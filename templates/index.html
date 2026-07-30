@@ -24070,39 +24070,42 @@
             #trendsIQView .tiq-title { font-size: 1.45rem; font-weight: 600; margin: 0; }
             #trendsIQView .tiq-subtitle { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
             #trendsIQView .tiq-filter-bar {
-                /* Geography + Region controls were removed 2026-07-27
-                   (Trends IQ is now always National); layout collapses
-                   to the two remaining controls (Window + Apply) at
-                   their natural sizes rather than stretching across
-                   the whole bar. */
-                display: grid;
-                grid-template-columns: minmax(160px, 220px) minmax(100px, 140px);
-                justify-content: start;
-                gap: 0.6rem;
-                align-items: end;
-                padding: 0.9rem 1rem;
+                /* Condensed inline toolbar. Trends IQ is always National
+                   (geo/region controls were removed 2026-07-27), so the
+                   remaining Window + As-of + Today + Apply all sit on a
+                   single tight row instead of the old stacked grid. */
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.5rem 0.75rem;
                 background: var(--bg-secondary, #1e1e2e);
                 border: 1px solid var(--border-color, #2c2c3e);
-                border-radius: 10px;
-                margin-bottom: 1rem;
+                border-radius: 8px;
+                margin-bottom: 0.85rem;
             }
-            #trendsIQView .tiq-filter-bar label { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem; display: block; }
+            #trendsIQView .tiq-filter-bar .tiq-fld { display: inline-flex; align-items: center; gap: 0.4rem; }
+            #trendsIQView .tiq-filter-bar label {
+                font-size: 0.7rem; color: var(--text-secondary);
+                text-transform: uppercase; letter-spacing: 0.04em;
+                margin: 0; display: inline-block; white-space: nowrap;
+            }
             #trendsIQView .tiq-filter-bar select,
             #trendsIQView .tiq-filter-bar input {
-                width: 100%;
-                padding: 0.5rem 0.65rem;
+                padding: 0.32rem 0.55rem;
                 background: var(--bg-primary, #14141f);
                 color: var(--text-primary, #fff);
                 border: 1px solid var(--border-color, #2c2c3e);
-                border-radius: 6px;
-                font-size: 0.9rem;
+                border-radius: 5px;
+                font-size: 0.82rem;
+                line-height: 1.2;
             }
             #trendsIQView .tiq-apply-btn {
-                padding: 0.5rem 1.1rem;
+                padding: 0.36rem 0.85rem;
                 background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
-                color: white; border: none; border-radius: 6px;
-                font-size: 0.85rem; font-weight: 600; cursor: pointer;
-                letter-spacing: 0.02em;
+                color: white; border: none; border-radius: 5px;
+                font-size: 0.8rem; font-weight: 600; cursor: pointer;
+                letter-spacing: 0.02em; white-space: nowrap;
             }
             #trendsIQView .tiq-apply-btn:hover { filter: brightness(1.1); }
             #trendsIQView .tiq-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; font-size: 0.78rem; color: var(--text-secondary); gap: 0.75rem; flex-wrap: wrap; }
@@ -24402,7 +24405,7 @@
         <div id="trendsIQView">
             <div class="tiq-header" style="position: relative;">
                 <h2 class="tiq-title">📈 Trends <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Culture Trends tracker</span></h2>
-                <p class="tiq-subtitle">What is trending across search, news, social, and retail right now. Filter by DMA, State, or National.</p>
+                <p class="tiq-subtitle">What is trending across search, news, social, and retail right now.</p>
                 <!--
                     Trends IQ ships its own HOVER ON/OFF toggle in the top-
                     right of the header. Wires to the same global
@@ -24430,7 +24433,7 @@
                      still works and always returns 'National' / ''). -->
                 <input type="hidden" id="trendsIQGeoType"  value="National">
                 <input type="hidden" id="trendsIQGeoValue" value="">
-                <div>
+                <span class="tiq-fld">
                     <label for="trendsIQLookback">Window</label>
                     <select id="trendsIQLookback">
                         <option value="1" selected>Last 24 hours</option>
@@ -24439,26 +24442,19 @@
                         <option value="14">Last 14 days</option>
                         <option value="30">Last 30 days</option>
                     </select>
-                </div>
-                <div>
+                </span>
+                <span class="tiq-fld">
                     <label for="trendsIQAsOf">As of</label>
                     <input type="date" id="trendsIQAsOf"
-                           title="Pick a past date to see what was trending then. Defaults to today (live)."
-                           style="min-width: 150px;">
-                </div>
-                <div>
-                    <label>&nbsp;</label>
-                    <button type="button" class="tiq-apply-btn"
-                            onclick="tiqResetAsOf()"
-                            title="Return to today's live view."
-                            style="background: rgba(255,255,255,0.06); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.12);">
-                        Today
-                    </button>
-                </div>
-                <div>
-                    <label>&nbsp;</label>
-                    <button type="button" class="tiq-apply-btn" onclick="applyTrendsIQFilters()">Apply</button>
-                </div>
+                           title="Pick a past date to see what was trending then. Defaults to today (live).">
+                </span>
+                <button type="button" class="tiq-apply-btn"
+                        onclick="tiqResetAsOf()"
+                        title="Return to today's live view."
+                        style="background: rgba(255,255,255,0.06); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.12);">
+                    Today
+                </button>
+                <button type="button" class="tiq-apply-btn" onclick="applyTrendsIQFilters()">Apply</button>
             </div>
             <div class="tiq-meta">
                 <span id="trendsIQMeta">Set filters and click Apply.</span>
