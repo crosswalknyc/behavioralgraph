@@ -483,7 +483,11 @@
             border-radius: 8px;
             padding: 1rem;
             margin-top: 1rem;
-            max-height: 520px;
+            /* 2026-07-30: bumped from 520px so the new group tabs +
+               bulk-actions toolbar don't push the product list into a
+               too-cramped scroll well. Cap at 65vh so it always leaves
+               breathing room for the Save button below. */
+            max-height: 65vh;
             overflow-y: auto;
         }
 
@@ -543,6 +547,151 @@
         
         .collapse-icon.rotated {
             transform: rotate(-90deg);
+        }
+
+        /* ============================================================
+           Streamlined Dashboard Access UI (2026-07-30)
+           Groups the ~15 per-product access cards into tabs (Core,
+           Trends, Finance, Conversion, Everything) with bulk actions,
+           tighter card padding, and a filter box scoped to the active
+           group. Every card keeps its original id / structure so the
+           createUser / editUser JS payload builders keep working. */
+        .access-toolbar {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            padding: 0.75rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            margin-bottom: 0.85rem;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+        .access-toolbar-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .access-toolbar .access-search {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.35rem 0.55rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            min-width: 220px;
+        }
+        .access-toolbar .access-search input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-primary);
+            font-size: 0.82rem;
+        }
+        .access-toolbar .access-count-badge {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .access-bulk-actions {
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+        .access-bulk-actions .btn-mini {
+            padding: 0.3rem 0.6rem;
+            font-size: 0.72rem;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-input);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .access-bulk-actions .btn-mini:hover {
+            border-color: var(--accent-cyan);
+            background: rgba(0, 255, 255, 0.06);
+        }
+        .access-group-tabs {
+            display: flex;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+            padding: 0.25rem;
+            background: var(--bg-input);
+            border-radius: 8px;
+        }
+        .access-group-tab {
+            padding: 0.4rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 6px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .access-group-tab:hover {
+            color: var(--text-primary);
+            background: rgba(0, 255, 255, 0.05);
+        }
+        .access-group-tab.active {
+            color: var(--bg-dark);
+            background: var(--accent-cyan);
+            border-color: var(--accent-cyan);
+        }
+        .access-group-tab .tab-count {
+            font-size: 0.65rem;
+            padding: 0.05rem 0.4rem;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.15);
+            font-weight: 500;
+        }
+        .access-group-tab.active .tab-count {
+            background: rgba(0, 0, 0, 0.18);
+        }
+        /* Tighter product cards: single-line by default (checkbox +
+           label + optional right-side chevron). Cards with a details
+           drawer (Profile IQ, Fin IQ, Analysis IQ, Journey IQ, Intent
+           IQ, Impact IQ) keep their existing collapsible sub-panels. */
+        #dashboardAccessSection .dashboard-access-item {
+            margin-bottom: 0.4rem;
+        }
+        #dashboardAccessSection .dashboard-access-header {
+            padding: 0.55rem 0.85rem;
+        }
+        #dashboardAccessSection .dashboard-access-item .checkbox-group span {
+            font-size: 0.82rem;
+        }
+        /* Hide cards that aren't in the currently-active group. Cards
+           carry data-access-group="core|trends|finance|conversion".
+           "everything" (default) shows all cards. */
+        #dashboardAccessSection[data-active-group="core"] .dashboard-access-item:not([data-access-group~="core"]),
+        #dashboardAccessSection[data-active-group="trends"] .dashboard-access-item:not([data-access-group~="trends"]),
+        #dashboardAccessSection[data-active-group="finance"] .dashboard-access-item:not([data-access-group~="finance"]),
+        #dashboardAccessSection[data-active-group="conversion"] .dashboard-access-item:not([data-access-group~="conversion"]) {
+            display: none !important;
+        }
+        /* Cards flagged data-admin-hidden="true" (e.g. legacy
+           Ticket Sales IQ toggle kept in DOM for JS back-compat) never
+           show regardless of active group. */
+        #dashboardAccessSection .dashboard-access-item[data-admin-hidden="true"] {
+            display: none !important;
+        }
+        /* Filter-search hidden hits (via .access-filter-hidden class
+           set by JS) also override the active-group display. */
+        #dashboardAccessSection .dashboard-access-item.access-filter-hidden {
+            display: none !important;
         }
 
         .run-item-row:hover .run-bulk-btn {
@@ -3038,58 +3187,86 @@
                     </div>
                 </div>
 
+                <!-- 2026-07-30: Compacted Profile photo + Company logo into
+                     a single 2-column row so the modal doesn't grow tall
+                     when neither is set. Old layout stacked them (took ~200
+                     vertical pixels even when empty); the grid collapses to
+                     a single column on narrow screens via minmax(280px,1fr). -->
                 <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: block; margin-bottom: 0.5rem;">Profile photo</label>
-                    <div style="display: flex; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
-                        <div id="userModalAvatarPreview" style="width: 64px; height: 64px; border-radius: 50%; background: var(--bg-input); border: 2px solid var(--border-color); overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; color: var(--text-secondary);">
-                            <span id="userModalAvatarInitials">—</span>
-                            <img id="userModalAvatarImg" src="" alt="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+                        <div>
+                            <label style="display: block; margin-bottom: 0.4rem;">👤 Profile photo</label>
+                            <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                                <div id="userModalAvatarPreview" style="width: 56px; height: 56px; border-radius: 50%; background: var(--bg-input); border: 2px solid var(--border-color); overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: var(--text-secondary);">
+                                    <span id="userModalAvatarInitials">—</span>
+                                    <img id="userModalAvatarImg" src="" alt="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                                </div>
+                                <div style="flex: 1; min-width: 0;">
+                                    <input type="file" id="userModalAvatarFile" accept="image/*" onchange="userModalAvatarFileOrUrlChange()" style="width: 100%; padding: 0.3rem; font-size: 0.72rem; margin-bottom: 0.35rem;" title="Upload image">
+                                    <input type="text" id="userModalAvatarUrl" placeholder="Or paste image URL" oninput="userModalAvatarFileOrUrlChange()" style="width: 100%; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.78rem;">
+                                    <button type="button" class="btn btn-small btn-secondary" onclick="userModalRemoveAvatar()" style="margin-top: 0.35rem; padding: 0.2rem 0.5rem; font-size: 0.7rem;">Remove</button>
+                                </div>
+                            </div>
                         </div>
-                        <div style="flex: 1; min-width: 200px;">
-                            <input type="file" id="userModalAvatarFile" accept="image/*" onchange="userModalAvatarFileOrUrlChange()" style="width: 100%; padding: 0.35rem; font-size: 0.8rem; margin-bottom: 0.5rem;" title="Upload image">
-                            <input type="text" id="userModalAvatarUrl" placeholder="Or paste image URL" oninput="userModalAvatarFileOrUrlChange()" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem;">
-                            <div style="margin-top: 0.5rem;">
-                                <button type="button" class="btn btn-small btn-secondary" onclick="userModalRemoveAvatar()">Remove photo</button>
+                        <div>
+                            <label style="display: block; margin-bottom: 0.4rem;">🏢 Company logo <small style="color: var(--text-secondary); font-weight: 400;">(shown on deck slides)</small></label>
+                            <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+                                <div id="userModalLogoPreview" style="width: 72px; height: 44px; border-radius: 6px; background: var(--bg-input); border: 2px solid var(--border-color); overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; color: var(--text-secondary);">
+                                    <span id="userModalLogoPlaceholder">—</span>
+                                    <img id="userModalLogoImg" src="" alt="" style="width: 100%; height: 100%; object-fit: contain; display: none;">
+                                </div>
+                                <div style="flex: 1; min-width: 0;">
+                                    <input type="file" id="userModalLogoFile" accept="image/*" onchange="userModalLogoFileOrUrlChange()" style="width: 100%; padding: 0.3rem; font-size: 0.72rem; margin-bottom: 0.35rem;" title="Upload logo">
+                                    <input type="text" id="userModalLogoUrl" placeholder="Or paste image URL" oninput="userModalLogoFileOrUrlChange()" style="width: 100%; padding: 0.4rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.78rem;">
+                                    <button type="button" class="btn btn-small btn-secondary" onclick="userModalRemoveLogo()" style="margin-top: 0.35rem; padding: 0.2rem 0.5rem; font-size: 0.7rem;">Remove</button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: block; margin-bottom: 0.5rem;">Company logo</label>
-                    <div style="display: flex; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
-                        <div id="userModalLogoPreview" style="width: 80px; height: 50px; border-radius: 6px; background: var(--bg-input); border: 2px solid var(--border-color); overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; color: var(--text-secondary);">
-                            <span id="userModalLogoPlaceholder">—</span>
-                            <img id="userModalLogoImg" src="" alt="" style="width: 100%; height: 100%; object-fit: contain; display: none;">
-                        </div>
-                        <div style="flex: 1; min-width: 200px;">
-                            <input type="file" id="userModalLogoFile" accept="image/*" onchange="userModalLogoFileOrUrlChange()" style="width: 100%; padding: 0.35rem; font-size: 0.8rem; margin-bottom: 0.5rem;" title="Upload logo">
-                            <input type="text" id="userModalLogoUrl" placeholder="Or paste image URL" oninput="userModalLogoFileOrUrlChange()" style="width: 100%; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem;">
-                            <div style="margin-top: 0.5rem;">
-                                <button type="button" class="btn btn-small btn-secondary" onclick="userModalRemoveLogo()">Remove logo</button>
-                            </div>
-                        </div>
-                    </div>
-                    <small style="color: var(--text-secondary); font-size: 0.65rem;">Shown on deck title and thank you slides (bottom right)</small>
-                </div>
-
-                <div class="access-section" id="dashboardAccessSection">
+                <div class="access-section" id="dashboardAccessSection" data-active-group="everything">
                     <h4 style="margin-bottom: 0.75rem;">🎯 Dashboard Access</h4>
 
-                    <!-- Product filter (added 2026-07-19). Filters the sibling
-                         .dashboard-access-item cards below by their visible text.
-                         Skips cards flagged data-admin-hidden="true" so hidden
-                         products stay hidden regardless of the query. -->
-                    <div style="display: flex; gap: 0.5rem; align-items: center; margin: 0 0 1rem; padding: 0.5rem 0.75rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px;">
-                        <span style="font-size: 0.9rem; opacity: 0.7;">🔍</span>
-                        <input type="text" id="dashboardAccessFilter"
-                               placeholder="Filter products (e.g. Profile, Trends, SF Conversion)..."
-                               oninput="filterDashboardAccessItems(this.value)"
-                               style="flex: 1; padding: 0.4rem 0.5rem; background: transparent; border: none; color: var(--text-primary); font-size: 0.85rem; outline: none;">
-                        <button type="button" class="btn btn-small btn-secondary"
-                                onclick="document.getElementById('dashboardAccessFilter').value=''; filterDashboardAccessItems('');"
-                                style="padding: 0.25rem 0.6rem; font-size: 0.7rem;">Clear</button>
-                        <span id="dashboardAccessFilterCount" style="font-size: 0.7rem; color: var(--text-secondary); white-space: nowrap;"></span>
+                    <!-- Streamlined access toolbar (2026-07-30). Combines:
+                         - Search across product labels
+                         - Bulk actions (grant all / revoke all / defaults) that
+                           act on the currently VISIBLE cards (respects both the
+                           active group tab and the search filter)
+                         - Group tabs (Core, Trends, Finance, Conversion, Everything)
+                           that hide/show cards via data-active-group on the
+                           parent section (styled in the CSS block above). Legacy
+                           cards flagged data-admin-hidden="true" (e.g. the
+                           retired Ticket Sales IQ / Talent Fit toggles) stay
+                           hidden across every group so JS reading their
+                           .checked values still works without cluttering the UI. -->
+                    <div class="access-toolbar">
+                        <div class="access-toolbar-row">
+                            <div class="access-search">
+                                <span style="opacity: 0.7;">🔍</span>
+                                <input type="text" id="dashboardAccessFilter"
+                                       placeholder="Filter products (e.g. Profile, Trends, SF Conversion)..."
+                                       oninput="filterDashboardAccessItems(this.value)">
+                                <button type="button" class="btn-mini"
+                                        onclick="document.getElementById('dashboardAccessFilter').value=''; filterDashboardAccessItems('');"
+                                        title="Clear filter">Clear</button>
+                            </div>
+                            <span id="dashboardAccessFilterCount" class="access-count-badge"></span>
+                        </div>
+                        <div class="access-toolbar-row">
+                            <div class="access-bulk-actions">
+                                <button type="button" class="btn-mini" onclick="dashboardAccessBulk('grant')" title="Check every product currently shown (respects the active tab and search filter)">✅ Grant all shown</button>
+                                <button type="button" class="btn-mini" onclick="dashboardAccessBulk('revoke')" title="Uncheck every product currently shown">🚫 Revoke all shown</button>
+                                <button type="button" class="btn-mini" onclick="dashboardAccessResetDefaults()" title="Reset all product toggles to the sensible default set (Profile IQ, Workspace, Share of Time, Impact IQ on; everything else off)">⭐ Reset to defaults</button>
+                            </div>
+                        </div>
+                        <div class="access-group-tabs" role="tablist">
+                            <button type="button" class="access-group-tab active" data-group="everything" onclick="setAccessGroupTab('everything')">Everything <span class="tab-count" data-count-for="everything"></span></button>
+                            <button type="button" class="access-group-tab" data-group="core" onclick="setAccessGroupTab('core')">📊 Core <span class="tab-count" data-count-for="core"></span></button>
+                            <button type="button" class="access-group-tab" data-group="trends" onclick="setAccessGroupTab('trends')">📈 Trends &amp; Rankers <span class="tab-count" data-count-for="trends"></span></button>
+                            <button type="button" class="access-group-tab" data-group="finance" onclick="setAccessGroupTab('finance')">💼 Finance &amp; Analysis <span class="tab-count" data-count-for="finance"></span></button>
+                            <button type="button" class="access-group-tab" data-group="conversion" onclick="setAccessGroupTab('conversion')">🔄 Conversion &amp; Impact <span class="tab-count" data-count-for="conversion"></span></button>
+                        </div>
                     </div>
 
                     <!-- Access to New Releases -->
@@ -3136,7 +3313,7 @@
                     </div>
                     
                     <!-- Profile IQ Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="core">
                         <div class="dashboard-access-header" onclick="toggleDashboardSection('profileIQ')">
                             <label class="checkbox-group" onclick="event.stopPropagation()">
                                 <input type="checkbox" id="hasProfileIQAccess" checked onchange="toggleProfileIQSection()">
@@ -3214,22 +3391,25 @@
                         </div>
                     </div>
                     
-                    <!-- 🎯 IMPACT IQ Access - section hidden 2026-07-19
-                         (removed from admin grants per Jenna). The
-                         hasTicketSalesIQAccess checkbox is kept
-                         (hidden) so JS handlers reading its .checked
-                         value keep working without null-deref errors. -->
+                    <!-- Ticket Sales IQ (legacy) - misleadingly labeled "🎯 IMPACT IQ"
+                         before 2026-07-30. Feature was retired from the dropdown
+                         on 2026-07-19 but the hasTicketSalesIQAccess flag is
+                         still referenced by createUser / editUser POST payloads
+                         (line ~11911) so the input must stay in the DOM to
+                         avoid null-deref. Kept hidden. Renamed 2026-07-30 to
+                         stop being confused with the real Impact IQ card
+                         (hasImpactIQAccess) further down. -->
                     <div class="dashboard-access-item" style="display: none;" data-admin-hidden="true">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasTicketSalesIQAccess" checked>
-                                <span style="font-weight: 600;">🎯 IMPACT IQ</span>
+                                <span style="font-weight: 600;">🎫 Ticket Sales IQ (legacy)</span>
                             </label>
                         </div>
                     </div>
 
                     <!-- Share of Time Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="core">
                         <div class="dashboard-access-header">
                             <span style="font-weight: 600;">⏱️ SHARE OF TIME</span>
                         </div>
@@ -3253,7 +3433,7 @@
                     </div>
                     
                     <!-- Subscriber IQ Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="core">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasSubscriberIQAccess">
@@ -3262,12 +3442,12 @@
                         </div>
                     </div>
 
-                    <!-- 💰 ROAS IQ Access - section hidden 2026-07-19
-                         (removed from admin grants per Jenna). The
-                         hasROASIQAccess checkbox is kept (hidden) so
-                         JS handlers reading its .checked value keep
-                         working without null-deref errors. -->
-                    <div class="dashboard-access-item" style="display: none;" data-admin-hidden="true">
+                    <!-- 💰 ROAS IQ Access - restored 2026-07-30 per Jenna
+                         ("make sure all features have toggle on/offs for
+                         each user"). ROAS IQ is a live product in the
+                         SELECT PRODUCT dropdown (index.html:18285); admins
+                         need a per-user grant toggle for it. -->
+                    <div class="dashboard-access-item" data-access-group="conversion">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasROASIQAccess">
@@ -3275,7 +3455,7 @@
                             </label>
                         </div>
                         <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; padding: 0 0.5rem 0.5rem 1.75rem;">
-                            Gates the ROAS IQ option in the Analysis IQ dropdown and access to released ROAS IQ reports.
+                            Grants this user access to the ROAS IQ view in the SELECT PRODUCT dropdown.
                         </small>
                     </div>
 
@@ -3297,7 +3477,7 @@
                     </div>
 
                     <!-- Workspace Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="core">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasWorkspaceAccess" checked>
@@ -3307,7 +3487,7 @@
                     </div>
 
                     <!-- SF Conversion Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="conversion">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasSFConversionAccess">
@@ -3316,22 +3496,25 @@
                         </div>
                     </div>
 
-                    <!-- 🔄 FLYWHEEL IQ Access - section hidden 2026-07-19
-                         (removed from admin grants per Jenna). The
-                         hasFlywheelConversionAccess checkbox is kept
-                         (hidden) so JS handlers reading its .checked
-                         value keep working without null-deref errors. -->
-                    <div class="dashboard-access-item" style="display: none;" data-admin-hidden="true">
+                    <!-- 🔄 Flywheel Conversion Access - restored 2026-07-30 per
+                         Jenna ("make sure all features have toggle on/offs for
+                         each user"). Flywheel Conversion is a live product in
+                         the SELECT PRODUCT dropdown (index.html:18287); admins
+                         need a per-user grant toggle for it. -->
+                    <div class="dashboard-access-item" data-access-group="conversion">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasFlywheelConversionAccess">
-                                <span style="font-weight: 600;">🔄 FLYWHEEL IQ</span>
+                                <span style="font-weight: 600;">🔄 FLYWHEEL CONVERSION</span>
                             </label>
                         </div>
+                        <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; padding: 0 0.5rem 0.5rem 1.75rem;">
+                            Grants access to the Flywheel Conversion view + the Flywheel Conversion module inside Analysis IQ.
+                        </small>
                     </div>
 
                     <!-- Brand Partnership IQ Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="conversion">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasBrandPartnershipIQAccess">
@@ -3341,7 +3524,7 @@
                     </div>
 
                     <!-- Digital Journey IQ Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="core">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasJourneyIQAccess" onchange="syncJourneyIqRunAccessVisibility()">
@@ -3370,7 +3553,7 @@
                     </div>
 
                     <!-- Intent IQ Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="conversion">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasIntentIQAccess" onchange="syncIntentIqRunAccessVisibility()">
@@ -3399,7 +3582,7 @@
                     </div>
 
                     <!-- LLMO IQ Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="finance">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasLLMOIQAccess">
@@ -3409,7 +3592,7 @@
                     </div>
 
                     <!-- Blue IQ Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="trends">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasBlueIQAccess">
@@ -3419,7 +3602,7 @@
                     </div>
 
                     <!-- Trends IQ Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="trends">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasTrendsIQAccess">
@@ -3429,7 +3612,7 @@
                     </div>
 
                     <!-- Microdramas IQ Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="trends">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasMicrodramasIQAccess">
@@ -3439,7 +3622,7 @@
                     </div>
 
                     <!-- Impact IQ Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="conversion">
                         <div class="dashboard-access-header" onclick="toggleImpactIQJourneysSection(event)">
                             <label class="checkbox-group" onclick="event.stopPropagation();">
                                 <input type="checkbox" id="hasImpactIQAccess">
@@ -3483,7 +3666,7 @@
                     </div>
                     
                     <!-- Fin IQ Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="finance">
                         <div class="dashboard-access-header" onclick="toggleDashboardSection('hedgeFundIQ')">
                             <label class="checkbox-group" onclick="event.stopPropagation()">
                                 <input type="checkbox" id="hasHedgeFundIQAccess" onchange="toggleHedgeFundIQSection()">
@@ -3555,7 +3738,7 @@
                     </div>
                     
                     <!-- Analysis IQ Access -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="finance">
                         <div class="dashboard-access-header" onclick="toggleDashboardSection('analysisIQ')">
                             <label class="checkbox-group" onclick="event.stopPropagation()">
                                 <input type="checkbox" id="hasAnalysisIQAccess" onchange="toggleAnalysisIQSection()">
@@ -3659,7 +3842,7 @@
                          their .checked values (createUser / editUser POST
                          payloads, ranker-option select-all helpers) do not
                          null-deref. -->
-                    <div class="dashboard-access-item">
+                    <div class="dashboard-access-item" data-access-group="trends">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasRankersIQAccess">
@@ -9227,8 +9410,18 @@
             document.getElementById('aanRankersIQ').checked = true;
             document.getElementById('aanTicketSalesTracker').checked = true;
             document.getElementById('aanTicketSalesIQ').checked = true;
-            
+
             document.getElementById('userModal').classList.add('show');
+            // 2026-07-30: seed the new streamlined access UI on every
+            // open — reset to "Everything" tab, populate tab count
+            // badges, clear the search filter, apply visibility.
+            try {
+                if (typeof setAccessGroupTab === 'function') setAccessGroupTab('everything');
+                if (typeof updateAccessGroupTabCounts === 'function') updateAccessGroupTabCounts();
+                const _searchEl = document.getElementById('dashboardAccessFilter');
+                if (_searchEl) _searchEl.value = '';
+                if (typeof filterDashboardAccessItems === 'function') filterDashboardAccessItems('');
+            } catch (_) { /* toolbar helpers are best-effort */ }
         }
 
         async function editUser(username) {
@@ -9439,6 +9632,17 @@
             if (typeof loadUserModalRecurring === 'function') {
                 loadUserModalRecurring();
             }
+
+            // 2026-07-30: seed the new streamlined access UI on every
+            // open — reset to "Everything" tab, populate tab count
+            // badges, clear the search filter, apply visibility.
+            try {
+                if (typeof setAccessGroupTab === 'function') setAccessGroupTab('everything');
+                if (typeof updateAccessGroupTabCounts === 'function') updateAccessGroupTabCounts();
+                const _searchEl = document.getElementById('dashboardAccessFilter');
+                if (_searchEl) _searchEl.value = '';
+                if (typeof filterDashboardAccessItems === 'function') filterDashboardAccessItems('');
+            } catch (_) { /* toolbar helpers are best-effort */ }
         }
 
         function userModalSetAvatarPreview(srcOrDataUrl, initialsFor) {
@@ -10498,26 +10702,154 @@
         // create/edit user modal. Filters the top-level product cards
         // (`.dashboard-access-item`) by their visible text. Cards flagged
         // `data-admin-hidden="true"` stay hidden regardless of query.
+        // 2026-07-30: Rewritten to work with the streamlined access UI.
+        //
+        // The group tabs (Everything / Core / Trends / Finance / Conversion)
+        // toggle #dashboardAccessSection[data-active-group=...] and the CSS
+        // hides any .dashboard-access-item whose data-access-group tokens
+        // don't include the active group. So this function's ONLY job is
+        // to layer a text-search filter on top of that: it adds/removes
+        // an .access-filter-hidden class (also styled to hide) so search
+        // and group-tab visibility compose cleanly.
+        //
+        // The counter shows "N / M shown" where M is the count within the
+        // currently-active group (not the global total), so admins get
+        // useful feedback while filtering inside a tab.
         function filterDashboardAccessItems(query) {
             const section = document.getElementById('dashboardAccessSection');
             if (!section) return;
             const q = (query || '').trim().toLowerCase();
+            const activeGroup = section.dataset.activeGroup || 'everything';
             const items = section.querySelectorAll(':scope > .dashboard-access-item');
-            let shown = 0, total = 0;
+            let shown = 0, groupTotal = 0;
             items.forEach(item => {
-                if (item.dataset.adminHidden === 'true') {
-                    item.style.display = 'none';
+                if (item.dataset.adminHidden === 'true') return;
+                const groupTokens = (item.dataset.accessGroup || '').split(/\s+/).filter(Boolean);
+                const inActiveGroup = activeGroup === 'everything' || groupTokens.includes(activeGroup);
+                if (!inActiveGroup) {
+                    item.classList.remove('access-filter-hidden');
                     return;
                 }
-                total += 1;
+                groupTotal += 1;
                 const text = (item.textContent || '').toLowerCase();
                 const match = !q || text.includes(q);
-                item.style.display = match ? '' : 'none';
+                item.classList.toggle('access-filter-hidden', !match);
                 if (match) shown += 1;
             });
             const counter = document.getElementById('dashboardAccessFilterCount');
             if (counter) {
-                counter.textContent = q ? `${shown} / ${total}` : '';
+                counter.textContent = q ? `${shown} / ${groupTotal} shown` : `${groupTotal} product${groupTotal === 1 ? '' : 's'}`;
+            }
+        }
+
+        // Switch which product group is currently visible. Updates the
+        // parent section's data-active-group (drives the CSS hide/show)
+        // and the .active class on the tab bar, then reruns the search
+        // filter so counts + visibility stay coherent.
+        function setAccessGroupTab(group) {
+            const section = document.getElementById('dashboardAccessSection');
+            if (!section) return;
+            section.dataset.activeGroup = group;
+            const tabs = section.querySelectorAll('.access-group-tab');
+            tabs.forEach(t => t.classList.toggle('active', t.dataset.group === group));
+            const search = document.getElementById('dashboardAccessFilter');
+            filterDashboardAccessItems((search && search.value) || '');
+        }
+
+        // Populate the little count badge inside each group tab. Called
+        // once on modal open so admins see how many products live in
+        // each group at a glance ("Core 5", "Conversion 6", etc.).
+        function updateAccessGroupTabCounts() {
+            const section = document.getElementById('dashboardAccessSection');
+            if (!section) return;
+            const items = section.querySelectorAll(':scope > .dashboard-access-item');
+            const buckets = { everything: 0, core: 0, trends: 0, finance: 0, conversion: 0 };
+            items.forEach(item => {
+                if (item.dataset.adminHidden === 'true') return;
+                buckets.everything += 1;
+                (item.dataset.accessGroup || '').split(/\s+/).filter(Boolean).forEach(g => {
+                    if (buckets.hasOwnProperty(g)) buckets[g] += 1;
+                });
+            });
+            Object.keys(buckets).forEach(g => {
+                const el = section.querySelector(`.tab-count[data-count-for="${g}"]`);
+                if (el) el.textContent = buckets[g];
+            });
+        }
+
+        // Grant / revoke checkboxes across every VISIBLE product card
+        // (respects both the active group tab and the search filter).
+        // Only touches the primary access-toggle checkbox of each card
+        // (the first .checkbox-group input in .dashboard-access-header),
+        // NOT the nested sub-options — those keep their own state so
+        // admins don't nuke Fin IQ tabs / Analysis IQ modules with a
+        // careless "Grant all shown" click on a filtered view.
+        function dashboardAccessBulk(action) {
+            const section = document.getElementById('dashboardAccessSection');
+            if (!section) return;
+            const target = action === 'grant';
+            const items = section.querySelectorAll(':scope > .dashboard-access-item');
+            let count = 0;
+            items.forEach(item => {
+                if (item.dataset.adminHidden === 'true') return;
+                // Skip cards hidden by group tab or search filter (only
+                // act on what the admin can actually SEE right now).
+                if (item.classList.contains('access-filter-hidden')) return;
+                if (item.offsetParent === null) return;
+                const cb = item.querySelector('.dashboard-access-header .checkbox-group input[type="checkbox"]');
+                if (!cb) return;
+                if (cb.checked !== target) {
+                    cb.checked = target;
+                    // Trigger onchange handlers so sync helpers
+                    // (syncJourneyIqRunAccessVisibility, etc.) update.
+                    try { cb.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
+                    count += 1;
+                }
+            });
+            if (typeof showToast === 'function') {
+                showToast(`${target ? 'Granted' : 'Revoked'} ${count} product${count === 1 ? '' : 's'}`);
+            }
+        }
+
+        // Reset ALL product access toggles (across every group, ignoring
+        // active tab / search filter) to a sensible default set:
+        //   ON:  Profile IQ, Workspace, Share of Time (view+run), Impact IQ,
+        //        Intent IQ  — the always-granted defaults from the backend
+        //   OFF: everything else
+        // Matches the create-new-user preset in showAddUserModal().
+        function dashboardAccessResetDefaults() {
+            const defaults = {
+                hasProfileIQAccess: true,
+                hasSubscriberIQAccess: false,
+                hasWorkspaceAccess: true,
+                hasSFConversionAccess: false,
+                hasFlywheelConversionAccess: false,
+                hasBrandPartnershipIQAccess: false,
+                hasJourneyIQAccess: false,
+                hasIntentIQAccess: true,
+                hasImpactIQAccess: true,
+                hasROASIQAccess: false,
+                hasTrendsIQAccess: false,
+                hasMicrodramasIQAccess: false,
+                hasBlueIQAccess: false,
+                hasLLMOIQAccess: false,
+                hasHedgeFundIQAccess: false,
+                hasAnalysisIQAccess: false,
+                hasRankersIQAccess: false,
+                hasShareOfTimeAccess: true,
+                hasShareOfTimeRunAccess: true,
+            };
+            let changed = 0;
+            Object.entries(defaults).forEach(([id, val]) => {
+                const el = document.getElementById(id);
+                if (el && el.checked !== val) {
+                    el.checked = val;
+                    try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
+                    changed += 1;
+                }
+            });
+            if (typeof showToast === 'function') {
+                showToast(`Reset ${changed} product${changed === 1 ? '' : 's'} to defaults`);
             }
         }
 
