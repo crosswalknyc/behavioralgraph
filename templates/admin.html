@@ -3927,31 +3927,13 @@
                     </small>
                 </div>
                 
-                <!-- Collaboration Team Section -->
-                <div class="access-section" id="teamAccessSection" style="display: none;">
-                    <h4 style="margin-bottom: 0.75rem; text-align: left;">👥 Collaboration Team</h4>
-                    <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem; text-align: left;">
-                        Select team members who can collaborate with this user.
-                    </p>
-                    
-                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; justify-content: flex-start; align-items: center; text-align: left;">
-                        <button type="button" class="btn btn-small btn-secondary" onclick="selectAllTeamMembersAdmin()">Select All</button>
-                        <button type="button" class="btn btn-small btn-secondary" onclick="deselectAllTeamMembersAdmin()">Clear All</button>
-                        <select id="selectByDepartment" onchange="selectTeamByDepartment()" style="padding: 0.4rem 0.5rem; font-size: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);">
-                            <option value="">Select by Department...</option>
-                        </select>
-                    </div>
-                    
-                    <div id="teamMembersListAdmin" style="max-height: 300px; overflow-y: auto; background: var(--bg-dark); border-radius: 8px; padding: 0.75rem;">
-                        <div style="text-align: left; padding: 1rem; color: var(--text-secondary);">
-                            Enter a company name to see available team members
-                        </div>
-                    </div>
-                    
-                    <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--accent-lime); text-align: left;">
-                        <span id="teamMembersCount">0</span> team members selected
-                    </div>
-                </div>
+                <!-- 2026-07-30 (Jenna): Collaboration Team section removed;
+                     everyone can now collaborate with everyone. The
+                     collab_team payload field defaults to ['*'] (wildcard)
+                     so any future consumer that reads it interprets the
+                     value as "no per-user filtering". Old users whose
+                     collab_team was a named list stay compatible (nothing
+                     currently reads the field to gate access anyway). -->
 
                 <!-- Activity CSV export (per user) -->
                 <div class="access-section" id="activityExportSection" style="display: none;">
@@ -4575,16 +4557,9 @@
             loadCategoriesAndRuns();
             loadContentFiles();
             if (window.location.hash === '#purgatory') showAdminTab('purgatory');
-            // Add event listener for company field to load team members
-            const companyField = document.getElementById('newCompany');
-            if (companyField) {
-                companyField.addEventListener('blur', function() {
-                    loadCompanyUsersForTeam(this.value);
-                });
-                companyField.addEventListener('change', function() {
-                    loadCompanyUsersForTeam(this.value);
-                });
-            }
+            // 2026-07-30: company-field blur/change listeners that loaded
+            // company users into the Collaboration Team picker are gone
+            // (section removed; everyone collaborates with everyone).
         });
 
         // Tab switching
@@ -9380,13 +9355,9 @@
             document.getElementById('analysisIQSection').style.display = 'none';
             document.getElementById('analysisIQIcon').classList.add('rotated');
             
-            // Reset Team section
-            document.getElementById('teamAccessSection').style.display = 'none';
-            currentEditingUserTeam = [];
-            companyUsersForTeam = [];
-            document.getElementById('teamMembersListAdmin').innerHTML = '<div style="text-align: center; padding: 1rem; color: var(--text-secondary);">Enter a company name to see available team members</div>';
-            document.getElementById('teamMembersCount').textContent = '0';
-            
+            // 2026-07-30: Collaboration Team reset removed (section deleted;
+            // everyone collaborates with everyone).
+
             // Purgatory Approval section (only visible to super_admin)
             const purgatorySection = document.getElementById('purgatoryApprovalSection');
             if (purgatorySection) {
@@ -9648,14 +9619,9 @@
             // Sync the Apply button label to the initial state.
             if (typeof _modalHoursPerMonthChange === 'function') _modalHoursPerMonthChange();
             
-            // Load team members for this user
-            currentEditingUserTeam = user.collab_team || [];
-            if (user.company) {
-                await loadCompanyUsersForTeam(user.company);
-            } else {
-                document.getElementById('teamAccessSection').style.display = 'none';
-            }
-            
+            // 2026-07-30: Collaboration Team load removed (section deleted;
+            // everyone collaborates with everyone).
+
             // Purgatory Approval section (only visible to super_admin)
             const purgatorySection = document.getElementById('purgatoryApprovalSection');
             if (purgatorySection) {
@@ -11112,164 +11078,32 @@
         
         // ============================================
         // COLLABORATION TEAM MANAGEMENT
+        // 2026-07-30 (Jenna): "remove this and just allow everyone to
+        // collaborate with everyone". The picker UI + department bucket
+        // + per-user checkbox list are gone; the payload field
+        // `collab_team` is still emitted (backend still reads it into
+        // users.json) but hard-wired to ['*'] so anyone can collaborate
+        // with anyone. Old users whose collab_team was a named list
+        // stay compatible — nothing in the frontend actually reads the
+        // field back to gate access today. The stub helpers below keep
+        // any lingering call sites safe (idempotent no-ops).
         // ============================================
-        
-        let companyUsersForTeam = [];
-        let currentEditingUserTeam = [];
-        
-        // Load company users for team selection when company field changes
-        async function loadCompanyUsersForTeam(company) {
-            const container = document.getElementById('teamMembersListAdmin');
-            const section = document.getElementById('teamAccessSection');
-            const deptSelect = document.getElementById('selectByDepartment');
-            
-            if (!company || company.trim() === '') {
-                section.style.display = 'none';
-                return;
-            }
-            
-            section.style.display = 'block';
-            container.innerHTML = '<div style="text-align: left; padding: 1rem; color: var(--text-secondary);">Loading company users...</div>';
-            
-            try {
-                const response = await fetch('/api/admin/users');
-                const data = await response.json();
-                
-                if (data.success) {
-                    const currentUsername = document.getElementById('editUsername').value || document.getElementById('newUsername').value;
-                    const companyLower = company.toLowerCase().trim();
-                    
-                    console.log('Loading team members for company:', company);
-                    console.log('Current user being edited:', currentUsername);
-                    console.log('Total users in system:', Object.keys(data.users).length);
-                    
-                    // Filter users from the same company (excluding the user being edited)
-                    // Use more flexible matching - trim whitespace and compare case-insensitively
-                    companyUsersForTeam = Object.entries(data.users)
-                        .filter(([username, user]) => {
-                            const userCompany = (user.company || '').toLowerCase().trim();
-                            const isMatch = userCompany === companyLower;
-                            const isNotCurrentUser = username !== currentUsername;
-                            
-                            // Debug log for each user
-                            if (userCompany && userCompany.includes(companyLower.substring(0, 3))) {
-                                console.log(`User ${username}: company="${user.company}", match=${isMatch}, notCurrent=${isNotCurrentUser}`);
-                            }
-                            
-                            return isMatch && isNotCurrentUser;
-                        })
-                        .map(([username, user]) => ({
-                            username,
-                            department: user.department || '',
-                            first_name: user.first_name || '',
-                            last_name: user.last_name || '',
-                            role: user.role || 'user',
-                            email: user.email || ''
-                        }));
-                    
-                    console.log('Found company users:', companyUsersForTeam.length);
-                    
-                    // Get unique departments for the dropdown
-                    const departments = [...new Set(companyUsersForTeam.map(u => u.department).filter(d => d))].sort();
-                    deptSelect.innerHTML = '<option value="">Select by Department...</option>' + 
-                        departments.map(d => `<option value="${d}">${d}</option>`).join('');
-                    
-                    renderTeamMembersList();
-                } else {
-                    container.innerHTML = '<div style="text-align: left; padding: 1rem; color: var(--accent-red);">Error loading users</div>';
-                }
-            } catch (e) {
-                console.error('Error loading company users:', e);
-                container.innerHTML = '<div style="text-align: left; padding: 1rem; color: var(--accent-red);">Error loading users</div>';
-            }
-        }
-        
-        function renderTeamMembersList() {
-            const container = document.getElementById('teamMembersListAdmin');
-            
-            if (companyUsersForTeam.length === 0) {
-                container.innerHTML = '<div style="text-align: left; padding: 1rem; color: var(--text-secondary);">No other users found in this company</div>';
-                updateTeamMembersCount();
-                return;
-            }
-            
-            // Sort by department, then by name
-            const sorted = [...companyUsersForTeam].sort((a, b) => {
-                if (a.department !== b.department) return a.department.localeCompare(b.department);
-                return a.username.localeCompare(b.username);
-            });
-            
-            let currentDept = '';
-            let html = '';
-            
-            sorted.forEach(user => {
-                // Add department header if new department
-                if (user.department !== currentDept) {
-                    currentDept = user.department;
-                    const deptId = (currentDept || 'no-dept').replace(/[^a-zA-Z0-9]/g, '_');
-                    html += `<div style="padding: 0.5rem 0.75rem; background: var(--bg-input); font-weight: 600; font-size: 0.8rem; color: var(--accent-cyan); margin-top: 0.5rem; border-radius: 4px; text-align: left; display: flex; justify-content: space-between; align-items: center;">
-                        <span>${currentDept || 'No Department'}</span>
-                        <button type="button" onclick="selectDeptMembers('${currentDept || ''}')" style="padding: 0.2rem 0.5rem; font-size: 0.65rem; background: var(--accent-lime); color: #000; border: none; border-radius: 3px; cursor: pointer; font-weight: 600;">Select All</button>
-                    </div>`;
-                }
-                
-                const isChecked = currentEditingUserTeam.includes(user.username);
-                const displayName = user.first_name && user.last_name 
-                    ? `${user.first_name} ${user.last_name}` 
-                    : user.username;
-                
-                html += `
-                    <label data-department="${user.department || ''}" style="display: grid; grid-template-columns: 24px 1fr; gap: 0.75rem; padding: 0.6rem 0.5rem; cursor: pointer; border-bottom: 1px solid var(--border-color); align-items: center;">
-                        <input type="checkbox" class="team-member-checkbox-admin" value="${user.username}" ${isChecked ? 'checked' : ''} onchange="updateTeamMembersCount()" style="width: 18px; height: 18px; cursor: pointer;">
-                        <div style="text-align: left;">
-                            <span style="display: block; font-weight: 600; font-size: 0.9rem; color: var(--text-primary);">${displayName}</span>
-                            <span style="font-size: 0.75rem; color: var(--text-secondary);">${user.username} • ${user.department || 'No Dept'} • ${user.role}</span>
-                        </div>
-                    </label>
-                `;
-            });
-            
-            container.innerHTML = html;
-            updateTeamMembersCount();
-        }
-        
-        function updateTeamMembersCount() {
-            const count = document.querySelectorAll('.team-member-checkbox-admin:checked').length;
-            document.getElementById('teamMembersCount').textContent = count;
-        }
-        
-        function selectAllTeamMembersAdmin() {
-            document.querySelectorAll('.team-member-checkbox-admin').forEach(cb => cb.checked = true);
-            updateTeamMembersCount();
-        }
-        
-        function deselectAllTeamMembersAdmin() {
-            document.querySelectorAll('.team-member-checkbox-admin').forEach(cb => cb.checked = false);
-            updateTeamMembersCount();
-        }
-        
-        function selectTeamByDepartment() {
-            const dept = document.getElementById('selectByDepartment').value;
-            if (!dept) return;
-            
-            selectDeptMembers(dept);
-            
-            // Reset dropdown
-            document.getElementById('selectByDepartment').value = '';
-        }
-        
-        function selectDeptMembers(dept) {
-            // Check all users in the selected department
-            document.querySelectorAll(`label[data-department="${dept}"] .team-member-checkbox-admin`).forEach(cb => {
-                cb.checked = true;
-            });
-            
-            updateTeamMembersCount();
-        }
-        
+
         function getSelectedTeamMembers() {
-            return Array.from(document.querySelectorAll('.team-member-checkbox-admin:checked')).map(cb => cb.value);
+            // Wildcard = everyone. Written to users.json for every save.
+            return ['*'];
         }
+
+        // Idempotent no-op stubs (in case any straggler onclick / event
+        // wiring survives; safe to remove once we're sure nothing calls
+        // them). None currently reference these — grep-verified 2026-07-30.
+        function loadCompanyUsersForTeam() { /* noop */ }
+        function renderTeamMembersList() { /* noop */ }
+        function updateTeamMembersCount() { /* noop */ }
+        function selectAllTeamMembersAdmin() { /* noop */ }
+        function deselectAllTeamMembersAdmin() { /* noop */ }
+        function selectTeamByDepartment() { /* noop */ }
+        function selectDeptMembers() { /* noop */ }
         
         // Load Fin IQ Tickers for Access Control
         async function loadHedgeFundTickersForAccess() {
