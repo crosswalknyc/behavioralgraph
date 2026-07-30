@@ -47156,7 +47156,7 @@
                        body +
                        '</div>';
             }).join('');
-            return header + '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' + cards + '</div>';
+            return header + '<div class="tiq-cards-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr));">' + cards + '</div>';
         }
 
         // ============================================================
@@ -47228,7 +47228,7 @@
                        body +
                        '</div>';
             }).join('');
-            return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' + cards + '</div>';
+            return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr));">' + cards + '</div>';
         }
 
         function renderTIQBooks(sources, libbySources) {
@@ -47323,7 +47323,7 @@
                 return cardFor(libby[k] || {}, 'libby', 'libby-' + k, libbyLabelMap[k]);
             }).join('');
 
-            return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' +
+            return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr));">' +
                    storeCards + libbyCards +
                    '</div>';
         }
