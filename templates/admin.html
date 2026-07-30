@@ -3283,22 +3283,17 @@
                            hidden across every group so JS reading their
                            .checked values still works without cluttering the UI. -->
                     <div class="access-toolbar">
-                        <div class="access-toolbar-row">
-                            <div class="access-search">
-                                <span style="opacity: 0.7;">🔍</span>
-                                <input type="text" id="dashboardAccessFilter"
-                                       placeholder="Filter products (e.g. Profile, Trends, SF Conversion)..."
-                                       oninput="filterDashboardAccessItems(this.value)">
-                                <button type="button" class="btn-mini"
-                                        onclick="document.getElementById('dashboardAccessFilter').value=''; filterDashboardAccessItems('');"
-                                        title="Clear filter">Clear</button>
-                            </div>
-                            <span id="dashboardAccessFilterCount" class="access-count-badge"></span>
-                        </div>
+                        <!-- 2026-07-30 (Jenna): search / filter bar removed;
+                             the group tabs below + product consolidation
+                             (Trends bucket) made it redundant. The
+                             filterDashboardAccessItems() JS helper is kept
+                             in place (it no-ops safely when the input is
+                             missing) so setAccessGroupTab() and the modal
+                             init blocks can still call it uniformly. -->
                         <div class="access-toolbar-row">
                             <div class="access-bulk-actions">
-                                <button type="button" class="btn-mini" onclick="dashboardAccessBulk('grant')" title="Check every product currently shown (respects the active tab and search filter)">✅ Grant all shown</button>
-                                <button type="button" class="btn-mini" onclick="dashboardAccessBulk('revoke')" title="Uncheck every product currently shown">🚫 Revoke all shown</button>
+                                <button type="button" class="btn-mini" onclick="dashboardAccessBulk('grant')" title="Check every product currently shown in the active tab">✅ Grant all shown</button>
+                                <button type="button" class="btn-mini" onclick="dashboardAccessBulk('revoke')" title="Uncheck every product currently shown in the active tab">🚫 Revoke all shown</button>
                                 <button type="button" class="btn-mini" onclick="dashboardAccessResetDefaults()" title="Reset all product toggles to the sensible default set (Profile IQ, Workspace, Share of Time, Impact IQ on; everything else off)">⭐ Reset to defaults</button>
                             </div>
                         </div>
