@@ -55,62 +55,59 @@ logger = logging.getLogger(__name__)
 
 
 MAX_URLS = [
-    ('Home',      'https://play.hbomax.com/'),
-    ('Series',    'https://play.hbomax.com/pages/series'),
-    ('Movies',    'https://play.hbomax.com/pages/movies'),
-    ('Trending',  'https://play.hbomax.com/pages/trending'),
+    # 2026-07 rebrand-revert: play.hbomax.com's home rail carries
+    # enough tiles for the dashboard on its own (typically 25-40
+    # deduped titles across Featured / Trending Now / Continue
+    # Watching / Because You Watched). The pre-rebrand /pages/series
+    # and /pages/movies routes now redirect-loop and are dropped.
+    ('Home', 'https://play.hbomax.com/'),
 ]
 
 
-# Max ships its rails as fully-rendered DOM tiles. Once we can find at
-# least a few /show/ or /movie/ anchors, the page is hydrated.
+# HBO Max ships its home rail as fully-rendered DOM tiles. Once we
+# can find at least a few /shows/ or /movies/ anchors, the page is
+# hydrated. Note the PLURAL - the pre-2025 URLs were /show/ and
+# /movie/, but the reverted-to-HBO-Max app uses /shows/ and /movies/.
 _MAX_HYDRATE_SELECTORS = [
-    'a[href*="/show/"]',
-    'a[href*="/movie/"]',
-    'a[data-testid*="_tile"]',
+    'a[href*="/shows/"]',
+    'a[href*="/movies/"]',
 ]
 
 
-# Match a Max tile anchor. `aria-label` first (title source), then
-# `href` (deep-link + type classifier).
+# HBO Max tile anchor looks like:
+#
+#   <a href="/shows/rick-and-morty/ab553cdc-e15d-4597-b65f-bec9201fd2dd"
+#      draggable="false" class="sc-...">
+#     <div class="img-collection ...">
+#       <img id="pageXXXX-bandYYY-..." src=".../artwork.png" />
+#     </div>
+#     <p class="sc-...">Rick and Morty</p>
+#   </a>
+#
+# The title is in the LAST <p> inside the anchor (never aria-label
+# post-2025). Slug + trailing UUID uniquely identify the item and let
+# us classify Film vs TV from the URL path segment.
 _MAX_TILE_RE = re.compile(
-    r'<a[^>]+aria-label="([^"]{3,300})"'
-    r'[^>]*href="(/(?:show|movie)/[a-f0-9\-]+)"',
-    re.IGNORECASE,
+    r'<a\s+href="(/(?:shows|movies)/[a-z0-9\-]+/[a-f0-9\-]{36})"'
+    r'[^>]*>'
+    r'.*?<p[^>]*>([^<]{1,240})</p>'
+    r'\s*</a>',
+    re.IGNORECASE | re.DOTALL,
 )
 
 
-# Unicode "isolate" wrapping characters that Max uses to protect RTL
-# rendering of the title. Strip them.
-_ISOLATES_RE = re.compile('[\u2066\u2067\u2068\u2069]')
-
-
-# Trailing "position" and "flag" segments that decorate the title in
-# aria-label. Example: "Rick and Morty. 1 of 20. New Episode".
-_TAIL_POS_RE     = re.compile(r'\.\s*\d+\s+of\s+\d+.*$', re.IGNORECASE)
-_TAIL_NEW_RE     = re.compile(r',\s*(?:New(?:\s+(?:Episode|Season))?|Coming Soon)\s*$',
-                                re.IGNORECASE)
-_TAIL_HOVER_RE   = re.compile(r',\s*(?:Add to My List|Go to (?:Movie|Show)|Watch\b.*)$',
-                                re.IGNORECASE)
-
-
 def _clean_title(raw: str) -> str:
-    t = _ISOLATES_RE.sub('', raw).strip()
-    # Max often terminates the title with a period before the "N of M"
-    # positional segment. Kill that first.
-    t = _TAIL_POS_RE.sub('', t).strip()
-    t = _TAIL_NEW_RE.sub('', t).strip()
-    t = _TAIL_HOVER_RE.sub('', t).strip()
-    # Trailing punctuation that's left over after stripping positions.
-    while t.endswith(('.', ',')):
-        t = t[:-1].strip()
-    return unescape(t)
+    """HBO Max post-2025 puts a clean title in the tile's trailing
+    <p>. All we need to do is unescape entities + collapse whitespace.
+    (The pre-rebrand aria-label parsing with position suffixes and
+    Unicode isolates is gone.)"""
+    return re.sub(r'\s+', ' ', unescape(raw)).strip()
 
 
 def _classify_from_path(path: str) -> str:
-    if '/movie/' in path:
+    if '/movies/' in path:
         return 'Film'
-    if '/show/' in path:
+    if '/shows/' in path:
         return 'TV'
     return ''
 
@@ -128,15 +125,20 @@ _NAV_STOPWORDS = frozenset({
 
 
 def _extract_max_dom(html: str, limit: int = 40) -> list[dict]:
+    """Dedupe by slug (path without the trailing UUID). The same show
+    can appear on the Featured, Trending Now, and Because You Watched
+    rails; we only want it counted once. First occurrence wins, which
+    preserves the "closest to top of page" ranking."""
     items: list[dict] = []
-    seen_paths: set[str] = set()
+    seen_slugs: set[str] = set()
     for m in _MAX_TILE_RE.finditer(html):
-        raw_label = m.group(1)
-        path      = m.group(2)
-        if path in seen_paths:
+        path  = m.group(1)      # /shows/rick-and-morty/UUID
+        title = _clean_title(m.group(2))
+        # /shows/<slug>/<uuid> -> slug key = /shows/<slug>
+        slug_key = path.rsplit('/', 1)[0]
+        if slug_key in seen_slugs:
             continue
-        seen_paths.add(path)
-        title = _clean_title(raw_label)
+        seen_slugs.add(slug_key)
         if not (2 <= len(title) <= 200):
             continue
         if title.lower() in _NAV_STOPWORDS:
@@ -190,18 +192,19 @@ def fetch() -> dict[str, Any]:
     for i, it in enumerate(all_items[:25], start=1):
         it['rank'] = i
 
-    # If we came back empty across every rail, the donated hbomax.com
-    # cookies are stale / missing / were served the marketing shell
-    # rather than the hydrated app. Fire the offline notifier so
-    # operators know to re-donate from play.hbomax.com; the dashboard
-    # itself just shows a neutral 'warming up' tile.
+    # Empty result => cookies are missing/stale OR the account isn't
+    # signed in (the anonymous marketing shell still returns ~10-30
+    # promoted tiles, so a truly-empty parse means the render failed).
+    # Fire the offline notifier so operators know to re-donate from
+    # play.hbomax.com; the dashboard itself just shows a neutral
+    # 'warming up' tile per the no-operator-hints rule.
     if not all_items:
         try:
             from .cookie_gap_notify import notify_cookie_gap
             notify_cookie_gap('max', 'hbomax.com',
-                              reason=('all HBO Max rails returned 0 titles; '
-                                      'cookies from play.hbomax.com likely '
-                                      'stale or missing'))
+                              reason=('HBO Max home rail returned 0 titles; '
+                                      'sign in at play.hbomax.com in Chrome, '
+                                      'then re-donate cookies for hbomax.com'))
         except Exception as e:
             logger.info("max cookie_gap notify failed: %s", e)
 
