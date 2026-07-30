@@ -1898,8 +1898,8 @@
                                 <span>🗺️ Digital Journey IQ</span>
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" class="hidden-product-checkbox" data-product="rankerIQ" onchange="updateHiddenProduct('rankerIQ', this.checked)">
-                                <span>📊 Ranker</span>
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="cultureRankerIQ" onchange="updateHiddenProduct('cultureRankerIQ', this.checked)">
+                                <span>📊 Talent Ranker</span>
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="blueIQ" onchange="updateHiddenProduct('blueIQ', this.checked)">
@@ -7000,9 +7000,15 @@
         // hidden (removed for everyone, including super admins). Keys must
         // be kept in sync with DEFAULT_HIDDEN_PRODUCTS in app.py and the
         // <option> values in templates/index.html #viewNavDropdown.
+        // 2026-07-30: renamed rankerIQ -> cultureRankerIQ so the key matches
+        // the actual #viewNavDropdown <option value=""> value; prior mismatch
+        // meant Live Features "Hide from SELECT PRODUCT Dropdown" for the
+        // Talent Ranker option never actually hid the option. Legacy
+        // rankerIQ key in saved S3 state is migrated on read by
+        // get_live_features in app.py.
         let hiddenProductsData = {
             profileIQ: false, subscriberIQ: false, journeyIQ: false,
-            rankerIQ: false, trendsIQ: false, blueIQ: false, hedgeFundIQ: false,
+            cultureRankerIQ: false, trendsIQ: false, blueIQ: false, hedgeFundIQ: false,
             llmoIQ: false, sfConversion: false, intentIQ: false,
             impactIQ: false,
             roasIQ: false, brandPartnershipIQ: false, flywheelConversion: false,

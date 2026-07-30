@@ -19329,7 +19329,14 @@ DEFAULT_HIDDEN_PRODUCTS = {
     'profileIQ': False,
     'subscriberIQ': False,
     'journeyIQ': False,
-    'rankerIQ': False,
+    # 2026-07-30: renamed from 'rankerIQ' to 'cultureRankerIQ' so the key
+    # matches the actual #viewNavDropdown <option value="cultureRankerIQ">.
+    # Prior mismatch meant admins checking "Hide Ranker" in Live Features
+    # never actually hid the Talent Ranker option (applyHiddenProductsToDropdown
+    # matches hiddenMap[opt.value] against option value, not against an
+    # arbitrary product key). Legacy saved-state migration is applied on
+    # read in `_migrate_legacy_hidden_product_keys()` below.
+    'cultureRankerIQ': False,
     'trendsIQ': False,
     'blueIQ': False,
     'hedgeFundIQ': False,
@@ -19348,6 +19355,34 @@ DEFAULT_HIDDEN_PRODUCTS = {
 }
 
 
+# Legacy hidden-product keys that were saved to S3 under a name that did
+# NOT match the corresponding #viewNavDropdown <option value="">. On both
+# read (get_live_features) and write (save_live_features) we normalize
+# these to the current canonical key. Preserves any global-hide state
+# admins had already set under the broken old name.
+_LEGACY_HIDDEN_PRODUCT_KEYS = {
+    'rankerIQ': 'cultureRankerIQ',   # 2026-07-30 fix
+}
+
+
+def _migrate_legacy_hidden_product_keys(hidden_products: dict) -> dict:
+    """Rewrite deprecated hidden-product keys to their current canonical name.
+
+    OR-merges values so a True in either the legacy or the canonical key
+    wins (safer: honors an admin's prior hide intent). Silently drops
+    the legacy key from the output dict.
+    """
+    if not isinstance(hidden_products, dict):
+        return hidden_products
+    out = dict(hidden_products)
+    for legacy, canonical in _LEGACY_HIDDEN_PRODUCT_KEYS.items():
+        if legacy in out:
+            legacy_val = bool(out.pop(legacy))
+            canonical_val = bool(out.get(canonical, False))
+            out[canonical] = legacy_val or canonical_val
+    return out
+
+
 @app.route('/api/admin/live-features', methods=['GET'])
 @requires_auth
 def get_live_features():
@@ -19356,6 +19391,10 @@ def get_live_features():
         live_features = load_json_from_s3(LIVE_FEATURES_FILE)
         saved = live_features.get('features', {})
         saved_hidden = live_features.get('hidden_products', {})
+        # 2026-07-30: rewrite legacy hidden-product keys (e.g. rankerIQ ->
+        # cultureRankerIQ) before merging so admins who had already checked
+        # the old broken toggle in the UI don't lose their setting.
+        saved_hidden = _migrate_legacy_hidden_product_keys(saved_hidden)
         # Merge with defaults so new keys (e.g. viewNumbers) are always present; saved values override
         features = {**DEFAULT_LIVE_FEATURES, **saved}
         hidden_products = {**DEFAULT_HIDDEN_PRODUCTS, **saved_hidden}
@@ -19390,7 +19429,12 @@ def save_live_features():
         
         features = data.get('features', {})
         hidden_products = data.get('hidden_products', {})
-        
+        # 2026-07-30: normalize legacy hidden-product keys on write too, so a
+        # stale client that still POSTs 'rankerIQ' (before hard refresh)
+        # doesn't re-introduce the broken key into S3 alongside the correct
+        # 'cultureRankerIQ' one.
+        hidden_products = _migrate_legacy_hidden_product_keys(hidden_products)
+
         live_features = {
             'features': features,
             'hidden_products': hidden_products,
