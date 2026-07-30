@@ -17258,6 +17258,81 @@
                 }
             } catch (e) { /* localStorage unavailable - stay on default (dark) */ }
         })();
+
+        /* 2026-07-30 (Jenna): global auth-401 auto-redirect.
+           Any fetch() that returns HTTP 401 (Flask's @requires_auth,
+           Session expired, Authentication required, Not logged in,
+           Not authenticated - all surface as 401) now sends the user
+           back to /login instead of bubbling up an "Authentication
+           required" toast or inline error somewhere in the dashboard.
+
+           Installed here so it wraps window.fetch BEFORE any other
+           script fires - every subsequent fetch call on the page
+           routes through the interceptor. XHR calls (rare in this
+           app) are not wrapped; add an XHR wrapper here if we ever
+           see a lingering surface.
+
+           Opt-out: any endpoint that legitimately expects a 401
+           (login form itself, health checks that ping /api/user/info
+           to detect signed-out state) can pass a
+           `X-Skip-Auth-Redirect: 1` header to bypass the redirect. */
+        (function installAuthAutoRedirect() {
+            if (window.__bgAuthAutoRedirectInstalled) return;
+            window.__bgAuthAutoRedirectInstalled = true;
+            if (typeof window.fetch !== 'function') return;
+
+            var _origFetch = window.fetch.bind(window);
+
+            function _shouldSkip(input, init) {
+                try {
+                    var url = typeof input === 'string'
+                        ? input
+                        : (input && input.url) || '';
+                    // Login flow itself returns 401 on bad password; don't
+                    // ping-pong the user through /login on every wrong try.
+                    if (/(^|\/)login(\?|$|#)/.test(url)) return true;
+                    // Explicit opt-out header from the caller.
+                    var hdrs = (init && init.headers) || (input && input.headers);
+                    if (!hdrs) return false;
+                    var val;
+                    if (typeof Headers !== 'undefined' && hdrs instanceof Headers) {
+                        val = hdrs.get('X-Skip-Auth-Redirect');
+                    } else {
+                        val = hdrs['X-Skip-Auth-Redirect']
+                            || hdrs['x-skip-auth-redirect'];
+                    }
+                    return val && String(val) === '1';
+                } catch (_) { return false; }
+            }
+
+            function _redirectToLogin() {
+                // Guard against double-navigation if several 401s fire back
+                // to back (e.g. dashboard boots and hits three /api endpoints
+                // at once after a session expiry).
+                if (window.__bgAuthRedirecting) return;
+                window.__bgAuthRedirecting = true;
+                try {
+                    window.location.replace('/login');
+                } catch (_) {
+                    window.location.href = '/login';
+                }
+            }
+
+            window.fetch = function(input, init) {
+                return _origFetch(input, init).then(function(resp) {
+                    if (resp && resp.status === 401 && !_shouldSkip(input, init)) {
+                        _redirectToLogin();
+                        // Return a never-resolving promise so downstream
+                        // .then/.catch handlers on the calling site don't
+                        // try to parse a body we're about to navigate away
+                        // from (which would otherwise flash their fallback
+                        // "Authentication required" text for a split second).
+                        return new Promise(function() {});
+                    }
+                    return resp;
+                });
+            };
+        })();
     </script>
     <!-- ============================================================================
          MOBILE RESPONSIVE LAYER  (added 2026-07-28)

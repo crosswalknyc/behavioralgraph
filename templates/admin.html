@@ -1191,6 +1191,48 @@
             document.body.style.paddingTop = '40px';
         }
     })();
+
+    /* 2026-07-30: mirror of the dashboard's global auth-401 auto-redirect.
+       Any fetch that returns 401 sends the user back to /login instead of
+       bubbling up an "Authentication required" toast or leaving the admin
+       panel silently frozen after a session expiry. See templates/index.html
+       for the full doc block. */
+    (function installAuthAutoRedirect() {
+        if (window.__bgAuthAutoRedirectInstalled) return;
+        window.__bgAuthAutoRedirectInstalled = true;
+        if (typeof window.fetch !== 'function') return;
+        var _origFetch = window.fetch.bind(window);
+        function _shouldSkip(input, init) {
+            try {
+                var url = typeof input === 'string' ? input : (input && input.url) || '';
+                if (/(^|\/)login(\?|$|#)/.test(url)) return true;
+                var hdrs = (init && init.headers) || (input && input.headers);
+                if (!hdrs) return false;
+                var val;
+                if (typeof Headers !== 'undefined' && hdrs instanceof Headers) {
+                    val = hdrs.get('X-Skip-Auth-Redirect');
+                } else {
+                    val = hdrs['X-Skip-Auth-Redirect'] || hdrs['x-skip-auth-redirect'];
+                }
+                return val && String(val) === '1';
+            } catch (_) { return false; }
+        }
+        function _redirectToLogin() {
+            if (window.__bgAuthRedirecting) return;
+            window.__bgAuthRedirecting = true;
+            try { window.location.replace('/login'); }
+            catch (_) { window.location.href = '/login'; }
+        }
+        window.fetch = function(input, init) {
+            return _origFetch(input, init).then(function(resp) {
+                if (resp && resp.status === 401 && !_shouldSkip(input, init)) {
+                    _redirectToLogin();
+                    return new Promise(function() {});
+                }
+                return resp;
+            });
+        };
+    })();
     </script>
 
     <div class="container">
