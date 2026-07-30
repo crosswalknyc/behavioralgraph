@@ -2,7 +2,7 @@
 Run the residential-only scrapers from your laptop.
 
 Some streaming services (Disney+, ESPN+ via Disney+, Max via
-play.max.com) IP-block the Hetzner scraper datacenter box before any
+play.hbomax.com) IP-block the Hetzner scraper datacenter box before any
 cookie/auth check runs. From your MacBook on your home ISP, the same
 URLs return a full catalog. This script runs those specific scrapers
 locally and uploads snapshots to the same S3 location the Hetzner

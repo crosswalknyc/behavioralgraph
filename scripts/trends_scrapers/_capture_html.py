@@ -42,12 +42,12 @@ CAPTURES = [
         ],
     ),
     (
-        'max', 'max.com',
-        'https://www.max.com/',
+        'max', 'hbomax.com',
+        'https://www.hbomax.com/',
         [
-            ('home',     'https://www.max.com/'),
-            ('series',   'https://www.max.com/series'),
-            ('movies',   'https://www.max.com/movies'),
+            ('home',     'https://www.hbomax.com/'),
+            ('series',   'https://www.hbomax.com/series'),
+            ('movies',   'https://www.hbomax.com/movies'),
         ],
     ),
     (

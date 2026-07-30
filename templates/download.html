@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download Crosswalk IQ</title>
+    <meta name="description" content="Download the Crosswalk IQ desktop companion app for macOS or Windows.">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a1929;
+            --bg-card: #0d2137;
+            --accent-cyan: #66d9ef;
+            --accent-lime: #c8ff00;
+            --text-primary: #e6f1ff;
+            --text-secondary: #8892b0;
+            --border-color: #1e3a5f;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #0a1929 0%, #0d2137 50%, #132f4c 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+        }
+        .wrap { width: 100%; max-width: 520px; }
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 3rem 2.5rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+        }
+        .brand {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.75rem;
+            letter-spacing: 0.35em;
+            color: var(--accent-cyan);
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 1.75rem;
+        }
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+        .subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-bottom: 2.25rem;
+            line-height: 1.5;
+        }
+        .primary-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            width: 100%;
+            padding: 1.1rem 1.5rem;
+            border-radius: 12px;
+            border: none;
+            background: var(--accent-lime);
+            color: #0a1929;
+            font-family: inherit;
+            font-size: 1.05rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform 0.1s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 16px rgba(200, 255, 0, 0.15);
+        }
+        .primary-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(200, 255, 0, 0.25); }
+        .primary-btn:active { transform: translateY(0); }
+        .primary-btn svg { width: 20px; height: 20px; }
+        .secondary {
+            text-align: center;
+            margin-top: 1.25rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        .secondary a {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .secondary a:hover { text-decoration: underline; }
+        .meta {
+            margin-top: 2.25rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+        .meta strong { color: var(--text-primary); font-weight: 600; }
+        .meta-row { display: flex; justify-content: space-between; margin-bottom: 0.25rem; }
+        .footer {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        .footer a { color: var(--accent-cyan); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+        @media (max-width: 480px) {
+            .card { padding: 2rem 1.5rem; }
+            h1 { font-size: 1.6rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="card">
+            <div class="brand">/// CROSSWALK IQ</div>
+            <h1>Download the desktop app</h1>
+            <p class="subtitle">
+                The Crosswalk IQ companion app runs quietly in the background
+                and keeps you signed into your dashboard.
+            </p>
+
+            <a id="primaryDownload" class="primary-btn" href="#">
+                <svg id="primaryIcon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                </svg>
+                <span id="primaryLabel">Download</span>
+            </a>
+
+            <p class="secondary">
+                <span id="secondaryHint">Or download for another platform:</span>
+                <a id="secondaryLink" href="#">Windows</a>
+            </p>
+
+            <div class="meta">
+                <div class="meta-row"><span>Version</span><strong>{{ version }}</strong></div>
+                <div class="meta-row"><span>macOS</span><strong>12 (Monterey) or newer</strong></div>
+                <div class="meta-row"><span>Windows</span><strong>10 / 11 (64-bit)</strong></div>
+            </div>
+        </div>
+
+        <p class="footer">
+            Need help? <a href="mailto:info@crosswalknyc.com">info@crosswalknyc.com</a>
+        </p>
+    </div>
+
+    <script>
+        (function () {
+            // OS detection: navigator.userAgentData is the modern hint, but
+            // Safari doesn't ship it — fall back to userAgent/platform sniffing.
+            function detectOS() {
+                var ua = (navigator.userAgent || '').toLowerCase();
+                var plat = (navigator.platform || '').toLowerCase();
+                if (/win/.test(plat) || /windows/.test(ua)) return 'windows';
+                if (/mac/.test(plat) || /macintosh|mac os x/.test(ua)) return 'mac';
+                // iPad now reports macOS in UA; still steer them to Mac since
+                // the pkg installer doesn't run on iPad regardless — but the
+                // download page is honest either way.
+                if (/iphone|ipad|ipod|android/.test(ua)) return 'mobile';
+                return 'unknown';
+            }
+
+            var MAC_URL     = {{ mac_url | tojson }};
+            var WINDOWS_URL = {{ windows_url | tojson }};
+            var os = detectOS();
+
+            var primary    = document.getElementById('primaryDownload');
+            var label      = document.getElementById('primaryLabel');
+            var secondary  = document.getElementById('secondaryLink');
+            var secHint    = document.getElementById('secondaryHint');
+
+            if (os === 'mac') {
+                primary.href = MAC_URL;
+                label.textContent = 'Download for macOS';
+                secondary.href = WINDOWS_URL;
+                secondary.textContent = 'Download for Windows';
+            } else if (os === 'windows') {
+                primary.href = WINDOWS_URL;
+                label.textContent = 'Download for Windows';
+                secondary.href = MAC_URL;
+                secondary.textContent = 'Download for macOS';
+            } else if (os === 'mobile') {
+                // Mobile can't install the desktop app; show both options
+                // with a note explaining why the primary button is disabled.
+                primary.href = '#';
+                primary.style.opacity = '0.5';
+                primary.style.cursor = 'not-allowed';
+                primary.addEventListener('click', function (e) { e.preventDefault(); });
+                label.textContent = 'Desktop only';
+                secHint.textContent = 'Open this page on your Mac or PC to install. Direct links:';
+                secondary.innerHTML = '<a href="' + MAC_URL + '">macOS</a> · <a href="' + WINDOWS_URL + '">Windows</a>';
+            } else {
+                primary.href = MAC_URL;
+                label.textContent = 'Download for macOS';
+                secondary.href = WINDOWS_URL;
+                secondary.textContent = 'Download for Windows';
+            }
+        })();
+    </script>
+</body>
+</html>

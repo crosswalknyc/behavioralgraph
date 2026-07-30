@@ -2847,6 +2847,50 @@ def privacy_page():
     """Privacy Policy page - accessible without login"""
     return render_template('privacy.html')
 
+# ============================================================================
+# DESKTOP APP DOWNLOAD
+# ----------------------------------------------------------------------------
+# Public, no-auth download surface for the Crosswalk IQ desktop app
+# (Mac .pkg / Windows .exe). Files live in a public S3 bucket; we
+# redirect through Flask so:
+#   1. dashboard.crosswalknyc.com/download stays the canonical URL we
+#      hand to people, even if we move off S3 later.
+#   2. we can add per-platform logging / lead capture in one place
+#      without touching client links.
+# The `latest/` prefix gets overwritten each release; the version
+# prefix (e.g. `1.0.0/`) is permanent for auditability.
+# ============================================================================
+
+CROSSWALK_APP_DOWNLOAD = {
+    "version":     "1.0.0",
+    "s3_base":     "https://crosswalk-downloads.s3.us-east-2.amazonaws.com",
+    "mac_key":     "latest/CrosswalkIQ-Mac.pkg",
+    "windows_key": "latest/CrosswalkIQ-Windows.exe",
+}
+
+def _crosswalk_app_url(platform: str) -> str:
+    """Absolute S3 URL for the requested platform ('mac' or 'windows')."""
+    key = CROSSWALK_APP_DOWNLOAD["mac_key"] if platform == "mac" else CROSSWALK_APP_DOWNLOAD["windows_key"]
+    return f"{CROSSWALK_APP_DOWNLOAD['s3_base']}/{key}"
+
+@app.route('/download')
+def download_page():
+    """Public landing page with OS auto-detection for the Crosswalk IQ desktop app."""
+    return render_template(
+        'download.html',
+        version=CROSSWALK_APP_DOWNLOAD["version"],
+        mac_url=_crosswalk_app_url("mac"),
+        windows_url=_crosswalk_app_url("windows"),
+    )
+
+@app.route('/download/mac')
+def download_mac():
+    return redirect(_crosswalk_app_url("mac"), code=302)
+
+@app.route('/download/windows')
+def download_windows():
+    return redirect(_crosswalk_app_url("windows"), code=302)
+
 @app.route('/admin')
 @requires_admin
 def admin_portal():

@@ -97,7 +97,7 @@ def notify_cookie_gap(source: str, domain: str,
 
     `source` is the internal scraper key ("amc", "regal", "max",
     "hulu", etc.). `domain` is the cookie domain to re-donate
-    ("amctheatres.com", "max.com"). `reason` is an optional
+    ("amctheatres.com", "hbomax.com"). `reason` is an optional
     freeform hint that goes into the email body but is NEVER
     surfaced to the dashboard.
     """

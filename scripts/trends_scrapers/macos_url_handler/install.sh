@@ -12,7 +12,7 @@
 #   bash scripts/trends_scrapers/macos_url_handler/install.sh
 #
 # Verify:
-#   open "cwcookie://donate/max.com"
+#   open "cwcookie://donate/hbomax.com"
 #
 # Uninstall:
 #   bash scripts/trends_scrapers/macos_url_handler/install.sh --uninstall
@@ -110,7 +110,7 @@ echo
 echo "✓ installed:  ${APP_PATH}"
 echo "✓ scheme:     cwcookie://"
 echo
-echo "Test:  open 'cwcookie://donate/max.com'"
+echo "Test:  open 'cwcookie://donate/hbomax.com'"
 echo "       (a Terminal window should open and start the cookie donation.)"
 echo
 echo "On the first click, macOS may ask 'Do you want to allow"

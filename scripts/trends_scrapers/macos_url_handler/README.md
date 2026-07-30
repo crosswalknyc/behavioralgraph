@@ -5,14 +5,14 @@ One-time setup that makes the cookie-gap operator emails **clickable**.
 After running `install.sh`, clicking
 
 ```
-cwcookie://donate/max.com
+cwcookie://donate/hbomax.com
 ```
 
 from Apple Mail (or anywhere on the Mac) opens Terminal.app and runs
 
 ```
 cd <bg-webapp>
-python3 scripts/trends_scrapers/donate_cookies.py max.com
+python3 scripts/trends_scrapers/donate_cookies.py hbomax.com
 ```
 
 The daily `cookie_gap_notify.py` email already includes both the
@@ -38,11 +38,11 @@ per URL scheme so every subsequent click is one-tap.
 ## Verify
 
 ```bash
-open 'cwcookie://donate/max.com'
+open 'cwcookie://donate/hbomax.com'
 ```
 
 A Terminal window should open at the repo root and start the cookie
-donation script for max.com.
+donation script for hbomax.com.
 
 ## Uninstall
 

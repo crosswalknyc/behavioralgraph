@@ -71,7 +71,7 @@ SCRAPERS = [
     #     daily scrape of netflix.com/browse, which needs the operator's
     #     donated netflix.com cookies (only available on her machine).
     #   - Disney+ / ESPN+: Bamgrid CDN IP-gates datacenter ranges.
-    #   - Max: play.max.com IP-gates similarly.
+    #   - HBO Max: play.hbomax.com IP-gates similarly.
     #   - Hulu (2026-07): kept returning 0 items from Hetzner despite
     #     valid donated cookies; Hulu WAFs the datacenter IP pre-auth.
     ('primevideo', 'scripts.trends_scrapers.primevideo',    'Prime Video', 'streaming'),
@@ -279,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
             # run from Jenna's laptop via local_residential_run.py
             # because Bamgrid IP-gates Hetzner)
             'hulu':       'hulu.com',
-            'max':        'max.com',        'primevideo': 'amazon.com',
+            'max':        'hbomax.com',    'primevideo': 'amazon.com',
             # Social - TikTok CC hashtag list is login-gated as of 2026-07
             'tiktok':     'ads.tiktok.com',
         }

@@ -2,7 +2,7 @@
 --
 -- macOS URL-scheme handler for cwcookie:// links.
 --
--- When the cookie-gap notifier emails "cwcookie://donate/max.com",
+-- When the cookie-gap notifier emails "cwcookie://donate/hbomax.com",
 -- clicking the link in Apple Mail (or any macOS app that honors
 -- system URL schemes) launches this app, which opens Terminal.app
 -- and runs the cookie-donation script for that domain.
@@ -16,9 +16,9 @@
 
 on open location theURL
     -- theURL looks like:
-    --   cwcookie://donate/max.com
+    --   cwcookie://donate/hbomax.com
     --   cwcookie://amctheatres.com
-    --   cwcookie:donate/max.com          (rare, from some mail clients)
+    --   cwcookie:donate/hbomax.com       (rare, from some mail clients)
     -- Strip the scheme + optional "donate/" verb + any trailing slash / query.
     set theDomain to theURL
 

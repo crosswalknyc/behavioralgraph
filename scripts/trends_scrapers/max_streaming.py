@@ -1,16 +1,23 @@
 """
-Max (HBO Max) trending scraper.
+HBO Max trending scraper.
 
-Requires donated cookies for `max.com`. Donate via:
+Requires donated cookies for `hbomax.com`. Donate via:
 
-    python3 scripts/trends_scrapers/donate_cookies.py --domain max.com
+    python3 scripts/trends_scrapers/donate_cookies.py hbomax.com
 
-CRITICAL: donate cookies from `play.max.com` (the actual player app),
-NOT from the marketing shell `www.max.com`. The two use different
-session tokens - only play.max.com issues the one that lets us render
-the hydrated home / series / movie pages. When Jenna's signed into HBO
-Max in Chrome and visits play.max.com/, the donation script picks up
-the right cookie automatically.
+CRITICAL: donate cookies from `play.hbomax.com` (the actual player app),
+NOT from the marketing shell `www.hbomax.com`. The two use different
+session tokens - only play.hbomax.com issues the one that lets us render
+the hydrated home / series / movie pages. When you're signed into HBO
+Max in Chrome and visit play.hbomax.com/, the donation script picks
+up the right cookie automatically.
+
+Naming history: WBD launched "Max" (max.com) in mid-2023, then
+reverted to "HBO Max" in mid-2025. The rebrand pushed the app back to
+play.hbomax.com. `max.com` no longer resolves the app shell. The
+scraper source key stays `max` for backwards compat with the S3
+snapshot path (`trends_iq_snapshots/latest/max.json`); everything
+customer-facing is HBO Max.
 
 Max renders tiles as anchors of the form:
 
@@ -48,10 +55,10 @@ logger = logging.getLogger(__name__)
 
 
 MAX_URLS = [
-    ('Home',      'https://play.max.com/'),
-    ('Series',    'https://play.max.com/pages/series'),
-    ('Movies',    'https://play.max.com/pages/movies'),
-    ('Trending',  'https://play.max.com/pages/trending'),
+    ('Home',      'https://play.hbomax.com/'),
+    ('Series',    'https://play.hbomax.com/pages/series'),
+    ('Movies',    'https://play.hbomax.com/pages/movies'),
+    ('Trending',  'https://play.hbomax.com/pages/trending'),
 ]
 
 
@@ -137,7 +144,7 @@ def _extract_max_dom(html: str, limit: int = 40) -> list[dict]:
         items.append({
             'rank':             len(items) + 1,
             'title':            title,
-            'url':              f'https://play.max.com{path}',
+            'url':              f'https://play.hbomax.com{path}',
             'category_display': _classify_from_path(path),
             'collection':       '',
         })
@@ -158,8 +165,8 @@ def fetch() -> dict[str, Any]:
     # "United States". The default "Random" rotation gives US only
     # ~12% of the time.
     rendered = render_pages(MAX_URLS,
-                             homepage='https://www.max.com/',
-                             cookie_domain='max.com',
+                             homepage='https://www.hbomax.com/',
+                             cookie_domain='hbomax.com',
                              wait_selectors=_MAX_HYDRATE_SELECTORS,
                              wait_ms=4000,
                              scroll_ms=3000,
@@ -183,17 +190,17 @@ def fetch() -> dict[str, Any]:
     for i, it in enumerate(all_items[:25], start=1):
         it['rank'] = i
 
-    # If we came back empty across every rail, the donated max.com
+    # If we came back empty across every rail, the donated hbomax.com
     # cookies are stale / missing / were served the marketing shell
     # rather than the hydrated app. Fire the offline notifier so
-    # operators know to re-donate from play.max.com; the dashboard
+    # operators know to re-donate from play.hbomax.com; the dashboard
     # itself just shows a neutral 'warming up' tile.
     if not all_items:
         try:
             from .cookie_gap_notify import notify_cookie_gap
-            notify_cookie_gap('max', 'max.com',
-                              reason=('all Max rails returned 0 titles; '
-                                      'cookies from play.max.com likely '
+            notify_cookie_gap('max', 'hbomax.com',
+                              reason=('all HBO Max rails returned 0 titles; '
+                                      'cookies from play.hbomax.com likely '
                                       'stale or missing'))
         except Exception as e:
             logger.info("max cookie_gap notify failed: %s", e)
@@ -204,6 +211,6 @@ def fetch() -> dict[str, Any]:
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO,
                          format='%(asctime)s %(levelname)s %(name)s %(message)s')
-    result = run_scraper('max', 'Max', 'streaming', fetch)
+    result = run_scraper('max', 'HBO Max', 'streaming', fetch)
     print(f"max: {len(result.get('national', []))} items  "
            f"error={result.get('error')}", file=sys.stderr)

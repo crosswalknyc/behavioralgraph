@@ -36,7 +36,7 @@ The two scraper entry points read config themselves; scrapers just pass
 
     from ._playwright import render_pages
     rendered = render_pages(pages, use_proxy=True,
-                             cookie_domain='max.com', ...)
+                             cookie_domain='hbomax.com', ...)
 
 For debugging you can validate the current proxy config with:
 

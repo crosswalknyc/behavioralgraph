@@ -90,7 +90,11 @@ DEFAULT_DOMAINS = [
     'netflix.com',     # 2026-07: switched from weekly TSV to authenticated daily
     'disneyplus.com',
     'hulu.com',
-    'max.com',
+    # HBO Max reverted from the max.com rebrand back to hbomax.com in
+    # 2025. Fresh Chrome cookies now sit under `.hbomax.com` /
+    # `play.hbomax.com`; the old `max.com` origin no longer serves
+    # the app shell. Sign in at play.hbomax.com to get a valid session.
+    'hbomax.com',
     'amazon.com',      # for Prime Video (same session as amazon shopping)
     # ESPN+ intentionally omitted - programming lives at
     # disneyplus.com/browse/espn (Disney bundle), so the disneyplus.com
@@ -261,26 +265,36 @@ def main() -> int:
     # cookies for the old host name and none for the new one. Explaining
     # this once, in place, saves a lot of "the cookies were donated but
     # the scraper still fails" back-and-forth.
-    LEGACY_DOMAIN_HINTS = {
-        'max.com':       'hbomax.com',   # rebrand 2023
-        'x.com':         'twitter.com',  # rebrand 2023
+    # If Chrome has cookies under the OLD host (key of the inner tuple)
+    # but the caller is asking for cookies for the CURRENT host
+    # (the dict key), point them at the current sign-in URL so they
+    # get a fresh session on the right origin. `sign_in_url` is the
+    # SPECIFIC page to visit; some services keep `www.` as marketing
+    # and put the actual session-issuing app on a subdomain.
+    LEGACY_DOMAIN_HINTS: dict[str, tuple[str, str]] = {
+        # WBD reverted the max.com rebrand in 2025 - app shell is
+        # back at play.hbomax.com.
+        'hbomax.com':    ('max.com',      'https://play.hbomax.com/'),
+        # X's max.com-style rebrand from twitter.com (2023).
+        'x.com':         ('twitter.com',  'https://x.com/'),
     }
 
     for domain in domains:
         cookies = _read_chrome_cookies(domain, profile=args.profile)
         if not cookies:
             print(f"  {domain:<20s} 0 cookies - skipping (are you logged in / have you visited it?)")
-            legacy = LEGACY_DOMAIN_HINTS.get(domain)
-            if legacy:
-                legacy_cookies = _read_chrome_cookies(legacy, profile=args.profile)
+            hint = LEGACY_DOMAIN_HINTS.get(domain)
+            if hint:
+                legacy_host, sign_in_url = hint
+                legacy_cookies = _read_chrome_cookies(legacy_host, profile=args.profile)
                 if legacy_cookies:
                     print(f"  {domain:<20s} ! Chrome has {len(legacy_cookies)} "
-                          f"cookies for the legacy '{legacy}' domain but none "
-                          f"for '{domain}'.")
-                    print(f"  {domain:<20s}   Visit https://play.{domain} in "
-                          f"Chrome and sign in there. Chrome will drop fresh "
-                          f"cookies under the current domain; re-run this "
-                          f"script and the donation will succeed.")
+                          f"cookies for the legacy '{legacy_host}' domain but "
+                          f"none for '{domain}'.")
+                    print(f"  {domain:<20s}   Visit {sign_in_url} in Chrome and "
+                          f"sign in. Chrome will drop fresh cookies under the "
+                          f"current domain; re-run this script and the "
+                          f"donation will succeed.")
             continue
         try:
             uri = _upload_to_s3(domain, cookies, dry_run=args.dry_run)
