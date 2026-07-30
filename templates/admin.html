@@ -694,6 +694,48 @@
             display: none !important;
         }
 
+        /* Access-to-new-releases pills (2026-07-30). Small horizontal
+           chips that pack tightly and never wrap mid-word — replaces
+           the old fixed-column grid that was rendering "PROFILE / IQ"
+           on two lines. The :has(input:checked) selector highlights
+           the pill so admins can eyeball which categories are
+           auto-granted at a glance. */
+        .aan-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.3rem 0.6rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            /* Override the global `label { text-transform: uppercase }` */
+            text-transform: none;
+            letter-spacing: 0;
+            color: var(--text-primary);
+            white-space: nowrap;
+            cursor: pointer;
+            margin: 0;
+            transition: all 0.15s ease;
+        }
+        .aan-pill:hover {
+            border-color: var(--accent-cyan);
+        }
+        .aan-pill input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+            padding: 0;
+            accent-color: var(--accent-cyan);
+        }
+        .aan-pill:has(input[type="checkbox"]:checked) {
+            background: rgba(0, 255, 255, 0.08);
+            border-color: var(--accent-cyan);
+            color: var(--text-primary);
+        }
+        .aan-pill:has(input[type="checkbox"]:not(:checked)) {
+            opacity: 0.55;
+        }
+
         .run-item-row:hover .run-bulk-btn {
             opacity: 1 !important;
         }
@@ -3269,46 +3311,36 @@
                         </div>
                     </div>
 
-                    <!-- Access to New Releases -->
-                    <div style="margin-bottom: 1rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem;">
-                        <div style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;" onclick="document.getElementById('accessToNewGrid').style.display = document.getElementById('accessToNewGrid').style.display === 'none' ? 'grid' : 'none'; this.querySelector('.collapse-icon').classList.toggle('rotated');">
-                            <span style="font-size: 1rem;">🆕</span>
-                            <h5 style="margin: 0; font-size: 0.85rem; color: var(--accent-cyan); font-weight: 600;">Access to New Releases</h5>
+                    <!-- Access to New Releases (2026-07-30 redesign).
+                         Auto-collapsed by default so it doesn't dominate the
+                         top of the Dashboard Access section. Uses pill-style
+                         toggles (.aan-pill in the shared CSS block) that
+                         wrap by word (never mid-word like the old grid did),
+                         inherit no uppercase transform, and show a cyan
+                         highlight when checked so admins can eyeball
+                         opt-outs quickly. Retired products (E-Commerce IQ,
+                         Ticket Sales Tracker, Ticket Sales IQ) keep their
+                         input in the DOM but the pill is hidden - JS reads
+                         .checked and must not null-deref. -->
+                    <div style="margin-bottom: 1rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.6rem 0.9rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;" onclick="var g=document.getElementById('accessToNewGrid'); var open=g.style.display==='none'||!g.style.display; g.style.display=open?'flex':'none'; this.querySelector('.collapse-icon').classList.toggle('rotated', !open);">
+                            <span style="font-size: 0.95rem;">🆕</span>
+                            <h5 style="margin: 0; font-size: 0.82rem; color: var(--accent-cyan); font-weight: 600;">Access to New Releases</h5>
                             <span class="collapse-icon rotated" style="font-size: 0.7rem; transition: transform 0.2s;">▼</span>
+                            <span style="margin-left: auto; font-size: 0.7rem; color: var(--text-secondary);">Auto-grants access when new items ship in these categories</span>
                         </div>
-                        <p style="color: var(--text-secondary); font-size: 0.7rem; margin: 0 0 0.5rem;">When checked, user automatically receives access to new items released from purgatory in that category.</p>
-                        <div id="accessToNewGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.3rem;">
-                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                <input type="checkbox" id="aanProfileIQ" checked> Profile IQ
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                <input type="checkbox" id="aanSubscriberIQ" checked> Subscriber IQ
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                <input type="checkbox" id="aanImpactIQ" checked> Impact IQ
-                            </label>
-                            <label style="display: none; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                <!-- E-Commerce IQ removed from the dashboard; checkbox kept (hidden) so JS handlers that read aanEcommerceIQ.checked don't null-deref. -->
-                                <input type="checkbox" id="aanEcommerceIQ" checked> E-Commerce IQ
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                <input type="checkbox" id="aanLLMOIQ" checked> LLMO IQ
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                <input type="checkbox" id="aanHedgeFundIQ" checked> Fin IQ
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                <input type="checkbox" id="aanAnalysisIQ" checked> Analysis IQ
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                <input type="checkbox" id="aanRankersIQ" checked> Rankers IQ
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                <input type="checkbox" id="aanTicketSalesTracker" checked> Ticket Sales Tracker
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                <input type="checkbox" id="aanTicketSalesIQ" checked> Ticket Sales IQ
-                            </label>
+                        <div id="accessToNewGrid" style="display: none; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem;">
+                            <label class="aan-pill"><input type="checkbox" id="aanProfileIQ" checked><span>🎯 Profile IQ</span></label>
+                            <label class="aan-pill"><input type="checkbox" id="aanSubscriberIQ" checked><span>📊 Subscriber IQ</span></label>
+                            <label class="aan-pill"><input type="checkbox" id="aanImpactIQ" checked><span>🌊 Impact IQ</span></label>
+                            <label class="aan-pill"><input type="checkbox" id="aanLLMOIQ" checked><span>🤖 LLMO IQ</span></label>
+                            <label class="aan-pill"><input type="checkbox" id="aanHedgeFundIQ" checked><span>📈 Fin IQ</span></label>
+                            <label class="aan-pill"><input type="checkbox" id="aanAnalysisIQ" checked><span>📊 Analysis IQ</span></label>
+                            <label class="aan-pill"><input type="checkbox" id="aanRankersIQ" checked><span>📊 Talent Ranker</span></label>
+                            <!-- Retired features - inputs kept for JS back-compat, pill hidden. -->
+                            <label class="aan-pill" style="display: none;"><input type="checkbox" id="aanEcommerceIQ" checked><span>🛒 E-Commerce IQ</span></label>
+                            <label class="aan-pill" style="display: none;"><input type="checkbox" id="aanTicketSalesTracker" checked><span>🎬 Ticket Sales Tracker</span></label>
+                            <label class="aan-pill" style="display: none;"><input type="checkbox" id="aanTicketSalesIQ" checked><span>🎫 Ticket Sales IQ</span></label>
                         </div>
                     </div>
                     
