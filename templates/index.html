@@ -46079,7 +46079,7 @@
             // unit label so podcasts read "listeners", music reads
             // "streams", video reads "views" automatically.
             var noun = (function () {
-                var m = unit.match(/(streams|listeners|views|audience|plays)\b/i);
+                var m = unit.match(/(streams|listeners|views|audience|plays|readers|borrows|borrowers|loans|purchases)\b/i);
                 return (m && m[1]) ? m[1].toLowerCase() : 'streams';
             })();
             var tip = 'Number of ' + noun;
@@ -46444,6 +46444,7 @@
                         ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
                         : _tiqEsc(it.title);
                     var rowKey = it.title + ' - ' + (it.artist || sourceSlug);
+                    var streamsChipBook = _tiqStreamsBadge(it);
                     var meta = '';
                     if (it.artist) meta += '<span>' + _tiqEsc(it.artist) + '</span>';
                     if (sourceKind === 'store') {
@@ -46463,6 +46464,7 @@
                     return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                            '<div class="tiq-row-body">' +
                            '<div class="tiq-row-title">' + titleLine +
+                           streamsChipBook +
                            _tiqCrossPlatformBadge(it) +
                            _tiqActions('book', sourceSlug, rowKey, rowKey, 'National') +
                            '</div>' +

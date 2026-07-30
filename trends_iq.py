@@ -2678,6 +2678,27 @@ _DEFAULT_UNIT_BY_KIND = {
     'film':    'weekly US views',
     'tv':      'weekly US views',
     'title':   'weekly US views',
+    # For books the noun depends on the platform (readers vs listeners
+    # vs library borrows). The aggregate fallback below is generic; the
+    # per-platform stamp prefers `_PLATFORM_UNIT_LABEL` when set.
+    'book':    'weekly US audience',
+}
+
+# Per (kind, platform) unit label. Wins over Claude's aggregate
+# `unit_label` when the stamp resolves to a specific platform. Keeps
+# the dashboard chip short + the tooltip noun ("readers" / "listeners"
+# / "borrows") crisp. Falls back to `_DEFAULT_UNIT_BY_KIND[kind]` when
+# no override exists for the (kind, platform) pair. `amazon` /
+# `apple` show different labels depending on whether the row is a
+# song / podcast / book, which is why we key by (kind, platform)
+# instead of just platform.
+_PLATFORM_UNIT_LABEL = {
+    # Books
+    ('book', 'amazon'):       'weekly US readers',
+    ('book', 'apple'):        'weekly US readers',
+    ('book', 'audible'):      'weekly US listeners',
+    ('book', 'libby_ebook'):  'weekly US library borrows',
+    ('book', 'libby_audio'):  'weekly US library borrows',
 }
 
 
@@ -2704,6 +2725,12 @@ def _stamp_stream_estimate(row: dict, entry: dict,
 
     if per and (per.get('us_estimate') or 0) > 0:
         # Per-platform source of truth.
+        unit_label = (
+            _PLATFORM_UNIT_LABEL.get((kind_hint, platform_key))
+            or _DEFAULT_UNIT_BY_KIND.get(kind_hint)
+            or entry.get('unit_label')
+            or 'weekly US audience'
+        )
         out = {
             'us_estimate':      per.get('us_estimate'),
             'us_estimate_low':  per.get('us_estimate_low'),
@@ -2717,9 +2744,7 @@ def _stamp_stream_estimate(row: dict, entry: dict,
             # tooltip is simplified.
             'method':           per.get('note') or entry.get('method'),
             'sources':          entry.get('sources'),
-            'unit_label':       (_DEFAULT_UNIT_BY_KIND.get(kind_hint)
-                                  or entry.get('unit_label')
-                                  or 'weekly US audience'),
+            'unit_label':       unit_label,
             'platform':         platform_key,
         }
     else:
@@ -2761,6 +2786,21 @@ _STREAMING_PANEL_TO_PLATFORM = {
     'max':        'max',
     'primevideo': 'primevideo',
     'espnplus':   'espnplus',
+}
+# book_charts panels -> per-platform key. Libby panels come from a
+# separate snapshot (`libby_trends`) but plug into the same book
+# estimate rows because `_collect_books` unifies them in
+# stream_estimates.py; the annotate walker below handles both.
+_BOOK_PANEL_TO_PLATFORM = {
+    # book_charts.sources
+    'amazon':    'amazon',
+    'apple':     'apple',
+    'audible':   'audible',
+}
+_LIBBY_PANEL_TO_PLATFORM = {
+    # libby_trends.sources
+    'ebook':     'libby_ebook',
+    'audiobook': 'libby_audio',
 }
 
 
@@ -2849,6 +2889,42 @@ def _annotate_streaming_with_streams(streaming_trending: dict,
                 _stamp_stream_estimate(row, entry,
                                          platform_key=platform_key,
                                          kind_hint=kind_hint)
+
+
+def _annotate_books_with_streams(book_charts: dict,
+                                   libby_trends: dict,
+                                   estimates: dict) -> None:
+    """Attach per-platform `us_streams` to every book row.
+      - book_charts panels (amazon/apple/audible) -> platform-specific
+        weekly US reader/listener count.
+      - libby_trends panels (ebook/audiobook) -> Libby's projected
+        weekly US public-library-wide borrows (NOT LA County holds).
+    Rows key by (normalized title + artist) - matches `_collect_books`.
+    """
+    if not estimates:
+        return
+    items_lookup = estimates.get('items') or {}
+
+    def _stamp_panel(panel_dict: dict,
+                      slug_to_platform: dict,
+                      kind_hint: str) -> None:
+        if not panel_dict:
+            return
+        for panel_slug, panel in (panel_dict.get('sources')
+                                   or panel_dict).items():
+            platform_key = slug_to_platform.get(panel_slug, '')
+            if not platform_key:
+                continue
+            for row in (panel or {}).get('items') or []:
+                title  = (row.get('title')  or '').strip()
+                artist = (row.get('artist') or '').strip()
+                key = f'book:{_cp_normalize(f"{title} {artist}")}'
+                _stamp_stream_estimate(row, items_lookup.get(key),
+                                         platform_key=platform_key,
+                                         kind_hint=kind_hint)
+
+    _stamp_panel(book_charts,   _BOOK_PANEL_TO_PLATFORM,   'book')
+    _stamp_panel(libby_trends,  _LIBBY_PANEL_TO_PLATFORM,  'book')
 
 
 def _annotate_cross_platform_moments(
@@ -4824,6 +4900,16 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     _annotate_music_with_streams(music_charts,       stream_estimates_snap)
     _annotate_podcasts_with_streams(podcast_charts,  stream_estimates_snap)
     _annotate_streaming_with_streams(streaming_trending, stream_estimates_snap)
+    # Books: pass BOTH the book_charts sub-dict (amazon/apple/audible)
+    # AND the libby_trends sub-dict (ebook/audiobook) - a single item
+    # can appear on both, and both share the same `book:<title
+    # artist>` estimate key. Wrap each in `{'sources': ...}` so the
+    # annotator's dispatch stays consistent.
+    _annotate_books_with_streams(
+        {'sources': book_charts},
+        {'sources': libby_trends},
+        stream_estimates_snap,
+    )
 
     trending_people = _fetch_trending_people(
         headlines,

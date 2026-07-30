@@ -85,12 +85,13 @@ _S3_DATED  = 'trends_iq_snapshots/{date}/'
 
 # -------------------------------------------------------------------------
 # How many items to research per category. Sonnet 4.5 + web_search costs
-# ~$0.02/item, so 15 podcasts + 20 songs + 20 streaming = 55 items/day
-# ≈ $1.10/day. Well within the trends-iq daily budget.
+# ~$0.02/item, so 15 podcasts + 20 songs + 20 streaming + 20 books = 75
+# items/day ≈ $1.50/day. Well within the trends-iq daily budget.
 # -------------------------------------------------------------------------
 _MAX_PODCAST_ITEMS   = 15
 _MAX_SONG_ITEMS      = 20
 _MAX_STREAMING_ITEMS = 20
+_MAX_BOOK_ITEMS      = 20
 
 _WEBSEARCH_MODEL      = (os.environ.get('STREAM_ESTIMATES_MODEL')
                           or 'claude-sonnet-4-5')
@@ -274,12 +275,96 @@ def _collect_streaming(max_items: int = _MAX_STREAMING_ITEMS) -> list[dict]:
     return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
 
 
+def _collect_books(max_items: int = _MAX_BOOK_ITEMS) -> list[dict]:
+    """Union top items across the book_charts snapshot (Amazon /
+    Apple / Audible) AND the libby_trends snapshot (LA County
+    Library popular ebook + audiobook lists), deduped by
+    (normalized title + author).
+
+    Libby rows are folded into the SAME item as their store-panel
+    counterparts so a book that appears on both Amazon Best-Sellers
+    and Libby Popular eBooks gets a SINGLE Claude call that reasons
+    across both platforms. The libby hold_count travels via
+    `libby_holds_by_type` so the prompt can call it out."""
+    book_snap  = _read_snapshot('book_charts')  or {}
+    libby_snap = _read_snapshot('libby_trends') or {}
+    per: dict[str, dict] = {}
+
+    # 1. Book stores (Amazon, Apple, Audible).
+    for src_slug, panel in (book_snap.get('sources') or {}).items():
+        for i, it in enumerate((panel.get('items') or [])[:30]):
+            title  = (it.get('title')  or '').strip()
+            artist = (it.get('artist') or '').strip()
+            if not title:
+                continue
+            key = _cp_normalize(f'{title} {artist}')
+            if not key:
+                continue
+            rank = i + 1
+            e = per.setdefault(key, {
+                'kind':          'book',
+                'display_title': title,
+                'artist':        artist,
+                'best_rank':     rank,
+                'chart_labels':  [],
+                'image':         it.get('image'),
+                'url':           it.get('url'),
+                'libby_holds_by_type': {},  # populated below
+            })
+            label = panel.get('label') or src_slug
+            e['chart_labels'].append(f'{label} #{rank}')
+            if rank < e['best_rank']:
+                e['best_rank'] = rank
+
+    # 2. Libby (LA County) - ebook + audiobook. Fold onto existing
+    #    items when the title+author match; create standalone items
+    #    when they don't.
+    for src_slug in ('ebook', 'audiobook'):
+        panel = (libby_snap.get('sources') or {}).get(src_slug) or {}
+        panel_label = panel.get('label') or f'Libby: Popular {src_slug.title()}s'
+        # Panel-label -> chart-label prefix we render on the dashboard
+        chart_prefix = ('Libby: Popular eBooks' if src_slug == 'ebook'
+                         else 'Libby: Popular Audiobooks')
+        for i, it in enumerate((panel.get('items') or [])[:30]):
+            title  = (it.get('title')  or '').strip()
+            artist = (it.get('artist') or '').strip()
+            holds  = int(it.get('holds') or 0)
+            if not title:
+                continue
+            key = _cp_normalize(f'{title} {artist}')
+            if not key:
+                continue
+            rank = i + 1
+            e = per.setdefault(key, {
+                'kind':          'book',
+                'display_title': title,
+                'artist':        artist,
+                'best_rank':     rank,
+                'chart_labels':  [],
+                'image':         it.get('image'),
+                'url':           it.get('url'),
+                'libby_holds_by_type': {},
+            })
+            e['chart_labels'].append(f'{chart_prefix} #{rank}')
+            if rank < e['best_rank']:
+                e['best_rank'] = rank
+            # Preserve the LA County hold count so the prompt can
+            # cite it (and reason to project it up to US-wide
+            # borrows). Map ebook->libby_ebook / audiobook->libby_audio.
+            plat = 'libby_ebook' if src_slug == 'ebook' else 'libby_audio'
+            e['libby_holds_by_type'][plat] = holds
+
+    return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
+
+
 def _lookup_key(kind: str, display_title: str, artist: str = '') -> str:
     """Storage key for an item. Podcasts/streaming key by title;
     songs key by (title + artist) because titles collide across
     artists."""
     if kind == 'song':
         return f'song:{_cp_normalize(f"{display_title} {artist}")}'
+    if kind == 'book':
+        return f'book:{_cp_normalize(f"{display_title} {artist}")}'
     if kind in ('film', 'tv', 'title'):
         return f'{kind}:{_cp_normalize(display_title)}'
     return f'{kind}:{_cp_normalize(display_title)}'
@@ -490,6 +575,69 @@ _PODCAST_PLATFORMS = [
      )},
 ]
 
+_BOOK_PLATFORMS = [
+    {'key': 'amazon',
+     'label': 'Amazon Best-Sellers (Kindle + Print)',
+     'ceiling': 500_000,
+     'anchors': (
+         "NPD BookScan / Circana US weekly print+ebook units. Top-10 "
+         "trade book typically 15-50K weekly US buyers; #1 in a "
+         "release week 100-300K (rare political memoir / celebrity "
+         "release). Amazon is ~55-65% of US ebook sales and ~40-50% "
+         "of print. Bias LOW: prefer the tier's low anchor unless a "
+         "publisher/Circana press cite backs a higher number for the "
+         "specific week. Steady-state top-10 = 8-25K weekly US buyers."
+     )},
+    {'key': 'apple',
+     'label': 'Apple Books Top 100 (Paid US)',
+     'ceiling': 60_000,
+     'anchors': (
+         "Apple Books is ~8-12% of US ebook market. Top-10 Apple Books "
+         "US typically 1-4K weekly US buyers; #1 3-10K. Rarely exceeds "
+         "10K weekly except for a mega-launch week. If no press data "
+         "exists, use chart-position * Apple's share of US ebook (~10%) "
+         "of the Amazon anchor - and bias LOW."
+     )},
+    {'key': 'audible',
+     'label': 'Audible Best-Sellers (Audiobook)',
+     'ceiling': 80_000,
+     'anchors': (
+         "Audible has ~10M US members. Top audiobook titles do 5-15K "
+         "weekly US listens/purchases; #1 20-50K in a big release week. "
+         "Audible dominates US audiobook (~55-65% share). Steady-state "
+         "top-10 = 3-10K weekly US listeners. Bias LOW."
+     )},
+    {'key': 'libby_ebook',
+     'label': 'Libby Popular eBooks (US public-library projection)',
+     'ceiling': 60_000,
+     'anchors': (
+         "OverDrive/Libby powers ~90% of US public library digital "
+         "circulation. Total US public library digital circulation = "
+         "~600M annual loans (OverDrive 2024-2025 press releases) = "
+         "~11.5M weekly. Top ~5K digital library titles get most "
+         "loans; #1 title ~15-40K US weekly library borrows; top-10 "
+         "5-15K; top-100 1-4K. THE RAW SIGNAL IS LA COUNTY LIBRARY "
+         "HOLDS - LA County ~10M residents = ~3-4% of US library-"
+         "served population. If a book has N holds at LA County, "
+         "the US weekly borrow rate is roughly N * 25-35x, but "
+         "cross-reference against OverDrive's National Digital Book "
+         "Awards / weekly bestsellers press when available. Bias LOW."
+     )},
+    {'key': 'libby_audio',
+     'label': 'Libby Popular Audiobooks (US public-library projection)',
+     'ceiling': 40_000,
+     'anchors': (
+         "US public library audiobook digital circulation = ~140M "
+         "annual loans (OverDrive 2025) = ~2.7M weekly. Top #1 "
+         "audiobook ~8-25K US weekly library borrows; top-10 2-8K; "
+         "top-100 <1K. RAW SIGNAL IS LA COUNTY LIBRARY HOLDS - "
+         "project up ~25-35x (LA County share of US library "
+         "audiobook demand), cross-check against OverDrive/AudioFile "
+         "quarterly reports when available. Bias LOW."
+     )},
+]
+
+
 _STREAMING_PLATFORMS_META = [
     {'key': 'netflix',
      'label': 'Netflix',
@@ -552,6 +700,8 @@ def _platforms_for_kind(kind: str) -> list[dict]:
         return _PODCAST_PLATFORMS
     if kind in ('film', 'tv', 'title'):
         return _STREAMING_PLATFORMS_META
+    if kind == 'book':
+        return _BOOK_PLATFORMS
     return []
 
 
@@ -578,6 +728,17 @@ def _format_target_platforms(platforms: list[dict], focus_keys: set[str]) -> str
 # actually appears on. Kept case-insensitive and forgiving so a label
 # reword doesn't silently break the highlight.
 _CHART_LABEL_TO_PLATFORM = (
+    # Books - most specific first so 'libby: popular ebooks' isn't
+    # eaten by the shorter 'libby' prefix.
+    ('libby: popular ebooks',     'libby_ebook'),
+    ('libby: popular audiobooks', 'libby_audio'),
+    ('libby popular ebooks',      'libby_ebook'),
+    ('libby popular audiobooks',  'libby_audio'),
+    ('apple books',       'apple'),
+    ('amazon best-sellers (books)', 'amazon'),
+    ('audible best-sellers',  'audible'),
+
+    # Podcast / music (order matters - longer / more-specific first)
     ('spotify podcast',  'spotify'),   # podcast panel - Spotify Podcast Charts (US)
     ('spotify',          'spotify'),   # Spotify Daily Top 200 (US), Spotify Podcast Charts (US)
     ('apple podcasts',   'apple'),
@@ -616,6 +777,29 @@ def _focus_keys_from_charts(chart_labels: list[str]) -> set[str]:
     return out
 
 
+_LIBBY_PROJECTION_NOTE = (
+    "LIBBY PROJECTION RULE (only applies to libby_ebook and "
+    "libby_audio platforms):\n"
+    "  The raw signal in CHART CONTEXT for Libby rows is the HOLD COUNT "
+    "at LA County Library (a single US public library system serving "
+    "~10M residents, roughly 3-4% of the US public-library-served "
+    "population). LA County holds are NOT the answer - you must project "
+    "them up to US-wide weekly library borrows.\n"
+    "  Preferred approach (in order):\n"
+    "    a) Cite OverDrive's public 'Big Library Read' / 'Popular "
+    "Reads This Week' data for the specific title if available.\n"
+    "    b) Cite Publishers Weekly / American Libraries digital-loan "
+    "reports.\n"
+    "    c) If neither exists, project holds -> weekly US borrows "
+    "using the ~25-35x LA County -> US library patrons scale, biased "
+    "LOW: divide by 7 to get a weekly rate if the holds are current-"
+    "queue rather than weekly circulation, and cap at the platform's "
+    "ceiling.\n"
+    "  Always state the projection method used in `note` for the "
+    "libby_* platforms. Do NOT return the raw LA County number.\n"
+)
+
+
 def _build_prompt(item: dict) -> str:
     kind          = item['kind']
     display_title = item['display_title']
@@ -623,6 +807,8 @@ def _build_prompt(item: dict) -> str:
     charts        = item.get('chart_labels') or []
     chart_str     = ', '.join(charts[:6]) if charts else '(no chart context)'
     focus_keys    = _focus_keys_from_charts(charts)
+
+    libby_note = ''
 
     if kind == 'podcast':
         unit  = 'weekly US listeners'
@@ -644,6 +830,26 @@ def _build_prompt(item: dict) -> str:
         query = (f'"{display_title}" Nielsen streaming top 10 US TV '
                  f'series weekly 2026')
         item_line = f'TV SERIES TITLE: {display_title}'
+    elif kind == 'book':
+        unit  = ('weekly US audience (readers/listeners/borrowers per '
+                 'platform - amazon+apple = readers, audible = '
+                 'listeners, libby_* = library borrows PROJECTED to '
+                 'the US public-library ecosystem, not local holds)')
+        query = (f'"{display_title}" "{artist}" Circana BookScan US '
+                 f'weekly sales OverDrive Libby US borrows 2026')
+        item_line = f'BOOK TITLE: {display_title}\nAUTHOR: {artist or "(unknown)"}'
+        # Surface any Libby LA County hold count so Claude has the raw
+        # local signal it must project upward. The prompt already
+        # tells it how to convert.
+        holds_by_plat = item.get('libby_holds_by_type') or {}
+        if holds_by_plat:
+            parts = [f'{p} raw LA County holds: {n:,}'
+                      for p, n in holds_by_plat.items() if n > 0]
+            if parts:
+                item_line += ('\nLIBBY RAW SIGNAL (LA County only, '
+                              'must be projected up):\n  '
+                              + '\n  '.join(parts))
+        libby_note = '\n' + _LIBBY_PROJECTION_NOTE
     else:
         unit  = 'weekly US views'
         query = f'"{display_title}" weekly viewers US streaming 2026'
@@ -667,6 +873,7 @@ def _build_prompt(item: dict) -> str:
         _PROMPT_HEADER
         + f'\nTARGET METRIC (per platform): {unit}\n'
         + target_section
+        + libby_note
         + '\n' + item_line
         + f'\nCHART CONTEXT: {chart_str}\n'
         + f'\nSUGGESTED SEARCH QUERY (feel free to refine): {query}\n\n'
@@ -711,6 +918,11 @@ _MAX_ESTIMATE_BY_KIND = {
     'film':    75_000_000,     # Sum of streaming platform ceilings (~90M) biased down
     'tv':      75_000_000,
     'title':   75_000_000,
+    # `book` covers Amazon + Apple + Audible + Libby (ebook + audio).
+    # Sum of per-platform ceilings ~740K; aggregate ceiling biased
+    # down to 500K. A weekly release-week best-seller might hit this;
+    # steady-state top-10 books read far below.
+    'book':    500_000,
 }
 _CLAMP_TO_FRACTION = 0.4         # Bias clamped values conservative (was 0.5)
 
@@ -721,6 +933,13 @@ def _default_unit_for_kind(kind: str) -> str:
         return 'weekly US listeners'
     if kind == 'song':
         return 'weekly US streams'
+    if kind == 'book':
+        # Chip label - the per-platform annotate step overrides this
+        # to 'weekly US readers' / 'weekly US listeners' / 'weekly US
+        # library borrows' based on which panel the row is on. The
+        # aggregate stays 'weekly US audience' since aggregating
+        # across sale + loan units in one label reads awkwardly.
+        return 'weekly US audience'
     return 'weekly US views'
 
 
@@ -997,10 +1216,10 @@ def _humanize(n: int) -> str:
 # Fetch entry point
 # -------------------------------------------------------------------------
 def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
-    """Read podcast / music / streaming snapshots, research each unique
-    top item's US audience via Claude + web_search, and return the
-    combined snapshot dict."""
-    wanted = only or {'podcast', 'song', 'streaming'}
+    """Read podcast / music / streaming / book snapshots, research
+    each unique top item's US audience via Claude + web_search, and
+    return the combined snapshot dict."""
+    wanted = only or {'podcast', 'song', 'streaming', 'book'}
 
     items: list[dict] = []
     if 'podcast' in wanted:
@@ -1009,6 +1228,8 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
         items.extend(_collect_songs())
     if 'streaming' in wanted:
         items.extend(_collect_streaming())
+    if 'book' in wanted:
+        items.extend(_collect_books())
 
     if not items:
         return {
@@ -1019,11 +1240,12 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
         }
 
     logger.info("stream_estimates: total unique items = %d "
-                "(podcast=%d, song=%d, streaming=%d)",
+                "(podcast=%d, song=%d, streaming=%d, book=%d)",
                 len(items),
                 sum(1 for it in items if it['kind'] == 'podcast'),
                 sum(1 for it in items if it['kind'] == 'song'),
-                sum(1 for it in items if it['kind'] in ('film', 'tv', 'title')))
+                sum(1 for it in items if it['kind'] in ('film', 'tv', 'title')),
+                sum(1 for it in items if it['kind'] == 'book'))
 
     researched = _research_all(items)
 
