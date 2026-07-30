@@ -92640,16 +92640,6 @@
             const container = document.getElementById('audienceShareBoxes');
             const tucCard = document.getElementById('tucCard');
             if (!container) return;
-            // User rule (2026-07-30): CONTENT-category profiles never show
-            // the Total Universe Composition box (MEDIA is 100% by
-            // definition, so the breakdown adds nothing). Hiding the whole
-            // card lets the Audience Snapshot rise to the top of the left
-            // column and align with the Behavioral Profile card on the right.
-            if (_currentProfileCategory() === 'CONTENT') {
-                container.style.display = 'none';
-                if (tucCard) tucCard.style.display = 'none';
-                return;
-            }
             // Subject is needed for the per-subject CONTENT override
             // (Cat in the Hat / Blue Crush / The Grinch). Fall back to
             // the dashboard header text or currentProfileData.name when
@@ -92668,6 +92658,21 @@
             }
             const share = _computeAudienceShare(parsed, subj);
             if (!share) {
+                container.style.display = 'none';
+                if (tucCard) tucCard.style.display = 'none';
+                return;
+            }
+            // User rule (2026-07-30): CONTENT-archetype profiles (movies,
+            // podcasts, games, series, vertical shorts) never show the
+            // Total Universe Composition box - MEDIA is 100% by definition,
+            // so the breakdown adds nothing. Keying off the *archetype*
+            // (not the raw category, which is MOVIE/FILM/etc.) means the
+            // per-subject MEDIA_BRAND override (Cat in the Hat / Blue Crush
+            // / Grinch) - which reroutes those away from CONTENT - keeps
+            // its full 5-channel composition. Hiding the card lets the
+            // Audience Snapshot rise to align with the Behavioral Profile
+            // card on the right.
+            if (share.archetype === 'CONTENT') {
                 container.style.display = 'none';
                 if (tucCard) tucCard.style.display = 'none';
                 return;
