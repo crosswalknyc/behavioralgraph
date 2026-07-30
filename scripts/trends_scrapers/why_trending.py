@@ -627,7 +627,12 @@ def _collect_items() -> list[dict]:
             sys.path.insert(0, _tiq_root)
         import trends_iq  # type: ignore
         movers = trends_iq.compute_search_movers(state=None) or {}
-        for bucket_key in ('breakout', 'rising'):
+        # 2026-07-30: extended to include `falling` + `sustained` so the
+        # Cooling / Sustained-Heat columns in the dashboard get the same
+        # "why is this trending" caption Breakout has always had. Prior
+        # scope was `breakout + rising` only, which is why Cooling rows
+        # rendered without a subheader.
+        for bucket_key in ('breakout', 'rising', 'falling', 'sustained'):
             for row in (movers.get(bucket_key) or []):
                 term = (row.get('term') or '').strip()
                 if term:
@@ -796,6 +801,13 @@ def _collect_items() -> list[dict]:
         clues: list[str] = []
         if bucket == 'breakout':
             clues.append('Breakout search query (5x+ growth off a low baseline).')
+        elif bucket == 'falling':
+            if isinstance(pct, (int, float)):
+                clues.append(f'Falling search query (down {int(round(pct * 100)):+d}% vs baseline; cooling off after prior peak).')
+            else:
+                clues.append('Falling search query (cooling off after a prior peak - explain what people were searching for and why interest is fading).')
+        elif bucket == 'sustained':
+            clues.append('Sustained search query (held its rank week over week - durable interest, not a one-day spike).')
         else:
             if isinstance(pct, (int, float)):
                 clues.append(f'Rising search query (up {int(round(pct * 100)):+d}% vs baseline).')

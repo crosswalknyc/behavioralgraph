@@ -3034,6 +3034,54 @@ def _annotate_with_why(
     _stamp(trending_searches,  'term')
 
 
+def _annotate_movers_with_why(movers: dict) -> None:
+    """Stamp a `why` field on every mover row (breakout / rising /
+    falling / sustained) so every bucket carries a 1-line context
+    subhead in the UI - not just Breakout.
+
+    Fallback ladder per row:
+      1. `related[0]` - a news headline attached by the trendspy
+         source. Breakout rows typically have this; rising/falling
+         often do not.
+      2. `news_articles[0].title` - same content, alternate field
+         (some pool merges strip `related` but preserve `news_articles`).
+      3. `why_trending.json` lookup by normalized term. The daily
+         Claude pass covers breakout + rising + falling + sustained
+         terms, so this catches every mover the ladder didn't already.
+
+    Missing on all 3 -> no `why` set (frontend just skips the caption).
+    Idempotent - safe to call twice.
+    """
+    if not movers or not isinstance(movers, dict):
+        return
+    snap  = _read_snapshot('why_trending') or {}
+    items = snap.get('items') or {}
+
+    def _resolve_why(row: dict) -> str:
+        rel = row.get('related') or []
+        if rel and isinstance(rel[0], str) and rel[0].strip():
+            return rel[0].strip()
+        na = row.get('news_articles') or []
+        if na and isinstance(na[0], dict):
+            t = (na[0].get('title') or na[0].get('headline') or '').strip()
+            if t:
+                return t
+        if items:
+            key = _cp_normalize(row.get('term') or '')
+            why = items.get(key)
+            if why and isinstance(why, str) and why.strip():
+                return why.strip()
+        return ''
+
+    for bucket in ('breakout', 'rising', 'falling', 'sustained'):
+        for row in movers.get(bucket) or []:
+            why = _resolve_why(row)
+            if why:
+                row['why'] = why
+            else:
+                row.pop('why', None)
+
+
 # ============================================================================
 # Fused Trending feed
 # ============================================================================
@@ -4946,6 +4994,12 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # renders normally.
     _annotate_with_why(
         trending_people, wikipedia_trending, trending_searches)
+
+    # Same treatment for every mover bucket. Uses a wider fallback
+    # ladder (related[0] -> news_articles[0].title -> why_trending
+    # lookup) because Rising/Falling rows often don't carry the news
+    # headlines that Breakout rows inherit from trendspy.
+    _annotate_movers_with_why(movers)
 
     # Split the trending search pool into the 5-card layout the UI renders:
     # Overall (all rows, scrollable) + Entertainment / Retail / Politics /

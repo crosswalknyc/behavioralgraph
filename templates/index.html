@@ -45342,8 +45342,34 @@
             // internal / confusing next to the rank pills). The score
             // ratio still drives which bucket a term lands in (breakout /
             // climbing / cooling / dropped), it just doesn't render.
-            var relatedHtml = (row.related || []).slice(0, 1).map(function(x){ return _tiqEsc(x); }).join('');
             var mixHtml = _tiqRenderPlatformMix(row.platform_mix);
+            // Context subhead: same italic caption Trending People + the
+            // fused feed use. Rendered under every mover row so
+            // Breakout, Climbing, Cooling, and Sustained all read the
+            // same way. Falls back through `why` -> `related[0]` ->
+            // `news_articles[0].title` via _tiqMoverWhy so cache-hit
+            // rate stays high even before the daily why_trending
+            // snapshot lands.
+            var whyText = row.why;
+            if (!whyText) {
+                var rel = (row.related || []);
+                if (rel.length && typeof rel[0] === 'string' && rel[0].trim()) {
+                    whyText = rel[0];
+                } else {
+                    var na = (row.news_articles || []);
+                    if (na.length && na[0] && (na[0].title || na[0].headline)) {
+                        whyText = na[0].title || na[0].headline;
+                    }
+                }
+            }
+            var whyHtml = '';
+            if (whyText) {
+                var t = String(whyText);
+                if (t.length > 180) t = t.slice(0, 178).replace(/\s+\S*$/, '') + '\u2026';
+                whyHtml = '<div class="tiq-row-why" style="' +
+                          'font-size:12px;opacity:0.75;margin-top:3px;font-style:italic;' +
+                          'color:#c9d3e0;line-height:1.35;">\u201C' + _tiqEsc(t) + '\u201D</div>';
+            }
             return '<div class="tiq-row">' +
                    '<div class="tiq-rank">' + (rankNow || '&mdash;') + '</div>' +
                    '<div class="tiq-row-body">' +
@@ -45352,8 +45378,8 @@
                      '<div class="tiq-row-meta">' +
                        _tiqMoverBadge(row) +
                        (rankPrev ? '<span class="tiq-badge">' + rankPrev + '</span>' : '') +
-                       (relatedHtml ? '<span style="opacity:0.75;">' + relatedHtml + '</span>' : '') +
                      '</div>' +
+                     whyHtml +
                      mixHtml +
                    '</div>' +
                    '</div>';
