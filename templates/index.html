@@ -135623,4 +135623,113 @@
 
             const pathRows = (ctx.top_path_clusters || []).map(p =>
                 `<tr><td><span style="color: var(--text-secondary)">${_iqEsc(p.domain || '')}</span> · ${_iqEsc(p.path || '/')}</td>` +
- 
+                `<td class="num">${fmtInt(p.hits)}</td>` +
+                `<td class="num">${fmtInt(p.uniq)}</td></tr>`
+            ).join('');
+            document.getElementById('iqRankerContextPathBody').innerHTML =
+                pathRows || `<tr><td colspan="3" class="num">No URL-path clusters.</td></tr>`;
+
+            const sampleRows = (ctx.sample_urls || []).map(u => {
+                const urlSafe = _iqEsc(u.url || '');
+                const truncated = urlSafe.length > 110 ? urlSafe.slice(0, 107) + '…' : urlSafe;
+                return `<tr><td><a href="${urlSafe}" target="_blank" rel="noopener" title="${urlSafe}">${truncated}</a></td>` +
+                       `<td class="num">${fmtInt(u.hits)}</td></tr>`;
+            }).join('');
+            document.getElementById('iqRankerContextSampleBody').innerHTML =
+                sampleRows || `<tr><td colspan="2" class="num">No sample URLs.</td></tr>`;
+
+            bodyEl.style.display = '';
+        }
+
+        // _iqrRenderCacheMeta() removed - the cache footer was pulled at user
+        // request. Cache behavior itself (24h S3 cross-user TTL) is unchanged.
+
+        // Close-on-backdrop and Esc parity with the other IQR modals.
+        (function _iqrContextModalCloseHooks() {
+            const modal = document.getElementById('iqRankerContextModal');
+            if (!modal) return;
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeIQRankerContext();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && modal.classList.contains('open')) {
+                    closeIQRankerContext();
+                }
+            });
+        })();
+
+        // Mirrors iq_rankers._tracker_id_for_profile() in Python so we can
+        // jump straight to the auto-provisioned Sentiment IQ tracker for a
+        // ranker row without an extra round-trip.
+        function _iqrTrackerIdFor(profileSubject) {
+            const safe = String(profileSubject || '').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase().slice(0, 48);
+            return safe ? ('iqr_' + safe) : 'iqr_unknown';
+        }
+
+        function openSentimentIQFromIQRanker(_trackerIdEnc) {
+            // Sentiment tracking was removed from the IQ Rankers dashboard;
+            // this stub is kept so any cached HTML that still has a Sentiment
+            // chip on a stale tab won't throw "function is not defined" when
+            // clicked. New rendered rows no longer wire this up at all.
+            return;
+        }
+        // ============================================================
+        
+        function renderRankerIQNetflixTrends() {
+            // Trends chart - simplified for now
+        }
+        
+        let rankerIQLiveTop10Data = null;
+        
+        function loadRankerIQNetflixLiveTop10(forceRefresh) {
+            const tbody = document.getElementById('rankerIQNetflixLiveTop10Body');
+            const loading = document.getElementById('rankerIQNetflixLiveTop10Loading');
+            
+            // If we have cached data and not forcing refresh, just render
+            if (rankerIQLiveTop10Data && !forceRefresh) {
+                renderRankerIQNetflixLiveTop10();
+                return;
+            }
+            
+            if (loading) loading.style.display = 'block';
+            if (tbody) tbody.innerHTML = '';
+            
+            fetch('/api/rankers/netflix/live-top10', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (loading) loading.style.display = 'none';
+                    if (data.error) {
+                        if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">Error: ' + data.error + '</td></tr>';
+                        return;
+                    }
+                    rankerIQLiveTop10Data = data;
+                    renderRankerIQNetflixLiveTop10();
+                })
+                .catch(err => {
+                    if (loading) loading.style.display = 'none';
+                    console.error('[RankerIQ Live Top 10] Error:', err);
+                    if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">Failed to load live data</td></tr>';
+                });
+        }
+        
+        function renderRankerIQNetflixLiveTop10() {
+            const tbody = document.getElementById('rankerIQNetflixLiveTop10Body');
+            if (!tbody || !rankerIQLiveTop10Data || !rankerIQLiveTop10Data.top_10) return;
+            
+            tbody.innerHTML = rankerIQLiveTop10Data.top_10.map(r => {
+                const displayName = r.show_name || r.title_id || r.url;
+                return '<tr>' +
+                    '<td>' + r.rank + '</td>' +
+                    '<td>' + displayName + '</td>' +
+                    '<td>' + (r.projected_views || 0).toLocaleString() + '</td>' +
+                    '<td>' + (r.pct_of_total || 0) + '%</td>' +
+                    '<td><a href="' + r.url + '" target="_blank" style="color: var(--accent-color);">View</a></td>' +
+                '</tr>';
+            }).join('');
+        }
+    </script>
+    
+    <!-- Profile Picture Upload Modal -->
+    <div id="avatarUploadModal" class="avatar-upload-modal" onclick="if(event.target === this) closeAvatarUpload()">
+        <div class="avatar-upload-content">
+            <h3>📷 Pr
