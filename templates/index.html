@@ -135596,4 +135596,263 @@
             const sampleRows = (ctx.sample_urls || []).map(u => {
                 const urlSafe = _iqEsc(u.url || '');
                 const truncated = urlSafe.length > 110 ? urlSafe.slice(0, 107) + '…' : urlSafe;
-                return `<
+                return `<tr><td><a href="${urlSafe}" target="_blank" rel="noopener" title="${urlSafe}">${truncated}</a></td>` +
+                       `<td class="num">${fmtInt(u.hits)}</td></tr>`;
+            }).join('');
+            document.getElementById('iqRankerContextSampleBody').innerHTML =
+                sampleRows || `<tr><td colspan="2" class="num">No sample URLs.</td></tr>`;
+
+            bodyEl.style.display = '';
+        }
+
+        // _iqrRenderCacheMeta() removed - the cache footer was pulled at user
+        // request. Cache behavior itself (24h S3 cross-user TTL) is unchanged.
+
+        // Close-on-backdrop and Esc parity with the other IQR modals.
+        (function _iqrContextModalCloseHooks() {
+            const modal = document.getElementById('iqRankerContextModal');
+            if (!modal) return;
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeIQRankerContext();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && modal.classList.contains('open')) {
+                    closeIQRankerContext();
+                }
+            });
+        })();
+
+        // Mirrors iq_rankers._tracker_id_for_profile() in Python so we can
+        // jump straight to the auto-provisioned Sentiment IQ tracker for a
+        // ranker row without an extra round-trip.
+        function _iqrTrackerIdFor(profileSubject) {
+            const safe = String(profileSubject || '').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase().slice(0, 48);
+            return safe ? ('iqr_' + safe) : 'iqr_unknown';
+        }
+
+        function openSentimentIQFromIQRanker(_trackerIdEnc) {
+            // Sentiment tracking was removed from the IQ Rankers dashboard;
+            // this stub is kept so any cached HTML that still has a Sentiment
+            // chip on a stale tab won't throw "function is not defined" when
+            // clicked. New rendered rows no longer wire this up at all.
+            return;
+        }
+        // ============================================================
+        
+        function renderRankerIQNetflixTrends() {
+            // Trends chart - simplified for now
+        }
+        
+        let rankerIQLiveTop10Data = null;
+        
+        function loadRankerIQNetflixLiveTop10(forceRefresh) {
+            const tbody = document.getElementById('rankerIQNetflixLiveTop10Body');
+            const loading = document.getElementById('rankerIQNetflixLiveTop10Loading');
+            
+            // If we have cached data and not forcing refresh, just render
+            if (rankerIQLiveTop10Data && !forceRefresh) {
+                renderRankerIQNetflixLiveTop10();
+                return;
+            }
+            
+            if (loading) loading.style.display = 'block';
+            if (tbody) tbody.innerHTML = '';
+            
+            fetch('/api/rankers/netflix/live-top10', { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    if (loading) loading.style.display = 'none';
+                    if (data.error) {
+                        if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">Error: ' + data.error + '</td></tr>';
+                        return;
+                    }
+                    rankerIQLiveTop10Data = data;
+                    renderRankerIQNetflixLiveTop10();
+                })
+                .catch(err => {
+                    if (loading) loading.style.display = 'none';
+                    console.error('[RankerIQ Live Top 10] Error:', err);
+                    if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">Failed to load live data</td></tr>';
+                });
+        }
+        
+        function renderRankerIQNetflixLiveTop10() {
+            const tbody = document.getElementById('rankerIQNetflixLiveTop10Body');
+            if (!tbody || !rankerIQLiveTop10Data || !rankerIQLiveTop10Data.top_10) return;
+            
+            tbody.innerHTML = rankerIQLiveTop10Data.top_10.map(r => {
+                const displayName = r.show_name || r.title_id || r.url;
+                return '<tr>' +
+                    '<td>' + r.rank + '</td>' +
+                    '<td>' + displayName + '</td>' +
+                    '<td>' + (r.projected_views || 0).toLocaleString() + '</td>' +
+                    '<td>' + (r.pct_of_total || 0) + '%</td>' +
+                    '<td><a href="' + r.url + '" target="_blank" style="color: var(--accent-color);">View</a></td>' +
+                '</tr>';
+            }).join('');
+        }
+    </script>
+    
+    <!-- Profile Picture Upload Modal -->
+    <div id="avatarUploadModal" class="avatar-upload-modal" onclick="if(event.target === this) closeAvatarUpload()">
+        <div class="avatar-upload-content">
+            <h3>📷 Profile Picture</h3>
+            <div class="avatar-preview" id="avatarPreview">
+                {% if profile_picture %}
+                <img src="{{ profile_picture }}" alt="Current avatar">
+                {% else %}
+                <span class="avatar-preview-initials">{{ username[:2] }}</span>
+                {% endif %}
+            </div>
+            <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem;">Click to upload a new picture (PNG, JPG, GIF - max 500KB)</p>
+            <input type="file" id="avatarFileInput" class="avatar-upload-input" accept="image/*" onchange="handleAvatarUpload(this)">
+            <div>
+                <button class="avatar-upload-btn" onclick="triggerAvatarUpload()">📤 Upload New</button>
+                <button class="avatar-upload-btn danger" onclick="removeAvatar()">🗑️ Remove</button>
+                <button class="avatar-upload-btn secondary" onclick="closeAvatarUpload()">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Chat Widget - REMOVED 2026-06-18 per user request: floating 💬
+         bubble was overlapping dashboard content in the bottom-right
+         corner and had no clear product home. Entire block is preserved
+         here as an HTML comment so we can restore it (uncomment the
+         block below) without re-deriving the markup, status menu, group
+         chat handler, etc. The .chat-widget* CSS in the <style> block
+         and the toggleChatWindow / setMyChatStatus / sendChatMessage JS
+         helpers are intentionally LEFT IN PLACE - they no-op safely
+         when the DOM elements are absent, and keeping them means the
+         restore is a single uncomment.
+    <div class="chat-widget" id="chatWidget">
+        <button class="chat-widget-btn" onclick="toggleChatWindow()" id="chatWidgetBtn">
+            CHAT
+            <span class="unread-badge" id="chatUnreadBadge" style="display: none;">0</span>
+        </button>
+        <div class="chat-window" id="chatWindow">
+            <div class="chat-header">
+                <h3>Team Chat</h3>
+                <div class="chat-header-actions" style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div class="chat-status-dropdown" style="position: relative;">
+                        <button id="chatStatusBtn" onclick="toggleChatStatusMenu()" title="Your status" style="background: transparent; border: none; cursor: pointer; padding: 0.25rem; display: flex; align-items: center;">
+                            <span id="chatMyStatusIndicator" class="status-indicator available" style="width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--bg-card);"></span>
+                        </button>
+                        <div id="chatStatusMenu" style="display: none; position: absolute; bottom: 100%; right: 0; margin-bottom: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem; min-width: 140px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); z-index: 10;">
+                            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Your status</div>
+                            <button onclick="setMyChatStatus('available'); document.getElementById('chatStatusMenu').style.display='none';" style="width: 100%; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: transparent; border: none; color: var(--text-primary); cursor: pointer; font-size: 0.85rem; border-radius: 4px; text-align: left;">
+                                <span class="status-indicator available" style="width: 10px; height: 10px;"></span> Available
+                            </button>
+                            <button onclick="setMyChatStatus('busy'); document.getElementById('chatStatusMenu').style.display='none';" style="width: 100%; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: transparent; border: none; color: var(--text-primary); cursor: pointer; font-size: 0.85rem; border-radius: 4px; text-align: left;">
+                                <span class="status-indicator busy" style="width: 10px; height: 10px;"></span> Busy
+                            </button>
+                        </div>
+                    </div>
+                    <button onclick="startNewGroupChat()" title="New Group Chat">+G</button>
+                    <button onclick="toggleChatWindow()" title="Minimize">-</button>
+                </div>
+            </div>
+            <div class="chat-body">
+                <div class="chat-contacts" id="chatContactsView">
+                    <div class="chat-contacts-search">
+                        <input type="text" id="chatSearchInput" placeholder="Search team members..." oninput="filterChatContacts(this.value)">
+                    </div>
+                    <div class="chat-new-group">
+                        <button onclick="startNewGroupChat()">+ New Group Chat</button>
+                    </div>
+                    <div id="chatContactsList"></div>
+                </div>
+                <div class="chat-conversation" id="chatConversationView">
+                    <div class="chat-conversation-header">
+                        <button class="chat-back-btn" onclick="backToChatContacts()">&lt;</button>
+                        <div class="chat-conversation-avatar" id="chatConvoAvatar">
+                            <div class="avatar-initials">?</div>
+                        </div>
+                        <span class="chat-conversation-name" id="chatConvoName">Chat</span>
+                    </div>
+                    <div class="chat-messages" id="chatMessages"></div>
+                    <div class="chat-input-area">
+                        <input type="text" id="chatMessageInput" placeholder="Type a message..." onkeypress="handleChatKeyPress(event)">
+                        <button class="chat-send-btn" onclick="sendChatMessage()">send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    -->
+    
+    <!-- Left-justified footer with data source - hidden 2026-06-03 because the
+         fixed-position bar was overlaying the bottom of dashboard views and
+         clipping content (request: "remove this navy bar so I can see more").
+         Kept in DOM (display:none) so we can flip it back on by removing the
+         style if attribution is needed again. -->
+    <footer class="app-footer" style="display: none;">
+        <img src="/static/crosswalk-logo-small.png" alt="Crosswalk" class="app-footer-logo" onerror="this.src='/static/crosswalk-logo.png'; this.style.height='24px';">
+        <span class="app-footer-text">Data Source: Crosswalk's Intelligence Platform, a 10M Gen Pop Digital Behavioral Panel</span>
+    </footer>
+
+    <!-- Mobile-only: "Data & Analysis Tools" dropdown wiring (added 2026-07-28).
+         Builds the dropdown from the live tab buttons and reuses their click
+         handlers, so tab switching + feature/access gating behave identically.
+         Globals are assigned to window so the inline onfocus/onchange resolve. -->
+    <script id="mobile-nav-enhancements">
+        (function () {
+            window._buildMobileToolsNav = function () {
+                var sel = document.getElementById('mobileToolsNav');
+                if (!sel) return;
+                var groups = document.querySelectorAll('#toolbarContent .dashboard-tabs');
+                var groupLabels = ['Data', 'Analysis Tools'];
+                var btns = [];
+                var html = '<option value="" selected disabled>Data &amp; Analysis Tools</option>';
+                for (var g = 0; g < groups.length; g++) {
+                    var groupBtns = groups[g].querySelectorAll('.tab-btn');
+                    var opts = '';
+                    for (var i = 0; i < groupBtns.length; i++) {
+                        var b = groupBtns[i];
+                        if (b.style.display === 'none') continue; // access-gated / hidden
+                        var labelEl = b.querySelector('.tab-label');
+                        var txt = ((labelEl ? labelEl.textContent : b.textContent) || '').trim();
+                        if (!txt) continue;
+                        opts += '<option value="' + btns.length + '">' + txt + '</option>';
+                        btns.push(b);
+                    }
+                    if (opts) {
+                        html += '<optgroup label="' + (groupLabels[g] || 'Tools') + '">' + opts + '</optgroup>';
+                    }
+                }
+                window._mobileToolsBtns = btns;
+                sel.innerHTML = html;
+                sel.selectedIndex = 0;
+            };
+            window._onMobileToolsNav = function (sel) {
+                var idx = parseInt(sel.value, 10);
+                var btns = window._mobileToolsBtns || [];
+                if (!isNaN(idx) && btns[idx]) { btns[idx].click(); }
+                sel.selectedIndex = 0; // keep the label reading "Data & Analysis Tools"
+            };
+            // Make every "Select Profile" sidebar a collapsible accordion on
+            // phones. Gated to mobile so the desktop DOM is never touched.
+            window._initMobileSidebarCollapse = function () {
+                document.querySelectorAll('.persistent-sidebar').forEach(function (sb) {
+                    if (sb._mobileCollapseInit) return;
+                    var header = sb.querySelector('.sidebar-header-section');
+                    var h3 = header && header.querySelector('h3');
+                    if (!h3) return;
+                    sb.classList.add('mobile-collapsible', 'mobile-collapsed');
+                    h3.addEventListener('click', function () {
+                        sb.classList.toggle('mobile-collapsed');
+                    });
+                    sb._mobileCollapseInit = true;
+                });
+            };
+            var _isMobileViewport = function () {
+                return !window.matchMedia || window.matchMedia('(max-width: 768px)').matches;
+            };
+            document.addEventListener('DOMContentLoaded', function () {
+                try { window._buildMobileToolsNav(); } catch (e) {}
+                try { if (_isMobileViewport()) window._initMobileSidebarCollapse(); } catch (e) {}
+            });
+        })();
+    </script>
+
+</body>
+</html>
