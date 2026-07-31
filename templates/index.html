@@ -91291,6 +91291,13 @@
             _safeRender('renderBehavioralInsights',   () => renderBehavioralInsights(parsed.behavioral, parsed));
             _safeRender('renderTopInsights',          () => renderTopInsights(parsed));
             _safeRender('_renderAudienceShareBoxes',  () => _renderAudienceShareBoxes(parsed, brandName));
+            // Marketing tab reads directly from currentDashboardData /
+            // currentProfileData, so it MUST be re-rendered on every
+            // profile switch or its Media Mix / Platform / Creator /
+            // Partner content stays stuck on the previous profile
+            // (visible bug: switching tabs from Reba to Deutsche
+            // Postcode Lotterie left Marketing on Deutsche Postcode).
+            _safeRender('renderMarketingTab',         () => { if (typeof window.renderMarketingTab === 'function') window.renderMarketingTab(); });
         }
 
         function parseAllData(csvData) {
@@ -97474,6 +97481,13 @@
             if (parsed.interests) {
                 _safeRender2('renderInterests',      () => renderInterests(parsed.interests));
             }
+            // Marketing tab reads directly from currentDashboardData /
+            // currentProfileData, so it MUST be re-rendered on every
+            // profile switch or its Media Mix / Platform / Creator /
+            // Partner content stays stuck on the previous profile
+            // (visible bug: switching tabs from Reba to Deutsche
+            // Postcode Lotterie left Marketing on Deutsche Postcode).
+            _safeRender2('renderMarketingTab',       () => { if (typeof window.renderMarketingTab === 'function') window.renderMarketingTab(); });
 
             // 2026-06-24: ensure every page (behavioral / interests /
             // location / demographics-in-compare-table-mode) always
