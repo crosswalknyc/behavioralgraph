@@ -24210,12 +24210,9 @@
                column is pinned to the left edge. Stacked horizontal stripes in
                muted versions of the default dashboard palette, with a classic
                midcentury sun disc + thin rule for a little print-poster flair. */
-            #trendsIQView .tiq-mcm-card { position: relative; padding: 0; overflow: hidden; min-height: 260px; border-color: rgba(255,255,255,0.08); }
-            #trendsIQView .tiq-mcm-stripes { position: absolute; inset: 0; display: flex; flex-direction: column; }
-            #trendsIQView .tiq-mcm-band { width: 100%; }
-            #trendsIQView .tiq-mcm-sun { position: absolute; right: 16%; top: 22%; width: 78px; height: 78px; border-radius: 50%; background: #d9cbb0; box-shadow: 0 0 0 6px rgba(217,203,176,0.18); }
-            #trendsIQView .tiq-mcm-rule { position: absolute; left: 0; right: 0; top: calc(22% + 39px); height: 2px; background: rgba(13,33,55,0.55); }
-            #trendsIQView .tiq-mcm-label { position: absolute; left: 14px; bottom: 12px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px rgba(0,0,0,0.45); }
+            #trendsIQView .tiq-mcm-card { position: relative; padding: 0; overflow: hidden; min-height: 260px; background: #17395c; border-color: rgba(255,255,255,0.08); }
+            #trendsIQView .tiq-mcm-bars { position: absolute; inset: 0; }
+            #trendsIQView .tiq-mcm-bar { position: absolute; }
             #trendsIQView .tiq-row { display: flex; align-items: flex-start; gap: 0.55rem; padding: 0.45rem 0; border-bottom: 1px dashed rgba(255,255,255,0.06); }
             #trendsIQView .tiq-row:last-child { border-bottom: none; }
             #trendsIQView .tiq-rank { flex: 0 0 22px; font-size: 0.9rem; font-weight: 700; color: #a78bfa; text-align: right; }
@@ -47836,26 +47833,29 @@
                         // ESPN+ is TV-only in practice, so we drop the Film
                         // column entirely, pin the TV list to the left edge at
                         // half width, and fill the vacant right half with a
-                        // decorative midcentury stripe panel (muted dashboard
-                        // palette). The two-column 1fr 1fr grid keeps TV at
-                        // exactly half the row width.
-                        var mcmBands = [
-                            { flex: 3, color: '#3f5e78' },  /* muted steel blue  (--accent-blue) */
-                            { flex: 1, color: '#4e8189' },  /* muted teal        (--accent-cyan)  */
-                            { flex: 4, color: '#7f9b57' },  /* muted olive-green (--accent-green) */
-                            { flex: 1, color: '#b7c26a' },  /* muted lime        (--accent-lime)  */
-                            { flex: 2, color: '#c98b4e' },  /* muted amber       (--accent-orange)*/
-                            { flex: 1, color: '#9c5a72' },  /* muted rose        (--accent-red)   */
-                            { flex: 3, color: '#4a6b86' }   /* muted slate blue                   */
+                        // light-navy panel scattered with random bars +
+                        // hairlines in our EXACT default accent colors. The
+                        // two-column 1fr 1fr grid keeps TV at half width.
+                        var mcmColors = ['#5a9ad9','#66d9ef','#a6e22e','#fd971f','#f92672','#c8ff00','#6366f1'];
+                        var mcmBars = [
+                            { top: 4,  h: 6,  w: 70, c: 0, right: false },
+                            { top: 11, h: 26, w: 100, c: 3, right: false },
+                            { top: 22, h: 2,  w: 45, c: 1, right: true  },
+                            { top: 30, h: 14, w: 60, c: 5, right: false },
+                            { top: 40, h: 3,  w: 85, c: 4, right: false },
+                            { top: 47, h: 30, w: 100, c: 2, right: false },
+                            { top: 63, h: 2,  w: 50, c: 6, right: true  },
+                            { top: 69, h: 10, w: 75, c: 0, right: false },
+                            { top: 78, h: 4,  w: 40, c: 3, right: true  },
+                            { top: 84, h: 20, w: 100, c: 1, right: false },
+                            { top: 93, h: 3,  w: 65, c: 5, right: false }
                         ];
-                        var mcmStripes = mcmBands.map(function(b) {
-                            return '<div class="tiq-mcm-band" style="flex:' + b.flex + ';background:' + b.color + ';"></div>';
+                        var mcmBarsHtml = mcmBars.map(function(b) {
+                            var side = b.right ? 'right:0;' : 'left:0;';
+                            return '<div class="tiq-mcm-bar" style="' + side + 'top:' + b.top + '%;height:' + b.h + 'px;width:' + b.w + '%;background:' + mcmColors[b.c] + ';"></div>';
                         }).join('');
                         var mcmCard = '<div class="tiq-card tiq-mcm-card" aria-hidden="true">' +
-                                      '<div class="tiq-mcm-stripes">' + mcmStripes + '</div>' +
-                                      '<div class="tiq-mcm-sun"></div>' +
-                                      '<div class="tiq-mcm-rule"></div>' +
-                                      '<div class="tiq-mcm-label">ESPN+ &middot; Trending</div>' +
+                                      '<div class="tiq-mcm-bars">' + mcmBarsHtml + '</div>' +
                                       '</div>';
                         body = '<div class="tiq-card-sub" style="margin-bottom:12px;">' + subtitle + '</div>' +
                                '<div class="tiq-cards-grid" style="grid-template-columns: 1fr 1fr;">' +
