@@ -120,7 +120,22 @@ IS_DEV_ENV = APP_ENV == 'development'
 print(f"🌍 Running in {APP_ENV.upper()} environment")
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+# ----------------------------------------------------------------------------
+# SECRET_KEY - MUST be set as a stable env var in prod, otherwise every deploy
+# invalidates every session cookie and users get bounced to /login the moment
+# Render rolls a new pod. Fixed 2026-07-31 after users reported being logged
+# out on every deploy. The env var is set on both prod (behavioralgraph) and
+# dev (behavioral-graph-dev) via Render env config.
+# ----------------------------------------------------------------------------
+_secret_key_from_env = os.environ.get('SECRET_KEY')
+if _secret_key_from_env:
+    app.secret_key = _secret_key_from_env
+    print(f"🔐 SECRET_KEY loaded from env ({len(_secret_key_from_env)} chars) - sessions persist across deploys")
+else:
+    app.secret_key = secrets.token_hex(32)
+    print("⚠️  SECRET_KEY NOT SET in env - using random per-boot key.")
+    print("⚠️  EVERY DEPLOY WILL LOG EVERY USER OUT until SECRET_KEY is set on this service.")
+    print("⚠️  Set it in Render -> service -> Environment.")
 CORS(app)
 
 # WebSocket support for real-time deck collaboration
