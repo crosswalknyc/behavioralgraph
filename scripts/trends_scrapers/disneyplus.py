@@ -49,6 +49,20 @@ from ._playwright import render_pages
 logger = logging.getLogger(__name__)
 
 
+# User rule 2026-07-29: NEVER surface operator-facing text and NEVER
+# silently overwrite a good snapshot with an empty one. When Disney+
+# soft-blocks the scraper (see _looks_like_soft_block), we preserve
+# yesterday's items on S3 and fire an SES notification to the ops
+# inbox instead of letting the tile go blank on the dashboard.
+def _mark_cookie_gap(source: str, domain: str, reason: str = '') -> None:
+    try:
+        from .cookie_gap_notify import notify_cookie_gap
+        notify_cookie_gap(source, domain, reason=reason)
+    except Exception as e:
+        logger.info("cookie_gap notify failed for %s/%s: %s",
+                     source, domain, e)
+
+
 # Public /browse/* pages that reliably ship a real catalog. `browse/espn`
 # is the ESPN+ programming (Disney bundle) - keep that here since it's
 # structurally identical to any other Disney+ hub, and drop the standalone
@@ -222,6 +236,44 @@ def _extract_disneyplus(html: str) -> list[dict]:
     return out
 
 
+def _looks_like_soft_block(rendered: list[tuple[str, str]],
+                            parsed_counts: list[int]) -> bool:
+    """Detect Disney+'s "soft-block" pattern where every browse URL
+    returns the SAME oversized landing page with 0 titles.
+
+    Signature observed 2026-07-30: all 5 pages came back at
+    5,480,886-5,480,951 bytes (spread of 65 bytes across 5 URLs that
+    should differ by 100-800 KB) and every page parsed to 0 titles.
+    Healthy runs vary by hundreds of KB and parse 80-170 titles/page.
+
+    Heuristic: at least 3 pages, all zero-parse, byte-spread < 5000,
+    AND every page is > 4 MB (way outside the healthy 2-3 MB range).
+    """
+    if len(rendered) < 3 or any(n != 0 for n in parsed_counts):
+        return False
+    sizes = [len(html) for _, html in rendered]
+    spread = max(sizes) - min(sizes)
+    return spread < 5000 and min(sizes) > 4_000_000
+
+
+def _load_previous_snapshot() -> list[dict] | None:
+    """Read the current latest/ snapshot from S3 (which is yesterday's
+    good run if today's soft-blocked). Returns the national items list
+    on success, None on any failure. Used to preserve last-known-good
+    when today's fetch is a soft-block."""
+    try:
+        import boto3, json as _json
+        s3 = boto3.client('s3', region_name='us-east-2')
+        o = s3.get_object(Bucket='dashboard-inputs',
+                           Key='trends_iq_snapshots/latest/disneyplus.json')
+        d = _json.loads(o['Body'].read().decode('utf-8'))
+        items = d.get('national') or []
+        return items if isinstance(items, list) and items else None
+    except Exception as e:
+        logger.info("disneyplus: could not read previous snapshot: %s", e)
+        return None
+
+
 def _fetch_via_http(pages: list[tuple[str, str]]) -> list[tuple[str, str]]:
     """Plain-HTTP fetch (curl_cffi under the hood). Preferred when running
     locally on a residential IP - much lighter than Playwright and fast."""
@@ -264,8 +316,10 @@ def fetch() -> dict[str, Any]:
 
     all_items: list[dict] = []
     seen: set[str] = set()
+    parsed_counts: list[int] = []
     for label, html in rendered:
         items = _extract_disneyplus(html)
+        parsed_counts.append(len(items))
         for it in items:
             key = it['title'].lower()
             if key in seen:
@@ -275,6 +329,29 @@ def fetch() -> dict[str, Any]:
             all_items.append(it)
         logger.info("disneyplus %s: parsed %d titles from %d-byte HTML",
                      label, len(items), len(html))
+
+    # Soft-block guard: if every page came back same-size with 0 titles,
+    # the scraper is looking at Disney+'s "please hold" redirect shell
+    # (not a real catalog). Preserve yesterday's snapshot rather than
+    # clobbering the tile with an empty list, and notify ops via SES
+    # so someone knows to refresh cookies / rotate the residential IP.
+    if _looks_like_soft_block(rendered, parsed_counts):
+        prev = _load_previous_snapshot()
+        sizes = [len(h) for _, h in rendered]
+        reason = (f'soft-block detected: {len(rendered)} pages all '
+                   f'sized {min(sizes)}-{max(sizes)} bytes, 0 titles parsed')
+        logger.warning("disneyplus: %s", reason)
+        _mark_cookie_gap('disneyplus', 'disneyplus.com', reason=reason)
+        if prev:
+            logger.warning("disneyplus: preserving previous snapshot "
+                            "(%d items) instead of overwriting with 0",
+                            len(prev))
+            return {'national': prev, 'stale_from_previous': True,
+                     'soft_block_reason': reason}
+        # No previous snapshot to preserve - let the empty write happen
+        # so the dashboard's cookie-gap "warming up" state takes over.
+        logger.warning("disneyplus: no previous snapshot available; "
+                        "letting empty result write")
 
     for i, it in enumerate(all_items[:25], start=1):
         it['rank'] = i
