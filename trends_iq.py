@@ -206,7 +206,7 @@ NEWS_FEEDS = [
     ('CNN',             'https://rss.cnn.com/rss/cnn_topstories.rss',                    'cnn.com'),
     ('New York Times',  'https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml',    'nytimes.com'),
     ('Fox News',        'https://feeds.foxnews.com/foxnews/latest',                     'foxnews.com'),
-    ('MSNBC',           'https://www.msnbc.com/feed/',                                  'msnbc.com'),
+    ('MS NOW',          'https://www.msnbc.com/feed/',                                  'msnbc.com'),
     ('CNBC',            'https://www.cnbc.com/id/100003114/device/rss/rss.html',        'cnbc.com'),
     ('NBC News',        'https://feeds.nbcnews.com/nbcnews/public/news',                'nbcnews.com'),
     ('CBS News',        'https://www.cbsnews.com/latest/rss/main',                      'cbsnews.com'),
@@ -1035,8 +1035,10 @@ _SEARCH_CATEGORY_KEYWORDS: dict[str, list[str]] = {
         'buttigieg', 'gretchen whitmer', 'whitmer', 'andy beshear',
         'wes moore', 'hakeem jeffries', 'chuck schumer',
         'nancy pelosi', 'zohran mamdani', 'mamdani',
-        # left-lean media
-        'msnbc', 'mother jones', 'the nation magazine', 'jacobin',
+        # left-lean media (2026-07-31: brand rebranded MSNBC -> MS NOW;
+        # keep both aliases so we match legacy hostmap entries + fresh
+        # feed byline strings during the transition window)
+        'ms now', 'msnbc', 'mother jones', 'the nation magazine', 'jacobin',
         'democracy now', 'common dreams',
         # climate
         'climate crisis', 'climate change', 'green new deal',
