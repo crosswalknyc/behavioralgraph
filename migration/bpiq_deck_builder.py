@@ -704,12 +704,19 @@ def _final_insight_lines(ctx: DeckCtx) -> tuple[str, str]:
             "size. Signal is consistent with a genuine but small "
             "sponsorship effect.",
         )
+    # Extract the talent / qualifier name from the project title
+    # (split on the LISA-style '×' character; fall back to 'the
+    # talent' if the project isn't shaped as 'Talent × Brand').
+    talent = ctx.project.split("×")[0].strip() if "×" in ctx.project else ""
     if lift_rel >= 200:
-        line1 = f"When {ctx.brand} shows up with"
-        line2 = f"{ctx.project.split('x')[0].strip() or 'the talent'}, the audience triples."
+        line1 = f"With {ctx.brand} in play,"
+        if talent:
+            line2 = f"the audience more than tripled around {talent}: a {lift_rel:.0f}% adjusted lift."
+        else:
+            line2 = f"the audience more than tripled: a {lift_rel:.0f}% adjusted lift."
     elif lift_rel >= 100:
-        line1 = f"{ctx.brand} more than doubles"
-        line2 = "its share of voice across the audience."
+        line1 = f"{ctx.brand} more than doubled"
+        line2 = "share of voice across the audience."
     elif lift_rel >= 25:
         line1 = f"{ctx.brand} won meaningful"
         line2 = f"new ground: {lift_rel:.0f}% adjusted lift, post-campaign."
@@ -883,12 +890,31 @@ def _slide_methodology(prs, ctx: DeckCtx, idx: int, total: int):
     return s
 
 
+def _brand_in_title(brand: str) -> str:
+    """Format a brand name for use in a LISA-style slide title.
+    Skips the leading 'The' article when the brand label already
+    reads as a possessive ('Lainey Wilson's...') or a plural / group
+    noun ('Lainey's Brands', 'Portfolio', 'Endorsements') where 'The
+    Foo' would read awkwardly. Single-brand labels ('Coca-Cola',
+    'CHANEL') keep the LISA 'The X Audience' phrasing."""
+    b = str(brand or "").strip()
+    if not b:
+        return "The Audience"
+    starts_with_article = b.lower().startswith(("the ", "a ", "an "))
+    has_possessive = "'s " in b or b.endswith("'s")
+    portfolio_words = ("portfolio", "brands", "endorsements", "roster")
+    is_portfolio = any(w in b.lower() for w in portfolio_words)
+    if starts_with_article or has_possessive or is_portfolio:
+        return f"{b} Audience · Scale"
+    return f"The {b} Audience · Scale"
+
+
 def _slide_audience_scale(prs, ctx: DeckCtx, idx: int, total: int):
     """LISA-style 'THE LISA AUDIENCE · SCALE' big stat slide."""
     s = _blank(prs)
     _add_bg(s, BG_DARK)
     _eyebrow(s, Inches(0.6), Inches(0.6),
-             _section_label(idx, f"The {ctx.brand} Audience · Scale"),
+             _section_label(idx, _brand_in_title(ctx.brand)),
              on_dark=True)
     _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
               f"Reach and resonance,\nside by side.",
@@ -1641,24 +1667,39 @@ def _math_calculator(slide, left, top, width, rows, *,
 def _slide_demographics(prs, ctx: DeckCtx, idx: int, total: int):
     s = _blank(prs)
     _add_bg(s, BG_CREAM)
+    # Choose an eyebrow + headline that fit the qualifier type.
+    # 'tv' / 'movie' / 'sporting event' -> "Who Watched", others
+    # (artist / social / campaign) -> "Who Engaged with the
+    # Qualifier". The WoF-specific hardcoded copy has been generalized.
+    qualifier_type = str(ctx.data.get("qualifier_type") or "").lower()
+    qualifier_val = ctx.data.get("qualifier_value")
+    if isinstance(qualifier_val, list):
+        qualifier_name = ", ".join(str(v) for v in qualifier_val)
+    else:
+        qualifier_name = str(qualifier_val or "").strip()
+    if qualifier_type in ("tv", "movie", "sporting event", "event", "show"):
+        eyebrow_label = "Who Watched the Integration"
+        headline = (f"{qualifier_name} viewer profile."
+                    if qualifier_name else "Viewer profile.")
+    else:
+        eyebrow_label = f"Who Engaged with {qualifier_name}" if qualifier_name else "Who Engaged"
+        headline = (f"{qualifier_name} audience profile."
+                    if qualifier_name else "Audience profile.")
     _eyebrow(s, Inches(0.6), Inches(0.6),
-             _section_label(idx, "Who Watched the Integration"),
+             _section_label(idx, eyebrow_label),
              on_dark=False)
     _add_text(s, Inches(0.6), Inches(1.0), Inches(11), Inches(1.3),
-              "Wheel of Fortune viewer profile.",
+              headline,
               size=40, bold=True, color=FG_DARK,
               spacing=0.95, font=FONT_DISPLAY)
-    # Source line - critical to disclose that this is the SHOW
-    # viewer profile, not brand-specific engagers. This is why the
-    # profile is identical across the Coca-Cola and Pepsi decks:
-    # both counterfactuals measure the same viewer cohort. (item 1)
+    # Source line: prefer the payload's own source_note (which
+    # explains what cohort this profile represents). Fall back to a
+    # neutral generic if none is provided.
     demo_src = (
         (ctx.data.get("demographics") or {}).get("source_note")
-        or "Source: Crosswalk BehaviorGraph, Wheel of Fortune Next Day Air "
-        "viewer profile (S43 Eps 191 to 195, streamed 2 to 6 June 2026). "
-        "This is the audience that watched the integration, not the "
-        "brand's engager base; the two brand decks show the same "
-        "distributions because both measure this shared viewer cohort."
+        or "Source: Crosswalk BehaviorGraph. This is the audience "
+        "that engaged with the qualifier, not the brand's engager "
+        "base."
     )
     _add_text(s, Inches(0.6), Inches(2.15), Inches(12), Inches(0.55),
               demo_src, size=10, italic=True, color=MUTED_LT, spacing=1.35)
