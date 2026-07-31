@@ -12,6 +12,81 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        // Auto-reload dashboard when a new deploy lands (Render push -> main).
+        // Polls /api/version every 20s; on version change, every open tab
+        // force-reloads within one poll interval so users see new UI/JS
+        // without having to sign out and back in. Flask sessions persist,
+        // so nobody is kicked out - the reload is invisible.
+        (function() {
+            var POLL_MS = 20000;          // 20s when tab is visible
+            var HIDDEN_POLL_MS = 60000;   // 60s when tab is hidden
+            var bootVersion = null;
+            var bootTime = null;
+            var reloading = false;
+            var consecutiveErrors = 0;
+
+            function fetchVersion() {
+                return fetch('/api/version', {
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                }).then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                });
+            }
+
+            function check() {
+                if (reloading) return Promise.resolve();
+                return fetchVersion().then(function(v) {
+                    consecutiveErrors = 0;
+                    if (bootVersion === null) {
+                        bootVersion = v.version;
+                        bootTime = v.boot_time;
+                        try { console.log('[auto-reload] armed at version', bootVersion); } catch (e) {}
+                        return;
+                    }
+                    var changed = (v.version !== bootVersion) || (v.boot_time !== bootTime);
+                    if (changed) {
+                        reloading = true;
+                        try { console.log('[auto-reload] deploy detected', bootVersion, '->', v.version, '- reloading'); } catch (e) {}
+                        // 250ms grace period lets any in-flight save finish
+                        setTimeout(function() {
+                            try {
+                                var url = new URL(window.location.href);
+                                url.searchParams.set('_v', v.version || String(Date.now()));
+                                window.location.replace(url.toString());
+                            } catch (e) {
+                                window.location.reload();
+                            }
+                        }, 250);
+                    }
+                }).catch(function(e) {
+                    // Server briefly down mid-deploy - keep polling, don't reload
+                    consecutiveErrors += 1;
+                });
+            }
+
+            function schedule() {
+                var delay = document.hidden ? HIDDEN_POLL_MS : POLL_MS;
+                setTimeout(function tick() {
+                    check().then(function() {
+                        if (!reloading) schedule();
+                    });
+                }, delay);
+            }
+
+            // Kick off after 3s so initial page load isn't disturbed
+            setTimeout(function() {
+                check().then(schedule);
+            }, 3000);
+
+            // Re-check immediately when tab regains focus
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden && !reloading && bootVersion !== null) check();
+            });
+        })();
+    </script>
     <style>
         :root {
             --bg-dark: #0a1929;

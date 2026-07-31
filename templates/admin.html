@@ -5,6 +5,67 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Portal | Crosswalk Behavioral Graph</title>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        // Auto-reload admin panel when a new deploy lands. Mirrors the
+        // version-poller in index.html so admins never sit on stale UI.
+        (function() {
+            var POLL_MS = 20000;
+            var HIDDEN_POLL_MS = 60000;
+            var bootVersion = null;
+            var bootTime = null;
+            var reloading = false;
+
+            function fetchVersion() {
+                return fetch('/api/version', {
+                    cache: 'no-store',
+                    credentials: 'same-origin'
+                }).then(function(r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                });
+            }
+
+            function check() {
+                if (reloading) return Promise.resolve();
+                return fetchVersion().then(function(v) {
+                    if (bootVersion === null) {
+                        bootVersion = v.version;
+                        bootTime = v.boot_time;
+                        try { console.log('[auto-reload] admin armed at', bootVersion); } catch (e) {}
+                        return;
+                    }
+                    if (v.version !== bootVersion || v.boot_time !== bootTime) {
+                        reloading = true;
+                        try { console.log('[auto-reload] admin deploy detected - reloading'); } catch (e) {}
+                        setTimeout(function() {
+                            try {
+                                var url = new URL(window.location.href);
+                                url.searchParams.set('_v', v.version || String(Date.now()));
+                                window.location.replace(url.toString());
+                            } catch (e) {
+                                window.location.reload();
+                            }
+                        }, 250);
+                    }
+                }).catch(function() { /* server mid-deploy - keep polling */ });
+            }
+
+            function schedule() {
+                var delay = document.hidden ? HIDDEN_POLL_MS : POLL_MS;
+                setTimeout(function tick() {
+                    check().then(function() {
+                        if (!reloading) schedule();
+                    });
+                }, delay);
+            }
+
+            setTimeout(function() { check().then(schedule); }, 3000);
+
+            document.addEventListener('visibilitychange', function() {
+                if (!document.hidden && !reloading && bootVersion !== null) check();
+            });
+        })();
+    </script>
     <style>
         :root {
             --bg-dark: #0a1929;

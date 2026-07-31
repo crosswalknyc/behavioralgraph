@@ -143,7 +143,43 @@ def readiness_check():
     """Readiness check - indicates app is ready to serve traffic."""
     return 'ready', 200, {'Content-Type': 'text/plain'}
 
-print("✅ Health check endpoints registered (/health, /healthz, /ready) - ready for Render")
+# ----------------------------------------------------------------------------
+# App version / build identifier
+# ----------------------------------------------------------------------------
+# Render sets RENDER_GIT_COMMIT on every deploy. When it changes, every open
+# dashboard tab detects the change via /api/version polling and force-reloads
+# so users always see the latest UI/JS without having to sign out and back in.
+# Locally we fall back to a boot timestamp so the mechanism still works.
+APP_BUILD_VERSION = (
+    os.environ.get('RENDER_GIT_COMMIT')
+    or os.environ.get('GIT_COMMIT')
+    or os.environ.get('SOURCE_COMMIT')
+    or f"local-{int(time.time())}"
+)[:12]
+APP_BOOT_TIME = int(time.time())
+print(f"🔖 App build version: {APP_BUILD_VERSION} (boot={APP_BOOT_TIME})")
+
+@app.route('/api/version')
+def api_version():
+    """Lightweight version endpoint polled by every open dashboard tab.
+
+    Returns the current deploy's commit SHA (or a boot-time fallback for
+    local dev) plus the boot timestamp. Frontends compare against what they
+    captured on page load and force a hard reload the moment either value
+    changes, so a `git push` -> Render deploy propagates to every open tab
+    within one poll interval without kicking anyone out of their session.
+    """
+    resp = jsonify({
+        'version': APP_BUILD_VERSION,
+        'boot_time': APP_BOOT_TIME,
+    })
+    # Never cache this response - it's the whole point of the endpoint
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
+
+print("✅ Health check endpoints registered (/health, /healthz, /ready, /api/version) - ready for Render")
 
 # Global error handler for API routes - ensures JSON responses
 @app.errorhandler(Exception)
