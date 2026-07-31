@@ -336,39 +336,22 @@ _CINEMARK_IMG_RE = re.compile(
 )
 
 
-def _fetch_cinemark(limit: int = 25) -> list[dict]:
-    """Server-rendered — parse each `card__movie` block. Dedupe by slug
-    (Cinemark shows both an IMAX and a standard row for the same film
-    sometimes; we keep only the first occurrence)."""
-    try:
-        r = requests.get(_CINEMARK_URL,
-                         headers={'User-Agent': _UA,
-                                  'Accept': 'text/html'},
-                         timeout=_TIMEOUT)
-    except Exception as e:
-        logger.warning("cinemark: %s", e)
-        return []
-    if not r.ok:
-        logger.warning("cinemark: http %s", r.status_code)
-        return []
+def _parse_cinemark_html(text: str, limit: int) -> list[dict]:
+    """Parser shared by both the plain-HTTP path and the Playwright
+    fallback. Dedupes by slug (Cinemark shows both an IMAX and a
+    standard row for the same film sometimes; keep first occurrence)."""
     seen_slugs: set[str] = set()
     items: list[dict] = []
-    text = r.text or ''
-    # Cinemark occasionally wraps cards with nested divs, so the block
-    # regex above misses some. Fall back to scanning every /movies/
-    # anchor and grouping by slug.
-    for m in _CINEMARK_ANCHOR_RE.finditer(text):
+    for m in _CINEMARK_ANCHOR_RE.finditer(text or ''):
         slug  = m.group(1).rsplit('/', 1)[-1]
         title = _clean_title(m.group(2))
         if slug in seen_slugs:
             continue
         if not _is_title(title):
             continue
-        # Look for the nearest image URL in a ~1500-char window around
-        # the anchor. Cinemark's poster imgs live either just before
-        # or inside the same card as the anchor.
+        # Nearest image URL in ~1500 chars around the anchor.
         window_start = max(0, m.start() - 1500)
-        window       = text[window_start:m.end() + 500]
+        window       = (text or '')[window_start:m.end() + 500]
         img_m        = _CINEMARK_IMG_RE.search(window)
         seen_slugs.add(slug)
         items.append({
@@ -379,6 +362,56 @@ def _fetch_cinemark(limit: int = 25) -> list[dict]:
         })
         if len(items) >= limit:
             break
+    return items
+
+
+def _fetch_cinemark(limit: int = 25) -> list[dict]:
+    """Cinemark's `/movies` page is server-rendered but the site has
+    WAF-hardened over time. Plain HTTP works from residential IPs
+    most days; when it returns 403 (Akamai / Cloudflare-style bot
+    challenge), we fall back to Playwright with real Chrome, which
+    reliably solves the challenge on the residential runner. Same
+    parser runs against both paths."""
+    text = ''
+    try:
+        r = requests.get(_CINEMARK_URL,
+                         headers={'User-Agent': _UA,
+                                  'Accept': 'text/html'},
+                         timeout=_TIMEOUT)
+        if r.ok:
+            text = r.text or ''
+        else:
+            logger.warning("cinemark: http %s, falling back to Playwright",
+                            r.status_code)
+    except Exception as e:
+        logger.warning("cinemark plain HTTP: %s, falling back to Playwright", e)
+
+    items = _parse_cinemark_html(text, limit) if text else []
+    if items:
+        return items
+
+    # Playwright fallback. No cookie donation required - Cinemark
+    # doesn't gate `/movies` behind login; the block is purely WAF
+    # TLS-fingerprint-based, and a real Chrome renderer bypasses it.
+    logger.info("cinemark: attempting Playwright render fallback")
+    rendered = _playwright_render(
+        _CINEMARK_URL,
+        homepage='https://www.cinemark.com/',
+        wait_selectors=['a[href^="/movies/"]', 'div.card__movie'],
+    )
+    if not rendered:
+        logger.warning("cinemark: Playwright fallback also failed")
+        _mark_cookie_gap('cinemark', 'cinemark.com',
+                          reason='plain HTTP 403 AND Playwright render '
+                                  'returned empty; site WAF likely hardened')
+        return []
+    items = _parse_cinemark_html(rendered, limit)
+    if not items:
+        logger.warning("cinemark: Playwright rendered %d bytes but parsed 0",
+                        len(rendered))
+        _mark_cookie_gap('cinemark', 'cinemark.com',
+                          reason='Playwright rendered but parser found 0 titles '
+                                  '- page structure may have changed')
     return items
 
 
@@ -1259,7 +1292,11 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
             },
             'cinemark': {
                 'label':     'Cinemark',
-                'sub':       "Cinemark's Now Showing lineup, ordered by their front-page merchandising.",
+                # `sub` renders only when items are present. When
+                # empty, the frontend swaps in a plain "Loading" body
+                # via _tiqLoadingBody() so the descriptive marketing
+                # copy is never shown on a blank card.
+                'sub':       "What people are buying tickets to right now at Cinemark.",
                 'items':     cinemark_items,
                 'available': bool(cinemark_items),
             },
