@@ -24210,9 +24210,6 @@
                column is pinned to the left edge. Stacked horizontal stripes in
                muted versions of the default dashboard palette, with a classic
                midcentury sun disc + thin rule for a little print-poster flair. */
-            #trendsIQView .tiq-mcm-card { position: relative; padding: 0; overflow: hidden; min-height: 260px; border-color: rgba(255,255,255,0.08); }
-            #trendsIQView .tiq-mcm-bars { position: absolute; inset: 0; }
-            #trendsIQView .tiq-mcm-bar { position: absolute; }
             #trendsIQView .tiq-row { display: flex; align-items: flex-start; gap: 0.55rem; padding: 0.45rem 0; border-bottom: 1px dashed rgba(255,255,255,0.06); }
             #trendsIQView .tiq-row:last-child { border-bottom: none; }
             #trendsIQView .tiq-rank { flex: 0 0 22px; font-size: 0.9rem; font-weight: 700; color: #a78bfa; text-align: right; }
@@ -47830,37 +47827,11 @@
                                '<div class="tiq-headline-list">' + (lis || '<div class="tiq-empty">No data.</div>') + '</div></div>';
                     };
                     if (k === 'espnplus') {
-                        // ESPN+ is TV-only in practice, so we drop the Film
-                        // column entirely, pin the TV list to the left edge at
-                        // half width, and fill the vacant right half with a
-                        // light-navy panel scattered with random bars +
-                        // hairlines in our EXACT default accent colors. The
-                        // two-column 1fr 1fr grid keeps TV at half width.
-                        var mcmColors = ['#5a9ad9','#66d9ef','#a6e22e','#fd971f','#f92672','#c8ff00','#6366f1'];
-                        var mcmBars = [
-                            { top: 4,  h: 6,  w: 70, c: 0, right: false },
-                            { top: 11, h: 26, w: 100, c: 3, right: false },
-                            { top: 22, h: 2,  w: 45, c: 1, right: true  },
-                            { top: 30, h: 14, w: 60, c: 5, right: false },
-                            { top: 40, h: 3,  w: 85, c: 4, right: false },
-                            { top: 47, h: 30, w: 100, c: 2, right: false },
-                            { top: 63, h: 2,  w: 50, c: 6, right: true  },
-                            { top: 69, h: 10, w: 75, c: 0, right: false },
-                            { top: 78, h: 4,  w: 40, c: 3, right: true  },
-                            { top: 84, h: 20, w: 100, c: 1, right: false },
-                            { top: 93, h: 3,  w: 65, c: 5, right: false }
-                        ];
-                        var mcmBarsHtml = mcmBars.map(function(b) {
-                            var side = b.right ? 'right:0;' : 'left:0;';
-                            return '<div class="tiq-mcm-bar" style="' + side + 'top:' + b.top + '%;height:' + b.h + 'px;width:' + b.w + '%;background:' + mcmColors[b.c] + ';"></div>';
-                        }).join('');
-                        var mcmCard = '<div class="tiq-card tiq-mcm-card" aria-hidden="true">' +
-                                      '<div class="tiq-mcm-bars">' + mcmBarsHtml + '</div>' +
-                                      '</div>';
+                        // ESPN+ is TV-only in practice: drop the Film column
+                        // and let the TV list span the full width of the panel.
                         body = '<div class="tiq-card-sub" style="margin-bottom:12px;">' + subtitle + '</div>' +
-                               '<div class="tiq-cards-grid" style="grid-template-columns: 1fr 1fr;">' +
+                               '<div class="tiq-cards-grid" style="grid-template-columns: 1fr;">' +
                                renderCol('TV', tvRows) +
-                               mcmCard +
                                '</div>';
                     } else {
                         body = '<div class="tiq-card-sub" style="margin-bottom:12px;">' + subtitle + '</div>' +
