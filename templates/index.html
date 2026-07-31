@@ -24205,6 +24205,17 @@
             #trendsIQView .tiq-card { background: var(--bg-secondary, #1e1e2e); border: 1px solid var(--border-color, #2c2c3e); border-radius: 10px; padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.55rem; }
             #trendsIQView .tiq-card h4 { margin: 0 0 0.15rem 0; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; }
             #trendsIQView .tiq-card-sub { font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.35rem; }
+            /* ESPN+ only: midcentury-modern decorative panel that fills the
+               vacant right half once the Film column is removed and the TV
+               column is pinned to the left edge. Stacked horizontal stripes in
+               muted versions of the default dashboard palette, with a classic
+               midcentury sun disc + thin rule for a little print-poster flair. */
+            #trendsIQView .tiq-mcm-card { position: relative; padding: 0; overflow: hidden; min-height: 260px; border-color: rgba(255,255,255,0.08); }
+            #trendsIQView .tiq-mcm-stripes { position: absolute; inset: 0; display: flex; flex-direction: column; }
+            #trendsIQView .tiq-mcm-band { width: 100%; }
+            #trendsIQView .tiq-mcm-sun { position: absolute; right: 16%; top: 22%; width: 78px; height: 78px; border-radius: 50%; background: #d9cbb0; box-shadow: 0 0 0 6px rgba(217,203,176,0.18); }
+            #trendsIQView .tiq-mcm-rule { position: absolute; left: 0; right: 0; top: calc(22% + 39px); height: 2px; background: rgba(13,33,55,0.55); }
+            #trendsIQView .tiq-mcm-label { position: absolute; left: 14px; bottom: 12px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px rgba(0,0,0,0.45); }
             #trendsIQView .tiq-row { display: flex; align-items: flex-start; gap: 0.55rem; padding: 0.45rem 0; border-bottom: 1px dashed rgba(255,255,255,0.06); }
             #trendsIQView .tiq-row:last-child { border-bottom: none; }
             #trendsIQView .tiq-rank { flex: 0 0 22px; font-size: 0.9rem; font-weight: 700; color: #a78bfa; text-align: right; }
@@ -47821,11 +47832,43 @@
                         return '<div class="tiq-card"><h4>' + _tiqEsc(label) + '</h4>' +
                                '<div class="tiq-headline-list">' + (lis || '<div class="tiq-empty">No data.</div>') + '</div></div>';
                     };
-                    body = '<div class="tiq-card-sub" style="margin-bottom:12px;">' + subtitle + '</div>' +
-                           '<div class="tiq-cards-grid" style="grid-template-columns: 1fr 1fr;">' +
-                           renderCol('Film', filmRows) +
-                           renderCol('TV',   tvRows) +
-                           '</div>';
+                    if (k === 'espnplus') {
+                        // ESPN+ is TV-only in practice, so we drop the Film
+                        // column entirely, pin the TV list to the left edge at
+                        // half width, and fill the vacant right half with a
+                        // decorative midcentury stripe panel (muted dashboard
+                        // palette). The two-column 1fr 1fr grid keeps TV at
+                        // exactly half the row width.
+                        var mcmBands = [
+                            { flex: 3, color: '#3f5e78' },  /* muted steel blue  (--accent-blue) */
+                            { flex: 1, color: '#4e8189' },  /* muted teal        (--accent-cyan)  */
+                            { flex: 4, color: '#7f9b57' },  /* muted olive-green (--accent-green) */
+                            { flex: 1, color: '#b7c26a' },  /* muted lime        (--accent-lime)  */
+                            { flex: 2, color: '#c98b4e' },  /* muted amber       (--accent-orange)*/
+                            { flex: 1, color: '#9c5a72' },  /* muted rose        (--accent-red)   */
+                            { flex: 3, color: '#4a6b86' }   /* muted slate blue                   */
+                        ];
+                        var mcmStripes = mcmBands.map(function(b) {
+                            return '<div class="tiq-mcm-band" style="flex:' + b.flex + ';background:' + b.color + ';"></div>';
+                        }).join('');
+                        var mcmCard = '<div class="tiq-card tiq-mcm-card" aria-hidden="true">' +
+                                      '<div class="tiq-mcm-stripes">' + mcmStripes + '</div>' +
+                                      '<div class="tiq-mcm-sun"></div>' +
+                                      '<div class="tiq-mcm-rule"></div>' +
+                                      '<div class="tiq-mcm-label">ESPN+ &middot; Trending</div>' +
+                                      '</div>';
+                        body = '<div class="tiq-card-sub" style="margin-bottom:12px;">' + subtitle + '</div>' +
+                               '<div class="tiq-cards-grid" style="grid-template-columns: 1fr 1fr;">' +
+                               renderCol('TV', tvRows) +
+                               mcmCard +
+                               '</div>';
+                    } else {
+                        body = '<div class="tiq-card-sub" style="margin-bottom:12px;">' + subtitle + '</div>' +
+                               '<div class="tiq-cards-grid" style="grid-template-columns: 1fr 1fr;">' +
+                               renderCol('Film', filmRows) +
+                               renderCol('TV',   tvRows) +
+                               '</div>';
+                    }
                 }
                 return '<div class="tiq-social-panel' + active + '" data-tiq-streaming="' + k + '">' + body + '</div>';
             }).join('');
@@ -135580,113 +135623,4 @@
 
             const pathRows = (ctx.top_path_clusters || []).map(p =>
                 `<tr><td><span style="color: var(--text-secondary)">${_iqEsc(p.domain || '')}</span> · ${_iqEsc(p.path || '/')}</td>` +
-                `<td class="num">${fmtInt(p.hits)}</td>` +
-                `<td class="num">${fmtInt(p.uniq)}</td></tr>`
-            ).join('');
-            document.getElementById('iqRankerContextPathBody').innerHTML =
-                pathRows || `<tr><td colspan="3" class="num">No URL-path clusters.</td></tr>`;
-
-            const sampleRows = (ctx.sample_urls || []).map(u => {
-                const urlSafe = _iqEsc(u.url || '');
-                const truncated = urlSafe.length > 110 ? urlSafe.slice(0, 107) + '…' : urlSafe;
-                return `<tr><td><a href="${urlSafe}" target="_blank" rel="noopener" title="${urlSafe}">${truncated}</a></td>` +
-                       `<td class="num">${fmtInt(u.hits)}</td></tr>`;
-            }).join('');
-            document.getElementById('iqRankerContextSampleBody').innerHTML =
-                sampleRows || `<tr><td colspan="2" class="num">No sample URLs.</td></tr>`;
-
-            bodyEl.style.display = '';
-        }
-
-        // _iqrRenderCacheMeta() removed - the cache footer was pulled at user
-        // request. Cache behavior itself (24h S3 cross-user TTL) is unchanged.
-
-        // Close-on-backdrop and Esc parity with the other IQR modals.
-        (function _iqrContextModalCloseHooks() {
-            const modal = document.getElementById('iqRankerContextModal');
-            if (!modal) return;
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) closeIQRankerContext();
-            });
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' && modal.classList.contains('open')) {
-                    closeIQRankerContext();
-                }
-            });
-        })();
-
-        // Mirrors iq_rankers._tracker_id_for_profile() in Python so we can
-        // jump straight to the auto-provisioned Sentiment IQ tracker for a
-        // ranker row without an extra round-trip.
-        function _iqrTrackerIdFor(profileSubject) {
-            const safe = String(profileSubject || '').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase().slice(0, 48);
-            return safe ? ('iqr_' + safe) : 'iqr_unknown';
-        }
-
-        function openSentimentIQFromIQRanker(_trackerIdEnc) {
-            // Sentiment tracking was removed from the IQ Rankers dashboard;
-            // this stub is kept so any cached HTML that still has a Sentiment
-            // chip on a stale tab won't throw "function is not defined" when
-            // clicked. New rendered rows no longer wire this up at all.
-            return;
-        }
-        // ============================================================
-        
-        function renderRankerIQNetflixTrends() {
-            // Trends chart - simplified for now
-        }
-        
-        let rankerIQLiveTop10Data = null;
-        
-        function loadRankerIQNetflixLiveTop10(forceRefresh) {
-            const tbody = document.getElementById('rankerIQNetflixLiveTop10Body');
-            const loading = document.getElementById('rankerIQNetflixLiveTop10Loading');
-            
-            // If we have cached data and not forcing refresh, just render
-            if (rankerIQLiveTop10Data && !forceRefresh) {
-                renderRankerIQNetflixLiveTop10();
-                return;
-            }
-            
-            if (loading) loading.style.display = 'block';
-            if (tbody) tbody.innerHTML = '';
-            
-            fetch('/api/rankers/netflix/live-top10', { credentials: 'same-origin' })
-                .then(r => r.json())
-                .then(data => {
-                    if (loading) loading.style.display = 'none';
-                    if (data.error) {
-                        if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">Error: ' + data.error + '</td></tr>';
-                        return;
-                    }
-                    rankerIQLiveTop10Data = data;
-                    renderRankerIQNetflixLiveTop10();
-                })
-                .catch(err => {
-                    if (loading) loading.style.display = 'none';
-                    console.error('[RankerIQ Live Top 10] Error:', err);
-                    if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">Failed to load live data</td></tr>';
-                });
-        }
-        
-        function renderRankerIQNetflixLiveTop10() {
-            const tbody = document.getElementById('rankerIQNetflixLiveTop10Body');
-            if (!tbody || !rankerIQLiveTop10Data || !rankerIQLiveTop10Data.top_10) return;
-            
-            tbody.innerHTML = rankerIQLiveTop10Data.top_10.map(r => {
-                const displayName = r.show_name || r.title_id || r.url;
-                return '<tr>' +
-                    '<td>' + r.rank + '</td>' +
-                    '<td>' + displayName + '</td>' +
-                    '<td>' + (r.projected_views || 0).toLocaleString() + '</td>' +
-                    '<td>' + (r.pct_of_total || 0) + '%</td>' +
-                    '<td><a href="' + r.url + '" target="_blank" style="color: var(--accent-color);">View</a></td>' +
-                '</tr>';
-            }).join('');
-        }
-    </script>
-    
-    <!-- Profile Picture Upload Modal -->
-    <div id="avatarUploadModal" class="avatar-upload-modal" onclick="if(event.target === this) closeAvatarUpload()">
-        <div class="avatar-upload-content">
-            <h3>📷 Pr
+ 
