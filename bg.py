@@ -28138,9 +28138,12 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             _enf_g1 = _pge_mw.dejitter_sequential_placeholders
             _enf_coll = _pge_mw.dejitter_within_cat_4dp_collisions
             _enf_round2dp = _pge_mw.depin_round_brand_bps
+            # 2026-08-03 pipeline hardening — Honey Pot / Summer's Eve /
+            # synth_engine defect classes. See canonical-write-path rule.
+            _enf_stream_share = _pge_mw.enforce_streaming_share_health
+            _enf_share_recompute = _pge_mw.apply_recompute_category_share
+            _enf_income_mono = _pge_mw.validate_income_monotonicity
         except Exception as _force_e:
-            # Fall back to standard import (will pick up cached version
-            # if any). Logged so we know if force-load failed.
             print(f"   ⚠️ force-load from migration/ failed ({_force_e}); "
                   f"falling back to sys.path resolution")
             if _migration_dir_mw not in _sys_mw.path:
@@ -28154,6 +28157,9 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                 dejitter_sequential_placeholders as _enf_g1,
                 dejitter_within_cat_4dp_collisions as _enf_coll,
                 depin_round_brand_bps as _enf_round2dp,
+                enforce_streaming_share_health as _enf_stream_share,
+                apply_recompute_category_share as _enf_share_recompute,
+                validate_income_monotonicity as _enf_income_mono,
             )
         _subj_mw = (
             locals().get('project_name')
@@ -28225,6 +28231,33 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
             df_final, _nr2 = _enf_round2dp(df_final, _subj_mw, verbose=True)
         except Exception as _e:
             print(f"   ⚠️ round-2dp depin mop-up skipped: {_e}")
+        # 8. 2026-08-03 pipeline hardening: streaming share health.
+        # Auto-repairs "one row Share=100, rest NULL" signature in
+        # STREAMING/PLATFORM/VIDEO/MUSIC/VMVPD/SOCIAL MEDIA blocks.
+        # Must run BEFORE the share recompute pass.
+        try:
+            df_final, _nss = _enf_stream_share(
+                df_final, _subj_mw, verbose=True,
+            )
+        except Exception as _e:
+            print(f"   ⚠️ enforce_streaming_share_health skipped: {_e}")
+        # 9. 2026-08-03 pipeline hardening: BP-based Category Share
+        # recompute. Fixes the Waterloo/Lainey/Sabrina/WoF/synth_engine
+        # signature (Share == BP), the Honey Pot signature (NULL Share
+        # on non-demo rows), and the '%' bleed cosmetic issue.
+        try:
+            df_final, _nsr = _enf_share_recompute(
+                df_final, _subj_mw, verbose=True,
+            )
+        except Exception as _e:
+            print(f"   ⚠️ apply_recompute_category_share skipped: {_e}")
+        # 10. 2026-08-03 pipeline hardening: bimodal INCOME soft-warn.
+        # Read-only detector; logs for operator review, does NOT
+        # auto-fix (some audiences are legitimately bimodal).
+        try:
+            _enf_income_mono(df_final, subject=_subj_mw, verbose=True)
+        except Exception as _e:
+            print(f"   ⚠️ validate_income_monotonicity skipped: {_e}")
     except Exception as _mw_err:
         print(f"   ⚠️ missing-enforcer wiring skipped: {_mw_err}")
 
