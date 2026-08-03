@@ -8151,16 +8151,40 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
     except Exception as e:
         print(f"   ⚠️ enforcer recompute_raw_and_projection failed: {e}")
 
+    # 2026-08-03 (Honey Pot streaming defect): repair the "Netflix
+    # Share=100, everyone else NULL" signature BEFORE the general share
+    # recompute — the health-check enforcer detects the pattern and
+    # forces a BP-based rewrite that survives even when Raw for the
+    # non-Netflix rows is stale/zero.
+    try:
+        df, n = enforce_streaming_share_health(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_streaming_share_health failed: {e}")
+
     # 2026-06-07 (Jenna deep audit, 549 of 560 files affected): final
     # Category Share recompute. Earlier enforcers don't always re-run
     # _renormalize_category on every block they touch; this pass ensures
-    # share = raw / Σraw_block × 100 for every non-meta block.
-    # MUST run AFTER recompute_raw_and_projection (needs final raw values).
+    # Share = BP / ΣBP × 100 for every non-meta block (BP-based math,
+    # 2026-08-03 hardening — raw-based math broke on stale-Raw files).
+    # MUST run AFTER recompute_raw_and_projection (needs final BP values).
     try:
         df, n = apply_recompute_category_share(df, subject, verbose=verbose)
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer apply_recompute_category_share failed: {e}")
+
+    # 2026-08-03 (Honey Pot bimodal INCOME): soft-warn on bimodal
+    # INCOME distributions. Read-only — does NOT auto-fix (some
+    # audiences are legitimately bimodal). Result is logged for the
+    # writer/auditor to review.
+    try:
+        n_bi, _ = validate_income_monotonicity(
+            df, subject=subject, verbose=verbose,
+        )
+        total += n_bi
+    except Exception as e:
+        print(f"   ⚠️ enforcer validate_income_monotonicity failed: {e}")
 
     # 2026-06-16 (Jenna Defect 37 -- Peacock/LiveTV/YouTube/Citibank
     # near-miss + overflow): FINAL guarantee pass. pin_subject_to_100_*
@@ -9381,6 +9405,80 @@ def validate_demo_sum_100(df, *, subject=None, tolerance=0.5,
 
 
 # ============================================================================
+# INCOME MONOTONICITY (soft-warn; some audiences are legitimately bimodal)
+# ============================================================================
+# 2026-08-03 (Honey Pot bimodal INCOME): corpus scan found 1,817 profiles
+# with the writer-noise signature: peak, decline ≥ 2pp, then rise ≥ 1pp.
+# Example (Honey Pot Avid): 25-49K=19.00, 50-74K=21.01, 75-99K=16.48,
+#                            100-149K=18.52 — the rise at 100-149K after
+#                            the 75-99K dip is the smoking gun.
+# Some audiences ARE legitimately bimodal (dual-cohort products: young
+# early adopters + established professionals). This validator soft-warns
+# so writers can catch the LLM-noise cases but doesn't auto-fix or reject.
+
+_INCOME_BUCKETS_ORDERED = [
+    ['Less than $25,000', 'Under $25,000', '<$25,000'],
+    ['$25,000 - $49,999', '$25,000 to $49,999'],
+    ['$50,000 - $74,999', '$50,000 to $74,999'],
+    ['$75,000 - $99,999', '$75,000 to $99,999'],
+    ['$100,000 - $149,999', '$100,000 to $149,999'],
+    ['$150,000 - $249,999', '$150,000 to $249,999', '$150,000+'],
+    ['$250,000 or More', '$250,000 or more', '$250,000+'],
+]
+
+
+def validate_income_monotonicity(df, *, subject=None, verbose=True):
+    """Soft-warn on bimodal INCOME distributions.
+
+    Returns (n_violations, sequence). n_violations is 0 on pass, 1 when
+    the block violates monotonic-after-peak. NEVER auto-fixes or
+    rejects — many audiences ARE legitimately bimodal. The signal is
+    useful for the writer/auditor to check whether the shape is
+    intentional.
+
+    Runs read-only; caller decides whether to log/pass.
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return 0, []
+    bp_col, _, _, _ = _detect_cols(df)
+    if bp_col is None:
+        return 0, []
+    m_inc = df['Column'].astype(str).str.strip().str.upper() == 'INCOME'
+    if not m_inc.any():
+        return 0, []
+    inc_map = {}
+    for idx in df.index[m_inc]:
+        v = str(df.at[idx, 'Value']).strip()
+        bp = _bp(df.at[idx, bp_col])
+        if bp is not None:
+            inc_map[v] = bp
+    seq = []
+    for aliases in _INCOME_BUCKETS_ORDERED:
+        for a in aliases:
+            if a in inc_map:
+                seq.append(inc_map[a])
+                break
+    if len(seq) < 4:
+        return 0, seq
+
+    peak_reached = False
+    bimodal = False
+    for i in range(1, len(seq)):
+        if seq[i - 1] >= seq[i] + 2.0:
+            peak_reached = True
+        if peak_reached and seq[i] >= seq[i - 1] + 1.0:
+            bimodal = True
+            break
+
+    if bimodal and verbose:
+        print(f'   ⚠️  validate_income_monotonicity [{subject or ""}]: '
+              f'INCOME appears bimodal (peak→dip≥2pp→rise≥1pp) '
+              f'seq={[round(x, 2) for x in seq]} — verify audience truly '
+              f'has two peaks (dual-cohort) or fix distribution.')
+    return (1 if bimodal else 0), seq
+
+
+# ============================================================================
 # D88 — STRIP TILDE FROM BRAND INPUT (writer-bug fix)
 # ============================================================================
 # 2026-06-07 (Jenna deep audit): subject-naming layer in BG.py emits
@@ -10283,24 +10381,132 @@ _SHARE_SKIP_BLOCKS = {
 }
 
 
-def apply_recompute_category_share(df, subject, verbose=True):
-    """Final pass: recompute Category Share for every non-meta block. For
-    demographic blocks, Category Share = BP (each demo sums to 100% so
-    share ≡ BP). For non-demo blocks, Category Share = raw / Σraw × 100.
+def enforce_streaming_share_health(df, subject, verbose=True):
+    """Detect + repair the "one row Share=100, everyone else NULL"
+    signature in STREAMING/PLATFORM and STREAMING VIDEO blocks.
 
-    Idempotent. Returns (df, n_blocks_touched).
+    Signature (Honey Pot 2026-08-03, corpus-wide: 171 files):
+      Netflix has Share=100.0000 and Raw > 0, while every other
+      streaming service has Share NULL (empty string). This ships
+      when a writer explicitly pins Netflix but forgets to touch the
+      other rows, and the raw-based apply_recompute_category_share
+      pass doesn't recover because the other rows have Raw=0 by that
+      point.
+
+    Fix strategy:
+      * If ≥50% of rows in the block have NULL share AND at least one
+        row has Share=100 AND the block has ≥5 rows, force a
+        BP-based Share recompute for the WHOLE block.
+      * The BP-based recompute lives in apply_recompute_category_share
+        (this function just detects and marks). Actual repair happens
+        via the same rewrite so both paths use identical math.
+
+    Auto-fix path: overwrite Share on every row in the block using
+    Share = BP / ΣBP × 100. Preserves the pinned peer at 100 only if
+    BP is actually 100.
+
+    Returns (df, n_rows_fixed). Idempotent — no-op after apply_recompute_
+    category_share has run cleanly.
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, _, _ = _detect_cols(df)
+    if bp_col is None or cs_col is None:
+        return df, 0
+
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+    targets = ('STREAMING/PLATFORM', 'STREAMING VIDEO', 'STREAMING MUSIC',
+               'VMVPD/FAST', 'SOCIAL MEDIA')
+
+    total_fixed = 0
+    for cat_up in targets:
+        mask = col_u == cat_up
+        if mask.sum() < 5:
+            continue
+
+        share_raw = df.loc[mask, cs_col].astype(str).str.strip()
+        n_rows = int(mask.sum())
+        n_null = int((share_raw == '').sum() + (share_raw.str.lower() == 'nan').sum())
+        share_vals = share_raw.apply(
+            lambda x: _bp(x) if x and x.lower() != 'nan' else None
+        )
+        n_pin_100 = int((share_vals.apply(
+            lambda v: v is not None and abs(v - 100) < 0.001
+        )).sum())
+
+        needs_fix = (n_null >= n_rows * 0.5) and (n_pin_100 >= 1)
+        if not needs_fix:
+            continue
+
+        # BP-based recompute for this block.
+        bps = df.loc[mask, bp_col].apply(_bp)
+        bp_sum = float(bps.fillna(0).sum())
+        if bp_sum <= 0:
+            continue
+        for idx in df.index[mask]:
+            v = _bp(df.at[idx, bp_col])
+            if v is None:
+                df.at[idx, cs_col] = ''
+                continue
+            df.at[idx, cs_col] = round(v / bp_sum * 100, 4)
+        total_fixed += n_rows
+        if verbose:
+            print(f"   🔧 enforce_streaming_share_health [{subject or ''}]: "
+                  f"repaired {cat_up} ({n_null}/{n_rows} rows had null "
+                  f"share, {n_pin_100} pinned at 100)")
+
+    return df, total_fixed
+
+
+def apply_recompute_category_share(df, subject, verbose=True):
+    """Final pass: recompute Category Share for every non-meta block.
+
+    Semantics:
+      * Demographic blocks (AGE, GENDER, INCOME, ...): Share = BP.
+        Each demo sums to 100 by construction, so Share ≡ BP.
+      * Non-demo blocks: Share = BP / Σ(BP_in_block) × 100.
+        "Voice-share within category". BP is the source of truth
+        because Raw can drift (stale, zero, or missing after ad-hoc
+        script edits — the Honey Pot 2026-08-03 signature).
+        Falls back to raw/Σraw only when BP for every row in the block
+        is missing (edge case for legacy files).
+
+    Also normalizes format:
+      * Strips '%' from Share cells so the column is uniformly numeric.
+      * Blanks Share on the BRAND CATEGORY metadata row.
+
+    Idempotent. Returns (df, n_blocks_touched). Runs LAST in the
+    enforcer chain — nothing downstream should touch Share.
+
+    History:
+      * Original impl (2026-06-07): raw / Σraw. Broke on Summer's Eve
+        Potential Consumers where synth_engine.py wrote Share=BP
+        (making the sum wildly inflated) and Raw was stale.
+      * 2026-08-03: switched to BP-based math + format normalize.
     """
     if df is None or len(df) == 0 or 'Column' not in df.columns:
         return df, 0
     bp_col, cs_col, raw_col, _ = _detect_cols(df)
-    if cs_col is None or cs_col not in df.columns:
+    if cs_col is None or cs_col not in df.columns or bp_col is None:
         return df, 0
-    if str(df[cs_col].dtype) == 'string' or str(df[cs_col].dtype).startswith('str'):
-        # Coerce to object dtype so float assignment works
+    if (str(df[cs_col].dtype) == 'string'
+            or str(df[cs_col].dtype).startswith('str')):
         df[cs_col] = df[cs_col].astype(object)
 
     n_blocks = 0
+    n_pct_stripped = 0
     cats_upper = df['Column'].astype(str).str.strip().str.upper()
+    demo_upper = {c.upper() for c in _DEMO_CATS_NINE}
+
+    # Blank Share on BRAND CATEGORY metadata rows first so they don't
+    # count in per-cat sums (they should be uniquely blank).
+    m_bc = cats_upper == 'BRAND CATEGORY'
+    if m_bc.any():
+        for idx in df.index[m_bc]:
+            v = str(df.at[idx, cs_col]).strip()
+            if v and v.lower() != 'nan':
+                df.at[idx, cs_col] = ''
+
     for cat in df['Column'].astype(str).str.strip().unique():
         cat_upper = str(cat).upper().strip()
         if cat_upper in _SHARE_SKIP_BLOCKS:
@@ -10308,28 +10514,58 @@ def apply_recompute_category_share(df, subject, verbose=True):
         mask = cats_upper == cat_upper
         if not mask.any():
             continue
-        if cat_upper in {c.upper() for c in _DEMO_CATS_NINE}:
-            # Demos — share equals BP (after renormalize, each sums to 100)
-            df.loc[mask, cs_col] = df.loc[mask, bp_col].apply(_bp).round(4)
+
+        bps = df.loc[mask, bp_col].apply(_bp)
+
+        if cat_upper in demo_upper:
+            df.loc[mask, cs_col] = bps.round(4)
             n_blocks += 1
             continue
-        # Non-demo — share = raw / Σraw × 100
+
+        # Non-demo — canonical formula Share = BP / ΣBP × 100.
+        bp_sum = float(bps.fillna(0).sum())
+        if bp_sum > 0:
+            for idx in df.index[mask]:
+                v = _bp(df.at[idx, bp_col])
+                if v is None:
+                    df.at[idx, cs_col] = ''
+                    continue
+                df.at[idx, cs_col] = round(v / bp_sum * 100, 4)
+            n_blocks += 1
+            continue
+
+        # BP is entirely missing/zero — fall back to raw-based math.
         if raw_col is None or raw_col not in df.columns:
             continue
         raws = pd.to_numeric(
             df.loc[mask, raw_col].astype(str).str.replace(',', ''),
             errors='coerce',
         ).fillna(0)
-        total = float(raws.sum())
-        if total <= 0:
+        raw_sum = float(raws.sum())
+        if raw_sum <= 0:
             continue
-        df.loc[mask, cs_col] = (raws / total * 100).round(4)
+        df.loc[mask, cs_col] = (raws / raw_sum * 100).round(4)
         n_blocks += 1
 
-    if verbose and n_blocks:
+    # Strip lingering '%' suffix from any Share cells (Fix W1: percent
+    # bleeding into share column — corpus-wide format signature).
+    try:
+        share_series = df[cs_col].astype(str)
+        pct_mask = share_series.str.contains('%', regex=False, na=False)
+        n_pct_stripped = int(pct_mask.sum())
+        if n_pct_stripped:
+            df.loc[pct_mask, cs_col] = share_series.loc[pct_mask].str.replace(
+                '%', '', regex=False
+            ).str.strip()
+    except Exception:
+        pass
+
+    if verbose and (n_blocks or n_pct_stripped):
+        extra = f" (also stripped '%' from {n_pct_stripped} share cells)" \
+            if n_pct_stripped else ''
         print(f"   🔧 apply_recompute_category_share [{subject or ''}]: "
-              f"{n_blocks} block(s) recomputed")
-    return df, n_blocks
+              f"{n_blocks} block(s) recomputed{extra}")
+    return df, n_blocks + n_pct_stripped
 
 
 class PrePublishGateError(Exception):
@@ -11444,6 +11680,110 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
                                 )
     except Exception as e:
         defects.append(f'G18 SUBJECT_DUPLICATED_NON_NATIVE_STREAMING: detector errored: {e}')
+
+    # ── G8: Category Share sum invariant (non-demo) ──────────────────
+    # 2026-08-03 (Honey Pot / synth_engine share=BP bug). Non-demo
+    # Category Share must sum to 100 ± 3pp per category (metadata rows
+    # excluded). This catches the two writer-bug signatures:
+    #   * Share literally set = BP (sums >> 100)
+    #   * Share left blank on some rows (sums << 100)
+    # Auto-patched by apply_recompute_category_share upstream; the gate
+    # only fires if the recompute couldn't run (missing BP/CS cols).
+    try:
+        if bp_col and cs_col and 'Column' in df.columns:
+            col_u_g8 = df['Column'].astype(str).str.strip().str.upper()
+            demo_upper_g8 = {c.upper() for c in _DEMO_CATS_NINE}
+            skip_g8 = _SHARE_SKIP_BLOCKS | demo_upper_g8
+            broken = []
+            seen = set()
+            for cat in df['Column'].astype(str).str.strip().unique():
+                cu = str(cat).upper().strip()
+                if cu in skip_g8 or cu in seen:
+                    continue
+                seen.add(cu)
+                m = col_u_g8 == cu
+                if int(m.sum()) < 3:
+                    continue
+                shares = df.loc[m, cs_col].apply(_bp).fillna(0)
+                s = float(shares.sum())
+                if abs(s - 100.0) > 3.0:
+                    broken.append((cu, round(s, 2), int(m.sum())))
+            if broken:
+                broken.sort(key=lambda x: -abs(x[1] - 100))
+                sample = '; '.join(
+                    f'{c}={s:.1f}%(n={n})' for c, s, n in broken[:5]
+                )
+                defects.append(
+                    f'G8 SHARE_SUM: {len(broken)} non-demo block(s) with '
+                    f'Category Share sum outside 100±3pp '
+                    f'(sample: {sample}) -- recompute did not run'
+                )
+    except Exception as e:
+        defects.append(f'G8 SHARE_SUM: detector errored: {e}')
+
+    # ── G9: Share == BP corruption pattern (non-demo) ────────────────
+    # 2026-08-03 (Waterloo/Lainey/Sabrina/WoF synth_engine.py bug):
+    # writer set Share = BP directly, so shares mimic penetration
+    # rather than proportion-within-category. Signature is >30 rows
+    # where non-demo Share equals BP to 4dp (and BP > 0.5%).
+    try:
+        if bp_col and cs_col and 'Column' in df.columns:
+            col_u_g9 = df['Column'].astype(str).str.strip().str.upper()
+            skip_g9 = _SHARE_SKIP_BLOCKS | {
+                c.upper() for c in _DEMO_CATS_NINE
+            }
+            n_corrupt = 0
+            for idx in df.index:
+                cu = str(df.at[idx, 'Column']).strip().upper()
+                if cu in skip_g9:
+                    continue
+                bp_v = _bp(df.at[idx, bp_col])
+                sh_v = _bp(df.at[idx, cs_col])
+                if bp_v is None or sh_v is None:
+                    continue
+                if bp_v > 0.5 and abs(bp_v - sh_v) < 0.0001:
+                    n_corrupt += 1
+            if n_corrupt > 30:
+                defects.append(
+                    f'G9 SHARE_EQ_BP: {n_corrupt} non-demo row(s) have '
+                    f'Category Share == Brand Penetration (writer-bug '
+                    f'signature; share should be BP/ΣBP*100)'
+                )
+    except Exception as e:
+        defects.append(f'G9 SHARE_EQ_BP: detector errored: {e}')
+
+    # ── G10: Streaming Share pinned + rest null ──────────────────────
+    # 2026-08-03 (Honey Pot Netflix): one row Share=100, ≥50% of block
+    # rows have NULL share. enforce_streaming_share_health should have
+    # auto-fixed this; gate fires only if that repair didn't run.
+    try:
+        if cs_col and 'Column' in df.columns:
+            col_u_g10 = df['Column'].astype(str).str.strip().str.upper()
+            for target in ('STREAMING/PLATFORM', 'STREAMING VIDEO'):
+                m = col_u_g10 == target
+                if int(m.sum()) < 5:
+                    continue
+                share_raw = df.loc[m, cs_col].astype(str).str.strip()
+                n = int(m.sum())
+                n_null = int(
+                    (share_raw == '').sum()
+                    + (share_raw.str.lower() == 'nan').sum()
+                )
+                share_vals = share_raw.apply(
+                    lambda x: _bp(x) if x and x.lower() != 'nan' else None
+                )
+                n_pin_100 = int(share_vals.apply(
+                    lambda v: v is not None and abs(v - 100) < 0.001
+                ).sum())
+                if n_null >= n * 0.5 and n_pin_100 >= 1:
+                    defects.append(
+                        f'G10 STREAMING_SHARE_PIN: {target} has 1 row '
+                        f'pinned at Share=100 with {n_null}/{n} rows '
+                        f'NULL — enforce_streaming_share_health did not '
+                        f'run or block has zero BP mass'
+                    )
+    except Exception as e:
+        defects.append(f'G10 STREAMING_SHARE_PIN: detector errored: {e}')
 
     if verbose:
         if defects:

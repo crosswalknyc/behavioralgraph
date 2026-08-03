@@ -178,6 +178,8 @@ def write_profile_csv(
     register: bool = True,
     backup: bool = True,
     sort: bool = True,
+    run_gate: bool = True,
+    gate_raise_on_fail: bool = False,
     verbose: bool = True,
     s3_client=None,
 ) -> dict:
@@ -191,12 +193,20 @@ def write_profile_csv(
          year)
       3. If tu_source_key: enforce_tu_avid_coherence(df, TU_source)
       4. If sort: sort within each Column group by BP desc
-      5. If backup AND file exists on S3: back up prior to
+      5. If run_gate: run_pre_publish_gate(df, subject). Fires G1-G18
+         defect detectors including the 2026-08-03 additions:
+           G8  SHARE_SUM (non-demo Category Share sum != 100 ± 3pp)
+           G9  SHARE_EQ_BP (writer wrote Share = BP directly)
+           G10 STREAMING_SHARE_PIN (one row pinned, rest null)
+         Defects log by default; set gate_raise_on_fail=True to abort
+         the write.
+      6. If backup AND file exists on S3: back up prior to
          `_backups/{key}.pre_write_<ts>.csv`
-      6. Upload df to `s3://dashboard-inputs/<s3_key>`
-      7. If register: register_profile_in_dashboard(s3_key, ...)
+      7. Upload df to `s3://dashboard-inputs/<s3_key>`
+      8. If register: register_profile_in_dashboard(s3_key, ...)
 
-    Returns a dict with everything the caller needs to log.
+    Returns a dict with everything the caller needs to log, including
+    `gate_defects` (list of strings from the gate).
 
     Any step failure is caught and logged; the write itself must succeed
     (or the exception propagates). Enforcer failures are non-fatal.
@@ -205,6 +215,7 @@ def write_profile_csv(
     n_enforcer_changes = 0
     n_anachronism_changes = 0
     n_coherence_changes = 0
+    gate_defects: list = []
 
     # 1. Enforcer chain (canonical set from run_all_enforcers). If
     #    year is provided, run_all_enforcers threads it to the
@@ -269,12 +280,38 @@ def write_profile_csv(
             print(f"  [profile_writer] sort failed "
                   f"({type(e).__name__}: {e}); continuing")
 
-    # 5. Back up prior version
+    # 5. Pre-publish gate (defect scanner). By default this logs
+    # violations but does not block the write. Set
+    # `gate_raise_on_fail=True` on write paths where you want to abort.
+    if run_gate:
+        try:
+            from migration.post_generation_enforcers import (
+                run_pre_publish_gate,
+            )
+        except ImportError:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from post_generation_enforcers import (  # type: ignore
+                run_pre_publish_gate,
+            )
+        try:
+            gate_defects = run_pre_publish_gate(
+                df, subject,
+                project_name=display_name or s3_key,
+                raise_on_fail=gate_raise_on_fail,
+                verbose=verbose,
+            )
+        except Exception as e:
+            print(f"  [profile_writer] pre-publish gate raised "
+                  f"({type(e).__name__}: {e})")
+            if gate_raise_on_fail:
+                raise
+
+    # 6. Back up prior version
     backup_key = None
     if backup:
         backup_key = _backup_prior(s3, s3_key, "write")
 
-    # 6. Upload
+    # 7. Upload
     buf = io.StringIO()
     df.to_csv(buf, index=False)
     body = buf.getvalue().encode("utf-8")
@@ -285,7 +322,7 @@ def write_profile_csv(
         print(f"  [profile_writer] uploaded ({len(body):,} bytes) -> "
               f"s3://{BUCKET}/{s3_key}")
 
-    # 7. Register
+    # 8. Register
     register_result = None
     if register:
         try:
@@ -314,6 +351,7 @@ def write_profile_csv(
         "n_enforcer_changes": n_enforcer_changes,
         "n_anachronism_changes": n_anachronism_changes,
         "n_coherence_changes": n_coherence_changes,
+        "gate_defects": gate_defects,
         "register": register_result,
     }
 
