@@ -47466,6 +47466,10 @@
             if (!present.length) {
                 return '<div class="tiq-empty">Film ticketing data is warming up. Check back later.</div>';
             }
+            var subheader =
+                '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
+                'Ticketing Demand Rank by Site' +
+                '</div>';
             var cards = present.map(function(k) {
                 var s = sources[k] || {};
                 var items = s.items || [];
@@ -47495,7 +47499,9 @@
                        body +
                        '</div>';
             }).join('');
-            return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' + cards + '</div>';
+            return subheader +
+                   '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' +
+                   cards + '</div>';
         }
 
         // ============================================================
