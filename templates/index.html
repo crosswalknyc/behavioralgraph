@@ -7114,7 +7114,9 @@
             padding: 0.5rem 0 0.5rem 0;
             position: sticky;
             top: 0;
-            z-index: 1;
+            /* Above .behavioral-item:hover (z-index:1) so a hovered row
+               scrolling up can never paint over the sticky header. */
+            z-index: 5;
             background: var(--bg-card);
             margin-bottom: 0;
             font-size: 0.7rem;
