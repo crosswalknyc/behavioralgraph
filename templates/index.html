@@ -45333,9 +45333,14 @@
                     Title: r.name || '',
                     Subtitle: (r.platform_count >= 3 ? 'cultural moment' : ''),
                     Source: sources,
-                    Value: (typeof r.score === 'number') ? r.score.toFixed(2) : (r.score || ''),
-                    Unit: 'score',
-                    Change: 'on ' + (r.platform_count || 0) + ' tabs',
+                    // Surface the platform count as the exportable
+                    // number (matches what the tile shows). The
+                    // internal fusion `score` is not exposed - per
+                    // Jenna 2026-08-04, no opaque scoring numbers
+                    // leave the dashboard.
+                    Value: (r.platform_count || 0),
+                    Unit: 'tabs',
+                    Change: '',
                     Why: r.why || '',
                     URL: r.url || ''
                 });
@@ -47512,10 +47517,13 @@
                     var fireBadge = (r.platform_count >= 3)
                         ? ' <span class="tiq-trend tiq-trend-cross" title="Trending on ' + r.platform_count + ' distinct tabs simultaneously">\uD83D\uDD25 cultural moment</span>'
                         : '';
-                    // Score meta (small, right of platform count)
+                    // Platform-count meta. Numeric fusion `r.score` is
+                    // used internally to rank rows but is intentionally
+                    // NOT surfaced to users (per Jenna 2026-08-04: no
+                    // opaque numbers on the tile). The "on N tabs"
+                    // phrase captures the same signal in plain English.
                     var meta = '<span class="tiq-fuse-meta">' +
                                'on <strong>' + r.platform_count + '</strong> tab' + (r.platform_count === 1 ? '' : 's') +
-                               ' &middot; score ' + Number(r.score).toFixed(2) +
                                '</span>';
                     // Why line (Claude one-liner from why_trending
                     // snapshot). Strict mode: only render when the
