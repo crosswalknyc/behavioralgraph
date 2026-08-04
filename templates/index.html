@@ -46776,6 +46776,25 @@
                 return (m && m[1]) ? m[1].toLowerCase() : 'streams';
             })();
             var tip = 'Number of ' + noun;
+            // When the DoD chip shows a delta (up/down %), append the
+            // exact date range the % covers, e.g.
+            //   "Number of streams. -15% from Aug 3 to Aug 4."
+            // The backend stamps `prev_date` / `as_of_date` on every
+            // stream estimate; if either is missing we fall back to
+            // a generic "over the last 24 hours" phrase so the
+            // tooltip is never orphaned.
+            if (deltaLabel) {
+                var rangePhrase = '';
+                if (e.prev_date && e.as_of_date) {
+                    rangePhrase = ' from ' + _tiqShortDate(e.prev_date) +
+                                   ' to ' + _tiqShortDate(e.as_of_date);
+                } else if (e.prev_date) {
+                    rangePhrase = ' vs ' + _tiqShortDate(e.prev_date);
+                } else {
+                    rangePhrase = ' over the last 24 hours';
+                }
+                tip += '. ' + deltaLabel + rangePhrase + '.';
+            }
             return ' <span class="tiq-streams-chip ' + arrowCls +
                    '" title="' + _tiqEsc(tip) + '">' +
                    mid + ' ' + _tiqEsc(unit) +

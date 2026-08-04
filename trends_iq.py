@@ -2736,6 +2736,7 @@ _STREAM_FIELDS = (
     'us_estimate', 'us_estimate_low', 'us_estimate_high',
     'unit_label', 'confidence', 'method', 'sources',
     'delta_pct', 'direction', 'prev_estimate',
+    'prev_date', 'as_of_date',
 )
 
 
@@ -2809,6 +2810,8 @@ def _stamp_stream_estimate(row: dict, entry: dict,
             'direction':        per.get('direction'),
             'delta_pct':        per.get('delta_pct'),
             'prev_estimate':    per.get('prev_estimate'),
+            'prev_date':        per.get('prev_date') or entry.get('prev_date'),
+            'as_of_date':       per.get('as_of_date') or entry.get('as_of_date'),
             # Note is per-platform reasoning. Aggregate `method` +
             # `sources` still travel for completeness but the frontend
             # tooltip is simplified.

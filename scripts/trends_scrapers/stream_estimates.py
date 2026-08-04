@@ -1173,11 +1173,18 @@ def _direction_and_delta(cur_mid: int, prev_mid: int) -> tuple[str, float]:
 
 
 def _attach_dod_trend(current: dict[str, dict],
-                       yesterday: Optional[dict]) -> dict[str, dict]:
+                       yesterday: Optional[dict],
+                       prev_date_iso: Optional[str] = None,
+                       today_iso: Optional[str] = None) -> dict[str, dict]:
     """Mutate `current` to add `delta_pct` / `direction` at the
     aggregate level AND on every per-platform sub-block. Missing
     prior values leave the aggregate fields at 0 / 'new' and drop
-    trend fields off the platform blocks."""
+    trend fields off the platform blocks.
+
+    `prev_date_iso` / `today_iso` are stamped onto every item so
+    the frontend tooltip can render an exact date range (e.g.
+    "-15% vs Aug 3 (24h ago)"). Passed through as-is; callers
+    figure out which prior snapshot they actually read."""
     prior_items = ((yesterday or {}).get('items') or {})
     for key, cur in current.items():
         prev = prior_items.get(key) or {}
@@ -1187,6 +1194,8 @@ def _attach_dod_trend(current: dict[str, dict],
         cur['direction']     = direction
         cur['delta_pct']     = delta
         cur['prev_estimate'] = prev_mid if prev_mid > 0 else None
+        if prev_date_iso: cur['prev_date']   = prev_date_iso
+        if today_iso:     cur['as_of_date']  = today_iso
 
         # Same for each per-platform block.
         prev_by_plat = (prev.get('by_platform') or {})
@@ -1198,6 +1207,8 @@ def _attach_dod_trend(current: dict[str, dict],
             plat_block['direction']     = pdir
             plat_block['delta_pct']     = pdelta
             plat_block['prev_estimate'] = p_prev_mid if p_prev_mid > 0 else None
+            if prev_date_iso: plat_block['prev_date']   = prev_date_iso
+            if today_iso:     plat_block['as_of_date']  = today_iso
     return current
 
 
@@ -1252,10 +1263,17 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
     researched = _research_all(items)
 
     # Attach day-over-day trend from yesterday's dated snapshot.
+    # Track which prior snapshot actually resolved so the tooltip
+    # can render an exact date range (days_back may be 1 or 2).
+    today_iso = date.today().isoformat()
+    prev_date_iso = (date.today() - timedelta(days=1)).isoformat()
     yesterday = _read_dated_snapshot('stream_estimates', days_back=1)
     if not yesterday:
         yesterday = _read_dated_snapshot('stream_estimates', days_back=2)
-    researched = _attach_dod_trend(researched, yesterday)
+        prev_date_iso = (date.today() - timedelta(days=2)).isoformat()
+    researched = _attach_dod_trend(researched, yesterday,
+                                     prev_date_iso=prev_date_iso,
+                                     today_iso=today_iso)
 
     return {
         'items':        researched,
