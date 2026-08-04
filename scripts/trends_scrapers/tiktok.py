@@ -51,7 +51,8 @@ import json
 import logging
 import re
 import sys
-from typing import Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Optional
 
 from ._base import run_scraper
 
@@ -266,6 +267,128 @@ def _fetch_playwright() -> list[dict]:
     return items
 
 
+# ---------------------------------------------------------------------------
+# Per-video engagement enrichment
+# ---------------------------------------------------------------------------
+# TikTok's /discover DOM does NOT expose view / like / comment counts
+# (only the caption + thumbnail + creator + video-id). To surface
+# engagement stats on the dashboard alongside the video row, we hit
+# each video's public page and parse the SSR JSON blob that TikTok
+# embeds under `<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__">`.
+#
+# That blob (renamed from SIGI_STATE mid-2024) carries the full
+# ItemModule tree: playCount (views), diggCount (likes), commentCount,
+# shareCount. Requests use curl_cffi's Chrome-124 TLS impersonation
+# so TikTok's WAF treats them as ordinary browser traffic. We do NOT
+# need Playwright for this - the individual video pages are much
+# less aggressively gated than /discover, and every request would
+# have cost 2s in Playwright vs ~1s via curl_cffi.
+_UNIVERSAL_DATA_RE = re.compile(
+    r'<script[^>]*id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>({.+?})</script>',
+    re.DOTALL,
+)
+
+
+def _walk_for_stats(obj: Any, depth: int = 0) -> Optional[dict]:
+    """Depth-first search for the first dict carrying `playCount`.
+    Returns the enclosing stats dict or None if nothing found within
+    the recursion cap (guards against pathological blobs)."""
+    if depth > 10:
+        return None
+    if isinstance(obj, dict):
+        if 'playCount' in obj:
+            return obj
+        for v in obj.values():
+            found = _walk_for_stats(v, depth + 1)
+            if found is not None:
+                return found
+    elif isinstance(obj, list):
+        for v in obj:
+            found = _walk_for_stats(v, depth + 1)
+            if found is not None:
+                return found
+    return None
+
+
+def _fetch_video_stats(video_url: str, timeout: int = 15) -> dict:
+    """Return {views, likes, comments, shares} for one TikTok video,
+    or {} if the fetch or parse fails. Never raises."""
+    try:
+        try:
+            from curl_cffi import requests as crq
+            r = crq.get(video_url, impersonate='chrome124',
+                         headers={
+                             'Accept':          'text/html,application/xhtml+xml',
+                             'Accept-Language': 'en-US,en;q=0.9',
+                         },
+                         timeout=timeout)
+        except ImportError:
+            import requests as crq
+            r = crq.get(video_url, headers={
+                'User-Agent':      ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; '
+                                     'rv:120.0) Gecko/20100101 Firefox/120.0'),
+                'Accept':          'text/html,application/xhtml+xml',
+                'Accept-Language': 'en-US,en;q=0.9',
+            }, timeout=timeout)
+    except Exception as e:
+        logger.debug("tiktok enrich %s: %s", video_url, e)
+        return {}
+    if not getattr(r, 'ok', False):
+        logger.debug("tiktok enrich %s: http %s",
+                      video_url, getattr(r, 'status_code', '?'))
+        return {}
+    m = _UNIVERSAL_DATA_RE.search(r.text or '')
+    if not m:
+        return {}
+    try:
+        blob = json.loads(m.group(1))
+    except Exception:
+        return {}
+    stats = _walk_for_stats(blob)
+    if not stats:
+        return {}
+    def _as_int(v: Any) -> int:
+        try: return int(v or 0)
+        except (TypeError, ValueError): return 0
+    return {
+        'views':    _as_int(stats.get('playCount')),
+        'likes':    _as_int(stats.get('diggCount')),
+        'comments': _as_int(stats.get('commentCount')),
+        'shares':   _as_int(stats.get('shareCount')),
+    }
+
+
+def _enrich_items_with_stats(items: list[dict], *, max_workers: int = 8) -> None:
+    """Mutate `items` in place, adding views/likes/comments/shares +
+    a human-readable `views_display` (e.g. '12.5M') to each entry
+    that has a valid URL. Runs enrichment fan-out via a thread pool
+    so 30 videos settle in ~4s instead of 30s serial."""
+    urls = [(i, it.get('url') or '') for i, it in enumerate(items)]
+    urls = [(i, u) for (i, u) in urls if u]
+    if not urls:
+        return
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = {ex.submit(_fetch_video_stats, u): i for (i, u) in urls}
+        for fut in as_completed(futures):
+            i = futures[fut]
+            try:
+                stats = fut.result()
+            except Exception:
+                stats = {}
+            if not stats:
+                continue
+            it = items[i]
+            if stats.get('views'):
+                it['views']         = stats['views']
+                it['views_display'] = _display_count(stats['views'])
+            if stats.get('likes'):
+                it['likes']    = stats['likes']
+            if stats.get('comments'):
+                it['comments'] = stats['comments']
+            if stats.get('shares'):
+                it['shares']   = stats['shares']
+
+
 def fetch() -> dict[str, Any]:
     items = _fetch_playwright()
     if not items:
@@ -277,6 +400,10 @@ def fetch() -> dict[str, Any]:
                          'tiktok.com) and that this ran from a residential '
                          'IP (Hetzner is fingerprinted).'),
         }
+    # Enrich the top-30 with per-video engagement stats. Failures on
+    # individual videos are silently swallowed - the row still renders,
+    # just without the extra chips.
+    _enrich_items_with_stats(items[:30])
     return {'national': items[:30]}
 
 
