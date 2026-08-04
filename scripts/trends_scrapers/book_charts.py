@@ -511,19 +511,19 @@ def fetch() -> dict[str, Any]:
         'available': bool(amazon_items or apple_items or aud_items),
         'sources': {
             'amazon': {
-                'label':     'Amazon Best-Sellers (Books)',
+                'label':     'Amazon Books',
                 'sub':       'The Amazon Best-Sellers list. Refreshes hourly.',
                 'items':     amazon_items,
                 'available': bool(amazon_items),
             },
             'apple': {
-                'label':     'Apple Books Top 100 (US)',
+                'label':     'Apple Books',
                 'sub':       'The Apple Books top-paid chart.',
                 'items':     apple_items,
                 'available': bool(apple_items),
             },
             'audible': {
-                'label':     'Audible Best-Sellers',
+                'label':     'Audible Books',
                 'sub':       (aud_sub or "Audible's Top 100 chart. What people "
                                           'are listening to on the biggest '
                                           'audiobook platform.'),
