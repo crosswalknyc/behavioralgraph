@@ -46494,7 +46494,21 @@
             }
             var overallSub = 'Top ' + Math.min(overall.length, 300) +
                              ' uncategorized queries. Scroll to see the full pool.';
-            var html = '<div class="tiq-searches-grid">' +
+            // Tab-level legend so users can decode the colored
+            // pills on each row. Blue tiq-vol = search-volume
+            // count; green tiq-growth = velocity (%Δ vs the
+            // prior window). Class names match the actual row
+            // badges 1:1 so swatches stay in visual sync with
+            // whatever styling the rest of the tab applies.
+            var legend =
+                '<div class="tiq-search-legend" style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:12px;font-size:12px;opacity:0.85;">' +
+                  '<span class="tiq-badge tiq-vol">100K</span>' +
+                  '<span>Rounded search volume in the selected window (day-over-day by default).</span>' +
+                  '<span class="tiq-badge tiq-growth">+150%</span>' +
+                  '<span>Velocity: % change in search volume vs. the prior window.</span>' +
+                '</div>';
+            var html = legend +
+                       '<div class="tiq-searches-grid">' +
                 // Row 1: Popular culture
                 _tiqRenderSearchCard('\uD83D\uDD0E Overall',
                                        overallSub,
