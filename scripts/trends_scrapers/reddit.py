@@ -1,14 +1,25 @@
 """
-Reddit trending scraper via public Atom RSS feed.
+Reddit trending scraper.
 
-Reddit's public .json endpoints are 403'd for unauthenticated clients
-now, but the Atom /r/popular/.rss endpoint still works with a
-browser-style UA when hit from a residential IP. Render's datacenter
-IPs are blocked, which is why the app-side live fetch returned zero
-items in production and the tab rendered "No trending items right
-now." Moving Reddit to a daily Hetzner cron (same egress that already
-serves TikTok / X / YouTube / Instagram) makes it consistent with
-every other social source.
+Primary path (2026-08 rewrite): Playwright renders
+`www.reddit.com/r/<sub>/hot/` in real Chrome from the residential
+runner. The rendered DOM includes `<shreddit-post>` custom elements
+whose attributes (`score`, `comment-count`, `post-title`,
+`permalink`, `author`) give us the engagement stats the RSS path
+never carried. Reddit's public `.json` endpoints (and even Playwright
+hits against `.json`) started returning 403 mid-2026 regardless of
+TLS fingerprint. The shreddit HTML path is currently the only zero-
+config way to pull scores + comment counts.
+
+Fallback path (still runs when Playwright is unavailable or a specific
+sub errs during render): the Atom `.rss` feed. RSS entries only carry
+title / URL / thumbnail / subreddit - no engagement stats - so the
+`score` and `comments` fields on those items will simply be absent
+and the dashboard will render the row without them.
+
+Render's datacenter IPs are blocked by Reddit's WAF; this scraper
+runs from `local_residential_run.py` alongside TikTok / X /
+Instagram.
 
 Snapshot shape matches the "social" contract in `_base.py`:
 
@@ -36,10 +47,11 @@ from __future__ import annotations
 import html as _html
 import logging
 import random
+import re
 import sys
 import time
 import xml.etree.ElementTree as ET
-from typing import Any
+from typing import Any, Optional
 
 import requests
 
@@ -51,6 +63,156 @@ logger = logging.getLogger(__name__)
 # with Chrome TLS impersonation gets 429'd - the ja3 fingerprint plus
 # the requests-from-datacenter pattern trips their WAF. Rolling our
 # own small GET here bypasses curl_cffi for this scraper only.
+
+
+# ---------------------------------------------------------------------------
+# Playwright HTML path (primary): parse <shreddit-post> attributes
+# ---------------------------------------------------------------------------
+# Reddit renders each post twice in the modern shreddit DOM: once as
+# the compact list card and once as a slot for the detail-view mount
+# point (both share the same score / comment-count attrs). We dedupe
+# by permalink so the same post doesn't appear twice in the output.
+_SHREDDIT_POST_RE = re.compile(r'<shreddit-post([^>]{0,4000})>', re.IGNORECASE)
+
+
+def _attr(attrs: str, name: str) -> str:
+    m = re.search(rf'\b{name}="([^"]*)"', attrs)
+    return _html.unescape(m.group(1)) if m else ''
+
+
+def _parse_shreddit_posts(html: str, sub: str, limit: int) -> list[dict]:
+    """Extract posts from a rendered `www.reddit.com/r/<sub>/hot/` page.
+
+    Every `<shreddit-post>` element carries these attributes we care
+    about (documented via inspection 2026-08-04):
+      - post-title, permalink, author, subreddit-prefixed-name
+      - score (int, upvotes), comment-count (int)
+      - post-type (image / video / link / self / gallery)
+      - domain (external link host or self.<sub>)
+    Poster thumbnails live on the inner `<img>` if any.
+    """
+    if not html:
+        return []
+    seen_permalinks: set[str] = set()
+    out: list[dict] = []
+    for m in _SHREDDIT_POST_RE.finditer(html):
+        attrs = m.group(1)
+        permalink = _attr(attrs, 'permalink')
+        if not permalink or permalink in seen_permalinks:
+            continue
+        title = _attr(attrs, 'post-title').strip()
+        if not title:
+            continue
+        seen_permalinks.add(permalink)
+        try:
+            score = int(_attr(attrs, 'score') or '0')
+        except ValueError:
+            score = 0
+        try:
+            comments = int(_attr(attrs, 'comment-count') or '0')
+        except ValueError:
+            comments = 0
+        author = _attr(attrs, 'author')
+        # subreddit-prefixed-name is `r/<sub>`; strip the prefix
+        sub_name = _attr(attrs, 'subreddit-prefixed-name') or f'r/{sub}'
+        sub_name = sub_name.replace('r/', '').strip() or sub
+        # Absolute URL for the post
+        if permalink.startswith('/'):
+            url = 'https://www.reddit.com' + permalink
+        else:
+            url = permalink
+        # Poster thumbnail: shreddit-post nests a media block; grab
+        # the first non-emoji, non-avatar image within the element's
+        # span in the source. The tag is self-closing in the SSR
+        # markup (no </shreddit-post>), so pull a bounded window
+        # after the tag for the img lookup.
+        window = html[m.end():m.end() + 4000]
+        img = ''
+        img_m = re.search(r'<img[^>]+src="(https://[^"]+)"', window)
+        if img_m:
+            candidate = img_m.group(1)
+            # Skip Reddit UI icons + user avatars (they live at
+            # styles.redditmedia.com/*/avatars/ and .../icons/ paths).
+            if ('redditstatic' not in candidate and
+                    'styles.redditmedia.com/t2_' not in candidate and
+                    '/avatars/' not in candidate):
+                img = candidate
+        out.append({
+            'rank':      len(out) + 1,
+            'title':     title[:260],
+            'url':       url,
+            'subreddit': sub_name,
+            'image':     img,
+            'score':     score,
+            'comments':  comments,
+            'author':    author,
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _fetch_sub_playwright(page, sub: str, limit: int = 20,
+                            *, timeout_ms: int = 25000) -> list[dict]:
+    """Load /r/<sub>/hot/ in a shared Playwright page and parse.
+
+    `page` is a Playwright Page created by the caller so all subs
+    reuse ONE browser context (35 renders would cost ~2 minutes if
+    each launched its own browser; reusing keeps the whole scraper
+    under 90s).
+    """
+    try:
+        r = page.goto(f'https://www.reddit.com/r/{sub}/hot/',
+                       wait_until='domcontentloaded', timeout=timeout_ms)
+        status = r.status if r else -1
+        if status != 200:
+            logger.info("reddit shreddit r/%s: http %s", sub, status)
+            return []
+        try:
+            page.wait_for_selector('shreddit-post', timeout=10_000)
+        except Exception:
+            logger.info("reddit shreddit r/%s: no shreddit-post after 10s", sub)
+        # Nudge lazy loading so more than the first 5 posts hydrate.
+        for _ in range(2):
+            page.mouse.wheel(0, 1500)
+            page.wait_for_timeout(400)
+        html = page.content() or ''
+    except Exception as e:
+        logger.info("reddit shreddit r/%s render err: %s", sub, e)
+        return []
+    return _parse_shreddit_posts(html, sub, limit)
+
+
+def _mint_reddit_page(pw):
+    """Launch one browser + one page. Returned tuple should be closed
+    by the caller in a finally block. Returns (browser, page) or
+    (None, None) on any failure."""
+    try:
+        from ._playwright import _launch_browser, _try_stealth, UA
+    except Exception as e:
+        logger.info("reddit: playwright helpers unavailable: %s", e)
+        return None, None
+    try:
+        browser, _ch = _launch_browser(pw, prefer_chrome=True, proxy=None)
+    except Exception as e:
+        logger.warning("reddit: playwright launch failed: %s", e)
+        return None, None
+    try:
+        ctx = browser.new_context(
+            user_agent=UA,
+            viewport={'width': 1440, 'height': 900},
+            locale='en-US',
+            timezone_id='America/New_York',
+            extra_http_headers={'Accept-Language': 'en-US,en;q=0.9'},
+        )
+        page = ctx.new_page()
+        _try_stealth(page)
+        return browser, page
+    except Exception as e:
+        logger.warning("reddit: context/page create failed: %s", e)
+        try: browser.close()
+        except Exception: pass
+        return None, None
 
 
 # Curated set of the 15 largest-market states with an active `/r/<slug>`
@@ -89,10 +251,13 @@ _BROWSER_UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) '
 _ACCEPT_XML = 'application/atom+xml, application/xml, text/xml'
 
 
-def _fetch_sub(sub: str, limit: int = 20, *, retries: int = 2,
-                timeout: int = 15) -> list[dict]:
-    """Pull up to `limit` entries from /r/<sub>/.rss. Returns [] on any
-    failure so a single dead subreddit doesn't kill the run.
+def _fetch_sub_rss(sub: str, limit: int = 20, *, retries: int = 2,
+                    timeout: int = 15) -> list[dict]:
+    """Fallback path: pull up to `limit` entries from /r/<sub>/.rss.
+    Returns [] on any failure so a single dead subreddit doesn't kill
+    the run. RSS entries do NOT carry engagement stats (score /
+    num_comments), so items produced here lack those fields and the
+    dashboard row-meta strip renders without them.
 
     Uses plain `requests` (not `_base.http_get`) because Reddit's WAF
     429s curl_cffi's Chrome TLS impersonation on this endpoint. Plain
@@ -185,17 +350,101 @@ _US_NATIONAL_SUBS = [
 ]
 
 
+def _fetch_sub(sub: str, page, limit: int, *, allow_rss_fallback: bool = True) -> list[dict]:
+    """Get posts for one subreddit. Uses the shared Playwright `page`
+    when provided, falls back to RSS on error / empty. `page=None`
+    forces the RSS path (used when Playwright never launched).
+    """
+    if page is not None:
+        try:
+            rows = _fetch_sub_playwright(page, sub, limit=limit)
+            if rows:
+                return rows
+            logger.info("reddit r/%s: playwright empty, "
+                         "falling back to RSS", sub)
+        except Exception as e:
+            logger.info("reddit r/%s playwright err %s, falling back to RSS",
+                         sub, e)
+    if not allow_rss_fallback:
+        return []
+    return _fetch_sub_rss(sub, limit=limit, retries=1, timeout=10)
+
+
 def fetch() -> dict[str, Any]:
-    """Pull top-of-day posts from a curated set of US-heavy subreddits,
-    merge them by score, then layer in per-state slices from state subs.
-    r/popular is skipped because it geo-biases toward the caller's IP -
-    Hetzner is in Germany, so r/popular was returning r/de-heavy noise
-    instead of USA trending content.
+    """Pull hot posts from a curated set of US-heavy subreddits, merge
+    them by score, then layer in per-state slices from state subs.
+    r/popular is skipped because it geo-biases toward the caller's IP
+    (Hetzner is in Germany, so r/popular was returning r/de-heavy
+    noise instead of USA trending content).
+
+    Primary source is Playwright rendering of `/r/<sub>/hot/`, which
+    gives us score + comment-count per post. RSS is a per-sub
+    fallback when Playwright errs or returns zero.
+    """
+    # Boot ONE browser context for the whole run. If Playwright is
+    # unavailable (missing on the box, or launch fails), every sub
+    # falls back to RSS and the scraper still produces titles/urls -
+    # just without engagement stats. We swallow all playwright-init
+    # errors so a broken chrome install never nukes the whole run.
+    try:
+        from ._playwright import _lazy_playwright
+    except Exception as e:
+        logger.info("reddit: cannot import playwright helper (%s), "
+                     "falling back to RSS for all subs", e)
+        _lazy_playwright = None  # type: ignore[assignment]
+
+    sp = _lazy_playwright() if _lazy_playwright else None
+    if sp is None:
+        # RSS-only branch
+        return _fetch_rss_only()
+
+    aggregated: list[dict] = []
+    by_state: dict[str, list[dict]] = {}
+    with sp() as pw:
+        browser, page = _mint_reddit_page(pw)
+        if page is None:
+            logger.info("reddit: playwright page mint failed, RSS-only")
+            return _fetch_rss_only()
+        try:
+            for sub in _US_NATIONAL_SUBS:
+                try:
+                    rows = _fetch_sub(sub, page, limit=8)
+                except Exception as e:
+                    logger.info("reddit us-sub %s failed: %s", sub, e)
+                    rows = []
+                aggregated.extend(rows)
+                # No inter-sub sleep needed - the browser + Reddit's
+                # own rate limiter both throttle us naturally.
+            for state, slug in _STATE_SUBREDDITS.items():
+                try:
+                    rows = _fetch_sub(slug, page, limit=15)
+                except Exception as e:
+                    logger.info("reddit rss %s (%s) failed: %s", state, slug, e)
+                    rows = []
+                if rows:
+                    by_state[state] = _dedupe(rows)[:12]
+        finally:
+            try: browser.close()
+            except Exception: pass
+
+    national = _dedupe(aggregated)[:40]
+    result: dict[str, Any] = {'national': national}
+    if by_state:
+        result['by_state'] = by_state
+    if not national:
+        result['error'] = ('Reddit shreddit + RSS both returned no entries. '
+                            'Check residential-IP eligibility and cookies.')
+    return result
+
+
+def _fetch_rss_only() -> dict[str, Any]:
+    """Pure-RSS branch retained for the case where Playwright can't
+    boot. Items ship without score / comments (RSS doesn't carry them).
     """
     aggregated: list[dict] = []
     for sub in _US_NATIONAL_SUBS:
         try:
-            rows = _fetch_sub(sub, limit=8, retries=1, timeout=10)
+            rows = _fetch_sub_rss(sub, limit=8, retries=1, timeout=10)
         except Exception as e:
             logger.info("reddit us-sub %s failed: %s", sub, e)
             rows = []
@@ -203,10 +452,8 @@ def fetch() -> dict[str, Any]:
         time.sleep(_PER_REQUEST_SLEEP_S)
 
     national = _dedupe(aggregated)[:40]
-
     by_state: dict[str, list[dict]] = {}
     if not national:
-        logger.warning("reddit: US-heavy subs returned no entries; skipping state loop")
         return {
             'national': [],
             'error':    'US-heavy subs returned no entries (likely IP-blocked by Reddit)',
@@ -214,11 +461,7 @@ def fetch() -> dict[str, Any]:
 
     for state, slug in _STATE_SUBREDDITS.items():
         try:
-            # State fetches use retries=1 and a shorter timeout - they
-            # supplement the geo view, so a slow subreddit shouldn't
-            # blow the whole scraper budget. Missing state slices fall
-            # back to national at read time.
-            rows = _dedupe(_fetch_sub(slug, limit=15, retries=1, timeout=10))
+            rows = _dedupe(_fetch_sub_rss(slug, limit=15, retries=1, timeout=10))
         except Exception as e:
             logger.info("reddit rss %s (%s) failed: %s", state, slug, e)
             rows = []
@@ -229,8 +472,6 @@ def fetch() -> dict[str, Any]:
     result: dict[str, Any] = {'national': national}
     if by_state:
         result['by_state'] = by_state
-    if not national:
-        result['error'] = 'r/popular returned no entries (likely IP-blocked by Reddit)'
     return result
 
 
