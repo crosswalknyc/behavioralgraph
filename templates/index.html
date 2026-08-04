@@ -47363,7 +47363,16 @@
                         // row carries the projected weekly US
                         // borrow count instead.
                         if (it.availability) {
-                            meta += '<span class="tiq-badge">' + _tiqEsc(it.availability) + '</span>';
+                            // Tooltip clarifies what an "On hold"
+                            // Libby chip means to a non-librarian
+                            // reader (Jenna 2026-08-04). "Available"
+                            // chips are self-explanatory and skip
+                            // the tooltip.
+                            var isOnHold = /hold/i.test(it.availability);
+                            var availTip = isOnHold
+                                ? ' title="Placed on hold at their digital library"'
+                                : '';
+                            meta += '<span class="tiq-badge"' + availTip + '>' + _tiqEsc(it.availability) + '</span>';
                         }
                         if (it.subjects && it.subjects.length) {
                             meta += '<span style="opacity:0.75;">' + _tiqEsc(it.subjects.slice(0, 2).join(', ')) + '</span>';
