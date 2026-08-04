@@ -10197,6 +10197,8 @@
            A CSS fill overrides the SVG presentation attribute, so recolor
            every label to near-black in light mode only. */
         body[data-theme="light"] #usHeatmap svg text { fill: #111827; }
+        body[data-theme="light"] #usHeatmap svg line.dma-leader { stroke: rgba(17,24,39,0.55); }
+        body[data-theme="light"] #usHeatmap svg circle.dma-leader-dot { fill: rgba(17,24,39,0.65); }
         .regional-breakdown {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
@@ -116353,8 +116355,8 @@
                 var dist = Math.sqrt(dx * dx + dy * dy);
                 var edgeX = b.x + (dx / dist) * r;
                 var edgeY = b.y + (dy / dist) * r;
-                svg += '<line x1="' + edgeX.toFixed(1) + '" y1="' + edgeY.toFixed(1) + '" x2="' + lp.x.toFixed(1) + '" y2="' + lp.y.toFixed(1) + '" stroke="rgba(255,255,255,0.5)" stroke-width="1" />';
-                svg += '<circle cx="' + lp.x.toFixed(1) + '" cy="' + lp.y.toFixed(1) + '" r="2" fill="rgba(255,255,255,0.6)" />';
+                svg += '<line class="dma-leader" x1="' + edgeX.toFixed(1) + '" y1="' + edgeY.toFixed(1) + '" x2="' + lp.x.toFixed(1) + '" y2="' + lp.y.toFixed(1) + '" stroke="rgba(255,255,255,0.5)" stroke-width="1" />';
+                svg += '<circle class="dma-leader-dot" cx="' + lp.x.toFixed(1) + '" cy="' + lp.y.toFixed(1) + '" r="2" fill="rgba(255,255,255,0.6)" />';
             });
 
             // Draw labels at final positions
