@@ -86,6 +86,12 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
     ],
     "SPORT": ["MILB", "MLB", "NBA", "NFL", "SPORTS ORGANIZATIONS",
               "SPORTS ORGANIZATION", "SPORTS TEAM", "WNBA"],
+    # 2026-08-03 (Jenna). New canonical top-level bucket. Renders in the
+    # profile selector immediately after SPORT and before TRENDS. Holds
+    # health-system, hospital-network, insurer, pharma-adjacent, and
+    # digital-health brands + subjects that don't cleanly belong under
+    # BRAND (retail) or PLATFORMS (media / digital services).
+    "HEALTHCARE": ["HEALTHCARE"],
     "TRENDS": ["TRENDS", "SHOPPING INTENT"],
 }
 
