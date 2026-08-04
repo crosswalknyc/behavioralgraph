@@ -10192,6 +10192,11 @@
             margin-bottom: 1rem;
             position: relative;
         }
+        /* Light mode: the DMA Concentration Map bubble labels are drawn as
+           SVG <text fill="#fff">, which is unreadable on the light map.
+           A CSS fill overrides the SVG presentation attribute, so recolor
+           every label to near-black in light mode only. */
+        body[data-theme="light"] #usHeatmap svg text { fill: #111827; }
         .regional-breakdown {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
