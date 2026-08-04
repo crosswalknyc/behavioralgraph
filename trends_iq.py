@@ -2961,6 +2961,50 @@ def _annotate_streaming_with_streams(streaming_trending: dict,
                                          kind_hint=kind_hint)
 
 
+# Libby local-to-US projection formula. LA County Library serves
+# ~10M residents (roughly 3-4% of the ~285M US public-library-served
+# population), so the conservative 25x scale-up is the LOW END of the
+# 25-35x range the Claude prompt already documents. Dividing by 7
+# converts the current-queue hold count into a weekly borrow rate
+# (holds are a queue snapshot, not weekly circulation).
+#
+# Formula:    weekly_us_borrows = round(la_county_holds * 25 / 7)
+#
+# Only used when the daily Claude pass hasn't produced an estimate
+# for this specific row (rank > _MAX_BOOK_ITEMS or fresh title that
+# missed today's cron). Ensures EVERY visible Libby row carries a
+# US-projected number per Jenna 2026-08-04.
+_LIBBY_LOCAL_TO_US_SCALE = 25
+_LIBBY_HOLDS_TO_WEEKLY   = 7
+
+
+def _libby_fallback_us_estimate(holds: int, platform_key: str) -> dict:
+    """Return a us_streams dict projecting LA County holds up to a
+    weekly US-library-wide borrow count. Conservative low-end scale."""
+    if not holds or holds <= 0:
+        return {}
+    weekly_us = int(round(holds * _LIBBY_LOCAL_TO_US_SCALE
+                            / _LIBBY_HOLDS_TO_WEEKLY))
+    if weekly_us <= 0:
+        return {}
+    # unit_label matches what the Claude-produced Libby estimates
+    # carry, so the frontend badge reads identically.
+    unit = ('weekly US library borrows'
+             if platform_key == 'libby_ebook'
+             else 'weekly US library audiobook borrows')
+    return {
+        'us_estimate':      weekly_us,
+        'us_estimate_low':  int(weekly_us * 0.7),
+        'us_estimate_high': int(weekly_us * 1.4),
+        'confidence':       'low',
+        'unit_label':       unit,
+        'platform':         platform_key,
+        'method':           (f'Projected from {holds:,} LA County holds via '
+                              f'25x scale-up / 7 = weekly US borrows '
+                              f'(conservative low-end).'),
+    }
+
+
 def _annotate_books_with_streams(book_charts: dict,
                                    libby_trends: dict,
                                    estimates: dict) -> None:
@@ -2970,14 +3014,18 @@ def _annotate_books_with_streams(book_charts: dict,
       - libby_trends panels (ebook/audiobook) -> Libby's projected
         weekly US public-library-wide borrows (NOT LA County holds).
     Rows key by (normalized title + artist) - matches `_collect_books`.
+
+    Libby fallback: rows the daily Claude pass hasn't covered get a
+    projected US number computed from their raw LA County holds so
+    EVERY visible Libby row carries a US number (per Jenna 2026-08-04:
+    "make sure in books all numbers are projected up to the us gen pop").
     """
-    if not estimates:
-        return
-    items_lookup = estimates.get('items') or {}
+    items_lookup = (estimates or {}).get('items') or {}
 
     def _stamp_panel(panel_dict: dict,
                       slug_to_platform: dict,
-                      kind_hint: str) -> None:
+                      kind_hint: str,
+                      libby_fallback: bool = False) -> None:
         if not panel_dict:
             return
         for panel_slug, panel in (panel_dict.get('sources')
@@ -2992,9 +3040,21 @@ def _annotate_books_with_streams(book_charts: dict,
                 _stamp_stream_estimate(row, items_lookup.get(key),
                                          platform_key=platform_key,
                                          kind_hint=kind_hint)
+                # Libby fallback: if the Claude pass produced nothing
+                # for this row but the row carries a raw LA County
+                # hold count, project it up ourselves so the tile
+                # never shows a local number.
+                if libby_fallback and not row.get('us_streams'):
+                    fb = _libby_fallback_us_estimate(
+                        int(row.get('holds') or 0),
+                        platform_key,
+                    )
+                    if fb:
+                        row['us_streams'] = fb
 
     _stamp_panel(book_charts,   _BOOK_PANEL_TO_PLATFORM,   'book')
-    _stamp_panel(libby_trends,  _LIBBY_PANEL_TO_PLATFORM,  'book')
+    _stamp_panel(libby_trends,  _LIBBY_PANEL_TO_PLATFORM,  'book',
+                  libby_fallback=True)
 
 
 def _annotate_cross_platform_moments(

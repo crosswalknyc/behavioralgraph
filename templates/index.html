@@ -47355,12 +47355,15 @@
                     if (sourceKind === 'store') {
                         if (it.price) meta += '<span class="tiq-badge">' + _tiqEsc(it.price) + '</span>';
                     } else {
-                        // Libby row extras
+                        // Libby row extras. Raw LA County `holds`
+                        // count is intentionally NOT shown (per
+                        // Jenna 2026-08-04: books tab shows only
+                        // US-projected numbers, not local library
+                        // signals). The us_streams badge below the
+                        // row carries the projected weekly US
+                        // borrow count instead.
                         if (it.availability) {
                             meta += '<span class="tiq-badge">' + _tiqEsc(it.availability) + '</span>';
-                        }
-                        if (typeof it.holds === 'number' && it.holds > 0) {
-                            meta += '<span>' + _tiqNum(it.holds) + ' holds</span>';
                         }
                         if (it.subjects && it.subjects.length) {
                             meta += '<span style="opacity:0.75;">' + _tiqEsc(it.subjects.slice(0, 2).join(', ')) + '</span>';

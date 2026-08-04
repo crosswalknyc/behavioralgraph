@@ -85,13 +85,15 @@ _S3_DATED  = 'trends_iq_snapshots/{date}/'
 
 # -------------------------------------------------------------------------
 # How many items to research per category. Sonnet 4.5 + web_search costs
-# ~$0.02/item, so 15 podcasts + 20 songs + 20 streaming + 20 books = 75
-# items/day ≈ $1.50/day. Well within the trends-iq daily budget.
+# ~$0.02/item, so 15 podcasts + 20 songs + 20 streaming + 100 books = 155
+# items/day ≈ $3/day. Books cap raised 2026-08-04 (Jenna) so every
+# row visible in the Books tab carries a US-projected reader/borrow
+# estimate, not just the top 20 across all 6 book panels.
 # -------------------------------------------------------------------------
 _MAX_PODCAST_ITEMS   = 15
 _MAX_SONG_ITEMS      = 20
 _MAX_STREAMING_ITEMS = 20
-_MAX_BOOK_ITEMS      = 20
+_MAX_BOOK_ITEMS      = 100
 
 _WEBSEARCH_MODEL      = (os.environ.get('STREAM_ESTIMATES_MODEL')
                           or 'claude-sonnet-4-5')
