@@ -6255,7 +6255,10 @@
         .interests-grid {
             background: var(--bg-card);
             border-radius: 8px;
-            padding: 0.5rem;
+            /* No top padding: the sticky .interest-header-row pins at
+               top:0, so a top strip here would let scrolling rows peek
+               above the header. Keep side/bottom padding only. */
+            padding: 0 0.5rem 0.5rem;
             max-height: 600px;
             overflow-y: auto;
             display: flex;
