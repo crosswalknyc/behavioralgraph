@@ -101661,7 +101661,7 @@
                 entries.sort((a, b) => {
                     const getOrderIndex = (label) => {
                         const lower = label.toLowerCase().trim();
-                        if (lower.startsWith('under')) return -1;
+                        if (lower.startsWith('under') || lower.startsWith('less')) return -1;
                         let idx = INCOME_ORDER.findIndex(o => o.toLowerCase() === lower);
                         if (idx !== -1) return idx;
                         const stripped = lower.replace(/[\$\,\s\+]/g, '');
