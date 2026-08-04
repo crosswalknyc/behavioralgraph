@@ -92434,7 +92434,7 @@
             });
 
             // Master categories allowed in profile selector (SVOD ACQUISITION, MUSIC, OTHER never shown)
-            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS'];
+            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'HEALTHCARE', 'TRENDS'];
             
             // Build HTML with master categories (show all in order, including TRENDS after SPORT, even when empty)
             let html = '';
@@ -117670,6 +117670,7 @@
             'GEN POP': ['GEN POP'],
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING PLATFORM', 'STREAMING VIDEO', 'STREAMING/PLATFORM', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
             'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'SPORTS TEAM', 'WNBA'],
+            'HEALTHCARE': ['HEALTHCARE'],
             'TRENDS': ['TRENDS', 'SHOPPING INTENT'],
             'TALENT': ['ACTOR', 'ATHLETE', 'COMEDIAN', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICIAN', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
             'SVOD ACQUISITION': ['SVOD ACQUISITION']  // SVOD files are always in their own master category
@@ -117681,6 +117682,7 @@
             'GEN POP': '📊',
             'PLATFORMS': '📺',
             'SPORT': '⚽',
+            'HEALTHCARE': '🏥',
             'TALENT': '⭐',
             'TRENDS': '📈',
             'SVOD ACQUISITION': '📺'  // TV icon for SVOD
@@ -118196,7 +118198,7 @@
                     const categorySelect = document.getElementById('categoryFilter');
                     if (categorySelect) {
                         let categoryOptions = '<option value="">All Categories</option>';
-                        const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+                        const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'HEALTHCARE', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
                         const categoriesByMaster = {};
                         allCategories.forEach(cat => {
                             const master = getMasterCategory(cat);
@@ -118277,7 +118279,7 @@
                 const categorySelect = document.getElementById('categoryFilter');
                 if (categorySelect) {
                     let categoryOptions = '<option value="">All Categories</option>';
-                    const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+                    const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'HEALTHCARE', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
                     const categoriesByMaster = {};
                     allCategories.forEach(cat => {
                         const master = getMasterCategory(cat);
@@ -118893,7 +118895,7 @@
             `;
 
             // Master categories allowed in profile selector (SVOD ACQUISITION, MUSIC, OTHER never shown)
-            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS'];
+            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'HEALTHCARE', 'TRENDS'];
             
             masterOrder.forEach(master => {
                 const subcats = byMasterCategory[master];
@@ -134262,7 +134264,8 @@
         // Friendly "All …" label per master (covers all 8 categories now).
         const IQ_RANKER_ALL_LABEL = {
             TALENT: 'All Talent', BRAND: 'All Brands', CONTENT: 'All Content',
-            PLATFORMS: 'All Platforms', SPORT: 'All Sport', TRENDS: 'All Trends',
+            PLATFORMS: 'All Platforms', SPORT: 'All Sport',
+            HEALTHCARE: 'All Healthcare', TRENDS: 'All Trends',
             'GEN POP': 'All Gen Pop', OTHER: 'All Other',
         };
         function renderIQRankerSubTabs(master) {
