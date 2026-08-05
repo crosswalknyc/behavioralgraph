@@ -208,6 +208,26 @@ def main(argv: list[str] | None = None) -> int:
             logging.exception("run_all: stream_estimates post-step crashed")
             results.append({'source': 'stream_estimates', 'error': str(e), 'national': []})
 
+    # headline_estimates: US daily-readership estimates (Claude Sonnet +
+    # web_search per article) for every headline on the Trends IQ
+    # Headlines tab. Runs AFTER philanthropy_news lands + inline
+    # against the live NEWS_FEEDS pool (fetched inside the scraper).
+    # Cost is ~90 web_search calls / day (~$2). Estimates stamp onto
+    # `trending_headlines` + `articles_by_source[*].articles` +
+    # `philanthropy_news` at request time via
+    # `trends_iq._annotate_headlines_with_readers`.
+    if (not only or 'headline_estimates' in only) and 'headline_estimates' not in skip:
+        try:
+            results.append(_run_one(
+                'headline_estimates',
+                'scripts.trends_scrapers.headline_estimates',
+                'US Headline Readers',
+                'meta',
+            ))
+        except Exception as e:
+            logging.exception("run_all: headline_estimates post-step crashed")
+            results.append({'source': 'headline_estimates', 'error': str(e), 'national': []})
+
     _write_index(results)
 
     # ------------------------------------------------------------------
