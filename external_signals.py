@@ -744,6 +744,70 @@ def wikipedia_pageviews(titles: list[str], lookback_days: int = 7) -> dict[str, 
     return out
 
 
+# Wikipedia page-summary REST endpoint. Free, no auth, ~200ms per call.
+# Returns a one-line `description` like "American Deaf actress" plus a
+# short `extract`. We call it in parallel from `wikipedia_descriptions`
+# below to classify trending names as US-people vs. events / orgs /
+# places / foreign celebs (see `_classify_person_row` in
+# scripts/trends_scrapers/wikipedia_trending.py).
+_WIKI_SUMMARY = ('https://en.wikipedia.org/api/rest_v1/page/summary/'
+                  '{slug}')
+
+
+def wikipedia_descriptions(titles: list[str],
+                            timeout_s: int = 6,
+                            max_workers: int = 12) -> dict[str, dict]:
+    """Parallel fetch of `{description, extract}` for each title.
+
+    Returns `{title: {"description": str, "extract": str}}` for every
+    input title. Missing / 404 / timeout responses map to
+    `{"description": "", "extract": ""}` so callers can distinguish
+    "no description" from "not in dict".
+
+    Uses a strict wall-clock timeout (default 6s total) to keep this
+    off the critical path for dashboard loads. Any title that takes
+    longer than `timeout_s` seconds is dropped from the result silently.
+    """
+    if not titles:
+        return {}
+    import concurrent.futures as _cf
+
+    def _one(title: str) -> tuple[str, dict]:
+        page = urllib.parse.quote(
+            (title or '').replace(' ', '_'), safe=''
+        )
+        url = _WIKI_SUMMARY.format(slug=page)
+        try:
+            r = requests.get(url, headers={
+                'User-Agent': 'BG-Trends/1.0 (jenna@crosswalknyc.com)',
+                'Accept': 'application/json',
+            }, timeout=4)
+        except Exception:
+            return title, {'description': '', 'extract': ''}
+        if not r.ok:
+            return title, {'description': '', 'extract': ''}
+        try:
+            data = r.json() or {}
+        except Exception:
+            return title, {'description': '', 'extract': ''}
+        return title, {
+            'description': (data.get('description') or '').strip(),
+            'extract':     (data.get('extract')     or '').strip(),
+        }
+
+    out: dict[str, dict] = {}
+    with _cf.ThreadPoolExecutor(max_workers=max_workers,
+                                 thread_name_prefix='wiki-desc') as pool:
+        futures = [pool.submit(_one, t) for t in titles if t]
+        for fut in _cf.as_completed(futures, timeout=timeout_s):
+            try:
+                title, val = fut.result()
+                out[title] = val
+            except Exception:
+                continue
+    return out
+
+
 # ── 4. Convenience: best-effort fetch-all-in-parallel ───────────────────────
 
 # Hard wall-clock budget per source. Even on slow days the dashboard never
