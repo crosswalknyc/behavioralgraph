@@ -94,12 +94,15 @@ _S3_DATED  = 'trends_iq_snapshots/{date}/'
 # Each cap targets union-of-top-N across that kind's panels post-dedup:
 #   podcasts:  ~10 platforms x top 8-10 unique  = 60
 #   songs:     5 music panels x top 20 unique  = 100
-#   streaming: 6 platforms x top 10 unique     = 60
+#   streaming: 6 platforms x top 25 unique     = 200 (bumped 2026-08-05
+#              from 60 - was leaving Disney+ / Hulu with only ~5 estimates
+#              each because the sort-by-best_rank cap culled everything
+#              below rank 10 across platforms).
 #   books:     6 book+libby panels x top 15   = 100
 # -------------------------------------------------------------------------
 _MAX_PODCAST_ITEMS   = 60
 _MAX_SONG_ITEMS      = 100
-_MAX_STREAMING_ITEMS = 60
+_MAX_STREAMING_ITEMS = 200
 _MAX_BOOK_ITEMS      = 100
 
 _WEBSEARCH_MODEL      = (os.environ.get('STREAM_ESTIMATES_MODEL')
@@ -260,8 +263,13 @@ def _collect_streaming(max_items: int = _MAX_STREAMING_ITEMS) -> list[dict]:
             buckets.append(('tv',   snap.get('us_tv')    or []))
         else:
             buckets.append(('mixed', snap.get('national') or []))
+        # Bumped 2026-08-05 from 15 to 30 per bucket so the dashboard's
+        # top-20 films + top-20 tv per platform is fully covered with
+        # estimates (previously the row below rank 15 rendered without
+        # a stream badge, most visibly on Disney+ where the whole TV
+        # rail below rank 5 was blank).
         for kind, items in buckets:
-            for i, it in enumerate(items[:15]):
+            for i, it in enumerate(items[:30]):
                 title  = (it.get('title') or '').strip()
                 cat    = (it.get('category_display') or kind or '').lower()
                 item_kind = 'film' if cat == 'film' else ('tv' if 'tv' in cat else 'title')
