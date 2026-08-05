@@ -65,6 +65,7 @@ try:
         trends_top_issues,
         gdelt_political_articles,
         wikipedia_pageviews,
+        wikipedia_descriptions,
         US_STATE_TO_ISO,
         _USPS_TO_NAME,
         normalize_state,
@@ -84,6 +85,9 @@ except Exception as _ext_err:
         return []
 
     def wikipedia_pageviews(titles, lookback_days=7):
+        return {}
+
+    def wikipedia_descriptions(titles, timeout_s=6, max_workers=12):
         return {}
 
     def normalize_state(state):
@@ -3907,6 +3911,18 @@ _NON_PERSON_PHRASES = {
     # media / show titles that repeat in headlines
     'saturday night', 'saturday night live', 'sunday night',
     'monday night', 'thursday night',
+    # ADD 2026-08-05 (Jenna feedback): non-person phrases that leaked
+    # into the Trending People card because the extractor caught them
+    # as Title Case runs in news headlines. "Salt Lake" is a city
+    # (surfaced from a Spanish-language soccer headline for Leagues
+    # Cup); "Election Results" is a topic; "Oath Keepers" is a right-
+    # wing organization; etc.
+    'salt lake', 'salt lake city', 'real salt lake',
+    'election results', 'election night', 'primary election',
+    'general election', 'special election', 'runoff election',
+    'oath keepers', 'proud boys', 'antifa',
+    'january 6', 'jan 6',
+    'leagues cup', 'gold cup', 'copa america',
 }
 
 _NAME_RE = re.compile(
@@ -4077,6 +4093,43 @@ def _fetch_trending_people(headlines: list[dict],
             people.sort(key=lambda x: (-x['mentions'], -x.get('pageviews', 0)))
         except Exception as e:
             logger.debug("trends_iq wikipedia lookup failed: %s", e)
+
+    # US-person classifier pass (Jenna 2026-08-05). GDELT-side people
+    # come from parsing Title Case runs in news headlines - which
+    # leaked non-people (events like "Election Results", places like
+    # "Salt Lake", orgs like "Oath Keepers") and foreign celebs
+    # (Indian actors dominating international news RSS). We look up
+    # each candidate's Wikipedia description in parallel, then drop
+    # any name whose description doesn't classify as a US person.
+    # Names with NO Wikipedia page are kept (benefit of doubt - the
+    # extractor's own filters already caught most junk).
+    if people:
+        try:
+            from scripts.trends_scrapers.wikipedia_trending import (
+                _classify_person_row,
+            )
+            names   = [p['name'] for p in people]
+            descs   = wikipedia_descriptions(names, timeout_s=8) or {}
+            kept: list[dict] = []
+            for p in people:
+                d = descs.get(p['name']) or {}
+                desc = d.get('description') or ''
+                extract = d.get('extract') or ''
+                # If we got no Wikipedia hit at all, keep the row -
+                # the extractor's blocklist + phrase check already
+                # rejected the worst of it, and lots of legit people
+                # (Perez Hilton, brand-new viral figures) have thin
+                # or missing wiki descriptions.
+                if not desc and not extract:
+                    kept.append(p)
+                    continue
+                if _classify_person_row(desc, extract):
+                    p['wikipedia_description'] = desc
+                    kept.append(p)
+                # else: drop the row (event / org / place / foreign)
+            people = kept
+        except Exception as e:
+            logger.debug("trends_iq person classifier failed: %s", e)
 
     # Project raw counts up to US gen pop (329.99M). Both fields are the
     # raw count multiplied by 329_990_000 so the front end can display
@@ -5309,7 +5362,15 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # scripts/trends_scrapers/wikipedia_trending.py). Missing snapshot
     # -> empty list; the frontend handles the empty-state.
     wiki_snap          = results.get('wikipedia_trending') or {}
-    wikipedia_trending = list(wiki_snap.get('national') or [])[:30]
+    # `national` is the full Wikipedia top-viewed list (people +
+    # events + orgs + places). Kept for downstream consumers that
+    # want everything. `people` is the US-person-only subset the
+    # scraper computes via `_classify_person_row` - what the
+    # Trending People card actually renders. Falls back to the raw
+    # `national` list on legacy snapshots that predate the classifier.
+    wikipedia_trending = list(wiki_snap.get('people')
+                                or wiki_snap.get('national')
+                                or [])[:30]
 
     # Music charts (Spotify + Apple Music + Shazam + TikTok + Amazon).
     # Scraper returns {sources: {spotify:{items:...}, apple:{...}, ...}}.

@@ -109,6 +109,157 @@ _MIN_VIEWS_FLOOR = 8_000
 _TOP_N = 30
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# US-person classifier (Jenna 2026-08-05).
+#
+# The Wikipedia top-viewed list surfaces events, organizations, places,
+# and foreign celebs alongside real US people. The Trending People card
+# is meant to show trending US individuals only, so we filter every
+# candidate row through this classifier before returning.
+#
+# We use the Wikimedia page-summary API `description` field (a
+# one-liner like "American Deaf actress" / "Indian actor" / "American
+# right-wing organization" / "county in Utah" / "primary election in
+# Michigan"). Two-tier check:
+#
+#   1. Description mentions a personhood role token (actor, singer,
+#      politician, athlete, ...). Rejects non-people (organizations,
+#      events, places).
+#   2. Description mentions "American" / "U.S." / "United States" AND
+#      does NOT mention an explicit foreign-nationality word (Indian,
+#      British, ...). Rejects US-relevant-audience-facing "trending"
+#      that's actually foreign celebs whose fans hit English Wikipedia.
+#
+# Both checks are case-insensitive. When description is empty, we
+# reject (safer default - a row we can't classify usually isn't a
+# well-formed person page).
+# ────────────────────────────────────────────────────────────────────────────
+_PERSON_ROLE_TOKENS = frozenset({
+    'actor', 'actress', 'singer', 'musician', 'songwriter', 'rapper',
+    'composer', 'producer', 'dj', 'band-member',
+    'athlete', 'player', 'quarterback', 'pitcher', 'batter', 'runner',
+    'swimmer', 'boxer', 'wrestler', 'coach', 'manager', 'referee',
+    'gymnast', 'skater', 'cyclist', 'skier', 'golfer', 'racer', 'driver',
+    'politician', 'president', 'senator', 'representative', 'governor',
+    'mayor', 'ambassador', 'congressman', 'congresswoman', 'lawmaker',
+    'diplomat', 'nominee', 'candidate', 'commissioner',
+    'journalist', 'anchor', 'correspondent', 'reporter', 'columnist',
+    'host', 'presenter', 'broadcaster', 'commentator', 'pundit',
+    'comedian', 'satirist', 'writer', 'novelist', 'author', 'poet',
+    'playwright', 'screenwriter', 'director', 'filmmaker',
+    'businessman', 'businesswoman', 'businessperson', 'entrepreneur',
+    'executive', 'ceo', 'founder', 'investor', 'financier', 'banker',
+    'philanthropist', 'socialite', 'heir', 'heiress',
+    'model', 'personality', 'influencer', 'creator', 'blogger',
+    'youtuber', 'streamer', 'podcaster', 'tiktoker', 'vlogger',
+    'chef', 'restaurateur', 'sommelier',
+    'scientist', 'researcher', 'physicist', 'biologist', 'chemist',
+    'engineer', 'inventor', 'astronaut',
+    'doctor', 'physician', 'surgeon', 'psychiatrist', 'psychologist',
+    'judge', 'justice', 'lawyer', 'attorney', 'prosecutor',
+    'activist', 'organizer', 'campaigner', 'protester', 'dissident',
+    'artist', 'painter', 'sculptor', 'photographer', 'designer',
+    'illustrator', 'cartoonist', 'animator',
+    'wrestler', 'fighter', 'martial-artist', 'bodybuilder',
+    'preacher', 'minister', 'rabbi', 'imam', 'pastor', 'evangelist',
+    'general', 'admiral', 'colonel', 'captain', 'commander',
+    'monarch', 'royal', 'prince', 'princess', 'duke', 'duchess',
+    'criminal', 'defendant', 'convict', 'suspect', 'victim',
+    'ballerina', 'dancer', 'choreographer', 'magician',
+    # Generic person nouns - Wikipedia often uses these when the
+    # subject's occupation is historical or the article is a
+    # biography of a private person tried for a crime, etc. ("American
+    # woman tried and acquitted...", "American man convicted of...")
+    'woman', 'man', 'person', 'individual', 'girl', 'boy', 'child',
+    'teenager', 'adult', 'youth', 'minor',
+    'businessman', 'businesswoman',  # keep - also flagged above
+})
+
+# Foreign-nationality descriptors. If any of these appear in the
+# description, the row is dropped even if a person role also matches
+# (unless "American" ALSO appears, which flags dual-nationals - we
+# keep those; e.g. "British-American actress").
+_FOREIGN_NATIONALITY_TOKENS = frozenset({
+    'indian', 'pakistani', 'bangladeshi', 'sri lankan', 'nepalese',
+    'british', 'english', 'welsh', 'scottish', 'irish', 'northern irish',
+    'chinese', 'japanese', 'korean', 'taiwanese', 'hong kong', 'thai',
+    'vietnamese', 'filipino', 'indonesian', 'malaysian', 'singaporean',
+    'russian', 'ukrainian', 'belarusian', 'georgian', 'kazakh',
+    'french', 'german', 'italian', 'spanish', 'portuguese', 'dutch',
+    'belgian', 'swiss', 'austrian', 'polish', 'czech', 'slovak',
+    'hungarian', 'romanian', 'bulgarian', 'greek', 'turkish',
+    'norwegian', 'swedish', 'danish', 'finnish', 'icelandic',
+    'israeli', 'palestinian', 'lebanese', 'syrian', 'jordanian',
+    'egyptian', 'iranian', 'iraqi', 'saudi', 'emirati', 'yemeni',
+    'nigerian', 'kenyan', 'ethiopian', 'ghanaian', 'south african',
+    'moroccan', 'algerian', 'tunisian', 'sudanese',
+    'mexican', 'guatemalan', 'honduran', 'salvadoran', 'nicaraguan',
+    'costa rican', 'panamanian', 'colombian', 'venezuelan', 'peruvian',
+    'chilean', 'argentine', 'argentinian', 'brazilian', 'uruguayan',
+    'ecuadorian', 'bolivian', 'paraguayan',
+    'canadian', 'australian', 'new zealand', 'kiwi',
+    'cuban', 'dominican', 'haitian', 'jamaican', 'puerto rican',
+    'trinidadian',
+})
+
+
+def _classify_person_row(description: str, extract: str = '') -> bool:
+    """Return True iff the description says this article is a US
+    (or US-relevant) person.
+
+    Uses substring matching on the lowercased description. Extract
+    is a fallback when description is empty or very short.
+    """
+    text = (description or '').strip().lower()
+    if not text and extract:
+        # Fall back to the first sentence of extract - typical wiki
+        # lead sentence "X (born YYYY) is an American {role} who...".
+        text = (extract or '').split('.')[0].lower()
+    if not text:
+        return False
+
+    has_us    = ('american' in text
+                  or 'u.s. ' in text
+                  or 'united states' in text)
+    has_foreign = False
+    for nat in _FOREIGN_NATIONALITY_TOKENS:
+        if nat in text:
+            has_foreign = True
+            break
+    # Dual-nationals ("British-American actress") stay.
+    if has_foreign and not has_us:
+        return False
+    if not has_us:
+        # Some Americans have descriptions that omit nationality
+        # ("Deaf actress", "professional wrestler born in Ohio").
+        # Fall through to the role check; if we can prove personhood
+        # AND the description doesn't say foreign, we tentatively
+        # accept as a plausible US person. Better than false-rejecting
+        # sparse-description Americans.
+        pass
+
+    # Personhood: some role token must appear. We split on non-word
+    # boundaries so "American actress" tokenizes as ["american",
+    # "actress"] and matches "actress" in the role set.
+    tokens = re.findall(r"[a-z']+", text)
+    for tok in tokens:
+        if tok in _PERSON_ROLE_TOKENS:
+            return True
+    # Multi-word roles ("martial artist", "band member") - split the
+    # role set into hyphenated singletons; also try 2-word matches.
+    for bigram in (' '.join(pair) for pair in zip(tokens, tokens[1:])):
+        if bigram.replace(' ', '-') in _PERSON_ROLE_TOKENS:
+            return True
+    # Biographical "(born YYYY)" or "YYYY-YYYY" pattern in the raw
+    # description is a strong personhood signal even without a role
+    # token.
+    if re.search(r'\bborn\s+\d{4}\b', text):
+        return has_us or not has_foreign
+    if re.search(r'\b\d{4}[-–]\d{4}\b', text):
+        return has_us or not has_foreign
+    return False
+
+
 def _is_topic(title: str) -> bool:
     """Return True iff `title` looks like a real article about a
     person / place / thing / event, not a Wikipedia meta page."""
@@ -312,8 +463,23 @@ def fetch() -> dict[str, Any]:
     # Hottle, "1965 Boeing 727 accident" for Pan Am Flight 526A, etc).
     _enrich_with_summaries(top)
 
+    # US-person subset for the Trending People card. Keeps only rows
+    # whose description classifies as an American individual (per
+    # `_classify_person_row`) and re-ranks the survivors 1..N. The
+    # unfiltered `national` list stays intact so the standalone
+    # Wikipedia trending tab (and any downstream consumer that wants
+    # events / places / orgs) still gets everything.
+    people_rows = []
+    for r in top:
+        if _classify_person_row(r.get('description') or '',
+                                  r.get('extract')     or ''):
+            people_rows.append(dict(r))
+    for i, r in enumerate(people_rows, start=1):
+        r['rank'] = i
+
     return {
         'national':      top,
+        'people':        people_rows,
         'available':     True,
         'anchor_day':    today_anchor.isoformat(),
         'compare_day':   prior.isoformat(),
