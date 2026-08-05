@@ -2877,6 +2877,77 @@ _LIBBY_PANEL_TO_PLATFORM = {
 }
 
 
+# Fields the headline_estimates scraper stamps onto each headline row.
+# Mirrors `_STREAM_FIELDS` but scoped to article-level "us_readers"
+# metadata. Any field the scraper adds later (e.g. `citations`) can be
+# added here without touching the annotator.
+_READER_FIELDS = (
+    'us_estimate', 'us_estimate_low', 'us_estimate_high',
+    'unit_label', 'confidence', 'method', 'sources',
+    'delta_pct', 'direction', 'prev_estimate',
+    'prev_date', 'as_of_date',
+)
+
+
+def _headline_lookup_key(title: str) -> str:
+    """Byte-for-byte match with `headline_estimates._lookup_key`."""
+    return _cp_normalize(title or '')
+
+
+def _stamp_reader_estimate(row: dict, entry: Optional[dict]) -> None:
+    """Copy the sanitized reader-estimate fields from `entry` (a
+    single record in the headline_estimates snapshot) onto `row` as
+    `row['us_readers']`. No-op when the estimate is missing or when
+    the mid-point is 0 - the frontend badge silently drops in that
+    case, so the row stays clean."""
+    if not entry:
+        return
+    mid = entry.get('us_estimate') or 0
+    if mid <= 0:
+        return
+    us_readers = {k: entry[k] for k in _READER_FIELDS if k in entry}
+    if not us_readers.get('unit_label'):
+        us_readers['unit_label'] = 'daily US readers'
+    row['us_readers'] = us_readers
+
+
+def _annotate_headlines_with_readers(trending_headlines: list,
+                                       articles_by_source: list,
+                                       philanthropy_news: list,
+                                       estimates: dict) -> None:
+    """Stamp `us_readers` on every headline row across the three
+    surfaces the Headlines tab renders:
+      1. `trending_headlines`         - flat "top" list
+      2. `articles_by_source[i].articles` - per-outlet lists
+      3. `philanthropy_news`          - the Philanthropy sub-tab
+
+    All three key by normalized title so a single Claude estimate
+    powers every surface the article appears on. Missing snapshot
+    -> silent no-op (rows just render without the reader chip)."""
+    if not estimates:
+        return
+    items = estimates.get('items') or {}
+    if not items:
+        return
+
+    def _stamp(row: dict) -> None:
+        title = (row.get('title') or '').strip()
+        if not title:
+            return
+        key = _headline_lookup_key(title)
+        entry = items.get(key)
+        if entry:
+            _stamp_reader_estimate(row, entry)
+
+    for row in (trending_headlines or []):
+        _stamp(row)
+    for outlet in (articles_by_source or []):
+        for row in (outlet.get('articles') or []):
+            _stamp(row)
+    for row in (philanthropy_news or []):
+        _stamp(row)
+
+
 def _annotate_music_with_streams(music_charts: dict, estimates: dict) -> None:
     """Attach per-platform `us_streams` to every song row: a row on
     the Spotify panel gets the Spotify-only US weekly stream count;
@@ -5210,6 +5281,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'libby_trends':        lambda: _read_snapshot('libby_trends'),
             'philanthropy_news':   lambda: _read_snapshot('philanthropy_news'),
             'stream_estimates':    lambda: _read_snapshot('stream_estimates'),
+            'headline_estimates':  lambda: _read_snapshot('headline_estimates'),
         }
 
     results: dict = {}
@@ -5305,6 +5377,18 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         {'sources': libby_trends},
         stream_estimates_snap,
     )
+
+    # Stamp `us_readers` (daily US-gen-pop reader estimate + DoD trend)
+    # onto every headline surface: the flat "Top trending" list, the
+    # per-outlet "By news source" lists, and the Philanthropy sub-tab.
+    # Estimates come from a daily Claude Sonnet + web_search pass (see
+    # scripts/trends_scrapers/headline_estimates.py). Missing snapshot
+    # -> rows just don't carry `us_readers` and the frontend renders
+    # without the extra chip.
+    headline_estimates_snap = results.get('headline_estimates') or {}
+    _annotate_headlines_with_readers(
+        headlines, articles_by_source, philanthropy_news,
+        headline_estimates_snap)
 
     trending_people = _fetch_trending_people(
         headlines,
