@@ -287,7 +287,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
       "HIGH SCHOOL GRADUATE": <percent>,
       "SOME COLLEGE": <percent>,
       "ASSOCIATE DEGREE": <percent>,
-      "BACHELOR'S DEGREE": <percent>,
+      "BACHELORS DEGREE": <percent>,
       "GRADUATE DEGREE": <percent>
     }},
     "RELATIONSHIP": {{

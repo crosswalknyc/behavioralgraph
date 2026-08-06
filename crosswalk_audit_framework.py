@@ -2993,7 +2993,7 @@ def strip_metadata_rows(df, verbose: bool = True):
 # DISTINCT set that actually exists in userdata.user_data_sanitized — the
 # pipeline must never invent new demographic buckets that aren't in the
 # source data. LLM emit + downstream passes can drift away from CH casing
-# (e.g. 'BACHELORS DEGREE' instead of "Bachelor's Degree"), introduce
+# (e.g. 'BACHELORS DEGREE' instead of "Bachelors Degree"), introduce
 # punctuation variants ('18–24' em-dash instead of '18-24'), or fabricate
 # buckets the data doesn't support. This pass canonicalizes.
 #
@@ -3040,7 +3040,7 @@ _DEMO_VALUE_FALLBACK = {
         '$150,000 - $249,999', '$250,000 or More',
     ],
     'EDUCATION': [
-        "Bachelor's Degree", 'Graduate or Professional Degree',
+        "Bachelors Degree", 'Graduate or Professional Degree',
         'High School or Less', 'Prefer Not to Say',
         'Some College / Associate Degree',
     ],
@@ -3117,7 +3117,9 @@ def _load_demos_csv() -> dict | None:
             df = df[df.Value.notna() & (df.Value.astype(str) != '')]
             out = {}
             for cat, grp in df.groupby('Category'):
-                # Build {norm_key: variant_with_highest_row_count}
+                # Build {norm_key: variant_with_highest_row_count}. Value
+                # side is passed through _canon_demo_value so legacy
+                # apostrophe forms are stripped (per Jenna 2026-08-06).
                 m = {}
                 grp_sorted = grp.sort_values('Row_Count', ascending=False)
                 for _, row in grp_sorted.iterrows():
@@ -3126,7 +3128,7 @@ def _load_demos_csv() -> dict | None:
                         continue
                     nkey = _norm_demo_value(val)
                     if nkey and nkey not in m:
-                        m[nkey] = val  # first-seen (highest Row_Count) wins
+                        m[nkey] = _canon_demo_value(val)
                 if m:
                     out[str(cat).upper()] = m
             return out
@@ -3136,18 +3138,38 @@ def _load_demos_csv() -> dict | None:
 
 
 def _norm_demo_value(s) -> str:
-    """Canonical lookup key — uppercase, collapse en/em dashes to hyphen,
-    smart quotes to straight, multiple spaces to single."""
+    """Canonical lookup key - uppercase, collapse en/em dashes to hyphen,
+    strip apostrophes so both "Bachelor's Degree" and "Bachelors Degree"
+    collapse to the same key (canonical: no apostrophe, per Jenna
+    2026-08-06), multiple spaces to single."""
     if s is None:
         return ''
     s = str(s).strip()
     if not s:
         return ''
     s = s.upper()
-    s = s.replace('\u2013', '-').replace('\u2014', '-')  # en/em dash
-    s = s.replace('\u2019', "'").replace('\u2018', "'")  # smart quotes
+    s = s.replace('\u2013', '-').replace('\u2014', '-')
+    s = s.replace('\u2019', '').replace('\u2018', '')
+    s = s.replace("'", '')
     s = re.sub(r'\s+', ' ', s)
     return s
+
+
+def _canon_demo_value(s: str) -> str:
+    """Rewrite a canonical demo Value string to strip apostrophes.
+
+    ClickHouse `userdata.user_data_sanitized` still holds legacy variants
+    like "Bachelor's Degree" / "Master's Degree". The pipeline canonical
+    (per Jenna 2026-08-06) is NO apostrophe anywhere. This helper is
+    applied to the VALUE side of the whitelist map so that the rewrite
+    target is always canonical, regardless of what CH returned.
+    """
+    if s is None:
+        return ''
+    return (str(s)
+            .replace('\u2019', '')
+            .replace('\u2018', '')
+            .replace("'", ''))
 
 
 def get_demographic_value_whitelist(force_refresh: bool = False) -> dict:
@@ -3185,24 +3207,29 @@ def get_demographic_value_whitelist(force_refresh: bool = False) -> dict:
                 )
                 vals = [row[0] for row in r.result_rows if row[0]]
                 # Dedupe via norm key, keep the first canonical form we see.
+                # Strip apostrophes from the VALUE (canonical) side so
+                # the pipeline output is apostrophe-free per Jenna
+                # 2026-08-06 rule -- even if CH still holds legacy
+                # "Bachelor's Degree" / "Master's Degree" variants.
                 m = {}
                 for v in vals:
                     k = _norm_demo_value(v)
                     if k and k not in m:
-                        m[k] = v
+                        m[k] = _canon_demo_value(v)
                 out[col] = m
             except Exception:
-                # Per-column failure → fall back for this column only
+                # Per-column failure -> fall back for this column only
                 out[col] = {
-                    _norm_demo_value(v): v
+                    _norm_demo_value(v): _canon_demo_value(v)
                     for v in _DEMO_VALUE_FALLBACK.get(col, [])
                 }
         _DEMO_WHITELIST_CACHE = out
         return out
     except Exception:
-        # CH unreachable → full fallback
+        # CH unreachable -> full fallback. Canonicalize VALUE side to
+        # strip apostrophes (per Jenna 2026-08-06 rule).
         out = {
-            col: {_norm_demo_value(v): v for v in vals}
+            col: {_norm_demo_value(v): _canon_demo_value(v) for v in vals}
             for col, vals in _DEMO_VALUE_FALLBACK.items()
         }
         _DEMO_WHITELIST_CACHE = out
@@ -3216,7 +3243,7 @@ def enforce_demographic_values(df, verbose: bool = True,
     For every row whose ``Column`` is a demographic (GENDER, AGE, INCOME,
     etc.):
       - Rewrite the ``Value`` to CH canonical casing if a normalized match
-        is found (e.g. "BACHELORS DEGREE" → "Bachelor's Degree").
+        is found (e.g. "BACHELORS DEGREE" → "Bachelors Degree").
       - Drop the row if no match exists (LLM invented a bucket).
 
     Returns ``(df, decisions)`` where each decision is one of:

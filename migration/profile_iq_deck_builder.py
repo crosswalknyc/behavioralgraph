@@ -5039,8 +5039,8 @@ def _short_bucket_label(b: str) -> str:
         return s
     # Some canonical shortenings
     repl = {
-        "Bachelor's Degree": "Bachelor's",
-        "Master's Degree":   "Master's",
+        "Bachelors Degree": "Bachelors",
+        "Masters Degree":   "Masters",
         "Doctoral Degree":   "PhD",
         "Some College":      "Some Coll.",
         "High School":       "HS",

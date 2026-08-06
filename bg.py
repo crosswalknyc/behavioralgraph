@@ -662,7 +662,7 @@ Return ONLY valid JSON (no markdown):
     "EDUCATION": {{
         "HIGH SCHOOL OR LESS": <percent>,
         "SOME COLLEGE / ASSOCIATE DEGREE": <percent>,
-        "BACHELOR'S DEGREE": <percent>,
+        "BACHELORS DEGREE": <percent>,
         "GRADUATE OR PROFESSIONAL DEGREE": <percent>
     }},
     "SEXUAL_ORIENTATION": {{
@@ -12262,7 +12262,7 @@ GENPOP_DEMOGRAPHICS = [
     ("EDUCATION", "High School or Less", 38.1),
     ("EDUCATION", "Trade School", 4.299),
     ("EDUCATION", "Some College / Associate Degree", 21.997),
-    ("EDUCATION", "Bachelor's Degree", 22.3),
+    ("EDUCATION", "Bachelors Degree", 22.3),
     ("EDUCATION", "Graduate or Professional Degree", 13.298),
     ("EDUCATION", "Prefer Not to Say", 0.0),
     ("INCOME", "Under $25,000", 8.937),
@@ -14143,7 +14143,7 @@ def get_user_inputs():
             "AGE": "Age group (N for no or <16, 16-18, 18-20, 21-25, 26-30, 31-40, 41-59, 60+): ",
             "ETHNICITY": "Ethnicity (N for no or White, Hispanic or Latino, Another Race/Ethnicity, Black or African American, Asian): ",
             "INCOME": "HHI (N for no or Under $25,000, $25,000 - $49,999, $50,000 - $74,999, $75,000 - $99,999, $100,000 - $149,999, $150,000 - $249,999, $250,000 or More): ",
-            "EDUCATION": "Education (N for no or Bachelor's Degree, High School or Less, Graduate or Professional Degree, Some College / Associate Degree, Prefer Not to Say): ",
+            "EDUCATION": "Education (N for no or Bachelors Degree, High School or Less, Graduate or Professional Degree, Some College / Associate Degree, Prefer Not to Say): ",
             "RELATIONSHIP": "Relationship (N for no or Single, Married, In a Relationship, Divorced or Separated, Prefer Not to Say): ",
             "SEXUAL_ORIENTATION": "Sexual Orientation (N for no or Straight / Heterosexual, Gay or Lesbian, Another Sexual Orientation, Prefer Not to Say): ",
             "PARENTAL_STATUS": "Parental Status (N for no or No Children, Has Children, Prefer Not to Say): "
@@ -14174,7 +14174,7 @@ def get_user_inputs():
                 "Under $25,000", "$25,000 - $49,999", "$50,000 - $74,999", "$75,000 - $99,999", "$100,000 - $149,999", "$150,000 - $249,999", "$250,000 or More"
             ],
             "EDUCATION": [
-                "Bachelor's Degree", "High School or Less", "Graduate or Professional Degree", "Some College / Associate Degree", "Prefer Not to Say"
+                "Bachelors Degree", "High School or Less", "Graduate or Professional Degree", "Some College / Associate Degree", "Prefer Not to Say"
             ],
             "RELATIONSHIP": [
                 "Single", "Married", "In a Relationship", "Divorced or Separated", "Prefer Not to Say"
@@ -14287,7 +14287,7 @@ income_caps = pd.DataFrame({
 income_caps['INCOME'] = income_caps['INCOME'].apply(normalize_demo_value)
 
 education_caps = pd.DataFrame({
-    'EDUCATION': ['High School or Less', "Bachelor's Degree", 'Graduate or Professional Degree', 'Some College / Associate Degree', 'Prefer Not to Say'],
+    'EDUCATION': ['High School or Less', "Bachelors Degree", 'Graduate or Professional Degree', 'Some College / Associate Degree', 'Prefer Not to Say'],
     'MAX_COUNT': [3670000, 4350000, 1380000, 500000, 595000]
 })
 education_caps['EDUCATION'] = education_caps['EDUCATION'].apply(normalize_demo_value)
@@ -16387,11 +16387,11 @@ STEP 1B — IF THE INPUT IS A BRAND (skip if input is a person, team, or activit
      • SIBLING sub-brands in the same corporate family get materially elevated floors — these are properties the same audience earns/redeems/uses regularly. Don't leave them at gen-pop. For a Marriott Bonvoy persona, Sheraton/JW Marriott/Westin/Ritz-Carlton/Aloft/Courtyard should each be in the 15-40% range, not 0.5-8%.
 
   C. VERTICAL-IMPLIED DEMOGRAPHICS — derive AGE / INCOME / EDUCATION / OCCUPATION / GENDER from the brand's category and price point, NOT from US gen-pop:
-     • Affluent loyalty/travel/business-class (Marriott Bonvoy, Hilton Honors, United MileagePlus, Amex Platinum, Chase Sapphire Reserve, TSA PreCheck, Global Entry): HHI $100k+ ≈ 50-60% of audience, $250k+ elevated to 8-15%, Age 35-64 peak (with 45-54 + 55-64 each ≥15%), Bachelor's+ ≥ 60%, MANAGEMENT/PROFESSIONAL ≥ 45% of OCCUPATION, Asian over-indexed (corporate professional concentration).
+     • Affluent loyalty/travel/business-class (Marriott Bonvoy, Hilton Honors, United MileagePlus, Amex Platinum, Chase Sapphire Reserve, TSA PreCheck, Global Entry): HHI $100k+ ≈ 50-60% of audience, $250k+ elevated to 8-15%, Age 35-64 peak (with 45-54 + 55-64 each ≥15%), Bachelors+ ≥ 60%, MANAGEMENT/PROFESSIONAL ≥ 45% of OCCUPATION, Asian over-indexed (corporate professional concentration).
      • Mass-market QSR / convenience (McDonald's, Taco Bell, 7-Eleven, Dollar General): HHI gen-pop or below, Age 18-44 peak, broad ethnicity, SERVICE/HOSPITALITY + TRANSPORTATION + SKILLED TRADES elevated.
-     • Luxury (Hermès, Rolex, Bentley, Bottega Veneta): HHI $250k+ ≥ 25-35%, Age 45-74 peak, Bachelor's+ ≥ 70%, MANAGEMENT/PROFESSIONAL + LEGAL elevated.
+     • Luxury (Hermès, Rolex, Bentley, Bottega Veneta): HHI $250k+ ≥ 25-35%, Age 45-74 peak, Bachelors+ ≥ 70%, MANAGEMENT/PROFESSIONAL + LEGAL elevated.
      • Kids brand (Bluey, Cocomelon, Paw Patrol, Disney Junior): 17-AND-UNDER peak (25-40%) AND 25-44 parent peak — bimodal. Kids-franchise affinities elevated; adult-luxury crushed.
-     • Outdoor/adventure (Patagonia, REI, The North Face): HHI median $100k, Age 25-54, Bachelor's+ elevated, Mountain West/Pacific Northwest DMAs over-index.
+     • Outdoor/adventure (Patagonia, REI, The North Face): HHI median $100k, Age 25-54, Bachelors+ elevated, Mountain West/Pacific Northwest DMAs over-index.
      • Premium beauty/wellness (La Mer, La Prairie, Goop): F-skew ≥ 70%, Age 35-64, HHI $100k+ ≥ 45%.
      • Hip-hop / streetwear / urban culture (Supreme, BAPE, off-White, hip-hop labels): Age 18-34 peak, Black + Hispanic over-indexed, SoundCloud + TikTok elevated.
      • If the brand straddles verticals (e.g. Disney = kids + adults + theme-park travelers): bimodal demographics; explicitly call out both segments in `audience_composition`.
@@ -16457,7 +16457,7 @@ US GEN POP REFERENCE (use as starting point — deviate based on persona):
           $75,000-$99,999 12.7, $100,000-$149,999 16.3,
           $150,000-$249,999 10.4, $250,000 OR MORE 3.6
   EDUCATION: HIGH SCHOOL OR LESS 36.0, SOME COLLEGE/ASSOCIATE 28.3,
-             BACHELOR'S 22.8, GRAD/PROF 12.9
+             BACHELORS 22.8, GRAD/PROF 12.9
   RELATIONSHIP: SINGLE 31.3, IN A RELATIONSHIP 6.5, MARRIED 48.3,
                 DIVORCED OR SEPARATED 8.4, WIDOWED 5.5
   SEXUAL_ORIENTATION: STRAIGHT 88.5, LGBTQ+ 11.5
@@ -16557,7 +16557,7 @@ Return ONLY a single valid JSON object — no markdown, no commentary.
     "EDUCATION": {{
       "HIGH SCHOOL OR LESS": <percent>,
       "SOME COLLEGE / ASSOCIATE DEGREE": <percent>,
-      "BACHELOR'S DEGREE": <percent>,
+      "BACHELORS DEGREE": <percent>,
       "GRADUATE OR PROFESSIONAL DEGREE": <percent>
     }},
     "RELATIONSHIP": {{
@@ -20179,7 +20179,7 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                    '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $249,999',
                    '$250,000 OR MORE'],
         'EDUCATION': ['HIGH SCHOOL OR LESS', 'SOME COLLEGE / ASSOCIATE DEGREE',
-                      "BACHELOR'S DEGREE", 'GRADUATE OR PROFESSIONAL DEGREE'],
+                      "BACHELORS DEGREE", 'GRADUATE OR PROFESSIONAL DEGREE'],
         'RELATIONSHIP': ['SINGLE', 'IN A RELATIONSHIP', 'MARRIED',
                          'DIVORCED OR SEPARATED', 'WIDOWED'],
         'SEXUAL_ORIENTATION': ['STRAIGHT / HETEROSEXUAL', 'LGBTQ+', 'PREFER NOT TO SAY'],
@@ -37741,7 +37741,7 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
             '31-40', '41-59', '26-30', '21-25', '<16', '18-20', '60+', '16-18'
         ],
         'EDUCATION': [
-            "Bachelor's Degree", 'High School or Less', 'Graduate or Professional Degree', 'Some College / Associate Degree', 'Prefer Not to Say'
+            "Bachelors Degree", 'High School or Less', 'Graduate or Professional Degree', 'Some College / Associate Degree', 'Prefer Not to Say'
         ],
         'ETHNICITY': [
             'White', 'Hispanic or Latino', 'Asian', 'Black or African American', 'Another Race/Ethnicity'
@@ -38118,7 +38118,7 @@ REQUIRED_DEMOGRAPHICS = {
         '25-34', '18-24', '35-44', '45-54', 'Other', '17 and Under', '55-64', '65 or Older'
     ],
     'EDUCATION': [
-        'High School or Less', 'Trade School', 'Some College / Associate Degree', "Bachelor's Degree", 'Graduate or Professional Degree', 'Prefer Not to Say'
+        'High School or Less', 'Trade School', 'Some College / Associate Degree', "Bachelors Degree", 'Graduate or Professional Degree', 'Prefer Not to Say'
     ],
     'ETHNICITY': [
         'White', 'Black or African American', 'Hispanic or Latino', 'Asian', 'Native American / Alaska Native', 'Another Race/Ethnicity',
@@ -38370,7 +38370,7 @@ VALID_SNOWFLAKE_DEMOGRAPHIC_OPTIONS = {
         'OTHER',
     },
     'EDUCATION': {
-        "BACHELOR'S DEGREE",
+        "BACHELORS DEGREE",
         'GRADUATE OR PROFESSIONAL DEGREE',
         'HIGH SCHOOL OR LESS',
         'PREFER NOT TO SAY',

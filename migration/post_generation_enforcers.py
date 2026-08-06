@@ -9270,6 +9270,25 @@ _DEMO_CATS_NINE = (
     'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION',
 )
 
+# Extended demo-like blocks: mutually-exclusive-bucket categories whose
+# BPs sum to ~100. For these, Share ≡ BP is mathematically correct
+# (Share = BP/ΣBP × 100 = BP/100 × 100 = BP). They must be treated
+# like the 9 canonical demos by:
+#   * apply_recompute_category_share (write Share = BP, not the
+#     non-demo BP/ΣBP path)
+#   * G8 SHARE_SUM detector (skip; sum ≈ 100 is EXPECTED, not a defect)
+#   * G9 SHARE_EQ_BP detector (skip; Share == BP is expected, not a
+#     writer-bug signature)
+# Added 2026-08-04 after Oncology Patients / Doctors landed with 210
+# DMA-level LOCATION rows all correctly showing Share == BP (they sum
+# to 100 by construction), and G9 falsely flagged them as writer-bug.
+_DEMO_LIKE_EXTRA = (
+    'LOCATION',          # 210 DMAs; sum to ~100 as mutually-exclusive buckets
+    'PRIMARY_LANGUAGE',  # English / Spanish / Other; sum to 100
+    'NUMBER_OF_CHILDREN', 'AGE_OF_CHILDREN',  # optional demos
+)
+_DEMO_LIKE_ALL = tuple(_DEMO_CATS_NINE) + _DEMO_LIKE_EXTRA
+
 
 class DemoSumViolationError(Exception):
     """Raised when one or more demographic categories fail the sum=100±tol
@@ -10496,7 +10515,12 @@ def apply_recompute_category_share(df, subject, verbose=True):
     n_blocks = 0
     n_pct_stripped = 0
     cats_upper = df['Column'].astype(str).str.strip().str.upper()
-    demo_upper = {c.upper() for c in _DEMO_CATS_NINE}
+    # For "Share = BP" semantics, treat both the 9 canonical demos AND
+    # the extended demo-like blocks (LOCATION, PRIMARY_LANGUAGE, etc.)
+    # the same way. For all of these, buckets sum to ~100 by construction
+    # so Share = BP/ΣBP × 100 degenerates to Share = BP. Writing them
+    # via the identity path is faster and avoids round-trip precision loss.
+    demo_upper = {c.upper() for c in _DEMO_LIKE_ALL}
 
     # Blank Share on BRAND CATEGORY metadata rows first so they don't
     # count in per-cat sums (they should be uniquely blank).
@@ -11692,7 +11716,11 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
     try:
         if bp_col and cs_col and 'Column' in df.columns:
             col_u_g8 = df['Column'].astype(str).str.strip().str.upper()
-            demo_upper_g8 = {c.upper() for c in _DEMO_CATS_NINE}
+            # G8 exempts the 9 canonical demos AND the extended demo-like
+            # blocks (LOCATION, PRIMARY_LANGUAGE, NUMBER_OF_CHILDREN,
+            # AGE_OF_CHILDREN). Those all sum to ~100 by construction, so
+            # a ~100 sum is expected, not a defect.
+            demo_upper_g8 = {c.upper() for c in _DEMO_LIKE_ALL}
             skip_g8 = _SHARE_SKIP_BLOCKS | demo_upper_g8
             broken = []
             seen = set()
@@ -11729,8 +11757,11 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
     try:
         if bp_col and cs_col and 'Column' in df.columns:
             col_u_g9 = df['Column'].astype(str).str.strip().str.upper()
+            # G9 exempts the 9 canonical demos AND the extended demo-like
+            # blocks — for those, Share == BP is expected math (buckets
+            # sum to 100 => Share = BP/100 * 100 = BP), not writer-bug.
             skip_g9 = _SHARE_SKIP_BLOCKS | {
-                c.upper() for c in _DEMO_CATS_NINE
+                c.upper() for c in _DEMO_LIKE_ALL
             }
             n_corrupt = 0
             for idx in df.index:
