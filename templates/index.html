@@ -11172,7 +11172,10 @@
         .comparison-main {
             background: var(--bg-card);
             border-radius: 8px;
-            padding: 1rem;
+            /* No top padding: the comp-table headers are position:sticky
+               top:0, so a top strip here would let scrolling rows peek
+               above the pinned header. Keep side/bottom padding only. */
+            padding: 0 1rem 1rem;
             overflow-x: auto;
             overflow-y: auto;
             flex: 1;
