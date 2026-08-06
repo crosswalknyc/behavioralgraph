@@ -7280,6 +7280,10 @@
             text-align: left;
             line-height: 1.4;
             display: block;
+            /* Behavioral item values arrive with mixed casing from the
+               source data (e.g. "North West" vs "RIHANNA"). Force all
+               uppercase so every card reads consistently. */
+            text-transform: uppercase;
         }
 
         .behavioral-name-wrapper {
