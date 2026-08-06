@@ -97549,7 +97549,14 @@
                 const brandNameEl = document.getElementById('dashBrandNameHeader');
                 // 2026-06-20: reset cached base title (see _updateProfileTitleForVisibleCohorts)
                 try { _resetProfileTitleCache(); } catch (_) {}
-                if (brandNameEl) brandNameEl.textContent = headerTitle;
+                if (brandNameEl) {
+                    brandNameEl.textContent = headerTitle;
+                    // Cache the platform-inclusive base title (e.g. "Shark
+                    // Tank - Hulu") so _updateProfileTitleForVisibleCohorts
+                    // appends the data-cut suffix to THAT rather than
+                    // regex-stripping the streaming platform tag.
+                    brandNameEl.dataset.baseTitle = tooltipTitle;
+                }
                 updateDashProfileHeaderMeta(dateRange, parsed);
                 // Cache this run's analyzed-period year so the sidebar tree
                 // and Run dropdown display 2025 (the analyzed period) rather
