@@ -91406,7 +91406,15 @@
                 // bleed through when _updateProfileTitleForVisibleCohorts
                 // strips/re-applies the " - <Cohort>" suffix.
                 try { _resetProfileTitleCache(); } catch (_) {}
-                document.getElementById('dashBrandNameHeader').textContent = headerTitle;
+                const _dashHeaderEl = document.getElementById('dashBrandNameHeader');
+                _dashHeaderEl.textContent = headerTitle;
+                // Cache the platform-inclusive base title (e.g. "Shark Tank
+                // - Hulu") so _updateProfileTitleForVisibleCohorts appends
+                // the data-cut suffix to THAT instead of regex-stripping the
+                // streaming platform tag off along with any prior cohort
+                // suffix. Without this the platform is lost as soon as a
+                // cut like "Total Universe" is applied.
+                _dashHeaderEl.dataset.baseTitle = tooltipTitle;
                 updateDashProfileHeaderMeta(resolvedDateRange, parsed);
 
                 // Fetch profile image (custom uploads only)
