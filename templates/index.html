@@ -118638,11 +118638,15 @@
         
         function loadComparisonProfiles() {
             const container = document.getElementById('compProfileList');
-            // 2026-08-06: picker sidebar was removed. If the element
-            // isn't in the DOM, silently no-op so callers don't throw.
-            if (!container) return;
+            // 2026-08-06: picker sidebar was removed. The list container
+            // may be absent - that's fine. We must STILL build the profile
+            // set and auto-select the open tabs so the comparison report
+            // renders; only the picker-list DOM writes are guarded on
+            // `container`. (A prior early-return here left the Compare tab
+            // blank because comparisonProfiles/selectedForComparison never
+            // got populated.)
             if (allJobs.length === 0) {
-                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No profiles available</div>';
+                if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No profiles available</div>';
                 return;
             }
             
