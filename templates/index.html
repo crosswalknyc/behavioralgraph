@@ -93417,6 +93417,12 @@
             // substring so 'CREATOR/INFLUENCER', 'INFLUENCER', 'CREATOR',
             // 'YOUTUBER', 'STREAMER', 'PODCASTER' all map here.
             if (/CREATOR|INFLUENCER|YOUTUBER|STREAMER|PODCASTER/.test(cat)) return 'INFLUENCER';
+            // 2026-08-06 (Jenna): EMERGING TALENT is the canonical
+            // BRAND CATEGORY bucket for young digital-native talent
+            // (TikTok stars, YouTube kids, IG-first personalities like
+            // North West). Route to INFLUENCER so the composition is
+            // social-first (55%) not the GENERIC 22% retail default.
+            if (cat === 'EMERGING TALENT') return 'INFLUENCER';
             // Traditional talent (actors, musicians, athletes, etc.)
             if ([
                 'TALENT', 'ACTOR', 'MUSICIAN/BAND', 'MUSICIAN-BAND',
@@ -93627,7 +93633,17 @@
                         }
                     }
                     if (topContribution <= 0) continue;
-                    dataSums[bucket] += topContribution;
+                    // 2026-08-06 (Jenna): MAX-per-bucket instead of
+                    // SUM-across-cats. SUM inherently rewarded buckets
+                    // that span many sub-cats (retail has ~15 APPAREL/
+                    // CPG/BEAUTY/etc.; media has ~11 broadcast/podcast/
+                    // games; social has 1). Every audience shops broadly
+                    // and watches broadly, so SUM was measuring bucket
+                    // fan-out rather than exposure strength. MAX competes
+                    // each bucket on its single strongest signal while
+                    // still preserving per-subject differentiation (a
+                    // Skims-loving audience still spikes retail).
+                    if (topContribution > dataSums[bucket]) dataSums[bucket] = topContribution;
                     if (topRawBP >= SIG_THRESHOLD && !sawSignal[bucket]) {
                         sawSignal[bucket] = true;
                         nonTrivialBuckets += 1;
@@ -93667,6 +93683,20 @@
             // brand mix dominates over the archetype anchor. Without this,
             // the 3 override profiles converge back to identical 12/12/26/
             // 8/42 MEDIA_BRAND defaults.
+            // 2026-08-06 (Jenna): retail sub-cats in NO_OWNED (TALENT /
+            // INFLUENCER) files represent AUDIENCE consumer behavior
+            // (what the fans buy) - not touchpoints that expose the
+            // audience to the subject. Zero the retail data signal so
+            // retail stays at the archetype base (INFLUENCER=8% /
+            // TALENT=7%) instead of crowding out social/search/media
+            // where the audience actually encounters the subject.
+            // Content-override path keeps retail (movie profiles CAN
+            // have subject-adjacent merch retail as a real touchpoint,
+            // e.g. Grinch plush / Cat in the Hat costumes).
+            if (noOwned && !contentOverride) {
+                dataSums.retail = 0;
+                sawSignal.retail = false;
+            }
             const RICH_THRESHOLD = contentOverride ? 1 : 3;
             const useData = contentOverride
                 ? (dataSums.social + dataSums.search + dataSums.retail + dataSums.media) > 0
