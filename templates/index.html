@@ -39239,6 +39239,16 @@
                         }
                     };
                     img.src = cachedUrl;
+                    // Browser HTTP-cache race: a fully-cached image can
+                    // finish decoding before (or without) firing onload,
+                    // leaving the container stuck at display:none. If it's
+                    // already complete, reveal it now instead of waiting.
+                    if (img.complete && img.naturalWidth > 0) {
+                        _clearImgHandlers(img);
+                        imageContainer.classList.add('loaded');
+                        _fetchImageInFlight = null;
+                        if (typeof onImageLoaded === 'function') onImageLoaded(cachedUrl);
+                    }
                 }
                 // Background check for updated image
                 fetch(`/api/profile-image/${encodeURIComponent(profileName)}`).then(r => r.json()).then(data => {
@@ -39354,6 +39364,12 @@
                     img.style.display = 'none';
                 };
                 img.src = cachedUrl;
+                // Same browser-cache race as fetchProfileImage: reveal an
+                // already-complete cached image without waiting for onload.
+                if (img.complete && img.naturalWidth > 0) {
+                    _clearImgHandlers(img);
+                    imageContainer.classList.add('loaded');
+                }
                 return;
             }
             
