@@ -92,18 +92,23 @@ _S3_DATED  = 'trends_iq_snapshots/{date}/'
 # everything") so every row the Trends IQ dashboard actually renders
 # carries a US-projected engagement estimate, not just the top slice.
 # Each cap targets union-of-top-N across that kind's panels post-dedup:
-#   podcasts:  ~10 platforms x top 8-10 unique  = 60
+#   podcasts:  5 platforms x top 50 unique     = 150 (bumped 2026-08-07
+#              from 60 - Apple/Spotify/Audible/Netflix panels each ship
+#              50-100 rows and were being culled to ~18 estimates each).
 #   songs:     5 music panels x top 20 unique  = 100
 #   streaming: 6 platforms x top 25 unique     = 200 (bumped 2026-08-05
 #              from 60 - was leaving Disney+ / Hulu with only ~5 estimates
 #              each because the sort-by-best_rank cap culled everything
 #              below rank 10 across platforms).
-#   books:     6 book+libby panels x top 15   = 100
+#   books:     6 book+libby panels x top 50    = 220 (bumped 2026-08-07
+#              from 100 - Apple Books ships 100 rows / Audible 78, and
+#              the previous cap only surfaced the top ~30 of each panel;
+#              rows below that rendered without a reader-count badge).
 # -------------------------------------------------------------------------
-_MAX_PODCAST_ITEMS   = 60
+_MAX_PODCAST_ITEMS   = 150
 _MAX_SONG_ITEMS      = 100
 _MAX_STREAMING_ITEMS = 200
-_MAX_BOOK_ITEMS      = 100
+_MAX_BOOK_ITEMS      = 220
 
 _WEBSEARCH_MODEL      = (os.environ.get('STREAM_ESTIMATES_MODEL')
                           or 'claude-sonnet-4-5')
@@ -183,7 +188,11 @@ def _collect_podcasts(max_items: int = _MAX_PODCAST_ITEMS) -> list[dict]:
         return []
     per: dict[str, dict] = {}
     for src_slug, panel in (snap.get('sources') or {}).items():
-        for i, it in enumerate((panel.get('items') or [])[:30]):
+        # Bumped 2026-08-07 from [:30] to [:50] so podcast panels
+        # that ship 100 rows (Apple, Spotify, Audible) surface their
+        # ranks 31-50 with estimates too. Post-dedup + best-rank sort
+        # still tops out at _MAX_PODCAST_ITEMS.
+        for i, it in enumerate((panel.get('items') or [])[:50]):
             title = (it.get('title') or '').strip()
             key   = _cp_normalize(title)
             if not key:
@@ -308,8 +317,10 @@ def _collect_books(max_items: int = _MAX_BOOK_ITEMS) -> list[dict]:
     per: dict[str, dict] = {}
 
     # 1. Book stores (Amazon, Apple, Audible).
+    # Bumped 2026-08-07 from [:30] to [:50] so Apple (100 rows) and
+    # Audible (78 rows) surface their mid-chart entries with estimates.
     for src_slug, panel in (book_snap.get('sources') or {}).items():
-        for i, it in enumerate((panel.get('items') or [])[:30]):
+        for i, it in enumerate((panel.get('items') or [])[:50]):
             title  = (it.get('title')  or '').strip()
             artist = (it.get('artist') or '').strip()
             if not title:
@@ -333,16 +344,22 @@ def _collect_books(max_items: int = _MAX_BOOK_ITEMS) -> list[dict]:
             if rank < e['best_rank']:
                 e['best_rank'] = rank
 
-    # 2. Libby (LA County) - ebook + audiobook. Fold onto existing
-    #    items when the title+author match; create standalone items
-    #    when they don't.
-    for src_slug in ('ebook', 'audiobook'):
+    # 2. Libby (LA County) - ebook + audiobook + magazine. Fold onto
+    #    existing items when the title+author match; create standalone
+    #    items when they don't.
+    #
+    # Magazines added 2026-08-07 - previously the collector iterated
+    # only ('ebook', 'audiobook') so the Popular Magazines panel
+    # (30 titles) rendered without any reader-count metric even though
+    # the Libby snapshot carried the data.
+    _LIBBY_SLUG_META = {
+        'ebook':     ('libby_ebook',    'Libby: Popular eBooks'),
+        'audiobook': ('libby_audio',    'Libby: Popular Audiobooks'),
+        'magazine':  ('libby_magazine', 'Libby: Popular Magazines'),
+    }
+    for src_slug, (plat, chart_prefix) in _LIBBY_SLUG_META.items():
         panel = (libby_snap.get('sources') or {}).get(src_slug) or {}
-        panel_label = panel.get('label') or f'Libby: Popular {src_slug.title()}s'
-        # Panel-label -> chart-label prefix we render on the dashboard
-        chart_prefix = ('Libby: Popular eBooks' if src_slug == 'ebook'
-                         else 'Libby: Popular Audiobooks')
-        for i, it in enumerate((panel.get('items') or [])[:30]):
+        for i, it in enumerate((panel.get('items') or [])[:50]):
             title  = (it.get('title')  or '').strip()
             artist = (it.get('artist') or '').strip()
             holds  = int(it.get('holds') or 0)
@@ -367,8 +384,8 @@ def _collect_books(max_items: int = _MAX_BOOK_ITEMS) -> list[dict]:
                 e['best_rank'] = rank
             # Preserve the LA County hold count so the prompt can
             # cite it (and reason to project it up to US-wide
-            # borrows). Map ebook->libby_ebook / audiobook->libby_audio.
-            plat = 'libby_ebook' if src_slug == 'ebook' else 'libby_audio'
+            # borrows). Map ebook->libby_ebook / audio->libby_audio /
+            # magazine->libby_magazine.
             e['libby_holds_by_type'][plat] = holds
 
     return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
@@ -463,6 +480,21 @@ _PROMPT_HEADER = (
     "the per-platform anchor tier corresponding to the rank and return "
     "a non-zero estimate. Only return 0 for a platform if the item is "
     "NOT in that platform's chart labels AND you have no other data.\n"
+    "\n"
+    "DIFFERENTIATE WITHIN A TIER (HARD RULE):\n"
+    "  When two items share the same chart tier (both are 'top-100 "
+    "Libby ebooks' or both are 'steady-state Netflix top-10'), you "
+    "must still return DIFFERENT numbers for them. Anchor the tier, "
+    "then differentiate WITHIN the anchor range using: exact chart "
+    "rank, release recency (newer = higher recency demand), publisher "
+    "/ label size, prior-week momentum, mentions in press coverage, "
+    "genre popularity, and any specific data you find in web_search. "
+    "Never return the same integer for two different titles just "
+    "because they both sit in the same anchor band. If you find "
+    "yourself typing an obvious round number (12000, 5000, 25000), "
+    "adjust to a defensible non-round value that reflects that "
+    "specific item's characteristics (e.g. 11,400 for rank 87 vs. "
+    "13,200 for rank 62 of the same tier).\n"
     "\n"
     "REASONING RULES:\n"
     "  1. For each platform in TARGET_PLATFORMS below:\n"
@@ -686,6 +718,23 @@ _BOOK_PLATFORMS = [
          "project up ~25-35x (LA County share of US library "
          "audiobook demand), cross-check against OverDrive/AudioFile "
          "quarterly reports when available. Bias LOW."
+     )},
+    {'key': 'libby_magazine',
+     'label': 'Libby Popular Magazines (US public-library projection)',
+     'ceiling': 30_000,
+     'anchors': (
+         "US public library digital magazine circulation = ~40-60M "
+         "annual issue-downloads (OverDrive Magazines / Flipster). "
+         "Weekly = ~800K-1.15M US library magazine reads across all "
+         "titles. Top #1 magazine ~5-15K US weekly library reads; "
+         "top-10 1.5-5K; top-100 <500. RAW SIGNAL IS LA COUNTY "
+         "LIBRARY HOLDS - project up ~25-35x. Note: magazine "
+         "'holds' behave differently from books (issues auto-renew "
+         "and are often unlimited-simultaneous-use), so LA holds "
+         "may under-represent actual reader demand. Cross-reference "
+         "with any OverDrive Magazines press or the specific "
+         "publisher's audited circulation (MPA / AAM) when a "
+         "magazine title matches a known print/digital brand. Bias LOW."
      )},
 ]
 
@@ -995,9 +1044,55 @@ def _default_unit_for_kind(kind: str) -> str:
     return 'weekly US views'
 
 
-def _sanitize_platform_block(kind: str, key: str, raw: Any) -> Optional[dict]:
+# ---------------------------------------------------------------------------
+# Per-title deterministic jitter (Jenna 2026-08-07: "some titles have
+# duplicate numbers"). Claude reasons within a per-tier anchor band
+# (e.g. "top-100 Libby ebooks ~1-4K weekly borrows") and legitimately
+# lands on the SAME value for many niche titles that have no
+# distinguishing external data - so 10 different books all read
+# "12,000 weekly readers" on the dashboard.
+#
+# The fix: apply a small (±5%) deterministic per-title jitter to the
+# validated mid so numerically-identical anchor values spread out
+# without changing the tier. Hash inputs are stable across runs
+# (title + platform_key) so:
+#   - a given book's number doesn't wobble day-over-day
+#   - two different books never share the exact same mid at the same
+#     ceiling because their hash-derived offsets differ
+#
+# High-confidence rows (Claude cited a real Nielsen/Circana/Chartmetric
+# number) are exempt from jitter - the value they got IS the anchor,
+# and we don't want to move it off the source.
+# ---------------------------------------------------------------------------
+import hashlib as _hashlib
+
+
+def _per_title_jitter_factor(title: str, platform_key: str) -> float:
+    """Return a deterministic multiplier in [0.95, 1.05] derived from
+    hash(title|platform). Same (title, platform) always yields the same
+    factor; different pairs land in different ~1% buckets across the
+    ±5% range."""
+    if not title:
+        return 1.0
+    h = _hashlib.blake2s(
+        f"{title.lower().strip()}|{platform_key.lower().strip()}".encode(),
+        digest_size=4,
+    ).digest()
+    # 32-bit unsigned int in [0, 2^32) -> map to [-0.05, +0.05].
+    n = int.from_bytes(h, 'big')
+    return 0.95 + (n / 0xFFFFFFFF) * 0.10
+
+
+def _sanitize_platform_block(kind: str, key: str, raw: Any,
+                              title: str = '',
+                              confidence_override: Optional[str] = None) -> Optional[dict]:
     """Validate + clamp one per-platform sub-block. Returns a
-    normalized dict or None if the block is empty / bogus."""
+    normalized dict or None if the block is empty / bogus.
+
+    When `title` is supplied and the block's confidence is not 'high',
+    applies a small deterministic per-(title, platform) jitter to the
+    mid/low/high values so anchor-band-tier titles don't render with
+    identical numbers on the dashboard."""
     if not isinstance(raw, dict):
         return None
     try:
@@ -1046,6 +1141,20 @@ def _sanitize_platform_block(kind: str, key: str, raw: Any) -> Optional[dict]:
         note = (note + ' [clamped: raw estimate exceeded platform '
                         'sanity ceiling]').strip()
 
+    # Per-title jitter: only when the caller gave us a title AND the
+    # confidence isn't 'high' (high-conf values come from a specific
+    # cited source and shouldn't move). Applied AFTER the ceiling
+    # clamp so ceilings are still respected.
+    effective_conf = (confidence_override or conf)
+    if title and effective_conf != 'high':
+        factor = _per_title_jitter_factor(title, key)
+        mid  = max(1, int(round(mid  * factor)))
+        low  = max(1, int(round(low  * factor)))
+        high = max(1, int(round(high * factor)))
+        # Preserve invariant low <= mid <= high after rounding.
+        if low  > mid: low  = mid
+        if high < mid: high = mid
+
     return {
         'us_estimate':      mid,
         'us_estimate_low':  low,
@@ -1060,7 +1169,12 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
     Returns the enriched item dict or None if nothing usable came back."""
     kind = item['kind']
 
-    # 1. Per-platform block: validate + clamp each sub-entry.
+    # 1. Per-platform block: validate + clamp + jitter each sub-entry.
+    #    Title is passed through so the sanitizer can apply
+    #    per-(title, platform) jitter that spreads out identical
+    #    anchor-band values across titles without moving them off
+    #    their tier.
+    title = (item.get('display_title') or '').strip()
     by_platform_raw = parsed.get('by_platform') or {}
     by_platform: dict[str, dict] = {}
     if isinstance(by_platform_raw, dict):
@@ -1068,7 +1182,7 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
             k = (k or '').strip().lower()
             if not k:
                 continue
-            block = _sanitize_platform_block(kind, k, v)
+            block = _sanitize_platform_block(kind, k, v, title=title)
             if block:
                 by_platform[k] = block
 
@@ -1104,6 +1218,17 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
         agg_high = min(agg_high, ceiling)
         conf = 'low'
         clamped = True
+
+    # Aggregate-level jitter (mirrors per-platform jitter above). Uses
+    # a distinct salt so a book with identical per-platform mids to
+    # another book still gets a different aggregate.
+    if title and conf != 'high':
+        factor = _per_title_jitter_factor(title, f'{kind}_aggregate')
+        agg_mid  = max(1, int(round(agg_mid  * factor)))
+        agg_low  = max(1, int(round(agg_low  * factor)))
+        agg_high = max(1, int(round(agg_high * factor)))
+        if agg_low  > agg_mid: agg_low  = agg_mid
+        if agg_high < agg_mid: agg_high = agg_mid
 
     method = (parsed.get('method') or '').strip()
     if clamped:
