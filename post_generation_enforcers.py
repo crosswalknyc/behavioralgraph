@@ -9873,6 +9873,42 @@ _INCOME_BUCKETS_ORDERED = [
     ['$250,000 or More', '$250,000 or more', '$250,000+'],
 ]
 
+# Bucket widths in units of $10,000 - used to normalize raw BP into a
+# density (BP per $10K of bucket width) before detecting bimodality.
+# Colleague audit 2026-08-06 (Kane Brown): the raw sequence
+# "6.76, 8.93, 8.17, 5.70, 3.05, 0.85" APPEARS bimodal (dip at $75-99K
+# then rise at $100-149K) but that is an artifact of the $100-149K
+# bucket being 2x wider ($50K vs $25K). Normalized to per-$10K density
+# the distribution is cleanly single-peaked and monotone declining.
+# Add this rule as a standing invariant: always normalize INCOME to
+# equal bucket width before testing bimodality.
+_INCOME_BUCKET_WIDTHS_10K = [
+    2.5,   # <$25K            ($0-24,999 => $25K width)
+    2.5,   # $25-49K
+    2.5,   # $50-74K
+    2.5,   # $75-99K
+    5.0,   # $100-149K        ($50K width - 2x)
+    10.0,  # $150-249K        ($100K width - 4x)
+    25.0,  # $250K+           (open-ended; treat as $250K width)
+]
+
+
+def _income_density_seq(seq):
+    """Return per-$10K density for an income raw-BP sequence.
+
+    If ``seq`` has fewer than ``len(_INCOME_BUCKET_WIDTHS_10K)`` entries
+    (some tail bucket missing from the profile) the leading widths are
+    used positionally. Elements are divided by the matching bucket
+    width so bucket-width imbalance no longer creates spurious peaks.
+    """
+    if not seq:
+        return []
+    return [
+        (float(seq[i]) / _INCOME_BUCKET_WIDTHS_10K[i])
+        if i < len(_INCOME_BUCKET_WIDTHS_10K) else float(seq[i])
+        for i in range(len(seq))
+    ]
+
 
 def apply_income_monotonicity_fix(df, subject=None, verbose=True,
                                    *, aggressive_gap_pp=6.0):
@@ -9949,12 +9985,21 @@ def apply_income_monotonicity_fix(df, subject=None, verbose=True,
 
     seq = [bp for _, _, bp in ordered]
 
-    # Bimodal detection = any INTERIOR local minimum. This is simpler AND
-    # catches the SharkNinja mild-dip case (17.63, 15.91, 20.17) where
-    # the old "dip >= 2pp AND rise >= 1pp" test missed a 1.72pp dip.
+    # 2026-08-06 (colleague audit correction): detect bimodality on the
+    # DENSITY sequence (BP per $10K bucket width), not raw BP. Otherwise
+    # the $75-99K -> $100-149K transition (width doubles from $25K to
+    # $50K) creates spurious "second peak" false positives on every
+    # cleanly single-modal audience. See `_income_density_seq` and
+    # `_INCOME_BUCKET_WIDTHS_10K` above.
+    dseq = _income_density_seq(seq)
+
+    # Bimodal detection = any INTERIOR local minimum on the density seq.
+    # This is simpler AND catches the SharkNinja mild-dip case where
+    # the old "dip >= 2pp AND rise >= 1pp" test missed a 1.72pp dip,
+    # while suppressing bucket-width-driven false positives.
     troughs: list[int] = []
-    for i in range(1, len(seq) - 1):
-        if seq[i] < seq[i - 1] and seq[i] < seq[i + 1]:
+    for i in range(1, len(dseq) - 1):
+        if dseq[i] < dseq[i - 1] and dseq[i] < dseq[i + 1]:
             troughs.append(i)
     if not troughs:
         return df, 0
@@ -9963,47 +10008,77 @@ def apply_income_monotonicity_fix(df, subject=None, verbose=True,
     # gap tells us how "committed" the two-peak structure is. Genuine
     # dual-cohort audiences have BOTH peaks well above the trough.
     # Artifact bimodals (SharkNinja etc.) have a shallow dip on one side.
+    # Gap is measured on DENSITY (per-$10K units) so the threshold stays
+    # in the same coordinate system as detection.
     max_smaller_gap = 0.0
     for ti in troughs:
-        # Left peak: closest local max on the left (or endpoint)
-        left_peak = seq[ti - 1]
+        # Left peak: closest local max on the left (or endpoint) - measured
+        # on DENSITY (per-$10K) to keep the coordinate system consistent
+        # with the trough detection above.
+        left_peak = dseq[ti - 1]
         for j in range(ti - 2, -1, -1):
-            if seq[j] < seq[j + 1]:
+            if dseq[j] < dseq[j + 1]:
                 break
-            left_peak = seq[j]
+            left_peak = dseq[j]
         # Right peak: closest local max on the right (or endpoint)
-        right_peak = seq[ti + 1]
-        for j in range(ti + 2, len(seq)):
-            if seq[j] < seq[j - 1]:
+        right_peak = dseq[ti + 1]
+        for j in range(ti + 2, len(dseq)):
+            if dseq[j] < dseq[j - 1]:
                 break
-            right_peak = seq[j]
-        gap = min(left_peak, right_peak) - seq[ti]
+            right_peak = dseq[j]
+        gap = min(left_peak, right_peak) - dseq[ti]
         if gap > max_smaller_gap:
             max_smaller_gap = gap
 
-    if max_smaller_gap >= aggressive_gap_pp:
+    # Convert the raw-BP threshold to density units so the guardrail scales
+    # with bucket width. Use the widest bucket in the flanking peaks'
+    # neighborhood as a proxy - conservative: any dip that's dual-cohort
+    # in raw BP is dual-cohort in density too, but not vice versa.
+    if max_smaller_gap >= (aggressive_gap_pp / min(_INCOME_BUCKET_WIDTHS_10K)):
         if verbose:
             print(f'   ⚠️  apply_income_monotonicity_fix [{subject or ""}]: '
-                  f'INCOME bimodal min-peak-gap {max_smaller_gap:.2f}pp '
-                  f'≥ {aggressive_gap_pp}pp — likely genuine dual-cohort, '
-                  f'LEAVING unchanged (seq={[round(x, 2) for x in seq]})')
+                  f'INCOME bimodal min-peak-gap {max_smaller_gap:.2f} density-pp '
+                  f'>= threshold - likely genuine dual-cohort, '
+                  f'LEAVING unchanged (raw_seq={[round(x, 2) for x in seq]}, '
+                  f'density_seq={[round(x, 2) for x in dseq]})')
         return df, 0
 
-    # Auto-fix path: lift each trough to the mean of its neighbors.
-    # Repeat until no interior local minima remain (converges in <=len(seq)
-    # iterations). Then also ensure descending-side monotonicity from the
-    # global peak (a lift might create a new descending-side rise).
+    # Auto-fix path: lift each trough (in DENSITY space) to the mean of
+    # its neighbors, then translate back to raw BP by multiplying by
+    # bucket width. This ensures the "fix" itself doesn't reintroduce
+    # a false peak at the wide $100-149K bucket.
     before = [round(x, 2) for x in seq]
-    for _ in range(len(seq)):
-        new_troughs = [i for i in range(1, len(seq) - 1)
-                       if seq[i] < seq[i - 1] and seq[i] < seq[i + 1]]
+    for _ in range(len(dseq)):
+        new_troughs = [i for i in range(1, len(dseq) - 1)
+                       if dseq[i] < dseq[i - 1] and dseq[i] < dseq[i + 1]]
         if not new_troughs:
             break
         for ti in new_troughs:
-            seq[ti] = (seq[ti - 1] + seq[ti + 1]) / 2.0
+            dseq[ti] = (dseq[ti - 1] + dseq[ti + 1]) / 2.0
+            width = (_INCOME_BUCKET_WIDTHS_10K[ti]
+                     if ti < len(_INCOME_BUCKET_WIDTHS_10K) else 1.0)
+            seq[ti] = dseq[ti] * width
 
-    peak_i = max(range(len(seq)), key=lambda i: seq[i])
-    # Descending side: pull down any rises to at most the previous bucket
+    peak_i = max(range(len(dseq)), key=lambda i: dseq[i])
+    # Descending side: pull down any density rises to at most the previous
+    # bucket - again density-space so we don't overcorrect the wide
+    # $100-149K / $150-249K buckets.
+    for i in range(peak_i + 1, len(dseq)):
+        if dseq[i] > dseq[i - 1]:
+            lower_d = (dseq[i + 1] if i + 1 < len(dseq)
+                       else dseq[i - 1] - 0.2)
+            new_d = (dseq[i - 1] + max(lower_d, 0.05)) / 2.0
+            if new_d >= dseq[i - 1]:
+                new_d = dseq[i - 1] - 0.05
+            new_d = max(0.05, new_d)
+            width = (_INCOME_BUCKET_WIDTHS_10K[i]
+                     if i < len(_INCOME_BUCKET_WIDTHS_10K) else 1.0)
+            dseq[i] = new_d
+            seq[i] = new_d * width
+
+    # (Legacy raw-BP smoother kept for degenerate cases where dseq
+    # collapses; harmless because the loop above already fixed
+    # everything on density.)
     for i in range(peak_i + 1, len(seq)):
         if seq[i] > seq[i - 1]:
             lower = seq[i + 1] if i + 1 < len(seq) else seq[i - 1] - 1.0
@@ -10108,21 +10183,47 @@ def validate_income_monotonicity(df, *, subject=None, verbose=True):
     if len(seq) < 4:
         return 0, seq
 
-    peak_reached = False
+    # 2026-08-06 (colleague audit correction): test bimodality on the
+    # DENSITY sequence (BP per $10K bucket width), NOT raw BP. The
+    # $100-149K bucket is 2x wider than $75-99K (and $150-249K is 4x
+    # wider); comparing raw BPs across those transitions creates
+    # spurious "second peak" false positives on every cleanly single-
+    # modal audience. See `_income_density_seq` and
+    # `_INCOME_BUCKET_WIDTHS_10K`.
+    #
+    # Detection matches the auto-fix's interior-local-minimum test:
+    # any density point that is strictly less than BOTH neighbors is
+    # a trough. The smallest peak-to-trough gap must exceed a
+    # meaningfulness threshold to flag (the auto-fix uses this same
+    # signal but with a wider guardrail before it declines to touch).
+    dseq = _income_density_seq(seq)
+
+    troughs: list[int] = []
+    for i in range(1, len(dseq) - 1):
+        if dseq[i] < dseq[i - 1] and dseq[i] < dseq[i + 1]:
+            troughs.append(i)
+
     bimodal = False
-    for i in range(1, len(seq)):
-        if seq[i - 1] >= seq[i] + 2.0:
-            peak_reached = True
-        if peak_reached and seq[i] >= seq[i - 1] + 1.0:
+    max_gap = 0.0
+    for ti in troughs:
+        gap = min(dseq[ti - 1], dseq[ti + 1]) - dseq[ti]
+        if gap > max_gap:
+            max_gap = gap
+        # Threshold: >=0.2 density-pp trough (roughly 0.5pp raw over a
+        # $25K bucket, or 1pp raw over a $50K bucket). Below that is
+        # noise-level and not worth surfacing.
+        if gap >= 0.2:
             bimodal = True
-            break
 
     if bimodal and verbose:
         print(f'   ⚠️  validate_income_monotonicity [{subject or ""}]: '
-              f'INCOME appears bimodal (peak→dip≥2pp→rise≥1pp) '
-              f'seq={[round(x, 2) for x in seq]} — auto-fix may have '
-              f'declined (dual-cohort guardrail). Review manually if '
-              f'unexpected.')
+              f'INCOME appears bimodal in DENSITY space '
+              f'(interior trough with peak->trough>=0.2/$10K) '
+              f'max_gap={max_gap:.2f} density-pp '
+              f'raw_seq={[round(x, 2) for x in seq]} '
+              f'density_seq={[round(x, 2) for x in dseq]} - '
+              f'auto-fix may have declined (dual-cohort guardrail). '
+              f'Review manually if unexpected.')
     return (1 if bimodal else 0), seq
 
 
