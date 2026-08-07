@@ -11413,20 +11413,154 @@ def apply_recompute_category_share(df, subject, verbose=True):
     return df, n_blocks + n_pct_stripped
 
 
+def fill_blank_bp_from_raw(df, subject, *, verbose: bool = True):
+    """Fill Brand Penetration (Row) when it's blank but Raw is populated.
+
+    Defect signature (Karol G TU 2026-07-24, Rosalía TU 2026-07-24, +
+    every other large full-audience pull we've inspected): the row-by-row
+    Raw column is written correctly by the pipeline but the
+    ``Brand Penetration (Row)`` column fails to serialize for 90+% of
+    non-meta rows. On Karol G that meant 9,312 blank BP cells across
+    ~65 categories including every demo, every sports roster, TALENT,
+    MEDIA, MUSICIAN/BAND, EVENTS, etc. The Raw signal survives -- so
+    the file's audience shape reasoning is intact -- but the dashboard
+    renders "N/A" on every blank cell.
+
+    Why the row-by-row math is safe (Rule #3a canonical):
+        BP = Raw / subject_raw * 100
+    where ``subject_raw`` is the BRAND INPUT row's Raw (falling back to
+    SAMPLE SIZE Raw). This is exactly the inverse of the canonical
+    ``recompute_raw_and_projection`` math, so a round-trip is lossless.
+
+    Must run BEFORE ``recompute_raw_and_projection`` in the safety net
+    because that function would compute ``Raw = BP/100 * sample_size``,
+    and with BP blank it would zero out the good Raw signal and destroy
+    the audience shape. Wired as step 1 (BP fill) → step 2
+    (normalize_final_format) → step 3 (recompute_raw_and_projection) →
+    ... in ``run_write_safety_net``.
+
+    Guards:
+      * Meta rows (BRAND INPUT, SAMPLE SIZE, BRAND CATEGORY,
+        AVID FAN, CASUAL FAN, INPUT_METADATA, SUBJECT) are handled
+        separately -- meta BP goes to 100 for BRAND INPUT/SAMPLE SIZE,
+        stays blank for BRAND CATEGORY.
+      * Rows with Raw == 0 are skipped (nothing to derive from).
+      * Rows already carrying BP (numeric or '%'-suffixed) are skipped.
+      * Result clamped to [0.0001, 100] to survive 4dp rounding.
+
+    Returns ``(df, n_filled)``. Idempotent.
+    """
+    if df is None or len(df) == 0 or "Column" not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, _ = _detect_cols(df)
+    if bp_col is None or raw_col is None:
+        return df, 0
+
+    # Coerce object dtype so we can write mixed values without pandas
+    # 2.x string-dtype guard tripping (Hetzner-only signature).
+    if (str(df[bp_col].dtype) == "string"
+            or str(df[bp_col].dtype).startswith("str")):
+        df[bp_col] = df[bp_col].astype(object)
+
+    # Detect subject_raw from BRAND INPUT row (canonical). Fall back to
+    # SAMPLE SIZE Raw. Bail if neither is present or parseable -- we
+    # cannot safely derive BP without a denominator.
+    cats_upper = df["Column"].astype(str).str.strip().str.upper()
+
+    def _parse_int(v):
+        try:
+            return int(float(str(v).replace(",", "").strip()))
+        except Exception:
+            return None
+
+    subject_raw = None
+    for meta_col in ("BRAND INPUT", "SAMPLE SIZE"):
+        m = cats_upper == meta_col
+        if m.any():
+            for idx in df.index[m]:
+                v = _parse_int(df.at[idx, raw_col])
+                if v and v > 0:
+                    subject_raw = v
+                    break
+        if subject_raw:
+            break
+
+    if not subject_raw:
+        if verbose:
+            print("   ⚠️ fill_blank_bp_from_raw: no BRAND INPUT/SAMPLE "
+                  "SIZE Raw found; skipping")
+        return df, 0
+
+    # Meta rows: BRAND INPUT / SAMPLE SIZE / SUBJECT get BP=100 when
+    # blank. BRAND CATEGORY / INPUT_METADATA / AVID FAN / CASUAL FAN
+    # (deprecated) stay blank.
+    META_100 = {"BRAND INPUT", "SAMPLE SIZE", "SUBJECT"}
+    META_BLANK = {"BRAND CATEGORY", "INPUT_METADATA", "AVID FAN", "CASUAL FAN"}
+
+    n_filled = 0
+    n_meta_pinned = 0
+    filled_by_col: dict[str, int] = {}
+
+    for idx in df.index:
+        col_upper = str(df.at[idx, "Column"]).strip().upper()
+        bp_raw = str(df.at[idx, bp_col]).strip()
+        # Skip already-populated BP cells (anything non-empty, non-nan).
+        if bp_raw and bp_raw.lower() != "nan":
+            continue
+
+        if col_upper in META_BLANK:
+            continue
+
+        if col_upper in META_100:
+            df.at[idx, bp_col] = "100.0000"
+            n_meta_pinned += 1
+            continue
+
+        raw_int = _parse_int(df.at[idx, raw_col])
+        if not raw_int or raw_int <= 0:
+            continue
+
+        bp_val = raw_int / subject_raw * 100.0
+        # Clamp to [0.0001, 100] to survive 4dp rounding + bp-hard-ceiling
+        # downstream.
+        bp_val = max(0.0001, min(100.0, round(bp_val, 4)))
+        df.at[idx, bp_col] = f"{bp_val:.4f}"
+        n_filled += 1
+        filled_by_col[col_upper] = filled_by_col.get(col_upper, 0) + 1
+
+    if verbose and (n_filled or n_meta_pinned):
+        top = sorted(filled_by_col.items(), key=lambda kv: -kv[1])[:6]
+        top_str = ", ".join(f"{c}={n}" for c, n in top) if top else ""
+        pinned = f", pinned {n_meta_pinned} meta" if n_meta_pinned else ""
+        cols_touched = len(filled_by_col)
+        print(f"   🩹 fill_blank_bp_from_raw [{subject or ''}]: filled "
+              f"{n_filled} blank-BP row(s) across {cols_touched} "
+              f"column(s){pinned} (subject_raw={subject_raw:,})"
+              f"{'   top: ' + top_str if top_str else ''}")
+
+    return df, n_filled + n_meta_pinned
+
+
 def run_write_safety_net(df, subject, *, verbose: bool = True):
     """Mandatory lightweight write-time safety net.
 
-    Runs the four idempotent normalizers that MUST hold on every file
+    Runs the five idempotent normalizers that MUST hold on every file
     that lands in ``s3://dashboard-inputs/`` regardless of which upstream
     path wrote it:
 
-      1. ``normalize_final_format`` -- strip '%' from BP/CS, blank
+      1. ``fill_blank_bp_from_raw`` -- fills Brand Penetration (Row)
+         from Raw when the pipeline serialized Raw but forgot BP.
+         MUST run first, before recompute_raw_and_projection, or the
+         RRP pass would zero out the good Raw signal (BP=blank ->
+         Raw = BP/100 * sample_size = 0). Fixes the Karol G TU /
+         Rosalía TU / every-large-TU-pull signature.
+      2. ``normalize_final_format`` -- strip '%' from BP/CS, blank
          BRAND CATEGORY numerics, zero phantom Raw=0/BP>0 rows.
-      2. ``recompute_raw_and_projection`` -- Raw = BP/100 * sample_size,
+      3. ``recompute_raw_and_projection`` -- Raw = BP/100 * sample_size,
          Proj = Raw/10M * 329.9M.
-      3. ``enforce_streaming_share_health`` -- catches the
+      4. ``enforce_streaming_share_health`` -- catches the
          "first row 100, rest null" streaming defect signature.
-      4. ``apply_recompute_category_share`` -- Share = BP/ΣBP * 100
+      5. ``apply_recompute_category_share`` -- Share = BP/ΣBP * 100
          for every non-meta block. THIS IS THE FIX for the recurring
          "large full-audience pulls lose Category Share, small Avid
          cuts keep it" defect. Root cause: BG.py's inline CS writer
@@ -11436,7 +11570,7 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
          Summer's Eve trio) 90+ categories can be null. Small Avid
          cuts happen to touch every category through the intensity
          propagation and so escape the bug.
-      5. Normalize SAMPLE SIZE / BRAND INPUT metadata rows: BP=100,
+      6. Normalize SAMPLE SIZE / BRAND INPUT metadata rows: BP=100,
          CS='' (dashboard doesn't render CS for meta rows).
 
     Everything here is idempotent and cheap (no cross-profile indexing,
@@ -11455,6 +11589,7 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
         return df, stats
 
     for fn_name, fn in (
+        ("fill_blank_bp_from_raw", fill_blank_bp_from_raw),
         ("normalize_final_format", normalize_final_format),
         ("recompute_raw_and_projection", recompute_raw_and_projection),
         ("enforce_streaming_share_health", enforce_streaming_share_health),
