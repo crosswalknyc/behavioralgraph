@@ -10268,6 +10268,61 @@
             }
         }
 
+        // 2026-08-07 (Jenna): put clicked action buttons into an
+        // immediate pending/success/error state so admins know the
+        // click landed - the toast alone is easy to miss and the
+        // button used to sit completely dead during the ~300ms API
+        // round-trip. Used by addCreditsFromModal, addHoursFromModal,
+        // and can be reused by any other admin action button.
+        //
+        //   _flashActionButton(btn, 'pending', 'Working...')
+        //   _flashActionButton(btn, 'success', 'Deducted', _modalCreditsPerMonthChange)
+        //   _flashActionButton(btn, 'error',   'Failed',   _modalCreditsPerMonthChange)
+        //
+        // The restoreFn is invoked after the flash window closes so
+        // the button's real label (which is dynamic - e.g. "Deduct
+        // now" vs "Schedule monthly charge" vs "Apply") is
+        // recomputed from the current checkbox state.
+        function _flashActionButton(btn, state, msg, restoreFn) {
+            if (!btn) return;
+            if (state === 'pending') {
+                if (!btn._origLabel) btn._origLabel = btn.textContent;
+                btn.disabled = true;
+                btn.dataset.flashState = 'pending';
+                btn.style.opacity = '0.85';
+                btn.style.cursor = 'wait';
+                btn.textContent = (msg || 'Working') + '...';
+                return;
+            }
+            const isOk = state === 'success';
+            btn.dataset.flashState = state;
+            btn.style.background   = isOk ? 'var(--accent-green, #22c55e)' : 'var(--accent-red, #ef4444)';
+            btn.style.borderColor  = isOk ? 'var(--accent-green, #22c55e)' : 'var(--accent-red, #ef4444)';
+            btn.style.color        = isOk ? '#1a1a1a' : '#ffffff';
+            btn.style.opacity      = '';
+            btn.style.cursor       = '';
+            btn.textContent        = (isOk ? '\u2713 ' : '\u2717 ') + (msg || (isOk ? 'Done' : 'Failed'));
+            const holdMs = isOk ? 1600 : 2400;
+            setTimeout(function () { _resetFlashButton(btn, restoreFn); }, holdMs);
+        }
+        function _resetFlashButton(btn, restoreFn) {
+            if (!btn) return;
+            btn.disabled = false;
+            btn.style.background  = '';
+            btn.style.borderColor = '';
+            btn.style.color       = '';
+            btn.style.opacity     = '';
+            btn.style.cursor      = '';
+            delete btn.dataset.flashState;
+            if (typeof restoreFn === 'function') {
+                try { restoreFn(); } catch (_) {}
+                if (btn._origLabel && !btn.textContent.trim()) btn.textContent = btn._origLabel;
+            } else if (btn._origLabel) {
+                btn.textContent = btn._origLabel;
+            }
+            btn._origLabel = null;
+        }
+
         function _modalCreditsPerMonthChange() {
             // Recurring / month controls the visibility of the "for how many
             // months" row. Deduct is now compatible with Recurring — the
@@ -10306,10 +10361,15 @@
             const deduct = !!(deductEl && deductEl.checked);
             const perMonth = !!(perMonthEl && perMonthEl.checked);
             const reason = (reasonEl.value || '').trim() || (deduct ? 'Credits deducted by admin' : 'Credits added by admin');
+            // Grab the action button so we can flash pending/success/error
+            // states on it directly (much more visible than the toast alone).
+            const btn = document.querySelector('button[onclick="addCreditsFromModal()"]');
             if (isNaN(credits) || credits < 1) {
                 if (typeof showToast === 'function') showToast('Enter a valid positive number of credits', true);
+                _flashActionButton(btn, 'error', 'Enter amount', _modalCreditsPerMonthChange);
                 return;
             }
+            _flashActionButton(btn, 'pending', 'Working');
 
             // Recurring monthly → different endpoint (also applies first
             // month immediately). Recurring + Deduct = recurring charge;
@@ -10339,15 +10399,18 @@
                                 + (months ? ` × ${months} mo` : ' (until cancelled)')
                                 + ' • first month applied now');
                         }
+                        _flashActionButton(btn, 'success', direction === 'charge' ? 'Scheduled charge' : 'Scheduled grant', _modalCreditsPerMonthChange);
                         // Refresh the in-modal list so the new rule shows up.
                         if (typeof loadUserModalRecurring === 'function') {
                             loadUserModalRecurring();
                         }
                     } else {
                         if (typeof showToast === 'function') showToast(data.error || 'Failed to schedule recurring rule', true);
+                        _flashActionButton(btn, 'error', 'Failed', _modalCreditsPerMonthChange);
                     }
                 } catch (e) {
                     if (typeof showToast === 'function') showToast('Error: ' + (e.message || 'Could not schedule'), true);
+                    _flashActionButton(btn, 'error', 'Network error', _modalCreditsPerMonthChange);
                 }
                 return;
             }
@@ -10368,6 +10431,7 @@
                             ? `Deducted ${credits} credits. ${balLabel}: ${bal}`
                             : `Added ${credits} credits. ${balLabel}: ${bal}`);
                     }
+                    _flashActionButton(btn, 'success', deduct ? `Deducted ${credits}` : `Added ${credits}`, _modalCreditsPerMonthChange);
                     if (data.credit_source !== 'pool' && document.getElementById('newCredits')) {
                         document.getElementById('newCredits').value = data.credits === -1 ? '0' : data.credits;
                     }
@@ -10376,9 +10440,11 @@
                     }
                 } else {
                     if (typeof showToast === 'function') showToast(data.error || 'Failed to update credits', true);
+                    _flashActionButton(btn, 'error', 'Failed', _modalCreditsPerMonthChange);
                 }
             } catch (e) {
                 if (typeof showToast === 'function') showToast('Error: ' + (e.message || 'Could not update credits'), true);
+                _flashActionButton(btn, 'error', 'Network error', _modalCreditsPerMonthChange);
             }
         }
 
@@ -10422,14 +10488,18 @@
             const hours = parseInt(hEl.value, 10) || 0;
             const minutes = parseInt(mEl.value, 10) || 0;
             const totalMinutes = hours * 60 + minutes;
+            // Grab the action button so we can flash pending/success/error.
+            const btn = document.querySelector('button[onclick="addHoursFromModal()"]');
             if (totalMinutes < 1) {
                 if (typeof showToast === 'function') showToast('Enter a positive amount of time (hours + minutes)', true);
+                _flashActionButton(btn, 'error', 'Enter amount', _modalHoursPerMonthChange);
                 return;
             }
             const worked = !!(workedEl && workedEl.checked);
             const perMonth = !!(perMonthEl && perMonthEl.checked);
             const reason = (reasonEl && reasonEl.value || '').trim()
                 || (worked ? 'Consulting time logged by admin' : 'Consulting hours granted by admin');
+            _flashActionButton(btn, 'pending', 'Working');
 
             // Recurring monthly grant → /api/admin/recurring-grants kind='hours'.
             // (Recurring + Log worked is blocked in _modalHoursPerMonthChange.)
@@ -10454,12 +10524,15 @@
                                 + (months ? ` × ${months} mo` : ' (until cancelled)')
                                 + ' • first month applied now');
                         }
+                        _flashActionButton(btn, 'success', `Scheduled ${hours}h ${minutes}m/mo`, _modalHoursPerMonthChange);
                         if (typeof loadUserModalRecurring === 'function') loadUserModalRecurring();
                     } else {
                         if (typeof showToast === 'function') showToast(data.error || 'Failed to schedule recurring hours', true);
+                        _flashActionButton(btn, 'error', 'Failed', _modalHoursPerMonthChange);
                     }
                 } catch (e) {
                     if (typeof showToast === 'function') showToast('Error: ' + (e.message || 'Could not schedule'), true);
+                    _flashActionButton(btn, 'error', 'Network error', _modalHoursPerMonthChange);
                 }
                 return;
             }
@@ -10479,6 +10552,7 @@
                     const data = await resp.json().catch(() => ({}));
                     if (resp.ok && data.success) {
                         if (typeof showToast === 'function') showToast(`Logged ${hours}h ${minutes}m worked`);
+                        _flashActionButton(btn, 'success', `Logged ${hours}h ${minutes}m`, _modalHoursPerMonthChange);
                         // Reset amount fields so the admin can't accidentally
                         // double-submit the same block of time. Refresh
                         // in-modal remaining if a stat card shows it.
@@ -10486,9 +10560,11 @@
                         if (mEl) mEl.value = '0';
                     } else {
                         if (typeof showToast === 'function') showToast(data.error || 'Failed to log time', true);
+                        _flashActionButton(btn, 'error', 'Failed', _modalHoursPerMonthChange);
                     }
                 } catch (e) {
                     if (typeof showToast === 'function') showToast('Error: ' + (e.message || 'Could not log'), true);
+                    _flashActionButton(btn, 'error', 'Network error', _modalHoursPerMonthChange);
                 }
                 return;
             }
@@ -10507,6 +10583,7 @@
                 const data = await resp.json().catch(() => ({}));
                 if (resp.ok && data.success) {
                     if (typeof showToast === 'function') showToast(`Granted ${hours}h ${minutes}m to pool`);
+                    _flashActionButton(btn, 'success', `Granted ${hours}h ${minutes}m`, _modalHoursPerMonthChange);
                     // Bump the visible pool total so the admin sees the effect.
                     const hInput = document.getElementById('newConsultingHours');
                     const mInput = document.getElementById('newConsultingMinutes');
@@ -10518,9 +10595,11 @@
                     }
                 } else {
                     if (typeof showToast === 'function') showToast(data.error || 'Failed to grant hours', true);
+                    _flashActionButton(btn, 'error', 'Failed', _modalHoursPerMonthChange);
                 }
             } catch (e) {
                 if (typeof showToast === 'function') showToast('Error: ' + (e.message || 'Could not grant'), true);
+                _flashActionButton(btn, 'error', 'Network error', _modalHoursPerMonthChange);
             }
         }
 
