@@ -14440,7 +14440,6 @@ def capitalize_words(text):
         'tv': 'TV',
         'hbo': 'HBO',
         'netflix': 'Netflix',
-        'hulu': 'Hulu',
         'spotify': 'Spotify',
         'youtube': 'YouTube',
         'tiktok': 'TikTok',
@@ -14455,7 +14454,16 @@ def capitalize_words(text):
         'whatsapp': 'WhatsApp',
         'amazon': 'Amazon',
         'prime': 'Prime',
-        'disney+': 'Disney+',
+        # 2026-08-07 (Jenna directive): Disney+ and Hulu are one platform
+        # now (unified app + login). Both map to canonical 'Disney+/Hulu'
+        # so upstream code that flows through the case-normalize path
+        # emits the merged form. The `apply_disney_hulu_rollup` enforcer
+        # in migration/post_generation_enforcers.py catches any laggard
+        # two-row emissions at write time (defense in depth).
+        'disney+': 'Disney+/Hulu',
+        'disney plus': 'Disney+/Hulu',
+        'hulu': 'Disney+/Hulu',
+        'disney+/hulu': 'Disney+/Hulu',
         'apple tv+': 'Apple TV+',
         'peacock': 'Peacock',
         'paramount+': 'Paramount+',
@@ -37363,9 +37371,14 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
         if not mask.any():
             return df
         platform_df = df[mask].copy()
-        # Priority brands
+        # Priority brands. 2026-08-07 (Jenna directive): Disney+ and Hulu
+        # are one platform now (unified app). Emit a single 'disney+/hulu'
+        # entry instead of two sibling rows. Enforcer
+        # apply_disney_hulu_rollup in migration/post_generation_enforcers.py
+        # collapses any laggard two-row emissions at write time.
         top10_brands = [
-            'netflix', 'hulu', 'apple tv+', 'amazon prime video', 'disney+', 'max', 'peacock', 'espn+', 'paramount+'
+            'netflix', 'disney+/hulu', 'apple tv+', 'amazon prime video',
+            'max', 'peacock', 'espn+', 'paramount+'
         ]
         # Ensure all priority brands are present
         for brand in top10_brands:
@@ -37382,8 +37395,9 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
         # Recompute after possible additions
         mask = df['Column'].str.lower() == category
         platform_df = df[mask].copy()
-        # Set Netflix #1, Hulu #2
-        for idx, brand in enumerate(['netflix', 'hulu']):
+        # Set Netflix #1, Disney+/Hulu #2 (post 2026-08-07 rollup — Hulu
+        # merged into Disney+/Hulu combined-platform row)
+        for idx, brand in enumerate(['netflix', 'disney+/hulu']):
             brand_idx = platform_df[platform_df['Value'].str.lower() == brand].index
             if len(brand_idx) > 0:
                 sorted_indices = platform_df['Percentage'].astype(float).sort_values(ascending=False).index.tolist()
@@ -37837,8 +37851,11 @@ def add_previous_run_column(df_final, previous_demo_lookup, previous_behavioral_
     # --- FINAL STREAMING/PLATFORM ENFORCEMENT: Required brands always in top 10 ---
     def enforce_streaming_platform_top10(df):
         category = 'streaming/platform'
+        # 2026-08-07 (Jenna directive): Disney+ and Hulu are one platform
+        # now — emit a single 'disney+/hulu' row. See top10_brands note above.
         required_brands = [
-            'netflix', 'hulu', 'apple tv+', 'amazon prime video', 'disney+', 'max', 'peacock', 'espn+', 'paramount+'
+            'netflix', 'disney+/hulu', 'apple tv+', 'amazon prime video',
+            'max', 'peacock', 'espn+', 'paramount+'
         ]
         mask = df['Column'].str.lower() == category
         if not mask.any():
