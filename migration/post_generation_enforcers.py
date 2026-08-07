@@ -7579,6 +7579,26 @@ def normalize_final_format(df, subject, verbose=True):
         if verbose:
             print(f'   [normalize_final] Fix 1 (%) failed: {e}')
 
+    # --- Fix 1b: strip '%' from every Category Share cell ----------------
+    # Mirror of Fix 1. SHARKNINJA main file 2026-08-04 shipped with %
+    # ONLY in Category Share (BP clean, CS dirty): 4,248 rows across 89
+    # categories from RELATIONSHIP onward. Fix 1 only touched BP so the
+    # signature persisted. This block is the symmetric CS-side fix.
+    try:
+        if cs_col is not None:
+            cs_series = df[cs_col].astype(str)
+            cs_pct_mask = cs_series.str.contains('%', regex=False, na=False)
+            n_cs_pct = int(cs_pct_mask.sum())
+            if n_cs_pct:
+                df[cs_col] = cs_series.str.replace('%', '', regex=False).str.strip()
+                if verbose:
+                    print(f'   [normalize_final] stripped % from {n_cs_pct} '
+                          f'Category Share cell(s)')
+                total += n_cs_pct
+    except Exception as e:
+        if verbose:
+            print(f'   [normalize_final] Fix 1b (CS %) failed: {e}')
+
     # --- Fix 2: zero raw=0 / bp>0 phantom rows ---------------------------
     zeroed_by_col = {}
     try:
@@ -7789,6 +7809,7 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         strip_phantom_zero_rows,           # 2026-06-15 (Rob Schneider INTEREST defect) — phantom 0.0000% inserts
         ensure_subject_in_native_category, # 2026-06-15 (Apple Pay native-cat gap) — subject must self-pin in BRAND CATEGORY
         enforce_native_cluster_self_pin,   # 2026-06-16 PM (Defect 38) — subject = 100% in ALL cluster grids (BANKING+BANK for BANKS)
+        enforce_multi_brand_input_self_pin, # 2026-08-04 Rail #7 (SharkNinja) — SHARKNINJA -> SHARK + NINJA both pinned to 100 in MPB + carry-through
         pin_subject_to_100_in_appearing_categories, # 2026-06-15 (Netflix 99.04 near-miss) — pin >=95% subject rows to exact 100
         enforce_netflix_leads_streaming_platform,   # 2026-06-15 PM (Defect 28) — Netflix #1 in S/P excl. self-pins
         enforce_niche_streamer_caps,                # 2026-06-16 PM (Defect 39) — Criterion/MUBI/Acorn/etc. capped to plausible US-sub ceilings
@@ -8105,6 +8126,36 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer reground_clamped_sample_size failed: {e}")
+    # 2026-08-06 (Jenna: "make sure for all synth profiles that it always
+    # only uses canonical demos ... should only be from these [demos.csv]").
+    # Collapse non-canonical demographic bucket labels to the canonical
+    # 5-EDU / 5-REL / 8-AGE / 13-OCC set from reference/demos.csv BEFORE
+    # renormalizing to 100 (so drops leave BPs to redistribute
+    # proportionally).
+    try:
+        df, n = enforce_canonical_demo_buckets(
+            df, subject=subject, verbose=verbose,
+        )
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_canonical_demo_buckets failed: {e}")
+
+    # 2026-08-06 (Jenna: "check most purchased brands for north west. they
+    # feel too lux. they can be those brands. The percentages just need to
+    # be lower since this is an assumed confirmed purchase ... We just need
+    # to ensure this doesn't happen again"). Cap MPB (+ sub-cat) rows for
+    # brands in the 4-tier lux canon to panel-reality confirmed-purchase
+    # bands. Idempotent: caps DOWN only. Runs AFTER canonical demos and
+    # BEFORE the demo renormalize so downstream Rule 3b sync gets the
+    # capped values.
+    try:
+        df, n = apply_lux_confirmed_purchase_caps(
+            df, subject=subject, verbose=verbose,
+        )
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer apply_lux_confirmed_purchase_caps failed: {e}")
+
     # 2026-06 (Jenna P2 belt-and-suspenders): demographic-renormalize.
     # Each of the 9 demos (AGE, GENDER, ETHNICITY, INCOME, EDUCATION,
     # RELATIONSHIP, SEXUAL_ORIENTATION, PARENTAL_STATUS, OCCUPATION) rescaled
@@ -8174,6 +8225,19 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
     except Exception as e:
         print(f"   ⚠️ enforcer apply_recompute_category_share failed: {e}")
 
+    # 2026-08-04 Rail #6 (SharkNinja main file bimodal INCOME):
+    # auto-repair mild-to-moderate bimodal INCOME. Runs BEFORE the
+    # soft-warn validator so most audiences are silently fixed;
+    # validator only speaks up when auto-fix's dual-cohort guardrail
+    # declined to touch (rare, legitimately bimodal case).
+    try:
+        df, n_ir = apply_income_monotonicity_fix(
+            df, subject=subject, verbose=verbose,
+        )
+        total += n_ir
+    except Exception as e:
+        print(f"   ⚠️ enforcer apply_income_monotonicity_fix failed: {e}")
+
     # 2026-08-03 (Honey Pot bimodal INCOME): soft-warn on bimodal
     # INCOME distributions. Read-only — does NOT auto-fix (some
     # audiences are legitimately bimodal). Result is logged for the
@@ -8185,6 +8249,19 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         total += n_bi
     except Exception as e:
         print(f"   ⚠️ enforcer validate_income_monotonicity failed: {e}")
+
+    # 2026-08-04 Rail #7 late repin (SharkNinja): re-pin multi-brand
+    # BRAND INPUT components in case any of the ~30 mid-pipeline
+    # enforcers (MPB digital lifts, propagation, canonical normalizes,
+    # non-hostmap resets) dropped SHARK / NINJA below 100.
+    try:
+        df, n = enforce_multi_brand_input_self_pin(
+            df, subject=subject, verbose=verbose,
+        )
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_multi_brand_input_self_pin (late) "
+              f"failed: {e}")
 
     # 2026-06-16 (Jenna Defect 37 -- Peacock/LiveTV/YouTube/Citibank
     # near-miss + overflow): FINAL guarantee pass. pin_subject_to_100_*
@@ -9304,6 +9381,357 @@ class DemoSumViolationError(Exception):
         )
 
 
+# ---------------------------------------------------------------------------
+# 2026-08-06 (Jenna: "make sure for all synth profiles that it always only
+# uses canonical demos ... should only be from these [demos.csv]").
+# North West and other new synth builds landed with 7-bucket EDUCATION
+# schemas ('Less than High School', 'HS Diploma / GED', 'Some College',
+# 'Associate Degree', 'Bachelor's Degree', 'Master's Degree', 'Doctorate /
+# Professional Degree') and legacy 'Widowed' in RELATIONSHIP -- neither is
+# in the canonical demos.csv distinct set from userdata.user_data_sanitized.
+# Enforcer collapses aliases -> canonical, drops orphan/aliased-to-None
+# buckets and merges duplicates. Runs BEFORE renormalize_demographics_to_100
+# so the sum-to-100 pass sees the collapsed distribution.
+# ---------------------------------------------------------------------------
+def enforce_canonical_demo_buckets(df, *, subject=None, verbose=True):
+    """Collapse non-canonical demographic bucket labels to the canonical
+    set from ``reference/demos.csv`` (via
+    :mod:`migration.canonical_demos`).
+
+    For each of the categories in PIPELINE_DEMO_SCHEMA:
+
+    * If a row's ``Value`` normalizes to a canonical bucket, its label
+      is rewritten to canonical casing/apostrophe form (e.g.
+      ``BACHELOR'S DEGREE`` -> ``Bachelors Degree`` -- but we preserve
+      the case style of neighbors if the file uses all-uppercase demos).
+    * If ``Value`` is aliased to another canonical bucket (e.g.
+      ``Master's Degree`` -> ``Graduate or Professional Degree``), the
+      row's BP is SUMMED into the canonical bucket's existing row (or
+      the row is relabeled if no canonical row exists yet), and the
+      duplicate is dropped.
+    * If ``Value`` is aliased to ``None`` (e.g. ``Widowed`` in
+      RELATIONSHIP, ``Prefer Not to Say`` in INCOME/OCCUPATION), the
+      row is dropped. Its BP will be redistributed proportionally to
+      the remaining canonical buckets by
+      :func:`renormalize_demographics_to_100`.
+    * If ``Value`` is orphan (no canonical match, no alias),
+      :func:`migration.canonical_demos.orphan_fallback` is consulted:
+      if a fallback bucket exists for the category (e.g. ``Other`` for
+      OCCUPATION), the BP is merged into it; otherwise the row is
+      dropped and logged as an orphan.
+
+    Idempotent: a second pass on an already-canonical df is a no-op.
+    Preserves the SUBJECT self-pin at 100%.
+
+    Returns (df, n_operations) where n_operations is the total number
+    of relabels + merges + drops applied.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+
+    try:
+        from migration.canonical_demos import (
+            PIPELINE_DEMO_SCHEMA, canonical_value, orphan_fallback,
+            _CANONICAL_NORM, _norm, _ORPHAN,
+        )
+    except Exception as e:
+        if verbose:
+            print(f'   ⚠️ enforce_canonical_demo_buckets: import failed: {e}')
+        return df, 0
+
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col not in df.columns:
+        return df, 0
+
+    df = df.copy()
+    ops = 0
+    log_relabel: list[tuple[str, str, str]] = []
+    log_merge:   list[tuple[str, str, str, float]] = []
+    log_drop:    list[tuple[str, str, float]] = []
+    log_orphan:  list[tuple[str, str, float]] = []
+
+    col_series = df['Column'].astype(str).str.strip().str.upper()
+
+    for cat in PIPELINE_DEMO_SCHEMA.keys():
+        cat_mask = col_series == cat
+        if not cat_mask.any():
+            continue
+
+        # Detect the file's case-style for this category (all-upper vs
+        # title-case) so we preserve it when rewriting labels.
+        cat_rows = df[cat_mask]
+        upper_style = all(
+            str(v).strip() == str(v).strip().upper()
+            for v in cat_rows['Value']
+            if str(v).strip()
+        )
+
+        # First pass: relabel canonical-but-differently-cased rows.
+        # Second pass: collapse aliases + drops + orphans.
+        drop_idxs: list[int] = []
+        for idx in list(cat_rows.index):
+            raw_val = df.at[idx, 'Value']
+            if raw_val is None or str(raw_val).strip() == '':
+                continue
+            canon = canonical_value(cat, raw_val)
+            if canon is None:
+                # Aliased to DROP
+                bp = _bp(df.at[idx, bp_col]) or 0.0
+                drop_idxs.append(idx)
+                log_drop.append((cat, str(raw_val), bp))
+                ops += 1
+                continue
+            if canon is _ORPHAN:
+                fallback = orphan_fallback(cat)
+                bp = _bp(df.at[idx, bp_col]) or 0.0
+                if fallback is None:
+                    drop_idxs.append(idx)
+                    log_orphan.append((cat, str(raw_val), bp))
+                    ops += 1
+                    continue
+                canon = fallback
+                log_orphan.append((cat, str(raw_val), bp))
+
+            # Convert to file's case style
+            target_label = canon.upper() if upper_style else canon
+
+            # Is this row already at the target label?
+            cur_label = str(raw_val).strip()
+            if cur_label == target_label:
+                continue
+
+            # Does any OTHER row in this category already carry the
+            # canonical target label? If so, merge BPs and drop this row.
+            target_norm = _norm(target_label)
+            existing_target_idx = None
+            for j in list(cat_rows.index):
+                if j == idx or j in drop_idxs:
+                    continue
+                if _norm(df.at[j, 'Value']) == target_norm:
+                    existing_target_idx = j
+                    break
+
+            bp_here = _bp(df.at[idx, bp_col]) or 0.0
+            if existing_target_idx is not None:
+                bp_target = _bp(df.at[existing_target_idx, bp_col]) or 0.0
+                new_bp = round(bp_target + bp_here, 4)
+                df.at[existing_target_idx, bp_col] = new_bp
+                drop_idxs.append(idx)
+                log_merge.append((cat, cur_label, target_label, bp_here))
+                ops += 1
+            else:
+                df.at[idx, 'Value'] = target_label
+                log_relabel.append((cat, cur_label, target_label))
+                ops += 1
+
+        if drop_idxs:
+            df = df.drop(index=drop_idxs).reset_index(drop=True)
+            col_series = df['Column'].astype(str).str.strip().str.upper()
+
+    if verbose and ops:
+        subj = f'[{subject}]' if subject else ''
+        print(f'   🧭 enforce_canonical_demo_buckets {subj}: '
+              f'{ops} operation(s) '
+              f'({len(log_relabel)} relabel, {len(log_merge)} merge, '
+              f'{len(log_drop)} drop, {len(log_orphan)} orphan)')
+        # Cap the per-line output for readability
+        for cat, old, new in log_relabel[:8]:
+            print(f"      relabel {cat}: '{old}' -> '{new}'")
+        if len(log_relabel) > 8:
+            print(f'      ...+{len(log_relabel)-8} more relabel(s)')
+        for cat, src, dst, bp in log_merge[:8]:
+            print(f"      merge   {cat}: '{src}' (BP={bp:.2f}) into '{dst}'")
+        if len(log_merge) > 8:
+            print(f'      ...+{len(log_merge)-8} more merge(s)')
+        for cat, val, bp in log_drop[:8]:
+            print(f"      drop    {cat}: '{val}' (BP={bp:.2f}) [alias->None]")
+        if len(log_drop) > 8:
+            print(f'      ...+{len(log_drop)-8} more drop(s)')
+        for cat, val, bp in log_orphan[:8]:
+            print(f"      orphan  {cat}: '{val}' (BP={bp:.2f})")
+        if len(log_orphan) > 8:
+            print(f'      ...+{len(log_orphan)-8} more orphan(s)')
+
+    return df, ops
+
+
+# ---------------------------------------------------------------------------
+# 2026-08-06 (Jenna: "check most purchased brands for north west. they feel
+# too lux. they can be those brands. The percentages just need to be lower
+# since this is an assumed confirmed purchase ... The mass brands would
+# likely still be fine ... We just need to ensure this doesn't happen again")
+#
+# MOST PURCHASED BRANDS is the "actually paid money in trailing 12 months"
+# column, not aspiration/lust. Panel-reality confirmed-purchase for a $2000
+# Fendi bag or $4000 Loro Piana sweater is single-digit % even for the most
+# aligned audience -- the pool of people who can afford it is small, and
+# not all of them buy in a given 12mo window.
+#
+# North West.csv had Celine at 52%, Louboutin at 52%, Fendi at 52%, Loro
+# Piana at 42%, The Row at 42%, Judith Leiber at 18% -- all wildly above
+# panel reality. This enforcer caps every MPB row (and sub-cat occurrences
+# via Rule 3b) whose brand normalizes into the 4-tier lux canon at
+# `migration.luxury_brand_tiers`. Idempotent: caps DOWN only, never up.
+# ---------------------------------------------------------------------------
+_LUX_SUBCAT_COLUMNS = {
+    # MPB itself
+    "MOST PURCHASED BRANDS",
+    # Fashion sub-cats where the same lux brand rows appear (Rule 3b)
+    "APPAREL", "APPAREL/FOOTWEAR", "APPAREL AND FOOTWEAR",
+    "FOOTWEAR",
+    "ACCESSORIES",
+    "JEWELRY",
+    "ACTIVEWEAR",
+    "INTIMATES",
+    "BEAUTY",
+    "FRAGRANCE",
+    "HOME/OUTDOOR", "HOME",
+    "PETS",
+    "TECHNOLOGY BRAND",
+    "WHERE THEY SHOP",
+    "RETAILERS",
+    "CPG",
+}
+
+
+def apply_lux_confirmed_purchase_caps(df, *, subject=None, verbose=True):
+    """Cap luxury / aspirational brand BPs into confirmed-purchase panel
+    reality (per-tier target bands defined in
+    ``migration.luxury_brand_tiers``).
+
+    * ULTRA tier (Hermes, Loro Piana, The Row, Judith Leiber, watch/champagne
+      houses...):     cap at 0.8-2.2%
+    * HI tier (Chanel, LV, Gucci, Prada, Dior, Fendi, Celine, Balenciaga,
+      Bottega, YSL, Louboutin, Chrome Hearts, Chloe, David Yurman,
+      Tiffany...):    cap at 1.5-3.8%
+    * MID tier (Reformation, Zadig, Sandro, Maje, Marc Jacobs, Golden
+      Goose, Acne, Ganni, Alo, SKIMS, SKKN, Good American...):
+                      cap at 3.0-7.0%
+    * LO tier (Michael Kors, Coach, Kate Spade, Tory Burch, Ralph Lauren,
+      Everlane, Madewell, J.Crew, Anthropologie, Lululemon, Athleta,
+      Old Navy, Gap, Away, Monos...):
+                      cap at 5.5-12.0%
+
+    For each MPB or sub-cat row where the brand is in the lux canon and
+    the current BP exceeds the tier ceiling: rescale to a jittered value
+    in the tier band. Below-ceiling rows are left alone (idempotent).
+
+    Subject-salted jitter preserves audience directional signal (a lux
+    brand the audience over-indexes on ends up in the top half of the
+    band; a lux brand the audience under-indexes on ends up in the
+    bottom half), while making sure no two brands in the same tier
+    land at identical 4dp BP.
+
+    Returns (df, n_capped) where n_capped is the count of individual
+    rows the enforcer capped.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+
+    try:
+        from migration.luxury_brand_tiers import (
+            lookup_tier, target_band, _norm_brand,
+        )
+    except Exception as e:
+        if verbose:
+            print(f"   ⚠️ apply_lux_confirmed_purchase_caps: import failed: {e}")
+        return df, 0
+
+    if 'Column' not in df.columns or 'Value' not in df.columns:
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col not in df.columns:
+        return df, 0
+
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+    subject_key = str(subject or '').upper()
+
+    df = df.copy()
+    ops = 0
+    log: list[tuple[str, str, str, float, float]] = []   # (brand, tier, col, old, new)
+    per_brand_new_bp: dict[str, float] = {}   # ensure same brand gets same jitter across all cats
+
+    col_series = df['Column'].astype(str).str.strip().str.upper()
+
+    for cat in _LUX_SUBCAT_COLUMNS:
+        mask = col_series == cat
+        if not mask.any():
+            continue
+        for idx in df.index[mask]:
+            brand_raw = df.at[idx, 'Value']
+            if brand_raw is None or str(brand_raw).strip() == '':
+                continue
+            tier = lookup_tier(brand_raw)
+            if tier is None:
+                continue
+            cur_bp = _bp(df.at[idx, bp_col]) or 0.0
+            lo, hi = target_band(tier)
+            if cur_bp <= hi:
+                # Already at panel reality
+                continue
+
+            brand_key = _norm_brand(brand_raw)
+            if brand_key in per_brand_new_bp:
+                new_bp = per_brand_new_bp[brand_key]
+            else:
+                # Rescale into the band. Direction preserved: brands with
+                # HIGHER original BP get pushed further UP in the band
+                # (they'll still be top-of-tier for this audience), brands
+                # with LOWER original BP land in the bottom half.
+                # Original BPs cluster in 15-80% range in bad files; map
+                # to (lo, hi) with a shallow curve so ordering is preserved.
+                band = hi - lo
+                anchor_lo, anchor_hi = 25.0, 70.0
+                frac = min(1.0, max(0.0,
+                                    (cur_bp - anchor_lo) /
+                                    (anchor_hi - anchor_lo)))
+                base_new = lo + band * (0.35 + 0.55 * frac)
+                # Subject + brand salted absolute-jitter in a small
+                # window around base_new so no two lux brands in the same
+                # tier land at identical 4dp BP.
+                jit_amp = max(0.05, band * 0.08)
+                jit_absval = _jitter_for(
+                    subject_key, brand_key, salt="LUX_CAP",
+                    lo=-jit_amp, hi=jit_amp,
+                )
+                new_bp = max(lo, min(hi, base_new + jit_absval))
+                per_brand_new_bp[brand_key] = round(new_bp, 4)
+                new_bp = per_brand_new_bp[brand_key]
+
+            if abs(new_bp - cur_bp) < 0.01:
+                continue
+            _set_bp(df, idx, new_bp, bp_col, cs_col, raw_col, proj_col,
+                    sample_size)
+            ops += 1
+            log.append((str(brand_raw), tier, cat, cur_bp, new_bp))
+
+    if verbose and ops:
+        subj = f'[{subject}]' if subject else ''
+        # Roll up to per-brand summary for readability (a lux brand
+        # capped in MPB + APPAREL/FOOTWEAR + ACCESSORIES gets 3 log rows
+        # but is really 1 brand event).
+        by_brand: dict[str, list] = {}
+        for brand, tier, cat, old, new in log:
+            by_brand.setdefault(brand, []).append((tier, cat, old, new))
+        print(f'   💎 apply_lux_confirmed_purchase_caps {subj}: '
+              f'capped {ops} row(s) across {len(by_brand)} brand(s)')
+        for brand, entries in sorted(by_brand.items(), key=lambda kv: -max(e[2] for e in kv[1]))[:20]:
+            tier = entries[0][0]
+            cats = [e[1] for e in entries]
+            old = entries[0][2]
+            new = entries[0][3]
+            print(f'      • {brand:<32} [{tier:<5}] {old:>6.2f}% -> {new:>5.2f}%  '
+                  f'({len(cats)} cat(s))')
+        if len(by_brand) > 20:
+            print(f'      ...+{len(by_brand)-20} more brand(s)')
+
+    return df, ops
+
+
 def renormalize_demographics_to_100(df, *, subject=None, tolerance=0.5,
                                     verbose=True):
     """Rescale BPs within each of the 9 demographic categories so each
@@ -9446,16 +9874,216 @@ _INCOME_BUCKETS_ORDERED = [
 ]
 
 
+def apply_income_monotonicity_fix(df, subject=None, verbose=True,
+                                   *, aggressive_gap_pp=6.0):
+    """Auto-repair mild-to-moderate bimodal INCOME distributions.
+
+    The 2026-08-03 pipeline hardening rail #6.
+
+    Motivation
+    ----------
+    SharkNinja main file 2026-08-04 shipped with income sequence:
+        9.37, 16.51, 17.63, 15.91, 20.17, 14.10, 6.31
+    A trough at $75-99K (15.91) sitting BELOW $50-74K (17.63) and
+    $100-149K (20.17). The Avid file (same audience, tighter panel)
+    was clean single-mode: 7.02, 13.54, 16.98, 17.47, 23.51, 16.48,
+    4.99. The main-file dip is a modeling artifact, not a real
+    dual-cohort signal. `validate_income_monotonicity` correctly
+    flagged it — but was read-only and let the file ship.
+
+    Fix logic
+    ---------
+    1. Read INCOME buckets in canonical ascending order.
+    2. Find the argmax bucket (call it peak_i).
+    3. For every bucket i in [1..peak_i], if bp[i] < bp[i-1] (trough
+       on the ASCENDING side), interpolate: bp[i] = mean(bp[i-1],
+       bp[i+1]) so the trough sits at least at the lower neighbor.
+       If i+1 doesn't exist, use bp[i-1] + 0.5.
+    4. For every bucket i in [peak_i+1..end], if bp[i] > bp[i-1] (rise
+       on the DESCENDING side), pull down: bp[i] = mean(bp[i-1],
+       bp[i+1]) or bp[i-1] - 0.5 as fallback. Floor at 0.5.
+    5. Renormalize the block to 100 exactly.
+    6. Recompute Raw + Proj for every touched row via _set_bp().
+
+    Guardrail
+    ---------
+    The largest bimodal "gap" is (peak2 - trough) where peak2 is the
+    lesser of the two peaks. When gap >= aggressive_gap_pp (default 6),
+    the audience is likely GENUINELY dual-cohort (e.g., a product that
+    serves both budget and premium segments distinctly). In that case
+    we skip the auto-fix and only soft-warn. Empirically all "modeling
+    artifact" cases in the corpus have gap in the 1.5-4pp range;
+    genuine bimodal cases start at ~6-8pp.
+
+    Returns (df, n_touched). Idempotent — no-op on monotonic files.
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+    m_inc = df['Column'].astype(str).str.strip().str.upper() == 'INCOME'
+    if not m_inc.any():
+        return df, 0
+
+    # Build ordered (idx, bucket_name, bp) list following canonical band
+    # order. If a bucket alias isn't present, that slot is skipped and
+    # the surrounding neighbors still form a valid contiguous sequence.
+    inc_by_name = {}
+    for idx in df.index[m_inc]:
+        v = str(df.at[idx, 'Value']).strip()
+        bp = _bp(df.at[idx, bp_col])
+        if bp is not None:
+            inc_by_name[v] = (idx, bp)
+
+    ordered: list[tuple[int, str, float]] = []
+    for aliases in _INCOME_BUCKETS_ORDERED:
+        for a in aliases:
+            if a in inc_by_name:
+                idx, bp = inc_by_name[a]
+                ordered.append((idx, a, bp))
+                break
+
+    if len(ordered) < 4:
+        return df, 0
+
+    seq = [bp for _, _, bp in ordered]
+
+    # Bimodal detection = any INTERIOR local minimum. This is simpler AND
+    # catches the SharkNinja mild-dip case (17.63, 15.91, 20.17) where
+    # the old "dip >= 2pp AND rise >= 1pp" test missed a 1.72pp dip.
+    troughs: list[int] = []
+    for i in range(1, len(seq) - 1):
+        if seq[i] < seq[i - 1] and seq[i] < seq[i + 1]:
+            troughs.append(i)
+    if not troughs:
+        return df, 0
+
+    # Dual-cohort guardrail: for each trough, the smaller peak-to-trough
+    # gap tells us how "committed" the two-peak structure is. Genuine
+    # dual-cohort audiences have BOTH peaks well above the trough.
+    # Artifact bimodals (SharkNinja etc.) have a shallow dip on one side.
+    max_smaller_gap = 0.0
+    for ti in troughs:
+        # Left peak: closest local max on the left (or endpoint)
+        left_peak = seq[ti - 1]
+        for j in range(ti - 2, -1, -1):
+            if seq[j] < seq[j + 1]:
+                break
+            left_peak = seq[j]
+        # Right peak: closest local max on the right (or endpoint)
+        right_peak = seq[ti + 1]
+        for j in range(ti + 2, len(seq)):
+            if seq[j] < seq[j - 1]:
+                break
+            right_peak = seq[j]
+        gap = min(left_peak, right_peak) - seq[ti]
+        if gap > max_smaller_gap:
+            max_smaller_gap = gap
+
+    if max_smaller_gap >= aggressive_gap_pp:
+        if verbose:
+            print(f'   ⚠️  apply_income_monotonicity_fix [{subject or ""}]: '
+                  f'INCOME bimodal min-peak-gap {max_smaller_gap:.2f}pp '
+                  f'≥ {aggressive_gap_pp}pp — likely genuine dual-cohort, '
+                  f'LEAVING unchanged (seq={[round(x, 2) for x in seq]})')
+        return df, 0
+
+    # Auto-fix path: lift each trough to the mean of its neighbors.
+    # Repeat until no interior local minima remain (converges in <=len(seq)
+    # iterations). Then also ensure descending-side monotonicity from the
+    # global peak (a lift might create a new descending-side rise).
+    before = [round(x, 2) for x in seq]
+    for _ in range(len(seq)):
+        new_troughs = [i for i in range(1, len(seq) - 1)
+                       if seq[i] < seq[i - 1] and seq[i] < seq[i + 1]]
+        if not new_troughs:
+            break
+        for ti in new_troughs:
+            seq[ti] = (seq[ti - 1] + seq[ti + 1]) / 2.0
+
+    peak_i = max(range(len(seq)), key=lambda i: seq[i])
+    # Descending side: pull down any rises to at most the previous bucket
+    for i in range(peak_i + 1, len(seq)):
+        if seq[i] > seq[i - 1]:
+            lower = seq[i + 1] if i + 1 < len(seq) else seq[i - 1] - 1.0
+            new_bp = (seq[i - 1] + max(lower, 0.5)) / 2.0
+            if new_bp >= seq[i - 1]:
+                new_bp = seq[i - 1] - 0.5
+            seq[i] = max(0.5, new_bp)
+
+    # Renormalize to 100 across the ordered buckets
+    tot = sum(seq)
+    if tot <= 0:
+        return df, 0
+    seq = [x * 100.0 / tot for x in seq]
+
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+    n = 0
+    for (idx, name, _old), new_bp in zip(ordered, seq):
+        df = _set_bp(df, idx, new_bp, bp_col, cs_col, raw_col, proj_col,
+                     sample_size)
+        n += 1
+
+    # 2026-08-05 (SharkNinja - Potential Air Fryer Consumer G5 fix):
+    # `ordered` only covers buckets whose Value matches a canonical
+    # alias in _INCOME_BUCKETS_ORDERED. If the source has extra INCOME
+    # rows (alias variants we didn't enumerate, or new bucket labels),
+    # the repaired subset sums to exactly 100 but the FULL block sums
+    # to 100 + (other rows). Rescale every INCOME row proportionally so
+    # the full block sums to exactly 100 -- this is what
+    # renormalize_demographics_to_100 does, but that enforcer runs
+    # BEFORE this fix in the chain, so the post-fix state needs its own
+    # sum-to-100 pass. This keeps the trough-lift shape (via
+    # proportional scaling of every row) while restoring BP sum=100.
+    inc_idxs = list(df.index[m_inc])
+    if inc_idxs:
+        current = []
+        for idx in inc_idxs:
+            v = _bp(df.at[idx, bp_col])
+            if v is not None:
+                current.append((idx, max(0.001, v)))
+        cur_total = sum(v for _, v in current)
+        if cur_total > 0 and abs(cur_total - 100.0) > 0.1:
+            scale = 100.0 / cur_total
+            for idx, v in current:
+                new_v = round(v * scale, 4)
+                df = _set_bp(df, idx, new_v, bp_col, cs_col, raw_col,
+                             proj_col, sample_size)
+
+    df = _renormalize_category(df, 'INCOME', bp_col, cs_col, raw_col,
+                                proj_col, sample_size)
+
+    if verbose:
+        # Re-read the ordered buckets after the full-block renormalize
+        after_final = []
+        for (idx, name, _old) in ordered:
+            v = _bp(df.at[idx, bp_col])
+            if v is not None:
+                after_final.append(round(v, 2))
+        # Verify full block sums to 100
+        full_sum = 0.0
+        for idx in inc_idxs:
+            v = _bp(df.at[idx, bp_col])
+            if v is not None:
+                full_sum += v
+        print(f'   🩹 apply_income_monotonicity_fix [{subject or ""}]: '
+              f'INCOME repaired {before} -> {after_final} '
+              f'({n} bucket(s); full block sums to {full_sum:.2f}%)')
+    return df, n
+
+
 def validate_income_monotonicity(df, *, subject=None, verbose=True):
     """Soft-warn on bimodal INCOME distributions.
 
     Returns (n_violations, sequence). n_violations is 0 on pass, 1 when
     the block violates monotonic-after-peak. NEVER auto-fixes or
-    rejects — many audiences ARE legitimately bimodal. The signal is
-    useful for the writer/auditor to check whether the shape is
-    intentional.
+    rejects.
 
-    Runs read-only; caller decides whether to log/pass.
+    Kept alongside `apply_income_monotonicity_fix` (2026-08-04 rail #6)
+    for auditability: the auto-fix runs first with a dual-cohort
+    guardrail; this validator runs afterwards as a soft-warn to log
+    the rare cases the auto-fix declined to touch.
     """
     if df is None or len(df) == 0 or 'Column' not in df.columns:
         return 0, []
@@ -9492,9 +10120,202 @@ def validate_income_monotonicity(df, *, subject=None, verbose=True):
     if bimodal and verbose:
         print(f'   ⚠️  validate_income_monotonicity [{subject or ""}]: '
               f'INCOME appears bimodal (peak→dip≥2pp→rise≥1pp) '
-              f'seq={[round(x, 2) for x in seq]} — verify audience truly '
-              f'has two peaks (dual-cohort) or fix distribution.')
+              f'seq={[round(x, 2) for x in seq]} — auto-fix may have '
+              f'declined (dual-cohort guardrail). Review manually if '
+              f'unexpected.')
     return (1 if bimodal else 0), seq
+
+
+# ============================================================================
+# 2026-08-04 Rail #7 — MULTI-BRAND BRAND INPUT SELF-PIN
+# ============================================================================
+# SharkNinja pair (Liz flag 2026-08-04): BRAND INPUT value was "SHARKNINJA"
+# but the MPB rows are split as "SHARK" (11.65% main / 12.11% avid) and
+# "NINJA" (13.56% main / 13.38% avid). Rule #3 says every subject brand
+# pins at 100% in MPB + carry-through to secondary categories, but
+# pin_subject_to_100_in_appearing_categories:
+#   1. Looks for a single Value == subject_name row (SHARKNINJA doesn't
+#      equal SHARK or NINJA individually)
+#   2. Skips MPB and its family (APPAREL/FOOTWEAR, TECHNOLOGY BRAND,
+#      HOME/OUTDOOR, ...) — but for multi-brand FAMILY profiles, MPB is
+#      exactly where the subject brands live and should be pinned.
+#
+# This new enforcer handles multi-brand BRAND INPUT explicitly:
+#   * Comma / plus / ampersand separator: "SHARK, NINJA" -> [SHARK, NINJA]
+#   * Concatenated brand family: "SHARKNINJA" -> scan MPB for substring
+#     matches ("SHARK" and "NINJA" both live in MPB -> multi-brand)
+#   * Legacy single subject: no split, hand off to existing enforcer
+# ============================================================================
+
+
+def enforce_multi_brand_input_self_pin(df, subject=None, verbose=True):
+    """Pin each component brand of a multi-brand BRAND INPUT to 100%.
+
+    Detects three multi-brand signals in BRAND INPUT.Value:
+      1. Explicit separator: comma, plus, ampersand between tokens.
+      2. Concatenated family: no space, no separator, but two or more
+         existing MPB rows match a substring of the input value.
+      3. Space-separated pair where BOTH tokens exist as MPB brands.
+
+    For each detected component brand:
+      * Pins its row in MOST PURCHASED BRANDS to 100% (BP, CS, Raw,
+        Proj).
+      * Propagates the 100% pin to every OTHER category where the same
+        brand value appears (Rule #3b MPB carry-through), such as
+        TECHNOLOGY BRAND, HOME/OUTDOOR, APPAREL/FOOTWEAR, CPG,
+        BEAUTY/WELLNESS, etc.
+
+    Idempotent — skips brands already at 100%. Returns (df, n_pinned).
+    No-op for single-subject profiles (falls through to the existing
+    pin_subject_to_100_in_appearing_categories enforcer).
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if not all((bp_col, raw_col, proj_col)):
+        return df, 0
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    bi_mask = col_u == 'BRAND INPUT'
+    if not bi_mask.any():
+        return df, 0
+    bi_val = str(df.loc[bi_mask].iloc[0].get('Value', '') or '').strip()
+    if not bi_val:
+        return df, 0
+
+    # Prefer SAMPLE SIZE row -> BRAND INPUT row -> _detect_sample_size fallback.
+    # _detect_sample_size walks rows and back-computes, which can pick up
+    # a floating-point rounding artifact on the FIRST row with positive
+    # BP + Raw (e.g., a low-BP brand row whose rounded Raw doesn't
+    # cleanly invert). The subject rows are the authoritative source.
+    def _to_int(cell):
+        try:
+            s = str(cell).replace(',', '').replace('%', '').strip()
+            if not s or s.lower() in ('nan', 'none'):
+                return None
+            return int(float(s))
+        except (ValueError, TypeError):
+            return None
+
+    sample_size = None
+    sz_mask = col_u == 'SAMPLE SIZE'
+    if sz_mask.any():
+        sample_size = _to_int(df.loc[sz_mask].iloc[0].get(raw_col))
+    if sample_size is None:
+        sample_size = _to_int(df.loc[bi_mask].iloc[0].get(raw_col))
+    if sample_size is None:
+        sample_size = _detect_sample_size(df, bp_col, raw_col)
+    profile_universe = int(round(sample_size / 10_000_000.0 * US_POP))
+
+    # --- Step 1: extract candidate component tokens from BRAND INPUT ----
+    bi_norm = bi_val.upper().strip()
+
+    # Strip common noise suffixes/prefixes ("- FULL PROFILE", "(2025)"
+    # etc.) that appear in some subject-string conventions.
+    bi_clean = _re.sub(r'\s*[-–—]\s*FULL PROFILE.*$', '', bi_norm)
+    bi_clean = _re.sub(r'\s*\([^)]*\)\s*$', '', bi_clean).strip()
+
+    # Explicit separator split
+    sep_tokens: list[str] = []
+    if _re.search(r'[,+&]', bi_clean):
+        sep_tokens = [t.strip() for t in _re.split(r'[,+&]', bi_clean)
+                      if t.strip()]
+
+    # Concatenated / space-separated candidate detection needs an index
+    # of MPB row values.
+    mpb_mask = col_u == 'MOST PURCHASED BRANDS'
+    mpb_vals: dict[str, int] = {}
+    if mpb_mask.any():
+        for idx in df.index[mpb_mask]:
+            v = str(df.at[idx, 'Value'] or '').strip().upper()
+            if v:
+                mpb_vals[v] = idx
+
+    detected: list[str] = []
+
+    # A) explicit separator: each token must exist as an MPB brand
+    if sep_tokens:
+        for t in sep_tokens:
+            if t in mpb_vals:
+                detected.append(t)
+
+    # B) concatenated / space-separated: try prefix + suffix decomposition
+    # (e.g. "SHARKNINJA" -> "SHARK" + "NINJA", or space "SHARK NINJA").
+    if not detected:
+        # First try space-separated pair
+        if ' ' in bi_clean:
+            parts = bi_clean.split()
+            if len(parts) == 2 and all(p in mpb_vals for p in parts):
+                detected = parts
+        # Then concatenated: find two MPB brands that together cover the
+        # whole string with no gap.
+        if not detected and ' ' not in bi_clean and len(bi_clean) >= 6:
+            for cut in range(3, len(bi_clean) - 2):
+                left = bi_clean[:cut]
+                right = bi_clean[cut:]
+                if left in mpb_vals and right in mpb_vals:
+                    detected = [left, right]
+                    break
+
+    # C) Legacy single subject: if only the whole BI value matches an
+    # MPB row, that's the normal single-subject case — hand off to the
+    # existing enforcer and no-op here.
+    if not detected:
+        # Try single: whole cleaned input matches an MPB brand
+        if bi_clean in mpb_vals:
+            return df, 0  # single-brand path handled elsewhere
+        return df, 0  # nothing to do
+
+    # De-dupe while preserving order
+    seen: set[str] = set()
+    detected = [t for t in detected if not (t in seen or seen.add(t))]
+
+    if verbose:
+        print(f'   🔗 enforce_multi_brand_input_self_pin '
+              f'[{subject or ""}]: BRAND INPUT="{bi_val}" detected as '
+              f'multi-brand -> {detected}')
+
+    # --- Step 2: pin each component brand to 100 -------------------------
+    #
+    # For each detected token, find EVERY row (across MPB + secondary
+    # categories) whose normalized Value matches, and pin to 100. This
+    # is the Rule #3b MPB carry-through for a subject brand.
+    n_pinned = 0
+    touched_cats: set[str] = set()
+    val_norm = (
+        df['Value'].astype(str).str.upper().str.strip()
+        .str.replace(r'[^A-Z0-9]', '', regex=True)
+    )
+    for tok in detected:
+        tok_norm = _re.sub(r'[^A-Z0-9]', '', tok.upper())
+        mask = val_norm == tok_norm
+        if not mask.any():
+            if verbose:
+                print(f'      [multi-brand] "{tok}" - no rows in profile')
+            continue
+        for idx in df.index[mask]:
+            cur_bp = _bp(df.at[idx, bp_col])
+            if cur_bp is not None and cur_bp >= 99.9999:
+                continue  # already pinned
+            cat_here = str(df.at[idx, 'Column']).strip()
+            df.at[idx, bp_col] = '100.0000'
+            if cs_col is not None:
+                df.at[idx, cs_col] = '100.0000'
+            df.at[idx, raw_col] = sample_size
+            df.at[idx, proj_col] = profile_universe
+            n_pinned += 1
+            touched_cats.add(cat_here.upper())
+            if verbose:
+                cur_str = f'{cur_bp:.4f}' if cur_bp is not None else 'blank'
+                print(f'      [multi-brand] "{tok}" in [{cat_here}]: '
+                      f'{cur_str} -> 100.0000%')
+
+    # --- Step 3: renormalize each touched category so Share sums right --
+    for cat in touched_cats:
+        df = _renormalize_category(df, cat, bp_col, cs_col, raw_col,
+                                   proj_col, sample_size)
+
+    return df, n_pinned
 
 
 # ============================================================================
@@ -10590,6 +11411,107 @@ def apply_recompute_category_share(df, subject, verbose=True):
         print(f"   🔧 apply_recompute_category_share [{subject or ''}]: "
               f"{n_blocks} block(s) recomputed{extra}")
     return df, n_blocks + n_pct_stripped
+
+
+def run_write_safety_net(df, subject, *, verbose: bool = True):
+    """Mandatory lightweight write-time safety net.
+
+    Runs the four idempotent normalizers that MUST hold on every file
+    that lands in ``s3://dashboard-inputs/`` regardless of which upstream
+    path wrote it:
+
+      1. ``normalize_final_format`` -- strip '%' from BP/CS, blank
+         BRAND CATEGORY numerics, zero phantom Raw=0/BP>0 rows.
+      2. ``recompute_raw_and_projection`` -- Raw = BP/100 * sample_size,
+         Proj = Raw/10M * 329.9M.
+      3. ``enforce_streaming_share_health`` -- catches the
+         "first row 100, rest null" streaming defect signature.
+      4. ``apply_recompute_category_share`` -- Share = BP/ΣBP * 100
+         for every non-meta block. THIS IS THE FIX for the recurring
+         "large full-audience pulls lose Category Share, small Avid
+         cuts keep it" defect. Root cause: BG.py's inline CS writer
+         only refreshes CS for categories touched by specific edit
+         functions; categories that no edit function touched stay
+         null. On large pulls (Kane Brown 08_06, Honey Pot 08_03,
+         Summer's Eve trio) 90+ categories can be null. Small Avid
+         cuts happen to touch every category through the intensity
+         propagation and so escape the bug.
+      5. Normalize SAMPLE SIZE / BRAND INPUT metadata rows: BP=100,
+         CS='' (dashboard doesn't render CS for meta rows).
+
+    Everything here is idempotent and cheap (no cross-profile indexing,
+    no Claude calls). Safe to run on every write path.
+
+    Wired into ``migration.profile_writer.write_profile_csv`` as a
+    MANDATORY tail step (cannot be disabled). ``run_all_enforcers``
+    already invokes these four functions in the same order, so calling
+    it twice via ``run_enforcers=True`` + this safety net is a no-op
+    (idempotent).
+
+    Returns ``(df, {name: n_changes, ...})``.
+    """
+    stats: dict[str, int] = {}
+    if df is None or len(df) == 0:
+        return df, stats
+
+    for fn_name, fn in (
+        ("normalize_final_format", normalize_final_format),
+        ("recompute_raw_and_projection", recompute_raw_and_projection),
+        ("enforce_streaming_share_health", enforce_streaming_share_health),
+        ("apply_recompute_category_share", apply_recompute_category_share),
+    ):
+        try:
+            df, n = fn(df, subject, verbose=verbose)
+            stats[fn_name] = int(n or 0)
+        except Exception as e:
+            stats[fn_name] = -1
+            if verbose:
+                print(f"   ⚠️ write-safety-net {fn_name} failed: "
+                      f"{type(e).__name__}: {e}")
+
+    # Normalize metadata-row CS: SAMPLE SIZE / BRAND INPUT should not
+    # carry a subject_raw or 10M "pseudo-category-share" value in the
+    # CS column (dashboard doesn't render it; leaving numeric junk here
+    # is a defect signature — Kane Brown 08_06 shipped with CS=347380.0
+    # on SAMPLE SIZE row). Also blank the CS on AVID FAN / CASUAL FAN
+    # (deprecated rows) and INPUT_METADATA.
+    try:
+        cats_upper = df["Column"].astype(str).str.strip().str.upper()
+        cs_col = "Category Share" if "Category Share" in df.columns else None
+        meta_rows = {
+            "SAMPLE SIZE", "BRAND INPUT", "AVID FAN", "CASUAL FAN",
+            "INPUT_METADATA", "SUBJECT",
+        }
+        if cs_col:
+            n_norm = 0
+            for r in meta_rows:
+                m = cats_upper == r
+                if m.any():
+                    for idx in df.index[m]:
+                        cur = str(df.at[idx, cs_col]).strip()
+                        if cur and cur.lower() != "nan":
+                            try:
+                                v = float(cur.replace("%", "").replace(",", ""))
+                            except Exception:
+                                v = None
+                            # 100.0 is the only value we allow through
+                            # for SAMPLE SIZE / BRAND INPUT (dashboard
+                            # ignores it either way). Anything else
+                            # (raw count, 10M panel, etc.) is junk.
+                            if v is None or v not in (100.0, 100):
+                                df.at[idx, cs_col] = ""
+                                n_norm += 1
+            stats["normalize_meta_cs"] = n_norm
+            if verbose and n_norm:
+                print(f"   🔧 write-safety-net: blanked "
+                      f"{n_norm} meta-row Category Share cell(s)")
+    except Exception as e:
+        stats["normalize_meta_cs"] = -1
+        if verbose:
+            print(f"   ⚠️ write-safety-net meta CS normalize failed: "
+                  f"{type(e).__name__}: {e}")
+
+    return df, stats
 
 
 class PrePublishGateError(Exception):

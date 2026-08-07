@@ -192,6 +192,14 @@ def write_profile_csv(
       2. If apply_anachronism AND year: strip_anachronistic_brands(df,
          year)
       3. If tu_source_key: enforce_tu_avid_coherence(df, TU_source)
+      3.5 MANDATORY run_write_safety_net(df, subject) -- idempotent
+         format normalize + Raw/Proj recompute + Category Share
+         recompute + streaming-share health check + meta-row CS scrub.
+         Cannot be disabled. See
+         `post_generation_enforcers.run_write_safety_net` for why
+         (Kane Brown 08_06 / Honey Pot 08_03 / Summer's Eve trio
+         signature: large full-audience pulls drop Category Share on
+         90+ blocks, smaller Avid cuts don't).
       4. If sort: sort within each Column group by BP desc
       5. If run_gate: run_pre_publish_gate(df, subject). Fires G1-G18
          defect detectors including the 2026-08-03 additions:
@@ -272,6 +280,34 @@ def write_profile_csv(
                 print(f"  [profile_writer] enforce_tu_avid_coherence raised "
                       f"({type(e).__name__}: {e}); continuing")
 
+    # 3.5 MANDATORY write-time safety net (2026-08-06). Idempotent,
+    #     cheap, always runs regardless of `run_enforcers`. Repairs the
+    #     recurring "large full-audience pull loses Category Share" bug
+    #     (Kane Brown 08_06 / Honey Pot 08_03 / Summer's Eve trio) by
+    #     re-running the four format/CS/Raw-Proj normalizers as a
+    #     terminal pass. See
+    #     `post_generation_enforcers.run_write_safety_net` docstring.
+    n_safety_net_changes = 0
+    try:
+        try:
+            from migration.post_generation_enforcers import (
+                run_write_safety_net,
+            )
+        except ImportError:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from post_generation_enforcers import (  # type: ignore
+                run_write_safety_net,
+            )
+        df, safety_stats = run_write_safety_net(
+            df, subject, verbose=verbose,
+        )
+        n_safety_net_changes = sum(
+            v for v in safety_stats.values() if isinstance(v, int) and v > 0
+        )
+    except Exception as e:
+        print(f"  [profile_writer] write-safety-net raised "
+              f"({type(e).__name__}: {e}); continuing")
+
     # 4. Sort within each Column group by BP desc
     if sort:
         try:
@@ -351,6 +387,7 @@ def write_profile_csv(
         "n_enforcer_changes": n_enforcer_changes,
         "n_anachronism_changes": n_anachronism_changes,
         "n_coherence_changes": n_coherence_changes,
+        "n_safety_net_changes": n_safety_net_changes,
         "gate_defects": gate_defects,
         "register": register_result,
     }
@@ -379,11 +416,19 @@ def upload_and_register_profile(
     pre-publish gate, etc.). Reads the CSV, then does upload + backup +
     dashboard registration through the canonical path.
 
-    Set `apply_final_enforcers=True` to force `run_all_enforcers` again
-    as a final safety net; default is False because BG.py has already
-    done comprehensive enforcement inline. TU-vs-Avid coherence and
-    anachronism checks still run when their trigger kwargs are passed
-    (`tu_source_key`, `year`).
+    Regardless of `apply_final_enforcers`, `write_profile_csv` always
+    runs the lightweight `run_write_safety_net` (format normalizer,
+    Raw/Proj recompute, Category Share recompute, streaming-share
+    health, meta-CS scrub) as a mandatory terminal pass. That is what
+    catches the Kane Brown 08_06 / Honey Pot 08_03 signature where
+    BG.py's inline CS writer skips 90+ non-meta blocks on large pulls.
+    `apply_final_enforcers=True` additionally re-runs the full
+    `run_all_enforcers` chain (Claude-free but expensive); default is
+    False because the write safety net covers the CS-loss bug at a
+    fraction of the cost.
+
+    TU-vs-Avid coherence and anachronism checks still run when their
+    trigger kwargs are passed (`tu_source_key`, `year`).
 
     Args:
       local_path: absolute path to CSV on disk
@@ -393,7 +438,8 @@ def upload_and_register_profile(
       category: brand category
       display_name: dashboard display name. Falls back to derived from key.
       source_key, tu_source_key, year: see `write_profile_csv`
-      apply_final_enforcers: rerun `run_all_enforcers` (default False)
+      apply_final_enforcers: rerun full `run_all_enforcers` (default
+        False). The write-time safety net always runs regardless.
     """
     import pandas as pd
     if s3_key is None:
