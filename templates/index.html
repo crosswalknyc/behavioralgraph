@@ -10791,8 +10791,11 @@
 
         /* Comparison Portal */
         .comparison-container {
+            /* 2026-08-08 (Jenna): sidebar removed; main pane spans full width.
+               Kept as a grid (not a flat block) so the child .comparison-main
+               keeps its overflow/height budget wired to the container. */
             display: grid;
-            grid-template-columns: 280px 1fr;
+            grid-template-columns: 1fr;
             gap: 1rem;
             height: calc(100vh - 260px);
         }
@@ -21578,45 +21581,19 @@
                 <!-- Comparison Report View -->
                 <div id="comparisonReportView" class="report-view" style="display: block;">
                     <div class="comparison-container">
-                        <div class="comparison-sidebar">
-                            <div class="sidebar-section">
-                                <!-- 2026-07-21 (Jenna): removed the "All open tabs and Gen Pop
-                                     are auto-selected for comparison" callout - the behavior
-                                     is still true (see autoSelectDefaultProfiles) but the
-                                     hint takes up sidebar space without adding value now
-                                     that only one Gen Pop shows up. -->
-                                <div style="position: relative; margin-bottom: 0.75rem;">
-                                    <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
-                                    <input type="text" id="compSearchInput" placeholder="Search profiles" oninput="filterComparisonProfiles()" style="padding-left: 32px; width: 100%; box-sizing: border-box;">
-                                </div>
-                                <div class="comparison-profile-list" id="compProfileList" style="max-height: 500px;">
-                                    <div style="padding: 1rem; color: var(--text-secondary);">Loading profiles...</div>
-                                </div>
-                            </div>
-                            
-                            <div class="sidebar-section" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
-                                <h3>Data Categories</h3>
-                                <div style="position: relative; margin-bottom: 0.5rem;">
-                                    <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary);">🔍</span>
-                                    <input type="text" id="catFilterSearch" placeholder="Search categories" oninput="filterCategoryList()" style="padding-left: 32px; width: 100%; box-sizing: border-box; font-size: 0.8rem;">
-                                </div>
-                                <div class="category-filter-list" id="categoryFilterList" style="max-height: 200px; overflow-y: auto;">
-                                    <div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">Run comparison first</div>
-                                </div>
-                            </div>
-                            
-                            <div class="comp-pills-row">
-                                <span class="comp-pill-count comp-selected-count">0 items</span>
-                                <button type="button" class="comp-pill-clear" onclick="clearComparison()">Clear</button>
-                            </div>
-                        </div>
+                        <!-- 2026-08-08 (Jenna): entire .comparison-sidebar removed.
+                             Profiles auto-populate the comparison from open Profile IQ
+                             tabs plus Gen Pop via autoSelectDefaultProfiles(). The
+                             Data Categories filter + count/clear pills were redundant
+                             with the top-level tab controls; comparison view now
+                             takes the full width. -->
                         <div class="comparison-main">
                             <!-- Side-by-Side Tables Tab -->
                             <div id="comp-tab-tables" class="comp-tab-content active">
                                 <div id="comparisonResults">
                                     <div class="comparison-empty">
-                                        <p>Select profiles from the left to compare</p>
-                                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p>
+                                        <p>Open profiles to compare</p>
+                                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Any profile you load in Profile IQ auto-appears here alongside Gen Pop.</p>
                                     </div>
                                 </div>
                             </div>
@@ -116777,9 +116754,14 @@
         let expandedCategories = new Set();
         
         function loadComparisonProfiles() {
+            // 2026-08-08: entire comparison-sidebar was removed. The
+            // list container may be absent - that's fine. We must
+            // STILL build the profile set + auto-select open tabs so
+            // the comparison report renders; only picker-list DOM
+            // writes are guarded on `container`.
             const container = document.getElementById('compProfileList');
             if (allJobs.length === 0) {
-                container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No profiles available</div>';
+                if (container) container.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No profiles available</div>';
                 return;
             }
             
@@ -117228,6 +117210,9 @@
 
         function renderComparisonProfiles(profiles) {
             const container = document.getElementById('compProfileList');
+            // 2026-08-08: picker sidebar removed. No-op if the
+            // element isn't in the DOM.
+            if (!container) return;
             
             // Group by master category, then by sub-category
             const byMasterCategory = {};
@@ -117432,8 +117417,8 @@
                 primaryProfileIndex = 0;
                 document.getElementById('comparisonResults').innerHTML = `
                     <div class="comparison-empty">
-                        <p>Select profiles from the left to compare</p>
-                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p>
+                        <p>Open profiles to compare</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Any profile you load in Profile IQ auto-appears here alongside Gen Pop.</p>
                     </div>
                 `;
             }
@@ -117505,8 +117490,8 @@
             } else {
                 document.getElementById('comparisonResults').innerHTML = `
                     <div class="comparison-empty">
-                        <p>Select profiles from the left to compare</p>
-                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p>
+                        <p>Open profiles to compare</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Any profile you load in Profile IQ auto-appears here alongside Gen Pop.</p>
                     </div>
                 `;
             }
@@ -117539,15 +117524,19 @@
             } else {
                 document.getElementById('comparisonResults').innerHTML = `
                     <div class="comparison-empty">
-                        <p>Select profiles from the left to compare</p>
-                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p>
+                        <p>Open profiles to compare</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Any profile you load in Profile IQ auto-appears here alongside Gen Pop.</p>
                     </div>
                 `;
             }
         }
 
         function filterComparisonProfiles() {
-            const search = document.getElementById('compSearchInput').value.toLowerCase().trim();
+            // 2026-08-08: picker sidebar removed. No-op if the
+            // search input isn't in the DOM.
+            const inputEl = document.getElementById('compSearchInput');
+            if (!inputEl) return;
+            const search = inputEl.value.toLowerCase().trim();
             if (!search) {
                 renderComparisonProfiles(comparisonProfiles);
                 return;
@@ -117604,8 +117593,8 @@
                 // Clear the comparison results when nothing is selected
                 document.getElementById('comparisonResults').innerHTML = `
                     <div class="comparison-empty">
-                        <p>Select profiles from the left to compare</p>
-                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p>
+                        <p>Open profiles to compare</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Any profile you load in Profile IQ auto-appears here alongside Gen Pop.</p>
                     </div>
                 `;
             }
@@ -117630,8 +117619,11 @@
             currentSortSection = null;
             updateSelectedCount();
             renderComparisonProfiles(comparisonProfiles);
-            document.getElementById('comparisonResults').innerHTML = '<div class="comparison-empty"><p>Select profiles from the left to compare</p><p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p></div>';
-            document.getElementById('categoryFilterList').innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">Select profiles to compare</div>';
+            document.getElementById('comparisonResults').innerHTML = '<div class="comparison-empty"><p>Open profiles to compare</p><p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Any profile you load in Profile IQ auto-appears here alongside Gen Pop.</p></div>';
+            const catFilterEl = document.getElementById('categoryFilterList');
+            if (catFilterEl) {
+                catFilterEl.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary); font-size: 0.8rem;">Select profiles to compare</div>';
+            }
         }
 
         function selectAllComparison(checked) {
@@ -117652,8 +117644,8 @@
             } else {
                 document.getElementById('comparisonResults').innerHTML = `
                     <div class="comparison-empty">
-                        <p>Select profiles from the left to compare</p>
-                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Check any profile to add it to the comparison grid</p>
+                        <p>Open profiles to compare</p>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Any profile you load in Profile IQ auto-appears here alongside Gen Pop.</p>
                     </div>
                 `;
             }
@@ -118767,6 +118759,9 @@
 
         function renderCategoryFilterList() {
             const container = document.getElementById('categoryFilterList');
+            // 2026-08-08: Data Categories filter removed from the
+            // Compare sidebar. No-op if the container is absent.
+            if (!container) return;
             const searchTerm = (document.getElementById('catFilterSearch')?.value || '').toLowerCase();
 
             let html = '';
