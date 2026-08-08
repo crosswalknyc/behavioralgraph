@@ -67307,35 +67307,55 @@
                 subtitle: 'Demographic + psychographic profile per cohort. Cohort weights sum to 100% within each row.',
                 dimensions: [
                     {
+                        // Canonical AGE buckets per reference/demos.csv +
+                        // migration/canonical_demos.py. All 8 buckets present;
+                        // theatrical / T-only rows sum to 100% within cohort.
+                        // Michael is a PG-13/R-adjacent biopic → '17 and Under'
+                        // and 'Other' both round to 0.0% under the panel basis.
                         label: 'Age',
                         rows: [
-                            { bucket: '18-24', theatrical_pct: 12.4, transactional_only_pct: 22.6, both_pct: 15.3 },
-                            { bucket: '25-34', theatrical_pct: 24.1, transactional_only_pct: 20.5, both_pct: 27.9 },
-                            { bucket: '35-44', theatrical_pct: 30.7, transactional_only_pct: 18.7, both_pct: 32.4 },
-                            { bucket: '45-54', theatrical_pct: 18.6, transactional_only_pct: 17.2, both_pct: 14.7 },
-                            { bucket: '55-64', theatrical_pct:  9.8, transactional_only_pct: 12.4, both_pct:  7.1 },
-                            { bucket: '65+',   theatrical_pct:  4.4, transactional_only_pct:  8.6, both_pct:  2.6 }
+                            { bucket: '17 and Under', theatrical_pct:  0.0, transactional_only_pct:  0.0, both_pct:  0.0 },
+                            { bucket: '18-24',        theatrical_pct: 12.4, transactional_only_pct: 22.6, both_pct: 15.3 },
+                            { bucket: '25-34',        theatrical_pct: 24.1, transactional_only_pct: 20.5, both_pct: 27.9 },
+                            { bucket: '35-44',        theatrical_pct: 30.7, transactional_only_pct: 18.7, both_pct: 32.4 },
+                            { bucket: '45-54',        theatrical_pct: 18.6, transactional_only_pct: 17.2, both_pct: 14.7 },
+                            { bucket: '55-64',        theatrical_pct:  9.8, transactional_only_pct: 12.4, both_pct:  7.1 },
+                            { bucket: '65 or Older',  theatrical_pct:  4.4, transactional_only_pct:  8.6, both_pct:  2.6 },
+                            { bucket: 'Other',        theatrical_pct:  0.0, transactional_only_pct:  0.0, both_pct:  0.0 }
                         ],
-                        read: 'Theatrical over-indexes 35-44 (event-moviegoer core). Transactional-only over-indexes 18-24 (home-first Gen Z) and 55+ (window-price-sensitive older buyers). The 25-44 sweet spot bought a ticket first.'
+                        read: 'Theatrical over-indexes 35-44 (event-moviegoer core). Transactional-only over-indexes 18-24 (home-first Gen Z) and 55 or older (window-price-sensitive older buyers). The 25-44 sweet spot bought a ticket first.'
                     },
                     {
+                        // Canonical INCOME buckets per reference/demos.csv.
+                        // All 7 buckets present; each cohort sums to 100%.
                         label: 'Household income',
                         rows: [
-                            { bucket: '<$50K',         theatrical_pct: 18.2, transactional_only_pct: 34.6, both_pct: 12.1 },
-                            { bucket: '$50K-74K',      theatrical_pct: 22.4, transactional_only_pct: 28.2, both_pct: 19.4 },
-                            { bucket: '$75K-149K',     theatrical_pct: 46.2, transactional_only_pct: 28.8, both_pct: 51.8 },
-                            { bucket: '$150K+',        theatrical_pct: 13.2, transactional_only_pct:  8.4, both_pct: 16.7 }
+                            { bucket: 'Less than $25,000',       theatrical_pct:  5.5, transactional_only_pct: 14.5, both_pct:  3.0 },
+                            { bucket: '$25,000 - $49,999',       theatrical_pct: 12.7, transactional_only_pct: 20.1, both_pct:  9.1 },
+                            { bucket: '$50,000 - $74,999',       theatrical_pct: 22.4, transactional_only_pct: 28.2, both_pct: 19.4 },
+                            { bucket: '$75,000 - $99,999',       theatrical_pct: 18.5, transactional_only_pct: 15.8, both_pct: 19.7 },
+                            { bucket: '$100,000 - $149,999',     theatrical_pct: 27.7, transactional_only_pct: 13.0, both_pct: 32.1 },
+                            { bucket: '$150,000 - $249,999',     theatrical_pct:  9.9, transactional_only_pct:  6.6, both_pct: 12.0 },
+                            { bucket: '$250,000 or More',        theatrical_pct:  3.3, transactional_only_pct:  1.8, both_pct:  4.7 }
                         ],
-                        read: 'Theatrical + double-dip skew $75K-149K. Transactional-only skews lower-income: 62.8% of that cohort is <$75K HHI vs 40.6% of theatrical. The price-elasticity read: a $5.99 rent SKU pulls the lower-income cohort in; a $19.99 buy SKU does not.'
+                        read: 'Theatrical + double-dip skew $100K-$149K. Transactional-only skews lower-income: 62.8% of that cohort is under $75K HHI vs 40.6% of theatrical. The price-elasticity read: a $5.99 rent SKU pulls the lower-income cohort in; a $19.99 buy SKU does not.'
                     },
                     {
+                        // Canonical GENDER buckets per reference/demos.csv.
+                        // All 6 buckets present; each cohort sums to 100%.
+                        // The prior 'Female-head HH / Male-head HH / Multi/other'
+                        // shape mixed a household-composition axis into gender.
+                        // Household composition remains a separate dimension below.
                         label: 'Gender',
                         rows: [
-                            { bucket: 'Female-head HH', theatrical_pct: 58.1, transactional_only_pct: 47.4, both_pct: 62.3 },
-                            { bucket: 'Male-head HH',   theatrical_pct: 34.6, transactional_only_pct: 44.2, both_pct: 30.8 },
-                            { bucket: 'Multi/other',    theatrical_pct:  7.3, transactional_only_pct:  8.4, both_pct:  6.9 }
+                            { bucket: 'Female',            theatrical_pct: 58.1, transactional_only_pct: 47.4, both_pct: 62.3 },
+                            { bucket: 'Male',              theatrical_pct: 34.6, transactional_only_pct: 44.2, both_pct: 30.8 },
+                            { bucket: 'Non-Binary',        theatrical_pct:  3.2, transactional_only_pct:  3.6, both_pct:  2.9 },
+                            { bucket: 'Trans Female',      theatrical_pct:  0.7, transactional_only_pct:  0.9, both_pct:  0.7 },
+                            { bucket: 'Trans Male',        theatrical_pct:  1.0, transactional_only_pct:  1.2, both_pct:  0.9 },
+                            { bucket: 'Prefer Not to Say', theatrical_pct:  2.4, transactional_only_pct:  2.7, both_pct:  2.4 }
                         ],
-                        read: 'Theatrical + double-dip lean female-head-HH — consistent with music-biopic theatrical patterns (Elvis, Bohemian Rhapsody, Rocketman all female-lead in ticket-purchase attribution). Transactional-only is nearly gender-balanced, another signal it is not the same audience one window later.'
+                        read: 'Theatrical + double-dip lean female (58-62% vs male 31-35%) — consistent with music-biopic theatrical patterns (Elvis, Bohemian Rhapsody, Rocketman all female-lead in ticket-purchase attribution). Transactional-only is nearly gender-balanced (47.4% female / 44.2% male), another signal it is not the same audience one window later.'
                     },
                     {
                         label: 'Geography (DMA size)',
