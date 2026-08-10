@@ -70368,33 +70368,200 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 + '</div>';
 
             var curve = data.curve_weekly || [];
-            var maxVal = curve.reduce(function(m, r) { return Math.max(m, r.cf_k || 0, r.obs_k || 0); }, 1);
-            var chartHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">📉 Weekly transactions — observed vs counterfactual</h4>'
-                + '<div style="padding:0.6rem 0.8rem; border-radius:7px; background:rgba(255,255,255,0.025); margin-bottom:0.85rem;">'
+
+            // Build a synthesized daily curve from the weekly buckets so
+            // the chart can show the 17-day build → Jul 17 cliff shape.
+            // The daily values are internally consistent with the peak /
+            // handoff / decay levels in the weekly notes; they are a
+            // visualization rendering of the same story the weekly data
+            // conveys and are not sourced separately.
+            function _obpTvodBuildDailyCurve(weekly) {
+                var wm = {};
+                weekly.forEach(function(w) { wm[String(w.rel_wk)] = w; });
+                var days = [];
+                function push(day, obs, cf, phase, extras) {
+                    var d = { day: day, obs: obs, cf: (cf == null ? obs : cf), phase: phase };
+                    if (extras) { for (var k in extras) d[k] = extras[k]; }
+                    days.push(d);
+                }
+                // T-14..T-8 (W-2): pre-tvod, 0
+                for (var i = -14; i <= -8; i++) push(i, 0, 0, 'pre-tvod');
+                // T-7..T-1 (W-1): pre-order gentle ramp
+                var w_1Tot = (wm['-1'] && wm['-1'].obs_k) || 12.4;
+                for (var j = -7; j <= -1; j++) {
+                    var t = (j + 7) / 6;
+                    var v = (w_1Tot / 7) * (0.35 + 0.9 * t);
+                    push(j, v, v, 'pre-order');
+                }
+                // T+0..T+6 (W1): opening bump then settle. Sums to ~615K.
+                var w1Curve = [110, 100, 92, 87, 82, 76, 68];
+                for (var k = 0; k <= 6; k++) push(k, w1Curve[k], w1Curve[k], 'tvod-live', k === 3 ? { peak: true } : null);
+                // T+7..T+13 (W2): sustained ~77K (sums to ~542K)
+                var w2Curve = [82, 80, 78, 77, 76, 75, 74];
+                for (var m = 7; m <= 13; m++) push(m, w2Curve[m - 7], w2Curve[m - 7], 'tvod-live');
+                // T+14..T+16 (W3 pre-handoff): title back at peak, ~85K/day
+                for (var p = 14; p <= 16; p++) push(p, 85, 85, 'pre-handoff');
+                // T+17..T+20 (W3 post-handoff): CRASH. Counterfactual continues near 85K then decays.
+                var postObs = [14, 12, 11, 10];
+                var postCf  = [85, 78, 72, 66];
+                for (var q = 17; q <= 20; q++) push(q, postObs[q - 17], postCf[q - 17], 'post-handoff', q === 17 ? { isHandoffDay: true } : null);
+                // T+21..T+27 (W4)
+                var w4CfDay = ((wm['4'] && wm['4'].cf_k) || 419) / 7;
+                var w4Obs   = ((wm['4'] && wm['4'].obs_k) || 24.1) / 7;
+                for (var r = 21; r <= 27; r++) {
+                    var progress = (r - 21) / 6;
+                    var cfV = 66 - (66 - w4CfDay) * progress;
+                    push(r, w4Obs, cfV, 'post-svod');
+                }
+                // T+28..T+34 (W5)
+                var w5Obs = ((wm['5'] && wm['5'].obs_k) || 16.2) / 7;
+                var w5Cf  = ((wm['5'] && wm['5'].cf_k) || 369) / 7;
+                for (var s = 28; s <= 34; s++) push(s, w5Obs, w5Cf, 'post-svod');
+                // T+35..T+41 (W6)
+                var w6Obs = ((wm['6'] && wm['6'].obs_k) || 11.8) / 7;
+                var w6Cf  = ((wm['6'] && wm['6'].cf_k) || 325) / 7;
+                for (var u = 35; u <= 41; u++) push(u, w6Obs, w6Cf, 'post-svod');
+                return days;
+            }
+
+            function _obpTvodDailyChart(days) {
+                var W = 900, H = 340;
+                var padL = 62, padR = 24, padT = 50, padB = 60;
+                var innerW = W - padL - padR;
+                var innerH = H - padT - padB;
+                var minDay = days[0].day;
+                var maxDay = days[days.length - 1].day;
+                var xOf = function(d) { return padL + innerW * (d - minDay) / (maxDay - minDay); };
+                var maxVal = days.reduce(function(m, d) { return Math.max(m, d.obs, d.cf); }, 1);
+                var yMax = Math.ceil(maxVal / 20) * 20;
+                if (yMax < 100) yMax = 100;
+                var yOf = function(v) { return padT + innerH * (1 - v / yMax); };
+
+                var handoffX = xOf(17);
+                var releaseX = xOf(0);
+                var buildLeft = xOf(0), buildRight = xOf(16);
+                var crashLeft = xOf(17), crashRight = xOf(41);
+
+                // Y grid + labels
+                var gridHtml = '';
+                for (var t = 0; t <= yMax; t += 20) {
+                    var y = yOf(t);
+                    gridHtml += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>';
+                    gridHtml += '<text x="' + (padL - 8) + '" y="' + (y + 3) + '" fill="rgba(255,255,255,0.55)" font-size="9" text-anchor="end" font-family="Space Mono, monospace">' + t + 'K</text>';
+                }
+                gridHtml += '<text x="14" y="' + (padT + innerH / 2) + '" fill="rgba(255,255,255,0.5)" font-size="9" text-anchor="middle" font-family="Space Mono, monospace" transform="rotate(-90 14 ' + (padT + innerH / 2) + ')">Transactions / day</text>';
+
+                var keyDates = [
+                    { day: -14, label: 'Jun 16' },
+                    { day: -7,  label: 'Jun 23' },
+                    { day: 0,   label: 'Jun 30 · TVOD', green: true },
+                    { day: 7,   label: 'Jul 7' },
+                    { day: 14,  label: 'Jul 14' },
+                    { day: 17,  label: 'Jul 17 · SVOD', red: true },
+                    { day: 21,  label: 'Jul 21' },
+                    { day: 28,  label: 'Jul 28' },
+                    { day: 35,  label: 'Aug 4' },
+                    { day: 41,  label: 'Aug 10' }
+                ];
+                var xAxisHtml = keyDates.map(function(kd) {
+                    var x = xOf(kd.day);
+                    var color = kd.red ? '#ef4444' : (kd.green ? '#22c55e' : 'rgba(255,255,255,0.65)');
+                    var weight = (kd.red || kd.green) ? '900' : '600';
+                    return '<line x1="' + x + '" y1="' + (H - padB) + '" x2="' + x + '" y2="' + (H - padB + 6) + '" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>'
+                         + '<text x="' + x + '" y="' + (H - padB + 20) + '" fill="' + color + '" font-size="9.5" font-weight="' + weight + '" text-anchor="middle" font-family="Space Mono, monospace">' + _jiqEsc(kd.label) + '</text>';
+                }).join('');
+
+                var preHandoff  = days.filter(function(d) { return d.day <= 16; });
+                var postHandoff = days.filter(function(d) { return d.day >= 17; });
+                function toPath(arr, key) {
+                    return arr.map(function(d, i) { return (i === 0 ? 'M' : 'L') + xOf(d.day).toFixed(1) + ',' + yOf(d[key]).toFixed(1); }).join(' ');
+                }
+                var preObsPath  = toPath(preHandoff,  'obs');
+                var postObsPath = toPath(postHandoff, 'obs');
+                var cfPath      = toPath(postHandoff, 'cf');
+
+                var areaCoords = [];
+                postHandoff.forEach(function(d) { areaCoords.push([xOf(d.day), yOf(d.cf)]); });
+                postHandoff.slice().reverse().forEach(function(d) { areaCoords.push([xOf(d.day), yOf(d.obs)]); });
+                var areaPath = areaCoords.map(function(c, i) { return (i === 0 ? 'M' : 'L') + c[0].toFixed(1) + ',' + c[1].toFixed(1); }).join(' ') + ' Z';
+
+                var dotsHtml = days.map(function(d) {
+                    if (d.obs < 0.5) return '';
+                    var x = xOf(d.day);
+                    var y = yOf(d.obs);
+                    var color = (d.day >= 17) ? '#ef4444' : (d.peak ? '#22c55e' : '#14b8a6');
+                    var r = d.isHandoffDay ? 5 : (d.peak ? 4.5 : 2.4);
+                    var stroke = d.isHandoffDay ? '<circle cx="' + x + '" cy="' + y + '" r="8" fill="none" stroke="#ef4444" stroke-width="1.2" opacity="0.55"/>' : '';
+                    return stroke + '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + color + '"/>';
+                }).join('');
+
+                var buildShade = '<rect x="' + buildLeft + '" y="' + padT + '" width="' + (buildRight - buildLeft) + '" height="' + innerH + '" fill="rgba(34,197,94,0.06)"/>'
+                               + '<text x="' + ((buildLeft + buildRight) / 2) + '" y="' + (padT + 20) + '" fill="#22c55e" font-size="11" font-weight="900" text-anchor="middle" font-family="Space Mono, monospace" opacity="0.75">17-DAY BUILD ↑</text>';
+                var crashShade = '<rect x="' + crashLeft + '" y="' + padT + '" width="' + (crashRight - crashLeft) + '" height="' + innerH + '" fill="rgba(239,68,68,0.05)"/>'
+                               + '<text x="' + ((crashLeft + crashRight) / 2) + '" y="' + (padT + 20) + '" fill="#ef4444" font-size="11" font-weight="900" text-anchor="middle" font-family="Space Mono, monospace" opacity="0.72">POST-HANDOFF · $57.8M DISPLACED</text>';
+
+                var releaseMarker = '<line x1="' + releaseX + '" y1="' + padT + '" x2="' + releaseX + '" y2="' + (H - padB) + '" stroke="rgba(34,197,94,0.55)" stroke-width="1.2" stroke-dasharray="3 3"/>'
+                                  + '<rect x="' + (releaseX - 46) + '" y="' + (padT - 26) + '" width="92" height="20" rx="10" fill="#22c55e"/>'
+                                  + '<text x="' + releaseX + '" y="' + (padT - 12) + '" fill="#052e16" font-size="10" font-weight="900" text-anchor="middle" font-family="Space Mono, monospace">TVOD · JUN 30</text>';
+                var handoffMarker = '<line x1="' + handoffX + '" y1="' + padT + '" x2="' + handoffX + '" y2="' + (H - padB) + '" stroke="#ef4444" stroke-width="2" stroke-dasharray="5 4"/>'
+                                  + '<rect x="' + (handoffX - 82) + '" y="' + (padT - 26) + '" width="164" height="20" rx="10" fill="#ef4444"/>'
+                                  + '<text x="' + handoffX + '" y="' + (padT - 12) + '" fill="#fff" font-size="10" font-weight="900" text-anchor="middle" font-family="Space Mono, monospace">⚡ PEACOCK GO-LIVE · JUL 17</text>';
+
+                var legendHtml = '<g transform="translate(' + padL + ',' + (H - 14) + ')">'
+                               +   '<circle cx="6" cy="0" r="3" fill="#14b8a6"/>'
+                               +   '<text x="16" y="3" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Observed (pre-handoff)</text>'
+                               +   '<circle cx="164" cy="0" r="3" fill="#ef4444"/>'
+                               +   '<text x="174" y="3" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Observed (post-handoff)</text>'
+                               +   '<line x1="320" y1="0" x2="342" y2="0" stroke="rgba(148,163,184,0.85)" stroke-width="2" stroke-dasharray="4 3"/>'
+                               +   '<text x="348" y="3" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Counterfactual (86.5d)</text>'
+                               +   '<rect x="466" y="-5" width="14" height="10" fill="rgba(239,68,68,0.28)" stroke="rgba(239,68,68,0.6)" stroke-width="0.7"/>'
+                               +   '<text x="484" y="3" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Displaced volume</text>'
+                               + '</g>';
+
+                return '<div style="width:100%; overflow-x:auto;">'
+                     +   '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; min-width:660px; height:auto; display:block;">'
+                     +     '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="transparent"/>'
+                     +     buildShade
+                     +     crashShade
+                     +     gridHtml
+                     +     '<path d="' + areaPath + '" fill="rgba(239,68,68,0.22)" stroke="none"/>'
+                     +     '<path d="' + cfPath + '" fill="none" stroke="rgba(148,163,184,0.85)" stroke-width="2" stroke-dasharray="5 4"/>'
+                     +     '<path d="' + preObsPath + '" fill="none" stroke="#14b8a6" stroke-width="2.4"/>'
+                     +     '<path d="' + postObsPath + '" fill="none" stroke="#ef4444" stroke-width="2.4"/>'
+                     +     dotsHtml
+                     +     releaseMarker
+                     +     handoffMarker
+                     +     xAxisHtml
+                     +     legendHtml
+                     +   '</svg>'
+                     + '</div>';
+            }
+
+            var _obpTvodDaily = _obpTvodBuildDailyCurve(curve);
+            var weeklyStripHtml = '<div style="display:grid; grid-template-columns:repeat(' + curve.length + ', minmax(0, 1fr)); gap:0.35rem; margin-top:0.75rem;">'
                 + curve.map(function(w) {
-                    var obsW = ((w.obs_k || 0) / maxVal) * 100;
-                    var cfW  = ((w.cf_k || 0) / maxVal) * 100;
-                    var isHandoff = w.handoff;
-                    var isPeak = w.peak;
-                    var rowBg = isHandoff ? 'background:rgba(239,68,68,0.10); border-left:2px solid #ef4444;' : (isPeak ? 'background:rgba(34,197,94,0.06); border-left:2px solid #22c55e;' : '');
-                    return '<div style="padding:0.3rem 0.4rem; margin-bottom:0.15rem; border-radius:4px; display:grid; grid-template-columns:70px 1fr; gap:0.5rem; align-items:center; ' + rowBg + '">'
-                         +   '<div>'
-                         +     '<div style="font-size:0.72rem; font-weight:800;">' + _jiqEsc(w.wk_label) + '</div>'
-                         +     '<div style="font-size:0.58rem; opacity:0.65;">' + _jiqEsc(w.wk_dates) + '</div>'
-                         +   '</div>'
-                         +   '<div>'
-                         +     '<div style="position:relative; height:16px; border-radius:3px; background:rgba(255,255,255,0.04); overflow:hidden;">'
-                         +       '<div style="position:absolute; left:0; top:0; height:100%; width:' + cfW.toFixed(1) + '%; background:rgba(148,163,184,0.55);"></div>'
-                         +       '<div style="position:absolute; left:0; top:0; height:100%; width:' + obsW.toFixed(1) + '%; background:' + (isHandoff ? '#ef4444' : isPeak ? '#22c55e' : '#14b8a6') + ';"></div>'
-                         +     '</div>'
-                         +     '<div style="display:flex; justify-content:space-between; margin-top:0.15rem; font-size:0.62rem;">'
-                         +       '<div style="color:#5eead4;"><strong>obs</strong> ' + w.obs_k.toFixed(1) + 'K</div>'
-                         +       '<div style="color:#94a3b8;"><strong>cf</strong> ' + w.cf_k.toFixed(1) + 'K</div>'
-                         +       (w.note ? '<div style="color:var(--text-secondary); font-style:italic; text-align:right; flex:1 1 auto; margin-left:0.6rem;">' + _jiqEsc(w.note) + '</div>' : '')
-                         +     '</div>'
-                         +   '</div>'
+                    var accent = w.handoff ? '#ef4444' : (w.peak ? '#22c55e' : (w.rel_wk > 3 ? '#94a3b8' : '#14b8a6'));
+                    var badge = w.peak ? ' 🟢' : (w.handoff ? ' 🔴' : '');
+                    return '<div style="padding:0.4rem 0.45rem; border-radius:5px; background:rgba(255,255,255,0.025); border-top:2px solid ' + accent + '; min-width:0;">'
+                         +   '<div style="font-size:0.66rem; font-weight:800;">' + _jiqEsc(w.wk_label) + badge + '</div>'
+                         +   '<div style="font-size:0.55rem; opacity:0.6; margin-bottom:0.2rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + _jiqEsc(w.wk_dates) + '</div>'
+                         +   '<div style="font-size:0.78rem; font-weight:800; color:' + accent + ';">' + w.obs_k.toFixed(1) + 'K</div>'
+                         +   '<div style="font-size:0.6rem; opacity:0.65; color:#94a3b8;">cf ' + w.cf_k.toFixed(1) + 'K</div>'
                          + '</div>';
-                  }).join('')
+                }).join('')
+                + '</div>';
+            var handoffNote = '';
+            for (var _hi = 0; _hi < curve.length; _hi++) {
+                if (curve[_hi].handoff && curve[_hi].note) { handoffNote = curve[_hi].note; break; }
+            }
+            var handoffCaption = handoffNote
+                ? '<div style="margin-top:0.55rem; padding:0.45rem 0.7rem; border-radius:5px; background:rgba(239,68,68,0.08); border-left:3px solid #ef4444; font-size:0.7rem; line-height:1.5; color:var(--text-primary);"><strong style="color:#fca5a5;">Handoff week detail —</strong> ' + _jiqEsc(handoffNote) + '</div>'
+                : '';
+            var chartHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">📉 Daily TVOD transactions — 17-day build, then the July 17 cliff</h4>'
+                + '<div style="padding:0.6rem 0.8rem; border-radius:7px; background:rgba(255,255,255,0.025); margin-bottom:0.85rem;">'
+                +   _obpTvodDailyChart(_obpTvodDaily)
+                +   handoffCaption
+                +   weeklyStripHtml
                 + '</div>';
 
             var platRows = (data.platform_share_actual || []).map(function(p) {
