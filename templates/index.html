@@ -69173,18 +69173,6 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                          + '</div>';
                   }).join('');
 
-            var gap = data.pvod_forecast_gap || {};
-            var gapHtml = '<div style="padding:0.75rem 0.9rem; border-radius:7px; margin-top:0.5rem; margin-bottom:0.85rem;'
-                +      ' background:rgba(239,68,68,0.10); border:1px solid rgba(239,68,68,0.32);">'
-                +   '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#fca5a5;">PVOD forecast gap</div>'
-                +   '<div style="display:flex; gap:1.5rem; align-items:baseline; flex-wrap:wrap; margin-top:0.35rem;">'
-                +     '<div><span style="opacity:0.7; font-size:0.7rem;">Forecast T-only</span> <strong style="font-size:1.05rem;">' + _jiqMicAbbrevM(gap.forecast_transactional_only_hh_m) + '</strong></div>'
-                +     '<div><span style="opacity:0.7; font-size:0.7rem;">Actual T-only</span> <strong style="font-size:1.05rem;">' + _jiqMicAbbrevM(gap.actual_transactional_only_hh_m) + '</strong></div>'
-                +     '<div><span style="opacity:0.7; font-size:0.7rem;">Gap</span> <strong style="font-size:1.05rem; color:#fca5a5;">−' + _jiqMicAbbrevM(gap.gap_hh_m) + ' (−' + gap.gap_pct.toFixed(1) + '%)</strong></div>'
-                +   '</div>'
-                +   '<div style="font-size:0.72rem; color:var(--text-secondary); font-style:italic; margin-top:0.35rem;">' + _jiqEsc(gap.note || '') + '</div>'
-                + '</div>';
-
             var readBox = '<div style="padding:0.75rem 0.9rem; border-radius:7px;'
                 +      ' background:linear-gradient(135deg, rgba(234,88,12,0.14) 0%, rgba(167,139,250,0.08) 100%);'
                 +      ' border:1px solid rgba(234,88,12,0.32);">'
@@ -69192,7 +69180,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.read || '') + '</div>'
                 + '</div>';
 
-            body.innerHTML = vennSvg + tilesHtml + sedHtml + defsHtml + gapHtml + readBox;
+            body.innerHTML = vennSvg + tilesHtml + sedHtml + defsHtml + readBox;
         }
 
         // ─── TAB 3: 👥 Audience profile ──────────────────────────────
