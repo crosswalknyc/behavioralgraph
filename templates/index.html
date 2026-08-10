@@ -69586,7 +69586,17 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             obp_industry: {
                 subtitle: 'Every vertically-integrated studio compresses to its owned service. No integrated studio in the sample approaches 17 days.',
                 studios: [
-                    { studio: 'Universal',       service: 'Peacock',      color: '#14b8a6', theatrical_range: '25-39 days',  tvod_range: '80-101 days', total_range: '119-120 days', tvod_min: 80, tvod_max: 101, total_min: 119, total_max: 120, footnote: '8 non-Focus titles, 2024-2026.' },
+                    { studio: 'Universal',       service: 'Peacock',      color: '#14b8a6', theatrical_range: '25-39 days',  tvod_range: '80-101 days', total_range: '119-120 days', tvod_min: 80, tvod_max: 101, total_min: 119, total_max: 120, footnote: '8 non-Focus titles, 2024-2026.',
+                      hover_titles: [
+                          'Despicable Me 4 — Illumination · 2024',
+                          'Twisters — Universal · 2024',
+                          'The Wild Robot — DreamWorks · 2024',
+                          'Wicked — Universal · 2024',
+                          'How to Train Your Dragon — Universal / DreamWorks · 2025',
+                          'Jurassic World Rebirth — Universal · 2025',
+                          'Wicked: For Good — Universal · 2025',
+                          "Five Nights at Freddy's 2 — Universal / Blumhouse · 2025"
+                      ] },
                     { studio: 'Disney',          service: 'Disney+',      color: '#3b82f6', theatrical_range: '53-67 days',  tvod_range: '36-43 days',  total_range: '89-105 days',  tvod_min: 36, tvod_max: 43,  total_min: 89,  total_max: 105, footnote: 'Inside Out 2, Cap America BNW, Lilo & Stitch, Zootopia 2, Hoppers.' },
                     { studio: 'Warner Bros.',    service: 'HBO Max',      color: '#a855f7', theatrical_range: '32-46 days',  tvod_range: '31-45 days',  total_range: '70-77 days',   tvod_min: 31, tvod_max: 45,  total_min: 70,  total_max: 77,  footnote: 'A Minecraft Movie, Sinners, Final Destination Bloodlines, Superman.' },
                     { studio: 'Paramount',       service: 'Paramount+',   color: '#0ea5e9', theatrical_range: '~32 days',    tvod_range: '~28-30 days', total_range: '~60 days',     tvod_min: 28, tvod_max: 30,  total_min: 60,  total_max: 60,  footnote: 'Gladiator II confirmed by panel signal; slate-average posture across the 2024-2026 sample.' },
@@ -70198,14 +70208,53 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             if (!body) return;
 
             var maxTvod = 105; // scale everything to 105 days for visual comparison
-            var studiosHtml = '<h4 style="font-size:0.85rem; margin:0.3rem 0 0.35rem;">🏢 Windowing ranges by studio</h4>'
+
+            // Renders a studio-row footnote. If hover_titles is present the
+            // footnote is a dashed-underline anchor with a floating panel
+            // that lists the counted titles on hover.
+            function _obpIndustryFootnote(s) {
+                if (!s.hover_titles || !s.hover_titles.length) {
+                    return '<div style="font-size:0.66rem; opacity:0.6; font-style:italic;">' + _jiqEsc(s.footnote) + '</div>';
+                }
+                var titleList = s.hover_titles.map(function(tt) {
+                    return '<li style="padding:2px 0;">' + _jiqEsc(tt) + '</li>';
+                }).join('');
+                return '<div style="font-size:0.66rem; opacity:0.75; font-style:italic;">'
+                     +   '<span class="jiq-obp-hoverable" style="position:relative; display:inline-block; border-bottom:1px dashed rgba(255,255,255,0.35); cursor:help;">'
+                     +     _jiqEsc(s.footnote)
+                     +     ' <span style="opacity:0.7; font-size:0.62rem; font-style:normal;">🛈</span>'
+                     +     '<span class="jiq-obp-hover-panel" style="'
+                     +       'position:absolute; left:0; top:100%; margin-top:6px; z-index:30;'
+                     +       ' min-width:280px; max-width:360px; padding:0.6rem 0.8rem; border-radius:7px;'
+                     +       ' background:rgba(15,23,42,0.98); border:1px solid ' + s.color + ';'
+                     +       ' box-shadow:0 8px 24px rgba(0,0,0,0.5);'
+                     +       ' font-style:normal; opacity:0; visibility:hidden; pointer-events:none;'
+                     +       ' transition:opacity 0.12s ease, visibility 0s linear 0.12s;'
+                     +       ' white-space:normal; text-align:left;'
+                     +     '">'
+                     +       '<div style="font-size:0.56rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:' + s.color + '; margin-bottom:0.3rem;">Titles counted (' + s.hover_titles.length + ')</div>'
+                     +       '<ul style="list-style:disc; margin:0; padding-left:1.05rem; font-size:0.72rem; color:var(--text-primary); line-height:1.55;">'
+                     +         titleList
+                     +       '</ul>'
+                     +     '</span>'
+                     +   '</span>'
+                     + '</div>';
+            }
+
+            var studiosHtml = '<style>'
+                +   '.jiq-obp-hoverable:hover .jiq-obp-hover-panel {'
+                +     ' opacity:1; visibility:visible; pointer-events:auto;'
+                +     ' transition:opacity 0.12s ease, visibility 0s linear 0s;'
+                +   ' }'
+                + '</style>'
+                + '<h4 style="font-size:0.85rem; margin:0.3rem 0 0.35rem;">🏢 Windowing ranges by studio</h4>'
                 + (data.studios || []).map(function(s) {
                     var leftPct = (s.tvod_min / maxTvod) * 100;
                     var widthPct = ((s.tvod_max - s.tvod_min) / maxTvod) * 100;
                     if (widthPct < 1.5) widthPct = 1.5;
                     return '<div style="padding:0.55rem 0.75rem; border-radius:6px; margin-bottom:0.4rem;'
                          +      ' background:' + (s.subject ? 'rgba(239,68,68,0.10)' : 'rgba(255,255,255,0.025)') + ';'
-                         +      ' border-left:3px solid ' + s.color + ';">'
+                         +      ' border-left:3px solid ' + s.color + '; overflow:visible;">'
                          +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:0.25rem;">'
                          +     '<div><strong style="font-size:0.86rem; color:' + s.color + ';">' + _jiqEsc(s.studio) + '</strong> <span style="font-size:0.68rem; opacity:0.65; margin-left:0.35rem;">→ ' + _jiqEsc(s.service) + '</span></div>'
                          +     '<div style="font-size:0.72rem; opacity:0.85;"><strong>TVOD</strong> ' + _jiqEsc(s.tvod_range) + ' &middot; <strong>Total</strong> ' + _jiqEsc(s.total_range) + '</div>'
@@ -70215,7 +70264,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                          +     '<div style="position:absolute; left:0; top:0; bottom:0; width:1px; background:rgba(255,255,255,0.15);"></div>'
                          +     '<div style="position:absolute; left:' + (28 / maxTvod * 100).toFixed(1) + '%; top:0; bottom:0; width:1px; background:rgba(239,68,68,0.35);"></div>'
                          +   '</div>'
-                         +   '<div style="font-size:0.66rem; opacity:0.6; font-style:italic;">' + _jiqEsc(s.footnote) + '</div>'
+                         +   _obpIndustryFootnote(s)
                          + '</div>';
                   }).join('')
                 + '<div style="font-size:0.66rem; opacity:0.6; margin-top:0.3rem;">Bars scaled 0-105 TVOD days. Faint red vertical = the 28-day industry-integrated floor set by Paramount / Gladiator II.</div>';
