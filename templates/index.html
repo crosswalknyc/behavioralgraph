@@ -68655,14 +68655,14 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             mic_content: {
                 subtitle: 'What else each cohort watches — genres, comps, streaming subs. The distance between the two audiences.',
                 genre_affinity: [
-                    { genre: 'Music biopics',        theatrical_idx: 218, transactional_only_idx: 168, both_idx: 246, note: 'Both cohorts over-index vs genpop, but theatrical is stronger.' },
-                    { genre: 'Prestige drama',       theatrical_idx: 174, transactional_only_idx:  92, both_idx: 187, note: 'Theatrical audience is a drama-first buyer. Transactional-only is not.' },
-                    { genre: 'Concert films / docs', theatrical_idx: 194, transactional_only_idx: 148, both_idx: 224, note: 'Music-first identity persists in both cohorts.' },
-                    { genre: 'Reality / celeb docs', theatrical_idx:  84, transactional_only_idx: 146, both_idx:  91, note: 'Transactional-only over-indexes on celebrity-focused unscripted content.' },
-                    { genre: 'Action / franchise',   theatrical_idx:  96, transactional_only_idx: 132, both_idx:  87, note: 'Transactional-only is a broader entertainment buyer.' },
-                    { genre: 'Comedy',               theatrical_idx: 104, transactional_only_idx: 118, both_idx: 108, note: 'Near-genpop across all three cohorts.' },
-                    { genre: 'Horror',               theatrical_idx:  72, transactional_only_idx: 128, both_idx:  81, note: 'Transactional-only skews toward genre content that plays best at home.' },
-                    { genre: 'Family / animated',    theatrical_idx: 148, transactional_only_idx: 104, both_idx: 162, note: 'Family-with-kids composition drives theatrical + double-dip lift.' }
+                    { genre: 'Music biopics',        theatrical_idx: 218, transactional_only_idx: 168, both_idx: 246, definition: 'Narrative feature films dramatizing the life of a real musician or band. Comps: Elvis (2022), Bohemian Rhapsody, Rocketman, Walk the Line, Straight Outta Compton, Respect.', note: 'Both cohorts over-index vs genpop, but theatrical is stronger.' },
+                    { genre: 'Prestige drama',       theatrical_idx: 174, transactional_only_idx:  92, both_idx: 187, definition: 'Awards-track, character-first adult dramas — Oscar-caliber narrative films and their limited-series analogs. Comps: Killers of the Flower Moon, Maestro, Oppenheimer, The Bear, Feud, Succession.', note: 'Theatrical audience is a drama-first buyer. Transactional-only is not.' },
+                    { genre: 'Concert films / docs', theatrical_idx: 194, transactional_only_idx: 148, both_idx: 224, definition: 'Feature-length concert recordings and music documentaries. Comps: Taylor Swift: The Eras Tour, Beyoncé: Renaissance, Summer of Soul, Get Back, Homecoming, Amy.', note: 'Music-first identity persists in both cohorts.' },
+                    { genre: 'Reality / celeb docs', theatrical_idx:  84, transactional_only_idx: 146, both_idx:  91, definition: 'Unscripted celebrity-focused programming: docu-series, tell-alls, and lifestyle reality. Comps: The Kardashians, Selena + Chef, Vanderpump Rules, Real Housewives, MTV Cribs.', note: 'Transactional-only over-indexes on celebrity-focused unscripted content.' },
+                    { genre: 'Action / franchise',   theatrical_idx:  96, transactional_only_idx: 132, both_idx:  87, definition: 'Wide-release action tentpoles and multi-installment IP. Comps: Marvel / DC, Fast & Furious, Mission: Impossible, John Wick, Bond, Jurassic World.', note: 'Transactional-only is a broader entertainment buyer.' },
+                    { genre: 'Comedy',               theatrical_idx: 104, transactional_only_idx: 118, both_idx: 108, definition: 'Broad theatrical and TV comedy — studio comedies, sitcoms, and stand-up specials. Comps: Bridesmaids, Barbie, No Hard Feelings, The Office, Nate Bargatze / Ali Wong specials.', note: 'Near-genpop across all three cohorts.' },
+                    { genre: 'Horror',               theatrical_idx:  72, transactional_only_idx: 128, both_idx:  81, definition: 'Theatrical and streaming horror, supernatural, and slasher content. Comps: M3GAN, The Nun II, Longlegs, Smile, Terrifier, Blumhouse catalog.', note: 'Transactional-only skews toward genre content that plays best at home.' },
+                    { genre: 'Family / animated',    theatrical_idx: 148, transactional_only_idx: 104, both_idx: 162, definition: 'Kid- and family-co-viewing content: Disney / Pixar / Illumination animated features plus live-action family. Comps: Inside Out 2, Wish, Elemental, The Super Mario Bros. Movie, Kung Fu Panda 4.', note: 'Family-with-kids composition drives theatrical + double-dip lift.' }
                 ],
                 top_streaming_subs: [
                     { platform: 'Netflix',             theatrical_pct: 82.6, transactional_only_pct: 74.2, both_pct: 86.4 },
@@ -69265,12 +69265,16 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 +     '<th style="padding:6px 10px; font-size:0.58rem; opacity:0.7;">Note</th>'
                 +   '</tr></thead><tbody>'
                 + (data.genre_affinity || []).map(function(g) {
-                    return '<tr style="border-bottom:1px solid var(--border-color);">'
-                         +   '<td style="padding:6px 10px; font-weight:700; font-size:0.78rem;">' + _jiqEsc(g.genre) + '</td>'
-                         +   '<td style="padding:6px 10px; text-align:right; font-weight:800; color:' + idxColor(g.theatrical_idx) + ';">' + g.theatrical_idx + '</td>'
-                         +   '<td style="padding:6px 10px; text-align:right; font-weight:800; color:' + idxColor(g.transactional_only_idx) + ';">' + g.transactional_only_idx + '</td>'
-                         +   '<td style="padding:6px 10px; text-align:right; font-weight:800; color:' + idxColor(g.both_idx) + ';">' + g.both_idx + '</td>'
-                         +   '<td style="padding:6px 10px; font-size:0.7rem; color:var(--text-secondary); font-style:italic;">' + _jiqEsc(g.note || '') + '</td>'
+                    var defBlock = g.definition ? ('<div style="font-size:0.66rem; font-weight:500; color:var(--text-secondary); margin-top:0.2rem; line-height:1.5; max-width:32rem;">' + _jiqEsc(g.definition) + '</div>') : '';
+                    return '<tr style="border-bottom:1px solid var(--border-color); vertical-align:top;">'
+                         +   '<td style="padding:8px 10px;">'
+                         +     '<div style="font-weight:700; font-size:0.78rem;">' + _jiqEsc(g.genre) + '</div>'
+                         +     defBlock
+                         +   '</td>'
+                         +   '<td style="padding:8px 10px; text-align:right; font-weight:800; color:' + idxColor(g.theatrical_idx) + ';">' + g.theatrical_idx + '</td>'
+                         +   '<td style="padding:8px 10px; text-align:right; font-weight:800; color:' + idxColor(g.transactional_only_idx) + ';">' + g.transactional_only_idx + '</td>'
+                         +   '<td style="padding:8px 10px; text-align:right; font-weight:800; color:' + idxColor(g.both_idx) + ';">' + g.both_idx + '</td>'
+                         +   '<td style="padding:8px 10px; font-size:0.7rem; color:var(--text-secondary); font-style:italic;">' + _jiqEsc(g.note || '') + '</td>'
                          + '</tr>';
                   }).join('')
                 + '</tbody></table></div>';
