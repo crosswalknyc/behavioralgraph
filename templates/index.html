@@ -70644,7 +70644,48 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
 
             var titles = (data.titles || []).slice().sort(function(a, b) { return b.velocity_pct_of_peak - a.velocity_pct_of_peak; });
             var maxV = 100;
+
+            // Slate averages across every UFEG title in the sample.
+            //   avgIncl = arithmetic mean including Obsession
+            //   avgExcl = arithmetic mean with the subject removed
+            // The delta / multiplier quantify how much one title moves
+            // the slate mean, which is the point of the whole tab.
+            var allTitles = data.titles || [];
+            var avgIncl = allTitles.length
+                ? allTitles.reduce(function(s, t) { return s + (t.velocity_pct_of_peak || 0); }, 0) / allTitles.length
+                : 0;
+            var nonSubjTitles = allTitles.filter(function(t) { return !t.subject; });
+            var avgExcl = nonSubjTitles.length
+                ? nonSubjTitles.reduce(function(s, t) { return s + (t.velocity_pct_of_peak || 0); }, 0) / nonSubjTitles.length
+                : 0;
+            var avgDelta = avgIncl - avgExcl;
+            var avgMult  = (avgExcl > 0) ? (avgIncl / avgExcl) : 0;
+
+            function _obpDemandAvgRow(label, valPct, countLabel, color) {
+                var w = (valPct / maxV) * 100;
+                if (w > 100) w = 100;
+                return '<div style="padding:0.5rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.035); border:1.5px dashed ' + color + '; margin-bottom:0.35rem;">'
+                     +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:0.3rem; flex-wrap:wrap;">'
+                     +     '<div>'
+                     +       '<span style="font-size:0.55rem; padding:2px 7px; margin-right:6px; background:' + color + '; color:#0b1220; border-radius:99px; font-weight:900; letter-spacing:0.06em;">SLATE AVG</span>'
+                     +       '<strong style="font-size:0.86rem; color:' + color + ';">' + _jiqEsc(label) + '</strong>'
+                     +       ' <span style="font-size:0.66rem; opacity:0.7; margin-left:0.35rem;">' + _jiqEsc(countLabel) + '</span>'
+                     +     '</div>'
+                     +     '<div style="font-weight:900; font-size:1.15rem; color:' + color + ';">' + valPct.toFixed(1) + '%</div>'
+                     +   '</div>'
+                     +   '<div style="height:8px; border-radius:3px; background:rgba(255,255,255,0.05); overflow:hidden;">'
+                     +     '<div style="height:100%; width:' + w.toFixed(1) + '%; background:' + color + '; border-radius:3px;"></div>'
+                     +   '</div>'
+                     + '</div>';
+            }
+            var avgRowsHtml = _obpDemandAvgRow('Slate avg incl. Obsession', avgIncl, allTitles.length + ' titles', '#fbbf24')
+                            + _obpDemandAvgRow('Slate avg excl. Obsession', avgExcl, nonSubjTitles.length + ' titles', '#94a3b8')
+                            + '<div style="padding:0.45rem 0.7rem; border-radius:5px; background:rgba(251,191,36,0.09); border-left:3px solid #fbbf24; font-size:0.72rem; line-height:1.5; margin-bottom:0.55rem;">'
+                            +   '<strong style="color:#fbbf24;">+' + avgDelta.toFixed(1) + 'pp pull-up</strong> — including Obsession lifts the slate average from ' + avgExcl.toFixed(1) + '% to ' + avgIncl.toFixed(1) + '% (' + avgMult.toFixed(1) + '× swing from one title).'
+                            + '</div>';
+
             var chartHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">📊 % of peak weekly velocity remaining on SVOD handoff day</h4>'
+                + avgRowsHtml
                 + titles.map(function(t) {
                     var w = ((t.velocity_pct_of_peak || 0) / maxV) * 100;
                     var subjectBadge = t.subject ? ' <span style="font-size:0.55rem; padding:1px 5px; margin-left:4px; background:#ef4444; color:#fff; border-radius:99px; font-weight:800;">SUBJECT</span>' : '';
