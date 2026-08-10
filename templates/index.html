@@ -69910,6 +69910,8 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             { id: 'comp',        cardId: 'jiqObpCompCard',        emoji: '👥', label: 'Pull 5 · Comp',   sub: 'canonical demos + playback' }
         ];
         var _jiqObpActiveTab = null;
+        // UFEG window record sort state: null key means default order.
+        var _jiqObpWindowSort = { key: null, dir: null };
         function _jiqObpRenderTabBar() {
             var bar = document.getElementById('jiqObpTabBar');
             if (!bar) return;
@@ -70044,65 +70046,143 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             var body = document.getElementById('jiqObpWindowBody');
             if (!body) return;
 
-            var rows = (data.titles || []).map(function(t) {
-                var rowBg = '';
-                var titleColor = 'var(--text-primary)';
-                var titleWeight = '600';
-                if (t.subject) { rowBg = 'background:rgba(239,68,68,0.08);'; titleColor = '#fca5a5'; titleWeight = '900'; }
-                else if (t.focus) { rowBg = 'background:rgba(168,85,247,0.05);'; titleColor = '#c4b5fd'; titleWeight = '700'; }
-                var tvodDaysCell = (t.tvod_days == null) ? '<span style="opacity:0.55;">n/a</span>' : t.tvod_days;
-                var svodCell     = (t.svod_total == null) ? '<span style="opacity:0.55;">n/a</span>' : t.svod_total;
-                return '<tr style="border-bottom:1px solid var(--border-color); ' + rowBg + '">'
-                     +   '<td style="padding:6px 10px; font-weight:' + titleWeight + '; font-size:0.78rem; color:' + titleColor + ';">' + _jiqEsc(t.title) + (t.subject ? ' <span style="font-size:0.55rem; padding:1px 5px; margin-left:4px; background:#ef4444; color:#fff; border-radius:99px; font-weight:800;">SUBJECT</span>' : '') + '</td>'
-                     +   '<td style="padding:6px 10px; font-size:0.72rem; color:var(--text-secondary);">' + _jiqEsc(t.studio) + '</td>'
-                     +   '<td style="padding:6px 10px; text-align:right; font-weight:700; font-size:0.78rem;">$' + t.dom_bo_m + 'M</td>'
-                     +   '<td style="padding:6px 10px; text-align:right; font-size:0.74rem; opacity:0.85;">' + _jiqEsc(t.theatrical) + '</td>'
-                     +   '<td style="padding:6px 10px; text-align:center; font-weight:800; color:' + (t.subject ? '#22c55e' : 'var(--text-primary)') + ';">' + t.tv_days + 'd</td>'
-                     +   '<td style="padding:6px 10px; text-align:right; font-size:0.74rem; opacity:0.85;">' + _jiqEsc(t.tvod) + '</td>'
-                     +   '<td style="padding:6px 10px; text-align:center; font-weight:800; color:' + (t.subject ? '#ef4444' : 'var(--text-primary)') + ';">' + tvodDaysCell + (t.tvod_days == null ? '' : 'd') + '</td>'
-                     +   '<td style="padding:6px 10px; text-align:right; font-size:0.74rem; opacity:0.85;">' + _jiqEsc(t.svod) + '</td>'
-                     +   '<td style="padding:6px 10px; text-align:center; font-weight:900; font-size:0.85rem; color:' + (t.subject ? '#ef4444' : (t.focus ? '#c4b5fd' : '#5eead4')) + ';">' + svodCell + (t.svod_total == null ? '' : 'd') + '</td>'
-                     + '</tr>';
-            }).join('');
+            // Column contract: order + label + alignment + how to pull a
+            // sort value out of a title row. `type` drives comparison so
+            // dates and numbers don't get compared as strings.
+            var COLS = [
+                { key: 'title',      label: 'Title',      align: 'left',   type: 'string' },
+                { key: 'studio',     label: 'Studio',     align: 'left',   type: 'string' },
+                { key: 'dom_bo_m',   label: 'Dom BO',     align: 'right',  type: 'number' },
+                { key: 'theatrical', label: 'Theatrical', align: 'right',  type: 'date'   },
+                { key: 'tv_days',    label: 'Days',       align: 'center', type: 'number' },
+                { key: 'tvod',       label: 'TVOD',       align: 'right',  type: 'date'   },
+                { key: 'tvod_days',  label: 'Days',       align: 'center', type: 'number' },
+                { key: 'svod',       label: 'Peacock',    align: 'right',  type: 'date'   },
+                { key: 'svod_total', label: 'Total',      align: 'center', type: 'number' }
+            ];
 
-            var tableHtml = '<div style="overflow-x:auto; margin-bottom:0.9rem;"><table style="width:100%; border-collapse:collapse; font-size:0.76rem;">'
-                +   '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
-                +     '<th style="padding:6px 10px; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Title</th>'
-                +     '<th style="padding:6px 10px; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Studio</th>'
-                +     '<th style="padding:6px 10px; text-align:right; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Dom BO</th>'
-                +     '<th style="padding:6px 10px; text-align:right; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Theatrical</th>'
-                +     '<th style="padding:6px 10px; text-align:center; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Days</th>'
-                +     '<th style="padding:6px 10px; text-align:right; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">TVOD</th>'
-                +     '<th style="padding:6px 10px; text-align:center; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Days</th>'
-                +     '<th style="padding:6px 10px; text-align:right; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Peacock</th>'
-                +     '<th style="padding:6px 10px; text-align:center; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Total</th>'
-                +   '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+            function _sortVal(t, col) {
+                var v = t[col.key];
+                if (v === null || v === undefined || v === '') {
+                    return (col.type === 'string') ? '\uffff' : Number.POSITIVE_INFINITY;
+                }
+                if (col.type === 'date') {
+                    var parsed = Date.parse(v);
+                    return isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
+                }
+                if (col.type === 'number') {
+                    var n = Number(v);
+                    return isNaN(n) ? Number.POSITIVE_INFINITY : n;
+                }
+                return String(v).toLowerCase();
+            }
 
-            var m = data.medians || {};
-            var mediansHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">📊 Medians (2024-2026 window)</h4>'
-                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
-                + [m.universal_group_24_26, m.focus_excl_obsession, m.obsession].filter(Boolean).map(function(row) {
-                    var isSubject = (row.label === 'Obsession');
-                    var accent = isSubject ? '#ef4444' : (row.label.indexOf('Focus') !== -1 ? '#a855f7' : '#14b8a6');
-                    return '<div style="padding:0.65rem 0.8rem; border-radius:7px; background:rgba(255,255,255,0.025); border-left:3px solid ' + accent + ';">'
-                         +   '<div style="font-size:0.62rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:' + accent + ';">' + _jiqEsc(row.label) + '</div>'
-                         +   '<div style="display:flex; gap:0.85rem; margin-top:0.25rem; flex-wrap:wrap;">'
-                         +     '<div><span style="opacity:0.7; font-size:0.66rem;">Theatrical</span> <strong style="font-size:0.9rem;">' + row.tv_days + 'd</strong></div>'
-                         +     '<div><span style="opacity:0.7; font-size:0.66rem;">TVOD</span> <strong style="font-size:0.9rem;">' + row.tvod_days + 'd</strong></div>'
-                         +     '<div><span style="opacity:0.7; font-size:0.66rem;">Total</span> <strong style="font-size:0.9rem;">' + row.svod_total + 'd</strong></div>'
-                         +   '</div>'
-                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.2rem;">n=' + row.titles + ' · avg $' + row.dom_bo_m + 'M dom BO</div>'
-                         + '</div>';
-                  }).join('')
-                + '</div>';
+            function paint() {
+                var sort = _jiqObpWindowSort || { key: null, dir: null };
+                var titles = (data.titles || []).slice();
+                if (sort.key) {
+                    var col = null;
+                    for (var i = 0; i < COLS.length; i++) {
+                        if (COLS[i].key === sort.key) { col = COLS[i]; break; }
+                    }
+                    if (col) {
+                        var mul = (sort.dir === 'desc') ? -1 : 1;
+                        titles.sort(function(a, b) {
+                            var av = _sortVal(a, col);
+                            var bv = _sortVal(b, col);
+                            if (av < bv) return -1 * mul;
+                            if (av > bv) return  1 * mul;
+                            return 0;
+                        });
+                    }
+                }
 
-            var readBox = '<div style="padding:0.75rem 0.9rem; border-radius:7px;'
-                +      ' background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);">'
-                +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.2rem;">Read</div>'
-                +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.read || '') + '</div>'
-                + '</div>';
+                var rows = titles.map(function(t) {
+                    var rowBg = '';
+                    var titleColor = 'var(--text-primary)';
+                    var titleWeight = '600';
+                    if (t.subject) { rowBg = 'background:rgba(239,68,68,0.08);'; titleColor = '#fca5a5'; titleWeight = '900'; }
+                    else if (t.focus) { rowBg = 'background:rgba(168,85,247,0.05);'; titleColor = '#c4b5fd'; titleWeight = '700'; }
+                    var tvodDaysCell = (t.tvod_days == null) ? '<span style="opacity:0.55;">n/a</span>' : t.tvod_days;
+                    var svodCell     = (t.svod_total == null) ? '<span style="opacity:0.55;">n/a</span>' : t.svod_total;
+                    return '<tr style="border-bottom:1px solid var(--border-color); ' + rowBg + '">'
+                         +   '<td style="padding:6px 10px; font-weight:' + titleWeight + '; font-size:0.78rem; color:' + titleColor + ';">' + _jiqEsc(t.title) + (t.subject ? ' <span style="font-size:0.55rem; padding:1px 5px; margin-left:4px; background:#ef4444; color:#fff; border-radius:99px; font-weight:800;">SUBJECT</span>' : '') + '</td>'
+                         +   '<td style="padding:6px 10px; font-size:0.72rem; color:var(--text-secondary);">' + _jiqEsc(t.studio) + '</td>'
+                         +   '<td style="padding:6px 10px; text-align:right; font-weight:700; font-size:0.78rem;">$' + t.dom_bo_m + 'M</td>'
+                         +   '<td style="padding:6px 10px; text-align:right; font-size:0.74rem; opacity:0.85;">' + _jiqEsc(t.theatrical) + '</td>'
+                         +   '<td style="padding:6px 10px; text-align:center; font-weight:800; color:' + (t.subject ? '#22c55e' : 'var(--text-primary)') + ';">' + t.tv_days + 'd</td>'
+                         +   '<td style="padding:6px 10px; text-align:right; font-size:0.74rem; opacity:0.85;">' + _jiqEsc(t.tvod) + '</td>'
+                         +   '<td style="padding:6px 10px; text-align:center; font-weight:800; color:' + (t.subject ? '#ef4444' : 'var(--text-primary)') + ';">' + tvodDaysCell + (t.tvod_days == null ? '' : 'd') + '</td>'
+                         +   '<td style="padding:6px 10px; text-align:right; font-size:0.74rem; opacity:0.85;">' + _jiqEsc(t.svod) + '</td>'
+                         +   '<td style="padding:6px 10px; text-align:center; font-weight:900; font-size:0.85rem; color:' + (t.subject ? '#ef4444' : (t.focus ? '#c4b5fd' : '#5eead4')) + ';">' + svodCell + (t.svod_total == null ? '' : 'd') + '</td>'
+                         + '</tr>';
+                }).join('');
 
-            body.innerHTML = tableHtml + mediansHtml + readBox;
+                var headHtml = COLS.map(function(c) {
+                    var alignRule = (c.align === 'left') ? '' : ('text-align:' + c.align + '; ');
+                    var isActive = (sort.key === c.key);
+                    var arrow = '';
+                    if (isActive) {
+                        arrow = ' <span style="opacity:0.9; font-size:0.62rem;">' + (sort.dir === 'desc' ? '▼' : '▲') + '</span>';
+                    } else {
+                        arrow = ' <span style="opacity:0.25; font-size:0.62rem;">↕</span>';
+                    }
+                    var activeStyle = isActive ? 'opacity:1; color:#5eead4; ' : 'opacity:0.7; ';
+                    return '<th data-obpwindow-sort="' + c.key + '"'
+                         +      ' title="Click to sort"'
+                         +      ' style="padding:6px 10px; font-size:0.58rem; text-transform:uppercase; ' + alignRule + activeStyle + 'cursor:pointer; user-select:none; white-space:nowrap;">'
+                         +   _jiqEsc(c.label) + arrow
+                         + '</th>';
+                }).join('');
+
+                var tableHtml = '<div style="overflow-x:auto; margin-bottom:0.9rem;"><table style="width:100%; border-collapse:collapse; font-size:0.76rem;">'
+                    +   '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
+                    +     headHtml
+                    +   '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+
+                var m = data.medians || {};
+                var mediansHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">📊 Medians (2024-2026 window)</h4>'
+                    + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                    + [m.universal_group_24_26, m.focus_excl_obsession, m.obsession].filter(Boolean).map(function(row) {
+                        var isSubject = (row.label === 'Obsession');
+                        var accent = isSubject ? '#ef4444' : (row.label.indexOf('Focus') !== -1 ? '#a855f7' : '#14b8a6');
+                        return '<div style="padding:0.65rem 0.8rem; border-radius:7px; background:rgba(255,255,255,0.025); border-left:3px solid ' + accent + ';">'
+                             +   '<div style="font-size:0.62rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:' + accent + ';">' + _jiqEsc(row.label) + '</div>'
+                             +   '<div style="display:flex; gap:0.85rem; margin-top:0.25rem; flex-wrap:wrap;">'
+                             +     '<div><span style="opacity:0.7; font-size:0.66rem;">Theatrical</span> <strong style="font-size:0.9rem;">' + row.tv_days + 'd</strong></div>'
+                             +     '<div><span style="opacity:0.7; font-size:0.66rem;">TVOD</span> <strong style="font-size:0.9rem;">' + row.tvod_days + 'd</strong></div>'
+                             +     '<div><span style="opacity:0.7; font-size:0.66rem;">Total</span> <strong style="font-size:0.9rem;">' + row.svod_total + 'd</strong></div>'
+                             +   '</div>'
+                             +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.2rem;">n=' + row.titles + ' · avg $' + row.dom_bo_m + 'M dom BO</div>'
+                             + '</div>';
+                      }).join('')
+                    + '</div>';
+
+                var readBox = '<div style="padding:0.75rem 0.9rem; border-radius:7px;'
+                    +      ' background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);">'
+                    +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.2rem;">Read</div>'
+                    +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.read || '') + '</div>'
+                    + '</div>';
+
+                body.innerHTML = tableHtml + mediansHtml + readBox;
+
+                // Wire click-to-sort. Cycle: unsorted -> asc -> desc -> unsorted.
+                var ths = body.querySelectorAll('th[data-obpwindow-sort]');
+                for (var j = 0; j < ths.length; j++) {
+                    (function(th) {
+                        th.addEventListener('click', function() {
+                            var k = th.getAttribute('data-obpwindow-sort');
+                            var cur = _jiqObpWindowSort || { key: null, dir: null };
+                            if (cur.key !== k)          _jiqObpWindowSort = { key: k, dir: 'asc' };
+                            else if (cur.dir === 'asc') _jiqObpWindowSort = { key: k, dir: 'desc' };
+                            else                        _jiqObpWindowSort = { key: null, dir: null };
+                            paint();
+                        });
+                    })(ths[j]);
+                }
+            }
+
+            paint();
         }
 
         // ─── TAB 3: 🏢 Industry Practice ─────────────────────────────
