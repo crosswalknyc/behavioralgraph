@@ -94473,15 +94473,27 @@
             const el = document.getElementById('dashBrandNameHeader');
             if (!el) return;
             const current = (el.textContent || '').trim();
-            // Cache the base title on first call (or when no suffix is
-            // currently applied). Strip any pre-existing " - X" suffix
-            // when re-caching so we always store the bare name.
+            // Cache the base title on first call. Strip a trailing " - X"
+            // suffix so we store the bare name - EXCEPT when that suffix is a
+            // base-universe descriptor ("Total Universe"). That descriptor is
+            // part of the profile's identity (e.g. "Karol G - Total Universe")
+            // and must stay in the big green header even when 0/2+ cohorts are
+            // visible, so it is kept as the cached base.
             if (!el.dataset.baseTitle) {
-                el.dataset.baseTitle = current.replace(/\s+-\s+.+$/, '').trim();
+                const m = current.match(/^(.*?)\s+-\s+(.+)$/);
+                el.dataset.baseTitle = (m && !_isBaseUniverseSuffix(m[2]))
+                    ? m[1].trim()
+                    : current;
             }
             const base = el.dataset.baseTitle || current;
-            if (cohorts.length === 1) {
-                el.textContent = base + ' - ' + cohorts[0].label;
+            if (cohorts.length === 1 && cohorts[0].label) {
+                const label = String(cohorts[0].label);
+                // Don't double the descriptor when the base already ends with
+                // this exact label (base "Karol G - Total Universe" + cohort
+                // "Total Universe" -> stays "Karol G - Total Universe").
+                const endsWithLabel = new RegExp('\\s-\\s' +
+                    label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i').test(base);
+                el.textContent = endsWithLabel ? base : (base + ' - ' + label);
             } else {
                 el.textContent = base;
             }
@@ -97492,7 +97504,9 @@
             let html = '';
             openProfileTabs.forEach((tab, index) => {
                 const isActive = tab.id === activeProfileTabId;
-                const shortName = tab.name.length > 20 ? tab.name.substring(0, 18) + '...' : tab.name;
+                const _tabDisplayName = (typeof _stripBaseUniverseSuffix === 'function')
+                    ? _stripBaseUniverseSuffix(tab.name) : tab.name;
+                const shortName = _tabDisplayName.length > 20 ? _tabDisplayName.substring(0, 18) + '...' : _tabDisplayName;
                 const safeId = tabIdAttr(tab.id);
                 html += `
                     <div class="profile-tab ${isActive ? 'active' : ''}" 
@@ -119029,6 +119043,17 @@
         // group's base run so it is picked by _pickBaseRun and de-duplicated.
         function _isBaseUniverseSuffix(suffix) {
             return /^total universe(\s+\d{4})?$/i.test(_normalizeWhitespaceName(suffix || ''));
+        }
+
+        // Strip a trailing "- Total Universe" (the base-universe descriptor)
+        // from a display name so the compact open-tab chip shows the canonical
+        // subject ("Karol G - Total Universe" -> "Karol G"). The big green
+        // header keeps the full descriptor; only the tab marker is shortened.
+        function _stripBaseUniverseSuffix(name) {
+            const s = _normalizeWhitespaceName(name || '');
+            const m = s.match(/^(.*?)\s+-\s+(.+)$/);
+            if (m && _isBaseUniverseSuffix(m[2])) return _normalizeWhitespaceName(m[1]);
+            return s;
         }
 
         function getProfileSuffixInfo(profile) {
