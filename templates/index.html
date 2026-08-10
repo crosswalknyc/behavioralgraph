@@ -68538,6 +68538,33 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     { id: 'both',               label: 'Both (double-dip)',  hh_m: 1.05, definition: 'Theatrical ticket AND ≥$0.99 SKU on a transactional VOD platform in the 22-wk window.',                                                                     color: '#a78bfa' },
                     { id: 'transactional_only', label: 'Transactional only', hh_m: 1.35, definition: 'One or more $0.99+ SKUs on Google Play, Apple TV, Prime Video, YouTube, Vudu, or Xfinity. No prior theatrical ticket.',                                    color: '#ea580c' }
                 ],
+                special_edition: {
+                    // SKU-level split of the 2.40M transactional cohort.
+                    // Standard = $19.99 rental / $24.99 buy on all platforms.
+                    // Special Edition + digital photo book = $29.99 / $34.99
+                    // premium SKU, bundled with a 40-page digital photo book
+                    // (concert stills + candid archival photos + producer
+                    // liner notes). Available on Prime Video, Apple TV, and
+                    // Fandango at Home; not carried on YouTube or Xfinity.
+                    total_transactional_hh_m: 2.40,
+                    standard_edition_hh_m: 1.83,
+                    special_edition_hh_m: 0.57,
+                    special_edition_pct_of_transactional: 23.7,
+                    standard_edition_pct_of_transactional: 76.3,
+                    sku_price_standard: '$19.99 rent / $24.99 buy',
+                    sku_price_special: '$29.99 rent / $34.99 buy',
+                    sku_platforms: 'Prime Video, Apple TV, Fandango at Home',
+                    within_special_edition: {
+                        double_dip_hh_m: 0.37,
+                        double_dip_pct: 64.9,
+                        transactional_only_hh_m: 0.20,
+                        transactional_only_pct: 35.1
+                    },
+                    overall_double_dip_pct: 43.8,
+                    special_edition_double_dip_lift_pp: 21.1,
+                    special_edition_share_of_double_dip_pct: 35.2,
+                    read: 'The Special Edition + digital photo book SKU captured 23.7% of transactional HHs — 570K households. 65% of those buyers had already bought a theatrical ticket, vs 43.8% overall — a +21pp double-dip lift. The photo-book bundle sold disproportionately to fans who saw the film first (the physical-media collector pattern), not to new-to-Michael HHs. Roughly one in three double-dip households paid the premium for the collector SKU.'
+                },
                 pvod_forecast_gap: {
                     forecast_transactional_only_hh_m: 3.40,
                     actual_transactional_only_hh_m: 1.35,
@@ -69088,6 +69115,53 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                   }).join('')
                 + '</div>';
 
+            // ── Special Edition + photo book breakdown ─────────────────
+            var se = data.special_edition || null;
+            var sedHtml = '';
+            if (se) {
+                var sePct = (se.special_edition_pct_of_transactional || 0);
+                var stdPct = (se.standard_edition_pct_of_transactional || 0);
+                var wse = se.within_special_edition || {};
+                sedHtml = '<h4 style="font-size:0.85rem; margin:0.85rem 0 0.35rem;">📖 Special Edition + digital photo book — the fan SKU</h4>'
+                    + '<div style="padding:0.85rem 1rem; border-radius:8px; margin-bottom:0.85rem; background:rgba(167,139,250,0.06); border:1px solid rgba(167,139,250,0.28);">'
+                    +   '<div style="font-size:0.72rem; opacity:0.8; margin-bottom:0.55rem; line-height:1.5;">'
+                    +     'Standard SKU · <strong>' + _jiqEsc(se.sku_price_standard) + '</strong> · all transactional platforms. '
+                    +     'Special Edition SKU · <strong>' + _jiqEsc(se.sku_price_special) + '</strong> · bundled 40-page digital photo book '
+                    +     '(concert stills + archival photos + producer liner notes) · ' + _jiqEsc(se.sku_platforms) + '.'
+                    +   '</div>'
+                    // Stacked bar: standard vs special edition split of transactional
+                    +   '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.25rem;">SKU mix within 2.40M transactional HHs</div>'
+                    +   '<div style="display:flex; height:26px; border-radius:4px; overflow:hidden; margin-bottom:0.35rem;">'
+                    +     '<div style="width:' + stdPct.toFixed(1) + '%; background:rgba(234,88,12,0.55); display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:800; color:#fff;">Standard &middot; ' + stdPct.toFixed(1) + '%</div>'
+                    +     '<div style="width:' + sePct.toFixed(1) + '%; background:rgba(167,139,250,0.75); display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:800; color:#fff;">SE &middot; ' + sePct.toFixed(1) + '%</div>'
+                    +   '</div>'
+                    +   '<div style="display:flex; justify-content:space-between; font-size:0.66rem; opacity:0.75; margin-bottom:0.85rem;">'
+                    +     '<div><strong style="color:#fdba74;">' + _jiqMicAbbrevM(se.standard_edition_hh_m) + '</strong> standard HHs</div>'
+                    +     '<div><strong style="color:#c4b5fd;">' + _jiqMicAbbrevM(se.special_edition_hh_m) + '</strong> SE HHs</div>'
+                    +   '</div>'
+                    // Within-SE breakdown (2 hero stats + 1 supporting)
+                    +   '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.55rem;">'
+                    +     '<div style="padding:0.65rem 0.75rem; border-radius:6px; background:rgba(167,139,250,0.10); border-left:3px solid #a78bfa;">'
+                    +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800;">SE buyers who also bought a ticket</div>'
+                    +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.15rem; color:#c4b5fd;">' + wse.double_dip_pct.toFixed(1) + '%</div>'
+                    +       '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.1rem;">' + _jiqMicAbbrevM(wse.double_dip_hh_m) + ' HHs · vs ' + se.overall_double_dip_pct.toFixed(1) + '% overall (+' + se.special_edition_double_dip_lift_pp.toFixed(1) + 'pp)</div>'
+                    +     '</div>'
+                    +     '<div style="padding:0.65rem 0.75rem; border-radius:6px; background:rgba(234,88,12,0.10); border-left:3px solid #ea580c;">'
+                    +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800;">SE buyers who skipped theaters</div>'
+                    +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.15rem; color:#fdba74;">' + wse.transactional_only_pct.toFixed(1) + '%</div>'
+                    +       '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.1rem;">' + _jiqMicAbbrevM(wse.transactional_only_hh_m) + ' HHs · trans-only w/ SE upgrade</div>'
+                    +     '</div>'
+                    +     '<div style="padding:0.65rem 0.75rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #94a3b8;">'
+                    +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800;">SE share of double-dip cohort</div>'
+                    +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.15rem; color:#e2e8f0;">' + se.special_edition_share_of_double_dip_pct.toFixed(1) + '%</div>'
+                    +       '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.1rem;">1 in 3 double-dip HHs paid the SE premium</div>'
+                    +     '</div>'
+                    +   '</div>'
+                    // Read line
+                    +   '<div style="font-size:0.72rem; color:var(--text-secondary); font-style:italic; margin-top:0.65rem; line-height:1.55;">' + _jiqEsc(se.read || '') + '</div>'
+                    + '</div>';
+            }
+
             var defsHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.3rem;">🧾 Cohort definitions</h4>'
                 + (data.cohort_definitions || []).map(function(c) {
                     return '<div style="padding:0.55rem 0.75rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + c.color + '; margin-bottom:0.35rem;">'
@@ -69118,7 +69192,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.read || '') + '</div>'
                 + '</div>';
 
-            body.innerHTML = vennSvg + tilesHtml + defsHtml + gapHtml + readBox;
+            body.innerHTML = vennSvg + tilesHtml + sedHtml + defsHtml + gapHtml + readBox;
         }
 
         // ─── TAB 3: 👥 Audience profile ──────────────────────────────
