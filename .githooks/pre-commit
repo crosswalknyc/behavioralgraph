@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Reject commits that break templates/index.html invariants.
+#
+# Enable per-clone (once): scripts/setup_git_hooks.sh
+#     -> runs: git config core.hooksPath .githooks
+#
+# What this catches (see scripts/validate_index_html.py for details):
+#   - tail truncation (file no longer ends with </html>)
+#   - <script> tag imbalance (dashboard freeze at 0%)
+#   - missing critical DOM ids / function names that have been silently
+#     dropped by past feature commits (mobile layer, boot handlers, etc.)
+#
+# Bypass in emergencies with `git commit --no-verify`, but the CI Action
+# (.github/workflows/validate-index-html.yml) will still catch it on push.
+
+set -eu
+
+# Only fire when templates/index.html is actually staged.
+if ! git diff --cached --name-only | grep -qE '^templates/index\.html$'; then
+    exit 0
+fi
+
+echo "[pre-commit] templates/index.html is staged; running validator..."
+
+# The validator prints its own errors; we just need to propagate exit.
+if ! python3 scripts/validate_index_html.py; then
+    echo ""
+    echo "[pre-commit] COMMIT BLOCKED."
+    echo "[pre-commit] Fix the errors above, re-stage, and commit again."
+    echo "[pre-commit] To bypass (not recommended), rerun with --no-verify."
+    exit 1
+fi
+
+exit 0

@@ -1,0 +1,43 @@
+# Enforces templates/index.html invariants on push + PR.
+#
+# Even if a developer (or agent) pushes without the local pre-commit
+# hook installed, this CI check runs on the pushed commit and:
+#   - blocks the PR merge until fixed
+#   - shows a red X in the commits view on dev/main
+#   - can be wired to Slack/email via GitHub notifications
+#
+# The actual check logic lives in scripts/validate_index_html.py so
+# the local hook and CI share exactly the same rules.
+name: validate templates/index.html
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - "templates/index.html"
+      - "scripts/validate_index_html.py"
+      - ".github/workflows/validate-index-html.yml"
+  pull_request:
+    paths:
+      - "templates/index.html"
+      - "scripts/validate_index_html.py"
+      - ".github/workflows/validate-index-html.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Fetch HEAD~1 so the shrink-vs-HEAD warning has a comparison
+          # baseline. Cheap for a single-file check.
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run validator
+        run: python3 scripts/validate_index_html.py

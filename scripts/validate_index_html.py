@@ -1,0 +1,275 @@
+#!/usr/bin/env python3
+"""Validate structural invariants of ``templates/index.html``.
+
+This file has been silently broken multiple times in a single week by
+otherwise-unrelated feature commits that rewrote the file wholesale and
+accidentally dropped its tail (twice) or an entire mobile-responsive
+layer (once). Each regression only surfaced when a user hit a broken
+UI. This validator turns those latent regressions into a hard fail at
+commit time (and, via the sibling GitHub Action, at push/PR time).
+
+Checks performed
+----------------
+1.  File exists and is non-trivial in size (>= 1 MB - anything smaller
+    means the file was catastrophically truncated or someone confused
+    it with a stub).
+2.  File ends with ``</html>``. This is the classic tail-truncation
+    signature: an unclosed ``<script>`` tag in the middle of the file
+    halts browser parsing and the tail (including the closing tags)
+    never renders.
+3.  ``<script>`` open tag count equals ``</script>`` close tag count.
+    An imbalance is the direct cause of the "dashboard stuck at
+    Loading your dashboard - Waking up the server... 0%" freeze.
+4.  Each known-critical anchor string is present. These are DOM ids /
+    function names / block markers that have been dropped in past
+    regressions. Adding a new anchor here is the fastest way to
+    prevent a regression from recurring - as soon as a real bug is
+    root-caused to a missing anchor, add its id/marker to
+    ``REQUIRED_ANCHORS`` below and no future commit can drop it
+    silently.
+5.  Optional (warn, do not fail): file shrunk by more than 5% vs the
+    previous HEAD version. Big deletions in a single commit are
+    almost always accidental; small trims are legitimate. Only warns
+    because deliberate large refactors do happen.
+
+Exit codes
+----------
+    0 - all checks pass
+    1 - one or more hard checks failed (blocks commit / CI)
+    2 - internal error (unable to read file / etc.)
+
+Usage
+-----
+Run standalone from either the repo root or the ``bg-webapp/`` dir::
+
+    python3 scripts/validate_index_html.py
+
+Wired into ``.githooks/pre-commit`` and
+``.github/workflows/validate-index-html.yml`` in this repo.
+"""
+from __future__ import annotations
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+# ---- CONFIG ----------------------------------------------------------------
+
+# Minimum sane size for the current dashboard. Set well below the current
+# ~8.5 MB so it flags only catastrophic truncation, not routine trims.
+MIN_SIZE_BYTES = 1_000_000  # 1 MB
+
+# Maximum acceptable shrinkage vs HEAD (fraction of HEAD size). Warns
+# only - deliberate refactors can legitimately exceed this.
+MAX_SHRINK_FRACTION = 0.05  # 5%
+
+# DOM ids, function names, and block markers that MUST exist in the file.
+# Add a new entry the moment a real bug is traced to a missing anchor,
+# so no future commit can drop the same block silently.
+#
+# Each entry is a tuple of (anchor_string, human_description).
+REQUIRED_ANCHORS: list[tuple[str, str]] = [
+    # Mobile responsive layer - dropped by 5aaad71d (2026-07-30 or so).
+    # User-visible failure: "mobile site formatting is gone" 2026-08-10.
+    ('id="mobile-responsive-layer"',
+     "mobile CSS block (@media max-width: 768px)"),
+    ('id="mobile-nav-enhancements"',
+     "mobile JS init IIFE (tools nav + sidebar accordion)"),
+    ('id="mobileToolsNav"',
+     "mobile <select> that replaces the Data & Analysis Tools button strip"),
+    ('_initMobileSidebarCollapse',
+     "mobile sidebar accordion init function"),
+    # Core Profile IQ boot / navigation. Dropped historically by the
+    # 2026-08-10 "Persona Lens" commit that truncated 958 tail lines.
+    ('function selectDashboardProfile',
+     "profile picker click handler - dashboard boot depends on it"),
+    ('function _pickBaseRun',
+     "resolves subject-click -> base run (Total Universe vs Avid Fan)"),
+    ('function getProfileSuffixInfo',
+     "parses profile filenames into base + cohort/year suffix"),
+    ('function _baseCohortLabel',
+     "single chokepoint for Total Universe / Casual Fan labeling"),
+]
+
+# Anchors we DO NOT want in the file (false negatives). Left empty for
+# now; add here if a bad string keeps re-appearing.
+FORBIDDEN_ANCHORS: list[tuple[str, str]] = []
+
+
+# ---- IMPLEMENTATION --------------------------------------------------------
+
+def find_index_html() -> Path | None:
+    """Locate templates/index.html whether invoked from repo root or bg-webapp/."""
+    for candidate in (
+        Path("bg-webapp/templates/index.html"),
+        Path("templates/index.html"),
+    ):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def head_size_bytes(path: Path) -> int | None:
+    """Return the size of the file at HEAD (previous committed version).
+
+    Returns None if there is no HEAD version (initial commit, unknown
+    file), or if git isn't reachable. Callers must handle None as a
+    "no comparison possible" signal, not a failure.
+    """
+    try:
+        rel = str(path)
+        # Try from cwd first; then try bg-webapp/-relative if we're in
+        # the parent repo where the file path is prefixed.
+        for git_path in (rel, rel.replace("bg-webapp/", "", 1)):
+            try:
+                out = subprocess.run(
+                    ["git", "show", f"HEAD:{git_path}"],
+                    capture_output=True, check=True,
+                )
+                return len(out.stdout)
+            except subprocess.CalledProcessError:
+                continue
+        return None
+    except Exception:
+        return None
+
+
+def check_ends_with_html(src: str) -> str | None:
+    """Return an error message if the file doesn't end with </html>."""
+    tail = src.rstrip()
+    if not tail.endswith("</html>"):
+        # Show the actual last 80 chars so debugging is trivial.
+        return (f"file does not end with </html> - most recent bytes: "
+                f"...{tail[-80:]!r}. Almost always a tail truncation "
+                f"introduced by a wholesale file rewrite.")
+    return None
+
+
+def check_script_tag_balance(src: str) -> str | None:
+    """Return an error message if <script> and </script> counts differ.
+
+    Uses a permissive regex for the open tag (matches attributes) and
+    a literal count for the close tag (has no attributes). Raw counting
+    includes any occurrences in HTML comments or template literals -
+    those balance naturally too, and being strict here is fine.
+    """
+    opens = len(re.findall(r"<script(?:\s[^>]*)?>", src))
+    closes = src.count("</script>")
+    if opens != closes:
+        return (f"<script> tag imbalance: {opens} open, {closes} close "
+                f"(delta {opens - closes:+}). Browser will stop parsing "
+                f"at the first unclosed tag and the dashboard will freeze "
+                f"at the loading screen at 0%.")
+    return None
+
+
+def check_required_anchors(src: str) -> list[str]:
+    """Return a list of error messages, one per missing required anchor."""
+    errs: list[str] = []
+    for anchor, desc in REQUIRED_ANCHORS:
+        if anchor not in src:
+            errs.append(f"missing required anchor {anchor!r} ({desc})")
+    return errs
+
+
+def check_forbidden_anchors(src: str) -> list[str]:
+    """Return a list of error messages, one per present forbidden anchor."""
+    errs: list[str] = []
+    for anchor, desc in FORBIDDEN_ANCHORS:
+        if anchor in src:
+            errs.append(f"forbidden anchor {anchor!r} present ({desc})")
+    return errs
+
+
+def check_size(src_bytes: int) -> str | None:
+    """Return an error message if the file is impossibly small."""
+    if src_bytes < MIN_SIZE_BYTES:
+        return (f"file size {src_bytes:,} bytes is under the {MIN_SIZE_BYTES:,}"
+                f"-byte floor. This almost always means catastrophic truncation.")
+    return None
+
+
+def check_shrink_vs_head(cur_bytes: int, head_bytes: int) -> str | None:
+    """Return a WARNING message (not error) if the file shrank sharply.
+
+    Callers should print this as a warning and NOT fail on it - some
+    refactors genuinely delete a lot in one commit. Failing here would
+    cause too many false positives.
+    """
+    if head_bytes <= 0:
+        return None
+    shrink = 1.0 - (cur_bytes / head_bytes)
+    if shrink > MAX_SHRINK_FRACTION:
+        return (f"file shrunk by {shrink*100:.1f}% vs HEAD "
+                f"({head_bytes:,} -> {cur_bytes:,} bytes). "
+                f"If this is intentional (large refactor), ignore. "
+                f"Otherwise check for accidental tail truncation.")
+    return None
+
+
+def main() -> int:
+    path = find_index_html()
+    if path is None:
+        print("[validate] templates/index.html not found from cwd - "
+              "run from repo root or bg-webapp/ directory")
+        return 2
+
+    try:
+        src_bytes = path.read_bytes()
+    except OSError as e:
+        print(f"[validate] failed to read {path}: {e}")
+        return 2
+
+    src = src_bytes.decode("utf-8", errors="replace")
+    print(f"[validate] checking {path} ({len(src_bytes):,} bytes, "
+          f"{src.count(chr(10)):,} lines)")
+
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    err = check_size(len(src_bytes))
+    if err:
+        errors.append(err)
+
+    err = check_ends_with_html(src)
+    if err:
+        errors.append(err)
+
+    err = check_script_tag_balance(src)
+    if err:
+        errors.append(err)
+
+    errors.extend(check_required_anchors(src))
+    errors.extend(check_forbidden_anchors(src))
+
+    head_bytes = head_size_bytes(path)
+    if head_bytes is not None:
+        warn = check_shrink_vs_head(len(src_bytes), head_bytes)
+        if warn:
+            warnings.append(warn)
+
+    if warnings:
+        print("[validate] WARNINGS (not blocking):")
+        for w in warnings:
+            print(f"  ! {w}")
+
+    if errors:
+        print(f"[validate] FAIL: {len(errors)} error(s):")
+        for e in errors:
+            print(f"  x {e}")
+        print()
+        print("[validate] Commit blocked. The fastest recovery is usually:")
+        print("           1. git show HEAD:templates/index.html > /tmp/prev.html")
+        print("           2. Diff to find what got dropped.")
+        print("           3. Splice the missing block back in and re-stage.")
+        return 1
+
+    print(f"[validate] OK ({len(REQUIRED_ANCHORS)} anchors present, "
+          f"tags balanced, ends with </html>)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
