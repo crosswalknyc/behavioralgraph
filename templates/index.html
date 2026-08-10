@@ -56128,7 +56128,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                             { label: 'Headline',       value: 'Obsession reached Peacock at day 63 with only 17 days of TVOD exclusivity. Every non-Focus Universal title in the 2024-2026 record received 80-101 TVOD days (median 86.5). Applied to Obsession, the panel-fitted counterfactual is $57.8M of displaced transactional revenue.' },
                             { label: 'The paradox',    value: 'Focus RE-CUT the theatrical window (extended from 17 to 46 days after three consecutive up weekends). Focus DID NOT re-cut the TVOD window when the same title was #1 on the Apple TV Store 17 days later. Same film, same weeks, opposite treatment.' },
                             { label: 'Demand remaining', value: 'Priority pull. Obsession sat at 88% of its peak weekly TVOD velocity on the day SVOD arrived. Every other Focus + Universal title in the 2022-2026 record sat at ≤32% (Conclave), with the Universal median at 3%. Same 17-day calendar; opposite position on the curve.' },
-                            { label: 'Substitution',   value: 'Pull 3 identifies 618K panelists (projected) who reached an Obsession TVOD title page on Apple TV or Prime Video during Jun 30 - Jul 16 without transacting, then opened a Peacock sign-up path on/after Jul 17. Not a correlation between aggregate curves - the same individuals abandoning a paid transaction in favor of the subscription once the substitute appeared.' },
+                            { label: 'Substitution',   value: 'Pull 3 identifies 618K panelists (projected) who reached an Obsession TVOD title page on Apple TV or Prime Video during Jun 30 - Jul 16 without transacting, then started Peacock playback of Obsession on/after Jul 17. Of that cohort, 138K new + reactivated Peacock subs are attributed to Obsession in SubIQ (76K new / 62K reactivated, 30d window) — the strict-subscription subset. Not a correlation between aggregate curves; the same individuals abandoning a paid transaction in favor of watching on Peacock once the substitute appeared.' },
                             { label: 'Acquisition',    value: 'Peacock sign-ups in the 30 days after Jul 17: 2.85M projected, +153% vs the trailing-8-week baseline and +107% vs the same 2025 window. 62.4% of that cohort carried an Obsession touchpoint in the 14 days prior; 74.8% of those were net-new to Peacock since Jan 2021.' },
                             { label: 'Durability',     value: 'The Obsession-attributed sign-up cohort churns at ~1.5× the Peacock baseline. Day-90 retention 39.7% vs baseline 54.6%; cancellation-path entry within 90 days 34.2% vs baseline 18.6%. Permanent transactional revenue was traded for a temporary subscriber count.' },
                             { label: 'Composition',    value: 'Obsession engager base is 74.8% aged 18-34 (panel-measured). Peacock subscriber base is 21.2% aged 18-34. The delivered cohort is the age band Peacock structurally under-indexes on and cannot acquire from its own slate. Canonical demo buckets throughout.' },
@@ -69709,13 +69709,17 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             },
 
             obp_sub: {
-                subtitle: 'Panelists who reached an Obsession TVOD title page during Jun 30 - Jul 16 without transacting, then opened a Peacock sign-up path on/after Jul 17. Same identified individuals abandoning a paid transaction in favor of the subscription once the substitute appeared.',
+                subtitle: 'Panelists who reached an Obsession TVOD title page during Jun 30 - Jul 16 without transacting, then started Peacock playback of Obsession on/after Jul 17. Same identified individuals abandoning a paid transaction in favor of watching on Peacock once the substitute appeared. The subset that resulted in a NEW or REACTIVATED Peacock subscription is measured separately in SubIQ.',
                 topline: {
                     tvod_title_page_no_txn_k: 1842,
-                    peacock_signup_after_jul17_k: 618,
-                    conversion_rate_pct: 33.5,
-                    median_time_to_conversion_days: 4,
-                    universe_note: 'Projected to U.S. digital population from the matched panel. Confidence ±3.1pp on the conversion rate at n=1,842K.'
+                    peacock_playback_after_jul17_k: 618,
+                    playback_conversion_rate_pct: 33.5,
+                    median_time_to_playback_days: 4,
+                    subiq_new_subs_k: 76,
+                    subiq_reactivated_subs_k: 62,
+                    subiq_new_or_reactivated_subs_k: 138,
+                    subiq_attribution_window: 'Jul 17 → Aug 16 · 30d attribution',
+                    universe_note: 'Projected to U.S. digital population from the matched panel. Confidence ±3.1pp on the playback conversion rate at n=1,842K. The 138K new/reactivated Peacock subscriptions are measured directly in SubIQ (76K new + 62K reactivated, 30-day attribution to Obsession from Jul 17). The 618K playback-conversion number is broader than subscription — the majority already carried an active Peacock sub before Jul 17 and simply substituted playback destination.'
                 },
                 time_to_conversion_distribution: [
                     { window: 'Within 24 hours',  share_pct: 41.2, cumulative_pct: 41.2 },
@@ -69726,7 +69730,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     { window: '>28 days',         share_pct:  1.8, cumulative_pct: 100.0 }
                 ],
                 platform_of_abandoned_txn: [
-                    { platform: 'Apple TV',           share_pct: 42.4, note: 'Highest abandonment-to-sub rate on Apple; title page → Peacock signup within 24hr.' },
+                    { platform: 'Apple TV',           share_pct: 42.4, note: 'Highest abandonment-to-play rate on Apple; TVOD title page → Peacock playback within 24hr.' },
                     { platform: 'Amazon Prime Video', share_pct: 31.6, note: '' },
                     { platform: 'Fandango at Home',   share_pct: 11.2, note: '' },
                     { platform: 'YouTube Movies',     share_pct:  7.8, note: '' },
@@ -69741,14 +69745,15 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 ],
                 strength_of_claim: {
                     heading: 'Why this is the strongest single output in the package',
-                    body: 'This is not a correlation between two aggregate curves. It is the same identified individuals — deterministic panel IDs — who abandoned a paid transaction in favor of a subscription once the substitute appeared. Crosswalk is not aware of another commercially available dataset that can produce this measurement.',
+                    body: 'This is not a correlation between two aggregate curves. It is the same identified individuals — deterministic panel IDs — who abandoned a paid transaction in favor of watching on Peacock once the substitute appeared. 618K panelists (projected) crossed from a paid TVOD funnel into free Peacock playback of Obsession. The strict-subscription subset — new + reactivated Peacock subs specifically attributed to Obsession — is 138K in SubIQ (76K new / 62K reactivated, 30-day attribution). Crosswalk is not aware of another commercially available dataset that can produce this measurement at the identified-individual level.',
                     caveats: [
                         'Panel-observed and projected. Not a census of every TVOD abandoner.',
-                        'A subset of abandonment is normal price-elasticity behavior (window shopping). The 33.5% within-4d conversion rate against the Peacock hard-arrival date is the departure from that baseline.',
+                        'Playback conversion (618K) is a broader behavior than subscription — the majority already had a Peacock sub before Jul 17 and simply substituted playback destination. The 138K SubIQ figure is the strict new/reactivated-sub subset attributable to Obsession.',
+                        'A subset of abandonment is normal price-elasticity behavior (window shopping). The 33.5% within-4d playback conversion rate against the Peacock hard-arrival date is the departure from that baseline.',
                         'Person-level attribution on CTV sessions is stated separately in the methodology annex.'
                     ]
                 },
-                read: '618K panelists (projected) abandoned a $19.99-$24.99 TVOD SKU on Apple TV or Prime Video between Jun 30 and Jul 16 and then opened a Peacock sign-up path within days of the Jul 17 handoff. 68.6% converted within 72 hours. This is the identified-individuals mechanism. The dollars in Pull 1 sit on top of a demonstrated behavioral substitution, not on a modeled inference.'
+                read: '618K panelists (projected) abandoned a $19.99-$24.99 TVOD SKU on Apple TV or Prime Video between Jun 30 and Jul 16 and then started Peacock playback of Obsession within days of the Jul 17 handoff — 68.6% within 72 hours. Of that population, 138K new + reactivated Peacock subscriptions are attributed to Obsession in SubIQ (76K new / 62K reactivated, 30-day attribution). This is the identified-individuals substitution mechanism, with the subscription-attribution subset measured directly. The dollars in Pull 1 sit on top of a demonstrated behavioral substitution, not a modeled inference.'
             },
 
             obp_acq: {
@@ -70737,12 +70742,13 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             if (!body) return;
 
             var top = data.topline || {};
-            var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.55rem; margin-bottom:0.85rem;">'
+            var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:0.55rem; margin-bottom:0.85rem;">'
                 + [
-                    { label: 'TVOD abandoners',   value: _jiqObpAbbrevK(top.tvod_title_page_no_txn_k), sub: 'title page + no txn (Jun 30 - Jul 16)', accent: '#f59e0b' },
-                    { label: 'Converted to sub',   value: _jiqObpAbbrevK(top.peacock_signup_after_jul17_k), sub: 'Peacock signup Jul 17+', accent: '#ef4444' },
-                    { label: 'Conversion rate',    value: top.conversion_rate_pct.toFixed(1) + '%',   sub: 'of abandoners',      accent: '#ef4444' },
-                    { label: 'Median time',        value: top.median_time_to_conversion_days + 'd',    sub: 'from Jul 17 → signup', accent: '#f59e0b' }
+                    { label: 'TVOD abandoners',        value: _jiqObpAbbrevK(top.tvod_title_page_no_txn_k),        sub: 'title page + no txn (Jun 30 - Jul 16)',              accent: '#f59e0b' },
+                    { label: 'Converted to watch',     value: _jiqObpAbbrevK(top.peacock_playback_after_jul17_k),  sub: 'Peacock playback Jul 17+ · incl. existing subs',      accent: '#ef4444' },
+                    { label: 'New / reactivated subs', value: _jiqObpAbbrevK(top.subiq_new_or_reactivated_subs_k), sub: top.subiq_new_subs_k + 'K new + ' + top.subiq_reactivated_subs_k + 'K reactivated · SubIQ ' + (top.subiq_attribution_window || ''), accent: '#22c55e' },
+                    { label: 'Playback rate',          value: top.playback_conversion_rate_pct.toFixed(1) + '%',   sub: 'of abandoners started playback',                      accent: '#ef4444' },
+                    { label: 'Median time to play',    value: top.median_time_to_playback_days + 'd',              sub: 'from Jul 17 → first play',                            accent: '#f59e0b' }
                   ].map(function(t) {
                     return '<div style="padding:0.7rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:4px solid ' + t.accent + ';">'
                          +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.07em; font-weight:700;">' + _jiqEsc(t.label) + '</div>'
@@ -70752,7 +70758,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                   }).join('')
                 + '</div>';
 
-            var ttcHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">⏳ Time-to-conversion distribution (cumulative)</h4>'
+            var ttcHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">⏳ Time-to-first-play distribution (cumulative, abandoner → Peacock playback)</h4>'
                 + (data.time_to_conversion_distribution || []).map(function(t) {
                     var w = t.share_pct;
                     return '<div style="padding:0.35rem 0.6rem; margin-bottom:0.2rem; display:grid; grid-template-columns:140px 1fr 60px 60px; gap:0.5rem; align-items:center; border-bottom:1px solid rgba(255,255,255,0.04);">'
@@ -70776,7 +70782,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                   }).join('')
                 + '</table></div>';
 
-            var pathHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">🧾 Peacock sign-up path type</h4>'
+            var pathHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">🧾 Peacock sign-up path type — new / reactivated cohort only (' + _jiqObpAbbrevK(top.subiq_new_or_reactivated_subs_k) + ' subs · SubIQ)</h4>'
                 + (data.sub_path_type || []).map(function(pt) {
                     var w = (pt.share_pct / 70) * 100;
                     return '<div style="padding:0.4rem 0.65rem; margin-bottom:0.25rem; border-radius:5px; background:rgba(255,255,255,0.025); border-left:3px solid #14b8a6;">'
