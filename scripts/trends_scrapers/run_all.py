@@ -46,6 +46,7 @@ SCRAPERS = [
     ('book_charts',        'scripts.trends_scrapers.book_charts',        'Books',                'book'),
     ('libby_trends',       'scripts.trends_scrapers.libby_trends',       'Libby popular',        'libby'),
     ('philanthropy_news',  'scripts.trends_scrapers.philanthropy_news',  'Philanthropy news',    'news'),
+    ('business_news',      'scripts.trends_scrapers.business_news',      'Business news',        'news'),
     ('youtube',   'scripts.trends_scrapers.youtube',    'YouTube',   'social'),
     # X, TikTok, and Instagram are NOT in this list. As of 2026-07 they
     # were switched from hashtag/topic lists to real trending posts /

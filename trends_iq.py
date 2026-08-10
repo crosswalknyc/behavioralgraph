@@ -2076,6 +2076,7 @@ def _augment_thin_buckets_from_pools(
         articles_by_source:  Optional[list[dict]] = None,
         movers:              Optional[dict]      = None,
         philanthropy_news:   Optional[list[dict]] = None,
+        business_news:       Optional[list[dict]] = None,
 ) -> dict[str, list[dict]]:
     """Fold matching secondary-signal rows into category buckets that
     came out thin (< `_THIN_BUCKET_THRESHOLD` items) from the
@@ -2137,6 +2138,16 @@ def _augment_thin_buckets_from_pools(
     # philanthropy stories. Merge into the news pool so the philanthropy
     # bucket can fold them in when Google Trends misses the beat.
     for h in (philanthropy_news or []):
+        t = (h.get('title') or '').strip().lower()
+        if t and t not in _news_seen_titles:
+            news_pool.append(h)
+            _news_seen_titles.add(t)
+
+    # Business-desk feed (NYT Business + WSJ Business via GN proxy) -
+    # ~40 items dedicated to corporate/markets stories. Fold into the
+    # news pool so the `business` bucket in the Search tab picks them
+    # up on days Google Trends misses the corporate beat.
+    for h in (business_news or []):
         t = (h.get('title') or '').strip().lower()
         if t and t not in _news_seen_titles:
             news_pool.append(h)
@@ -2918,14 +2929,16 @@ def _stamp_reader_estimate(row: dict, entry: Optional[dict]) -> None:
 def _annotate_headlines_with_readers(trending_headlines: list,
                                        articles_by_source: list,
                                        philanthropy_news: list,
-                                       estimates: dict) -> None:
-    """Stamp `us_readers` on every headline row across the three
-    surfaces the Headlines tab renders:
+                                       estimates: dict,
+                                       business_news: Optional[list] = None) -> None:
+    """Stamp `us_readers` on every headline row across the surfaces
+    the Headlines tab renders:
       1. `trending_headlines`         - flat "top" list
       2. `articles_by_source[i].articles` - per-outlet lists
       3. `philanthropy_news`          - the Philanthropy sub-tab
+      4. `business_news`              - the Business sub-tab (NYT + WSJ)
 
-    All three key by normalized title so a single Claude estimate
+    All surfaces key by normalized title so a single Claude estimate
     powers every surface the article appears on. Missing snapshot
     -> silent no-op (rows just render without the reader chip)."""
     if not estimates:
@@ -2949,6 +2962,8 @@ def _annotate_headlines_with_readers(trending_headlines: list,
         for row in (outlet.get('articles') or []):
             _stamp(row)
     for row in (philanthropy_news or []):
+        _stamp(row)
+    for row in (business_news or []):
         _stamp(row)
 
 
@@ -3325,6 +3340,11 @@ _FUSE_WEIGHTS = {
     'podcasts':          0.50,
     'books':             0.50,
     'philanthropy':      0.40,
+    'business':          0.55,   # NYT + WSJ business desks (higher
+                                  # signal than philanthropy - both
+                                  # outlets skew hard toward market-
+                                  # moving news that also drives
+                                  # search interest)
 }
 _FUSE_CROSS_PLATFORM_BONUS = 0.25
 _FUSE_MIN_KEY_LEN          = 3
@@ -3555,6 +3575,14 @@ def _compute_fused_trending(cards: dict, limit: int = _FUSE_TOP_N) -> list[dict]
         _add(p.get('title') or '', p.get('title') or '',
              'philanthropy', 'Philanthropy', None, i + 1, max_ph,
              url=p.get('url'), image=p.get('image'))
+
+    # ---------------- Business ----------------
+    biz = cards.get('business_news') or []
+    max_b = min(len(biz), 15)
+    for i, b in enumerate(biz[:max_b]):
+        _add(b.get('title') or '', b.get('title') or '',
+             'business', 'Business', None, i + 1, max_b,
+             url=b.get('url'), image=b.get('image'))
 
     # Cross-platform bonus: count DISTINCT tab labels (not source
     # instances). "Spotify + Apple Music" is 1 tab (Music), not 2.
@@ -5311,6 +5339,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'film_ticketing':      lambda: _read_snapshot('film_ticketing',     asof),
             'libby_trends':        lambda: _read_snapshot('libby_trends',       asof),
             'philanthropy_news':   lambda: _read_snapshot('philanthropy_news',  asof),
+            'business_news':       lambda: _read_snapshot('business_news',      asof),
             'stream_estimates':    lambda: _read_snapshot('stream_estimates',   asof),
         }
     else:
@@ -5333,6 +5362,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'film_ticketing':      lambda: _read_snapshot('film_ticketing'),
             'libby_trends':        lambda: _read_snapshot('libby_trends'),
             'philanthropy_news':   lambda: _read_snapshot('philanthropy_news'),
+            'business_news':       lambda: _read_snapshot('business_news'),
             'stream_estimates':    lambda: _read_snapshot('stream_estimates'),
             'headline_estimates':  lambda: _read_snapshot('headline_estimates'),
         }
@@ -5418,6 +5448,14 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     philanthropy_news = list(phil_snap.get('national') or [])[:40]
     philanthropy_by_source = phil_snap.get('by_source') or {}
 
+    # Business news (NYT Business RSS + WSJ Business via Google News
+    # RSS proxy). Same shape as philanthropy_news - a `national` list
+    # for the flat "Business" sub-tab and a `by_source` split so the
+    # UI can render per-outlet cards if we want that later.
+    biz_snap         = results.get('business_news') or {}
+    business_news    = list(biz_snap.get('national') or [])[:40]
+    business_by_source = biz_snap.get('by_source') or {}
+
     # Stamp US audience estimates (weekly listeners / streams / views)
     # + day-over-day direction onto every song / podcast / streaming
     # title row. Estimates come from a daily Claude Sonnet + web_search
@@ -5449,7 +5487,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     headline_estimates_snap = results.get('headline_estimates') or {}
     _annotate_headlines_with_readers(
         headlines, articles_by_source, philanthropy_news,
-        headline_estimates_snap)
+        headline_estimates_snap,
+        business_news = business_news)
 
     trending_people = _fetch_trending_people(
         headlines,
@@ -5516,6 +5555,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         articles_by_source  = articles_by_source,
         movers              = movers,
         philanthropy_news   = philanthropy_news,
+        business_news       = business_news,
     )
 
     now = datetime.now(timezone.utc)
@@ -5548,6 +5588,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'fused_trending':                 [],
             'philanthropy_news':              philanthropy_news,
             'philanthropy_news_by_source':    philanthropy_by_source,
+            'business_news':                  business_news,
+            'business_news_by_source':        business_by_source,
             'social_trending':                social_trending,
             'streaming_trending':             streaming_trending,
             'products_by_retailer':           products,
