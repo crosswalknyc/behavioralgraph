@@ -44683,10 +44683,43 @@
             window.__trendsIQ.lensScores = byTitle;
         }
 
+        // Extract the just-the-title text out of a .tiq-row-title
+        // cell.  The cell often contains adjacent badge / action
+        // nodes ("cross-platform on 3 sources", star toggle, why-line)
+        // that would pollute textContent and break normalization.
+        // Preference order:
+        //   1. First <a> in the title cell (link text is always the
+        //      pure title - Music/Podcasts/Wikipedia rows use this).
+        //   2. First non-empty text child (search terms + books use
+        //      this since they render as plain _tiqEsc without <a>).
+        //   3. Fallback to titleCell.textContent minus badge text.
+        function _tiqRowTitleText(row) {
+            var cell = row.querySelector('.tiq-row-title');
+            if (!cell) return '';
+            var a = cell.querySelector('a');
+            if (a && (a.textContent || '').trim()) {
+                return a.textContent;
+            }
+            // Prefer the FIRST text-only child. .tiq-row-title's
+            // markup pattern is:  <text>Title</text><span badge>...
+            for (var i = 0; i < cell.childNodes.length; i++) {
+                var n = cell.childNodes[i];
+                if (n.nodeType === 3) {
+                    var t = (n.nodeValue || '').trim();
+                    if (t) return t;
+                }
+            }
+            // Last resort: whole cell text, badge suffix stripped.
+            return (cell.textContent || '').replace(/\s+on\s+\d+\s+sources?.*/i, '').trim();
+        }
+
         // Apply the currently-selected lens to every rendered row.
         // Called on payload arrival (repaint) AND on dropdown change.
         // No lens selected -> show everything.  Lens selected -> hide
-        // rows whose normalized title lookup scores below the threshold.
+        // rows below threshold.  Rows we couldn't score are hidden ONLY
+        // if the panel they live in has other scored rows - otherwise
+        // hiding them would blank the whole panel (bad UX on tabs the
+        // scraper hasn't caught up to yet).
         window.applyTrendsIQLens = function() {
             var sel = document.getElementById('trendsIQLens');
             var lensId = (sel && sel.value) || '';
@@ -44694,52 +44727,81 @@
             var byTitle = window.__trendsIQ.lensScores || {};
             var panels  = document.getElementById('trendsIQPanels');
             if (!panels) return;
-            var rows = panels.querySelectorAll('.tiq-row');
             var hasScores = Object.keys(byTitle).length > 0;
-            for (var i = 0; i < rows.length; i++) {
-                var row = rows[i];
-                if (!lensId || !hasScores) {
-                    row.style.display = '';
-                    continue;
-                }
-                // Extract title text from the row's title link.  Every
-                // row renderer in the dashboard funnels through
-                // .tiq-row-title (a wrapper) with either <a> or plain
-                // text inside.  Fall back to the whole row title cell
-                // if no anchor.
-                var titleEl = row.querySelector('.tiq-row-title a')
-                              || row.querySelector('.tiq-row-title');
-                var title   = titleEl ? titleEl.textContent : '';
-                var norm    = _tiqLensNorm(title);
-                var bag     = norm && byTitle[norm];
-                if (!bag) {
-                    // Unknown item -> default visible.  Better UX than
-                    // hiding rows we couldn't score.
-                    row.style.display = '';
-                    continue;
-                }
-                var s = Number(bag[lensId]) || 0;
-                row.style.display = (s >= _TIQ_LENS_THRESHOLD) ? '' : 'none';
+
+            // No filter active - clear every row's display override
+            // and bail. Idempotent so this is safe to call on every
+            // repaint.
+            if (!lensId || !hasScores) {
+                var allRows = panels.querySelectorAll('.tiq-row');
+                for (var j = 0; j < allRows.length; j++) allRows[j].style.display = '';
+                _tiqLensUpdateMetaBanner(sel, lensId);
+                return;
             }
 
-            // Meta banner reflects the active lens so it's obvious a
-            // filter is on.  Strip any prior `  ·  filtered: ...`
-            // suffix so this fn is idempotent across repaints AND
-            // toggles - reading meta.textContent always yields the
-            // clean base text.
-            var meta = document.getElementById('trendsIQMeta');
-            if (meta) {
-                var txt = meta.textContent || '';
-                var idx = txt.indexOf('  \u00b7  filtered:');
-                if (idx > -1) txt = txt.slice(0, idx);
-                if (lensId && sel) {
-                    var lensLabel = sel.options[sel.selectedIndex].text;
-                    meta.textContent = txt + '  \u00b7  filtered: ' + lensLabel;
-                } else {
-                    meta.textContent = txt;
-                }
+            // Group rows by panel so we can decide per-panel whether
+            // unscored rows should hide (panel has some scored rows)
+            // or stay visible (panel has zero scored rows -> scraper
+            // doesn't cover this feed yet, leave it alone).
+            var byPanel = {};
+            var allRows2 = panels.querySelectorAll('.tiq-panel .tiq-row');
+            for (var k = 0; k < allRows2.length; k++) {
+                var r = allRows2[k];
+                var panel = r.closest('.tiq-panel');
+                var pk = panel ? (panel.getAttribute('data-tiq-panel') || '') : '';
+                (byPanel[pk] = byPanel[pk] || []).push(r);
             }
+
+            var _TIQ_LENS_THRESHOLD_LOCAL = _TIQ_LENS_THRESHOLD;
+            Object.keys(byPanel).forEach(function(pk) {
+                var rows = byPanel[pk];
+                // First pass: count scored rows on this panel.
+                var scoredCount = 0;
+                var scoredMap = [];
+                for (var i = 0; i < rows.length; i++) {
+                    var title = _tiqRowTitleText(rows[i]);
+                    var norm  = _tiqLensNorm(title);
+                    var bag   = norm && byTitle[norm];
+                    scoredMap.push(bag || null);
+                    if (bag) scoredCount++;
+                }
+                // If NO rows on this panel are scored, don't filter
+                // it - hiding everything would look broken. This is
+                // the safety net for panels the scraper hasn't
+                // caught up to yet.
+                if (scoredCount === 0) {
+                    for (var m = 0; m < rows.length; m++) rows[m].style.display = '';
+                    return;
+                }
+                for (var n = 0; n < rows.length; n++) {
+                    var b = scoredMap[n];
+                    if (!b) {
+                        // Unscored row on a panel that HAS scored rows -
+                        // treat as low-relevance and hide.
+                        rows[n].style.display = 'none';
+                        continue;
+                    }
+                    var s = Number(b[lensId]) || 0;
+                    rows[n].style.display = (s >= _TIQ_LENS_THRESHOLD_LOCAL) ? '' : 'none';
+                }
+            });
+
+            _tiqLensUpdateMetaBanner(sel, lensId);
         };
+
+        function _tiqLensUpdateMetaBanner(sel, lensId) {
+            var meta = document.getElementById('trendsIQMeta');
+            if (!meta) return;
+            var txt = meta.textContent || '';
+            var idx = txt.indexOf('  \u00b7  filtered:');
+            if (idx > -1) txt = txt.slice(0, idx);
+            if (lensId && sel) {
+                var lensLabel = sel.options[sel.selectedIndex].text;
+                meta.textContent = txt + '  \u00b7  filtered: ' + lensLabel;
+            } else {
+                meta.textContent = txt;
+            }
+        }
         // CROSSWALK / TRENDING fallback chip. Renders the lockup as real HTML
         // text (see .tiq-ph-label CSS) rather than an SVG data-URI background,
         // because Safari/WebKit refuses to paint <text> inside an SVG used as a
@@ -45511,6 +45573,10 @@
                     data.cards.philanthropy_news  || [],
                     data.cards.business_news      || []);
             }
+            // Re-run lens filter after in-place repaint so the active
+            // persona filter stays applied when the user flips between
+            // Top / By source / Business / Philanthropy sub-tabs.
+            if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
         };
 
         // Format a search volume as "50K+", "1M+", etc. Google's UI
@@ -46512,6 +46578,7 @@
             document.querySelectorAll('#trendsIQPanels .tiq-social-panel').forEach(function(el) {
                 el.classList.toggle('active', el.getAttribute('data-tiq-social') === key);
             });
+            if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
         };
 
         // Preferred platform tab order. Netflix leads because its public
@@ -46657,6 +46724,7 @@
             document.querySelectorAll('#trendsIQPanels [data-tiq-streaming]').forEach(function(el) {
                 el.classList.toggle('active', el.getAttribute('data-tiq-streaming') === key);
             });
+            if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
         };
 
         function renderTIQProducts(retailers) {
@@ -134640,7 +134708,7 @@
 
         function iqRankerCompareClear() {
             IQR_COMPARE_STATE.selected.clear();
-            IQR_COMPARE_STATE.paletteIdx = 0;
+              IQR_COMPARE_STATE.paletteIdx = 0;
             renderIQRankerCompareList();
             renderIQRankerCompareChips();
             renderIQRankerCompareChart();

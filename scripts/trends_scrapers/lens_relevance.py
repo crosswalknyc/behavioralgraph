@@ -367,19 +367,67 @@ def _collect_all_items() -> list[dict]:
                   artist=it.get('artist') or '',
                   source_label=panel.get('label') or slug)
 
-    # Headlines (top + business + philanthropy).  All three feed the
-    # same `headline:` keyspace so if a story appears on the "top"
-    # list AND in "business" the scorer only pays for it once.
-    for src in ('philanthropy_news', 'business_news'):
+    # Headlines - top articles, by-source articles, business, and
+    # philanthropy all live in the same `headline:` keyspace so a
+    # story appearing on multiple lists only gets scored once.
+    for src in ('trending_headlines', 'philanthropy_news', 'business_news'):
         snap = _read(src) or {}
-        for it in (snap.get('national') or []):
+        # `trending_headlines` stores under 'articles'; the two topic
+        # feeds store under 'national'. Support both.
+        rows = (snap.get('articles') or snap.get('national')
+                or snap.get('by_source') or [])
+        # `by_source` is a dict of {source: [items]}; flatten if so.
+        if isinstance(rows, dict):
+            flat = []
+            for lst in rows.values():
+                flat.extend(lst or [])
+            rows = flat
+        for it in rows[:120]:
             _add('headline', it.get('title') or '',
-                  extra=it.get('source_label') or '',
+                  extra=it.get('source_label') or it.get('source') or '',
                   source_label=snap.get('label') or src)
 
-    # Wikipedia trending (people + national).  Descriptions are
+    # Trending searches - overall list + every per-category feed
+    # (sports / entertainment / gaming / tech / weather / politics /
+    # finance / retail / etc). These populate the default landing
+    # "Trending" tab so the scorer MUST cover them or the persona
+    # filter has no effect on the tab most users see first.
+    searches = _read('trending_searches') or {}
+    for it in (searches.get('all') or searches.get('national') or [])[:80]:
+        _add('search', it.get('term') or it.get('title') or '',
+              extra=it.get('why') or it.get('context') or '',
+              source_label='Trending searches')
+    for cat, items in (searches.get('by_category') or {}).items():
+        for it in (items or [])[:30]:
+            _add('search', it.get('term') or it.get('title') or '',
+                  extra=str(cat or '') + ': ' + (it.get('why') or ''),
+                  source_label='Trending searches / ' + str(cat or ''))
+
+    # Movers (breakout / rising / cooling / sustained). Same
+    # keyspace as searches so if a term appears in both it only
+    # gets scored once.
+    movers = _read('movers') or {}
+    for bucket in ('breakout', 'rising', 'falling', 'sustained',
+                    'climbing', 'cooling'):
+        for it in (movers.get(bucket) or [])[:40]:
+            _add('search', it.get('term') or it.get('title') or '',
+                  extra='mover: ' + bucket,
+                  source_label='Movers / ' + bucket)
+
+    # Trending people (composite ranker: news + wikipedia + social).
+    # This is what feeds renderTIQPeople(cards.trending_people)
+    # in the frontend - separate snapshot from wikipedia_trending.
+    people = _read('trending_people') or {}
+    for it in (people.get('national') or people.get('people') or [])[:60]:
+        name = it.get('name') or it.get('title') or ''
+        _add('person', name,
+              extra=(it.get('description') or it.get('why') or '')[:180],
+              source_label='Trending people')
+
+    # Wikipedia trending (people + national). Descriptions are
     # helpful context for the scorer ("American senator" vs
-    # "Nigerian afrobeats singer" swings both lenses hard).
+    # "Nigerian afrobeats singer" swings both lenses hard). Same
+    # `person:` keyspace as trending_people so dedupe is automatic.
     wiki = _read('wikipedia_trending') or {}
     for it in (wiki.get('people') or wiki.get('national') or [])[:60]:
         _add('person', it.get('name') or it.get('title') or '',
