@@ -17211,6 +17211,324 @@
             } catch (e) { /* localStorage unavailable - stay on default (dark) */ }
         })();
     </script>
+    <!-- ============================================================================
+         MOBILE RESPONSIVE LAYER  (added 2026-07-28)
+         ----------------------------------------------------------------------------
+         Self-contained, ADDITIVE mobile styling for the Profile IQ dashboard.
+
+         SAFETY CONTRACT (do not break):
+           * EVERY rule below lives inside `@media (max-width: 768px)`, so it is
+             physically incapable of applying to desktop viewports (>=769px).
+             Desktop renders from the exact same rules it always has.
+           * This block only ADDS rules; it never edits/deletes existing CSS.
+           * It is the LAST <style> in <head>, so for equal-specificity mobile
+             rules it wins by source order (no need to bump specificity elsewhere).
+           * To fully revert mobile behavior, delete this single block.
+
+         Scope (phase 1): the shared app shell used by Profile IQ — root scroll
+         model, header/product nav, two-pane -> stacked layout, sub-tab strip,
+         footer, and baseline overflow/table/input guards.
+         ============================================================================ -->
+    <style id="mobile-responsive-layer">
+    @media (max-width: 768px) {
+        /* ---- 1. Root scroll model -------------------------------------------------
+           Desktop is a fixed-viewport app: body{overflow:hidden} +
+           .container{height:100vh;overflow:hidden} + inner panes scroll
+           independently. On phones we turn the whole thing into one normal,
+           vertically-scrolling document. */
+        html {
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            height: auto !important;
+            -webkit-text-size-adjust: 100%;
+        }
+        body {
+            overflow: visible !important;
+            overflow-x: hidden !important;
+            height: auto !important;
+            min-height: 100vh;
+        }
+        .container {
+            height: auto !important;
+            min-height: 100vh;
+            overflow: visible !important;
+            padding: 0.6rem 0.75rem calc(56px + env(safe-area-inset-bottom, 0px)) 0.75rem !important;
+        }
+
+        /* ---- 2. Header + product selector ----------------------------------------
+           Let the logo row and the controls stack; make the product nav and
+           user bar span full width so they're tappable. */
+        header {
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-bottom: 0.4rem;
+        }
+        .header-right-section {
+            width: 100%;
+            align-items: stretch;
+            margin-left: 0;
+        }
+        .user-info-bar {
+            width: 100%;
+            justify-content: space-between;
+            gap: 0.6rem;
+        }
+        .view-toggle {
+            width: 100%;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+        .view-nav-custom-wrap {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .view-nav-trigger,
+        .view-nav-panel {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        /* ---- 3. Two-pane dashboard -> stacked -------------------------------------
+           The 280px persistent sidebar (profile list) moves above the content
+           as a capped, self-scrolling panel; the content pane grows naturally. */
+        .dashboard-layout {
+            flex-direction: column !important;
+            height: auto !important;
+            overflow: visible !important;
+            gap: 0.75rem;
+        }
+        .persistent-sidebar {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            height: auto !important;
+            max-height: 45vh;
+            overflow-y: auto !important;
+        }
+        .dashboard-tab-content {
+            height: auto !important;
+            overflow: visible !important;
+            padding-bottom: 1rem !important;
+        }
+
+        /* ---- 4. Action row + grids stack to a single column ----------------------- */
+        .action-buttons-row {
+            grid-template-columns: 1fr !important;
+            gap: 0.5rem;
+        }
+        .content-action-buttons {
+            max-width: 100% !important;
+            flex-wrap: wrap;
+        }
+        .main-grid {
+            grid-template-columns: 1fr !important;
+            gap: 1rem !important;
+        }
+
+        /* ---- 5. Sub-tab strip: horizontal scroll instead of clipping -------------- */
+        .dashboard-tabs {
+            overflow-x: auto !important;
+            overflow-y: hidden;
+            flex-wrap: nowrap;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            padding-bottom: 2px;
+        }
+        .dashboard-tabs::-webkit-scrollbar { display: none; }
+
+        /* ---- 6. Fixed footer: compact ---------------------------------------------- */
+        .app-footer {
+            padding: 0.4rem 0.75rem;
+        }
+        .app-footer-text { font-size: 0.65rem; }
+
+        /* ---- 7. Baseline guards ---------------------------------------------------
+           Prevent wide data tables from forcing horizontal page scroll (they get
+           their own inner scroll), and stop iOS from auto-zooming on input focus
+           (needs >=16px font). Scoped to real inputs to avoid layout surprises. */
+        .dashboard-tab-content table {
+            display: block;
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        input[type="text"],
+        input[type="search"],
+        input[type="email"],
+        input[type="password"],
+        input[type="number"],
+        input[type="tel"],
+        textarea {
+            font-size: 16px !important;
+        }
+
+        /* ---- 8. Profile IQ header + tab strip ------------------------------------
+           Desktop lays the profile info and the DATA / ANALYSIS TOOLS tab groups
+           in one horizontal row where .toolbar-content{overflow:hidden}. On a
+           phone that pushes the tab strip (Demographics / Behavioral / Interests
+           / Location ...) off the right edge and overflows the title banner.
+           Fix: force the profile-header row and toolbar row to full width so the
+           tabs wrap underneath, let the two tab groups stack, and make each tab
+           group swipe-scroll horizontally (rule 5 handles .dashboard-tabs). */
+        .profile-and-toolbar-row {
+            align-items: stretch;
+        }
+        .profile-and-toolbar-row .profile-header-row,
+        .profile-and-toolbar-row .toolbar-row {
+            flex: 1 1 100% !important;
+            width: 100%;
+            min-width: 0;
+        }
+        .toolbar-row { align-items: stretch; }
+        .toolbar-content {
+            overflow: visible !important;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+        .toolbar-section { width: 100%; }
+
+        /* Title banner: shrink + wrap instead of running off the right edge. */
+        .dash-profile-info { min-width: 0; }
+        .dash-brand-container {
+            flex: 1 1 auto !important;
+            min-width: 0;
+            max-width: 100%;
+        }
+        .dash-brand-box {
+            font-size: 0.95rem;
+            letter-spacing: 0.5px;
+            padding: 0.5rem 0.8rem;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            max-width: 100%;
+        }
+        .dash-meta-grid { margin-left: 0 !important; }
+
+        /* Open-profile chips wrap instead of overflowing. */
+        .profile-tabs-bar { flex-wrap: wrap; }
+
+        /* ---- 9. Insights tab content: stop right-edge overflow ------------------
+           An existing @media(max-width:1200px) already single-columns these
+           grids, but with plain `1fr` tracks. `1fr` == `minmax(auto,1fr)`, and
+           the `auto` floor grows to the content's min-content width, so the grids
+           (plus the nowrap metrics row and the inline `1fr 1fr` layout) balloon
+           wider than the phone screen and get clipped on the right. Using
+           `minmax(0,1fr)` lets the tracks shrink so inner content wraps/fits. */
+        .dashboard-tab-content .insights-summary-grid,
+        .dashboard-tab-content .insights-grid-v2 {
+            grid-template-columns: minmax(0, 1fr) !important;
+        }
+        /* Nested inline two-column layouts (e.g. TUC+Snapshot / Behavioral
+           Profile) collapse to a single shrinkable column. */
+        .dashboard-tab-content [style*="grid-template-columns: 1fr 1fr"] {
+            grid-template-columns: minmax(0, 1fr) !important;
+        }
+        /* Key metrics: 2 cards per line instead of 4-across (nowrap). */
+        .metrics-row {
+            flex-wrap: wrap !important;
+        }
+        .metrics-row .metric-card {
+            flex: 1 1 calc(50% - 0.5rem) !important;
+            min-width: 0;
+        }
+        /* Let long values (e.g. the Date Range) wrap to fit instead of being
+           clipped by the desktop nowrap+ellipsis rule. */
+        .metrics-row .metric-card .metric-value {
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+        }
+        /* Audience Snapshot: two shrinkable columns. */
+        .audience-snapshot {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+        /* Total Universe Composition pills wrap instead of clipping. */
+        #audienceShareBoxes {
+            flex-wrap: wrap !important;
+        }
+        /* Insight cards never force the page wider than the viewport. */
+        .dashboard-tab-content .insight-card-v2 { min-width: 0; max-width: 100%; }
+
+        /* ---- 10. Demographics charts: give the bars vertical room ---------------
+           The demographics chart cards use a fixed aspect-ratio (16/10) capped at
+           max-height:400px, and the Chart.js charts run maintainAspectRatio:false
+           (canvas fills the card). On a ~360px-wide phone that aspect-ratio yields
+           a very short plot, so the horizontal bars and their category labels get
+           crammed together and overlap. Switch to an auto, height-based card on
+           mobile with a generous min-height so each category row has space. */
+        .charts-grid .chart-card {
+            aspect-ratio: auto !important;
+            height: auto !important;
+            max-height: none !important;
+            min-height: 340px;
+            overflow: visible;
+        }
+
+        /* ---- 11. Data & Analysis Tools as a single dropdown --------------------
+           On phones the two thumbnail tab groups (DATA + ANALYSIS TOOLS) are
+           replaced by one native <select> ("Data & Analysis Tools"). The select
+           is inert on desktop (inline display:none); here we reveal it and hide
+           the button groups. The dropdown reuses each button's click handler, so
+           access rules and tab switching behave exactly as before. */
+        .mobile-tools-nav {
+            display: block !important;
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--bg-input, #0d1a2a);
+            color: var(--text-primary, #e6f1ff);
+            border: 1px solid var(--border-color, #2a3a4a);
+            border-radius: 8px;
+            padding: 0.65rem 0.7rem;
+            font-size: 16px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .mobile-tools-nav:focus { outline: none; border-color: #66d9ef; }
+        #toolbarContent .toolbar-section { display: none !important; }
+
+        /* ---- 12. Hide the floating team-chat widget on phones ------------------ */
+        #chatWidget { display: none !important; }
+
+        /* ---- 13. Select Profile sidebar -> collapsible to save space ----------
+           The profile picker is a searchable nested tree, so instead of a lossy
+           native <select> it becomes a space-saving accordion: tapping the
+           "Select Profile" header toggles the search + tree. Collapsed by
+           default so the data is front-and-center. (Wiring lives in the
+           #mobile-nav-enhancements script.) */
+        .persistent-sidebar.mobile-collapsible .sidebar-header-section h3 {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 0.6rem;
+            margin: 0;
+        }
+        .persistent-sidebar.mobile-collapsible .sidebar-header-section h3::after {
+            content: '\25BE'; /* down chevron, right after the label */
+            font-size: 1.4em;
+            line-height: 1;
+            opacity: 0.85;
+            transition: transform 0.2s ease;
+        }
+        /* Collapsed (default) points down; expanded flips it up. */
+        .persistent-sidebar.mobile-collapsible:not(.mobile-collapsed) .sidebar-header-section h3::after {
+            transform: rotate(180deg);
+        }
+        .persistent-sidebar.mobile-collapsed > *:not(.sidebar-header-section) {
+            display: none !important;
+        }
+        .persistent-sidebar.mobile-collapsed .sidebar-header-section > *:not(h3) {
+            display: none !important;
+        }
+        .persistent-sidebar.mobile-collapsed {
+            max-height: none !important;
+        }
+        .persistent-sidebar.mobile-collapsible:not(.mobile-collapsed) {
+            max-height: 60vh;
+        }
+    }
+    </style>
 </head>
 <body{% if username %} data-username="{{ username }}"{% endif %}>
     <script>
@@ -20419,6 +20737,14 @@
                     </div>
                     <div id="toolbarRow" class="toolbar-row">
                         <div class="toolbar-content" id="toolbarContent">
+                            <!-- Mobile-only: consolidated "Data & Analysis Tools" dropdown.
+                                 Hidden on desktop (inline display:none); the mobile
+                                 layer reveals it and hides the button groups below.
+                                 Populated from the live tab buttons so it mirrors
+                                 access rules; see #mobile-nav-enhancements script. -->
+                            <select id="mobileToolsNav" class="mobile-tools-nav" style="display:none;" onfocus="if(window._buildMobileToolsNav)window._buildMobileToolsNav()" onchange="if(window._onMobileToolsNav)window._onMobileToolsNav(this)" aria-label="Data &amp; Analysis Tools">
+                                <option value="" selected disabled>Data &amp; Analysis Tools</option>
+                            </select>
                             <div class="toolbar-section">
                                 <div class="dashboard-tabs">
                                     <button class="tab-btn active has-tooltip" data-tooltip="Insights: Executive summary with key audience statistics, demographic highlights, and behavioral patterns at a glance." onclick="showTab('insights')"><span class="tab-icon">💡</span><span class="tab-label">INSIGHTS</span></button>
@@ -135730,7 +136056,71 @@
     <footer class="app-footer" style="display: none;">
         <img src="/static/crosswalk-logo-small.png" alt="Crosswalk" class="app-footer-logo" onerror="this.src='/static/crosswalk-logo.png'; this.style.height='24px';">
         <span class="app-footer-text">Data Source: Crosswalk's Intelligence Platform, a 10M Gen Pop Digital Behavioral Panel</span>
-    </footer>
+    
+    <!-- Mobile-only: "Data & Analysis Tools" dropdown wiring (added 2026-07-28).
+         Builds the dropdown from the live tab buttons and reuses their click
+         handlers, so tab switching + feature/access gating behave identically.
+         Globals are assigned to window so the inline onfocus/onchange resolve. -->
+    <script id="mobile-nav-enhancements">
+        (function () {
+            window._buildMobileToolsNav = function () {
+                var sel = document.getElementById('mobileToolsNav');
+                if (!sel) return;
+                var groups = document.querySelectorAll('#toolbarContent .dashboard-tabs');
+                var groupLabels = ['Data', 'Analysis Tools'];
+                var btns = [];
+                var html = '<option value="" selected disabled>Data &amp; Analysis Tools</option>';
+                for (var g = 0; g < groups.length; g++) {
+                    var groupBtns = groups[g].querySelectorAll('.tab-btn');
+                    var opts = '';
+                    for (var i = 0; i < groupBtns.length; i++) {
+                        var b = groupBtns[i];
+                        if (b.style.display === 'none') continue; // access-gated / hidden
+                        var labelEl = b.querySelector('.tab-label');
+                        var txt = ((labelEl ? labelEl.textContent : b.textContent) || '').trim();
+                        if (!txt) continue;
+                        opts += '<option value="' + btns.length + '">' + txt + '</option>';
+                        btns.push(b);
+                    }
+                    if (opts) {
+                        html += '<optgroup label="' + (groupLabels[g] || 'Tools') + '">' + opts + '</optgroup>';
+                    }
+                }
+                window._mobileToolsBtns = btns;
+                sel.innerHTML = html;
+                sel.selectedIndex = 0;
+            };
+            window._onMobileToolsNav = function (sel) {
+                var idx = parseInt(sel.value, 10);
+                var btns = window._mobileToolsBtns || [];
+                if (!isNaN(idx) && btns[idx]) { btns[idx].click(); }
+                sel.selectedIndex = 0; // keep the label reading "Data & Analysis Tools"
+            };
+            // Make every "Select Profile" sidebar a collapsible accordion on
+            // phones. Gated to mobile so the desktop DOM is never touched.
+            window._initMobileSidebarCollapse = function () {
+                document.querySelectorAll('.persistent-sidebar').forEach(function (sb) {
+                    if (sb._mobileCollapseInit) return;
+                    var header = sb.querySelector('.sidebar-header-section');
+                    var h3 = header && header.querySelector('h3');
+                    if (!h3) return;
+                    sb.classList.add('mobile-collapsible', 'mobile-collapsed');
+                    h3.addEventListener('click', function () {
+                        sb.classList.toggle('mobile-collapsed');
+                    });
+                    sb._mobileCollapseInit = true;
+                });
+            };
+            var _isMobileViewport = function () {
+                return !window.matchMedia || window.matchMedia('(max-width: 768px)').matches;
+            };
+            document.addEventListener('DOMContentLoaded', function () {
+                try { window._buildMobileToolsNav(); } catch (e) {}
+                try { if (_isMobileViewport()) window._initMobileSidebarCollapse(); } catch (e) {}
+            });
+        })();
+    </script>
+</footer>
 
 
 </body>
