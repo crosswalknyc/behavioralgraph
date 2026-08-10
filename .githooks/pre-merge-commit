@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Reject merge commits whose auto-resolution corrupts templates/index.html.
+#
+# Why this hook exists (separate from pre-commit):
+#   git's pre-commit hook does NOT run on merge commits produced by
+#   `git merge`. `git merge` runs pre-merge-commit instead. Without
+#   this hook, an ort-strategy auto-merge that silently drops content
+#   from templates/index.html slips through even though the file is
+#   fully staged.
+#
+# Discovered 2026-08-10 while merging origin/main into dev: auto-merge
+# resulted in a file that failed all four validator checks (tail chop,
+# script imbalance, missing anchors), got committed as the merge, and
+# would have been pushed to prod without this guard.
+#
+# Same logic as .githooks/pre-commit: only fire when the file is
+# affected. For a merge commit, "affected" means the merge touched the
+# file at all (any change from any parent), so we just always run the
+# validator - it's cheap (~300ms) and merge commits are infrequent.
+
+set -eu
+
+# Only run if this repo actually has the validator (i.e., don't fail
+# older submodule checkouts that pre-date the validator).
+if [ ! -x scripts/validate_index_html.py ] && [ ! -f scripts/validate_index_html.py ]; then
+    exit 0
+fi
+
+# Only care if templates/index.html exists in this tree.
+if [ ! -f templates/index.html ]; then
+    exit 0
+fi
+
+echo "[pre-merge-commit] validating templates/index.html post-merge..."
+if ! python3 scripts/validate_index_html.py; then
+    echo ""
+    echo "[pre-merge-commit] MERGE BLOCKED."
+    echo "[pre-merge-commit] The auto-merge produced a corrupt templates/index.html."
+    echo "[pre-merge-commit] Options:"
+    echo "[pre-merge-commit]   1. git merge --abort  (start over, try rebase instead)"
+    echo "[pre-merge-commit]   2. Manually fix the file, git add it, git commit"
+    echo "[pre-merge-commit]      (the pre-commit hook will re-run the validator)"
+    echo "[pre-merge-commit] To bypass (dangerous), rerun with --no-verify."
+    exit 1
+fi
+
+exit 0
