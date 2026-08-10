@@ -44683,25 +44683,23 @@
             window.__trendsIQ.lensScores = byTitle;
         }
 
-        // Extract the just-the-title text out of a .tiq-row-title
-        // cell.  The cell often contains adjacent badge / action
-        // nodes ("cross-platform on 3 sources", star toggle, why-line)
-        // that would pollute textContent and break normalization.
-        // Preference order:
-        //   1. First <a> in the title cell (link text is always the
-        //      pure title - Music/Podcasts/Wikipedia rows use this).
-        //   2. First non-empty text child (search terms + books use
-        //      this since they render as plain _tiqEsc without <a>).
-        //   3. Fallback to titleCell.textContent minus badge text.
+        // Extract the just-the-title text out of a filter target.
+        // Handles two card shapes:
+        //   1. .tiq-row - primary grammar. Title inside .tiq-row-title
+        //      (either <a>Title</a>Badges... or plain text).
+        //   2. .tiq-person-card - Trending People grid. Title lives in
+        //      .tiq-person-name > span.
         function _tiqRowTitleText(row) {
+            var personName = row.querySelector('.tiq-person-name > span');
+            if (personName) {
+                return (personName.textContent || '').trim();
+            }
             var cell = row.querySelector('.tiq-row-title');
             if (!cell) return '';
             var a = cell.querySelector('a');
             if (a && (a.textContent || '').trim()) {
                 return a.textContent;
             }
-            // Prefer the FIRST text-only child. .tiq-row-title's
-            // markup pattern is:  <text>Title</text><span badge>...
             for (var i = 0; i < cell.childNodes.length; i++) {
                 var n = cell.childNodes[i];
                 if (n.nodeType === 3) {
@@ -44709,9 +44707,12 @@
                     if (t) return t;
                 }
             }
-            // Last resort: whole cell text, badge suffix stripped.
             return (cell.textContent || '').replace(/\s+on\s+\d+\s+sources?.*/i, '').trim();
         }
+
+        // Filter target selector - kept centralized so adding new
+        // card types (e.g. tiq-product-card) is a one-line change.
+        var _TIQ_LENS_ROW_SELECTOR = '.tiq-row, .tiq-person-card';
 
         // Apply the currently-selected lens to every rendered row.
         // Called on payload arrival (repaint) AND on dropdown change.
@@ -44733,7 +44734,7 @@
             // and bail. Idempotent so this is safe to call on every
             // repaint.
             if (!lensId || !hasScores) {
-                var allRows = panels.querySelectorAll('.tiq-row');
+                var allRows = panels.querySelectorAll(_TIQ_LENS_ROW_SELECTOR);
                 for (var j = 0; j < allRows.length; j++) allRows[j].style.display = '';
                 _tiqLensUpdateMetaBanner(sel, lensId);
                 return;
@@ -44744,7 +44745,8 @@
             // or stay visible (panel has zero scored rows -> scraper
             // doesn't cover this feed yet, leave it alone).
             var byPanel = {};
-            var allRows2 = panels.querySelectorAll('.tiq-panel .tiq-row');
+            var allRows2 = panels.querySelectorAll(
+                '.tiq-panel .tiq-row, .tiq-panel .tiq-person-card');
             for (var k = 0; k < allRows2.length; k++) {
                 var r = allRows2[k];
                 var panel = r.closest('.tiq-panel');

@@ -334,15 +334,25 @@ def _collect_all_items() -> list[dict]:
                   artist=it.get('artist') or '',
                   source_label=panel.get('label') or slug)
 
-    # Streaming (film + tv)
-    streaming = _read('streaming_trending') or {}
-    for slug, panel in (streaming or {}).items():
-        for it in (panel.get('items') or []):
-            kind = (it.get('kind') or 'title').lower()
-            if kind not in ('film', 'tv', 'title'):
-                kind = 'title'
-            _add(kind, it.get('title') or '',
-                  source_label=panel.get('label') or slug)
+    # Streaming (per-platform Top-10 lists). Every platform has its
+    # own snapshot file with `national` (mixed) plus `us_films` +
+    # `us_tv` split lists on some platforms. We score every visible
+    # title as either film or tv; the platform is the source_label
+    # so lens reasoning can differentiate ("Millennials love Netflix's
+    # rewatch nostalgia titles but skip Disney+'s kids catalog").
+    for slug, label in (('netflix',    'Netflix'),
+                         ('disneyplus', 'Disney+'),
+                         ('hulu',       'Hulu'),
+                         ('max',        'HBO Max'),
+                         ('primevideo', 'Prime Video'),
+                         ('espnplus',   'ESPN+')):
+        snap = _read(slug) or {}
+        for pool_key, kind in (('us_films', 'film'),
+                                ('us_tv',    'tv'),
+                                ('national', 'title')):
+            for it in (snap.get(pool_key) or [])[:20]:
+                _add(kind, it.get('title') or '',
+                      source_label=snap.get('label') or label)
 
     # Films (ticketing)
     films = _read('film_ticketing') or {}
@@ -367,72 +377,70 @@ def _collect_all_items() -> list[dict]:
                   artist=it.get('artist') or '',
                   source_label=panel.get('label') or slug)
 
-    # Headlines - top articles, by-source articles, business, and
-    # philanthropy all live in the same `headline:` keyspace so a
-    # story appearing on multiple lists only gets scored once.
-    for src in ('trending_headlines', 'philanthropy_news', 'business_news'):
+    # Headlines - business + philanthropy share the same `headline:`
+    # keyspace with the top-headlines feed that trends_iq.py composites
+    # at runtime from GDELT. We can only score what has a snapshot;
+    # top headlines from GDELT don't have a separate snapshot file
+    # (they're recomputed per-request), so we score the two topic
+    # feeds we do have plus every article on their `by_source` breakouts.
+    for src in ('philanthropy_news', 'business_news'):
         snap = _read(src) or {}
-        # `trending_headlines` stores under 'articles'; the two topic
-        # feeds store under 'national'. Support both.
-        rows = (snap.get('articles') or snap.get('national')
-                or snap.get('by_source') or [])
-        # `by_source` is a dict of {source: [items]}; flatten if so.
-        if isinstance(rows, dict):
-            flat = []
-            for lst in rows.values():
-                flat.extend(lst or [])
-            rows = flat
-        for it in rows[:120]:
-            _add('headline', it.get('title') or '',
+        seen = set()
+        for it in (snap.get('national') or [])[:80]:
+            t = (it.get('title') or '').strip()
+            if not t or t in seen:
+                continue
+            seen.add(t)
+            _add('headline', t,
                   extra=it.get('source_label') or it.get('source') or '',
                   source_label=snap.get('label') or src)
+        for source_key, lst in (snap.get('by_source') or {}).items():
+            for it in (lst or [])[:20]:
+                t = (it.get('title') or '').strip()
+                if not t or t in seen:
+                    continue
+                seen.add(t)
+                _add('headline', t,
+                      extra=str(source_key),
+                      source_label=snap.get('label') or src)
 
-    # Trending searches - overall list + every per-category feed
-    # (sports / entertainment / gaming / tech / weather / politics /
-    # finance / retail / etc). These populate the default landing
-    # "Trending" tab so the scorer MUST cover them or the persona
-    # filter has no effect on the tab most users see first.
-    searches = _read('trending_searches') or {}
-    for it in (searches.get('all') or searches.get('national') or [])[:80]:
-        _add('search', it.get('term') or it.get('title') or '',
-              extra=it.get('why') or it.get('context') or '',
+    # Trending searches - the default landing tab is populated from
+    # google_wide.json (top ~600 terms with score + related headlines).
+    # This is by far the biggest coverage gap in the prior scraper:
+    # searches was the first tab a user sees and NONE of it was scored.
+    gw = _read('google_wide') or {}
+    for it in (gw.get('national') or [])[:120]:
+        term = (it.get('term') or it.get('title') or '').strip()
+        if not term:
+            continue
+        # Related headlines are prime context - they tell the scorer
+        # what the search is actually ABOUT.
+        related = it.get('related') or []
+        extra = '; '.join(related[:3])[:220] if related else ''
+        _add('search', term, extra=extra,
               source_label='Trending searches')
-    for cat, items in (searches.get('by_category') or {}).items():
-        for it in (items or [])[:30]:
-            _add('search', it.get('term') or it.get('title') or '',
-                  extra=str(cat or '') + ': ' + (it.get('why') or ''),
-                  source_label='Trending searches / ' + str(cat or ''))
 
-    # Movers (breakout / rising / cooling / sustained). Same
-    # keyspace as searches so if a term appears in both it only
-    # gets scored once.
-    movers = _read('movers') or {}
-    for bucket in ('breakout', 'rising', 'falling', 'sustained',
-                    'climbing', 'cooling'):
-        for it in (movers.get(bucket) or [])[:40]:
-            _add('search', it.get('term') or it.get('title') or '',
-                  extra='mover: ' + bucket,
-                  source_label='Movers / ' + bucket)
-
-    # Trending people (composite ranker: news + wikipedia + social).
-    # This is what feeds renderTIQPeople(cards.trending_people)
-    # in the frontend - separate snapshot from wikipedia_trending.
-    people = _read('trending_people') or {}
-    for it in (people.get('national') or people.get('people') or [])[:60]:
-        name = it.get('name') or it.get('title') or ''
-        _add('person', name,
-              extra=(it.get('description') or it.get('why') or '')[:180],
-              source_label='Trending people')
-
-    # Wikipedia trending (people + national). Descriptions are
-    # helpful context for the scorer ("American senator" vs
-    # "Nigerian afrobeats singer" swings both lenses hard). Same
-    # `person:` keyspace as trending_people so dedupe is automatic.
+    # Wikipedia trending. `national` is the union of people + events +
+    # orgs + places; `people` is the classifier-filtered US-person
+    # subset the frontend actually renders on the Trending People
+    # card. Score BOTH sets so no matter which the frontend picks,
+    # we have a bag.
     wiki = _read('wikipedia_trending') or {}
-    for it in (wiki.get('people') or wiki.get('national') or [])[:60]:
-        _add('person', it.get('name') or it.get('title') or '',
-              extra=(it.get('description') or '')[:180],
-              source_label='Wikipedia trending')
+    wiki_seen = set()
+    for it in (wiki.get('people') or []):
+        title = it.get('title') or it.get('name') or ''
+        if title and title not in wiki_seen:
+            wiki_seen.add(title)
+            _add('person', title,
+                  extra=(it.get('description') or '')[:180],
+                  source_label='Wikipedia trending / people')
+    for it in (wiki.get('national') or [])[:40]:
+        title = it.get('title') or it.get('name') or ''
+        if title and title not in wiki_seen:
+            wiki_seen.add(title)
+            _add('person', title,
+                  extra=(it.get('description') or '')[:180],
+                  source_label='Wikipedia trending')
 
     # Social (Reddit / YouTube / TikTok posts).
     for src, key in (('reddit', 'reddit'),
