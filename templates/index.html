@@ -68929,6 +68929,51 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                   }).join('')
                 + '</div>';
 
+            // ── Michael windowing continuum ──────────────────────────────
+            // Day 0 = Feb 14, 2026 theatrical open. Day 103 = May 28 PVOD
+            // launch. Day 151 = Jul 15 panel end. Same axis grammar as the
+            // Obsession→Peacock Industry-tab continuum: numeric ticks below
+            // the baseline, colored event callouts above it, shaded bands
+            // inside the strip for the theatrical + PVOD windows.
+            var timelineHtml = (function() {
+                var maxD = 155;
+                var events = [
+                    { d:   0, date: 'Feb 14', label: 'Theatrical open',   color: '#f59e0b', bg: 'rgba(245,158,11,0.18)', border: 'rgba(245,158,11,0.55)' },
+                    { d: 103, date: 'May 28', label: 'PVOD launch',       color: '#ea580c', bg: 'rgba(234,88,12,0.20)',  border: 'rgba(234,88,12,0.60)'  },
+                    { d: 151, date: 'Jul 15', label: 'Panel end',         color: '#94a3b8', bg: 'rgba(148,163,184,0.15)', border: 'rgba(148,163,184,0.50)' }
+                ];
+                var regularTicks = [0, 30, 60, 90, 120, 150];
+                var bands = [
+                    { start:   0, end:  84, color: 'rgba(245,158,11,0.14)', label: '12-wk theatrical window' },
+                    { start: 103, end: 151, color: 'rgba(234,88,12,0.16)',  label: 'PVOD window (wk 1-7)' }
+                ];
+                var bandHtml = bands.map(function(b) {
+                    var leftPct = (b.start / maxD) * 100;
+                    var widthPct = ((b.end - b.start) / maxD) * 100;
+                    return '<div style="position:absolute; left:' + leftPct.toFixed(2) + '%; width:' + widthPct.toFixed(2) + '%; top:calc(50% - 8px); height:16px; background:' + b.color + '; border-radius:3px;" title="' + _jiqEsc(b.label) + '"></div>';
+                }).join('');
+                var regHtml = regularTicks.map(function(d) {
+                    var pct = (d / maxD * 100).toFixed(2);
+                    return '<div style="position:absolute; left:' + pct + '%; top:50%; width:1px; height:7px; background:rgba(255,255,255,0.42); transform:translateX(-0.5px);"></div>'
+                         + '<div style="position:absolute; left:' + pct + '%; top:calc(50% + 10px); transform:translateX(-50%); font-size:0.6rem; font-weight:700; opacity:0.72; white-space:nowrap; letter-spacing:0.02em;">' + d + 'd</div>';
+                }).join('');
+                var eventHtml = events.map(function(e) {
+                    var pct = (e.d / maxD * 100).toFixed(2);
+                    return '<div style="position:absolute; left:' + pct + '%; top:50%; margin-top:-9px; width:2px; height:9px; background:' + e.color + '; transform:translateX(-1px);"></div>'
+                         + '<div style="position:absolute; left:' + pct + '%; top:calc(50% - 34px); transform:translateX(-50%); font-size:0.56rem; font-weight:800; color:' + e.color + '; white-space:nowrap; padding:2px 8px; border-radius:99px; background:' + e.bg + '; border:1px solid ' + e.border + ';">' + e.d + 'd &middot; ' + _jiqEsc(e.date) + ' &middot; ' + _jiqEsc(e.label) + '</div>';
+                }).join('');
+                return '<div style="padding:0.4rem 0.75rem 0.15rem; margin-bottom:1rem; border-radius:8px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06);">'
+                     +   '<div style="font-size:0.58rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.09em; font-weight:800; margin-bottom:0.15rem;">📅 Michael windowing continuum &middot; theatrical → PVOD</div>'
+                     +   '<div style="position:relative; height:56px; margin:0.3rem 0 0.15rem;">'
+                     +     bandHtml
+                     +     '<div style="position:absolute; left:0; right:0; top:50%; height:1px; background:rgba(255,255,255,0.32);"></div>'
+                     +     eventHtml
+                     +     regHtml
+                     +   '</div>'
+                     +   '<div style="font-size:0.62rem; opacity:0.62; margin-top:0.4rem; line-height:1.5;">Feb 14 theatrical open → 84 days of 12-wk domestic run → 19-day gap → May 28 PVOD launch → 48 days of PVOD data captured through Jul 15 panel end. Comps below span the full wk-1→wk-8 PVOD window.</div>'
+                     + '</div>';
+            })();
+
             var compRows = (data.comp_biopics || []).map(function(c) {
                 var isMichael = (c.title || '').toLowerCase().indexOf('michael') !== -1;
                 var color = isMichael ? '#ea580c' : '#94a3b8';
@@ -68959,7 +69004,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.read || '') + '</div>'
                 + '</div>';
 
-            body.innerHTML = tilesHtml + compHtml + readBox;
+            body.innerHTML = tilesHtml + timelineHtml + compHtml + readBox;
         }
 
         // ─── TAB 2: 🎫 Two audiences (Venn) ──────────────────────────
