@@ -5341,6 +5341,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'philanthropy_news':   lambda: _read_snapshot('philanthropy_news',  asof),
             'business_news':       lambda: _read_snapshot('business_news',      asof),
             'stream_estimates':    lambda: _read_snapshot('stream_estimates',   asof),
+            'lens_scores':         lambda: _read_snapshot('lens_scores',        asof),
         }
     else:
         tasks = {
@@ -5365,6 +5366,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'business_news':       lambda: _read_snapshot('business_news'),
             'stream_estimates':    lambda: _read_snapshot('stream_estimates'),
             'headline_estimates':  lambda: _read_snapshot('headline_estimates'),
+            'lens_scores':         lambda: _read_snapshot('lens_scores'),
         }
 
     results: dict = {}
@@ -5455,6 +5457,17 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     biz_snap         = results.get('business_news') or {}
     business_news    = list(biz_snap.get('national') or [])[:40]
     business_by_source = biz_snap.get('by_source') or {}
+
+    # Persona-lens relevance scores.  Daily Claude pass over every
+    # visible item scoring 0-100 for each configured lens (MS NOW
+    # Reader, Millennials, ...).  Frontend uses this to instantly
+    # filter every card when the user selects a lens from the
+    # dropdown - no server round-trip needed.  Missing snapshot ->
+    # the dropdown just doesn't show the lens options + all items
+    # render as normal.
+    lens_snap        = results.get('lens_scores') or {}
+    lens_config      = list(lens_snap.get('lenses') or [])
+    lens_scores_map  = dict(lens_snap.get('items') or {})
 
     # Stamp US audience estimates (weekly listeners / streams / views)
     # + day-over-day direction onto every song / podcast / streaming
@@ -5590,6 +5603,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'philanthropy_news_by_source':    philanthropy_by_source,
             'business_news':                  business_news,
             'business_news_by_source':        business_by_source,
+            'lens_config':                    lens_config,
+            'lens_scores':                    lens_scores_map,
             'social_trending':                social_trending,
             'streaming_trending':             streaming_trending,
             'products_by_retailer':           products,

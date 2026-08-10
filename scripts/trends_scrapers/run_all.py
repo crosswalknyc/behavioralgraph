@@ -47,6 +47,11 @@ SCRAPERS = [
     ('libby_trends',       'scripts.trends_scrapers.libby_trends',       'Libby popular',        'libby'),
     ('philanthropy_news',  'scripts.trends_scrapers.philanthropy_news',  'Philanthropy news',    'news'),
     ('business_news',      'scripts.trends_scrapers.business_news',      'Business news',        'news'),
+    # Lens scoring depends on every OTHER latest snapshot being in
+    # place first (it reads them all to build the item universe).
+    # Kept AFTER all content scrapers so a same-day run picks up
+    # today's fresh chart/podcast/etc. items instead of yesterday's.
+    ('lens_scores',        'scripts.trends_scrapers.lens_relevance',     'Persona lens scores',  'meta'),
     ('youtube',   'scripts.trends_scrapers.youtube',    'YouTube',   'social'),
     # X, TikTok, and Instagram are NOT in this list. As of 2026-07 they
     # were switched from hashtag/topic lists to real trending posts /
