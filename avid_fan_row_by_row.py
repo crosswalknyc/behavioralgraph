@@ -1039,20 +1039,25 @@ def synthesize_avid_fan(
     # MUST have a canonical BRAND CATEGORY).
     #
     # 2026-07-17 (Jenna): "avid cuts always have the same category as main
-    # cuts and never end up as uncategorized". Resolution changed from
-    # fallback semantics (avid → baseline → give up) to MIRROR semantics
-    # with a canonical fallback:
+    # cuts and never end up as uncategorized". Resolution is MIRROR semantics
+    # with a canonical fallback.
     #
-    #   Priority 1: `brand_category` kwarg from the caller (BG.py's
-    #               run_full_pipeline knows the authoritative value the
-    #               user submitted). This is the ground truth.
-    #   Priority 2: BRAND CATEGORY row on the source (main) file. Used
-    #               when the caller didn't pass one — mirrors main.
+    # 2026-08-10 (Jenna reinforcement): "make sure the brand category of the
+    # avid cuts are always the same as the parent profile." Priority order
+    # flipped so the PARENT (main) file is the primary source of truth.
+    # The caller's kwarg becomes a fallback used only when the parent lacks
+    # a BC row. If both are present and they disagree, PARENT wins and we
+    # log a WARN so the caller-side drift can be investigated.
+    #
+    #   Priority 1: BRAND CATEGORY row on the SOURCE (main / baseline) file.
+    #               This is the authoritative dashboard category. Avid MUST
+    #               mirror it, no exceptions.
+    #   Priority 2: `brand_category` kwarg from the caller. Only used when
+    #               the parent file lacks a BC row (very rare — the D111
+    #               enforcer in BG.py guarantees BC on every main file).
     #   Priority 3: BRAND CATEGORY row already on the avid file itself
     #               (leftover from Phase 3 apply_avid_transform). Only
-    #               reached when neither of the above found anything
-    #               usable, and even then we would have been UNCATEGORIZED
-    #               in the pre-2026-07-17 code path.
+    #               reached when neither of the above found anything usable.
     #   Priority 4: "GENERAL" (canonical last-resort so the file is never
     #               shipped UNCATEGORIZED — matches submit_analysis()'s
     #               default in bg-webapp/app.py). A loud warning is
@@ -1069,31 +1074,49 @@ def synthesize_avid_fan(
             s = str(v or "").strip()
             return s if s and s.upper() not in ("UNKNOWN", "NAN", "NONE", "UNCATEGORIZED") else ""
 
-        bc_value = _clean(brand_category)
-        bc_source = "caller.brand_category" if bc_value else None
+        kwarg_bc = _clean(brand_category)
+        parent_bc = ""
+        try:
+            src_col_u = df_baseline["Column"].astype(str).str.strip().str.upper()
+            src_mask = src_col_u == "BRAND CATEGORY"
+            if src_mask.any():
+                parent_bc = _clean(df_baseline.loc[src_mask, "Value"].iloc[0])
+        except Exception:
+            pass
 
-        if not bc_value:
-            try:
-                src_col_u = df_baseline["Column"].astype(str).str.strip().str.upper()
-                src_mask = src_col_u == "BRAND CATEGORY"
-                if src_mask.any():
-                    bc_value = _clean(df_baseline.loc[src_mask, "Value"].iloc[0])
-                    if bc_value:
-                        bc_source = "baseline_file.BRAND_CATEGORY"
-            except Exception:
-                pass
-
-        if not bc_value and bc_mask.any():
+        # Priority 1: parent file (authoritative per 2026-08-10 rule).
+        if parent_bc:
+            bc_value = parent_bc
+            bc_source = "baseline_file.BRAND_CATEGORY (parent-authoritative)"
+            if kwarg_bc and kwarg_bc.upper() != parent_bc.upper():
+                print(
+                    f"   ⚠ BRAND CATEGORY DRIFT: caller passed "
+                    f"{kwarg_bc!r} but parent file has {parent_bc!r} "
+                    f"for {subject!r}. Per 2026-08-10 mirror rule, "
+                    f"parent wins. Investigate upstream caller."
+                )
+        # Priority 2: caller kwarg (only when parent lacks BC).
+        elif kwarg_bc:
+            bc_value = kwarg_bc
+            bc_source = "caller.brand_category (parent lacked BC row)"
+            print(
+                f"   ⚠ parent file lacks BRAND CATEGORY row for "
+                f"{subject!r}; using caller kwarg {kwarg_bc!r}. "
+                f"Investigate: main pipeline should have written BC "
+                f"via D111 enforce_brand_category_row."
+            )
+        # Priority 3: leftover on avid file.
+        elif bc_mask.any():
             bc_value = _clean(df_avid.loc[bc_mask, "Value"].iloc[0])
-            if bc_value:
-                bc_source = "avid_file.BRAND_CATEGORY (leftover from apply_avid_transform)"
+            bc_source = "avid_file.BRAND_CATEGORY (leftover from apply_avid_transform)"
 
-        if not bc_value:
+        # Priority 4: hard fallback.
+        if not (parent_bc or kwarg_bc) and not (bc_mask.any() and _clean(df_avid.loc[bc_mask, "Value"].iloc[0])):
             bc_value = "GENERAL"
             bc_source = "GENERAL (LAST-RESORT FALLBACK)"
             print(
                 f"   ⚠ no BRAND CATEGORY resolvable for {subject!r} "
-                f"(kwarg empty, baseline empty, avid empty) -- forcing "
+                f"(parent empty, kwarg empty, avid empty) -- forcing "
                 f"BRAND CATEGORY='GENERAL' so the avid ships categorized. "
                 f"Investigate upstream: the main pull should have passed "
                 f"brand_category into synthesize_avid_fan or the source "
