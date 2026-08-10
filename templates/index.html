@@ -14680,6 +14680,174 @@
         }
 
         /* ===========================================================
+           LIGHT MODE - darken faint Journey IQ accent TEXT colors.
+           Journey IQ paints accent numbers/labels with light, dark-UI-
+           tuned hex values (orange #f59e0b, rose #fca5a5, green #22c55e,
+           ...) inline; on light-mode tinted card backgrounds they wash
+           out. Remap each to a darker, higher-contrast equivalent.
+           Attribute selectors target real `color:` declarations only
+           (start / after `;`), so `border-left-color:` and
+           `background-color:` are untouched - borders + tints stay.
+           =========================================================== */
+body[data-theme="light"] #journeyIQView [style^="color:#f59e0b"],
+body[data-theme="light"] #journeyIQView [style*=";color:#f59e0b"],
+body[data-theme="light"] #journeyIQView [style*="; color:#f59e0b"],
+body[data-theme="light"] #journeyIQView [style^="color:#fbbf24"],
+body[data-theme="light"] #journeyIQView [style*=";color:#fbbf24"],
+body[data-theme="light"] #journeyIQView [style*="; color:#fbbf24"],
+body[data-theme="light"] #journeyIQView [style^="color:#fb923c"],
+body[data-theme="light"] #journeyIQView [style*=";color:#fb923c"],
+body[data-theme="light"] #journeyIQView [style*="; color:#fb923c"],
+body[data-theme="light"] #journeyIQView [style^="color:#f97316"],
+body[data-theme="light"] #journeyIQView [style*=";color:#f97316"],
+body[data-theme="light"] #journeyIQView [style*="; color:#f97316"],
+body[data-theme="light"] #journeyIQView [style^="color:#fcd34d"],
+body[data-theme="light"] #journeyIQView [style*=";color:#fcd34d"],
+body[data-theme="light"] #journeyIQView [style*="; color:#fcd34d"],
+body[data-theme="light"] #journeyIQView [style^="color:#fdba74"],
+body[data-theme="light"] #journeyIQView [style*=";color:#fdba74"],
+body[data-theme="light"] #journeyIQView [style*="; color:#fdba74"],
+body[data-theme="light"] #journeyIQView [style^="color:#fde047"],
+body[data-theme="light"] #journeyIQView [style*=";color:#fde047"],
+body[data-theme="light"] #journeyIQView [style*="; color:#fde047"],
+body[data-theme="light"] #journeyIQView [style^="color:#facc15"],
+body[data-theme="light"] #journeyIQView [style*=";color:#facc15"],
+body[data-theme="light"] #journeyIQView [style*="; color:#facc15"] {
+            color: #b45309 !important;
+        }
+body[data-theme="light"] #journeyIQView [style^="color:#fca5a5"],
+body[data-theme="light"] #journeyIQView [style*=";color:#fca5a5"],
+body[data-theme="light"] #journeyIQView [style*="; color:#fca5a5"],
+body[data-theme="light"] #journeyIQView [style^="color:#fecaca"],
+body[data-theme="light"] #journeyIQView [style*=";color:#fecaca"],
+body[data-theme="light"] #journeyIQView [style*="; color:#fecaca"],
+body[data-theme="light"] #journeyIQView [style^="color:#fda4af"],
+body[data-theme="light"] #journeyIQView [style*=";color:#fda4af"],
+body[data-theme="light"] #journeyIQView [style*="; color:#fda4af"],
+body[data-theme="light"] #journeyIQView [style^="color:#fb7185"],
+body[data-theme="light"] #journeyIQView [style*=";color:#fb7185"],
+body[data-theme="light"] #journeyIQView [style*="; color:#fb7185"] {
+            color: #be123c !important;
+        }
+body[data-theme="light"] #journeyIQView [style^="color:#f87171"],
+body[data-theme="light"] #journeyIQView [style*=";color:#f87171"],
+body[data-theme="light"] #journeyIQView [style*="; color:#f87171"],
+body[data-theme="light"] #journeyIQView [style^="color:#ef4444"],
+body[data-theme="light"] #journeyIQView [style*=";color:#ef4444"],
+body[data-theme="light"] #journeyIQView [style*="; color:#ef4444"] {
+            color: #b91c1c !important;
+        }
+body[data-theme="light"] #journeyIQView [style^="color:#86efac"],
+body[data-theme="light"] #journeyIQView [style*=";color:#86efac"],
+body[data-theme="light"] #journeyIQView [style*="; color:#86efac"],
+body[data-theme="light"] #journeyIQView [style^="color:#4ade80"],
+body[data-theme="light"] #journeyIQView [style*=";color:#4ade80"],
+body[data-theme="light"] #journeyIQView [style*="; color:#4ade80"],
+body[data-theme="light"] #journeyIQView [style^="color:#22c55e"],
+body[data-theme="light"] #journeyIQView [style*=";color:#22c55e"],
+body[data-theme="light"] #journeyIQView [style*="; color:#22c55e"],
+body[data-theme="light"] #journeyIQView [style^="color:#bbf7d0"],
+body[data-theme="light"] #journeyIQView [style*=";color:#bbf7d0"],
+body[data-theme="light"] #journeyIQView [style*="; color:#bbf7d0"],
+body[data-theme="light"] #journeyIQView [style^="color:#a3e635"],
+body[data-theme="light"] #journeyIQView [style*=";color:#a3e635"],
+body[data-theme="light"] #journeyIQView [style*="; color:#a3e635"],
+body[data-theme="light"] #journeyIQView [style^="color:#84cc16"],
+body[data-theme="light"] #journeyIQView [style*=";color:#84cc16"],
+body[data-theme="light"] #journeyIQView [style*="; color:#84cc16"] {
+            color: #15803d !important;
+        }
+body[data-theme="light"] #journeyIQView [style^="color:#14b8a6"],
+body[data-theme="light"] #journeyIQView [style*=";color:#14b8a6"],
+body[data-theme="light"] #journeyIQView [style*="; color:#14b8a6"],
+body[data-theme="light"] #journeyIQView [style^="color:#2dd4bf"],
+body[data-theme="light"] #journeyIQView [style*=";color:#2dd4bf"],
+body[data-theme="light"] #journeyIQView [style*="; color:#2dd4bf"],
+body[data-theme="light"] #journeyIQView [style^="color:#5eead4"],
+body[data-theme="light"] #journeyIQView [style*=";color:#5eead4"],
+body[data-theme="light"] #journeyIQView [style*="; color:#5eead4"] {
+            color: #0f766e !important;
+        }
+body[data-theme="light"] #journeyIQView [style^="color:#22d3ee"],
+body[data-theme="light"] #journeyIQView [style*=";color:#22d3ee"],
+body[data-theme="light"] #journeyIQView [style*="; color:#22d3ee"],
+body[data-theme="light"] #journeyIQView [style^="color:#67e8f9"],
+body[data-theme="light"] #journeyIQView [style*=";color:#67e8f9"],
+body[data-theme="light"] #journeyIQView [style*="; color:#67e8f9"],
+body[data-theme="light"] #journeyIQView [style^="color:#0891b2"],
+body[data-theme="light"] #journeyIQView [style*=";color:#0891b2"],
+body[data-theme="light"] #journeyIQView [style*="; color:#0891b2"] {
+            color: #0e7490 !important;
+        }
+body[data-theme="light"] #journeyIQView [style^="color:#60a5fa"],
+body[data-theme="light"] #journeyIQView [style*=";color:#60a5fa"],
+body[data-theme="light"] #journeyIQView [style*="; color:#60a5fa"],
+body[data-theme="light"] #journeyIQView [style^="color:#3b82f6"],
+body[data-theme="light"] #journeyIQView [style*=";color:#3b82f6"],
+body[data-theme="light"] #journeyIQView [style*="; color:#3b82f6"],
+body[data-theme="light"] #journeyIQView [style^="color:#93c5fd"],
+body[data-theme="light"] #journeyIQView [style*=";color:#93c5fd"],
+body[data-theme="light"] #journeyIQView [style*="; color:#93c5fd"],
+body[data-theme="light"] #journeyIQView [style^="color:#38bdf8"],
+body[data-theme="light"] #journeyIQView [style*=";color:#38bdf8"],
+body[data-theme="light"] #journeyIQView [style*="; color:#38bdf8"] {
+            color: #1d4ed8 !important;
+        }
+body[data-theme="light"] #journeyIQView [style^="color:#a78bfa"],
+body[data-theme="light"] #journeyIQView [style*=";color:#a78bfa"],
+body[data-theme="light"] #journeyIQView [style*="; color:#a78bfa"],
+body[data-theme="light"] #journeyIQView [style^="color:#c4b5fd"],
+body[data-theme="light"] #journeyIQView [style*=";color:#c4b5fd"],
+body[data-theme="light"] #journeyIQView [style*="; color:#c4b5fd"],
+body[data-theme="light"] #journeyIQView [style^="color:#8b5cf6"],
+body[data-theme="light"] #journeyIQView [style*=";color:#8b5cf6"],
+body[data-theme="light"] #journeyIQView [style*="; color:#8b5cf6"] {
+            color: #6d28d9 !important;
+        }
+body[data-theme="light"] #journeyIQView [style^="color:#a855f7"],
+body[data-theme="light"] #journeyIQView [style*=";color:#a855f7"],
+body[data-theme="light"] #journeyIQView [style*="; color:#a855f7"],
+body[data-theme="light"] #journeyIQView [style^="color:#c084fc"],
+body[data-theme="light"] #journeyIQView [style*=";color:#c084fc"],
+body[data-theme="light"] #journeyIQView [style*="; color:#c084fc"] {
+            color: #7e22ce !important;
+        }
+body[data-theme="light"] #journeyIQView [style^="color:#ec4899"],
+body[data-theme="light"] #journeyIQView [style*=";color:#ec4899"],
+body[data-theme="light"] #journeyIQView [style*="; color:#ec4899"],
+body[data-theme="light"] #journeyIQView [style^="color:#f472b6"],
+body[data-theme="light"] #journeyIQView [style*=";color:#f472b6"],
+body[data-theme="light"] #journeyIQView [style*="; color:#f472b6"],
+body[data-theme="light"] #journeyIQView [style^="color:#f9a8d4"],
+body[data-theme="light"] #journeyIQView [style*=";color:#f9a8d4"],
+body[data-theme="light"] #journeyIQView [style*="; color:#f9a8d4"] {
+            color: #be185d !important;
+        }
+        /* CSS-class-colored jmap / tab accents */
+body[data-theme="light"] #journeyIQView .jiq-tab-btn.jiq-tab-active { color:#b45309 !important; background:rgba(234,88,12,0.14) !important; }
+body[data-theme="light"] #journeyIQView .jiq-tab-btn.jiq-tab-active .jiq-tab-sub { color:#c2410c !important; }
+body[data-theme="light"] #journeyIQView .jiq-jmap-funnel-title .pct-loyal,
+body[data-theme="light"] #journeyIQView .jiq-jmap-funnel-side .ok,
+body[data-theme="light"] #journeyIQView .jiq-jmap-funnel-winback-icon,
+body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-stat.is-good .stat-num,
+body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-winback .row-icon { color:#15803d !important; }
+body[data-theme="light"] #journeyIQView .jiq-jmap-funnel-title .pct-lost,
+body[data-theme="light"] #journeyIQView .jiq-jmap-funnel-side .drop,
+body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-stat.is-bad .stat-num,
+body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-drop .row-icon { color:#b91c1c !important; }
+body[data-theme="light"] #journeyIQView .jiq-jmap-legend .leg-earned,
+body[data-theme="light"] #journeyIQView .jiq-jmap-funnel-detour-icon,
+body[data-theme="light"] #journeyIQView .jiq-jmap-foot strong,
+body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-class.is-earned,
+body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-detour .row-icon { color:#b45309 !important; }
+body[data-theme="light"] #journeyIQView .jiq-jmap-funnel-headline strong,
+body[data-theme="light"] #journeyIQView .jiq-jmap-title-summary strong,
+body[data-theme="light"] #journeyIQView .jiq-jmap-legend .leg-owned,
+body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-class.is-owned,
+body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-next .row-icon { color:#1d4ed8 !important; }
+body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-icon { color:#7e22ce !important; }
+
+        /* ===========================================================
            PROGRESSIVE DISCLOSURE - "broad first, deep on demand"
            ===========================================================
            Used inside each Landman card to make the dashboard feel
