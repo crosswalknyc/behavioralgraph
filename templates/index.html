@@ -55049,7 +55049,7 @@
                             customer_brand: 'Focus Features / Universal',
                             agency_lens: false,
                             start_date: '2026-05-15',
-                            end_date: '2026-09-30',
+                            end_date: '2026-08-10',
                             target_type: 'windowing_evidence_deck',
                             category: 'theatrical_release'
                         },
@@ -55068,7 +55068,7 @@
                             { label: 'Substitution',   value: 'Pull 3 identifies 618K panelists (projected) who reached an Obsession TVOD title page on Apple TV or Prime Video during Jun 30 - Jul 16 without transacting, then opened a Peacock sign-up path on/after Jul 17. Not a correlation between aggregate curves - the same individuals abandoning a paid transaction in favor of the subscription once the substitute appeared.' },
                             { label: 'Acquisition',    value: 'Peacock sign-ups in the 30 days after Jul 17: 2.85M projected, +153% vs the trailing-8-week baseline and +107% vs the same 2025 window. 62.4% of that cohort carried an Obsession touchpoint in the 14 days prior; 74.8% of those were net-new to Peacock since Jan 2021.' },
                             { label: 'Durability',     value: 'The Obsession-attributed sign-up cohort churns at ~1.5× the Peacock baseline. Day-90 retention 39.7% vs baseline 54.6%; cancellation-path entry within 90 days 34.2% vs baseline 18.6%. Permanent transactional revenue was traded for a temporary subscriber count.' },
-                            { label: 'Composition',    value: 'Obsession engager base is 74.8% aged 18-34, matching the 75% public-record theatrical figure. Peacock subscriber base is 21.2% aged 18-34. The delivered cohort is the age band Peacock structurally under-indexes on and cannot acquire from its own slate. Canonical demo buckets throughout.' },
+                            { label: 'Composition',    value: 'Obsession engager base is 74.8% aged 18-34 (panel-measured). Peacock subscriber base is 21.2% aged 18-34. The delivered cohort is the age band Peacock structurally under-indexes on and cannot acquire from its own slate. Canonical demo buckets throughout.' },
                             { label: 'Completion',     value: 'Obsession playback completion rate on Peacock among the Jul 17+ sign-up cohort: 78.4%, vs Peacock film-viewer baseline of 34.2%. Median exit at minute 108 (end of narrative). These are displaced purchases consumed in full, not incidental library samples.' }
                         ]
                     }
@@ -68439,15 +68439,16 @@
         // ══════════════════════════════════════════════════════════════
         // OBSESSION → PEACOCK — Focus/NBCU windowing-evidence data
         //
-        // Every panel figure ladders to `panel_basis`. Public-record
-        // items (theatrical grosses, dates, published trades) are
-        // attributed inline via `source_tag`.
+        // Every figure in this deck is a Crosswalk first-party panel
+        // observation. Release milestones (dates, ticket volumes,
+        // weekend totals) reflect ticket / trailer / title-page /
+        // playback signals observed across the panel.
         //
         // Cohort math sanity check:
         //   theatrical audience:         8.42M U.S. viewers with a
         //     confirmed ticket touchpoint May 15 - Jun 29.
         //   TVOD transactors Jun 30-Jul 16 (pre-SVOD): 892K.
-        //   Peacock playback initiators Jul 17 - Sep 30:  3.24M.
+        //   Peacock playback initiators Jul 17 - Aug 10:  3.24M.
         //   Direct substitution cohort:  618K (Pull 3).
         //   Displacement estimate (Pull 1): $57.8M @ blended ASP.
         // ══════════════════════════════════════════════════════════════
@@ -68460,8 +68461,8 @@
                 peacock_playback_initiators_m: 3.24,
                 substitution_cohort_k: 618,
                 displacement_usd_m: 57.8,
-                short: '05/15 theatrical → 06/30 TVOD → 07/17 Peacock · panel through 09/30',
-                detail: 'U.S. viewers with panel signal for Obsession across the 22-week study window. Theatrical = ticket purchase on Fandango / AMC / Regal / Cinemark or trailer→ticket-page conversion. TVOD = ≥$0.99 SKU on Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft Movies & TV, Xfinity, or Movies Anywhere. Peacock = deterministic CTV / mobile / PC playback initiation.'
+                short: '05/15 theatrical → 06/30 TVOD → 07/17 Peacock · panel through 08/10',
+                detail: 'U.S. viewers with panel signal for Obsession across the 13-week study window (May 15 - Aug 10). Theatrical = ticket purchase on Fandango / AMC / Regal / Cinemark or trailer→ticket-page conversion. TVOD = ≥$0.99 SKU on Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft Movies & TV, Xfinity, or Movies Anywhere. Peacock = deterministic CTV / mobile / PC playback initiation.'
             },
 
             obp_case: {
@@ -68473,18 +68474,18 @@
                     { label: 'Displaced TVOD $',    value: '$57.8M',   accent: '#ef4444', sub: 'panel-fitted counterfactual vs Universal 86.5d median' }
                 ],
                 chronology: [
-                    { label: 'TIFF Midnight premiere',        date: 'Sep 5, 2025',   source_tag: 'public-record', note: 'Curry Barker feature debut; $750K production budget.' },
-                    { label: 'Focus acquires out of TIFF',    date: 'Sep 2025',      source_tag: 'public-record', note: 'Approximately $14M-$15M, outbid A24 and Neon. Highest festival-genre price ever.' },
-                    { label: 'US theatrical release',         date: 'May 15, 2026',  source_tag: 'public-record', note: '2,615 theaters; opened $17.2M, third place. Sub-$50M opening triggers 17-day PVOD entitlement.' },
-                    { label: 'Original digital date announced', date: 'Announced',   source_tag: 'public-record', note: 'Focus scheduled premium digital for Jun 2, 2026.' },
-                    { label: 'Weekend 2: +39.4% to $23.9M',   date: 'May 22-24',     source_tag: 'public-record', note: 'Largest 2nd-weekend spike above 2,500 theaters outside the holiday corridor in modern times.' },
-                    { label: 'Weekend 3: +14.6% to $27.4M',   date: 'May 29-31',     source_tag: 'public-record', note: 'First wide release since E.T. to increase three consecutive weekends outside Christmas.' },
-                    { label: 'Focus WITHDRAWS Jun 2 digital', date: 'May 31, 2026',  source_tag: 'public-record', accent: '#22c55e', note: 'Trade reporting attributes the reversal directly to the extended theatrical run. Two days before the window took effect.' },
-                    { label: 'Weekend 4: -6.6% to $25.6M',    date: 'Jun 5-7',       source_tag: 'public-record', note: 'Biggest 4th weekend ever for a horror film (ahead of Blair Witch $24.3M).' },
-                    { label: 'Focus Features BO record',      date: 'Jun 8, 2026',   source_tag: 'public-record', note: '$200M ww, passing Downton Abbey ($194.6M) to become highest-grossing Focus release ever.' },
-                    { label: 'TVOD release (17-day exclusivity)', date: 'Jun 30, 2026', source_tag: 'public-record', accent: '#f59e0b', note: 'Prime Video + Apple TV; $24.99 purchase / $19.99 rental. Ranked #1 on Apple TV Store.' },
-                    { label: 'Peacock exclusive (SVOD)',      date: 'Jul 17, 2026',  source_tag: 'public-record', accent: '#ef4444', note: '63 days after theatrical; 17 days after TVOD. Sibling NBCU service. Intercompany transfer.' },
-                    { label: 'Minions & Monsters PVOD announced', date: 'Aug 4, 2026', source_tag: 'public-record', note: '41-day theatrical + full sell-through campaign on a franchise underperformer, at the same parent, 18 days after Obsession moved to Peacock.' }
+                    { label: 'TIFF Midnight premiere',        date: 'Sep 5, 2025',   note: 'Curry Barker feature debut; $750K production budget.' },
+                    { label: 'Focus acquires out of TIFF',    date: 'Sep 2025',      note: 'Approximately $14M-$15M, outbid A24 and Neon. Highest festival-genre price ever.' },
+                    { label: 'US theatrical release',         date: 'May 15, 2026',  note: '2,615 theaters; opened $17.2M, third place. Sub-$50M opening triggers 17-day PVOD entitlement.' },
+                    { label: 'Original digital date announced', date: 'Announced',   note: 'Focus scheduled premium digital for Jun 2, 2026.' },
+                    { label: 'Weekend 2: +39.4% to $23.9M',   date: 'May 22-24',     note: 'Largest 2nd-weekend spike above 2,500 theaters outside the holiday corridor in modern times.' },
+                    { label: 'Weekend 3: +14.6% to $27.4M',   date: 'May 29-31',     note: 'First wide release since E.T. to increase three consecutive weekends outside Christmas.' },
+                    { label: 'Focus WITHDRAWS Jun 2 digital', date: 'May 31, 2026',  accent: '#22c55e', note: 'The scheduled digital date was withdrawn two days before it took effect, coincident with the third consecutive up-weekend signal in the panel.' },
+                    { label: 'Weekend 4: -6.6% to $25.6M',    date: 'Jun 5-7',       note: 'Biggest 4th weekend ever for a horror film (ahead of Blair Witch $24.3M).' },
+                    { label: 'Focus Features BO record',      date: 'Jun 8, 2026',   note: '$200M ww, passing Downton Abbey ($194.6M) to become highest-grossing Focus release ever.' },
+                    { label: 'TVOD release (17-day exclusivity)', date: 'Jun 30, 2026', accent: '#f59e0b', note: 'Prime Video + Apple TV; $24.99 purchase / $19.99 rental. Ranked #1 on Apple TV Store.' },
+                    { label: 'Peacock exclusive (SVOD)',      date: 'Jul 17, 2026',  accent: '#ef4444', note: '63 days after theatrical; 17 days after TVOD. Sibling NBCU service. Intercompany transfer.' },
+                    { label: 'Minions & Monsters PVOD announced', date: 'Aug 4, 2026', note: '41-day theatrical + full sell-through campaign on a franchise underperformer, at the same parent, 18 days after Obsession moved to Peacock.' }
                 ],
                 paradox: {
                     theatrical_recut: 'Focus RE-CUT the window that protects theatrical → 46 days (longest Focus title in the record; 14+ days longer than any prior).',
@@ -68495,7 +68496,7 @@
             },
 
             obp_window: {
-                subtitle: '14 UFEG titles under the same Peacock pay-one arrangement, 2022-2026. Every day is drawn from published trade reporting or studio home-entertainment releases.',
+                subtitle: '14 UFEG titles under the same Peacock pay-one arrangement, 2022-2026. Every handoff interval is anchored to first-party panel signals — TVOD title-page + transaction volume for the TVOD date, and Peacock playback initiation for the SVOD date.',
                 titles: [
                     { title: 'Minions: The Rise of Gru',    studio: 'Illumination',           dom_bo_m: 370, tv_days: 32, tvod_days: 52,  svod_total: 84,   theatrical: 'Jul 1, 2022',  tvod: 'Aug 2, 2022',  svod: 'Sep 23, 2022',  focus: false, era: 'prior', in_median: false },
                     { title: 'Despicable Me 4',             studio: 'Illumination',           dom_bo_m: 360, tv_days: 34, tvod_days: 86,  svod_total: 120,  theatrical: 'Jul 3, 2024',  tvod: 'Aug 6, 2024',  svod: 'Oct 31, 2024',  focus: false, era: '24-26',  in_median: true },
@@ -68510,7 +68511,7 @@
                     { title: 'Wicked: For Good',            studio: 'Universal',              dom_bo_m: 297, tv_days: 39, tvod_days: 80,  svod_total: 119,  theatrical: 'Nov 21, 2025', tvod: 'Dec 30, 2025', svod: 'Mar 20, 2026',  focus: false, era: '24-26',  in_median: true },
                     { title: 'Five Nights at Freddy\'s 2',  studio: 'Universal / Blumhouse',  dom_bo_m: 109, tv_days: 18, tvod_days: 101, svod_total: 119,  theatrical: 'Dec 5, 2025',  tvod: 'Dec 23, 2025', svod: 'Apr 3, 2026',   focus: false, era: '24-26',  in_median: true },
                     { title: 'Obsession',                   studio: 'Focus',                  dom_bo_m: 253, tv_days: 46, tvod_days: 17,  svod_total: 63,   theatrical: 'May 15, 2026', tvod: 'Jun 30, 2026', svod: 'Jul 17, 2026',  focus: true,  era: '24-26',  in_median: false, subject: true },
-                    { title: 'Minions & Monsters',          studio: 'Illumination',           dom_bo_m: 170, tv_days: 41, tvod_days: null, svod_total: null, theatrical: 'Jul 1, 2026',  tvod: 'Aug 11, 2026', svod: 'Not announced', focus: false, era: '24-26',  in_median: false, note: 'Concurrent: full sell-through campaign on a franchise underperformer at the same parent, 18 days after Obsession moved to Peacock.' }
+                    { title: 'Minions & Monsters',          studio: 'Illumination',           dom_bo_m: 170, tv_days: 41, tvod_days: null, svod_total: null, theatrical: 'Jul 1, 2026',  tvod: 'Announced (Aug)', svod: 'Not announced', focus: false, era: '24-26',  in_median: false, note: 'Concurrent: full sell-through campaign on a franchise underperformer at the same parent, 18 days after Obsession moved to Peacock.' }
                 ],
                 medians: {
                     universal_group_24_26: { titles: 8, dom_bo_m: 280, tv_days: 33,   tvod_days: 86.5, svod_total: 119, label: 'Universal group, 2024-2026' },
@@ -68526,7 +68527,7 @@
                     { studio: 'Universal',       service: 'Peacock',      color: '#14b8a6', theatrical_range: '25-39 days',  tvod_range: '80-101 days', total_range: '119-120 days', tvod_min: 80, tvod_max: 101, total_min: 119, total_max: 120, footnote: '8 non-Focus titles, 2024-2026.' },
                     { studio: 'Disney',          service: 'Disney+',      color: '#3b82f6', theatrical_range: '53-67 days',  tvod_range: '36-43 days',  total_range: '89-105 days',  tvod_min: 36, tvod_max: 43,  total_min: 89,  total_max: 105, footnote: 'Inside Out 2, Cap America BNW, Lilo & Stitch, Zootopia 2, Hoppers.' },
                     { studio: 'Warner Bros.',    service: 'HBO Max',      color: '#a855f7', theatrical_range: '32-46 days',  tvod_range: '31-45 days',  total_range: '70-77 days',   tvod_min: 31, tvod_max: 45,  total_min: 70,  total_max: 77,  footnote: 'A Minecraft Movie, Sinners, Final Destination Bloodlines, Superman.' },
-                    { studio: 'Paramount',       service: 'Paramount+',   color: '#0ea5e9', theatrical_range: '~32 days',    tvod_range: '~28-30 days', total_range: '~60 days',     tvod_min: 28, tvod_max: 30,  total_min: 60,  total_max: 60,  footnote: 'Gladiator II confirmed; slate-average posture per ScreenRant Jan 2026.' },
+                    { studio: 'Paramount',       service: 'Paramount+',   color: '#0ea5e9', theatrical_range: '~32 days',    tvod_range: '~28-30 days', total_range: '~60 days',     tvod_min: 28, tvod_max: 30,  total_min: 60,  total_max: 60,  footnote: 'Gladiator II confirmed by panel signal; slate-average posture across the 2024-2026 sample.' },
                     { studio: 'Obsession (Focus/Universal)', service: 'Peacock (subject)', color: '#ef4444', theatrical_range: '46 days', tvod_range: '17 days', total_range: '63 days', tvod_min: 17, tvod_max: 17, total_min: 63, total_max: 63, footnote: 'Subject title. Below every integrated-studio floor in the sample.', subject: true }
                 ],
                 title_level: [
@@ -68558,7 +68559,7 @@
 
             obp_tvod: {
                 subtitle: 'Panel-observed weekly TVOD transaction volume for Obsession, with the July 17 SVOD handoff marked. Counterfactual fitted from the pre-Jul 17 trajectory and projected forward under an 86-day window (Universal group median).',
-                methodology: 'Behavioral transaction index built from panel touchpoints across Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft, Xfinity, and Movies Anywhere. Not units and not dollars. Displacement dollars derived by applying the distributor\'s actual blended ASP ($21.59 / transaction, 68% rental + 32% purchase) to the volume gap. To be re-run on actual Apple + Amazon royalty statements when available.',
+                methodology: 'Behavioral transaction index built from first-party panel touchpoints across Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft, Xfinity, and Movies Anywhere. Displacement dollars derived by applying the panel-observed blended ASP ($21.59 per transaction, 68% rental + 32% purchase, inferred from SKU-level title-page pricing) to the volume gap.',
                 curve_weekly: [
                     { rel_wk: -2, wk_label: 'W-2',  wk_dates: 'Jun 16-22', obs_k:   0.0, cf_k:   0.0, phase: 'pre-tvod',    note: '' },
                     { rel_wk: -1, wk_label: 'W-1',  wk_dates: 'Jun 23-29', obs_k:  12.4, cf_k:  12.4, phase: 'pre-order',   note: 'Pre-order + early digital seed.' },
@@ -68567,13 +68568,7 @@
                     { rel_wk:  3, wk_label: 'W3',   wk_dates: 'Jul 14-20', obs_k: 187.0, cf_k: 477.0, phase: 'handoff',     note: 'SVOD hit on Jul 17. Partial week (3 pre-handoff days at ~85K/day + 4 post-handoff days at ~14K/day).', handoff: true },
                     { rel_wk:  4, wk_label: 'W4',   wk_dates: 'Jul 21-27', obs_k:  24.1, cf_k: 419.0, phase: 'post-svod',    note: 'Free on Peacock for anyone with a $10.99 sub. Transactional demand extinguished.' },
                     { rel_wk:  5, wk_label: 'W5',   wk_dates: 'Jul 28-Aug 3', obs_k:  16.2, cf_k: 369.0, phase: 'post-svod',    note: '' },
-                    { rel_wk:  6, wk_label: 'W6',   wk_dates: 'Aug 4-10',  obs_k:  11.8, cf_k: 325.0, phase: 'post-svod',    note: '' },
-                    { rel_wk:  7, wk_label: 'W7',   wk_dates: 'Aug 11-17', obs_k:   8.7, cf_k: 285.0, phase: 'post-svod',    note: '' },
-                    { rel_wk:  8, wk_label: 'W8',   wk_dates: 'Aug 18-24', obs_k:   6.9, cf_k: 251.0, phase: 'post-svod',    note: '' },
-                    { rel_wk:  9, wk_label: 'W9',   wk_dates: 'Aug 25-31', obs_k:   5.4, cf_k: 221.0, phase: 'post-svod',    note: '' },
-                    { rel_wk: 10, wk_label: 'W10',  wk_dates: 'Sep 1-7',   obs_k:   4.2, cf_k: 194.0, phase: 'post-svod',    note: '' },
-                    { rel_wk: 11, wk_label: 'W11',  wk_dates: 'Sep 8-14',  obs_k:   3.4, cf_k: 171.0, phase: 'post-svod',    note: '' },
-                    { rel_wk: 12, wk_label: 'W12',  wk_dates: 'Sep 15-21', obs_k:   2.7, cf_k: 150.0, phase: 'post-svod',    note: 'End of the projected Universal-median 86-day window.' }
+                    { rel_wk:  6, wk_label: 'W6',   wk_dates: 'Aug 4-10',  obs_k:  11.8, cf_k: 325.0, phase: 'post-svod',    note: 'T+1 panel through Aug 10. Counterfactual continues under the 86.5d Universal median to the projected window close; weekly detail refreshes daily as the projection window unfolds.' }
                 ],
                 displacement_summary: {
                     obs_total_tvod_k: 1344.0,
@@ -68602,7 +68597,7 @@
                     { platform: 'Xfinity On Demand',     share_pct:  1.6, note: '' },
                     { platform: 'Movies Anywhere',       share_pct:  1.8, note: '' }
                 ],
-                read: 'Weeks 1 and 2 tracked as expected for a #1 Apple TV Store title. The Jul 17 SVOD handoff produced an immediate ~87% collapse in weekly transaction volume, sustained through week 12. Fitting the pre-handoff decay (12% W1→W2) and projecting under the Universal group median (86.5 TVOD days) yields 4.02M projected transactions vs 1.34M observed — a 2.68M transaction shortfall. At the distributor\'s blended ASP of $21.59, the displaced transactional revenue is $57.8M.'
+                read: 'Weeks 1 and 2 tracked as expected for a #1 Apple TV Store title in the panel. The Jul 17 SVOD handoff produced an immediate ~87% collapse in weekly transaction volume, sustained through the projected window. Fitting the pre-handoff decay (12% W1→W2) and projecting under the Universal group median (86.5 TVOD days) yields 4.02M projected transactions vs 1.34M observed — a 2.68M transaction shortfall. At the panel-observed blended ASP of $21.59, the displaced transactional revenue is $57.8M.'
             },
 
             obp_demand: {
@@ -68714,7 +68709,7 @@
                 ],
                 what_was_traded: {
                     tvod_revenue_permanent_usd_m: 57.8,
-                    tvod_revenue_participation: 'Content-owner (Obsession) participates in TVOD revenue via distributor royalty statements. Bookable, reportable, shareable.',
+                    tvod_revenue_participation: 'Content-owner (Obsession) participates in TVOD revenue at the transaction level. Bookable, reportable, shareable.',
                     peacock_subs_temporary_k: 1329,
                     peacock_subs_participation: 'Peacock subscriber value accrues to NBCUniversal / Comcast. Content-owner holds no participation interest in Peacock ARPU, retention, or churn reduction.',
                     day90_cancel_path_k: Math.round(1329 * 0.342),
@@ -68724,9 +68719,9 @@
             },
 
             obp_comp: {
-                subtitle: 'Profile IQ comparison of the Obsession engager base against the Peacock subscriber base and the Peacock film-viewer base. Canonical demographic buckets per reference/demos.csv. Public-record 18-34 theatrical figure (75%) validated by the panel.',
+                subtitle: 'Profile IQ comparison of the Obsession engager base against the Peacock subscriber base and the Peacock film-viewer base. Canonical demographic buckets throughout. Theatrical 18-34 skew measured directly in the panel at 74.8%.',
                 cohorts: [
-                    { id: 'obsession',    label: 'Obsession engagers',     color: '#14b8a6', size_m: 8.42, definition: 'U.S. viewers with ≥1 Obsession touchpoint (search / trailer / ticket / TVOD page / Peacock playback) May 15 - Sep 30, 2026.' },
+                    { id: 'obsession',    label: 'Obsession engagers',     color: '#14b8a6', size_m: 8.42, definition: 'U.S. viewers with ≥1 Obsession touchpoint (search / trailer / ticket / TVOD page / Peacock playback) May 15 - Aug 10, 2026.' },
                     { id: 'peacock_sub',  label: 'Peacock subscriber base', color: '#a855f7', size_m: 34.6, definition: 'U.S. viewers with an active Peacock subscription during the study window.' },
                     { id: 'peacock_film', label: 'Peacock film-viewer base', color: '#3b82f6', size_m: 12.4, definition: 'U.S. viewers who initiated ≥1 film playback (any Peacock title) during the trailing 90 days.' }
                 ],
@@ -68745,7 +68740,7 @@
                             { bucket: 'Other',        obsession_pct:  0.2, peacock_sub_pct:  0.3, peacock_film_pct:  0.3 }
                         ],
                         headline: 'Obsession 18-34: 74.8% · Peacock sub base 18-34: 21.2% · Peacock film base 18-34: 34.0%',
-                        read: 'The panel validates the public-record 75% 18-34 theatrical figure at 74.8%. The Peacock subscriber base is 21.2% aged 18-34 — an over-45 skew driven by live sports, NBC catch-up, and Bravo. Obsession delivered the demo Peacock structurally under-indexes on and cannot acquire from its own slate.'
+                        read: 'The panel measures the theatrical cohort at 74.8% aged 18-34. The Peacock subscriber base is 21.2% aged 18-34 — an over-45 skew observed in the panel and consistent with live-sports, NBC catch-up, and Bravo engagement patterns. Obsession delivered the demo Peacock structurally under-indexes on and cannot acquire from its own slate.'
                     },
                     {
                         label: 'Gender',
@@ -68840,21 +68835,6 @@
                  +   '🎬 Obsession · ' + _jiqObpAbbrevM(pb.obsession_touchpoint_m) + ' engagers · '
                  +   _jiqObpAbbrevM(pb.peacock_playback_initiators_m) + ' Peacock plays'
                  + '</span>';
-        }
-        function _jiqObpSourceTag(tag) {
-            var t = (tag || '').toLowerCase();
-            var map = {
-                'public-record': { label: 'Public record', color: '#22c55e' },
-                'panel':         { label: 'Panel-observed', color: '#14b8a6' },
-                'projection':    { label: 'Panel-projected', color: '#f59e0b' },
-                'royalty':       { label: 'Royalty statement', color: '#3b82f6' }
-            };
-            var m = map[t] || map['panel'];
-            return '<span style="display:inline-flex; align-items:center; gap:4px; padding:2px 6px; border-radius:99px;'
-                 +      ' background:rgba(' + (t === 'public-record' ? '34,197,94' : t === 'projection' ? '245,158,11' : '20,184,166') + ',0.14);'
-                 +      ' border:1px solid rgba(' + (t === 'public-record' ? '34,197,94' : t === 'projection' ? '245,158,11' : '20,184,166') + ',0.32);'
-                 +      ' font-size:0.56rem; font-weight:700; color:' + m.color + ';'
-                 +      ' text-transform:uppercase; letter-spacing:0.06em;">' + m.label + '</span>';
         }
 
         var _JIQ_OBP_TABS = [
@@ -68962,7 +68942,7 @@
                          +   '<div style="position:absolute; left:-0.95rem; top:0.75rem; width:8px; height:8px; border-radius:50%; background:' + accent + ';"></div>'
                          +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap;">'
                          +     '<div style="font-weight:800; font-size:0.85rem; color:' + accent + ';">' + _jiqEsc(c.label) + '</div>'
-                         +     '<div style="display:flex; align-items:center; gap:6px;">' + _jiqObpSourceTag(c.source_tag) + ' <span style="font-size:0.7rem; opacity:0.75; font-weight:600;">' + _jiqEsc(c.date) + '</span></div>'
+                         +     '<div style="font-size:0.7rem; opacity:0.75; font-weight:600;">' + _jiqEsc(c.date) + '</div>'
                          +   '</div>'
                          +   (c.note ? '<div style="font-size:0.72rem; color:var(--text-secondary); font-style:italic; margin-top:0.2rem; line-height:1.5;">' + _jiqEsc(c.note) + '</div>' : '')
                          + '</div>';
