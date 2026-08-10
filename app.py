@@ -25012,6 +25012,49 @@ def smart_cache_update():
             except Exception as _norm_err:
                 print(f"⚠️  category-norm refresh scheduling failed after cache smart-update: {_norm_err}")
 
+        # ------------------------------------------------------------------
+        # 2026-08-10 (Rosalia base bug): SELF-HEALING RECONCILIATION PASS.
+        # Runs on EVERY smart_cache_update, not just when new_s3_keys exists.
+        # Catches orphans - profiles present in S3 + s3_cache but MISSING from
+        # admin_quick_selects.json and/or users' allowed_runs.
+        #
+        # These orphans happen when auto_add_to_quick_selects or
+        # auto_add_runs_to_all_users failed silently on the ORIGINAL "new"
+        # pass (network blip, process kill mid-save, race between two workers,
+        # etc.). The old code only ran those helpers on the single run where
+        # the file transitioned from new->cached, so a missed run meant the
+        # file was permanently invisible in the dropdown even though the
+        # s3_cache said "cached" - which is exactly what happened to
+        # Rosalia.csv today: got into s3_cache but not quick_selects,
+        # requiring manual triage.
+        #
+        # After this reconciliation, the invariant is:
+        #   every root CSV in S3 <=> present in admin_quick_selects
+        #   every root CSV in S3 <=> present in allowed_runs for every
+        #                            qualifying explicit-list user
+        # ...enforced on every smart_cache_update, self-healing forever.
+        try:
+            qs_now = load_json_from_s3(QUICK_SELECTS_FILE) or {}
+            qs_profiles = qs_now.get('profiles', {})
+            orphan_qs_keys = [k for k in current_s3_keys if k not in qs_profiles]
+            if orphan_qs_keys:
+                # Build category map for the reconciler using the fresh cache.
+                orphan_cats = {}
+                cache_by_key = {j.get('s3_key'): j for j in (s3_cache.get('jobs') or [])
+                                if isinstance(j, dict) and j.get('s3_key')}
+                for k in orphan_qs_keys:
+                    j = cache_by_key.get(k) or {}
+                    orphan_cats[k] = j.get('category') or ''
+                print(f"🩹 Self-heal: {len(orphan_qs_keys)} S3 root-CSV(s) missing from admin_quick_selects; adding...")
+                auto_add_to_quick_selects(orphan_qs_keys)
+                # Also fix allowed_runs on the same orphans (a missed
+                # quick_selects add usually means the users pass was
+                # also missed on that run).
+                auto_add_runs_to_all_users(orphan_qs_keys, key_category_map=orphan_cats)
+                print(f"🩹 Self-heal complete: added {len(orphan_qs_keys)} orphan(s) to quick_selects + users")
+        except Exception as _heal_err:
+            print(f"⚠️  self-heal reconciliation failed (non-fatal): {_heal_err}")
+
         return {'new': new_count, 'updated': updated_count, 'deleted': deleted_count, 'total': len(s3_cache['jobs'])}
         
     except Exception as e:
