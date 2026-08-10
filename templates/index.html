@@ -70241,6 +70241,45 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                      + '</div>';
             }
 
+            // Renders one horizontal day-axis (0-105 TVOD days). Used twice —
+            // once above the studios stack, once below — so the reader has
+            // the scale in view without scrolling. Numeric ticks sit below
+            // the baseline; colored callouts (17d Obsession / 28d floor)
+            // sit above the baseline.
+            function _obpIndustryTimelineAxis(orientation) {
+                var maxTvod = 105;
+                var regularTicks = [0, 20, 40, 60, 80, 100];
+                var callouts = [
+                    { d: 17, label: 'Obsession',        color: '#ef4444', bg: 'rgba(239,68,68,0.18)',  border: 'rgba(239,68,68,0.55)' },
+                    { d: 28, label: 'Integrated floor', color: '#fbbf24', bg: 'rgba(251,191,36,0.15)', border: 'rgba(251,191,36,0.55)' }
+                ];
+                var regHtml = regularTicks.map(function(d) {
+                    var pct = (d / maxTvod * 100).toFixed(2);
+                    return '<div style="position:absolute; left:' + pct + '%; top:50%; width:1px; height:7px; background:rgba(255,255,255,0.4); transform:translateX(-0.5px);"></div>'
+                         + '<div style="position:absolute; left:' + pct + '%; top:calc(50% + 10px); transform:translateX(-50%); font-size:0.6rem; font-weight:700; opacity:0.72; white-space:nowrap; letter-spacing:0.02em;">' + d + 'd</div>';
+                }).join('');
+                var calHtml = callouts.map(function(c) {
+                    var pct = (c.d / maxTvod * 100).toFixed(2);
+                    return '<div style="position:absolute; left:' + pct + '%; top:50%; margin-top:-8px; width:1px; height:8px; background:' + c.color + '; transform:translateX(-0.5px);"></div>'
+                         + '<div style="position:absolute; left:' + pct + '%; top:calc(50% - 26px); transform:translateX(-50%); font-size:0.56rem; font-weight:800; color:' + c.color + '; white-space:nowrap; padding:2px 7px; border-radius:99px; background:' + c.bg + '; border:1px solid ' + c.border + ';">' + c.d + 'd · ' + _jiqEsc(c.label) + '</div>';
+                }).join('');
+                var caption = (orientation === 'top')
+                    ? '<div style="font-size:0.55rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.09em; font-weight:800; margin:0.35rem 0 0.15rem;">Days from theatrical release → home-window handoff</div>'
+                    : '';
+                var footCaption = (orientation === 'bottom')
+                    ? '<div style="font-size:0.55rem; opacity:0.55; text-transform:uppercase; letter-spacing:0.09em; font-weight:700; margin:0.1rem 0 0.15rem;">Day scale (repeated)</div>'
+                    : '';
+                return '<div style="padding:0 0.75rem;">'
+                     +   caption
+                     +   '<div style="position:relative; height:48px; margin:0.15rem 0;">'
+                     +     '<div style="position:absolute; left:0; right:0; top:50%; height:1px; background:rgba(255,255,255,0.3);"></div>'
+                     +     calHtml
+                     +     regHtml
+                     +   '</div>'
+                     +   footCaption
+                     + '</div>';
+            }
+
             var studiosHtml = '<style>'
                 +   '.jiq-obp-hoverable:hover .jiq-obp-hover-panel {'
                 +     ' opacity:1; visibility:visible; pointer-events:auto;'
@@ -70248,6 +70287,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 +   ' }'
                 + '</style>'
                 + '<h4 style="font-size:0.85rem; margin:0.3rem 0 0.35rem;">🏢 Windowing ranges by studio</h4>'
+                + _obpIndustryTimelineAxis('top')
                 + (data.studios || []).map(function(s) {
                     var leftPct = (s.tvod_min / maxTvod) * 100;
                     var widthPct = ((s.tvod_max - s.tvod_min) / maxTvod) * 100;
@@ -70267,7 +70307,8 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                          +   _obpIndustryFootnote(s)
                          + '</div>';
                   }).join('')
-                + '<div style="font-size:0.66rem; opacity:0.6; margin-top:0.3rem;">Bars scaled 0-105 TVOD days. Faint red vertical = the 28-day industry-integrated floor set by Paramount / Gladiator II.</div>';
+                + _obpIndustryTimelineAxis('bottom')
+                + '<div style="font-size:0.66rem; opacity:0.6; margin-top:0.3rem;">Bars and axis both scaled 0-105 TVOD days. The 28-day integrated-studio floor (Paramount / Gladiator II) is drawn as a faint red vertical inside every row.</div>';
 
             var floors = data.floors || {};
             var floorHtml = '<div style="padding:0.85rem 1rem; border-radius:8px; margin-top:0.85rem; margin-bottom:0.85rem;'
