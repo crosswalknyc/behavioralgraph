@@ -70395,7 +70395,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 }
                 // T+0..T+6 (W1): opening bump then settle. Sums to ~615K.
                 var w1Curve = [110, 100, 92, 87, 82, 76, 68];
-                for (var k = 0; k <= 6; k++) push(k, w1Curve[k], w1Curve[k], 'tvod-live', k === 3 ? { peak: true } : null);
+                for (var k = 0; k <= 6; k++) push(k, w1Curve[k], w1Curve[k], 'tvod-live', k === 0 ? { peak: true } : null);
                 // T+7..T+13 (W2): sustained ~77K (sums to ~542K)
                 var w2Curve = [82, 80, 78, 77, 76, 75, 74];
                 for (var m = 7; m <= 13; m++) push(m, w2Curve[m - 7], w2Curve[m - 7], 'tvod-live');
@@ -70426,14 +70426,14 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
 
             function _obpTvodDailyChart(days) {
                 var W = 900, H = 340;
-                var padL = 62, padR = 24, padT = 50, padB = 60;
+                var padL = 62, padR = 60, padT = 50, padB = 60;
                 var innerW = W - padL - padR;
                 var innerH = H - padT - padB;
                 var minDay = days[0].day;
                 var maxDay = days[days.length - 1].day;
                 var xOf = function(d) { return padL + innerW * (d - minDay) / (maxDay - minDay); };
                 var maxVal = days.reduce(function(m, d) { return Math.max(m, d.obs, d.cf); }, 1);
-                var yMax = Math.ceil(maxVal / 20) * 20;
+                var yMax = Math.ceil(maxVal / 10) * 10;
                 if (yMax < 100) yMax = 100;
                 var yOf = function(v) { return padT + innerH * (1 - v / yMax); };
 
@@ -70450,6 +70450,28 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     gridHtml += '<text x="' + (padL - 8) + '" y="' + (y + 3) + '" fill="rgba(255,255,255,0.55)" font-size="9" text-anchor="end" font-family="Space Mono, monospace">' + t + 'K</text>';
                 }
                 gridHtml += '<text x="14" y="' + (padT + innerH / 2) + '" fill="rgba(255,255,255,0.5)" font-size="9" text-anchor="middle" font-family="Space Mono, monospace" transform="rotate(-90 14 ' + (padT + innerH / 2) + ')">Transactions / day</text>';
+
+                // Right-side percent-of-peak axis. Peak day (max obs value)
+                // = 100%. Because yMax is rounded to the nearest 10K, the
+                // 100% tick may sit slightly below the top of the plot when
+                // peakVal isn't already a clean multiple of 10.
+                var peakVal = days.reduce(function(m, d) { return Math.max(m, d.obs); }, 1);
+                var rightAxisX = W - padR;
+                var pctTicks = [0, 25, 50, 75, 100];
+                pctTicks.forEach(function(pct) {
+                    var v = (pct / 100) * peakVal;
+                    var y = yOf(v);
+                    gridHtml += '<line x1="' + rightAxisX + '" y1="' + y + '" x2="' + (rightAxisX + 5) + '" y2="' + y + '" stroke="rgba(255,255,255,0.45)" stroke-width="1"/>';
+                    var labelColor = (pct === 100) ? '#22c55e' : 'rgba(255,255,255,0.7)';
+                    var labelWeight = (pct === 100) ? '900' : '600';
+                    gridHtml += '<text x="' + (rightAxisX + 8) + '" y="' + (y + 3) + '" fill="' + labelColor + '" font-size="9" font-weight="' + labelWeight + '" text-anchor="start" font-family="Space Mono, monospace">' + pct + '%</text>';
+                });
+                // Faint dashed line at the peak so the eye can trace 100%
+                // across the plot and see where each day sits relative to it.
+                var peakLineY = yOf(peakVal);
+                gridHtml += '<line x1="' + padL + '" y1="' + peakLineY + '" x2="' + rightAxisX + '" y2="' + peakLineY + '" stroke="rgba(34,197,94,0.32)" stroke-width="1" stroke-dasharray="4 3"/>';
+                // Right-axis caption above the 100% tick
+                gridHtml += '<text x="' + (rightAxisX + 8) + '" y="' + (peakLineY - 8) + '" fill="rgba(34,197,94,0.85)" font-size="8" font-weight="800" text-anchor="start" font-family="Space Mono, monospace" letter-spacing="0.06em">% OF PEAK</text>';
 
                 var keyDates = [
                     { day: -14, label: 'Jun 16' },
