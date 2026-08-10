@@ -56131,7 +56131,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                             { label: 'Substitution',   value: 'Pull 3 identifies 618K panelists (projected) who reached an Obsession TVOD title page on Apple TV or Prime Video during Jun 30 - Jul 16 without transacting, then started Peacock playback of Obsession on/after Jul 17. Of that cohort, 138K new + reactivated Peacock subs are attributed to Obsession in SubIQ (76K new / 62K reactivated, 30d window) — the strict-subscription subset. Not a correlation between aggregate curves; the same individuals abandoning a paid transaction in favor of watching on Peacock once the substitute appeared.' },
                             { label: 'Acquisition',    value: 'Peacock sign-ups in the 30 days after Jul 17: 2.85M projected, +153% vs the trailing-8-week baseline and +107% vs the same 2025 window. 62.4% of that cohort carried an Obsession touchpoint in the 14 days prior; 74.8% of those were net-new to Peacock since Jan 2021.' },
                             { label: 'Durability',     value: 'The Obsession-attributed sign-up cohort churns at ~1.5× the Peacock baseline. Day-90 retention 39.7% vs baseline 54.6%; cancellation-path entry within 90 days 34.2% vs baseline 18.6%. Permanent transactional revenue was traded for a temporary subscriber count.' },
-                            { label: 'Composition',    value: 'Obsession engager base is 74.8% aged 18-34 (panel-measured). Peacock subscriber base is 21.2% aged 18-34. The delivered cohort is the age band Peacock structurally under-indexes on and cannot acquire from its own slate. Canonical demo buckets throughout.' },
+                            { label: 'Composition',    value: 'Obsession theatrical audience is 74.8% aged 18-34 (panel-measured, ticket-touchpoint cohort). Peacock subscriber base is 21.2% aged 18-34. The delivered cohort is the age band Peacock structurally under-indexes on and cannot acquire from its own slate. Canonical demo buckets throughout.' },
                             { label: 'Completion',     value: 'Obsession playback completion rate on Peacock among the Jul 17+ sign-up cohort: 78.4%, vs Peacock film-viewer baseline of 34.2%. Median exit at minute 108 (end of narrative). These are displaced purchases consumed in full, not incidental library samples.' }
                         ]
                     }
@@ -69796,11 +69796,11 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             },
 
             obp_comp: {
-                subtitle: 'Profile IQ comparison of the Obsession engager base against the Peacock subscriber base and the Peacock film-viewer base. Canonical demographic buckets throughout. Theatrical 18-34 skew measured directly in the panel at 74.8%.',
+                subtitle: 'Profile IQ comparison of the Obsession theatrical audience (ticket-touchpoint cohort, May 15 - Jun 29) against the Peacock subscriber base and the Peacock film-viewer base. Canonical demographic buckets throughout. Theatrical 18-34 skew measured directly in the panel at 74.8%.',
                 cohorts: [
-                    { id: 'obsession',    label: 'Obsession engagers',     color: '#14b8a6', size_m: 8.42, definition: 'U.S. viewers with ≥1 Obsession touchpoint (search / trailer / ticket / TVOD page / Peacock playback) May 15 - Aug 10, 2026.' },
-                    { id: 'peacock_sub',  label: 'Peacock subscriber base', color: '#a855f7', size_m: 34.6, definition: 'U.S. viewers with an active Peacock subscription during the study window.' },
-                    { id: 'peacock_film', label: 'Peacock film-viewer base', color: '#3b82f6', size_m: 12.4, definition: 'U.S. viewers who initiated ≥1 film playback (any Peacock title) during the trailing 90 days.' }
+                    { id: 'obsession',    label: 'Obsession theatrical audience', color: '#14b8a6', size_m: 8.42, unit_label: 'ticket audience', definition: 'U.S. viewers with a confirmed Obsession theatrical ticket touchpoint (Fandango / Atom / AMC / Regal / Cinemark showtime page → seat select → purchase confirmation) during the May 15 - Jun 29, 2026 pre-SVOD theatrical window. TVOD abandoners and Peacock playback initiators are measured separately in Pulls 1 & 3.' },
+                    { id: 'peacock_sub',  label: 'Peacock subscriber base',        color: '#a855f7', size_m: 34.6, unit_label: 'subscribers',      definition: 'U.S. viewers with an active Peacock subscription during the study window.' },
+                    { id: 'peacock_film', label: 'Peacock film-viewer base',       color: '#3b82f6', size_m: 12.4, unit_label: 'film viewers',     definition: 'U.S. viewers who initiated ≥1 film playback (any Peacock title) during the trailing 90 days.' }
                 ],
                 demographics: [
                     {
@@ -69846,7 +69846,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                             { bucket: '$250,000 or More',     obsession_pct:  3.2, peacock_sub_pct:  3.8, peacock_film_pct:  3.6 }
                         ],
                         headline: 'Obsession slightly lower-income than Peacock sub base — consistent with a Gen Z / early-career cohort.',
-                        read: 'The Obsession engager base skews modestly lower on household income than the Peacock subscriber base (52.2% under $75K vs 46.8%). Consistent with the 18-34 age skew — a younger, earlier-career cohort at the price-elastic end of the transactional funnel.'
+                        read: 'The Obsession theatrical audience skews modestly lower on household income than the Peacock subscriber base (52.2% under $75K vs 46.8%). Consistent with the 18-34 age skew — a younger, earlier-career cohort at the price-elastic end of the transactional funnel.'
                     }
                 ],
                 completion: {
@@ -69909,7 +69909,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             return '<span style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px;'
                  + ' background:rgba(20,184,166,0.14); border:1px solid rgba(20,184,166,0.32);'
                  + ' font-size:0.66rem; font-weight:700; color:#5eead4; text-transform:uppercase; letter-spacing:0.06em;">'
-                 +   '🎬 Obsession · ' + _jiqObpAbbrevM(pb.obsession_touchpoint_m) + ' engagers · '
+                 +   '🎬 Obsession · ' + _jiqObpAbbrevM(pb.obsession_touchpoint_m) + ' ticket audience · '
                  +   _jiqObpAbbrevM(pb.peacock_playback_initiators_m) + ' Peacock plays'
                  + '</span>';
         }
@@ -70922,7 +70922,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 + (data.cohorts || []).map(function(c) {
                     return '<div style="padding:0.7rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.025); border-left:4px solid ' + c.color + ';">'
                          +   '<div style="font-size:0.66rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:' + c.color + ';">' + _jiqEsc(c.label) + '</div>'
-                         +   '<div style="font-size:1.35rem; font-weight:900; margin-top:0.15rem;">' + _jiqObpAbbrevM(c.size_m) + ' viewers</div>'
+                         +   '<div style="font-size:1.35rem; font-weight:900; margin-top:0.15rem;">' + _jiqObpAbbrevM(c.size_m) + ' ' + _jiqEsc(c.unit_label || 'viewers') + '</div>'
                          +   '<div style="font-size:0.68rem; opacity:0.75; margin-top:0.2rem; line-height:1.5;">' + _jiqEsc(c.definition) + '</div>'
                          + '</div>';
                   }).join('')
