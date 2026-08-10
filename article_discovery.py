@@ -41,7 +41,9 @@ logger = logging.getLogger(__name__)
 
 S3_BUCKET   = os.environ.get('BLUE_IQ_CACHE_BUCKET', 'dashboard-inputs')
 S3_PREFIX   = 'blue_iq/articles/v4/'  # v4: freshness + stale-year strip (2026-07-06)
-CACHE_TTL_S = 12 * 3600                # 12h — articles are time-sensitive
+CACHE_TTL_S = 3 * 3600                 # 3h — Jenna 2026-08-10: "Top political articles doesn't seem to be updating".
+                                       # 12h was way too long for a news-cycle card;
+                                       # 3h matches how often the underlying stories turn over.
 AGENT_TIMEOUT_S = float(os.environ.get('ARTICLE_AGENT_TIMEOUT', '60'))
 AGENT_MODEL = os.environ.get('ARTICLE_AGENT_MODEL', 'gpt-4o')
 

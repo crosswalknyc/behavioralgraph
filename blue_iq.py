@@ -39,6 +39,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import urllib.parse
 from collections import Counter, defaultdict
@@ -67,6 +68,18 @@ S3_CUBE_KEY        = os.environ.get('BLUE_IQ_CUBE_KEY', 'blue_iq/aggregates/late
 def _cube_key_for_lookback(lookback_days: int) -> str:
     return f"blue_iq/aggregates/cube_{int(lookback_days)}d.json"
 CACHE_TTL_S        = int(os.environ.get('BLUE_IQ_CACHE_TTL', '86400'))   # 24h
+# Serve fast from the 24h cache, but if the payload is older than this
+# window, kick a background compute_panel_view(force_refresh=True) so
+# the *next* request gets a freshened payload. Primarily driven by
+# `top_articles` being a news-cycle card that goes stale within a few
+# hours; the outer 24h TTL was baking the article list in for the
+# whole day. Everything else (candidates, engaged, playbook, issue
+# shares, search/social synth, top_searches) has its own per-agent
+# cache with the right TTL, so the background refresh mostly re-runs
+# GDELT + Google Trends HTTP fetches (~15-25s wall clock). Added
+# 2026-08-10 after Jenna's "Top political articles doesn't seem to
+# be updating" report.
+ARTICLE_STALE_S    = int(os.environ.get('BLUE_IQ_ARTICLE_STALE_S', '7200'))  # 2h
 CUBE_STALE_S       = int(os.environ.get('BLUE_IQ_CUBE_STALE_S', '172800'))  # 48h before warning
 MIN_CELL_SIZE      = int(os.environ.get('BLUE_IQ_MIN_CELL_SIZE', '100')) # privacy floor
 DEFAULT_LOOKBACK_DAYS = int(os.environ.get('BLUE_IQ_LOOKBACK_DAYS', '30'))
@@ -745,20 +758,81 @@ def blue_iq_cache_key(filters: dict) -> str:
 
 
 def _cache_get(filters: dict) -> Optional[dict]:
+    """Return the cached payload if within `CACHE_TTL_S`. Attaches the
+    S3 `LastModified` age (in seconds) to the returned dict under
+    `_cache_age_s` so callers can decide whether to trigger a
+    background freshness refresh (see `ARTICLE_STALE_S`).
+    """
     key = S3_CACHE_PREFIX + blue_iq_cache_key(filters) + '.json'
     try:
         s3 = _s3()
         resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=key)
         last_mod = resp.get('LastModified')
-        if last_mod and (datetime.now(timezone.utc) - last_mod).total_seconds() > CACHE_TTL_S:
-            return None
+        age_s: Optional[float] = None
+        if last_mod:
+            age_s = (datetime.now(timezone.utc) - last_mod).total_seconds()
+            if age_s > CACHE_TTL_S:
+                return None
         data = json.loads(resp['Body'].read().decode('utf-8'))
+        if isinstance(data, dict) and age_s is not None:
+            data['_cache_age_s'] = age_s
         return data
     except Exception as e:
         msg = str(e)
         if 'NoSuchKey' not in msg and '404' not in msg:
             logger.debug("blue_iq cache miss: %s", msg)
         return None
+
+
+# ── Background freshness refresh ─────────────────────────────────────
+#
+# When a cache-hit payload is older than ARTICLE_STALE_S but still
+# within CACHE_TTL_S, we serve it immediately AND kick off a
+# background thread that runs `compute_panel_view(force_refresh=True)`
+# so the next request gets a freshened payload. Deduplicated per
+# (party, geo_type, geo_value, lookback) so simultaneous requests
+# for the same slice only fire one background refresh.
+_BG_STALE_REFRESH_INFLIGHT: set[str] = set()
+_BG_STALE_REFRESH_LOCK = threading.Lock()
+
+
+def _bg_stale_refresh_key(f: dict) -> str:
+    return json.dumps({
+        'party':     f.get('party') or 'All',
+        'geo_type':  f.get('geo_type') or 'National',
+        'geo_value': f.get('geo_value') or '',
+        'lookback':  int(f.get('lookback_days') or DEFAULT_LOOKBACK_DAYS),
+    }, sort_keys=True, separators=(',', ':'))
+
+
+def _kick_stale_refresh(f: dict) -> None:
+    """Fire-and-forget background thread that force-refreshes the
+    payload for `f` and re-writes S3. Idempotent per slice.
+    """
+    key = _bg_stale_refresh_key(f)
+    with _BG_STALE_REFRESH_LOCK:
+        if key in _BG_STALE_REFRESH_INFLIGHT:
+            return
+        _BG_STALE_REFRESH_INFLIGHT.add(key)
+
+    def _worker(target_filters: dict, dedupe_key: str) -> None:
+        t0 = time.time()
+        try:
+            logger.info("blue_iq bg-refresh: START %s", dedupe_key)
+            compute_panel_view(dict(target_filters), force_refresh=True)
+            logger.info("blue_iq bg-refresh: DONE  %s (%.1fs)",
+                        dedupe_key, time.time() - t0)
+        except Exception as e:
+            logger.warning("blue_iq bg-refresh: FAIL  %s (%.1fs): %s",
+                           dedupe_key, time.time() - t0, e)
+        finally:
+            with _BG_STALE_REFRESH_LOCK:
+                _BG_STALE_REFRESH_INFLIGHT.discard(dedupe_key)
+
+    threading.Thread(
+        target=_worker, args=(dict(f), key), daemon=True,
+        name=f'blue_iq-bg-refresh-{key[:32]}',
+    ).start()
 
 
 def _cache_put(filters: dict, payload: dict) -> None:
@@ -2972,11 +3046,24 @@ def compute_panel_view(filters: dict, *, force_refresh: bool = False) -> dict:
     """
     f = _normalize_filters(filters)
 
-    # 1. Per-request cache (24h, identical filter combo)
+    # 1. Per-request cache (24h, identical filter combo).
+    #
+    # If the cached payload is older than ARTICLE_STALE_S (2h by
+    # default) we still SERVE it immediately so no user waits, but
+    # we kick off a background thread that force-refreshes the
+    # payload so the next request within the 24h window gets fresh
+    # articles / trends / voter-journey data. This is the fix for
+    # Jenna's 2026-08-10 "Top political articles doesn't seem to be
+    # updating" — outer 24h TTL was baking the article list in for
+    # the full day.
     if not force_refresh:
         cached = _cache_get(f)
         if cached:
             cached['cache_hit'] = True
+            age_s = cached.get('_cache_age_s')
+            if isinstance(age_s, (int, float)) and age_s > ARTICLE_STALE_S:
+                _kick_stale_refresh(f)
+                cached['bg_refresh_kicked'] = True
             return cached
 
     # 2. Cube lookup (sub-second S3 GetObject, then in-process cache for 5 min).
