@@ -70426,34 +70426,22 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             var maxTvod = 105; // scale everything to 105 days for visual comparison
 
             // Renders a studio-row footnote. If hover_titles is present the
-            // footnote is a dashed-underline anchor with a floating panel
-            // that lists the counted titles on hover.
+            // titles are listed inline underneath the footnote line (was a
+            // hover tooltip; converted to always-visible after the tooltip
+            // failed to surface on the Universal row).
             function _obpIndustryFootnote(s) {
                 if (!s.hover_titles || !s.hover_titles.length) {
                     return '<div style="font-size:0.66rem; opacity:0.6; font-style:italic;">' + _jiqEsc(s.footnote) + '</div>';
                 }
                 var titleList = s.hover_titles.map(function(tt) {
-                    return '<li style="padding:2px 0;">' + _jiqEsc(tt) + '</li>';
+                    return '<li style="padding:1px 0;">' + _jiqEsc(tt) + '</li>';
                 }).join('');
-                return '<div style="font-size:0.66rem; opacity:0.75; font-style:italic;">'
-                     +   '<span class="jiq-obp-hoverable" style="position:relative; display:inline-block; border-bottom:1px dashed rgba(255,255,255,0.35); cursor:help;">'
-                     +     _jiqEsc(s.footnote)
-                     +     ' <span style="opacity:0.7; font-size:0.62rem; font-style:normal;">🛈</span>'
-                     +     '<span class="jiq-obp-hover-panel" style="'
-                     +       'position:absolute; left:0; top:100%; margin-top:6px; z-index:30;'
-                     +       ' min-width:280px; max-width:360px; padding:0.6rem 0.8rem; border-radius:7px;'
-                     +       ' background:rgba(15,23,42,0.98); border:1px solid ' + s.color + ';'
-                     +       ' box-shadow:0 8px 24px rgba(0,0,0,0.5);'
-                     +       ' font-style:normal; opacity:0; visibility:hidden; pointer-events:none;'
-                     +       ' transition:opacity 0.12s ease, visibility 0s linear 0.12s;'
-                     +       ' white-space:normal; text-align:left;'
-                     +     '">'
-                     +       '<div style="font-size:0.56rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:' + s.color + '; margin-bottom:0.3rem;">Titles counted (' + s.hover_titles.length + ')</div>'
-                     +       '<ul style="list-style:disc; margin:0; padding-left:1.05rem; font-size:0.72rem; color:var(--text-primary); line-height:1.55;">'
-                     +         titleList
-                     +       '</ul>'
-                     +     '</span>'
-                     +   '</span>'
+                return '<div style="font-size:0.66rem; opacity:0.75; font-style:italic; margin-bottom:0.3rem;">' + _jiqEsc(s.footnote) + '</div>'
+                     + '<div style="padding:0.5rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:2px solid ' + s.color + ';">'
+                     +   '<div style="font-size:0.55rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:' + s.color + '; margin-bottom:0.25rem;">Titles counted (' + s.hover_titles.length + ')</div>'
+                     +   '<ul style="list-style:disc; margin:0; padding-left:1.05rem; font-size:0.7rem; color:var(--text-primary); line-height:1.55;">'
+                     +     titleList
+                     +   '</ul>'
                      + '</div>';
             }
 
