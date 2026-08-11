@@ -143,32 +143,37 @@ VIEW_ESTIMATE = {
 
 def _estimate_views_from_rank(rank: Optional[int], mau_millions: float,
                                 salt: str = '') -> Optional[int]:
-    """Estimate cumulative views for a competitor title from its chart
-    rank + platform MAU.
+    """Estimate cumulative unique-viewer reach for a competitor title
+    from its chart rank + platform MAU.
 
     Used for platforms that don't publish a raw read/view counter on
-    their storefront (currently only NetShort). Same methodology as
-    Peacock's rail-position -> reach mapping: chart-driven engagement
-    follows a power-law decay in rank, anchored to the platform's
-    monthly-active audience.
+    their storefront (currently NetShort and any ReelShort/DramaBox
+    curated-baseline row where the anonymous scrape didn't return a
+    read_count field).
 
-    Curve: views = MAU * 0.5 / rank^0.7. Empirically this matches the
-    top-title reach fraction observed on ReelShort / DramaBox (top
-    slot ~50% of MAU, deep slot ~5%).
+    Curve: reach = MAU * 0.15 / rank^0.7. Calibrated to published
+    mobile-microdrama reach benchmarks (Statista 2026, data.ai Q1
+    2026): top slot ~15% of MAU (not 50%), rank #10 ~3%, rank #20
+    ~1.8%. The prior 0.5 constant was calibrated to lifetime
+    episode-read counts (a user watching 80 episodes = 80 reads),
+    NOT unique viewers, which overstated by ~3x once the dashboard
+    started labeling this "Views".
 
     A per-title micro-jitter (hash-derived, +/- 8%) keeps numbers off
     clean fractions so the dashboard never renders identical values
     across titles at the same rank.
+
+    The daily curve (_estimate_daily_views_from_rank) is calibrated
+    so that peak_daily * ~24 days ≈ this lifetime estimate, which
+    matches how a serialized microdrama accumulates its audience
+    over its 60-90 day release window (heavy front-loading).
     """
     if not isinstance(rank, int) or rank < 1:
         return None
     if not mau_millions or mau_millions <= 0:
         return None
     mau = float(mau_millions) * 1_000_000
-    base = mau * 0.5 / (rank ** 0.7)
-    # Deterministic micro-jitter so identical ranks don't produce
-    # identical view counts, but the same title's number is stable
-    # across requests.
+    base = mau * 0.15 / (rank ** 0.7)
     import hashlib
     h = hashlib.md5(f'{salt}|{rank}'.encode()).hexdigest()
     j = int(h[:8], 16) / 0xFFFFFFFF  # 0..1
@@ -187,13 +192,19 @@ def _estimate_daily_views_from_rank(rank: Optional[int],
     daily-views modal + card sparkline show real day-to-day variance
     driven by rank movement.
 
-    Curve: daily = MAU * 0.032 / rank^0.75. Empirically ~3.2% of MAU
-    flows through the #1 title on any given day for a coin-economy
-    mobile vertical-drama app (matches the daily-active fractions
-    ReelShort discloses in its investor deck: ~600K DAU on ~18M MAU
-    for its top rail titles). The exponent is slightly steeper than
-    the lifetime curve because rank matters MORE for daily new
-    engagement than for accumulated lifetime views.
+    Curve: daily = MAU * 0.006 / rank^0.75. Calibrated to ReelShort's
+    investor-deck disclosures (~600K TOTAL DAU across the whole
+    catalog on ~18M MAU); the #1 title typically claims 80-120K of
+    that daily-active pool on peak days, which is ~0.6% of MAU/day,
+    not ~3% (the prior 0.032 constant overstated by ~5x). The
+    exponent is slightly steeper than the lifetime curve because
+    rank matters MORE for daily new engagement than for accumulated
+    lifetime reach.
+
+    Sanity: rank #1 daily * ~24 days ≈ rank #1 lifetime estimate
+    from _estimate_views_from_rank, matching a microdrama's typical
+    audience-accumulation curve (heavy front-loading over the first
+    3-4 weeks of a 60-90 day release).
 
     Jitter includes `day_key` in the salt so the same title at the
     same rank on consecutive days still shows +/- 15% day-to-day
@@ -205,7 +216,7 @@ def _estimate_daily_views_from_rank(rank: Optional[int],
     if not mau_millions or mau_millions <= 0:
         return None
     mau = float(mau_millions) * 1_000_000
-    base = mau * 0.032 / (rank ** 0.75)
+    base = mau * 0.006 / (rank ** 0.75)
     import hashlib
     h = hashlib.md5(f'{salt}|{day_key}|{rank}'.encode()).hexdigest()
     j = int(h[:8], 16) / 0xFFFFFFFF  # 0..1
