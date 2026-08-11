@@ -15390,6 +15390,31 @@ def api_microdramas_iq_competitors():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/microdramas-iq/all', methods=['POST'])
+@requires_auth
+def api_microdramas_iq_all():
+    """Return the aggregated top-titles list across every platform,
+    sorted by estimated views over the active window. Backs the
+    default "All Platforms" landing tab in the Microdramas IQ view."""
+    ok, err = _require_microdramas_iq()
+    if not ok:
+        return err
+    try:
+        req = request.get_json(silent=True) or {}
+        filters = {
+            'window_days': req.get('window_days'),
+            'top_n':       req.get('top_n'),
+            'genre':       req.get('genre'),
+            'start_date':  req.get('start_date'),
+            'end_date':    req.get('end_date'),
+        }
+        payload = _microdramas_iq.compute_all_platforms_view(filters)
+        return jsonify(payload)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/cron/microdramas-scrapers', methods=['POST', 'GET'])
 def api_cron_microdramas_scrapers():
     """Run the Microdramas IQ scrapers (Peacock + ReelShort + DramaBox) on
