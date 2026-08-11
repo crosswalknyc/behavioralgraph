@@ -16105,6 +16105,28 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             border-color: #cbd5e1;
         }
 
+        /* Journey IQ run picker (native <select>): paint the option +
+           optgroup rows so Windows/Chrome doesn't render white bars for
+           the group headers / rows when the dropdown is open (macOS uses
+           the native popup and ignored these, so it looked fine there). */
+        #jiqRunPicker option {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        #jiqRunPicker optgroup {
+            background-color: var(--bg-primary);
+            color: var(--text-secondary);
+            font-weight: 700;
+        }
+        body[data-theme="light"] #jiqRunPicker option {
+            background-color: #ffffff;
+            color: #1e293b;
+        }
+        body[data-theme="light"] #jiqRunPicker optgroup {
+            background-color: #ffffff;
+            color: #475569;
+        }
+
         /* ===========================================================
            CONVERSION FUNNEL (sits at the top of the master journey-
            map card, before the title). 5 horizontal stacked-bar rows
@@ -71187,7 +71209,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
 
                 return '<div style="width:100%; overflow-x:auto;">'
                      +   '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; min-width:660px; height:auto; display:block;">'
-                     +     '<defs><marker id="obpDispArrow" viewBox="0 0 10 10" markerWidth="7" markerHeight="7" refX="5" refY="5" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9 Z" fill="#ef4444"/></marker></defs>'
+                     +     '<defs><marker id="obpDispArrow" viewBox="0 0 10 10" markerWidth="7" markerHeight="7" refX="9" refY="5" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9 Z" fill="#ef4444"/></marker></defs>'
                      +     '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="transparent"/>'
                      +     buildShade
                      +     crashShade
