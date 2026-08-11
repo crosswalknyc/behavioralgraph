@@ -5468,6 +5468,13 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     lens_snap        = results.get('lens_scores') or {}
     lens_config      = list(lens_snap.get('lenses') or [])
     lens_scores_map  = dict(lens_snap.get('items') or {})
+    # Per-kind top-50% cutoffs computed at scrape time (see
+    # lens_relevance._compute_cutoffs).  Shape:
+    #   {lens_id: {kind: min_score_to_show}, ...}
+    # Frontend uses these instead of a global threshold so tabs where
+    # the persona scores everything low (e.g. MS NOW songs) still
+    # filter meaningfully rather than blanking.
+    lens_cutoffs     = dict(lens_snap.get('cutoffs') or {})
 
     # Stamp US audience estimates (weekly listeners / streams / views)
     # + day-over-day direction onto every song / podcast / streaming
@@ -5605,6 +5612,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'business_news_by_source':        business_by_source,
             'lens_config':                    lens_config,
             'lens_scores':                    lens_scores_map,
+            'lens_cutoffs':                   lens_cutoffs,
             'social_trending':                social_trending,
             'streaming_trending':             streaming_trending,
             'products_by_retailer':           products,
