@@ -120341,10 +120341,10 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
 
             // State outlines (continental)
             _US_STATE_PATHS.forEach(function(d) {
-                svg += '<path d="' + _fixPath(d) + '" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="0.7" stroke-linejoin="round"/>';
+                svg += '<path d="' + _fixPath(d) + '" fill="none" stroke="rgba(148,163,184,0.28)" stroke-width="0.7" stroke-linejoin="round"/>';
             });
-            svg += '<path d="' + _fixPath(_AK_PATH) + '" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="0.7" stroke-linejoin="round"/>';
-            svg += '<path d="' + _fixPath(_HI_PATH) + '" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="0.7" stroke-linejoin="round"/>';
+            svg += '<path d="' + _fixPath(_AK_PATH) + '" fill="none" stroke="rgba(148,163,184,0.28)" stroke-width="0.7" stroke-linejoin="round"/>';
+            svg += '<path d="' + _fixPath(_HI_PATH) + '" fill="none" stroke="rgba(148,163,184,0.28)" stroke-width="0.7" stroke-linejoin="round"/>';
 
             // Draw bubbles (smallest first so large ones don't obscure small)
             const reversed = [...bubbles].reverse();
@@ -120451,8 +120451,8 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 var dist = Math.sqrt(dx * dx + dy * dy);
                 var edgeX = b.x + (dx / dist) * r;
                 var edgeY = b.y + (dy / dist) * r;
-                svg += '<line x1="' + edgeX.toFixed(1) + '" y1="' + edgeY.toFixed(1) + '" x2="' + lp.x.toFixed(1) + '" y2="' + lp.y.toFixed(1) + '" stroke="rgba(255,255,255,0.5)" stroke-width="1" />';
-                svg += '<circle cx="' + lp.x.toFixed(1) + '" cy="' + lp.y.toFixed(1) + '" r="2" fill="rgba(255,255,255,0.6)" />';
+                svg += '<line x1="' + edgeX.toFixed(1) + '" y1="' + edgeY.toFixed(1) + '" x2="' + lp.x.toFixed(1) + '" y2="' + lp.y.toFixed(1) + '" stroke="rgba(148,163,184,0.55)" stroke-width="1" />';
+                svg += '<circle cx="' + lp.x.toFixed(1) + '" cy="' + lp.y.toFixed(1) + '" r="2" fill="rgba(148,163,184,0.65)" />';
             });
 
             // Draw labels at final positions
@@ -120466,13 +120466,13 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     var line1 = words.slice(0, mid).join(' ');
                     var line2 = words.slice(mid).join(' ');
                     var topY = lp.y - lineGap;
-                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + topY.toFixed(1) + '" fill="#fff" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + line1 + '</text>';
-                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap).toFixed(1) + '" fill="#fff" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + line2 + '</text>';
-                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap * 2).toFixed(1) + '" fill="rgba(255,255,255,0.8)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
+                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + topY.toFixed(1) + '" fill="var(--text-primary)" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + line1 + '</text>';
+                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap).toFixed(1) + '" fill="var(--text-primary)" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + line2 + '</text>';
+                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap * 2).toFixed(1) + '" fill="var(--text-secondary)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
                 } else {
                     var topY = lp.y - lineGap * 0.5;
-                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + topY.toFixed(1) + '" fill="#fff" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + b.name + '</text>';
-                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap).toFixed(1) + '" fill="rgba(255,255,255,0.8)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
+                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + topY.toFixed(1) + '" fill="var(--text-primary)" font-size="' + labelSize + '" text-anchor="middle" dominant-baseline="central" font-weight="700" font-family="inherit" style="pointer-events:none;">' + b.name + '</text>';
+                    svg += '<text x="' + lp.x.toFixed(1) + '" y="' + (topY + lineGap).toFixed(1) + '" fill="var(--text-secondary)" font-size="' + pctLabelSize + '" text-anchor="middle" font-weight="600" font-family="inherit" style="pointer-events:none;">' + b.pct.toFixed(1) + '%</text>';
                 }
             });
 
