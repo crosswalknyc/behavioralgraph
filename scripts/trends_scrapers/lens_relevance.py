@@ -130,66 +130,138 @@ _LENSES: list[dict[str, Any]] = [
         'emoji':       '\U0001F4FA',                       # 📺
         'description': ('Politics-forward center-left audience; core '
                          'MS NOW (formerly MSNBC) viewer.'),
+        # Persona text is written kind-by-kind so Claude has a clear
+        # per-surface rubric.  Every kind that shows up on the
+        # dashboard (headlines / podcasts / songs / books / films /
+        # search / social / person) has at least one HIGH, MID, and
+        # LOW named example so Claude never has to guess "what would
+        # this cohort listen to?" or "what film would they watch?".
         'persona': (
-            "MS NOW (formerly MSNBC) reader / viewer.  Demographic: "
-            "US adults skewing 55+, college-educated, urban and inner-"
-            "suburban, ~85% Democratic-leaning, ~65% female, higher-"
-            "income (median ~$85K HHI), heavy news consumers.\n"
+            "MS NOW (formerly MSNBC) reader / viewer.\n"
+            "DEMOGRAPHIC: US adults skewing 55+, college-educated, "
+            "urban / inner-suburban, ~85% Democratic-leaning, ~65% "
+            "female, higher-income (median ~$85K HHI), heavy news "
+            "consumers, NPR / PBS pledgers, Sunday NYT subscribers.\n"
             "\n"
-            "CORE INTERESTS (score HIGH, 80-100):\n"
-            "  - Trump-administration accountability journalism, "
-            "Justice Department, FBI, Special Counsel coverage.\n"
-            "  - Congressional hearings (Jan 6, impeachment, etc.), "
-            "Democratic strategy, DNC internals, Kamala Harris, Joe "
-            "Biden, AOC, Bernie Sanders, Elizabeth Warren, Chuck "
-            "Schumer, Hakeem Jeffries.\n"
-            "  - Rachel Maddow, Nicolle Wallace, Chris Hayes, Joy "
-            "Reid, Lawrence O'Donnell, Alex Wagner, Stephanie Ruhle, "
-            "Ari Melber, Katy Tur, Jen Psaki, Symone Sanders-Townsend, "
-            "Andrea Mitchell, Willie Geist, Mika Brzezinski, Joe "
-            "Scarborough.\n"
-            "  - Pod Save America, The Bulwark, The Daily (NYT), Up "
-            "First (NPR), The Rachel Maddow Show podcast, Deadline "
-            "White House, Prosecuting Donald Trump, Amicus (Slate), "
-            "The Ezra Klein Show, The New Yorker Radio Hour.\n"
-            "  - NYT, Washington Post, The New Yorker, The Atlantic, "
-            "ProPublica, PBS NewsHour, NPR, Reuters, AP.\n"
-            "  - Foreign policy (Ukraine, Israel/Gaza, China), "
-            "climate policy, voting rights, Supreme Court coverage, "
-            "election integrity, reproductive rights.\n"
-            "  - Books by / about political figures, prestige "
-            "nonfiction (history / biography / policy), literary "
-            "fiction, book-club darlings.\n"
-            "  - Prestige TV drama (Succession, The Diplomat, The "
-            "Morning Show, Slow Horses), historical documentaries, "
-            "Ken Burns, PBS Frontline.\n"
+            "IDENTITY: they view themselves as informed, empathetic, "
+            "and defenders of institutions.  Consumption is oriented "
+            "around news, ideas, and culturally-serious "
+            "entertainment.  They still watch cable + linear TV.\n"
             "\n"
-            "MILDLY RELEVANT (score MEDIUM, 40-65):\n"
-            "  - Business coverage IF politically-adjacent (Musk, "
-            "Zuckerberg, big-tech antitrust, banking-crisis stories, "
-            "OPEC).\n"
-            "  - Health-policy stories (Medicare, ACA, drug pricing) "
-            "but not pure lifestyle wellness.\n"
-            "  - Entertainment IF culturally-political (Barbie, "
-            "Oppenheimer, Handmaid's Tale, activist actors).\n"
+            "===================================================\n"
+            "SCORING BY KIND (use the full 0-100 range)\n"
+            "===================================================\n"
             "\n"
-            "NOT INTERESTED (score LOW, 5-25):\n"
-            "  - Fox News talent, Newsmax, OAN, MAGA-aligned podcasts "
-            "(Rogan, Ben Shapiro, Charlie Kirk, Tucker Carlson, Tim "
-            "Pool, Bannon).\n"
-            "  - Sports (NFL/NBA/MLB/soccer game coverage, fantasy "
-            "sports, betting).\n"
-            "  - Gaming, esports, streamers (Twitch, gaming YouTube).\n"
-            "  - K-pop, hip-hop rankings, mainstream pop charts, "
-            "TikTok viral songs, DJ mixes.\n"
-            "  - Reality TV, dating shows, teen dramas, YA romance, "
-            "Wattpad-adjacent romantasy.\n"
-            "  - Crypto, NFTs, day-trading, meme-stock coverage.\n"
-            "  - Fashion / beauty / influencer content, most "
-            "lifestyle magazines.\n"
-            "  - Fast food, QSR, grocery-store trend coverage.\n"
-            "  - Horror, action franchises, superhero tentpoles unless "
-            "specifically culturally-political."
+            "HEADLINES\n"
+            "  HIGH (85-100): Trump-administration accountability, "
+            "DOJ/FBI, Congressional hearings, Supreme Court "
+            "decisions, foreign policy (Ukraine, Israel/Gaza, "
+            "China), climate policy, voting rights, DEI-erasure, "
+            "reproductive rights, Democratic strategy, big-tech "
+            "antitrust, philanthropy accountability.\n"
+            "  MID (50-70): business coverage IF politically-charged "
+            "(Musk, Zuckerberg, banking crisis, OPEC), health-policy "
+            "stories, culturally-political entertainment coverage.\n"
+            "  LOW (5-25): pure market moves, individual company "
+            "earnings without political angle, celebrity gossip, "
+            "sports scores, tech product reviews without policy hook.\n"
+            "\n"
+            "PODCASTS\n"
+            "  HIGH (85-100): The Rachel Maddow Show, Pod Save "
+            "America, The Bulwark Daily, The Ezra Klein Show, The "
+            "Daily (NYT), Up First (NPR), Deadline White House, "
+            "Amicus (Slate), Prosecuting Donald Trump, The New "
+            "Yorker Radio Hour, Fresh Air, The Weekly Show with Jon "
+            "Stewart, Democracy Now.\n"
+            "  MID (45-65): Radiolab, This American Life, Serial, "
+            "Reveal, 60 Minutes, prestige-narrative shows.\n"
+            "  LOW (5-20): Joe Rogan, Ben Shapiro, Tucker Carlson, "
+            "Charlie Kirk, Matt Walsh, Candace Owens, Fearless with "
+            "Jason Whitlock, most sports-talk (Bill Simmons, Pat "
+            "McAfee), most true-crime, most gaming / anime "
+            "podcasts.\n"
+            "\n"
+            "SONGS - MS NOW readers DO listen to music, so DO NOT "
+            "cap songs artificially low.  Their consumption skews "
+            "singer-songwriter / classic-rock canon / Americana / "
+            "'NPR Tiny Desk' territory.\n"
+            "  HIGH (75-95): Joni Mitchell, James Taylor, Carole "
+            "King, Paul Simon, Fleetwood Mac, Bruce Springsteen, "
+            "Bonnie Raitt, Bob Dylan, Van Morrison, Neil Young, "
+            "Norah Jones, Brandi Carlile, Alison Krauss, Chris "
+            "Stapleton, Adele, John Prine, Emmylou Harris, Bon Iver, "
+            "Sufjan Stevens, Sara Bareilles.\n"
+            "  MID (45-65): mainstream rock canon (Journey, Tears "
+            "for Fears, U2, Elton John, Billy Joel), Adele, "
+            "Kacey Musgraves.\n"
+            "  LOW (5-25): current pop/hip-hop chart hits (Post "
+            "Malone, Doja Cat, Bad Bunny), K-pop, viral TikTok "
+            "sounds, EDM/DJ mixes, Morgan Wallen (a bit lower - "
+            "some MS NOW readers do NOT like his politics), Latin-"
+            "language reggaeton, most Spanish-language chart music.\n"
+            "\n"
+            "BOOKS\n"
+            "  HIGH (85-100): Trump-era accountability journalism "
+            "(Maggie Haberman, Bob Woodward, Michael Wolff, "
+            "Ronan Farrow), Patrick Radden Keefe, prestige "
+            "literary fiction (Ann Patchett, Elizabeth Strout, "
+            "George Saunders, Colson Whitehead), New Yorker / "
+            "Atlantic / NYRB compendiums, biographies of "
+            "presidents / justices / activists, climate books.\n"
+            "  MID (45-65): general literary fiction, memoirs, "
+            "prestige nonfiction.\n"
+            "  LOW (5-20): BookTok romantasy (Sarah J. Maas, "
+            "Rebecca Yarros, Colleen Hoover), YA fantasy, cozy "
+            "mysteries, sports biographies, self-help / "
+            "productivity, evangelical / conservative-imprint "
+            "(Regnery, Dinesh D'Souza), niche fandom / gaming "
+            "novelizations.\n"
+            "\n"
+            "FILMS / TV\n"
+            "  HIGH (80-95): prestige drama (Succession, The "
+            "Diplomat, Slow Horses, The Morning Show, The Crown), "
+            "docs and biopics of political / artistic figures, "
+            "Oscar-bait indie, historical drama, PBS Frontline / "
+            "Ken Burns, Handmaid's Tale, All The Light We Cannot "
+            "See, Oppenheimer.\n"
+            "  MID (45-65): high-quality genre with cultural weight "
+            "(The Last of Us, Yellowjackets, House of Cards, mid "
+            "Christopher Nolan).\n"
+            "  LOW (5-25): superhero tentpoles, YA fantasy "
+            "adaptations, reality dating (Love Island / The "
+            "Bachelor / 90 Day Fiancé), horror franchises, "
+            "kids/family animation, most action franchises.\n"
+            "\n"
+            "SEARCHES\n"
+            "  HIGH (75-95): politicians (AOC, Bernie, Kamala, "
+            "Trump), justice/legal terms (indictment, subpoena, "
+            "opinion, precedent), foreign-policy hotspots, climate "
+            "events (heatwave, flood, wildfire, IPCC), Supreme "
+            "Court cases, election terms.\n"
+            "  MID (40-65): business-adjacent politics (Musk, "
+            "Zuckerberg), health-policy terms.\n"
+            "  LOW (5-25): pop-culture beefs, sports box scores, "
+            "streamer names, meme stocks, celebrity-couple gossip, "
+            "Spanish-language sports queries, WWE / UFC results, "
+            "K-pop groups.\n"
+            "\n"
+            "PEOPLE (trending)\n"
+            "  HIGH (80-95): Democratic politicians, progressive "
+            "activists, prestige journalists, SCOTUS justices, "
+            "senior admin officials, foreign leaders in the news, "
+            "Nobel laureates.\n"
+            "  MID (40-65): major cultural figures with political "
+            "weight (Bruce Springsteen, Meryl Streep, Bill Gates).\n"
+            "  LOW (5-25): TikTok influencers, sports stars, "
+            "reality-TV cast, K-pop idols, gaming streamers.\n"
+            "\n"
+            "SOCIAL (Reddit / TikTok / YouTube posts)\n"
+            "  HIGH (70-90): posts about politics, breaking news, "
+            "SCOTUS, elections, climate.\n"
+            "  MID (40-60): general 'interesting news' posts, "
+            "clever observational humor.\n"
+            "  LOW (5-25): fandom posts, gaming clips, K-pop, "
+            "fitness / diet / hustle content, MLM content."
         ),
     },
     {
@@ -199,78 +271,187 @@ _LENSES: list[dict[str, Any]] = [
         'description': ('Ages 27-42 as of 2026 (born 1981-1996). Home / '
                          'career / nostalgia sweet spot.'),
         'persona': (
-            "Millennial audience, ages 27-42 as of 2026 (born 1981-"
-            "1996).  Demographic: US adults, roughly 50/50 gender, "
-            "60% suburban / 30% urban / 10% rural, ~70% college-"
+            "Millennial audience, ages 27-42 as of 2026 (born "
+            "1981-1996).\n"
+            "DEMOGRAPHIC: US adults, roughly 50/50 gender, 60% "
+            "suburban / 30% urban / 10% rural, ~70% college-"
             "attended, median HHI ~$75K, ~55% married, ~40% have "
             "kids under 12.\n"
             "\n"
-            "CORE INTERESTS (score HIGH, 80-100):\n"
-            "  - Nostalgic reboots and franchises: Cobra Kai, Star "
-            "Wars, Marvel (esp. Loki-era), Barbie, Fallout, Legend of "
-            "Zelda, Pokemon, Harry Potter, LOTR / Rings of Power, "
-            "Stranger Things, Ted Lasso, The Bear, Only Murders in "
-            "the Building, Yellowjackets, Succession, Severance, "
-            "Beef.\n"
-            "  - Pop / hip-hop / country crossover: Taylor Swift, "
-            "Olivia Rodrigo, Sabrina Carpenter, Chappell Roan, Beyonce, "
-            "Bad Bunny, Zach Bryan, Morgan Wallen, Post Malone, Drake, "
-            "Kendrick Lamar, SZA.\n"
-            "  - Podcasts (high-consumption cohort): Smartless, "
-            "Armchair Expert, Call Her Daddy, SmartLess, My Favorite "
-            "Murder, Crime Junkie, Serial, The Daily, Huberman Lab, "
-            "The Tim Ferriss Show, How I Built This, Reply All, "
-            "Radiolab, This American Life.\n"
-            "  - Books: BookTok darlings (Colleen Hoover, Rebecca "
-            "Yarros, Sarah J. Maas, Emily Henry, Taylor Jenkins Reid), "
-            "prestige nonfiction (Atomic Habits, Educated, Bad Blood, "
-            "Braiding Sweetgrass), self-help + personal finance "
-            "(Ramit Sethi, Morgan Housel).\n"
-            "  - Personal finance / adulting content: student-loan "
-            "coverage, first-home-buying, 401k / index-fund investing, "
-            "side-hustle economy, DTC brand affinity.\n"
-            "  - Gaming (broader than Gen Z): Nintendo Switch, "
-            "Fortnite, Zelda, Mario, Elden Ring, Baldur's Gate 3, "
-            "The Sims, Stardew Valley, Animal Crossing, retro / "
-            "arcade nostalgia.\n"
-            "  - Parenting content for kids under 12 (millennial "
-            "parents are the largest active-parent cohort), Bluey, "
-            "Cocomelon backlash, screen-time debate.\n"
-            "  - Streaming platforms (heavy users): Netflix, Disney+, "
-            "Hulu, HBO Max, Prime Video, Peacock, Apple TV+.\n"
-            "  - K-pop (BTS, BLACKPINK, NewJeans, Stray Kids), K-"
-            "drama, anime crossovers.\n"
-            "  - Tech coverage that's practical: iPhone, MacBook, "
-            "Google Pixel, Apple Watch, AirPods, home-tech reviews, "
-            "AI-for-productivity stories.\n"
-            "  - Reddit-native trends (subreddit-driven virality), "
-            "TikTok algorithm content, Instagram Reels.\n"
+            "IDENTITY: nostalgia-forward, career-and-mortgage-"
+            "anxious, high podcast consumers, wellness-attuned, "
+            "'main character energy' online.  Skeptical of cable "
+            "news, receptive to prestige TV, deeply engaged with "
+            "fandom (Marvel/Star Wars/HOTD/Taylor Swift).\n"
             "\n"
-            "MILDLY RELEVANT (score MEDIUM, 40-65):\n"
-            "  - Politics if scandal / celebrity / meme-driven, "
-            "otherwise low interest.\n"
-            "  - Traditional business coverage (mergers, earnings, "
-            "market moves).\n"
-            "  - Hard news / world affairs (yes, but less than "
-            "boomer-plus cohort).\n"
+            "===================================================\n"
+            "SCORING BY KIND (use the full 0-100 range)\n"
+            "===================================================\n"
             "\n"
-            "NOT INTERESTED (score LOW, 5-25):\n"
-            "  - Cable-news personalities specifically (Rachel Maddow, "
-            "Sean Hannity, Tucker Carlson - millennials don't watch "
-            "cable news).\n"
-            "  - Traditional talk radio, boomer-podcast circuit.\n"
-            "  - Vintage brands their parents love (Chevrolet, Buick, "
-            "Golden Corral).\n"
-            "  - AARP / retirement / senior-focused content.\n"
-            "  - Gen Z-only slang or aesthetic (some overlap but not "
-            "core).\n"
-            "  - Country music that isn't Zach Bryan / Morgan Wallen "
-            "/ Kacey Musgraves crossover-tier.\n"
-            "  - Cricket, rugby, most soccer (except MLS + WC), "
-            "boxing, UFC (male-skew millennial only)."
+            "HEADLINES\n"
+            "  HIGH (80-95): personal-finance (student loans, "
+            "mortgage rates, 401k, index funds, side hustles), "
+            "tech-product reviews (iPhone, Pixel, Whoop, Oura, "
+            "Peloton), wellness / mental-health, parenting "
+            "anxiety (screen time, IVF, daycare costs, Bluey), "
+            "AI-productivity stories, DTC brand news, celebrity "
+            "scandal / relationship news, TV-recap-worthy shows.\n"
+            "  MID (45-65): general business coverage, national "
+            "news events, tech-industry moves without a personal "
+            "hook.\n"
+            "  LOW (5-25): pure Congressional-procedure stories, "
+            "AARP / retirement / senior-focused, dense foreign-"
+            "policy analysis, philanthropy-sector inside-baseball.\n"
+            "\n"
+            "PODCASTS\n"
+            "  HIGH (85-100): SmartLess, Armchair Expert with "
+            "Dax Shepard, Call Her Daddy, My Favorite Murder, "
+            "Crime Junkie, Serial, The Daily, Office Ladies, "
+            "Morbid, Anna Faris Is Unqualified, Huberman Lab, "
+            "How I Built This, Diary of a CEO, Ten Percent "
+            "Happier, The Ringer, Bill Simmons.\n"
+            "  MID (45-65): NPR journalism podcasts, prestige-"
+            "narrative shows, general true-crime.\n"
+            "  LOW (5-20): The Rachel Maddow Show (millennials "
+            "don't listen to cable), Tucker Carlson, Charlie "
+            "Kirk, Candace Owens, most religious podcasts, "
+            "boomer-oriented sports-talk (Colin Cowherd), "
+            "specialized-hobby podcasts (Vortex Optics, "
+            "Dogman Encounters).\n"
+            "\n"
+            "SONGS\n"
+            "  HIGH (85-100): Taylor Swift (all eras), Olivia "
+            "Rodrigo, Sabrina Carpenter, Chappell Roan, Beyoncé, "
+            "Post Malone, Morgan Wallen, Zach Bryan, Kendrick "
+            "Lamar, Drake, Doja Cat, Ariana Grande, Bad Bunny, "
+            "Billie Eilish, SZA, Dua Lipa, plus 2000s / 2010s "
+            "nostalgia (Fall Out Boy, Paramore, Kanye pre-2018, "
+            "One Direction, Rihanna, Katy Perry, Backstreet Boys "
+            "throwbacks).\n"
+            "  MID (50-70): current adult-alt (Hozier, Noah "
+            "Kahan, Phoebe Bridgers), classic-rock crossovers "
+            "(Fleetwood Mac renaissance).\n"
+            "  LOW (5-25): pre-70s / adult-standards, Latin-"
+            "language regional-Mexican unless viral (banda / "
+            "corridos low unless it's Peso Pluma / Fuerza "
+            "Regida), niche K-pop B-sides, most classical / "
+            "opera, most Christian contemporary.\n"
+            "\n"
+            "BOOKS\n"
+            "  HIGH (85-100): BookTok romantasy (Sarah J. Maas, "
+            "Rebecca Yarros / Fourth Wing / Iron Flame / Onyx "
+            "Storm, Colleen Hoover / Verity, Emily Henry, Taylor "
+            "Jenkins Reid / Daisy Jones), self-help + finance "
+            "(Atomic Habits, Psychology of Money, Ramit Sethi), "
+            "prestige nonfiction (Educated, Bad Blood, Braiding "
+            "Sweetgrass), memoirs of comedians and pop-culture "
+            "figures.\n"
+            "  MID (45-65): general literary fiction, prestige "
+            "biography, sci-fi crossover (Project Hail Mary), "
+            "productivity nonfiction.\n"
+            "  LOW (5-25): conservative-imprint political books, "
+            "evangelical / prosperity gospel, older cozy mystery "
+            "series, most in-hobby niche (Dungeon Crawler Carl "
+            "series unless part of Millennial-gamer aesthetic - "
+            "in which case MID), boomer memoirs.\n"
+            "\n"
+            "FILMS / TV\n"
+            "  HIGH (85-100): franchise / nostalgia (Marvel, Star "
+            "Wars, HOTD / GOT, Harry Potter, LOTR / Rings of "
+            "Power, Barbie, Oppenheimer, Cobra Kai, Stranger "
+            "Things, Fallout), prestige TV (The Bear, Ted Lasso, "
+            "Only Murders in the Building, Yellowjackets, "
+            "Succession, Severance, Beef, White Lotus, Bridgerton, "
+            "The Last of Us), animated-for-adults, Bluey (parent-"
+            "millennials).\n"
+            "  MID (45-65): general Netflix rom-com, indie "
+            "drama, mid-tier action.\n"
+            "  LOW (5-25): PBS Frontline / Ken Burns docs (skew "
+            "older), classic Hollywood catalog (unless "
+            "nostalgia-flavor 90s), kids animation without "
+            "cross-appeal.\n"
+            "\n"
+            "SEARCHES\n"
+            "  HIGH (80-95): reboots / franchises (Star Wars "
+            "canceled, HOTD, Marvel), Taylor Swift terms, sports "
+            "AT the fandom level (Aces vs Liberty for female "
+            "millennials, Chase Briscoe / F1 / NFL for male), "
+            "tech-product reviews (Pixel, Whoop, Peloton), "
+            "parenting terms (IVF, daycare, Bluey), personal-"
+            "finance terms (student loan forgiveness, mortgage "
+            "rates, index fund).\n"
+            "  MID (40-65): general news terms, wellness (diet, "
+            "protein, gut health).\n"
+            "  LOW (5-25): SCOTUS docket terms, Congressional-"
+            "procedure terms, senior-focused terms (Medicare "
+            "supplement), foreign-language sports-league terms "
+            "unless the person follows Liga MX, obscure political "
+            "figures.\n"
+            "\n"
+            "PEOPLE (trending)\n"
+            "  HIGH (80-95): actors from prestige TV, pop-star "
+            "principals (Taylor Swift, Sabrina Carpenter, "
+            "Beyoncé), Marvel / Star Wars leads, athletes with "
+            "cultural crossover (Travis Kelce, Caitlin Clark), "
+            "podcast hosts they listen to, viral influencers.\n"
+            "  MID (40-65): major athletes, mid-tier actors, "
+            "authors of BookTok titles.\n"
+            "  LOW (5-25): cable-news anchors, senior politicians "
+            "(unless meme-tier), boomer icons, foreign politicians "
+            "without US-cultural crossover, hyper-local figures.\n"
+            "\n"
+            "SOCIAL (Reddit / TikTok / YouTube posts)\n"
+            "  HIGH (75-95): pop-culture / fandom posts, "
+            "wellness / life-hack content, career and money "
+            "posts, Bluey / parenting humor, gaming clips.\n"
+            "  MID (40-60): general observational humor, "
+            "news commentary.\n"
+            "  LOW (5-25): partisan cable-news style content, "
+            "religious / evangelical posts, boomer-topic posts."
         ),
     },
 ]
+
+
+# ---------------------------------------------------------------------------
+# Anchor items - concrete calibration examples pinned at the top of
+# every batch prompt.  Claude scores these first (visible to itself as
+# already-decided) so it can peg the rest of the batch against a known
+# scale, instead of inventing a new distribution per batch.  Choose
+# spread anchors: one at 90+, a mid-tier, a low-tier, per kind that
+# appears in the batch.
+# ---------------------------------------------------------------------------
+_ANCHORS: dict[str, list[dict[str, Any]]] = {
+    'ms_now_reader': [
+        {'kind': 'podcast',  'title': 'The Rachel Maddow Show',       'score': 98},
+        {'kind': 'podcast',  'title': 'Pod Save America',              'score': 92},
+        {'kind': 'headline', 'title': 'Trump DOJ moves to dismiss ...','score': 88},
+        {'kind': 'book',     'title': 'Regime Change (Haberman)',      'score': 95},
+        {'kind': 'song',     'title': 'The River (Bruce Springsteen)', 'score': 82},
+        {'kind': 'song',     'title': 'Landslide (Fleetwood Mac)',     'score': 78},
+        {'kind': 'song',     'title': 'Not Like Us (Kendrick Lamar)',  'score': 22},
+        {'kind': 'film',     'title': 'Oppenheimer',                   'score': 82},
+        {'kind': 'film',     'title': 'Fast & Furious 12',             'score': 12},
+        {'kind': 'search',   'title': 'kamala harris',                 'score': 92},
+        {'kind': 'search',   'title': 'aces vs liberty',               'score': 12},
+        {'kind': 'podcast',  'title': 'The Tucker Carlson Show',       'score': 5},
+    ],
+    'millennials': [
+        {'kind': 'podcast',  'title': 'SmartLess',                     'score': 95},
+        {'kind': 'podcast',  'title': 'My Favorite Murder',            'score': 90},
+        {'kind': 'podcast',  'title': 'The Rachel Maddow Show',        'score': 18},
+        {'kind': 'song',     'title': 'The Fate of Ophelia (Taylor Swift)', 'score': 95},
+        {'kind': 'song',     'title': 'I Had Some Help (Post Malone / Morgan Wallen)', 'score': 92},
+        {'kind': 'song',     'title': 'Landslide (Fleetwood Mac)',     'score': 55},
+        {'kind': 'book',     'title': 'Fourth Wing (Rebecca Yarros)',  'score': 95},
+        {'kind': 'book',     'title': 'Atomic Habits (James Clear)',   'score': 92},
+        {'kind': 'book',     'title': 'Regime Change (Haberman)',      'score': 32},
+        {'kind': 'film',     'title': 'House of the Dragon',           'score': 92},
+        {'kind': 'film',     'title': 'PBS Frontline: Ukraine',        'score': 18},
+        {'kind': 'search',   'title': 'house of the dragon season 4',  'score': 92},
+        {'kind': 'search',   'title': 'kamala harris',                 'score': 30},
+    ],
+}
 
 
 # ---------------------------------------------------------------------------
@@ -459,36 +640,78 @@ def _collect_all_items() -> list[dict]:
 # Claude batch prompt
 # ---------------------------------------------------------------------------
 def _batch_prompt(lens: dict, batch: list[dict]) -> str:
+    """Build the per-batch prompt.  Order of sections:
+      1. Task framing (use full 0-100 range, no artificial bias)
+      2. Persona description (kind-by-kind rubric)
+      3. Anchor calibration items with pinned scores (Claude reads
+         these first so it locks the scale before rating the batch)
+      4. Kind-specific reasoning rubric per item in the batch
+      5. Items list with rich context per row
+      6. Strict output format"""
+    # Collect the kinds present in this batch so we can filter anchors
+    # to only the relevant ones (keeps the prompt tight).
+    kinds_in_batch = {it['kind'] for it in batch}
+    anchors = [a for a in _ANCHORS.get(lens['id'], [])
+                if a['kind'] in kinds_in_batch
+                or a['kind'] in ('podcast', 'song', 'book')]  # always keep music/podcast/book anchors as scale-anchors
+
     lines = [
         "You are an audience-strategist scoring items for a specific "
-        "persona.  Return an integer 0-100 for each item measuring "
-        "how likely this exact persona would be interested in "
-        "clicking, streaming, reading, watching, or otherwise engaging "
-        "with the item this week.  Bias LOW - most items should score "
-        "in the 30-55 range; reserve 80+ for items that are core-"
-        "audience content for this persona.  Return 5-25 for items "
-        "the persona would actively avoid.",
+        "persona.  For each item, output an integer 0-100 that answers: "
+        "'How likely is this exact persona to click on, stream, read, "
+        "watch, or otherwise engage with THIS specific item this week?'",
         "",
+        "USE THE FULL 0-100 RANGE.  Do NOT compress everything into "
+        "the 30-55 band.  Items that are core-audience content for "
+        "this persona SHOULD score 85-100.  Items the persona would "
+        "actively avoid SHOULD score 5-20.  Items that are plausible "
+        "but not core belong in 40-65.  A blanket 'bias low' is WRONG "
+        "and produces useless filters.",
+        "",
+        "Score based on: (a) does this match a core-interest area for "
+        "the persona? (b) does the persona's cohort actually consume "
+        "this KIND of content? (c) is this specific item core, "
+        "adjacent, or anti-aligned within that kind?  A generic search "
+        "term with no context should score 40-55 (unknown intent), NOT "
+        "the middle of the persona's average.",
+        "",
+        "=========================================================",
         "PERSONA: " + lens['label'],
+        "=========================================================",
         lens['persona'],
         "",
-        "OUTPUT FORMAT (STRICT):",
-        "  Return a single JSON array with one object per item, IN "
-        "THE SAME ORDER as the input.  Each object has:",
-        '    { "id": <int>, "score": <int 0-100>, "why": "<10-15 word rationale>" }',
-        "  Return ONLY the JSON array, no prose before or after.",
+        "=========================================================",
+        "CALIBRATION ANCHORS (already-decided scores for this persona)",
+        "=========================================================",
+        "Use these as the reference scale.  Do NOT rescore them; they "
+        "are shown so you can peg the batch consistently.",
+    ]
+    for a in anchors:
+        lines.append(f'  score={a["score"]:3d}  kind={a["kind"]:<8}  title="{a["title"]}"')
+
+    lines += [
         "",
-        "ITEMS:",
+        "=========================================================",
+        "OUTPUT FORMAT (STRICT)",
+        "=========================================================",
+        "Return a single JSON array with one object per input item, IN "
+        "THE SAME ORDER.  Each object:",
+        '  { "id": <int>, "score": <int 0-100>, "why": "<8-14 word rationale specific to THIS item and THIS persona>" }',
+        "Return ONLY the JSON array, no prose before or after.",
+        "",
+        "=========================================================",
+        "ITEMS TO SCORE (" + str(len(batch)) + ")",
+        "=========================================================",
     ]
     for i, it in enumerate(batch):
-        title = it['title'][:150]
-        row   = f'  [{i}] kind={it["kind"]} title="{title}"'
+        title = it['title'][:180]
+        row   = f'[{i}] kind={it["kind"]}  title="{title}"'
         if it.get('artist'):
-            row += f' artist="{it["artist"][:80]}"'
+            row += f'\n     artist="{it["artist"][:100]}"'
         if it.get('context'):
-            row += f' context="{it["context"][:180]}"'
+            row += f'\n     context="{it["context"][:240]}"'
         if it.get('seen_on'):
-            row += f' seen_on={it["seen_on"][:3]}'
+            row += f'\n     seen_on={it["seen_on"][:3]}'
         lines.append(row)
     return '\n'.join(lines)
 
@@ -535,9 +758,11 @@ def _parse_batch(text: str, batch_len: int) -> list[Optional[dict]]:
 def _score_batch(client, lens: dict, batch: list[dict]) -> list[Optional[dict]]:
     prompt = _batch_prompt(lens, batch)
     try:
+        # 4096 tokens gives Claude room to write a real why-string per
+        # item (was 2048 which sometimes truncated mid-JSON).
         resp = client.messages.create(
             model=_CLAUDE_MODEL,
-            max_tokens=2048,
+            max_tokens=4096,
             messages=[{'role': 'user', 'content': prompt}],
             timeout=_TIMEOUT_S,
         )
@@ -628,6 +853,7 @@ def fetch(only_lens: Optional[str] = None, dry_run: bool = False) -> dict[str, A
             'kind':   it['kind'],
             'title':  it['title'],
             'scores': {},
+            'why':    {},   # {lens_id: "8-14 word rationale"}
         }
         if it.get('artist'):
             row['artist'] = it['artist']
@@ -635,19 +861,63 @@ def fetch(only_lens: Optional[str] = None, dry_run: bool = False) -> dict[str, A
             hit = lens_out.get(it['key'])
             if hit:
                 row['scores'][lens_id] = hit['score']
-                # `why` intentionally NOT stamped into the frontend
-                # payload - it's Claude's rationale for internal audit
-                # only.  Comment back in if we want tooltip context.
-                # row.setdefault('_why', {})[lens_id] = hit['why']
+                if hit.get('why'):
+                    row['why'][lens_id] = hit['why']
+        # Drop the `why` sub-dict if nothing landed (keeps payload lean).
+        if not row['why']:
+            row.pop('why', None)
         if row['scores']:
             combined[it['key']] = row
+
+    # Per-kind top-50% cutoffs.  Frontend uses these instead of a
+    # global threshold so kinds where the persona scores everything
+    # lower (e.g. MS NOW songs never breaking 50) still get filtered
+    # meaningfully - we show the top half of each kind rather than
+    # blanking the whole tab.
+    cutoffs = _compute_cutoffs(combined, [l['id'] for l in lens_meta])
 
     return {
         'items':        combined,
         'lenses':       lens_meta,
+        'cutoffs':      cutoffs,
         'count':        len(combined),
         'generated_at': datetime.now(timezone.utc).isoformat(),
     }
+
+
+def _compute_cutoffs(items: dict[str, dict],
+                      lens_ids: list[str],
+                      top_pct: float = 0.50,
+                      floor: int = 20) -> dict[str, dict[str, int]]:
+    """For every (lens, kind) return the score threshold above which
+    items should be considered 'in the persona's top N% for this kind'.
+
+    Rationale: a global score threshold (>=55) hides entire tabs when
+    the persona's cohort simply scores that kind lower on average.
+    Per-kind cutoffs preserve the relative ranking Claude produced.
+
+    A floor of 20 ensures we never show items that scored actively
+    anti-aligned (5-20 range) even if the whole kind is weak."""
+    from collections import defaultdict
+    by_lens_kind: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(list))
+    for entry in items.values():
+        kind = entry.get('kind') or ''
+        scores = entry.get('scores') or {}
+        for lens_id, s in scores.items():
+            by_lens_kind[lens_id][kind].append(int(s))
+    out: dict[str, dict[str, int]] = {}
+    for lens_id in lens_ids:
+        out[lens_id] = {}
+        for kind, arr in by_lens_kind.get(lens_id, {}).items():
+            if not arr:
+                continue
+            arr_sorted = sorted(arr, reverse=True)
+            # 50th percentile cutoff = the score at position N/2 in
+            # descending order.  Score >= this value is in the top half.
+            idx = max(0, int(len(arr_sorted) * top_pct) - 1)
+            cutoff = arr_sorted[idx] if arr_sorted else floor
+            out[lens_id][kind] = max(cutoff, floor)
+    return out
 
 
 if __name__ == '__main__':

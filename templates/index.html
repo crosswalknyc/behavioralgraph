@@ -44122,7 +44122,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
         // Google Trends, GDELT, major news RSS feeds, Reddit, YouTube,
         // and retailer bestseller pages. Every tab renders its own card
         // grid.
-        window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'searches', activeSocial: 'reddit', activeRetailer: 'amazon', headlinesView: 'top', inFlight: null, activeLens: '', lensScores: {} };
+        window.__trendsIQ = { filterOptions: null, lastData: null, activeTab: 'searches', activeSocial: 'reddit', activeRetailer: 'amazon', headlinesView: 'top', inFlight: null, activeLens: '', lensScores: {}, lensCutoffs: {} };
 
         function _trendsIQHideAllOtherViews() {
             var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
@@ -45410,17 +45410,24 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
         //
         // Row visibility model: when a lens is active, every .tiq-row inside
         // #trendsIQPanels gets its normalized title text matched against a
-        // lookup table.  Rows scoring >= _TIQ_LENS_THRESHOLD stay visible;
-        // rows below the threshold get display:none.  Unknown rows (title
-        // wasn't in the scored set) DEFAULT TO VISIBLE so first-run cards
-        // never blank out on a lens change.
+        // lookup table that maps (title -> {kind, scores, why}).  We then
+        // compare the row's score to a PER-KIND cutoff (top-50% of that
+        // kind for the active persona).  This replaces the earlier global
+        // threshold of 55, which incorrectly hid entire tabs when a
+        // persona scored a whole kind lower on average (e.g. MS NOW
+        // songs never breaking 50).  Unknown rows default to VISIBLE so
+        // first-run cards never blank out.
         // ------------------------------------------------------------------
         var _TIQ_LENS_STOPWORDS = new Set([
             'the','a','an','and','or','of','in','on','to','for','with',
             'at','by','from','as','is','are','was','were','be','been',
             'being','this','that','these','those'
         ]);
-        var _TIQ_LENS_THRESHOLD = 55;
+        // Kept for legacy code paths.  Per-kind cutoffs from the payload
+        // (window.__trendsIQ.lensCutoffs[lensId][kind]) take precedence
+        // when present; this constant only applies as an emergency
+        // fallback if the scraper emitted no cutoffs table.
+        var _TIQ_LENS_THRESHOLD = 45;
 
         // Byte-for-byte mirror of lens_relevance.py::_norm().  Case-fold,
         // strip punctuation, drop stopwords, collapse whitespace.
@@ -45469,27 +45476,55 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
         // across kinds take the MAX score - most permissive default so we
         // don't hide a row that's core-audience for another surface.
         function _tiqStoreLensScores(scoresMap) {
+            // Keep the full richness: {kind, scores{lens:score},
+            // why{lens:string}} per normalized title.  Prior version
+            // collapsed to just scores which lost the kind lookup
+            // needed for per-kind cutoffs and the why-tooltip.
+            //
+            // Duplicate titles across kinds: keep the entry with the
+            // HIGHER max score across all lenses (most-permissive).
             var byTitle = {};
             Object.keys(scoresMap || {}).forEach(function(key) {
                 var entry = scoresMap[key] || {};
                 var title = (entry.title || '').trim();
                 if (!title) {
-                    // Fall back to the key with the kind: prefix stripped.
                     title = String(key).replace(/^[^:]+:/, '');
                 }
                 var norm = _tiqLensNorm(title);
                 if (!norm) return;
-                var bag = byTitle[norm] || {};
                 var scores = entry.scores || {};
-                Object.keys(scores).forEach(function(lensId) {
-                    var s = Number(scores[lensId]) || 0;
-                    if (!(lensId in bag) || s > bag[lensId]) {
-                        bag[lensId] = s;
-                    }
+                var maxIncoming = 0;
+                Object.keys(scores).forEach(function(l) {
+                    var s = Number(scores[l]) || 0;
+                    if (s > maxIncoming) maxIncoming = s;
                 });
-                byTitle[norm] = bag;
+                var existing = byTitle[norm];
+                if (existing) {
+                    var maxExisting = 0;
+                    Object.keys(existing.scores || {}).forEach(function(l) {
+                        var s = Number(existing.scores[l]) || 0;
+                        if (s > maxExisting) maxExisting = s;
+                    });
+                    if (maxIncoming <= maxExisting) return;
+                }
+                byTitle[norm] = {
+                    kind:   entry.kind || '',
+                    scores: scores,
+                    why:    entry.why || {}
+                };
             });
             window.__trendsIQ.lensScores = byTitle;
+        }
+
+        // Store per-(lens, kind) cutoff table so the filter uses the
+        // top-50% of each kind for the active persona instead of a
+        // global score threshold.  Shape:
+        //   window.__trendsIQ.lensCutoffs = { ms_now_reader: { song: 45,
+        //                                                     podcast: 78,
+        //                                                     ... },
+        //                                    millennials:   {...} }
+        function _tiqStoreLensCutoffs(cutoffs) {
+            window.__trendsIQ.lensCutoffs = cutoffs || {};
         }
 
         // Extract the just-the-title text out of a filter target.
@@ -45530,29 +45565,53 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
         // if the panel they live in has other scored rows - otherwise
         // hiding them would blank the whole panel (bad UX on tabs the
         // scraper hasn't caught up to yet).
+        // Panel -> primary kind mapping.  Used as a fallback when a
+        // row's title isn't in the scored set but we need to compare
+        // its (hypothetical) score to the right cutoff.  Also used to
+        // hint kind for unscored rows so the display logic is fair.
+        var _TIQ_PANEL_TO_KIND = {
+            headlines: 'headline',
+            searches:  'search',
+            people:    'person',
+            music:     'song',
+            podcasts:  'podcast',
+            books:     'book',
+            social:    'headline',
+            streaming: 'title',
+            films:     'film',
+            watchlist: 'headline'
+        };
+
         window.applyTrendsIQLens = function() {
             var sel = document.getElementById('trendsIQLens');
             var lensId = (sel && sel.value) || '';
             window.__trendsIQ.activeLens = lensId;
             var byTitle = window.__trendsIQ.lensScores || {};
+            var cutoffs = (window.__trendsIQ.lensCutoffs || {})[lensId] || {};
             var panels  = document.getElementById('trendsIQPanels');
             if (!panels) return;
             var hasScores = Object.keys(byTitle).length > 0;
 
             // No filter active - clear every row's display override
-            // and bail. Idempotent so this is safe to call on every
-            // repaint.
+            // AND every stashed lens tooltip.  Idempotent - safe to
+            // call on every repaint.
             if (!lensId || !hasScores) {
                 var allRows = panels.querySelectorAll(_TIQ_LENS_ROW_SELECTOR);
-                for (var j = 0; j < allRows.length; j++) allRows[j].style.display = '';
+                for (var j = 0; j < allRows.length; j++) {
+                    allRows[j].style.display = '';
+                    allRows[j].removeAttribute('data-lens-why');
+                    if (allRows[j].dataset && 'lensScore' in allRows[j].dataset) {
+                        delete allRows[j].dataset.lensScore;
+                    }
+                }
                 _tiqLensUpdateMetaBanner(sel, lensId);
                 return;
             }
 
             // Group rows by panel so we can decide per-panel whether
             // unscored rows should hide (panel has some scored rows)
-            // or stay visible (panel has zero scored rows -> scraper
-            // doesn't cover this feed yet, leave it alone).
+            // or stay visible (panel has zero scored rows -> the
+            // scraper doesn't cover this feed yet, leave it alone).
             var byPanel = {};
             var allRows2 = panels.querySelectorAll(
                 '.tiq-panel .tiq-row, .tiq-panel .tiq-person-card');
@@ -45563,10 +45622,11 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 (byPanel[pk] = byPanel[pk] || []).push(r);
             }
 
-            var _TIQ_LENS_THRESHOLD_LOCAL = _TIQ_LENS_THRESHOLD;
             Object.keys(byPanel).forEach(function(pk) {
                 var rows = byPanel[pk];
-                // First pass: count scored rows on this panel.
+                var panelKind = _TIQ_PANEL_TO_KIND[pk] || '';
+
+                // First pass: resolve each row to its lens bag.
                 var scoredCount = 0;
                 var scoredMap = [];
                 for (var i = 0; i < rows.length; i++) {
@@ -45577,25 +45637,54 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     if (bag) scoredCount++;
                 }
                 // If NO rows on this panel are scored, don't filter
-                // it - hiding everything would look broken. This is
+                // it - hiding everything would look broken.  This is
                 // the safety net for panels the scraper hasn't
                 // caught up to yet.
                 if (scoredCount === 0) {
-                    for (var m = 0; m < rows.length; m++) rows[m].style.display = '';
+                    for (var m = 0; m < rows.length; m++) {
+                        rows[m].style.display = '';
+                        rows[m].removeAttribute('data-lens-why');
+                    }
                     return;
                 }
+
                 for (var n = 0; n < rows.length; n++) {
                     var b = scoredMap[n];
+                    var row = rows[n];
                     if (!b) {
-                        // Unscored row on a panel that HAS scored rows -
-                        // treat as low-relevance and hide.
-                        rows[n].style.display = 'none';
+                        row.style.display = 'none';
+                        row.removeAttribute('data-lens-why');
                         continue;
                     }
-                    var s = Number(b[lensId]) || 0;
-                    rows[n].style.display = (s >= _TIQ_LENS_THRESHOLD_LOCAL) ? '' : 'none';
+                    var s = Number((b.scores || {})[lensId]) || 0;
+                    var kind = b.kind || panelKind || '';
+                    var cut = (kind && cutoffs[kind] != null)
+                              ? Number(cutoffs[kind])
+                              : _TIQ_LENS_THRESHOLD;
+                    var visible = (s >= cut);
+                    row.style.display = visible ? '' : 'none';
+
+                    var why = (b.why || {})[lensId] || '';
+                    if (why || s) {
+                        row.setAttribute(
+                            'data-lens-why',
+                            'Score ' + s + '/100 \u00b7 cutoff ' + cut
+                            + (why ? ' \u00b7 ' + why : '')
+                        );
+                        row.dataset.lensScore = String(s);
+                    } else {
+                        row.removeAttribute('data-lens-why');
+                    }
                 }
             });
+
+            // Bind tooltips: set title="..." on every row that has a
+            // stashed why-string.  Native title attribute so there's
+            // no custom tooltip code to maintain.
+            var tipRows = panels.querySelectorAll('[data-lens-why]');
+            for (var t = 0; t < tipRows.length; t++) {
+                tipRows[t].title = tipRows[t].getAttribute('data-lens-why');
+            }
 
             _tiqLensUpdateMetaBanner(sel, lensId);
         };
@@ -45753,6 +45842,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             // only and filtering is a no-op.
             _tiqPopulateLensDropdown(cards.lens_config || []);
             _tiqStoreLensScores(cards.lens_scores || {});
+            _tiqStoreLensCutoffs(cards.lens_cutoffs || {});
             // Reapply whatever lens the user had selected before the
             // repaint (session-persistent via window.__trendsIQ).
             applyTrendsIQLens();
