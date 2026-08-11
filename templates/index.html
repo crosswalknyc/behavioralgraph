@@ -24437,16 +24437,18 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             #trendsIQView .tiq-subtitle { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
             #trendsIQView .tiq-filter-bar {
                 /* Geography + Region controls were removed 2026-07-27
-                   (Trends IQ is now always National); layout collapses
-                   to the two remaining controls (Window + Apply) at
-                   their natural sizes rather than stretching across
-                   the whole bar. */
+                   (Trends IQ is now always National); Lens dropdown was
+                   added 2026-08-10.  All three controls (Window, Lens,
+                   Apply) live on a single row so the filter box stays
+                   compact.  align-items: end lines the Apply button's
+                   baseline up with the bottom of the two select inputs
+                   (each has a stacked <label> above it). */
                 display: grid;
-                grid-template-columns: minmax(160px, 220px) minmax(100px, 140px);
+                grid-template-columns: minmax(160px, 220px) minmax(180px, 240px) auto;
                 justify-content: start;
                 gap: 0.6rem;
                 align-items: end;
-                padding: 0.9rem 1rem;
+                padding: 0.75rem 1rem;
                 background: var(--bg-secondary, #1e1e2e);
                 border: 1px solid var(--border-color, #2c2c3e);
                 border-radius: 10px;
