@@ -71184,12 +71184,12 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
 
                 var keyDates = [
                     { day: -14, label: 'Jun 16' },
-                    { day: -7,  label: 'Jun 23' },
+                    { day: -7,  label: 'Jun 23', dx: -8 },
                     { day: 0,   label: 'Jun 30 · TVOD', green: true },
-                    { day: 7,   label: 'Jul 7' },
-                    { day: 14,  label: 'Jul 14' },
+                    { day: 7,   label: 'Jul 7', dx: 10 },
+                    { day: 14,  label: 'Jul 14', dx: -22 },
                     { day: 17,  label: 'Jul 17 · SVOD', red: true },
-                    { day: 21,  label: 'Jul 21' },
+                    { day: 21,  label: 'Jul 21', dx: 16 },
                     { day: 28,  label: 'Jul 28' },
                     { day: 35,  label: 'Aug 4' },
                     { day: 41,  label: 'Aug 10' }
@@ -71199,7 +71199,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     var color = kd.red ? '#ef4444' : (kd.green ? '#22c55e' : 'var(--text-secondary)');
                     var weight = (kd.red || kd.green) ? '900' : '600';
                     return '<line x1="' + x + '" y1="' + (H - padB) + '" x2="' + x + '" y2="' + (H - padB + 6) + '" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>'
-                         + '<text x="' + x + '" y="' + (H - padB + 20) + '" fill="' + color + '" font-size="9.5" font-weight="' + weight + '" text-anchor="middle" font-family="Space Mono, monospace">' + _jiqEsc(kd.label) + '</text>';
+                         + '<text x="' + (x + (kd.dx || 0)) + '" y="' + (H - padB + 20) + '" fill="' + color + '" font-size="9.5" font-weight="' + weight + '" text-anchor="middle" font-family="Space Mono, monospace">' + _jiqEsc(kd.label) + '</text>';
                 }).join('');
 
                 var preHandoff  = days.filter(function(d) { return d.day <= 16; });
@@ -71245,12 +71245,23 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                                +   '<text x="174" y="3" fill="var(--text-secondary)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Observed (post-handoff)</text>'
                                +   '<line x1="320" y1="0" x2="342" y2="0" stroke="rgba(148,163,184,0.85)" stroke-width="2" stroke-dasharray="4 3"/>'
                                +   '<text x="348" y="3" fill="var(--text-secondary)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Counterfactual (86.5d)</text>'
-                               +   '<rect x="466" y="-5" width="14" height="10" fill="rgba(239,68,68,0.28)" stroke="rgba(239,68,68,0.6)" stroke-width="0.7"/>'
-                               +   '<text x="484" y="3" fill="var(--text-secondary)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Displaced volume</text>'
+                               +   '<rect x="506" y="-5" width="14" height="10" fill="rgba(239,68,68,0.28)" stroke="rgba(239,68,68,0.6)" stroke-width="0.7"/>'
+                               +   '<text x="524" y="3" fill="var(--text-secondary)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Displaced volume</text>'
                                + '</g>';
+
+                // Double-ended red arrow spanning the displaced band at
+                // its horizontal midpoint: north tip on the counterfactual
+                // line, south tip on the observed line.
+                var _dispArrow = '', _midDay = 29, _midObj = null;
+                for (var _di = 0; _di < days.length; _di++) { if (days[_di].day === _midDay) { _midObj = days[_di]; break; } }
+                if (_midObj) {
+                    var _mx = xOf(_midDay), _topY = yOf(_midObj.cf), _botY = yOf(_midObj.obs);
+                    _dispArrow = '<line x1="' + _mx.toFixed(1) + '" y1="' + _topY.toFixed(1) + '" x2="' + _mx.toFixed(1) + '" y2="' + _botY.toFixed(1) + '" stroke="#ef4444" stroke-width="2" marker-start="url(#obpDispArrow)" marker-end="url(#obpDispArrow)"/>';
+                }
 
                 return '<div style="width:100%; overflow-x:auto;">'
                      +   '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; min-width:660px; height:auto; display:block;">'
+                     +     '<defs><marker id="obpDispArrow" viewBox="0 0 10 10" markerWidth="7" markerHeight="7" refX="5" refY="5" orient="auto-start-reverse"><path d="M1,1 L9,5 L1,9 Z" fill="#ef4444"/></marker></defs>'
                      +     '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="transparent"/>'
                      +     buildShade
                      +     crashShade
@@ -71260,6 +71271,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                      +     '<path d="' + preObsPath + '" fill="none" stroke="#14b8a6" stroke-width="2.4"/>'
                      +     '<path d="' + postObsPath + '" fill="none" stroke="#ef4444" stroke-width="2.4"/>'
                      +     dotsHtml
+                     +     _dispArrow
                      +     releaseMarker
                      +     handoffMarker
                      +     xAxisHtml
