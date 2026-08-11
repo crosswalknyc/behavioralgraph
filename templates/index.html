@@ -18741,9 +18741,9 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                             <option value="profileIQ" {% if not has_profile_iq_access %}disabled{% endif %} {% if not default_view_hedge_fund_iq %}selected{% endif %}>🎯 Profile IQ</option>
                             <option value="subscriberIQ" {% if not has_subscriber_iq_access %}disabled{% endif %}>👥 Subscriber IQ</option>
                             <option value="journeyIQ" {% if not has_journey_iq_access and 'journey_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🗺️ Digital Journey IQ</option>
-                            <option value="trendsIQ" data-group="Trends" {% if not has_trends_iq_access %}disabled{% endif %}>📈 Trends</option>
-                            <option value="cultureRankerIQ" data-group="Trends" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Talent Ranker</option>
-                            <option value="microdramasIQ" data-group="Trends" {% if not has_microdramas_iq_access %}disabled{% endif %}>📱 Microdramas</option>
+                            <option value="trendsIQ" {% if not has_trends_iq_access %}disabled{% endif %}>📈 Trends</option>
+                            <option value="cultureRankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Talent Ranker</option>
+                            <option value="microdramasIQ" {% if not has_microdramas_iq_access %}disabled{% endif %}>📱 Microdramas</option>
                             <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
