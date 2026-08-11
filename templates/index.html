@@ -69761,6 +69761,19 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     { studio: 'Paramount',       service: 'Paramount+',   color: '#0ea5e9', theatrical_range: '~32 days',    tvod_range: '~28-30 days', total_range: '~60 days',     tvod_min: 28, tvod_max: 30,  total_min: 60,  total_max: 60,  footnote: 'Gladiator II confirmed by panel signal; slate-average posture across the 2024-2026 sample.' },
                     { studio: 'Obsession (Focus/Universal)', service: 'Peacock (subject)', color: '#ef4444', theatrical_range: '46 days', tvod_range: '17 days', total_range: '63 days', tvod_min: 17, tvod_max: 17, total_min: 63, total_max: 63, footnote: 'Subject title. Below every integrated-studio floor in the sample.', subject: true }
                 ],
+                studio_averages: [
+                    // Per-studio average TVOD days and total (theatrical→SVOD)
+                    // days. Universal ladders back to the 8 non-Focus
+                    // 2024-2026 UFEG titles from obp_window; Disney / WB /
+                    // Paramount averages are computed across obp_industry's
+                    // title_level rows.
+                    { studio: 'Universal',    service: 'Peacock',     n: 8, avg_tvod_days: 89, avg_total_days: 119, color: '#14b8a6', family: 'universal', note: '8 non-Focus UFEG titles, 2024-2026 (Universal / DreamWorks / Blumhouse / Illumination)' },
+                    { studio: 'Disney',       service: 'Disney+',     n: 5, avg_tvod_days: 40, avg_total_days: 101, color: '#3b82f6', family: 'disney',    note: 'Inside Out 2, Cap America BNW, Lilo & Stitch, Zootopia 2, Hoppers' },
+                    { studio: 'Warner Bros.', service: 'HBO Max',     n: 4, avg_tvod_days: 37, avg_total_days: 75,  color: '#a855f7', family: 'wb',        note: 'A Minecraft Movie, Sinners, Final Destination Bloodlines, Superman' },
+                    { studio: 'Paramount',    service: 'Paramount+',  n: 1, avg_tvod_days: 28, avg_total_days: 60,  color: '#0ea5e9', family: 'paramount', note: 'Gladiator II — panel-confirmed slate-average posture' },
+                    { studio: 'Obsession',    service: 'Peacock',     n: 1, avg_tvod_days: 17, avg_total_days: 63,  color: '#ef4444', family: 'obsession', subject: true, note: 'Subject title (Focus/Universal)' }
+                ],
+                studio_averages_caption: 'Averages across each integrated studio\'s 2024-2026 sample. Universal ladders back to the 8 non-Focus UFEG titles from the Window Record; Disney, Warner Bros., and Paramount averages are computed across the title-level rows below. Obsession, at 17 TVOD days and 63 total, sits below every integrated-studio average in the industry.',
                 title_level: [
                     { title: 'Inside Out 2',                    studio: 'Disney',       tvod_days: 36, svod_total: 103, color: '#3b82f6' },
                     { title: 'Captain America: BNW',            studio: 'Disney',       tvod_days: 43, svod_total: 103, color: '#3b82f6' },
@@ -70483,12 +70496,45 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                      + '</div>';
             }
 
+            // ── Studio averages summary boxes (sit above the ranges chart)
+            var studioAvgs = data.studio_averages || [];
+            var avgBoxes = '';
+            if (studioAvgs.length) {
+                var boxes = studioAvgs.map(function(s) {
+                    var bg = s.subject ? 'rgba(239,68,68,0.10)' : 'rgba(255,255,255,0.025)';
+                    var border = s.subject ? '1px solid rgba(239,68,68,0.55)' : ('1px solid ' + s.color);
+                    var tvodColor = s.subject ? '#ef4444' : (s.family === 'universal' ? '#5eead4' : s.color);
+                    var subjectBadge = s.subject ? ' <span style="font-size:0.5rem; padding:1px 5px; margin-left:4px; background:#ef4444; color:#fff; border-radius:99px; font-weight:800; vertical-align:middle;">SUBJECT</span>' : '';
+                    return '<div style="padding:0.7rem 0.85rem; border-radius:8px; background:' + bg + '; border:' + border + '; min-width:0;">'
+                         +   '<div style="font-size:0.6rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:' + s.color + ';">'
+                         +     _jiqEsc(s.studio) + subjectBadge
+                         +   '</div>'
+                         +   '<div style="font-size:0.62rem; opacity:0.62; margin-top:0.1rem;">→ ' + _jiqEsc(s.service) + '</div>'
+                         +   '<div style="display:flex; align-items:baseline; gap:0.5rem; margin-top:0.45rem;">'
+                         +     '<div style="font-size:1.85rem; font-weight:900; line-height:1; color:' + tvodColor + '; font-variant-numeric:tabular-nums;">' + s.avg_tvod_days + 'd</div>'
+                         +     '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800;">avg<br/>TVOD</div>'
+                         +   '</div>'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:0.35rem; padding-top:0.35rem; border-top:1px solid rgba(255,255,255,0.08);">'
+                         +     '<div style="font-size:0.62rem; opacity:0.7;">Avg total</div>'
+                         +     '<div style="font-size:0.95rem; font-weight:900; color:' + (s.subject ? '#ef4444' : '#e2e8f0') + '; font-variant-numeric:tabular-nums;">' + s.avg_total_days + 'd</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.6rem; opacity:0.6; margin-top:0.35rem;">n=' + s.n + (s.note ? ' &middot; ' + _jiqEsc(s.note) : '') + '</div>'
+                         + '</div>';
+                }).join('');
+                avgBoxes = '<h4 style="font-size:0.85rem; margin:0.3rem 0 0.35rem;">📊 Studio averages · industry comparison</h4>'
+                    + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.55rem; margin-bottom:0.85rem;">'
+                    +   boxes
+                    + '</div>'
+                    + (data.studio_averages_caption ? '<div style="font-size:0.68rem; opacity:0.62; margin-bottom:0.95rem; line-height:1.5;">' + _jiqEsc(data.studio_averages_caption) + '</div>' : '');
+            }
+
             var studiosHtml = '<style>'
                 +   '.jiq-obp-hoverable:hover .jiq-obp-hover-panel {'
                 +     ' opacity:1; visibility:visible; pointer-events:auto;'
                 +     ' transition:opacity 0.12s ease, visibility 0s linear 0s;'
                 +   ' }'
                 + '</style>'
+                + avgBoxes
                 + '<h4 style="font-size:0.85rem; margin:0.3rem 0 0.35rem;">🏢 Windowing ranges by studio</h4>'
                 + _obpIndustryTimelineAxis('top')
                 + (data.studios || []).map(function(s) {
