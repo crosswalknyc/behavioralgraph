@@ -69720,6 +69720,20 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     { title: 'Obsession',                   studio: 'Focus',                  dom_bo_m: 253, tv_days: 46, tvod_days: 17,  svod_total: 63,   theatrical: 'May 15, 2026', tvod: 'Jun 30, 2026', svod: 'Jul 17, 2026',  focus: true,  era: '24-26',  in_median: false, subject: true },
                     { title: 'Minions & Monsters',          studio: 'Illumination',           dom_bo_m: 170, tv_days: 41, tvod_days: null, svod_total: null, theatrical: 'Jul 1, 2026',  tvod: 'Announced (Aug)', svod: 'Not announced', focus: false, era: '24-26',  in_median: false, note: 'Concurrent: full sell-through campaign on a franchise underperformer at the same parent, 18 days after Obsession moved to Peacock.' }
                 ],
+                studio_averages: [
+                    // Per-studio averages across all 14 titles in the record,
+                    // grouped by the exact `studio` label. Focus is split into
+                    // 'excl. Obsession' + standalone Obsession row so the
+                    // subject can be compared to its own label's baseline.
+                    { label: 'Universal',              n: 4, tvod_svod_n: 4, dom_bo_m: 344, tv_days: 34, tvod_days: 85,  svod_total: 119, color: '#14b8a6', family: 'universal' },
+                    { label: 'Universal / DreamWorks', n: 1, tvod_svod_n: 1, dom_bo_m: 263, tv_days: 32, tvod_days: 87,  svod_total: 119, color: '#14b8a6', family: 'universal' },
+                    { label: 'Universal / Blumhouse', n: 1, tvod_svod_n: 1, dom_bo_m: 109, tv_days: 18, tvod_days: 101, svod_total: 119, color: '#14b8a6', family: 'universal' },
+                    { label: 'DreamWorks',             n: 1, tvod_svod_n: 1, dom_bo_m: 144, tv_days: 18, tvod_days: 101, svod_total: 119, color: '#14b8a6', family: 'universal' },
+                    { label: 'Illumination',           n: 3, tvod_svod_n: 2, dom_bo_m: 300, tv_days: 36, tvod_days: 69,  svod_total: 102, color: '#14b8a6', family: 'universal', note: 'TVOD/SVOD averages over 2 titles — Minions & Monsters not yet announced.' },
+                    { label: 'Focus, excl. Obsession', n: 3, tvod_svod_n: 3, dom_bo_m: 59,  tv_days: 26, tvod_days: 29,  svod_total: 54,  color: '#a855f7', family: 'focus' },
+                    { label: 'Obsession',              n: 1, tvod_svod_n: 1, dom_bo_m: 253, tv_days: 46, tvod_days: 17,  svod_total: 63,  color: '#ef4444', family: 'obsession', subject: true }
+                ],
+                studio_averages_caption: 'Averages computed across the 14 titles in the record above, grouped by exact studio label. Universal-family labels (Universal, Universal / DreamWorks, Universal / Blumhouse, DreamWorks, Illumination) share the Peacock pay-1 arrangement. Focus is UFEG\'s specialty label — its non-Obsession slate lands 49-58 days total. Obsession, at 63 days total and 17 TVOD days, sits below every non-Focus average and shorter on TVOD than every Focus average.',
                 medians: {
                     universal_group_24_26: { titles: 8, dom_bo_m: 280, tv_days: 33,   tvod_days: 86.5, svod_total: 119, label: 'Universal group, 2024-2026' },
                     focus_excl_obsession:  { titles: 3, dom_bo_m: 45,  tv_days: 27,   tvod_days: 31,   svod_total: 56,  label: 'Focus, excluding Obsession' },
@@ -70300,6 +70314,45 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     +     headHtml
                     +   '</tr></thead><tbody>' + rows + '</tbody></table></div>';
 
+                // ── Studio averages summary strip (sits above the titles table)
+                var studioAvgs = data.studio_averages || [];
+                var avgHtml = '';
+                if (studioAvgs.length) {
+                    var avgHead = '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
+                        + '<th style="padding:6px 10px; font-size:0.58rem; text-transform:uppercase; opacity:0.7;">Studio</th>'
+                        + '<th style="padding:6px 10px; text-align:center; font-size:0.58rem; text-transform:uppercase; opacity:0.7;">n</th>'
+                        + '<th style="padding:6px 10px; text-align:right; font-size:0.58rem; text-transform:uppercase; opacity:0.7;">Ø Dom BO</th>'
+                        + '<th style="padding:6px 10px; text-align:center; font-size:0.58rem; text-transform:uppercase; opacity:0.7;">Ø Theatrical→TVOD</th>'
+                        + '<th style="padding:6px 10px; text-align:center; font-size:0.58rem; text-transform:uppercase; opacity:0.7;">Ø TVOD days</th>'
+                        + '<th style="padding:6px 10px; text-align:center; font-size:0.58rem; text-transform:uppercase; opacity:0.7;">Ø Total (T→SVOD)</th>'
+                        + '</tr></thead>';
+                    var avgRows = studioAvgs.map(function(s) {
+                        var rowBg = s.subject ? 'background:rgba(239,68,68,0.10);' : (s.family === 'focus' ? 'background:rgba(168,85,247,0.05);' : '');
+                        var labelWeight = s.subject ? '900' : '700';
+                        var totalColor = s.subject ? '#ef4444' : (s.family === 'focus' ? '#c4b5fd' : '#5eead4');
+                        var tvodColor  = s.subject ? '#ef4444' : (s.family === 'focus' ? '#c4b5fd' : 'var(--text-primary)');
+                        var nSuffix = (s.tvod_svod_n && s.tvod_svod_n !== s.n) ? (' <span style="opacity:0.55; font-size:0.65rem;">(' + s.tvod_svod_n + ' for TVOD/SVOD)</span>') : '';
+                        var subjectBadge = s.subject ? ' <span style="font-size:0.55rem; padding:1px 5px; margin-left:4px; background:#ef4444; color:#fff; border-radius:99px; font-weight:800;">SUBJECT</span>' : '';
+                        var noteHtml = s.note ? ('<div style="font-size:0.62rem; opacity:0.6; font-style:italic; margin-top:0.2rem;">' + _jiqEsc(s.note) + '</div>') : '';
+                        return '<tr style="border-bottom:1px solid var(--border-color); ' + rowBg + '">'
+                             +   '<td style="padding:7px 10px; font-weight:' + labelWeight + '; font-size:0.78rem; color:' + s.color + ';">' + _jiqEsc(s.label) + subjectBadge + noteHtml + '</td>'
+                             +   '<td style="padding:7px 10px; text-align:center; font-weight:700; font-size:0.76rem;">' + s.n + nSuffix + '</td>'
+                             +   '<td style="padding:7px 10px; text-align:right; font-weight:700; font-size:0.78rem;">$' + s.dom_bo_m + 'M</td>'
+                             +   '<td style="padding:7px 10px; text-align:center; font-weight:800; color:' + (s.subject ? '#22c55e' : 'var(--text-primary)') + ';">' + s.tv_days + 'd</td>'
+                             +   '<td style="padding:7px 10px; text-align:center; font-weight:800; color:' + tvodColor + ';">' + s.tvod_days + 'd</td>'
+                             +   '<td style="padding:7px 10px; text-align:center; font-weight:900; font-size:0.88rem; color:' + totalColor + ';">' + s.svod_total + 'd</td>'
+                             + '</tr>';
+                    }).join('');
+                    avgHtml = '<h4 style="font-size:0.85rem; margin:0.3rem 0 0.35rem;">📊 Studio averages · UFEG window record (2022-2026)</h4>'
+                        + '<div style="overflow-x:auto; margin-bottom:0.85rem; border-radius:8px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.015);">'
+                        +   '<table style="width:100%; border-collapse:collapse; font-size:0.76rem;">'
+                        +     avgHead
+                        +     '<tbody>' + avgRows + '</tbody>'
+                        +   '</table>'
+                        + '</div>'
+                        + (data.studio_averages_caption ? '<div style="font-size:0.68rem; opacity:0.62; margin-bottom:0.9rem; line-height:1.5;">' + _jiqEsc(data.studio_averages_caption) + '</div>' : '');
+                }
+
                 var m = data.medians || {};
                 var mediansHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">📊 Medians (2024-2026 window)</h4>'
                     + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
@@ -70324,7 +70377,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.read || '') + '</div>'
                     + '</div>';
 
-                body.innerHTML = tableHtml + mediansHtml + readBox;
+                body.innerHTML = avgHtml + tableHtml + mediansHtml + readBox;
 
                 // Wire click-to-sort. Cycle: unsorted -> asc -> desc -> unsorted.
                 var ths = body.querySelectorAll('th[data-obpwindow-sort]');
