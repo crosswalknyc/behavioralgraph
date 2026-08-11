@@ -24877,9 +24877,21 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             #microdramasIQModal .miq-demo-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 0.85rem 1rem; }
             #microdramasIQModal .miq-demo-card h4 { margin: 0 0 0.5rem; font-size: 0.82rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
             #microdramasIQModal .miq-demo-row { display: grid; grid-template-columns: 160px 1fr auto; gap: 0.5rem; align-items: center; padding: 0.2rem 0; font-size: 0.82rem; }
-            #microdramasIQModal .miq-demo-bar-track { background: rgba(255,255,255,0.05); border-radius: 4px; height: 8px; position: relative; overflow: hidden; }
+            #microdramasIQModal .miq-demo-bar-track { background: rgba(255,255,255,0.05); border-radius: 4px; height: 8px; position: relative; overflow: visible; }
             #microdramasIQModal .miq-demo-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #ec4899, #8b5cf6); border-radius: 4px; }
-            #microdramasIQModal .miq-demo-pct { font-variant-numeric: tabular-nums; text-align: right; min-width: 3.4rem; }
+            /* Gen Pop overlay marker: thin vertical tick on the same track, dashed for visibility over the fill */
+            #microdramasIQModal .miq-genpop-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: rgba(255,255,255,0.85); border-radius: 1px; box-shadow: 0 0 4px rgba(0,0,0,0.4); pointer-events: none; transform: translateX(-1px); }
+            #microdramasIQModal .miq-genpop-marker::after { content: 'GP'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); font-size: 0.55rem; font-weight: 700; color: rgba(255,255,255,0.7); letter-spacing: 0.04em; }
+            body[data-theme="light"] #microdramasIQModal .miq-genpop-marker { background: rgba(0,0,0,0.7); box-shadow: 0 0 4px rgba(0,0,0,0.15); }
+            body[data-theme="light"] #microdramasIQModal .miq-genpop-marker::after { color: rgba(0,0,0,0.55); }
+            #microdramasIQModal .miq-demo-pct { font-variant-numeric: tabular-nums; text-align: right; min-width: 3.4rem; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15; }
+            #microdramasIQModal .miq-genpop-delta { font-size: 0.66rem; font-weight: 600; margin-top: 0.05rem; letter-spacing: 0.02em; }
+            #microdramasIQModal .miq-genpop-delta-pos { color: #86efac; }   /* over-indexed vs Gen Pop */
+            #microdramasIQModal .miq-genpop-delta-neg { color: #fca5a5; }   /* under-indexed vs Gen Pop */
+            #microdramasIQModal .miq-genpop-delta-mid { color: var(--text-secondary); opacity: 0.75; }
+            #microdramasIQModal .miq-demo-card-legend { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.65rem; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-secondary); margin-left: 0.6rem; opacity: 0.75; }
+            #microdramasIQModal .miq-demo-card-legend .miq-legend-tick { display: inline-block; width: 2px; height: 10px; background: rgba(255,255,255,0.85); border-radius: 1px; vertical-align: middle; }
+            body[data-theme="light"] #microdramasIQModal .miq-demo-card-legend .miq-legend-tick { background: rgba(0,0,0,0.7); }
             body[data-theme="light"] #microdramasIQModal .miq-modal-summary,
             body[data-theme="light"] #microdramasIQModal .miq-demo-card { background: #fafafa; border-color: rgba(0,0,0,0.08); }
             body[data-theme="light"] #microdramasIQModal .miq-demo-bar-track { background: rgba(0,0,0,0.06); }
@@ -45321,21 +45333,63 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             var demoOrder  = d.demo_order  || ['gender','age','ethnicity','income','education','relationship','parental_status','occupation','sexual_orientation'];
             var demoLabels = d.demo_labels || {};
             var demographics = d.demographics || {};
+            // Gen Pop overlay: {cat: [{label, pct}, ...]} shaped exactly
+            // like `demographics`. Absent when the Gen Pop CSV couldn't
+            // be loaded, in which case the marker + delta silently drop.
+            var demographicsGp = d.demographics_genpop || {};
+            var gpLabel        = d.demographics_genpop_label || 'US Gen Pop';
+            var hasGp          = Object.keys(demographicsGp).length > 0;
+
+            function _gpLookup(cat) {
+                var rows = demographicsGp[cat] || [];
+                var out = {};
+                for (var i = 0; i < rows.length; i++) {
+                    if (rows[i] && rows[i].label != null) {
+                        out[String(rows[i].label)] = Number(rows[i].pct || 0);
+                    }
+                }
+                return out;
+            }
+            function _fmtDelta(delta) {
+                var mag = Math.abs(delta);
+                var cls = mag >= 5 ? (delta > 0 ? 'miq-genpop-delta-pos' : 'miq-genpop-delta-neg')
+                                    : 'miq-genpop-delta-mid';
+                var sign = delta > 0 ? '+' : (delta < 0 ? '\u2212' : '');
+                return '<span class="miq-genpop-delta ' + cls + '">' +
+                    sign + mag.toFixed(1) + 'pp vs GP</span>';
+            }
 
             var demoCards = demoOrder.map(function(cat) {
                 var rows = demographics[cat] || [];
                 if (!rows.length) return '';
                 var displayLabel = demoLabels[cat] || cat.replace(/_/g,' ').replace(/\b\w/g, function(c){return c.toUpperCase();});
+                var gpForCat = _gpLookup(cat);
                 var rowHtml = rows.map(function(r) {
-                    var pct = Number(r.pct || 0);
+                    var pct   = Number(r.pct || 0);
+                    var gpPct = (gpForCat[r.label] != null) ? Number(gpForCat[r.label]) : null;
+                    var barPos = Math.min(100, Math.max(0, pct));
+                    var gpMarker = '';
+                    var deltaHtml = '';
+                    if (gpPct != null && hasGp) {
+                        var gpPos = Math.min(100, Math.max(0, gpPct));
+                        gpMarker = '<div class="miq-genpop-marker" style="left:' + gpPos.toFixed(2) + '%;" title="' +
+                            _miqEscape(gpLabel) + ': ' + gpPct.toFixed(1) + '%"></div>';
+                        deltaHtml = _fmtDelta(pct - gpPct);
+                    }
                     return '<div class="miq-demo-row">' +
                         '<div style="color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + _miqEscape(r.label) + '</div>' +
-                        '<div class="miq-demo-bar-track"><div class="miq-demo-bar-fill" style="width:' + Math.min(100, Math.max(0, pct)).toFixed(1) + '%;"></div></div>' +
-                        '<div class="miq-demo-pct">' + pct.toFixed(1) + '%</div>' +
+                        '<div class="miq-demo-bar-track">' +
+                            '<div class="miq-demo-bar-fill" style="width:' + barPos.toFixed(1) + '%;"></div>' +
+                            gpMarker +
+                        '</div>' +
+                        '<div class="miq-demo-pct"><span>' + pct.toFixed(1) + '%</span>' + deltaHtml + '</div>' +
                     '</div>';
                 }).join('');
+                var legend = hasGp
+                    ? '<span class="miq-demo-card-legend"><span class="miq-legend-tick"></span> ' + _miqEscape(gpLabel) + '</span>'
+                    : '';
                 return '<div class="miq-demo-card">' +
-                    '<h4>' + _miqEscape(displayLabel) + '</h4>' + rowHtml +
+                    '<h4>' + _miqEscape(displayLabel) + legend + '</h4>' + rowHtml +
                 '</div>';
             }).join('');
 
