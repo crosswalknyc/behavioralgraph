@@ -45494,13 +45494,22 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 }
                 return out;
             }
-            function _fmtDelta(delta) {
-                var mag = Math.abs(delta);
-                var cls = mag >= 5 ? (delta > 0 ? 'miq-genpop-delta-pos' : 'miq-genpop-delta-neg')
-                                    : 'miq-genpop-delta-mid';
-                var sign = delta > 0 ? '+' : (delta < 0 ? '\u2212' : '');
-                return '<span class="miq-genpop-delta ' + cls + '">' +
-                    sign + mag.toFixed(1) + 'pp vs GP</span>';
+            // Gen Pop comparison as an INDEX (100 = parity). Matches
+            // the grammar of the Interests card below and is the
+            // standard Crosswalk audience-index unit. Format:
+            // "142 vs GP" = this audience over-indexes 42% above Gen Pop.
+            //   >=115  -> green (over-indexed)
+            //   <=85   -> red   (under-indexed)
+            //   85-115 -> muted (parity band, natural sampling noise)
+            function _fmtIndex(titlePct, gpPct) {
+                if (!(gpPct > 0)) return '';
+                var idx = Math.round((titlePct / gpPct) * 100);
+                var cls = idx >= 115 ? 'miq-genpop-delta-pos'
+                        : idx <=  85 ? 'miq-genpop-delta-neg'
+                        :              'miq-genpop-delta-mid';
+                return '<span class="miq-genpop-delta ' + cls +
+                    '" title="Index vs Gen Pop (100 = parity)">' +
+                    idx + ' vs GP</span>';
             }
 
             var demoCards = demoOrder.map(function(cat) {
@@ -45518,7 +45527,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                         var gpPos = Math.min(100, Math.max(0, gpPct));
                         gpMarker = '<div class="miq-genpop-marker" style="left:' + gpPos.toFixed(2) + '%;" title="' +
                             _miqEscape(gpLabel) + ': ' + gpPct.toFixed(1) + '%"></div>';
-                        deltaHtml = _fmtDelta(pct - gpPct);
+                        deltaHtml = _fmtIndex(pct, gpPct);
                     }
                     return '<div class="miq-demo-row">' +
                         '<div style="color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + _miqEscape(r.label) + '</div>' +
