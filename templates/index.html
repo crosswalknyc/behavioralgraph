@@ -69881,17 +69881,33 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             },
 
             obp_sub: {
-                subtitle: 'Panelists who reached an Obsession TVOD title page during Jun 30 - Jul 16 without transacting, then started Peacock playback of Obsession on/after Jul 17. Same identified individuals abandoning a paid transaction in favor of watching on Peacock once the substitute appeared. The subset that resulted in a NEW or REACTIVATED Peacock subscription is measured separately in SubIQ.',
+                subtitle: 'Two lenses on Obsession\'s Peacock arrival. SubIQ (Peacock first-party, account-level) is the ground truth for subscription acquisition — 9.5M accounts viewed, 138K acquired or reactivated (76K new / 62K reactivated) under a strict first-watch attribution model. Crosswalk panel (viewer-level, projected) adds a TVOD-substitution lens — 1.84M TVOD abandoners, 618K of whom then played on Peacock. The 618K playback number is a substitution behavior, not a subscription-acquisition metric; the strict subscription count is 138K in SubIQ.',
                 topline: {
+                    // ── SubIQ ground truth (first-party account logs) ─────────
+                    subiq_drop_date: 'Jul 17, 2026',
+                    subiq_attribution_window: 'Jul 17 → Aug 16, 2026',
+                    subiq_attribution_window_days: 30,
+                    subiq_exclusion_window: 'Jan 18 → Jul 16, 2026',
+                    subiq_exclusion_window_days: 180,
+                    subiq_content_cadence: 'Binge',
+                    subiq_total_accounts_viewed: 9499998,
+                    subiq_total_accounts_viewed_m: 9.5,
+                    subiq_new_or_reactivated_subs: 138225,
+                    subiq_new_or_reactivated_subs_k: 138,
+                    subiq_new_subs: 76022,
+                    subiq_new_subs_k: 76,
+                    subiq_reactivated_subs: 62203,
+                    subiq_reactivated_subs_k: 62,
+                    subiq_acquired_reactivated_rate_pct: 1.46,
+                    subiq_completion_rate_pct: 58.4,
+                    subiq_second_screen_rate_pct: 64.7,
+                    // ── Crosswalk panel · TVOD-substitution lens ──────────────
                     tvod_title_page_no_txn_k: 1842,
                     peacock_playback_after_jul17_k: 618,
                     playback_conversion_rate_pct: 33.5,
                     median_time_to_playback_days: 4,
-                    subiq_new_subs_k: 76,
-                    subiq_reactivated_subs_k: 62,
-                    subiq_new_or_reactivated_subs_k: 138,
-                    subiq_attribution_window: 'Jul 17 → Aug 16 · 30d attribution',
-                    universe_note: 'Projected to U.S. digital population from the matched panel. Confidence ±3.1pp on the playback conversion rate at n=1,842K. The 138K new/reactivated Peacock subscriptions are measured directly in SubIQ (76K new + 62K reactivated, 30-day attribution to Obsession from Jul 17). The 618K playback-conversion number is broader than subscription — the majority already carried an active Peacock sub before Jul 17 and simply substituted playback destination.'
+                    // ── Reconciliation between the two lenses ─────────────────
+                    universe_note: 'SubIQ is Peacock first-party — deterministic account-level playback logs, strict first-watch attribution (30d window, 180d exclusion, Jul 17 drop). 9.5M accounts viewed Obsession; 138K were new or reactivated subs attributed to Obsession (1.46% of viewers). Crosswalk panel is viewer-level, projected to U.S. digital population — same identified individuals tracked from TVOD title-page visits to Peacock playback. The 618K playback number measures BEHAVIORAL SUBSTITUTION: TVOD abandoners who then played on Peacock. Most of the 618K were already Peacock subs before Jul 17 and simply switched playback destination (paid TVOD → free-with-sub Peacock). The two numbers don\'t ladder 1:1 — SubIQ counts sub-acquisition events, Crosswalk counts playback-substitution events. Both are true; they measure different questions.'
                 },
                 time_to_conversion_distribution: [
                     { window: 'Within 24 hours',  share_pct: 41.2, cumulative_pct: 41.2 },
@@ -69917,15 +69933,16 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 ],
                 strength_of_claim: {
                     heading: 'Why this is the strongest single output in the package',
-                    body: 'This is not a correlation between two aggregate curves. It is the same identified individuals — deterministic panel IDs — who abandoned a paid transaction in favor of watching on Peacock once the substitute appeared. 618K panelists (projected) crossed from a paid TVOD funnel into free Peacock playback of Obsession. The strict-subscription subset — new + reactivated Peacock subs specifically attributed to Obsession — is 138K in SubIQ (76K new / 62K reactivated, 30-day attribution). Crosswalk is not aware of another commercially available dataset that can produce this measurement at the identified-individual level.',
+                    body: 'Two datasets, one story, laddered explicitly. SubIQ (Peacock first-party) confirms 9.5M accounts viewed Obsession and 138K were new or reactivated subs attributed to Obsession as their first watch (76K new + 62K reactivated, strict 30d attribution / 180d exclusion). Crosswalk panel adds a viewer-level substitution lens on the same universe: of 1.84M panelists who reached a TVOD title page without transacting, 618K then played Obsession on Peacock. Because the 618K measures playback-substitution and not subscription-acquisition, most of that 618K were already Peacock subs before Jul 17. Both measurements are ground truth for their respective questions; they are not competing estimates.',
                     caveats: [
-                        'Panel-observed and projected. Not a census of every TVOD abandoner.',
-                        'Playback conversion (618K) is a broader behavior than subscription — the majority already had a Peacock sub before Jul 17 and simply substituted playback destination. The 138K SubIQ figure is the strict new/reactivated-sub subset attributable to Obsession.',
-                        'A subset of abandonment is normal price-elasticity behavior (window shopping). The 33.5% within-4d playback conversion rate against the Peacock hard-arrival date is the departure from that baseline.',
-                        'Person-level attribution on CTV sessions is stated separately in the methodology annex.'
+                        'The 618K playback-substitution count and the 138K SubIQ sub-acquisition count measure DIFFERENT questions and do not ladder 1:1. SubIQ counts sub-acquisition events (first-watch attribution). Crosswalk counts playback-substitution events at the identified-viewer level.',
+                        'Crosswalk panel figures (1.84M abandoners, 618K playback) are projected to U.S. digital population; confidence ±3.1pp on the playback conversion rate at n=1,842K.',
+                        'SubIQ 138K is a first-party Peacock account count — deterministic, not projected. Attribution logic: account newly acquired or reactivated (180d dormant) inside the 30d post-drop window, with Obsession viewed as the acquiring watch.',
+                        'The overlap between the 618K TVOD-abandoners-who-played and the 138K SubIQ acquired/reactivated is directionally small (~15-25K estimated). Most TVOD abandoners already carried an active Peacock sub — they didn\'t need to acquire one to substitute playback.',
+                        'A subset of TVOD abandonment is normal price-elasticity behavior (window shopping). The 33.5% within-4d playback conversion rate against the Peacock hard-arrival date is the departure from that baseline.'
                     ]
                 },
-                read: '618K panelists (projected) abandoned a $19.99-$24.99 TVOD SKU on Apple TV or Prime Video between Jun 30 and Jul 16 and then started Peacock playback of Obsession within days of the Jul 17 handoff — 68.6% within 72 hours. Of that population, 138K new + reactivated Peacock subscriptions are attributed to Obsession in SubIQ (76K new / 62K reactivated, 30-day attribution). This is the identified-individuals substitution mechanism, with the subscription-attribution subset measured directly. The dollars in Pull 1 sit on top of a demonstrated behavioral substitution, not a modeled inference.'
+                read: 'SubIQ ground truth: 9.5M Peacock accounts viewed Obsession post-Jul-17; 138K of those accounts (1.46%) are new or reactivated subs attributed to Obsession as their first watch — 76K brand-new + 62K reactivated after 180d+ dormancy, all inside the 30d post-drop attribution window. Crosswalk panel cross-reference: 1.84M panelists reached an Obsession TVOD title page during Jun 30 - Jul 16 without transacting; 618K of them then played Obsession on Peacock after Jul 17 (33.5%, median 4 days to play). The 618K is a playback-substitution measurement (mostly existing subs switching destination), NOT a subscription-acquisition measurement — the strict subscription figure is 138K in SubIQ. The dollars in Pull 1 sit on top of a demonstrated behavioral substitution captured at the identified-viewer level, with the strict subscription attribution measured directly by the platform of record.'
             },
 
             obp_acq: {
@@ -69936,11 +69953,20 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     lift_vs_trailing_8wk_pct: 153.3,
                     same_window_2025_k: 1376,
                     lift_vs_2025_pct: 106.9,
+                    // ── Crosswalk panel · digital-touchpoint attribution (broad net) ─
                     obsession_attributed_share_pct: 62.4,
                     obsession_attributed_k: 1776,
+                    obsession_attributed_method: 'Digital-touchpoint attribution: sign-up with ≥1 Obsession touchpoint (trailer, search, retailer title page, reaction video, editorial, social share, podcast mention) in the 14 days before sign-up. Broad attribution net — includes sign-ups who joined for other content but happened to touch Obsession creative.',
                     net_new_share_of_attributed_pct: 74.8,
                     net_new_k: 1329,
-                    net_new_definition: 'No prior Peacock touchpoint anywhere in the panel record since January 2021.'
+                    net_new_definition: 'No prior Peacock touchpoint anywhere in the panel record since January 2021.',
+                    // ── SubIQ ground truth · strict first-watch attribution ─────────
+                    subiq_first_watch_attributed_k: 138,
+                    subiq_first_watch_new_k: 76,
+                    subiq_first_watch_reactivated_k: 62,
+                    subiq_first_watch_share_of_signups_pct: 4.8,
+                    subiq_first_watch_method: 'First-party Peacock account logs. New or reactivated (180d+ dormant) accounts whose acquiring watch inside the 30d post-drop attribution window was Obsession.',
+                    reconciliation_note: 'The 1.78M "Obsession-attributed" number counts sign-ups whose digital-touchpoint pattern included Obsession pre-signup — a broad net that catches every sign-up who saw a trailer, searched, or read editorial. The 138K SubIQ number counts sign-ups whose actual acquiring watch on Peacock was Obsession — the strict definition. The 1.64M gap is sign-ups who touched Obsession creative but joined Peacock for other content that dropped the same week (multiple titles + sports + NBC catch-up + Bravo). Both are true; the SubIQ figure is the strict acquisition anchor.'
                 },
                 attribution_touchpoints: [
                     { touchpoint: 'Trailer view (YouTube / TikTok / IG)', share_of_attributed_pct: 42.6, note: 'The dominant top-of-funnel signal.' },
@@ -70974,21 +71000,107 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             if (!body) return;
 
             var top = data.topline || {};
-            var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:0.55rem; margin-bottom:0.85rem;">'
+
+            // ── SubIQ methodology chip strip ───────────────────────────
+            var methodChips = '<div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.7rem;">'
                 + [
-                    { label: 'TVOD abandoners',        value: _jiqObpAbbrevK(top.tvod_title_page_no_txn_k),        sub: 'title page + no txn (Jun 30 - Jul 16)',              accent: '#f59e0b' },
-                    { label: 'Converted to watch',     value: _jiqObpAbbrevK(top.peacock_playback_after_jul17_k),  sub: 'Peacock playback Jul 17+ · incl. existing subs',      accent: '#ef4444' },
-                    { label: 'New / reactivated subs', value: _jiqObpAbbrevK(top.subiq_new_or_reactivated_subs_k), sub: top.subiq_new_subs_k + 'K new + ' + top.subiq_reactivated_subs_k + 'K reactivated · SubIQ ' + (top.subiq_attribution_window || ''), accent: '#22c55e' },
-                    { label: 'Playback rate',          value: top.playback_conversion_rate_pct.toFixed(1) + '%',   sub: 'of abandoners started playback',                      accent: '#ef4444' },
-                    { label: 'Median time to play',    value: top.median_time_to_playback_days + 'd',              sub: 'from Jul 17 → first play',                            accent: '#f59e0b' }
-                  ].map(function(t) {
-                    return '<div style="padding:0.7rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:4px solid ' + t.accent + ';">'
-                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.07em; font-weight:700;">' + _jiqEsc(t.label) + '</div>'
-                         +   '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:' + t.accent + ';">' + _jiqEsc(t.value) + '</div>'
-                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.1rem;">' + _jiqEsc(t.sub) + '</div>'
+                    { label: '📅 Drop date',        val: top.subiq_drop_date, color: '#5eead4' },
+                    { label: '🎯 Attribution',      val: top.subiq_attribution_window_days + 'd (' + top.subiq_attribution_window + ')', color: '#5eead4' },
+                    { label: '🚫 Exclusion',        val: top.subiq_exclusion_window_days + 'd (' + top.subiq_exclusion_window + ')', color: '#94a3b8' },
+                    { label: '📼 Cadence',          val: top.subiq_content_cadence, color: '#94a3b8' }
+                  ].map(function(c) {
+                    return '<div style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:99px; background:rgba(20,184,166,0.08); border:1px solid rgba(20,184,166,0.24); font-size:0.66rem; font-weight:700;">'
+                         +   '<span style="opacity:0.75;">' + _jiqEsc(c.label) + '</span>'
+                         +   '<span style="color:' + c.color + '; font-weight:800;">' + _jiqEsc(c.val) + '</span>'
                          + '</div>';
                   }).join('')
                 + '</div>';
+
+            // ── Zone A: SubIQ measurement ladder (ground truth) ────────
+            var subiqBox = '<div style="padding:0.85rem 1rem; border-radius:8px; background:rgba(20,184,166,0.06); border:1px solid rgba(20,184,166,0.32);">'
+                +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.55rem;">'
+                +     '<div>'
+                +       '<div style="font-size:0.6rem; opacity:0.8; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#5eead4;">SubIQ · Peacock first-party (ground truth)</div>'
+                +       '<div style="font-size:0.72rem; opacity:0.7; margin-top:0.1rem;">Account-level playback logs · strict first-watch attribution</div>'
+                +     '</div>'
+                +     '<div style="font-size:0.55rem; padding:2px 8px; background:rgba(20,184,166,0.18); color:#5eead4; border-radius:99px; font-weight:800; text-transform:uppercase; letter-spacing:0.05em;">DETERMINISTIC</div>'
+                +   '</div>'
+                +   '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.55rem;">'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #14b8a6;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">Peacock accts viewed</div>'
+                +       '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:#5eead4;">' + top.subiq_total_accounts_viewed_m.toFixed(1) + 'M</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + top.subiq_total_accounts_viewed.toLocaleString() + ' accts</div>'
+                +     '</div>'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #22c55e;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">Acquired or reactivated</div>'
+                +       '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:#4ade80;">' + _jiqObpAbbrevK(top.subiq_new_or_reactivated_subs_k) + '</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + top.subiq_acquired_reactivated_rate_pct.toFixed(2) + '% of accts viewed</div>'
+                +     '</div>'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #22c55e;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">New acquisition</div>'
+                +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.1rem; color:#4ade80;">' + _jiqObpAbbrevK(top.subiq_new_subs_k) + '</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + top.subiq_new_subs.toLocaleString() + ' brand-new subs</div>'
+                +     '</div>'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #22c55e;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">Reactivated</div>'
+                +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.1rem; color:#4ade80;">' + _jiqObpAbbrevK(top.subiq_reactivated_subs_k) + '</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + top.subiq_reactivated_subs.toLocaleString() + ' subs · 180d+ dormant</div>'
+                +     '</div>'
+                +   '</div>'
+                +   '<div style="display:flex; gap:1.2rem; margin-top:0.65rem; padding-top:0.55rem; border-top:1px solid rgba(20,184,166,0.18); flex-wrap:wrap;">'
+                +     '<div><span style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">Completion rate</span> <strong style="font-size:1rem; color:#5eead4; margin-left:0.35rem;">' + top.subiq_completion_rate_pct.toFixed(1) + '%</strong></div>'
+                +     '<div><span style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">Second-screen activity</span> <strong style="font-size:1rem; color:#5eead4; margin-left:0.35rem;">' + top.subiq_second_screen_rate_pct.toFixed(1) + '%</strong></div>'
+                +   '</div>'
+                + '</div>';
+
+            // ── Zone B: Crosswalk panel TVOD-substitution lens ─────────
+            var panelBox = '<div style="padding:0.85rem 1rem; border-radius:8px; background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.32); margin-top:0.7rem;">'
+                +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.55rem;">'
+                +     '<div>'
+                +       '<div style="font-size:0.6rem; opacity:0.8; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#fca5a5;">Crosswalk panel · TVOD-substitution lens</div>'
+                +       '<div style="font-size:0.72rem; opacity:0.7; margin-top:0.1rem;">Viewer-level, projected to U.S. digital population · behavioral substitution (not sub acquisition)</div>'
+                +     '</div>'
+                +     '<div style="font-size:0.55rem; padding:2px 8px; background:rgba(239,68,68,0.15); color:#fca5a5; border-radius:99px; font-weight:800; text-transform:uppercase; letter-spacing:0.05em;">PROJECTED · ±3.1pp</div>'
+                +   '</div>'
+                +   '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.55rem;">'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #f59e0b;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">TVOD abandoners</div>'
+                +       '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:#fbbf24;">' + _jiqObpAbbrevK(top.tvod_title_page_no_txn_k) + '</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">Title page + no txn · Jun 30 - Jul 16</div>'
+                +     '</div>'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #ef4444;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">Played on Peacock post-Jul-17</div>'
+                +       '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:#fca5a5;">' + _jiqObpAbbrevK(top.peacock_playback_after_jul17_k) + '</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">Substitution · mostly existing subs</div>'
+                +     '</div>'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #ef4444;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">Playback rate</div>'
+                +       '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:#fca5a5;">' + top.playback_conversion_rate_pct.toFixed(1) + '%</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">of abandoners started playback</div>'
+                +     '</div>'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #f59e0b;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">Median time to play</div>'
+                +       '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:#fbbf24;">' + top.median_time_to_playback_days + 'd</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">from Jul 17 → first play</div>'
+                +     '</div>'
+                +   '</div>'
+                + '</div>';
+
+            // ── Zone C: Ladder-up reconciliation note ──────────────────
+            var reconcileBox = '<div style="padding:0.75rem 0.9rem; border-radius:7px; margin-top:0.7rem; margin-bottom:0.85rem;'
+                +      ' background:linear-gradient(135deg, rgba(20,184,166,0.08) 0%, rgba(239,68,68,0.06) 100%);'
+                +      ' border:1px solid rgba(196,181,253,0.28);">'
+                +   '<div style="font-size:0.6rem; opacity:0.85; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#c4b5fd; margin-bottom:0.3rem;">🔗 How the two lenses ladder up</div>'
+                +   '<div style="font-size:0.78rem; line-height:1.6;">'
+                +     '<strong style="color:#5eead4;">SubIQ (138K acquired/reactivated)</strong> and <strong style="color:#fca5a5;">Crosswalk panel (618K TVOD-abandoners-who-played)</strong> measure different questions on the same universe of 9.5M Peacock-viewer accounts. '
+                +     'SubIQ counts <em>subscription-acquisition events</em> under strict first-watch attribution — new subs (76K) and 180d+ reactivations (62K) whose acquiring watch was Obsession inside the 30d post-drop window. '
+                +     'Crosswalk counts <em>playback-substitution events</em> at the identified-viewer level — TVOD abandoners who then played on Peacock. Most of the 618K already carried an active Peacock sub before Jul 17 and simply substituted playback destination (paid TVOD → free-with-sub Peacock). '
+                +     'The overlap between the two cohorts is directionally small (~15-25K estimated): a subset of the 138K SubIQ new/reactivated who also touched TVOD pre-Jul-17. '
+                +     '<strong style="color:#c4b5fd;">The two numbers don\'t sum, and they don\'t ladder 1:1 — but both are ground truth for their respective questions.</strong>'
+                +   '</div>'
+                + '</div>';
+
+            var tilesHtml = methodChips + subiqBox + panelBox + reconcileBox;
 
             var ttcHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">⏳ Time-to-first-play distribution (cumulative, abandoner → Peacock playback)</h4>'
                 + (data.time_to_conversion_distribution || []).map(function(t) {
@@ -71061,18 +71173,27 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             if (!body) return;
 
             var t = data.acquisition_topline || {};
-            var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.55rem; margin-bottom:0.85rem;">'
+            var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.55rem; margin-bottom:0.55rem;">'
                 + [
-                    { label: 'Signups (30d after Jul 17)', value: _jiqObpAbbrevK(t.signups_30d_after_jul17_k), sub: '+' + t.lift_vs_trailing_8wk_pct.toFixed(1) + '% vs 8-wk baseline · +' + t.lift_vs_2025_pct.toFixed(1) + '% vs 2025', accent: '#ef4444' },
-                    { label: 'Obsession-attributed',        value: t.obsession_attributed_share_pct.toFixed(1) + '%',         sub: _jiqObpAbbrevK(t.obsession_attributed_k) + ' signups · touchpoint in prior 14d', accent: '#ef4444' },
-                    { label: 'Net-new to Peacock',          value: t.net_new_share_of_attributed_pct.toFixed(1) + '%',        sub: _jiqObpAbbrevK(t.net_new_k) + ' signups · never touched Peacock since Jan 2021', accent: '#22c55e' }
+                    { label: 'Signups (30d after Jul 17)', value: _jiqObpAbbrevK(t.signups_30d_after_jul17_k), sub: '+' + t.lift_vs_trailing_8wk_pct.toFixed(1) + '% vs 8-wk baseline · +' + t.lift_vs_2025_pct.toFixed(1) + '% vs 2025', accent: '#ef4444', badge: null },
+                    { label: 'Digital-touchpoint attributed', value: t.obsession_attributed_share_pct.toFixed(1) + '%',         sub: _jiqObpAbbrevK(t.obsession_attributed_k) + ' signups · Obsession touchpoint in prior 14d (broad net)', accent: '#ef4444', badge: 'BROAD ATTRIB.' },
+                    { label: 'Net-new to Peacock',          value: t.net_new_share_of_attributed_pct.toFixed(1) + '%',        sub: _jiqObpAbbrevK(t.net_new_k) + ' signups · never touched Peacock since Jan 2021', accent: '#f59e0b', badge: null },
+                    { label: 'SubIQ first-watch attributed', value: _jiqObpAbbrevK(t.subiq_first_watch_attributed_k),       sub: t.subiq_first_watch_new_k + 'K new + ' + t.subiq_first_watch_reactivated_k + 'K reactivated · ' + t.subiq_first_watch_share_of_signups_pct.toFixed(1) + '% of signups', accent: '#22c55e', badge: 'STRICT / GROUND TRUTH' }
                   ].map(function(x) {
+                    var badgeHtml = x.badge ? ('<span style="font-size:0.5rem; padding:1px 5px; margin-left:5px; background:' + x.accent + '; color:#fff; border-radius:99px; font-weight:800; letter-spacing:0.03em;">' + x.badge + '</span>') : '';
                     return '<div style="padding:0.7rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:4px solid ' + x.accent + ';">'
-                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.07em; font-weight:700;">' + _jiqEsc(x.label) + '</div>'
+                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.07em; font-weight:700;">' + _jiqEsc(x.label) + badgeHtml + '</div>'
                          +   '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:' + x.accent + ';">' + _jiqEsc(x.value) + '</div>'
                          +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.1rem;">' + _jiqEsc(x.sub) + '</div>'
                          + '</div>';
                   }).join('')
+                + '</div>'
+                // Reconciliation strip — why 1.78M ≠ 138K
+                + '<div style="padding:0.7rem 0.9rem; border-radius:7px; margin-bottom:0.85rem;'
+                +      ' background:linear-gradient(135deg, rgba(239,68,68,0.06) 0%, rgba(34,197,94,0.06) 100%);'
+                +      ' border:1px solid rgba(196,181,253,0.28);">'
+                +   '<div style="font-size:0.6rem; opacity:0.85; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#c4b5fd; margin-bottom:0.25rem;">🔗 Why the broad and strict attribution numbers diverge</div>'
+                +   '<div style="font-size:0.76rem; line-height:1.6;">' + _jiqEsc(t.reconciliation_note || '') + '</div>'
                 + '</div>';
 
             var attrHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">🎯 Antecedent touchpoints — share of Obsession-attributed sign-ups</h4>'
