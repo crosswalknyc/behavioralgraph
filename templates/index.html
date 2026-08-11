@@ -24823,7 +24823,18 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             #microdramasIQView .miq-panel { display: none; }
             #microdramasIQView .miq-panel.active { display: block; }
             #microdramasIQView .miq-title-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
-            #microdramasIQView .miq-title-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 0.75rem 0.85rem; display: flex; flex-direction: column; gap: 0.4rem; cursor: pointer; transition: border-color 0.15s ease, transform 0.15s ease; }
+            #microdramasIQView .miq-title-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 0.75rem 0.85rem; display: flex; flex-direction: column; gap: 0.4rem; cursor: pointer; transition: border-color 0.15s ease, transform 0.15s ease; position: relative; }
+            /* Platform badge for the aggregated "All Platforms" tab: small chip in the top-right corner. */
+            #microdramasIQView .miq-platform-badge { position: absolute; top: 0.55rem; right: 0.55rem; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 0.15rem 0.42rem; border-radius: 6px; color: #fff; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); }
+            #microdramasIQView .miq-platform-badge.miq-plat-peacock   { background: rgba(59,130,246,0.22);  color: #93c5fd; border-color: rgba(59,130,246,0.4); }
+            #microdramasIQView .miq-platform-badge.miq-plat-reelshort { background: rgba(236,72,153,0.22);  color: #f9a8d4; border-color: rgba(236,72,153,0.4); }
+            #microdramasIQView .miq-platform-badge.miq-plat-dramabox  { background: rgba(168,85,247,0.22);  color: #d8b4fe; border-color: rgba(168,85,247,0.4); }
+            #microdramasIQView .miq-platform-badge.miq-plat-goodshort { background: rgba(16,185,129,0.22);  color: #86efac; border-color: rgba(16,185,129,0.4); }
+            #microdramasIQView .miq-platform-badge.miq-plat-netshort  { background: rgba(249,115,22,0.22);  color: #fdba74; border-color: rgba(249,115,22,0.4); }
+            /* Keep long titles from colliding with the badge. */
+            #microdramasIQView .miq-title-card.miq-has-badge .miq-title-row { padding-right: 5.5rem; }
+            /* Aggregated rank pill on the left side of the title row. */
+            #microdramasIQView .miq-agg-rank { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 0.05rem 0.42rem; border-radius: 4px; margin-right: 0.4rem; color: #fbbf24; background: rgba(251,191,36,0.14); border: 1px solid rgba(251,191,36,0.3); font-variant-numeric: tabular-nums; }
             #microdramasIQView .miq-title-card:hover { border-color: rgba(236, 72, 153, 0.5); transform: translateY(-1px); }
             #microdramasIQView .miq-title-series { font-size: 0.68rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
             #microdramasIQView .miq-title-row { font-size: 0.95rem; font-weight: 600; line-height: 1.25; }
@@ -25008,7 +25019,8 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 <span id="microdramasIQMeta">Loading catalog...</span>
             </div>
             <div class="miq-tabstrip">
-                <button type="button" class="miq-tab active" data-panel="peacock"   onclick="setMicrodramasIQTab('peacock')">Peacock</button>
+                <button type="button" class="miq-tab active" data-panel="all"       onclick="setMicrodramasIQTab('all')">All Platforms</button>
+                <button type="button" class="miq-tab"        data-panel="peacock"   onclick="setMicrodramasIQTab('peacock')">Peacock</button>
                 <button type="button" class="miq-tab"        data-panel="reelshort" onclick="setMicrodramasIQTab('reelshort')">ReelShort</button>
                 <button type="button" class="miq-tab"        data-panel="dramabox"  onclick="setMicrodramasIQTab('dramabox')">DramaBox</button>
                 <button type="button" class="miq-tab"        data-panel="goodshort" onclick="setMicrodramasIQTab('goodshort')">GoodShort</button>
@@ -25019,8 +25031,14 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 <div>Loading microdrama titles...</div>
             </div>
 
+            <!-- All Platforms panel: default landing tab. Aggregated top titles across every platform, sorted by estimated views. -->
+            <div class="miq-panel active" data-panel="all">
+                <div id="microdramasIQAllMeta" class="miq-meta"></div>
+                <div id="microdramasIQAllGrid" class="miq-title-grid"></div>
+            </div>
+
             <!-- Peacock panel (original card-grid design; kept as the reference layout) -->
-            <div class="miq-panel active" data-panel="peacock">
+            <div class="miq-panel" data-panel="peacock">
                 <div id="microdramasIQTitleGrid" class="miq-title-grid"></div>
             </div>
 
@@ -44284,12 +44302,22 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             _microdramasIQHideAllOtherViews();
             var view = document.getElementById('microdramasIQView');
             if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
+            // Default landing tab is the aggregated cross-platform ranker.
+            if (!window.__microdramasIQ.activePanel) {
+                window.__microdramasIQ.activePanel = 'all';
+            }
             if (!window.__microdramasIQ.filterOptions) {
                 loadMicrodramasIQFilterOptions().then(function() {
-                    applyMicrodramasIQFilters();
+                    if (!window.__microdramasIQ.allLoaded) {
+                        window.__microdramasIQ.allLoaded = true;
+                        applyMicrodramasIQAll();
+                    }
                 });
-            } else if (!window.__microdramasIQ.lastData) {
-                applyMicrodramasIQFilters();
+            } else if (!window.__microdramasIQ.allData) {
+                if (!window.__microdramasIQ.allLoaded) {
+                    window.__microdramasIQ.allLoaded = true;
+                    applyMicrodramasIQAll();
+                }
             }
         };
 
@@ -44353,9 +44381,11 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
         }
 
         // Dispatch Apply to the correct loader based on which tab is
-        // currently active.
+        // currently active. Default panel is 'all' - the aggregated
+        // cross-platform ranker.
         function applyMicrodramasIQUnified() {
-            var panel = (window.__microdramasIQ && window.__microdramasIQ.activePanel) || 'peacock';
+            var panel = (window.__microdramasIQ && window.__microdramasIQ.activePanel) || 'all';
+            if (panel === 'all')     return applyMicrodramasIQAll();
             if (panel === 'peacock') return applyMicrodramasIQFilters();
             return applyMicrodramasIQCompetitors();
         }
@@ -44950,18 +44980,18 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 if (p.getAttribute('data-panel') === panel) p.classList.add('active');
                 else p.classList.remove('active');
             });
-            // "Show" (Top N) applies to every tab now, including
-            // Peacock - the backend caps the sorted title list at N so
-            // the filter grammar is identical across tabs. Kept the
-            // wrap lookup in case a future tab (e.g. cross-platform)
-            // needs to opt out again.
+            // "Show" (Top N) applies to every tab, including All Platforms.
             var topWrap = document.getElementById('microdramasIQTopNWrap');
             if (topWrap) {
                 topWrap.style.display = '';
             }
-            // Lazy-load competitor data the first time any competitor
-            // tab is opened.
-            if (_MIQ_COMPETITOR_PANELS.indexOf(panel) >= 0 && !window.__microdramasIQ.compLoaded) {
+            // Lazy-load: each tab fetches the first time it opens.
+            if (panel === 'all' && !window.__microdramasIQ.allLoaded) {
+                window.__microdramasIQ.allLoaded = true;
+                applyMicrodramasIQAll();
+            } else if (panel === 'peacock' && !window.__microdramasIQ.lastData) {
+                applyMicrodramasIQFilters();
+            } else if (_MIQ_COMPETITOR_PANELS.indexOf(panel) >= 0 && !window.__microdramasIQ.compLoaded) {
                 window.__microdramasIQ.compLoaded = true;
                 applyMicrodramasIQCompetitors();
             }
@@ -45020,6 +45050,120 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             // Fan each platform's titles into its own dedicated card grid.
             (d.platforms || []).forEach(function(p) {
                 renderMicrodramasIQPlatformGrid(p.source, p);
+            });
+        }
+
+        // ===================== MICRODRAMAS ALL-PLATFORMS =====================
+        // Aggregated ranker across every platform, sorted by estimated
+        // views over the active window. Default landing tab.
+        async function applyMicrodramasIQAll() {
+            var meta = document.getElementById('microdramasIQAllMeta');
+            var grid = document.getElementById('microdramasIQAllGrid');
+            if (meta) meta.textContent = 'Loading aggregated ranker...';
+            if (grid) grid.innerHTML = '';
+            var f = _miqCurrentFilters();
+            var body = {
+                window_days: f.window_days || 7,
+                start_date:  f.start_date,
+                end_date:    f.end_date,
+                top_n:       f.top_n || 20,
+                genre:       f.genre,
+            };
+            try {
+                var resp = await fetch('/api/microdramas-iq/all', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                var d = await resp.json();
+                if (!d || !d.success) throw new Error(d && d.error ? d.error : 'Failed to load aggregated ranker');
+                window.__microdramasIQ.allData = d;
+                renderMicrodramasIQAllPlatforms(d);
+            } catch (e) {
+                console.error('Microdramas all-platforms error:', e);
+                if (grid) grid.innerHTML = '<div class="miq-empty-panel">Could not load aggregated ranker: ' + (e.message || e) + '</div>';
+                if (meta) meta.textContent = '';
+            }
+        }
+
+        function _miqPlatformCssKey(platformLabel) {
+            var s = String(platformLabel || '').toLowerCase();
+            if (s.indexOf('reelshort') >= 0)  return 'reelshort';
+            if (s.indexOf('dramabox')  >= 0)  return 'dramabox';
+            if (s.indexOf('goodshort') >= 0)  return 'goodshort';
+            if (s.indexOf('netshort')  >= 0)  return 'netshort';
+            if (s.indexOf('peacock')   >= 0)  return 'peacock';
+            return '';
+        }
+
+        function renderMicrodramasIQAllPlatforms(d) {
+            var meta = document.getElementById('microdramasIQAllMeta');
+            var grid = document.getElementById('microdramasIQAllGrid');
+            if (!grid) return;
+            var titles = d.titles || [];
+            var mix = d.platform_mix || [];
+            if (meta) {
+                if (titles.length && mix.length) {
+                    var mixStr = mix.map(function(m) {
+                        return m.count + ' ' + m.platform;
+                    }).join(' \u00B7 ');
+                    meta.textContent = 'Top ' + titles.length + ' across every platform, ranked by views \u00B7 ' + mixStr;
+                } else {
+                    meta.textContent = '';
+                }
+            }
+            if (!titles.length) {
+                grid.innerHTML = '<div class="miq-empty">No titles yet. The daily scraper (05:30 UTC) populates automatically once snapshots land.</div>';
+                return;
+            }
+            grid.innerHTML = '';
+            titles.forEach(function(t, idx) {
+                var platformLabel = t.platform_label || 'Unknown';
+                var platformKey   = _miqPlatformCssKey(platformLabel);
+
+                var card = document.createElement('div');
+                card.className = 'miq-title-card miq-has-badge';
+
+                t.__observedDates = t.observed_dates || [];
+
+                // Peacock and competitors ship different curve fields; pick
+                // the right sparkline builder per row.
+                var spark;
+                if (platformKey === 'peacock') {
+                    spark = _miqViewSparkline(t);
+                } else {
+                    spark = _miqReadsSparkline(t, t.observed_dates || []);
+                }
+
+                var viewsRaw = (t.sort_views != null) ? t.sort_views : t.read_count;
+                var viewsStr = (viewsRaw != null) ? _miqFormatNumber(viewsRaw) : '-';
+                var primary = { label: 'Views', value: viewsStr };
+
+                // Aggregated rank pill prepended to the title row.
+                var rankPill = '<span class="miq-agg-rank">#' + (idx + 1) + '</span>';
+                var cardInner = _miqCardHTML(t, platformLabel, spark, primary);
+                cardInner = cardInner.replace('<div class="miq-title-row">',
+                    '<div class="miq-title-row">' + rankPill);
+                var badgeClass = platformKey ? ('miq-platform-badge miq-plat-' + platformKey)
+                                                : 'miq-platform-badge';
+                var badgeHTML = '<div class="' + badgeClass + '">' + _miqEscape(platformLabel) + '</div>';
+                card.innerHTML = badgeHTML + cardInner;
+
+                card.addEventListener('click', function(evt) {
+                    if (evt.target.closest('[data-miq-spark="1"]')) {
+                        evt.stopPropagation();
+                        openMicrodramasIQDailyViewsModal(t, platformLabel);
+                        return;
+                    }
+                    openMicrodramasIQTitleModal({
+                        title:    t.title,
+                        series:   t.series || t.title,
+                        genre:    t.genre,
+                        platform: platformLabel,
+                    });
+                });
+                grid.appendChild(card);
             });
         }
 

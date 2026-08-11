@@ -516,9 +516,10 @@ def prewarm_common_views() -> dict:
     - Peacock default (window_days=7, sort=view_28d, cut=all)
     - Competitors default (window_days=7, top_n=20, all genres)
     - Competitors 30-day (window_days=30, top_n=20, all genres)
+    - All-platforms default (the landing tab: window_days=7, top_n=20)
     """
     warmed = {'peacock': False, 'comp_7d': False, 'comp_30d': False,
-              'errors': []}
+              'all_7d': False, 'errors': []}
     try:
         compute_view({'sort': 'view_28d', 'window_days': 7,
                        'audience_cut': 'all'})
@@ -535,6 +536,11 @@ def prewarm_common_views() -> dict:
         warmed['comp_30d'] = True
     except Exception as e:
         warmed['errors'].append(f'comp_30d: {e}')
+    try:
+        compute_all_platforms_view({'window_days': 7, 'top_n': 20})
+        warmed['all_7d'] = True
+    except Exception as e:
+        warmed['errors'].append(f'all_7d: {e}')
     return warmed
 
 
@@ -1170,6 +1176,146 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
     }
     _view_cache_set(_cache_key, _payload)
     return _payload
+
+
+# ============================================================================
+# Cross-platform aggregated ranker (default landing tab)
+# ============================================================================
+# Flattens every platform's top titles into a single view-ordered list
+# so the operator sees "what's the most-viewed thing in vertical drama
+# right now" without having to click through five separate tabs.
+#
+# Uniform sort key = estimated views over the active window:
+#   * Peacock title:   view_window_estimate (falls back to view_28d_estimate)
+#   * Competitor title: read_count (lifetime cumulative counter for
+#                       ReelShort/DramaBox/GoodShort, rank-derived
+#                       estimate for NetShort - both already unified
+#                       in compute_competitors_view)
+#
+# Cache-keyed identically to the underlying platform views so any
+# pre-warm of compute_view + compute_competitors_view fills this
+# tab's cache implicitly (via the cache_get path below).
+def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
+    """Return the aggregated top-titles list across every platform,
+    sorted by estimated views over the active window.
+
+    filters:
+      window_days: int      (default 7, matches competitor default)
+      top_n:       int      (default 20, applies to the AGGREGATED list;
+                             underlying platform pulls always take
+                             top_n * 2 so we have enough headroom for
+                             re-ranking)
+      genre:       str      (optional, applied to both Peacock and
+                             competitor calls)
+      start_date:  str      (ISO YYYY-MM-DD, optional)
+      end_date:    str      (ISO YYYY-MM-DD, optional)
+    """
+    filters = filters or {}
+    top_n_final = int(filters.get('top_n') or 20)
+    top_n_final = max(1, min(top_n_final, 50))
+
+    _cache_key = _view_cache_key('all_platforms', filters)
+    cached = _view_cache_get(_cache_key)
+    if cached is not None:
+        return cached
+
+    # Pull more titles from each source than we intend to display so the
+    # cross-platform ranker has room to interleave. Each platform's
+    # own tab still respects the operator's top_n.
+    per_source_pull = min(50, top_n_final * 3)
+    inner_filters = dict(filters)
+    inner_filters['top_n'] = per_source_pull
+
+    # Window default for the aggregated tab matches the competitor
+    # default (7 days) - Peacock's default is 28d for its own tab, but
+    # in the cross-platform view we want the same window across
+    # sources so comparison is apples-to-apples.
+    if not inner_filters.get('start_date') and not inner_filters.get('end_date'):
+        inner_filters.setdefault('window_days', int(filters.get('window_days') or 7))
+
+    # --- Peacock ---
+    try:
+        pc_payload = compute_view(inner_filters)
+    except Exception as e:
+        logger.warning('compute_all_platforms_view: Peacock compute_view failed (%s)', e)
+        pc_payload = {'success': False, 'titles': [], 'observed_dates': []}
+    pc_titles = pc_payload.get('titles') or []
+    pc_window = ((pc_payload.get('filters') or {}).get('window_days')
+                 or int(inner_filters.get('window_days') or 7))
+
+    # --- Competitors ---
+    try:
+        comp_payload = compute_competitors_view(inner_filters)
+    except Exception as e:
+        logger.warning('compute_all_platforms_view: compute_competitors_view failed (%s)', e)
+        comp_payload = {'success': False, 'platforms': []}
+    comp_platforms = comp_payload.get('platforms') or []
+
+    # --- Flatten with per-title platform tag + uniform sort key ---
+    aggregated: list[dict] = []
+
+    for t in pc_titles:
+        views = (t.get('view_window_estimate')
+                  if t.get('view_window_estimate') is not None
+                  else t.get('view_28d_estimate'))
+        # Stash the platform-side observed_dates ONTO the title so the
+        # frontend can render sparklines without needing a separate
+        # platform meta lookup.
+        row = dict(t)
+        row['platform_source'] = 'peacock'
+        row['platform_label']  = 'Peacock'
+        row['sort_views']      = int(views) if isinstance(views, (int, float)) else 0
+        row['observed_dates']  = t.get('observed_dates') or []
+        aggregated.append(row)
+
+    for p in comp_platforms:
+        p_source = p.get('source') or ''
+        p_label  = p.get('label') or p_source.title()
+        p_obs    = p.get('observed_dates') or []
+        for t in (p.get('titles') or []):
+            reads = t.get('read_count')
+            row = dict(t)
+            row['platform_source'] = p_source
+            row['platform_label']  = p_label
+            row['sort_views']      = int(reads) if isinstance(reads, (int, float)) else 0
+            # Copy the platform's observed_dates onto the title itself
+            # so competitor sparklines have the same self-contained
+            # shape as Peacock's.
+            row['observed_dates']  = p_obs
+            aggregated.append(row)
+
+    aggregated.sort(key=lambda r: -int(r.get('sort_views') or 0))
+    aggregated = aggregated[:top_n_final]
+
+    # Small stats block: how many titles came from each platform in
+    # the trimmed top-N list, for a "top 20 = 8 Peacock, 5 ReelShort..."
+    # summary in the header.
+    platform_counts: dict[str, int] = {}
+    for r in aggregated:
+        lbl = r.get('platform_label') or 'Unknown'
+        platform_counts[lbl] = platform_counts.get(lbl, 0) + 1
+    platform_mix = sorted(
+        [{'platform': p, 'count': c} for p, c in platform_counts.items()],
+        key=lambda x: -x['count'],
+    )
+
+    payload = {
+        'success':       True,
+        'filters': {
+            'window_days': pc_window,
+            'top_n':       top_n_final,
+            'genre':       filters.get('genre') or None,
+            'start_date':  filters.get('start_date') or None,
+            'end_date':    filters.get('end_date') or None,
+        },
+        'generated_at':   datetime.now(timezone.utc).isoformat(),
+        'titles':         aggregated,
+        'platform_mix':   platform_mix,
+        'total_pulled':   len(pc_titles) + sum(len(p.get('titles') or [])
+                                                for p in comp_platforms),
+    }
+    _view_cache_set(_cache_key, payload)
+    return payload
 
 
 # ============================================================================
