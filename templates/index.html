@@ -1085,11 +1085,13 @@
         .view-nav-option:disabled, .view-nav-option.disabled { opacity: 0.6; cursor: not-allowed; }
         /* Nested-group support for the custom product dropdown.
            A parent button (.view-nav-group-trigger) is styled as a
-           visually distinct section header (uppercase, letter-spaced,
-           accent color, subtle top divider) so it's obvious it's a
-           category label, not a navigable leaf item. Clicking it
-           toggles a child list of <button>s (.view-nav-suboption).
-           The chevron flips between right (collapsed) and down (open). */
+           clickable pill (border + rounded corners + filled bg + big
+           chevron in a circle) so it reads as an interactive button,
+           not a passive section label. Clicking it toggles a child
+           list of <button>s (.view-nav-suboption). The chevron
+           points down (▾) when collapsed and rotates 180deg when
+           open. Includes a subtle 3-pulse attention hint on load so
+           first-time users notice the group is expandable. */
         .view-nav-group {
             display: flex;
             flex-direction: column;
@@ -1103,35 +1105,62 @@
             text-transform: uppercase;
             letter-spacing: 0.08em;
             color: #BC91F9;
-            padding-top: 0.55rem;
-            padding-bottom: 0.4rem;
-            border-top: 1px solid rgba(188, 145, 249, 0.22);
-            background: rgba(188, 145, 249, 0.06);
-        }
-        /* First group in the panel skips the top divider so we don't
-           draw a line under the rounded panel corner. */
-        .view-nav-panel > .view-nav-group:first-child .view-nav-group-trigger {
-            border-top: none;
+            padding: 0.55rem 0.85rem;
+            background: rgba(188, 145, 249, 0.12);
+            border: 1px solid rgba(188, 145, 249, 0.35);
+            border-radius: 8px;
+            box-sizing: border-box;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease,
+                        color 0.15s ease, box-shadow 0.15s ease;
         }
         .view-nav-group-trigger:hover {
-            background: rgba(188, 145, 249, 0.18);
+            background: rgba(188, 145, 249, 0.28);
+            border-color: #BC91F9;
             color: #fff;
+            box-shadow: 0 0 0 2px rgba(188, 145, 249, 0.18);
         }
         .view-nav-group-trigger::after {
-            content: '▸';
-            font-size: 0.8em;
-            opacity: 0.85;
-            transition: transform 0.15s ease;
+            content: '▾';
+            font-size: 0.95rem;
+            line-height: 1;
+            color: #E9D9FF;
+            background: rgba(188, 145, 249, 0.30);
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding-bottom: 2px;
             margin-left: 0.5rem;
+            transition: transform 0.2s ease, background 0.15s ease,
+                        color 0.15s ease;
+        }
+        .view-nav-group-trigger:hover::after {
+            background: rgba(188, 145, 249, 0.55);
+            color: #fff;
         }
         .view-nav-group.open .view-nav-group-trigger::after {
-            transform: rotate(90deg);
+            transform: rotate(180deg);
+            padding-bottom: 0;
+            padding-top: 2px;
+        }
+        /* First-run hint: pulse the chevron three times to draw the
+           eye. Stops as soon as the group is expanded (or after
+           three pulses on its own). */
+        @keyframes viewNavExpandHint {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(188, 145, 249, 0.45); }
+            50%      { transform: scale(1.15); box-shadow: 0 0 0 6px rgba(188, 145, 249, 0); }
+        }
+        .view-nav-group:not(.open) .view-nav-group-trigger::after {
+            animation: viewNavExpandHint 1.6s ease-in-out 3;
         }
         .view-nav-submenu {
             display: none;
             flex-direction: column;
             border-left: 2px solid rgba(188, 145, 249, 0.35);
-            margin: 0.15rem 0 0.35rem 0.85rem;
+            margin: 0.35rem 0 0.35rem 0.85rem;
         }
         .view-nav-group.open .view-nav-submenu { display: flex; }
         .view-nav-suboption {
@@ -1140,15 +1169,51 @@
             opacity: 0.95;
         }
         .view-nav-suboption:hover { opacity: 1; }
-        /* Light-theme variant of the group header. */
+        /* Count badge showing how many items live inside the group
+           (e.g. "TRENDS  7"). Renders inline after the label so the
+           flex layout still pushes the chevron to the right. */
+        .view-nav-group-count {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            color: #E9D9FF;
+            background: rgba(188, 145, 249, 0.22);
+            padding: 1px 7px;
+            border-radius: 999px;
+            margin-left: 0.4rem;
+            margin-right: auto;
+        }
+        .view-nav-group-trigger:hover .view-nav-group-count {
+            background: rgba(188, 145, 249, 0.45);
+            color: #fff;
+        }
+        /* Light-theme variant of the group pill + chevron + count. */
         body[data-theme="light"] .view-nav-group-trigger {
             color: #6D3FCB;
-            border-top-color: rgba(109, 63, 203, 0.18);
-            background: rgba(109, 63, 203, 0.05);
+            border-color: rgba(109, 63, 203, 0.32);
+            background: rgba(109, 63, 203, 0.08);
         }
         body[data-theme="light"] .view-nav-group-trigger:hover {
-            background: rgba(109, 63, 203, 0.12);
+            background: rgba(109, 63, 203, 0.18);
             color: #4A2792;
+            border-color: #6D3FCB;
+            box-shadow: 0 0 0 2px rgba(109, 63, 203, 0.15);
+        }
+        body[data-theme="light"] .view-nav-group-trigger::after {
+            color: #4A2792;
+            background: rgba(109, 63, 203, 0.20);
+        }
+        body[data-theme="light"] .view-nav-group-trigger:hover::after {
+            background: rgba(109, 63, 203, 0.45);
+            color: #fff;
+        }
+        body[data-theme="light"] .view-nav-group-count {
+            color: #4A2792;
+            background: rgba(109, 63, 203, 0.18);
+        }
+        body[data-theme="light"] .view-nav-group-trigger:hover .view-nav-group-count {
+            background: rgba(109, 63, 203, 0.40);
+            color: #fff;
         }
         .user-info-bar { display: flex; align-items: center; gap: 1rem; }
         .view-btn {
@@ -38711,7 +38776,23 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                         parentBtn.type = 'button';
                         parentBtn.className = 'view-nav-option view-nav-group-trigger';
                         parentBtn.setAttribute('aria-expanded', _expandedNavGroups.has(groupName) ? 'true' : 'false');
-                        parentBtn.textContent = groupName;
+                        var _groupItemCount = 0;
+                        for (var _gc = 0; _gc < viewDropdown.options.length; _gc++) {
+                            if (viewDropdown.options[_gc].getAttribute('data-group') === groupName) {
+                                _groupItemCount++;
+                            }
+                        }
+                        var _nameSpan = document.createElement('span');
+                        _nameSpan.className = 'view-nav-group-name';
+                        _nameSpan.textContent = groupName;
+                        parentBtn.appendChild(_nameSpan);
+                        if (_groupItemCount > 0) {
+                            var _countBadge = document.createElement('span');
+                            _countBadge.className = 'view-nav-group-count';
+                            _countBadge.textContent = _groupItemCount;
+                            _countBadge.setAttribute('aria-label', _groupItemCount + ' items - click to expand');
+                            parentBtn.appendChild(_countBadge);
+                        }
                         parentBtn.addEventListener('click', (function(name, wrap, btn) {
                             return function(e) {
                                 e.stopPropagation();
