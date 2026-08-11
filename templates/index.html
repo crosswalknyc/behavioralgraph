@@ -16127,6 +16127,18 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             color: #475569;
         }
 
+        /* Michael "Two audiences" Venn: in light mode the pale purple /
+           orange labels and white numbers were unreadable on the tinted
+           circles. Darken the accent labels and paint the big numbers a
+           dark slate. Dark mode keeps the inline SVG fills. */
+        body[data-theme="light"] .micVennNum { fill: #334155; }
+        body[data-theme="light"] .micVennSub { fill: #64748b; }
+        body[data-theme="light"] .micVennLbl-orange { fill: #b45309; }
+        body[data-theme="light"] .micVennSub-orange { fill: #c2410c; }
+        body[data-theme="light"] .micVennTot-orange { fill: #b45309; }
+        body[data-theme="light"] .micVennLbl-purple { fill: #6d28d9; }
+        body[data-theme="light"] .micVennSub-purple { fill: #7c3aed; }
+
         /* ===========================================================
            CONVERSION FUNNEL (sits at the top of the master journey-
            map card, before the title). 5 horizontal stacked-bar rows
@@ -69380,9 +69392,15 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                          + '<div style="position:absolute; left:' + pct + '%; top:calc(50% + 10px); transform:translateX(-50%); font-size:0.6rem; font-weight:700; opacity:0.72; white-space:nowrap; letter-spacing:0.02em;">' + d + 'd</div>';
                 }).join('');
                 var eventHtml = events.map(function(e) {
-                    var pct = (e.d / maxD * 100).toFixed(2);
+                    var pctN = (e.d / maxD * 100);
+                    var pct = pctN.toFixed(2);
+                    // Edge pills would overflow the card if centered on the tick
+                    // (translateX(-50%) pushes half the pill off-canvas at 0%/100%).
+                    // Anchor the left-most pill's left edge and the right-most
+                    // pill's right edge to the tick instead.
+                    var pillTx = pctN <= 6 ? 'translateX(0)' : (pctN >= 94 ? 'translateX(-100%)' : 'translateX(-50%)');
                     return '<div style="position:absolute; left:' + pct + '%; top:50%; margin-top:-9px; width:2px; height:9px; background:' + e.color + '; transform:translateX(-1px);"></div>'
-                         + '<div style="position:absolute; left:' + pct + '%; top:calc(50% - 34px); transform:translateX(-50%); font-size:0.56rem; font-weight:800; color:' + e.color + '; white-space:nowrap; padding:2px 8px; border-radius:99px; background:' + e.bg + '; border:1px solid ' + e.border + ';">' + e.d + 'd &middot; ' + _jiqEsc(e.date) + ' &middot; ' + _jiqEsc(e.label) + '</div>';
+                         + '<div style="position:absolute; left:' + pct + '%; top:calc(50% - 34px); transform:' + pillTx + '; font-size:0.56rem; font-weight:800; color:' + e.color + '; white-space:nowrap; padding:2px 8px; border-radius:99px; background:' + e.bg + '; border:1px solid ' + e.border + ';">' + e.d + 'd &middot; ' + _jiqEsc(e.date) + ' &middot; ' + _jiqEsc(e.label) + '</div>';
                 }).join('');
                 return '<div style="padding:0.4rem 0.75rem 0.15rem; margin-bottom:1rem; border-radius:8px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06);">'
                      +   '<div style="font-size:0.58rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.09em; font-weight:800; margin-bottom:0.15rem;">📅 Michael windowing continuum &middot; theatrical → PVOD</div>'
@@ -69472,27 +69490,27 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 +   '<circle cx="' + cx1 + '" cy="' + cy + '" r="' + r1 + '" fill="none" stroke="#f59e0b" stroke-width="2.5"/>'
                 +   '<circle cx="' + cx2 + '" cy="' + cy + '" r="' + r2 + '" fill="none" stroke="#ea580c" stroke-width="2.5"/>'
                 // ── THEATRICAL label (inside theatrical, left portion)
-                +   '<text x="215" y="168" text-anchor="middle" fill="#fff" font-size="12" font-weight="800" letter-spacing="1.2">THEATRICAL</text>'
-                +   '<text x="215" y="200" text-anchor="middle" fill="#fff" font-size="30" font-weight="900" font-variant-numeric="tabular-nums">' + _jiqMicAbbrevM(v.theatrical_only_hh_m) + '</text>'
-                +   '<text x="215" y="220" text-anchor="middle" fill="rgba(255,255,255,0.72)" font-size="11" font-weight="600">only</text>'
+                +   '<text x="215" y="168" text-anchor="middle" class="micVennLbl-orange" fill="#fff" font-size="12" font-weight="800" letter-spacing="1.2">THEATRICAL</text>'
+                +   '<text x="215" y="200" text-anchor="middle" class="micVennNum" fill="#fff" font-size="30" font-weight="900" font-variant-numeric="tabular-nums">' + _jiqMicAbbrevM(v.theatrical_only_hh_m) + '</text>'
+                +   '<text x="215" y="220" text-anchor="middle" class="micVennSub" fill="rgba(255,255,255,0.72)" font-size="11" font-weight="600">only</text>'
                 // ── TRANSACTIONAL label (outside the small circle, top-right callout with leader)
                 +   '<line x1="446" y1="146" x2="500" y2="102" stroke="#ea580c" stroke-width="1.2" stroke-opacity="0.7"/>'
                 +   '<circle cx="446" cy="146" r="2.6" fill="#ea580c"/>'
-                +   '<text x="508" y="98" fill="#fdba74" font-size="11" font-weight="800" letter-spacing="1.1">TRANSACTIONAL</text>'
-                +   '<text x="508" y="126" fill="#fff" font-size="26" font-weight="900" font-variant-numeric="tabular-nums">' + _jiqMicAbbrevM(v.transactional_only_hh_m) + '</text>'
-                +   '<text x="508" y="144" fill="rgba(253,186,116,0.85)" font-size="11" font-weight="600">only</text>'
+                +   '<text x="508" y="98" class="micVennLbl-orange" fill="#fdba74" font-size="11" font-weight="800" letter-spacing="1.1">TRANSACTIONAL</text>'
+                +   '<text x="508" y="126" class="micVennNum" fill="#fff" font-size="26" font-weight="900" font-variant-numeric="tabular-nums">' + _jiqMicAbbrevM(v.transactional_only_hh_m) + '</text>'
+                +   '<text x="508" y="144" class="micVennSub-orange" fill="rgba(253,186,116,0.85)" font-size="11" font-weight="600">only</text>'
                 // ── BOTH label (inside the lens, centered on the overlap centroid)
-                +   '<text x="' + lensCx + '" y="' + (cy - 8) + '" text-anchor="middle" fill="#c4b5fd" font-size="10" font-weight="800" letter-spacing="1.4">BOTH</text>'
-                +   '<text x="' + lensCx + '" y="' + (cy + 16) + '" text-anchor="middle" fill="#e9d5ff" font-size="20" font-weight="900" font-variant-numeric="tabular-nums">' + _jiqMicAbbrevM(v.both_hh_m) + '</text>'
-                +   '<text x="' + lensCx + '" y="' + (cy + 32) + '" text-anchor="middle" fill="rgba(196,181,253,0.75)" font-size="9" font-weight="700">double-dip</text>'
+                +   '<text x="' + lensCx + '" y="' + (cy - 8) + '" text-anchor="middle" class="micVennLbl-purple" fill="#c4b5fd" font-size="10" font-weight="800" letter-spacing="1.4">BOTH</text>'
+                +   '<text x="' + lensCx + '" y="' + (cy + 16) + '" text-anchor="middle" class="micVennNum" fill="#e9d5ff" font-size="20" font-weight="900" font-variant-numeric="tabular-nums">' + _jiqMicAbbrevM(v.both_hh_m) + '</text>'
+                +   '<text x="' + lensCx + '" y="' + (cy + 32) + '" text-anchor="middle" class="micVennSub-purple" fill="rgba(196,181,253,0.75)" font-size="9" font-weight="700">double-dip</text>'
                 // ── 43.8% callout with arrow pointing at the lens
                 +   '<path d="M 220 285 Q 300 300 355 220" stroke="#a78bfa" stroke-width="1.4" fill="none" stroke-opacity="0.75" stroke-dasharray="3,3"/>'
                 +   '<polygon points="358,215 353,225 348,220" fill="#a78bfa" opacity="0.85"/>'
-                +   '<text x="60" y="290" fill="#c4b5fd" font-size="11" font-weight="800" letter-spacing="0.6">' + v.double_dip_pct_of_transactional.toFixed(1) + '% of TVOD buyers</text>'
-                +   '<text x="60" y="305" fill="rgba(196,181,253,0.75)" font-size="10" font-weight="600">also bought a theatrical ticket</text>'
+                +   '<text x="60" y="290" class="micVennLbl-purple" fill="#c4b5fd" font-size="11" font-weight="800" letter-spacing="0.6">' + v.double_dip_pct_of_transactional.toFixed(1) + '% of TVOD buyers</text>'
+                +   '<text x="60" y="305" class="micVennSub-purple" fill="rgba(196,181,253,0.75)" font-size="10" font-weight="600">also bought a theatrical ticket</text>'
                 // ── HH totals shown discreetly below each label
-                +   '<text x="215" y="315" text-anchor="middle" fill="rgba(245,158,11,0.75)" font-size="9" font-weight="700" letter-spacing="0.9">8.70M THEATRICAL TOTAL</text>'
-                +   '<text x="508" y="176" fill="rgba(234,88,12,0.75)" font-size="9" font-weight="700" letter-spacing="0.9">2.40M TRANSACTIONAL TOTAL</text>'
+                +   '<text x="215" y="315" text-anchor="middle" class="micVennTot-orange" fill="rgba(245,158,11,0.75)" font-size="9" font-weight="700" letter-spacing="0.9">8.70M THEATRICAL TOTAL</text>'
+                +   '<text x="508" y="176" class="micVennTot-orange" fill="rgba(234,88,12,0.75)" font-size="9" font-weight="700" letter-spacing="0.9">2.40M TRANSACTIONAL TOTAL</text>'
                 + '</svg></div>';
 
             var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.55rem; margin-bottom:0.85rem;">'
