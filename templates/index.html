@@ -24581,6 +24581,9 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                difference just becomes empty scroll space at the
                bottom of the shorter card. */
             #trendsIQView .tiq-searches-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+            #trendsIQView .tiq-searches-single { display: block; }
+            #trendsIQView .tiq-searches-single .tiq-card { max-width: 900px; margin: 0 auto; }
+            #trendsIQView .tiq-searches-single .tiq-search-scroll { max-height: none; }
             @media (max-width: 1200px) { #trendsIQView .tiq-searches-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
             @media (max-width: 780px)  { #trendsIQView .tiq-searches-grid { grid-template-columns: 1fr; } }
             /* Each card is a flex column so the body can flex-grow to
@@ -46069,7 +46072,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             // array so it's easy to see and update in one place.
             var tabs = [
                 { key: 'searches',  label: 'Trending',         count: counts.searches  || 0, icon: '🔎',
-                  tip: 'Trending searches: The top search queries and hashtags in the window, sliced into overall, entertainment, retail, politics, finance, sports, and more. What people are actively looking for right now.' },
+                  tip: 'Trending searches: The top search queries and hashtags in the window, ranked by search volume. What people are actively looking for right now.' },
                 { key: 'movers',    label: 'Movers',           count: counts.movers    || 0, icon: '🚀',
                   tip: 'Movers: Day-over-day and week-over-week momentum. Breakout, climbing, cooling, and sustained-heat buckets show which trends are gaining, holding, or losing steam.' },
                 { key: 'headlines', label: 'Headlines',        count: headlineCount,         icon: '📰',
@@ -46256,7 +46259,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             // ---------- Trending searches sub-cards ----------
             // Keys match the actual _tiqRenderSearchCard title AFTER
             // _tiqNormalizeHeader strips the leading emoji.
-            'Overall':               'Overall trending: The top search queries and hashtags in the window, no category filter. The catch-all view.',
+            'Overall':               'Overall trending: The top search queries and hashtags in the window, ranked by search volume.',
             'Entertainment':         'Entertainment: Movies, TV, celebrities, music, awards shows, tour announcements, red carpet, casting news.',
             'Retail':                'Retail: Product launches, sales, best-seller queries, brand mentions, coupon codes, restocks.',
             'Politics':              'Politics: Candidates, policy debates, election news, government actions, Congress, courts.',
@@ -46976,114 +46979,35 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
         // as the generic shopping catch-all after every vertical
         // consumer category has had a shot at the term.
         function renderTIQSearches(payload) {
-            var overall, byCat, allPool;
+            // Sub-category cards (Entertainment, Sports, Gaming, ...)
+            // were removed 2026-08-11 per user directive: "lets remove
+            // all subcategorys and just keep overall on trending".  The
+            // single Overall card now renders the full flat list (up to
+            // 300 items) sourced from `payload.all`, not the byCat
+            // `overall` bucket which was the "uncategorized" catch-all.
+            var master;
             if (Array.isArray(payload)) {
-                overall = payload;
-                byCat = {};
-                allPool = payload;
+                master = payload;
             } else {
                 payload = payload || {};
-                allPool = payload.all || [];
-                byCat = payload.by_category || {};
-                overall = (byCat.overall && byCat.overall.length)
-                          ? byCat.overall
-                          : allPool;
+                // Prefer the full flat list; fall back to the
+                // overall-bucket then any byCat scraps if the payload
+                // shape is legacy.
+                master = payload.all
+                         || (payload.by_category && payload.by_category.overall)
+                         || [];
             }
-            if (!overall.length && !allPool.length) {
+            if (!master.length) {
                 return '<div class="tiq-empty">No trending searches available for this filter yet.</div>';
             }
-            var overallSub = 'Top ' + Math.min(overall.length, 300) +
-                             ' uncategorized queries. Scroll to see the full pool.';
-            var html = '<div class="tiq-searches-grid">' +
-                // Row 1: Popular culture
-                _tiqRenderSearchCard('\uD83D\uDD0E Overall',
-                                       overallSub,
-                                       overall,
-                                       { maxItems: 300 }) +
-                _tiqRenderSearchCard('\uD83C\uDFAC Entertainment',
-                                       'Movies, TV, music, and celebs.',
-                                       byCat.entertainment,
-                                       {}) +
-                _tiqRenderSearchCard('\uD83C\uDFC8 Sports',
-                                       'Leagues, teams, games, and athletes.',
-                                       byCat.sports,
-                                       {}) +
-                // Row 2: Digital / money
-                _tiqRenderSearchCard('\uD83C\uDFAE Gaming',
-                                       'Video games, esports, streamers, launches.',
-                                       byCat.gaming,
-                                       {}) +
-                _tiqRenderSearchCard('\uD83D\uDCBB Tech',
-                                       'AI, big-tech launches, product news, outages.',
-                                       byCat.tech,
-                                       {}) +
-                _tiqRenderSearchCard('\uD83D\uDCBC Business',
-                                       'IPOs, funding rounds, layoffs, exec moves.',
-                                       byCat.business,
-                                       {}) +
-                // Row 3: Real-world events
-                _tiqRenderSearchCard('\uD83C\uDF29\uFE0F Weather',
-                                       'Storms, wildfires, earthquakes, extreme weather.',
-                                       byCat.weather,
-                                       {}) +
-                _tiqRenderSearchCard('\uD83D\uDD0D Crime',
-                                       'Trials, investigations, missing persons, cases.',
-                                       byCat.crime,
-                                       {}) +
-                _tiqRenderSearchCard('\uD83C\uDFDB Politics',
-                                       'Neutral institutional stories: Congress, foreign policy, ballots.',
-                                       byCat.politics,
-                                       {}) +
-                // Row 4: Political cluster
-                _tiqRenderSearchCard('\uD83D\uDD34 Conservative',
-                                       'Right-lean: MAGA, border, 2A, election integrity.',
-                                       byCat.conservative,
-                                       {}) +
-                _tiqRenderSearchCard('\uD83D\uDD35 Progressive',
-                                       'Left-lean: climate, reproductive rights, labor, racial justice.',
-                                       byCat.progressive,
-                                       {}) +
-                _tiqRenderSearchCard('\uD83D\uDCB0 Finance / Wall St',
-                                       'Markets, macro, and bellwether tickers.',
-                                       byCat.finance,
-                                       {}) +
-                _tiqRenderSearchCard('\u2764\uFE0F Philanthropy',
-                                       'Foundations, nonprofits, big gifts, relief funds.',
-                                       byCat.philanthropy,
-                                       {}) +
-                // Row 5: Life / body
-                _tiqRenderSearchCard('\uD83D\uDC9A Health & Wellness',
-                                       'GLP-1s, workouts, mental health, wellness fads.',
-                                       byCat.health,
-                                       {}) +
-                _tiqRenderSearchCard('\uD83C\uDF74 Food & Recipes',
-                                       'Restaurants, viral recipes, chef news, recalls.',
-                                       byCat.food,
-                                       {}) +
-                _tiqRenderSearchCard('\u2708\uFE0F Travel',
-                                       'Airlines, hotels, cities, cruises, parks.',
-                                       byCat.travel,
-                                       {}) +
-                // Row 6: Home + wheels + threads
-                _tiqRenderSearchCard('\uD83D\uDC57 Fashion & Beauty',
-                                       'Runway, red carpet, viral looks, beauty brands.',
-                                       byCat.fashion,
-                                       {}) +
-                _tiqRenderSearchCard('\uD83D\uDE97 Auto & EVs',
-                                       'Car launches, EV news, recalls, racing.',
-                                       byCat.auto,
-                                       {}) +
-                _tiqRenderSearchCard('\uD83C\uDFE0 Home & Real Estate',
-                                       'Housing market, HGTV, home reno, decor trends.',
-                                       byCat.home,
-                                       {}) +
-                // Row 7: Catch-all shopping
-                _tiqRenderSearchCard('\uD83D\uDECD Retail',
-                                       'Brands, products, and shopping intent.',
-                                       byCat.retail,
-                                       {}) +
-                '</div>';
-            return html;
+            var sub = 'Top ' + Math.min(master.length, 300) +
+                      ' trending queries. Scroll to see the full pool.';
+            return '<div class="tiq-searches-single">' +
+                   _tiqRenderSearchCard('\uD83D\uDD0E Overall',
+                                          sub,
+                                          master,
+                                          { maxItems: 300 }) +
+                   '</div>';
         }
 
         // Sort trending people by the selected mode.
