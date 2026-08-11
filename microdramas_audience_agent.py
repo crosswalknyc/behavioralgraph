@@ -53,6 +53,13 @@ CACHE_TTL_S           = int(os.environ.get('MICRODRAMAS_AUDIENCE_TTL', str(60 * 
 
 CLAUDE_MODEL = os.environ.get('MICRODRAMAS_CLAUDE_MODEL') or 'claude-sonnet-4-5'
 
+# Canonical Gen Pop CSV in the dashboard S3 bucket. Same file the
+# BG.py pipeline reads for its own Gen Pop calibration (see bg.py
+# GEN_POP_CANONICAL_KEY). Falling back to the local repo copy lets
+# this module work in dev without S3 credentials.
+GEN_POP_S3_KEY   = 'Gen_Pop_2026.csv'
+GEN_POP_LOCAL    = os.environ.get('GEN_POP_LOCAL_PATH') or ''
+
 
 # ============================================================================
 # Canonical demographic bucket labels (matches demos.csv exactly)
@@ -114,6 +121,168 @@ DEMO_ORDER = [
     'GENDER', 'AGE', 'ETHNICITY', 'INCOME', 'EDUCATION',
     'RELATIONSHIP', 'PARENTAL_STATUS', 'OCCUPATION', 'SEXUAL_ORIENTATION',
 ]
+
+
+# ============================================================================
+# Gen Pop baseline loader
+# ============================================================================
+# Every title-audience payload ships a parallel `demographics_genpop`
+# block using the exact same bucket labels as `demographics`, so the
+# frontend can render a Gen Pop comparison marker on every bar without
+# ever fetching a second endpoint.
+#
+# Source of truth = the same Gen_Pop_2026.csv that BG.py reads (see
+# bg.py :: GEN_POP_CANONICAL_KEY). Loaded once per process, cached
+# forever - the file only changes when engineering re-uploads it, and
+# the web workers restart on every deploy.
+#
+# Bucket alignment: Gen Pop uses UPPERCASE labels and a slightly
+# different bucket set from the agent's canonical list
+# (see DEMO_BUCKETS). Mismatches handled explicitly below:
+#
+#   GENDER:              GP has no "Prefer Not to Say" -> 0
+#   EDUCATION:           GP has no "Prefer Not to Say" -> 0
+#   RELATIONSHIP:        GP has no "Prefer Not to Say" -> 0
+#   OCCUPATION:          GP has SELF-EMPLOYED / STUDENT / HOMEMAKER /
+#                        RETIRED / UNEMPLOYED buckets; agent doesn't.
+#                        These sit at 0% in the current GP file so
+#                        they drop out at normalization time.
+#   SEXUAL_ORIENTATION:  GP collapses "Gay or Lesbian" + "Another"
+#                        into a single "LGBTQ+" bucket. Split back
+#                        into the agent's 2 buckets using a fixed
+#                        63/37 ratio (Pew 2023 US LGBTQ+ breakdown:
+#                        ~63% identify as gay/lesbian/bisexual with
+#                        gay+lesbian dominant vs ~37% other identities).
+#
+# After mapping, each category is renormalized to sum to 100 via
+# `_renormalize_100` (defined further down), so the small buckets
+# that drop out don't leave the row summing to 98% or 102%.
+_GENPOP_DEMOS: Optional[dict] = None
+_GENPOP_LOAD_ATTEMPTED = False
+
+# LGBTQ+ -> (Gay or Lesbian, Another Sexual Orientation) split
+_LGBTQ_SPLIT = (0.63, 0.37)
+
+
+def _norm_label(s) -> str:
+    """Case + punctuation-insensitive key for demographic labels."""
+    return re.sub(r'[^a-z0-9]+', '', str(s or '').lower())
+
+
+def _read_genpop_csv_rows() -> Optional[list[dict]]:
+    """Load Gen_Pop_2026.csv as a list of dicts. Tries S3 first, then
+    the local repo copy if S3 is unavailable. Returns None if neither
+    path works."""
+    # 1) S3
+    try:
+        s3 = _s3_client()
+        obj = s3.get_object(Bucket=S3_BUCKET, Key=GEN_POP_S3_KEY)
+        raw = obj['Body'].read().decode('utf-8')
+        import csv, io
+        return list(csv.DictReader(io.StringIO(raw)))
+    except Exception as e:
+        logger.info('microdramas_audience_agent: Gen Pop S3 read failed (%s), trying local', e)
+
+    # 2) Local repo copy (finished_codes/Gen_Pop_2026.csv, one dir up
+    #    from bg-webapp/)
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        GEN_POP_LOCAL,
+        os.path.join(here, GEN_POP_S3_KEY),
+        os.path.abspath(os.path.join(here, '..', GEN_POP_S3_KEY)),
+    ]
+    for path in candidates:
+        if not path or not os.path.exists(path):
+            continue
+        try:
+            import csv
+            with open(path, 'r', encoding='utf-8') as f:
+                return list(csv.DictReader(f))
+        except Exception as e:
+            logger.info('microdramas_audience_agent: Gen Pop local read failed at %s (%s)',
+                        path, e)
+    return None
+
+
+def _parse_bp(bp_str: str) -> float:
+    """Parse a "12.3456%" string into a float. Zero on any error."""
+    if not bp_str:
+        return 0.0
+    try:
+        return float(str(bp_str).rstrip('%').strip())
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _extract_genpop_bp_by_category(rows: list[dict]) -> dict:
+    """Group rows by Column (demographic category) and return
+    {CATEGORY: {norm_label: bp}} for every canonical demo category we
+    care about."""
+    result: dict = {cat: {} for cat in DEMO_ORDER}
+    for row in rows:
+        col = str(row.get('Column') or '').strip().upper()
+        if col not in DEMO_ORDER:
+            continue
+        val = str(row.get('Value') or '').strip()
+        bp  = _parse_bp(row.get('Brand Penetration (Row)') or '')
+        if val and bp > 0:
+            result[col][_norm_label(val)] = bp
+    return result
+
+
+def _map_genpop_to_agent_buckets(gp_by_cat: dict) -> dict:
+    """For each canonical category, walk the agent's bucket list and
+    resolve each bucket's Gen Pop pct via label matching + the special
+    cases documented at the top of this section."""
+    out: dict = {}
+    for cat in DEMO_ORDER:
+        gp = gp_by_cat.get(cat) or {}
+        buckets = DEMO_BUCKETS[cat]
+
+        if cat == 'SEXUAL_ORIENTATION':
+            # LGBTQ+ splits between "Gay or Lesbian" and "Another"
+            lgbtq_pct = gp.get(_norm_label('LGBTQ+')) or 0.0
+            straight  = gp.get(_norm_label('Straight / Heterosexual')) or 0.0
+            pns       = gp.get(_norm_label('Prefer Not to Say')) or 0.0
+            gay_share, other_share = _LGBTQ_SPLIT
+            resolved = {
+                'Straight / Heterosexual':     straight,
+                'Gay or Lesbian':              round(lgbtq_pct * gay_share, 4),
+                'Another Sexual Orientation':  round(lgbtq_pct * other_share, 4),
+                'Prefer Not to Say':           pns,
+            }
+            out[cat] = {b: resolved.get(b, 0.0) for b in buckets}
+            continue
+
+        # Default path: canonical label match + missing-bucket -> 0
+        resolved = {}
+        for b in buckets:
+            resolved[b] = gp.get(_norm_label(b)) or 0.0
+        out[cat] = resolved
+    return out
+
+
+def _load_genpop_demographics() -> Optional[dict]:
+    """Return {CATEGORY: {bucket_label: pct}} for the agent's canonical
+    bucket set, aligned to the Gen Pop CSV. Values are pre-normalization
+    - the caller should renormalize each category to 100 before
+    surfacing to the frontend."""
+    global _GENPOP_DEMOS, _GENPOP_LOAD_ATTEMPTED
+    if _GENPOP_DEMOS is not None:
+        return _GENPOP_DEMOS
+    if _GENPOP_LOAD_ATTEMPTED:
+        # We already tried and failed once this process - don't spam S3
+        return None
+    _GENPOP_LOAD_ATTEMPTED = True
+    rows = _read_genpop_csv_rows()
+    if not rows:
+        logger.warning('microdramas_audience_agent: Gen Pop CSV unavailable; '
+                        'comparison overlay will be omitted from payloads')
+        return None
+    _GENPOP_DEMOS = _map_genpop_to_agent_buckets(_extract_genpop_bp_by_category(rows))
+    logger.info('microdramas_audience_agent: loaded Gen Pop baseline for %d categories',
+                len(_GENPOP_DEMOS))
+    return _GENPOP_DEMOS
 
 
 # ============================================================================
@@ -664,6 +833,16 @@ def _shape_agent_payload(raw: dict, title: str, series: str,
         cat.lower(): _renormalize_100(demos_in.get(cat) or {}, DEMO_BUCKETS[cat])
         for cat in DEMO_ORDER
     }
+    # Gen Pop comparison overlay: same bucket labels, sourced from
+    # Gen_Pop_2026.csv. Omitted from the payload when the CSV can't be
+    # loaded so the frontend gracefully hides the overlay UI.
+    genpop_by_cat = _load_genpop_demographics() or {}
+    demographics_genpop = None
+    if genpop_by_cat:
+        demographics_genpop = {
+            cat.lower(): _renormalize_100(genpop_by_cat.get(cat) or {}, DEMO_BUCKETS[cat])
+            for cat in DEMO_ORDER
+        }
     interests = []
     for r in (raw.get('interests') or [])[:8]:
         if not isinstance(r, dict):
@@ -680,7 +859,7 @@ def _shape_agent_payload(raw: dict, title: str, series: str,
         rp = r.get('reach_pct')
         if lbl and isinstance(rp, (int, float)):
             platforms.append({'label': lbl, 'reach_pct': round(float(rp), 1)})
-    return {
+    payload = {
         'success':       True,
         'title':         title,
         'series':        series or title,
@@ -696,6 +875,10 @@ def _shape_agent_payload(raw: dict, title: str, series: str,
         'source':        source,   # 'claude' | 'heuristic'
         'generated_at':  datetime.now(timezone.utc).isoformat(),
     }
+    if demographics_genpop is not None:
+        payload['demographics_genpop']       = demographics_genpop
+        payload['demographics_genpop_label'] = 'US Gen Pop (2026)'
+    return payload
 
 
 # ============================================================================
