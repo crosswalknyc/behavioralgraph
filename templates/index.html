@@ -70949,9 +70949,9 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 for (var t = 0; t <= yMax; t += 20) {
                     var y = yOf(t);
                     gridHtml += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>';
-                    gridHtml += '<text x="' + (padL - 8) + '" y="' + (y + 3) + '" fill="rgba(255,255,255,0.55)" font-size="9" text-anchor="end" font-family="Space Mono, monospace">' + t + 'K</text>';
+                    gridHtml += '<text x="' + (padL - 8) + '" y="' + (y + 3) + '" fill="var(--text-secondary)" font-size="9" text-anchor="end" font-family="Space Mono, monospace">' + t + 'K</text>';
                 }
-                gridHtml += '<text x="14" y="' + (padT + innerH / 2) + '" fill="rgba(255,255,255,0.5)" font-size="9" text-anchor="middle" font-family="Space Mono, monospace" transform="rotate(-90 14 ' + (padT + innerH / 2) + ')">Transactions / day</text>';
+                gridHtml += '<text x="14" y="' + (padT + innerH / 2) + '" fill="var(--text-secondary)" font-size="9" text-anchor="middle" font-family="Space Mono, monospace" transform="rotate(-90 14 ' + (padT + innerH / 2) + ')">Transactions / day</text>';
 
                 // Right-side percent-of-peak axis. Peak day (max obs value)
                 // = 100%. Because yMax is rounded to the nearest 10K, the
@@ -70964,7 +70964,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     var v = (pct / 100) * peakVal;
                     var y = yOf(v);
                     gridHtml += '<line x1="' + rightAxisX + '" y1="' + y + '" x2="' + (rightAxisX + 5) + '" y2="' + y + '" stroke="rgba(255,255,255,0.45)" stroke-width="1"/>';
-                    var labelColor = (pct === 100) ? '#22c55e' : 'rgba(255,255,255,0.7)';
+                    var labelColor = (pct === 100) ? '#22c55e' : 'var(--text-secondary)';
                     var labelWeight = (pct === 100) ? '900' : '600';
                     gridHtml += '<text x="' + (rightAxisX + 8) + '" y="' + (y + 3) + '" fill="' + labelColor + '" font-size="9" font-weight="' + labelWeight + '" text-anchor="start" font-family="Space Mono, monospace">' + pct + '%</text>';
                 });
@@ -70989,7 +70989,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 ];
                 var xAxisHtml = keyDates.map(function(kd) {
                     var x = xOf(kd.day);
-                    var color = kd.red ? '#ef4444' : (kd.green ? '#22c55e' : 'rgba(255,255,255,0.65)');
+                    var color = kd.red ? '#ef4444' : (kd.green ? '#22c55e' : 'var(--text-secondary)');
                     var weight = (kd.red || kd.green) ? '900' : '600';
                     return '<line x1="' + x + '" y1="' + (H - padB) + '" x2="' + x + '" y2="' + (H - padB + 6) + '" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>'
                          + '<text x="' + x + '" y="' + (H - padB + 20) + '" fill="' + color + '" font-size="9.5" font-weight="' + weight + '" text-anchor="middle" font-family="Space Mono, monospace">' + _jiqEsc(kd.label) + '</text>';
@@ -71028,18 +71028,18 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                                   + '<rect x="' + (releaseX - 46) + '" y="' + (padT - 26) + '" width="92" height="20" rx="10" fill="#22c55e"/>'
                                   + '<text x="' + releaseX + '" y="' + (padT - 12) + '" fill="#052e16" font-size="10" font-weight="900" text-anchor="middle" font-family="Space Mono, monospace">TVOD · JUN 30</text>';
                 var handoffMarker = '<line x1="' + handoffX + '" y1="' + padT + '" x2="' + handoffX + '" y2="' + (H - padB) + '" stroke="#ef4444" stroke-width="2" stroke-dasharray="5 4"/>'
-                                  + '<rect x="' + (handoffX - 82) + '" y="' + (padT - 26) + '" width="164" height="20" rx="10" fill="#ef4444"/>'
+                                  + '<rect x="' + (handoffX - 94) + '" y="' + (padT - 26) + '" width="188" height="20" rx="10" fill="#ef4444"/>'
                                   + '<text x="' + handoffX + '" y="' + (padT - 12) + '" fill="#fff" font-size="10" font-weight="900" text-anchor="middle" font-family="Space Mono, monospace">⚡ PEACOCK GO-LIVE · JUL 17</text>';
 
                 var legendHtml = '<g transform="translate(' + padL + ',' + (H - 14) + ')">'
                                +   '<circle cx="6" cy="0" r="3" fill="#14b8a6"/>'
-                               +   '<text x="16" y="3" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Observed (pre-handoff)</text>'
+                               +   '<text x="16" y="3" fill="var(--text-secondary)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Observed (pre-handoff)</text>'
                                +   '<circle cx="164" cy="0" r="3" fill="#ef4444"/>'
-                               +   '<text x="174" y="3" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Observed (post-handoff)</text>'
+                               +   '<text x="174" y="3" fill="var(--text-secondary)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Observed (post-handoff)</text>'
                                +   '<line x1="320" y1="0" x2="342" y2="0" stroke="rgba(148,163,184,0.85)" stroke-width="2" stroke-dasharray="4 3"/>'
-                               +   '<text x="348" y="3" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Counterfactual (86.5d)</text>'
+                               +   '<text x="348" y="3" fill="var(--text-secondary)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Counterfactual (86.5d)</text>'
                                +   '<rect x="466" y="-5" width="14" height="10" fill="rgba(239,68,68,0.28)" stroke="rgba(239,68,68,0.6)" stroke-width="0.7"/>'
-                               +   '<text x="484" y="3" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Displaced volume</text>'
+                               +   '<text x="484" y="3" fill="var(--text-secondary)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Displaced volume</text>'
                                + '</g>';
 
                 return '<div style="width:100%; overflow-x:auto;">'
