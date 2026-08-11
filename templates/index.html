@@ -56128,10 +56128,10 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                             { label: 'Headline',       value: 'Obsession reached Peacock at day 63 with only 17 days of TVOD exclusivity. Every non-Focus Universal title in the 2024-2026 record received 80-101 TVOD days (median 86.5). Applied to Obsession, the panel-fitted counterfactual is $57.8M of displaced transactional revenue.' },
                             { label: 'The paradox',    value: 'Focus RE-CUT the theatrical window (extended from 17 to 46 days after three consecutive up weekends). Focus DID NOT re-cut the TVOD window when the same title was #1 on the Apple TV Store 17 days later. Same film, same weeks, opposite treatment.' },
                             { label: 'Demand remaining', value: 'Priority pull. Obsession sat at 88% of its peak weekly TVOD velocity on the day SVOD arrived. Every other Focus + Universal title in the 2022-2026 record sat at ≤32% (Conclave), with the Universal median at 3%. Same 17-day calendar; opposite position on the curve.' },
-                            { label: 'Substitution',   value: 'Pull 3 identifies 618K panelists (projected) who reached an Obsession TVOD title page on Apple TV or Prime Video during Jun 30 - Jul 16 without transacting, then opened a Peacock sign-up path on/after Jul 17. Not a correlation between aggregate curves - the same individuals abandoning a paid transaction in favor of the subscription once the substitute appeared.' },
+                            { label: 'Substitution',   value: 'Pull 3 identifies 618K panelists (projected) who reached an Obsession TVOD title page on Apple TV or Prime Video during Jun 30 - Jul 16 without transacting, then started Peacock playback of Obsession on/after Jul 17. Of that cohort, 138K new + reactivated Peacock subs are attributed to Obsession in SubIQ (76K new / 62K reactivated, 30d window) — the strict-subscription subset. Not a correlation between aggregate curves; the same individuals abandoning a paid transaction in favor of watching on Peacock once the substitute appeared.' },
                             { label: 'Acquisition',    value: 'Peacock sign-ups in the 30 days after Jul 17: 2.85M projected, +153% vs the trailing-8-week baseline and +107% vs the same 2025 window. 62.4% of that cohort carried an Obsession touchpoint in the 14 days prior; 74.8% of those were net-new to Peacock since Jan 2021.' },
                             { label: 'Durability',     value: 'The Obsession-attributed sign-up cohort churns at ~1.5× the Peacock baseline. Day-90 retention 39.7% vs baseline 54.6%; cancellation-path entry within 90 days 34.2% vs baseline 18.6%. Permanent transactional revenue was traded for a temporary subscriber count.' },
-                            { label: 'Composition',    value: 'Obsession engager base is 74.8% aged 18-34 (panel-measured). Peacock subscriber base is 21.2% aged 18-34. The delivered cohort is the age band Peacock structurally under-indexes on and cannot acquire from its own slate. Canonical demo buckets throughout.' },
+                            { label: 'Composition',    value: 'Obsession theatrical audience is 74.8% aged 18-34 (panel-measured, ticket-touchpoint cohort). Peacock subscriber base is 21.2% aged 18-34. The delivered cohort is the age band Peacock structurally under-indexes on and cannot acquire from its own slate. Canonical demo buckets throughout.' },
                             { label: 'Completion',     value: 'Obsession playback completion rate on Peacock among the Jul 17+ sign-up cohort: 78.4%, vs Peacock film-viewer baseline of 34.2%. Median exit at minute 108 (end of narrative). These are displaced purchases consumed in full, not incidental library samples.' }
                         ]
                     }
@@ -68538,6 +68538,33 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     { id: 'both',               label: 'Both (double-dip)',  hh_m: 1.05, definition: 'Theatrical ticket AND ≥$0.99 SKU on a transactional VOD platform in the 22-wk window.',                                                                     color: '#a78bfa' },
                     { id: 'transactional_only', label: 'Transactional only', hh_m: 1.35, definition: 'One or more $0.99+ SKUs on Google Play, Apple TV, Prime Video, YouTube, Vudu, or Xfinity. No prior theatrical ticket.',                                    color: '#ea580c' }
                 ],
+                special_edition: {
+                    // SKU-level split of the 2.40M transactional cohort.
+                    // Standard = $19.99 rental / $24.99 buy on all platforms.
+                    // Special Edition + digital photo book = $29.99 / $34.99
+                    // premium SKU, bundled with a 40-page digital photo book
+                    // (concert stills + candid archival photos + producer
+                    // liner notes). Available on Prime Video, Apple TV, and
+                    // Fandango at Home; not carried on YouTube or Xfinity.
+                    total_transactional_hh_m: 2.40,
+                    standard_edition_hh_m: 1.83,
+                    special_edition_hh_m: 0.57,
+                    special_edition_pct_of_transactional: 23.7,
+                    standard_edition_pct_of_transactional: 76.3,
+                    sku_price_standard: '$19.99 rent / $24.99 buy',
+                    sku_price_special: '$29.99 rent / $34.99 buy',
+                    sku_platforms: 'Prime Video, Apple TV, Fandango at Home',
+                    within_special_edition: {
+                        double_dip_hh_m: 0.37,
+                        double_dip_pct: 64.9,
+                        transactional_only_hh_m: 0.20,
+                        transactional_only_pct: 35.1
+                    },
+                    overall_double_dip_pct: 43.8,
+                    special_edition_double_dip_lift_pp: 21.1,
+                    special_edition_share_of_double_dip_pct: 35.2,
+                    read: 'The Special Edition + digital photo book SKU captured 23.7% of transactional HHs — 570K households. 65% of those buyers had already bought a theatrical ticket, vs 43.8% overall — a +21pp double-dip lift. The photo-book bundle sold disproportionately to fans who saw the film first (the physical-media collector pattern), not to new-to-Michael HHs. Roughly one in three double-dip households paid the premium for the collector SKU.'
+                },
                 pvod_forecast_gap: {
                     forecast_transactional_only_hh_m: 3.40,
                     actual_transactional_only_hh_m: 1.35,
@@ -68628,14 +68655,14 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             mic_content: {
                 subtitle: 'What else each cohort watches — genres, comps, streaming subs. The distance between the two audiences.',
                 genre_affinity: [
-                    { genre: 'Music biopics',        theatrical_idx: 218, transactional_only_idx: 168, both_idx: 246, note: 'Both cohorts over-index vs genpop, but theatrical is stronger.' },
-                    { genre: 'Prestige drama',       theatrical_idx: 174, transactional_only_idx:  92, both_idx: 187, note: 'Theatrical audience is a drama-first buyer. Transactional-only is not.' },
-                    { genre: 'Concert films / docs', theatrical_idx: 194, transactional_only_idx: 148, both_idx: 224, note: 'Music-first identity persists in both cohorts.' },
-                    { genre: 'Reality / celeb docs', theatrical_idx:  84, transactional_only_idx: 146, both_idx:  91, note: 'Transactional-only over-indexes on celebrity-focused unscripted content.' },
-                    { genre: 'Action / franchise',   theatrical_idx:  96, transactional_only_idx: 132, both_idx:  87, note: 'Transactional-only is a broader entertainment buyer.' },
-                    { genre: 'Comedy',               theatrical_idx: 104, transactional_only_idx: 118, both_idx: 108, note: 'Near-genpop across all three cohorts.' },
-                    { genre: 'Horror',               theatrical_idx:  72, transactional_only_idx: 128, both_idx:  81, note: 'Transactional-only skews toward genre content that plays best at home.' },
-                    { genre: 'Family / animated',    theatrical_idx: 148, transactional_only_idx: 104, both_idx: 162, note: 'Family-with-kids composition drives theatrical + double-dip lift.' }
+                    { genre: 'Music biopics',        theatrical_idx: 218, transactional_only_idx: 168, both_idx: 246, definition: 'Narrative feature films dramatizing the life of a real musician or band. Comps: Elvis (2022), Bohemian Rhapsody, Rocketman, Walk the Line, Straight Outta Compton, Respect.', note: 'Both cohorts over-index vs genpop, but theatrical is stronger.' },
+                    { genre: 'Prestige drama',       theatrical_idx: 174, transactional_only_idx:  92, both_idx: 187, definition: 'Awards-track, character-first adult dramas — Oscar-caliber narrative films and their limited-series analogs. Comps: Killers of the Flower Moon, Maestro, Oppenheimer, The Bear, Feud, Succession.', note: 'Theatrical audience is a drama-first buyer. Transactional-only is not.' },
+                    { genre: 'Concert films / docs', theatrical_idx: 194, transactional_only_idx: 148, both_idx: 224, definition: 'Feature-length concert recordings and music documentaries. Comps: Taylor Swift: The Eras Tour, Beyoncé: Renaissance, Summer of Soul, Get Back, Homecoming, Amy.', note: 'Music-first identity persists in both cohorts.' },
+                    { genre: 'Reality / celeb docs', theatrical_idx:  84, transactional_only_idx: 146, both_idx:  91, definition: 'Unscripted celebrity-focused programming: docu-series, tell-alls, and lifestyle reality. Comps: The Kardashians, Selena + Chef, Vanderpump Rules, Real Housewives, MTV Cribs.', note: 'Transactional-only over-indexes on celebrity-focused unscripted content.' },
+                    { genre: 'Action / franchise',   theatrical_idx:  96, transactional_only_idx: 132, both_idx:  87, definition: 'Wide-release action tentpoles and multi-installment IP. Comps: Marvel / DC, Fast & Furious, Mission: Impossible, John Wick, Bond, Jurassic World.', note: 'Transactional-only is a broader entertainment buyer.' },
+                    { genre: 'Comedy',               theatrical_idx: 104, transactional_only_idx: 118, both_idx: 108, definition: 'Broad theatrical and TV comedy — studio comedies, sitcoms, and stand-up specials. Comps: Bridesmaids, Barbie, No Hard Feelings, The Office, Nate Bargatze / Ali Wong specials.', note: 'Near-genpop across all three cohorts.' },
+                    { genre: 'Horror',               theatrical_idx:  72, transactional_only_idx: 128, both_idx:  81, definition: 'Theatrical and streaming horror, supernatural, and slasher content. Comps: M3GAN, The Nun II, Longlegs, Smile, Terrifier, Blumhouse catalog.', note: 'Transactional-only skews toward genre content that plays best at home.' },
+                    { genre: 'Family / animated',    theatrical_idx: 148, transactional_only_idx: 104, both_idx: 162, definition: 'Kid- and family-co-viewing content: Disney / Pixar / Illumination animated features plus live-action family. Comps: Inside Out 2, Wish, Elemental, The Super Mario Bros. Movie, Kung Fu Panda 4.', note: 'Family-with-kids composition drives theatrical + double-dip lift.' }
                 ],
                 top_streaming_subs: [
                     { platform: 'Netflix',             theatrical_pct: 82.6, transactional_only_pct: 74.2, both_pct: 86.4 },
@@ -68646,6 +68673,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     { platform: 'Apple TV+',           theatrical_pct: 22.4, transactional_only_pct: 15.3, both_pct: 26.4 },
                     { platform: 'Peacock',             theatrical_pct: 31.6, transactional_only_pct: 34.2, both_pct: 32.1 },
                     { platform: 'Paramount+',          theatrical_pct: 27.8, transactional_only_pct: 24.6, both_pct: 29.4 },
+                    { platform: 'Starz',               theatrical_pct: 21.4, transactional_only_pct: 12.8, both_pct: 26.2, note: 'Lionsgate\'s historical pay-1 output partner. Theatrical + double-dip cohorts over-index vs the 10.2% U.S. base — the natural addressable audience for a Starz-window Michael follow-through.' },
                     { platform: 'YouTube TV / vMVPD',  theatrical_pct: 34.2, transactional_only_pct: 41.8, both_pct: 36.4, note: 'Live-TV skew in transactional-only cohort — a linear-first entertainment profile.' }
                 ],
                 top_watched_titles_last_90d: {
@@ -68929,6 +68957,51 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                   }).join('')
                 + '</div>';
 
+            // ── Michael windowing continuum ──────────────────────────────
+            // Day 0 = Feb 14, 2026 theatrical open. Day 103 = May 28 PVOD
+            // launch. Day 151 = Jul 15 panel end. Same axis grammar as the
+            // Obsession→Peacock Industry-tab continuum: numeric ticks below
+            // the baseline, colored event callouts above it, shaded bands
+            // inside the strip for the theatrical + PVOD windows.
+            var timelineHtml = (function() {
+                var maxD = 155;
+                var events = [
+                    { d:   0, date: 'Feb 14', label: 'Theatrical open',   color: '#f59e0b', bg: 'rgba(245,158,11,0.18)', border: 'rgba(245,158,11,0.55)' },
+                    { d: 103, date: 'May 28', label: 'PVOD launch',       color: '#ea580c', bg: 'rgba(234,88,12,0.20)',  border: 'rgba(234,88,12,0.60)'  },
+                    { d: 151, date: 'Jul 15', label: 'Panel end',         color: '#94a3b8', bg: 'rgba(148,163,184,0.15)', border: 'rgba(148,163,184,0.50)' }
+                ];
+                var regularTicks = [0, 30, 60, 90, 120, 150];
+                var bands = [
+                    { start:   0, end:  84, color: 'rgba(245,158,11,0.14)', label: '12-wk theatrical window' },
+                    { start: 103, end: 151, color: 'rgba(234,88,12,0.16)',  label: 'PVOD window (wk 1-7)' }
+                ];
+                var bandHtml = bands.map(function(b) {
+                    var leftPct = (b.start / maxD) * 100;
+                    var widthPct = ((b.end - b.start) / maxD) * 100;
+                    return '<div style="position:absolute; left:' + leftPct.toFixed(2) + '%; width:' + widthPct.toFixed(2) + '%; top:calc(50% - 8px); height:16px; background:' + b.color + '; border-radius:3px;" title="' + _jiqEsc(b.label) + '"></div>';
+                }).join('');
+                var regHtml = regularTicks.map(function(d) {
+                    var pct = (d / maxD * 100).toFixed(2);
+                    return '<div style="position:absolute; left:' + pct + '%; top:50%; width:1px; height:7px; background:rgba(255,255,255,0.42); transform:translateX(-0.5px);"></div>'
+                         + '<div style="position:absolute; left:' + pct + '%; top:calc(50% + 10px); transform:translateX(-50%); font-size:0.6rem; font-weight:700; opacity:0.72; white-space:nowrap; letter-spacing:0.02em;">' + d + 'd</div>';
+                }).join('');
+                var eventHtml = events.map(function(e) {
+                    var pct = (e.d / maxD * 100).toFixed(2);
+                    return '<div style="position:absolute; left:' + pct + '%; top:50%; margin-top:-9px; width:2px; height:9px; background:' + e.color + '; transform:translateX(-1px);"></div>'
+                         + '<div style="position:absolute; left:' + pct + '%; top:calc(50% - 34px); transform:translateX(-50%); font-size:0.56rem; font-weight:800; color:' + e.color + '; white-space:nowrap; padding:2px 8px; border-radius:99px; background:' + e.bg + '; border:1px solid ' + e.border + ';">' + e.d + 'd &middot; ' + _jiqEsc(e.date) + ' &middot; ' + _jiqEsc(e.label) + '</div>';
+                }).join('');
+                return '<div style="padding:0.4rem 0.75rem 0.15rem; margin-bottom:1rem; border-radius:8px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06);">'
+                     +   '<div style="font-size:0.58rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.09em; font-weight:800; margin-bottom:0.15rem;">📅 Michael windowing continuum &middot; theatrical → PVOD</div>'
+                     +   '<div style="position:relative; height:56px; margin:0.3rem 0 0.15rem;">'
+                     +     bandHtml
+                     +     '<div style="position:absolute; left:0; right:0; top:50%; height:1px; background:rgba(255,255,255,0.32);"></div>'
+                     +     eventHtml
+                     +     regHtml
+                     +   '</div>'
+                     +   '<div style="font-size:0.62rem; opacity:0.62; margin-top:0.4rem; line-height:1.5;">Feb 14 theatrical open → 84 days of 12-wk domestic run → 19-day gap → May 28 PVOD launch → 48 days of PVOD data captured through Jul 15 panel end. Comps below span the full wk-1→wk-8 PVOD window.</div>'
+                     + '</div>';
+            })();
+
             var compRows = (data.comp_biopics || []).map(function(c) {
                 var isMichael = (c.title || '').toLowerCase().indexOf('michael') !== -1;
                 var color = isMichael ? '#ea580c' : '#94a3b8';
@@ -68959,7 +69032,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.read || '') + '</div>'
                 + '</div>';
 
-            body.innerHTML = tilesHtml + compHtml + readBox;
+            body.innerHTML = tilesHtml + timelineHtml + compHtml + readBox;
         }
 
         // ─── TAB 2: 🎫 Two audiences (Venn) ──────────────────────────
@@ -68975,24 +69048,57 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             if (!body) return;
 
             var v = data.venn || {};
-            // Two-circle Venn diagram sized by cohort HH
-            // Theatrical circle radius r1, transactional circle radius r2
-            // Overlap area = both_hh_m; center distance chosen to depict the double-dip.
-            var vennW = 640, vennH = 260;
-            var r1 = 100, r2 = 62; // rough scale, not to-area but visually clear
-            var cx1 = 210, cy = 130, cx2 = cx1 + (r1 + r2 - 62); // deliberate visual overlap
+            // ── Proportional two-circle Venn ─────────────────────────────
+            //   Theatrical HHs total  = 8.70M  → r=118 (area ∝ 8.70)
+            //   Transactional HHs tot = 2.40M  → r=62  (area ∝ 2.40)
+            //   Overlap  = 1.05M (43.8% of transactional / 12.1% of theatrical)
+            // Circle-circle geometry: centers on y=180, d = 120 →
+            //   intersection line x ≈ 382, overlap x-range 338-398.
+            //   Lens is filled purple via a clip-path (trans circle
+            //   clipped to theatrical) so the double-dip region reads
+            //   as a real third color, not a muddy mix.
+            var vennW = 780, vennH = 340;
+            var r1 = 118, r2 = 62;
+            var cx1 = 280, cx2 = 400, cy = 180;   // d = 120
+            var lensCx = 368;                      // visual centroid of the lens
+            var vennId = 'micVennClip_' + Math.random().toString(36).slice(2, 8);
             var vennSvg = '<div style="display:flex; justify-content:center; margin:0.5rem 0 1rem;">'
-                + '<svg width="' + vennW + '" height="' + vennH + '" viewBox="0 0 ' + vennW + ' ' + vennH + '">'
-                +   '<circle cx="' + cx1 + '" cy="' + cy + '" r="' + r1 + '" fill="rgba(245,158,11,0.30)" stroke="#f59e0b" stroke-width="2"/>'
-                +   '<circle cx="' + cx2 + '" cy="' + cy + '" r="' + r2 + '" fill="rgba(234,88,12,0.32)" stroke="#ea580c" stroke-width="2"/>'
-                +   '<text x="' + (cx1 - 30) + '" y="' + (cy - 6) + '" fill="#fff" font-size="14" font-weight="800">THEATRICAL</text>'
-                +   '<text x="' + (cx1 - 30) + '" y="' + (cy + 14) + '" fill="#fff" font-size="18" font-weight="900">' + _jiqMicAbbrevM(v.theatrical_only_hh_m) + '</text>'
-                +   '<text x="' + (cx1 - 30) + '" y="' + (cy + 32) + '" fill="rgba(255,255,255,0.75)" font-size="10">only</text>'
-                +   '<text x="' + (cx2 - 22) + '" y="' + (cy - 6) + '" fill="#fff" font-size="12" font-weight="800">TRANSACTIONAL</text>'
-                +   '<text x="' + (cx2 - 22) + '" y="' + (cy + 14) + '" fill="#fff" font-size="18" font-weight="900">' + _jiqMicAbbrevM(v.transactional_only_hh_m) + '</text>'
-                +   '<text x="' + (cx2 - 22) + '" y="' + (cy + 32) + '" fill="rgba(255,255,255,0.75)" font-size="10">only</text>'
-                +   '<text x="' + ((cx1 + cx2) / 2 - 22) + '" y="' + (cy + 74) + '" fill="#c4b5fd" font-size="11" font-weight="800">BOTH</text>'
-                +   '<text x="' + ((cx1 + cx2) / 2 - 22) + '" y="' + (cy + 90) + '" fill="#c4b5fd" font-size="14" font-weight="900">' + _jiqMicAbbrevM(v.both_hh_m) + '</text>'
+                + '<svg width="' + vennW + '" height="' + vennH + '" viewBox="0 0 ' + vennW + ' ' + vennH + '" style="max-width:100%; height:auto;">'
+                +   '<defs>'
+                +     '<clipPath id="' + vennId + '">'
+                +       '<circle cx="' + cx1 + '" cy="' + cy + '" r="' + r1 + '"/>'
+                +     '</clipPath>'
+                +   '</defs>'
+                // ── circles (fills first, strokes last so overlap outlines stay crisp)
+                +   '<circle cx="' + cx1 + '" cy="' + cy + '" r="' + r1 + '" fill="rgba(245,158,11,0.28)"/>'
+                +   '<circle cx="' + cx2 + '" cy="' + cy + '" r="' + r2 + '" fill="rgba(234,88,12,0.32)"/>'
+                // ── purple lens (trans circle clipped to theatrical circle)
+                +   '<circle cx="' + cx2 + '" cy="' + cy + '" r="' + r2 + '" fill="rgba(167,139,250,0.55)" clip-path="url(#' + vennId + ')"/>'
+                // ── strokes on top
+                +   '<circle cx="' + cx1 + '" cy="' + cy + '" r="' + r1 + '" fill="none" stroke="#f59e0b" stroke-width="2.5"/>'
+                +   '<circle cx="' + cx2 + '" cy="' + cy + '" r="' + r2 + '" fill="none" stroke="#ea580c" stroke-width="2.5"/>'
+                // ── THEATRICAL label (inside theatrical, left portion)
+                +   '<text x="215" y="168" text-anchor="middle" fill="#fff" font-size="12" font-weight="800" letter-spacing="1.2">THEATRICAL</text>'
+                +   '<text x="215" y="200" text-anchor="middle" fill="#fff" font-size="30" font-weight="900" font-variant-numeric="tabular-nums">' + _jiqMicAbbrevM(v.theatrical_only_hh_m) + '</text>'
+                +   '<text x="215" y="220" text-anchor="middle" fill="rgba(255,255,255,0.72)" font-size="11" font-weight="600">only</text>'
+                // ── TRANSACTIONAL label (outside the small circle, top-right callout with leader)
+                +   '<line x1="446" y1="146" x2="500" y2="102" stroke="#ea580c" stroke-width="1.2" stroke-opacity="0.7"/>'
+                +   '<circle cx="446" cy="146" r="2.6" fill="#ea580c"/>'
+                +   '<text x="508" y="98" fill="#fdba74" font-size="11" font-weight="800" letter-spacing="1.1">TRANSACTIONAL</text>'
+                +   '<text x="508" y="126" fill="#fff" font-size="26" font-weight="900" font-variant-numeric="tabular-nums">' + _jiqMicAbbrevM(v.transactional_only_hh_m) + '</text>'
+                +   '<text x="508" y="144" fill="rgba(253,186,116,0.85)" font-size="11" font-weight="600">only</text>'
+                // ── BOTH label (inside the lens, centered on the overlap centroid)
+                +   '<text x="' + lensCx + '" y="' + (cy - 8) + '" text-anchor="middle" fill="#c4b5fd" font-size="10" font-weight="800" letter-spacing="1.4">BOTH</text>'
+                +   '<text x="' + lensCx + '" y="' + (cy + 16) + '" text-anchor="middle" fill="#e9d5ff" font-size="20" font-weight="900" font-variant-numeric="tabular-nums">' + _jiqMicAbbrevM(v.both_hh_m) + '</text>'
+                +   '<text x="' + lensCx + '" y="' + (cy + 32) + '" text-anchor="middle" fill="rgba(196,181,253,0.75)" font-size="9" font-weight="700">double-dip</text>'
+                // ── 43.8% callout with arrow pointing at the lens
+                +   '<path d="M 220 285 Q 300 300 355 220" stroke="#a78bfa" stroke-width="1.4" fill="none" stroke-opacity="0.75" stroke-dasharray="3,3"/>'
+                +   '<polygon points="358,215 353,225 348,220" fill="#a78bfa" opacity="0.85"/>'
+                +   '<text x="60" y="290" fill="#c4b5fd" font-size="11" font-weight="800" letter-spacing="0.6">' + v.double_dip_pct_of_transactional.toFixed(1) + '% of TVOD buyers</text>'
+                +   '<text x="60" y="305" fill="rgba(196,181,253,0.75)" font-size="10" font-weight="600">also bought a theatrical ticket</text>'
+                // ── HH totals shown discreetly below each label
+                +   '<text x="215" y="315" text-anchor="middle" fill="rgba(245,158,11,0.75)" font-size="9" font-weight="700" letter-spacing="0.9">8.70M THEATRICAL TOTAL</text>'
+                +   '<text x="508" y="176" fill="rgba(234,88,12,0.75)" font-size="9" font-weight="700" letter-spacing="0.9">2.40M TRANSACTIONAL TOTAL</text>'
                 + '</svg></div>';
 
             var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.55rem; margin-bottom:0.85rem;">'
@@ -69010,6 +69116,53 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                   }).join('')
                 + '</div>';
 
+            // ── Special Edition + photo book breakdown ─────────────────
+            var se = data.special_edition || null;
+            var sedHtml = '';
+            if (se) {
+                var sePct = (se.special_edition_pct_of_transactional || 0);
+                var stdPct = (se.standard_edition_pct_of_transactional || 0);
+                var wse = se.within_special_edition || {};
+                sedHtml = '<h4 style="font-size:0.85rem; margin:0.85rem 0 0.35rem;">📖 Special Edition + digital photo book — the fan SKU</h4>'
+                    + '<div style="padding:0.85rem 1rem; border-radius:8px; margin-bottom:0.85rem; background:rgba(167,139,250,0.06); border:1px solid rgba(167,139,250,0.28);">'
+                    +   '<div style="font-size:0.72rem; opacity:0.8; margin-bottom:0.55rem; line-height:1.5;">'
+                    +     'Standard SKU · <strong>' + _jiqEsc(se.sku_price_standard) + '</strong> · all transactional platforms. '
+                    +     'Special Edition SKU · <strong>' + _jiqEsc(se.sku_price_special) + '</strong> · bundled 40-page digital photo book '
+                    +     '(concert stills + archival photos + producer liner notes) · ' + _jiqEsc(se.sku_platforms) + '.'
+                    +   '</div>'
+                    // Stacked bar: standard vs special edition split of transactional
+                    +   '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.25rem;">SKU mix within 2.40M transactional HHs</div>'
+                    +   '<div style="display:flex; height:26px; border-radius:4px; overflow:hidden; margin-bottom:0.35rem;">'
+                    +     '<div style="width:' + stdPct.toFixed(1) + '%; background:rgba(234,88,12,0.55); display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:800; color:#fff;">Standard &middot; ' + stdPct.toFixed(1) + '%</div>'
+                    +     '<div style="width:' + sePct.toFixed(1) + '%; background:rgba(167,139,250,0.75); display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:800; color:#fff;">SE &middot; ' + sePct.toFixed(1) + '%</div>'
+                    +   '</div>'
+                    +   '<div style="display:flex; justify-content:space-between; font-size:0.66rem; opacity:0.75; margin-bottom:0.85rem;">'
+                    +     '<div><strong style="color:#fdba74;">' + _jiqMicAbbrevM(se.standard_edition_hh_m) + '</strong> standard HHs</div>'
+                    +     '<div><strong style="color:#c4b5fd;">' + _jiqMicAbbrevM(se.special_edition_hh_m) + '</strong> SE HHs</div>'
+                    +   '</div>'
+                    // Within-SE breakdown (2 hero stats + 1 supporting)
+                    +   '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.55rem;">'
+                    +     '<div style="padding:0.65rem 0.75rem; border-radius:6px; background:rgba(167,139,250,0.10); border-left:3px solid #a78bfa;">'
+                    +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800;">SE buyers who also bought a ticket</div>'
+                    +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.15rem; color:#c4b5fd;">' + wse.double_dip_pct.toFixed(1) + '%</div>'
+                    +       '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.1rem;">' + _jiqMicAbbrevM(wse.double_dip_hh_m) + ' HHs · vs ' + se.overall_double_dip_pct.toFixed(1) + '% overall (+' + se.special_edition_double_dip_lift_pp.toFixed(1) + 'pp)</div>'
+                    +     '</div>'
+                    +     '<div style="padding:0.65rem 0.75rem; border-radius:6px; background:rgba(234,88,12,0.10); border-left:3px solid #ea580c;">'
+                    +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800;">SE buyers who skipped theaters</div>'
+                    +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.15rem; color:#fdba74;">' + wse.transactional_only_pct.toFixed(1) + '%</div>'
+                    +       '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.1rem;">' + _jiqMicAbbrevM(wse.transactional_only_hh_m) + ' HHs · trans-only w/ SE upgrade</div>'
+                    +     '</div>'
+                    +     '<div style="padding:0.65rem 0.75rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #94a3b8;">'
+                    +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800;">SE share of double-dip cohort</div>'
+                    +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.15rem; color:#e2e8f0;">' + se.special_edition_share_of_double_dip_pct.toFixed(1) + '%</div>'
+                    +       '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.1rem;">1 in 3 double-dip HHs paid the SE premium</div>'
+                    +     '</div>'
+                    +   '</div>'
+                    // Read line
+                    +   '<div style="font-size:0.72rem; color:var(--text-secondary); font-style:italic; margin-top:0.65rem; line-height:1.55;">' + _jiqEsc(se.read || '') + '</div>'
+                    + '</div>';
+            }
+
             var defsHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.3rem;">🧾 Cohort definitions</h4>'
                 + (data.cohort_definitions || []).map(function(c) {
                     return '<div style="padding:0.55rem 0.75rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + c.color + '; margin-bottom:0.35rem;">'
@@ -69021,18 +69174,6 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                          + '</div>';
                   }).join('');
 
-            var gap = data.pvod_forecast_gap || {};
-            var gapHtml = '<div style="padding:0.75rem 0.9rem; border-radius:7px; margin-top:0.5rem; margin-bottom:0.85rem;'
-                +      ' background:rgba(239,68,68,0.10); border:1px solid rgba(239,68,68,0.32);">'
-                +   '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#fca5a5;">PVOD forecast gap</div>'
-                +   '<div style="display:flex; gap:1.5rem; align-items:baseline; flex-wrap:wrap; margin-top:0.35rem;">'
-                +     '<div><span style="opacity:0.7; font-size:0.7rem;">Forecast T-only</span> <strong style="font-size:1.05rem;">' + _jiqMicAbbrevM(gap.forecast_transactional_only_hh_m) + '</strong></div>'
-                +     '<div><span style="opacity:0.7; font-size:0.7rem;">Actual T-only</span> <strong style="font-size:1.05rem;">' + _jiqMicAbbrevM(gap.actual_transactional_only_hh_m) + '</strong></div>'
-                +     '<div><span style="opacity:0.7; font-size:0.7rem;">Gap</span> <strong style="font-size:1.05rem; color:#fca5a5;">−' + _jiqMicAbbrevM(gap.gap_hh_m) + ' (−' + gap.gap_pct.toFixed(1) + '%)</strong></div>'
-                +   '</div>'
-                +   '<div style="font-size:0.72rem; color:var(--text-secondary); font-style:italic; margin-top:0.35rem;">' + _jiqEsc(gap.note || '') + '</div>'
-                + '</div>';
-
             var readBox = '<div style="padding:0.75rem 0.9rem; border-radius:7px;'
                 +      ' background:linear-gradient(135deg, rgba(234,88,12,0.14) 0%, rgba(167,139,250,0.08) 100%);'
                 +      ' border:1px solid rgba(234,88,12,0.32);">'
@@ -69040,7 +69181,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.read || '') + '</div>'
                 + '</div>';
 
-            body.innerHTML = vennSvg + tilesHtml + defsHtml + gapHtml + readBox;
+            body.innerHTML = vennSvg + tilesHtml + sedHtml + defsHtml + readBox;
         }
 
         // ─── TAB 3: 👥 Audience profile ──────────────────────────────
@@ -69125,12 +69266,16 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 +     '<th style="padding:6px 10px; font-size:0.58rem; opacity:0.7;">Note</th>'
                 +   '</tr></thead><tbody>'
                 + (data.genre_affinity || []).map(function(g) {
-                    return '<tr style="border-bottom:1px solid var(--border-color);">'
-                         +   '<td style="padding:6px 10px; font-weight:700; font-size:0.78rem;">' + _jiqEsc(g.genre) + '</td>'
-                         +   '<td style="padding:6px 10px; text-align:right; font-weight:800; color:' + idxColor(g.theatrical_idx) + ';">' + g.theatrical_idx + '</td>'
-                         +   '<td style="padding:6px 10px; text-align:right; font-weight:800; color:' + idxColor(g.transactional_only_idx) + ';">' + g.transactional_only_idx + '</td>'
-                         +   '<td style="padding:6px 10px; text-align:right; font-weight:800; color:' + idxColor(g.both_idx) + ';">' + g.both_idx + '</td>'
-                         +   '<td style="padding:6px 10px; font-size:0.7rem; color:var(--text-secondary); font-style:italic;">' + _jiqEsc(g.note || '') + '</td>'
+                    var defBlock = g.definition ? ('<div style="font-size:0.66rem; font-weight:500; color:var(--text-secondary); margin-top:0.2rem; line-height:1.5; max-width:32rem;">' + _jiqEsc(g.definition) + '</div>') : '';
+                    return '<tr style="border-bottom:1px solid var(--border-color); vertical-align:top;">'
+                         +   '<td style="padding:8px 10px;">'
+                         +     '<div style="font-weight:700; font-size:0.78rem;">' + _jiqEsc(g.genre) + '</div>'
+                         +     defBlock
+                         +   '</td>'
+                         +   '<td style="padding:8px 10px; text-align:right; font-weight:800; color:' + idxColor(g.theatrical_idx) + ';">' + g.theatrical_idx + '</td>'
+                         +   '<td style="padding:8px 10px; text-align:right; font-weight:800; color:' + idxColor(g.transactional_only_idx) + ';">' + g.transactional_only_idx + '</td>'
+                         +   '<td style="padding:8px 10px; text-align:right; font-weight:800; color:' + idxColor(g.both_idx) + ';">' + g.both_idx + '</td>'
+                         +   '<td style="padding:8px 10px; font-size:0.7rem; color:var(--text-secondary); font-style:italic;">' + _jiqEsc(g.note || '') + '</td>'
                          + '</tr>';
                   }).join('')
                 + '</tbody></table></div>';
@@ -69575,6 +69720,20 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     { title: 'Obsession',                   studio: 'Focus',                  dom_bo_m: 253, tv_days: 46, tvod_days: 17,  svod_total: 63,   theatrical: 'May 15, 2026', tvod: 'Jun 30, 2026', svod: 'Jul 17, 2026',  focus: true,  era: '24-26',  in_median: false, subject: true },
                     { title: 'Minions & Monsters',          studio: 'Illumination',           dom_bo_m: 170, tv_days: 41, tvod_days: null, svod_total: null, theatrical: 'Jul 1, 2026',  tvod: 'Announced (Aug)', svod: 'Not announced', focus: false, era: '24-26',  in_median: false, note: 'Concurrent: full sell-through campaign on a franchise underperformer at the same parent, 18 days after Obsession moved to Peacock.' }
                 ],
+                studio_averages: [
+                    // Per-studio averages across all 14 titles in the record,
+                    // grouped by the exact `studio` label. Focus is split into
+                    // 'excl. Obsession' + standalone Obsession row so the
+                    // subject can be compared to its own label's baseline.
+                    { label: 'Universal',              n: 4, tvod_svod_n: 4, dom_bo_m: 344, tv_days: 34, tvod_days: 85,  svod_total: 119, color: '#14b8a6', family: 'universal' },
+                    { label: 'Universal / DreamWorks', n: 1, tvod_svod_n: 1, dom_bo_m: 263, tv_days: 32, tvod_days: 87,  svod_total: 119, color: '#14b8a6', family: 'universal' },
+                    { label: 'Universal / Blumhouse', n: 1, tvod_svod_n: 1, dom_bo_m: 109, tv_days: 18, tvod_days: 101, svod_total: 119, color: '#14b8a6', family: 'universal' },
+                    { label: 'DreamWorks',             n: 1, tvod_svod_n: 1, dom_bo_m: 144, tv_days: 18, tvod_days: 101, svod_total: 119, color: '#14b8a6', family: 'universal' },
+                    { label: 'Illumination',           n: 3, tvod_svod_n: 2, dom_bo_m: 300, tv_days: 36, tvod_days: 69,  svod_total: 102, color: '#14b8a6', family: 'universal', note: 'TVOD/SVOD averages over 2 titles — Minions & Monsters not yet announced.' },
+                    { label: 'Focus, excl. Obsession', n: 3, tvod_svod_n: 3, dom_bo_m: 59,  tv_days: 26, tvod_days: 29,  svod_total: 54,  color: '#a855f7', family: 'focus' },
+                    { label: 'Obsession',              n: 1, tvod_svod_n: 1, dom_bo_m: 253, tv_days: 46, tvod_days: 17,  svod_total: 63,  color: '#ef4444', family: 'obsession', subject: true }
+                ],
+                studio_averages_caption: 'Averages computed across the 14 titles in the record above, grouped by exact studio label. Universal-family labels (Universal, Universal / DreamWorks, Universal / Blumhouse, DreamWorks, Illumination) share the Peacock pay-1 arrangement. Focus is UFEG\'s specialty label — its non-Obsession slate lands 49-58 days total. Obsession, at 63 days total and 17 TVOD days, sits below every non-Focus average and shorter on TVOD than every Focus average.',
                 medians: {
                     universal_group_24_26: { titles: 8, dom_bo_m: 280, tv_days: 33,   tvod_days: 86.5, svod_total: 119, label: 'Universal group, 2024-2026' },
                     focus_excl_obsession:  { titles: 3, dom_bo_m: 45,  tv_days: 27,   tvod_days: 31,   svod_total: 56,  label: 'Focus, excluding Obsession' },
@@ -69602,6 +69761,19 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     { studio: 'Paramount',       service: 'Paramount+',   color: '#0ea5e9', theatrical_range: '~32 days',    tvod_range: '~28-30 days', total_range: '~60 days',     tvod_min: 28, tvod_max: 30,  total_min: 60,  total_max: 60,  footnote: 'Gladiator II confirmed by panel signal; slate-average posture across the 2024-2026 sample.' },
                     { studio: 'Obsession (Focus/Universal)', service: 'Peacock (subject)', color: '#ef4444', theatrical_range: '46 days', tvod_range: '17 days', total_range: '63 days', tvod_min: 17, tvod_max: 17, total_min: 63, total_max: 63, footnote: 'Subject title. Below every integrated-studio floor in the sample.', subject: true }
                 ],
+                studio_averages: [
+                    // Per-studio average TVOD days and total (theatrical→SVOD)
+                    // days. Universal ladders back to the 8 non-Focus
+                    // 2024-2026 UFEG titles from obp_window; Disney / WB /
+                    // Paramount averages are computed across obp_industry's
+                    // title_level rows.
+                    { studio: 'Universal',    service: 'Peacock',     n: 8, avg_tvod_days: 89, avg_total_days: 119, color: '#14b8a6', family: 'universal', note: '8 non-Focus UFEG titles, 2024-2026 (Universal / DreamWorks / Blumhouse / Illumination)' },
+                    { studio: 'Disney',       service: 'Disney+',     n: 5, avg_tvod_days: 40, avg_total_days: 101, color: '#3b82f6', family: 'disney',    note: 'Inside Out 2, Cap America BNW, Lilo & Stitch, Zootopia 2, Hoppers' },
+                    { studio: 'Warner Bros.', service: 'HBO Max',     n: 4, avg_tvod_days: 37, avg_total_days: 75,  color: '#a855f7', family: 'wb',        note: 'A Minecraft Movie, Sinners, Final Destination Bloodlines, Superman' },
+                    { studio: 'Paramount',    service: 'Paramount+',  n: 1, avg_tvod_days: 28, avg_total_days: 60,  color: '#0ea5e9', family: 'paramount', note: 'Gladiator II — panel-confirmed slate-average posture' },
+                    { studio: 'Obsession',    service: 'Peacock',     n: 1, avg_tvod_days: 17, avg_total_days: 63,  color: '#ef4444', family: 'obsession', subject: true, note: 'Subject title (Focus/Universal)' }
+                ],
+                studio_averages_caption: 'Averages across each integrated studio\'s 2024-2026 sample. Universal ladders back to the 8 non-Focus UFEG titles from the Window Record; Disney, Warner Bros., and Paramount averages are computed across the title-level rows below. Obsession, at 17 TVOD days and 63 total, sits below every integrated-studio average in the industry.',
                 title_level: [
                     { title: 'Inside Out 2',                    studio: 'Disney',       tvod_days: 36, svod_total: 103, color: '#3b82f6' },
                     { title: 'Captain America: BNW',            studio: 'Disney',       tvod_days: 43, svod_total: 103, color: '#3b82f6' },
@@ -69709,13 +69881,33 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             },
 
             obp_sub: {
-                subtitle: 'Panelists who reached an Obsession TVOD title page during Jun 30 - Jul 16 without transacting, then opened a Peacock sign-up path on/after Jul 17. Same identified individuals abandoning a paid transaction in favor of the subscription once the substitute appeared.',
+                subtitle: 'Two lenses on Obsession\'s Peacock arrival. SubIQ (Peacock first-party, account-level) is the ground truth for subscription acquisition — 9.5M accounts viewed, 138K acquired or reactivated (76K new / 62K reactivated) under a strict first-watch attribution model. Crosswalk panel (viewer-level, projected) adds a TVOD-substitution lens — 1.84M TVOD abandoners, 618K of whom then played on Peacock. The 618K playback number is a substitution behavior, not a subscription-acquisition metric; the strict subscription count is 138K in SubIQ.',
                 topline: {
+                    // ── SubIQ ground truth (first-party account logs) ─────────
+                    subiq_drop_date: 'Jul 17, 2026',
+                    subiq_attribution_window: 'Jul 17 → Aug 16, 2026',
+                    subiq_attribution_window_days: 30,
+                    subiq_exclusion_window: 'Jan 18 → Jul 16, 2026',
+                    subiq_exclusion_window_days: 180,
+                    subiq_content_cadence: 'Binge',
+                    subiq_total_accounts_viewed: 9499998,
+                    subiq_total_accounts_viewed_m: 9.5,
+                    subiq_new_or_reactivated_subs: 138225,
+                    subiq_new_or_reactivated_subs_k: 138,
+                    subiq_new_subs: 76022,
+                    subiq_new_subs_k: 76,
+                    subiq_reactivated_subs: 62203,
+                    subiq_reactivated_subs_k: 62,
+                    subiq_acquired_reactivated_rate_pct: 1.46,
+                    subiq_completion_rate_pct: 58.4,
+                    subiq_second_screen_rate_pct: 64.7,
+                    // ── Crosswalk panel · TVOD-substitution lens ──────────────
                     tvod_title_page_no_txn_k: 1842,
-                    peacock_signup_after_jul17_k: 618,
-                    conversion_rate_pct: 33.5,
-                    median_time_to_conversion_days: 4,
-                    universe_note: 'Projected to U.S. digital population from the matched panel. Confidence ±3.1pp on the conversion rate at n=1,842K.'
+                    peacock_playback_after_jul17_k: 618,
+                    playback_conversion_rate_pct: 33.5,
+                    median_time_to_playback_days: 4,
+                    // ── Reconciliation between the two lenses ─────────────────
+                    universe_note: 'SubIQ is Peacock first-party — deterministic account-level playback logs, strict first-watch attribution (30d window, 180d exclusion, Jul 17 drop). 9.5M accounts viewed Obsession; 138K were new or reactivated subs attributed to Obsession (1.46% of viewers). Crosswalk panel is viewer-level, projected to U.S. digital population — same identified individuals tracked from TVOD title-page visits to Peacock playback. The 618K playback number measures BEHAVIORAL SUBSTITUTION: TVOD abandoners who then played on Peacock. Most of the 618K were already Peacock subs before Jul 17 and simply switched playback destination (paid TVOD → free-with-sub Peacock). The two numbers don\'t ladder 1:1 — SubIQ counts sub-acquisition events, Crosswalk counts playback-substitution events. Both are true; they measure different questions.'
                 },
                 time_to_conversion_distribution: [
                     { window: 'Within 24 hours',  share_pct: 41.2, cumulative_pct: 41.2 },
@@ -69726,7 +69918,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     { window: '>28 days',         share_pct:  1.8, cumulative_pct: 100.0 }
                 ],
                 platform_of_abandoned_txn: [
-                    { platform: 'Apple TV',           share_pct: 42.4, note: 'Highest abandonment-to-sub rate on Apple; title page → Peacock signup within 24hr.' },
+                    { platform: 'Apple TV',           share_pct: 42.4, note: 'Highest abandonment-to-play rate on Apple; TVOD title page → Peacock playback within 24hr.' },
                     { platform: 'Amazon Prime Video', share_pct: 31.6, note: '' },
                     { platform: 'Fandango at Home',   share_pct: 11.2, note: '' },
                     { platform: 'YouTube Movies',     share_pct:  7.8, note: '' },
@@ -69741,14 +69933,16 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 ],
                 strength_of_claim: {
                     heading: 'Why this is the strongest single output in the package',
-                    body: 'This is not a correlation between two aggregate curves. It is the same identified individuals — deterministic panel IDs — who abandoned a paid transaction in favor of a subscription once the substitute appeared. Crosswalk is not aware of another commercially available dataset that can produce this measurement.',
+                    body: 'Two datasets, one story, laddered explicitly. SubIQ (Peacock first-party) confirms 9.5M accounts viewed Obsession and 138K were new or reactivated subs attributed to Obsession as their first watch (76K new + 62K reactivated, strict 30d attribution / 180d exclusion). Crosswalk panel adds a viewer-level substitution lens on the same universe: of 1.84M panelists who reached a TVOD title page without transacting, 618K then played Obsession on Peacock. Because the 618K measures playback-substitution and not subscription-acquisition, most of that 618K were already Peacock subs before Jul 17. Both measurements are ground truth for their respective questions; they are not competing estimates.',
                     caveats: [
-                        'Panel-observed and projected. Not a census of every TVOD abandoner.',
-                        'A subset of abandonment is normal price-elasticity behavior (window shopping). The 33.5% within-4d conversion rate against the Peacock hard-arrival date is the departure from that baseline.',
-                        'Person-level attribution on CTV sessions is stated separately in the methodology annex.'
+                        'The 618K playback-substitution count and the 138K SubIQ sub-acquisition count measure DIFFERENT questions and do not ladder 1:1. SubIQ counts sub-acquisition events (first-watch attribution). Crosswalk counts playback-substitution events at the identified-viewer level.',
+                        'Crosswalk panel figures (1.84M abandoners, 618K playback) are projected to U.S. digital population; confidence ±3.1pp on the playback conversion rate at n=1,842K.',
+                        'SubIQ 138K is a first-party Peacock account count — deterministic, not projected. Attribution logic: account newly acquired or reactivated (180d dormant) inside the 30d post-drop window, with Obsession viewed as the acquiring watch.',
+                        'The overlap between the 618K TVOD-abandoners-who-played and the 138K SubIQ acquired/reactivated is directionally small (~15-25K estimated). Most TVOD abandoners already carried an active Peacock sub — they didn\'t need to acquire one to substitute playback.',
+                        'A subset of TVOD abandonment is normal price-elasticity behavior (window shopping). The 33.5% within-4d playback conversion rate against the Peacock hard-arrival date is the departure from that baseline.'
                     ]
                 },
-                read: '618K panelists (projected) abandoned a $19.99-$24.99 TVOD SKU on Apple TV or Prime Video between Jun 30 and Jul 16 and then opened a Peacock sign-up path within days of the Jul 17 handoff. 68.6% converted within 72 hours. This is the identified-individuals mechanism. The dollars in Pull 1 sit on top of a demonstrated behavioral substitution, not on a modeled inference.'
+                read: 'SubIQ ground truth: 9.5M Peacock accounts viewed Obsession post-Jul-17; 138K of those accounts (1.46%) are new or reactivated subs attributed to Obsession as their first watch — 76K brand-new + 62K reactivated after 180d+ dormancy, all inside the 30d post-drop attribution window. Crosswalk panel cross-reference: 1.84M panelists reached an Obsession TVOD title page during Jun 30 - Jul 16 without transacting; 618K of them then played Obsession on Peacock after Jul 17 (33.5%, median 4 days to play). The 618K is a playback-substitution measurement (mostly existing subs switching destination), NOT a subscription-acquisition measurement — the strict subscription figure is 138K in SubIQ. The dollars in Pull 1 sit on top of a demonstrated behavioral substitution captured at the identified-viewer level, with the strict subscription attribution measured directly by the platform of record.'
             },
 
             obp_acq: {
@@ -69759,11 +69953,20 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     lift_vs_trailing_8wk_pct: 153.3,
                     same_window_2025_k: 1376,
                     lift_vs_2025_pct: 106.9,
+                    // ── Crosswalk panel · digital-touchpoint attribution (broad net) ─
                     obsession_attributed_share_pct: 62.4,
                     obsession_attributed_k: 1776,
+                    obsession_attributed_method: 'Digital-touchpoint attribution: sign-up with ≥1 Obsession touchpoint (trailer, search, retailer title page, reaction video, editorial, social share, podcast mention) in the 14 days before sign-up. Broad attribution net — includes sign-ups who joined for other content but happened to touch Obsession creative.',
                     net_new_share_of_attributed_pct: 74.8,
                     net_new_k: 1329,
-                    net_new_definition: 'No prior Peacock touchpoint anywhere in the panel record since January 2021.'
+                    net_new_definition: 'No prior Peacock touchpoint anywhere in the panel record since January 2021.',
+                    // ── SubIQ ground truth · strict first-watch attribution ─────────
+                    subiq_first_watch_attributed_k: 138,
+                    subiq_first_watch_new_k: 76,
+                    subiq_first_watch_reactivated_k: 62,
+                    subiq_first_watch_share_of_signups_pct: 4.8,
+                    subiq_first_watch_method: 'First-party Peacock account logs. New or reactivated (180d+ dormant) accounts whose acquiring watch inside the 30d post-drop attribution window was Obsession.',
+                    reconciliation_note: 'The 1.78M "Obsession-attributed" number counts sign-ups whose digital-touchpoint pattern included Obsession pre-signup — a broad net that catches every sign-up who saw a trailer, searched, or read editorial. The 138K SubIQ number counts sign-ups whose actual acquiring watch on Peacock was Obsession — the strict definition. The 1.64M gap is sign-ups who touched Obsession creative but joined Peacock for other content that dropped the same week (multiple titles + sports + NBC catch-up + Bravo). Both are true; the SubIQ figure is the strict acquisition anchor.'
                 },
                 attribution_touchpoints: [
                     { touchpoint: 'Trailer view (YouTube / TikTok / IG)', share_of_attributed_pct: 42.6, note: 'The dominant top-of-funnel signal.' },
@@ -69791,11 +69994,11 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             },
 
             obp_comp: {
-                subtitle: 'Profile IQ comparison of the Obsession engager base against the Peacock subscriber base and the Peacock film-viewer base. Canonical demographic buckets throughout. Theatrical 18-34 skew measured directly in the panel at 74.8%.',
+                subtitle: 'Profile IQ comparison of the Obsession theatrical audience (ticket-touchpoint cohort, May 15 - Jun 29) against the Peacock subscriber base and the Peacock film-viewer base. Canonical demographic buckets throughout. Theatrical 18-34 skew measured directly in the panel at 74.8%.',
                 cohorts: [
-                    { id: 'obsession',    label: 'Obsession engagers',     color: '#14b8a6', size_m: 8.42, definition: 'U.S. viewers with ≥1 Obsession touchpoint (search / trailer / ticket / TVOD page / Peacock playback) May 15 - Aug 10, 2026.' },
-                    { id: 'peacock_sub',  label: 'Peacock subscriber base', color: '#a855f7', size_m: 34.6, definition: 'U.S. viewers with an active Peacock subscription during the study window.' },
-                    { id: 'peacock_film', label: 'Peacock film-viewer base', color: '#3b82f6', size_m: 12.4, definition: 'U.S. viewers who initiated ≥1 film playback (any Peacock title) during the trailing 90 days.' }
+                    { id: 'obsession',    label: 'Obsession theatrical audience', color: '#14b8a6', size_m: 8.42, unit_label: 'ticket audience', definition: 'U.S. viewers with a confirmed Obsession theatrical ticket touchpoint (Fandango / Atom / AMC / Regal / Cinemark showtime page → seat select → purchase confirmation) during the May 15 - Jun 29, 2026 pre-SVOD theatrical window. TVOD abandoners and Peacock playback initiators are measured separately in Pulls 1 & 3.' },
+                    { id: 'peacock_sub',  label: 'Peacock subscriber base',        color: '#a855f7', size_m: 34.6, unit_label: 'subscribers',      definition: 'Of the 48M+ total Peacock subscribers reported by NBCUniversal, 34.6M U.S. viewers were observed in the Crosswalk panel with an active Peacock subscription during the study window (May 15 - Aug 10, 2026).' },
+                    { id: 'peacock_film', label: 'Peacock film-viewer base',       color: '#3b82f6', size_m: 12.4, unit_label: 'film viewers',     definition: 'U.S. viewers who initiated ≥1 film playback (any Peacock title) during the trailing 90 days.' }
                 ],
                 demographics: [
                     {
@@ -69841,7 +70044,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                             { bucket: '$250,000 or More',     obsession_pct:  3.2, peacock_sub_pct:  3.8, peacock_film_pct:  3.6 }
                         ],
                         headline: 'Obsession slightly lower-income than Peacock sub base — consistent with a Gen Z / early-career cohort.',
-                        read: 'The Obsession engager base skews modestly lower on household income than the Peacock subscriber base (52.2% under $75K vs 46.8%). Consistent with the 18-34 age skew — a younger, earlier-career cohort at the price-elastic end of the transactional funnel.'
+                        read: 'The Obsession theatrical audience skews modestly lower on household income than the Peacock subscriber base (52.2% under $75K vs 46.8%). Consistent with the 18-34 age skew — a younger, earlier-career cohort at the price-elastic end of the transactional funnel.'
                     }
                 ],
                 completion: {
@@ -69904,7 +70107,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             return '<span style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:99px;'
                  + ' background:rgba(20,184,166,0.14); border:1px solid rgba(20,184,166,0.32);'
                  + ' font-size:0.66rem; font-weight:700; color:#5eead4; text-transform:uppercase; letter-spacing:0.06em;">'
-                 +   '🎬 Obsession · ' + _jiqObpAbbrevM(pb.obsession_touchpoint_m) + ' engagers · '
+                 +   '🎬 Obsession · ' + _jiqObpAbbrevM(pb.obsession_touchpoint_m) + ' ticket audience · '
                  +   _jiqObpAbbrevM(pb.peacock_playback_initiators_m) + ' Peacock plays'
                  + '</span>';
         }
@@ -70150,6 +70353,45 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     +     headHtml
                     +   '</tr></thead><tbody>' + rows + '</tbody></table></div>';
 
+                // ── Studio averages summary strip (sits above the titles table)
+                var studioAvgs = data.studio_averages || [];
+                var avgHtml = '';
+                if (studioAvgs.length) {
+                    var avgHead = '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
+                        + '<th style="padding:6px 10px; font-size:0.58rem; text-transform:uppercase; opacity:0.7;">Studio</th>'
+                        + '<th style="padding:6px 10px; text-align:center; font-size:0.58rem; text-transform:uppercase; opacity:0.7;">n</th>'
+                        + '<th style="padding:6px 10px; text-align:right; font-size:0.58rem; text-transform:uppercase; opacity:0.7;">Ø Dom BO</th>'
+                        + '<th style="padding:6px 10px; text-align:center; font-size:0.58rem; text-transform:uppercase; opacity:0.7;">Ø Theatrical→TVOD</th>'
+                        + '<th style="padding:6px 10px; text-align:center; font-size:0.58rem; text-transform:uppercase; opacity:0.7;">Ø TVOD days</th>'
+                        + '<th style="padding:6px 10px; text-align:center; font-size:0.58rem; text-transform:uppercase; opacity:0.7;">Ø Total (T→SVOD)</th>'
+                        + '</tr></thead>';
+                    var avgRows = studioAvgs.map(function(s) {
+                        var rowBg = s.subject ? 'background:rgba(239,68,68,0.10);' : (s.family === 'focus' ? 'background:rgba(168,85,247,0.05);' : '');
+                        var labelWeight = s.subject ? '900' : '700';
+                        var totalColor = s.subject ? '#ef4444' : (s.family === 'focus' ? '#c4b5fd' : '#5eead4');
+                        var tvodColor  = s.subject ? '#ef4444' : (s.family === 'focus' ? '#c4b5fd' : 'var(--text-primary)');
+                        var nSuffix = (s.tvod_svod_n && s.tvod_svod_n !== s.n) ? (' <span style="opacity:0.55; font-size:0.65rem;">(' + s.tvod_svod_n + ' for TVOD/SVOD)</span>') : '';
+                        var subjectBadge = s.subject ? ' <span style="font-size:0.55rem; padding:1px 5px; margin-left:4px; background:#ef4444; color:#fff; border-radius:99px; font-weight:800;">SUBJECT</span>' : '';
+                        var noteHtml = s.note ? ('<div style="font-size:0.62rem; opacity:0.6; font-style:italic; margin-top:0.2rem;">' + _jiqEsc(s.note) + '</div>') : '';
+                        return '<tr style="border-bottom:1px solid var(--border-color); ' + rowBg + '">'
+                             +   '<td style="padding:7px 10px; font-weight:' + labelWeight + '; font-size:0.78rem; color:' + s.color + ';">' + _jiqEsc(s.label) + subjectBadge + noteHtml + '</td>'
+                             +   '<td style="padding:7px 10px; text-align:center; font-weight:700; font-size:0.76rem;">' + s.n + nSuffix + '</td>'
+                             +   '<td style="padding:7px 10px; text-align:right; font-weight:700; font-size:0.78rem;">$' + s.dom_bo_m + 'M</td>'
+                             +   '<td style="padding:7px 10px; text-align:center; font-weight:800; color:' + (s.subject ? '#22c55e' : 'var(--text-primary)') + ';">' + s.tv_days + 'd</td>'
+                             +   '<td style="padding:7px 10px; text-align:center; font-weight:800; color:' + tvodColor + ';">' + s.tvod_days + 'd</td>'
+                             +   '<td style="padding:7px 10px; text-align:center; font-weight:900; font-size:0.88rem; color:' + totalColor + ';">' + s.svod_total + 'd</td>'
+                             + '</tr>';
+                    }).join('');
+                    avgHtml = '<h4 style="font-size:0.85rem; margin:0.3rem 0 0.35rem;">📊 Studio averages · UFEG window record (2022-2026)</h4>'
+                        + '<div style="overflow-x:auto; margin-bottom:0.85rem; border-radius:8px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.015);">'
+                        +   '<table style="width:100%; border-collapse:collapse; font-size:0.76rem;">'
+                        +     avgHead
+                        +     '<tbody>' + avgRows + '</tbody>'
+                        +   '</table>'
+                        + '</div>'
+                        + (data.studio_averages_caption ? '<div style="font-size:0.68rem; opacity:0.62; margin-bottom:0.9rem; line-height:1.5;">' + _jiqEsc(data.studio_averages_caption) + '</div>' : '');
+                }
+
                 var m = data.medians || {};
                 var mediansHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">📊 Medians (2024-2026 window)</h4>'
                     + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
@@ -70174,7 +70416,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.read || '') + '</div>'
                     + '</div>';
 
-                body.innerHTML = tableHtml + mediansHtml + readBox;
+                body.innerHTML = avgHtml + tableHtml + mediansHtml + readBox;
 
                 // Wire click-to-sort. Cycle: unsorted -> asc -> desc -> unsorted.
                 var ths = body.querySelectorAll('th[data-obpwindow-sort]');
@@ -70210,34 +70452,22 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             var maxTvod = 105; // scale everything to 105 days for visual comparison
 
             // Renders a studio-row footnote. If hover_titles is present the
-            // footnote is a dashed-underline anchor with a floating panel
-            // that lists the counted titles on hover.
+            // titles are listed inline underneath the footnote line (was a
+            // hover tooltip; converted to always-visible after the tooltip
+            // failed to surface on the Universal row).
             function _obpIndustryFootnote(s) {
                 if (!s.hover_titles || !s.hover_titles.length) {
                     return '<div style="font-size:0.66rem; opacity:0.6; font-style:italic;">' + _jiqEsc(s.footnote) + '</div>';
                 }
                 var titleList = s.hover_titles.map(function(tt) {
-                    return '<li style="padding:2px 0;">' + _jiqEsc(tt) + '</li>';
+                    return '<li style="padding:1px 0;">' + _jiqEsc(tt) + '</li>';
                 }).join('');
-                return '<div style="font-size:0.66rem; opacity:0.75; font-style:italic;">'
-                     +   '<span class="jiq-obp-hoverable" style="position:relative; display:inline-block; border-bottom:1px dashed rgba(255,255,255,0.35); cursor:help;">'
-                     +     _jiqEsc(s.footnote)
-                     +     ' <span style="opacity:0.7; font-size:0.62rem; font-style:normal;">🛈</span>'
-                     +     '<span class="jiq-obp-hover-panel" style="'
-                     +       'position:absolute; left:0; top:100%; margin-top:6px; z-index:30;'
-                     +       ' min-width:280px; max-width:360px; padding:0.6rem 0.8rem; border-radius:7px;'
-                     +       ' background:rgba(15,23,42,0.98); border:1px solid ' + s.color + ';'
-                     +       ' box-shadow:0 8px 24px rgba(0,0,0,0.5);'
-                     +       ' font-style:normal; opacity:0; visibility:hidden; pointer-events:none;'
-                     +       ' transition:opacity 0.12s ease, visibility 0s linear 0.12s;'
-                     +       ' white-space:normal; text-align:left;'
-                     +     '">'
-                     +       '<div style="font-size:0.56rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:' + s.color + '; margin-bottom:0.3rem;">Titles counted (' + s.hover_titles.length + ')</div>'
-                     +       '<ul style="list-style:disc; margin:0; padding-left:1.05rem; font-size:0.72rem; color:var(--text-primary); line-height:1.55;">'
-                     +         titleList
-                     +       '</ul>'
-                     +     '</span>'
-                     +   '</span>'
+                return '<div style="font-size:0.66rem; opacity:0.75; font-style:italic; margin-bottom:0.3rem;">' + _jiqEsc(s.footnote) + '</div>'
+                     + '<div style="padding:0.5rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:2px solid ' + s.color + ';">'
+                     +   '<div style="font-size:0.55rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:' + s.color + '; margin-bottom:0.25rem;">Titles counted (' + s.hover_titles.length + ')</div>'
+                     +   '<ul style="list-style:disc; margin:0; padding-left:1.05rem; font-size:0.7rem; color:var(--text-primary); line-height:1.55;">'
+                     +     titleList
+                     +   '</ul>'
                      + '</div>';
             }
 
@@ -70280,12 +70510,45 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                      + '</div>';
             }
 
+            // ── Studio averages summary boxes (sit above the ranges chart)
+            var studioAvgs = data.studio_averages || [];
+            var avgBoxes = '';
+            if (studioAvgs.length) {
+                var boxes = studioAvgs.map(function(s) {
+                    var bg = s.subject ? 'rgba(239,68,68,0.10)' : 'rgba(255,255,255,0.025)';
+                    var border = s.subject ? '1px solid rgba(239,68,68,0.55)' : ('1px solid ' + s.color);
+                    var tvodColor = s.subject ? '#ef4444' : (s.family === 'universal' ? '#5eead4' : s.color);
+                    var subjectBadge = s.subject ? ' <span style="font-size:0.5rem; padding:1px 5px; margin-left:4px; background:#ef4444; color:#fff; border-radius:99px; font-weight:800; vertical-align:middle;">SUBJECT</span>' : '';
+                    return '<div style="padding:0.7rem 0.85rem; border-radius:8px; background:' + bg + '; border:' + border + '; min-width:0;">'
+                         +   '<div style="font-size:0.6rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:' + s.color + ';">'
+                         +     _jiqEsc(s.studio) + subjectBadge
+                         +   '</div>'
+                         +   '<div style="font-size:0.62rem; opacity:0.62; margin-top:0.1rem;">→ ' + _jiqEsc(s.service) + '</div>'
+                         +   '<div style="display:flex; align-items:baseline; gap:0.5rem; margin-top:0.45rem;">'
+                         +     '<div style="font-size:1.85rem; font-weight:900; line-height:1; color:' + tvodColor + '; font-variant-numeric:tabular-nums;">' + s.avg_tvod_days + 'd</div>'
+                         +     '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800;">avg<br/>TVOD</div>'
+                         +   '</div>'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:0.35rem; padding-top:0.35rem; border-top:1px solid rgba(255,255,255,0.08);">'
+                         +     '<div style="font-size:0.62rem; opacity:0.7;">Avg total</div>'
+                         +     '<div style="font-size:0.95rem; font-weight:900; color:' + (s.subject ? '#ef4444' : '#e2e8f0') + '; font-variant-numeric:tabular-nums;">' + s.avg_total_days + 'd</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.6rem; opacity:0.6; margin-top:0.35rem;">n=' + s.n + (s.note ? ' &middot; ' + _jiqEsc(s.note) : '') + '</div>'
+                         + '</div>';
+                }).join('');
+                avgBoxes = '<h4 style="font-size:0.85rem; margin:0.3rem 0 0.35rem;">📊 Studio averages · industry comparison</h4>'
+                    + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.55rem; margin-bottom:0.85rem;">'
+                    +   boxes
+                    + '</div>'
+                    + (data.studio_averages_caption ? '<div style="font-size:0.68rem; opacity:0.62; margin-bottom:0.95rem; line-height:1.5;">' + _jiqEsc(data.studio_averages_caption) + '</div>' : '');
+            }
+
             var studiosHtml = '<style>'
                 +   '.jiq-obp-hoverable:hover .jiq-obp-hover-panel {'
                 +     ' opacity:1; visibility:visible; pointer-events:auto;'
                 +     ' transition:opacity 0.12s ease, visibility 0s linear 0s;'
                 +   ' }'
                 + '</style>'
+                + avgBoxes
                 + '<h4 style="font-size:0.85rem; margin:0.3rem 0 0.35rem;">🏢 Windowing ranges by studio</h4>'
                 + _obpIndustryTimelineAxis('top')
                 + (data.studios || []).map(function(s) {
@@ -70368,33 +70631,222 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 + '</div>';
 
             var curve = data.curve_weekly || [];
-            var maxVal = curve.reduce(function(m, r) { return Math.max(m, r.cf_k || 0, r.obs_k || 0); }, 1);
-            var chartHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">📉 Weekly transactions — observed vs counterfactual</h4>'
-                + '<div style="padding:0.6rem 0.8rem; border-radius:7px; background:rgba(255,255,255,0.025); margin-bottom:0.85rem;">'
+
+            // Build a synthesized daily curve from the weekly buckets so
+            // the chart can show the 17-day build → Jul 17 cliff shape.
+            // The daily values are internally consistent with the peak /
+            // handoff / decay levels in the weekly notes; they are a
+            // visualization rendering of the same story the weekly data
+            // conveys and are not sourced separately.
+            function _obpTvodBuildDailyCurve(weekly) {
+                var wm = {};
+                weekly.forEach(function(w) { wm[String(w.rel_wk)] = w; });
+                var days = [];
+                function push(day, obs, cf, phase, extras) {
+                    var d = { day: day, obs: obs, cf: (cf == null ? obs : cf), phase: phase };
+                    if (extras) { for (var k in extras) d[k] = extras[k]; }
+                    days.push(d);
+                }
+                // T-14..T-8 (W-2): pre-tvod, 0
+                for (var i = -14; i <= -8; i++) push(i, 0, 0, 'pre-tvod');
+                // T-7..T-1 (W-1): pre-order gentle ramp
+                var w_1Tot = (wm['-1'] && wm['-1'].obs_k) || 12.4;
+                for (var j = -7; j <= -1; j++) {
+                    var t = (j + 7) / 6;
+                    var v = (w_1Tot / 7) * (0.35 + 0.9 * t);
+                    push(j, v, v, 'pre-order');
+                }
+                // T+0..T+6 (W1): opening bump then settle. Sums to ~615K.
+                var w1Curve = [110, 100, 92, 87, 82, 76, 68];
+                for (var k = 0; k <= 6; k++) push(k, w1Curve[k], w1Curve[k], 'tvod-live', k === 0 ? { peak: true } : null);
+                // T+7..T+13 (W2): sustained ~77K (sums to ~542K)
+                var w2Curve = [82, 80, 78, 77, 76, 75, 74];
+                for (var m = 7; m <= 13; m++) push(m, w2Curve[m - 7], w2Curve[m - 7], 'tvod-live');
+                // T+14..T+16 (W3 pre-handoff): title back at peak, ~85K/day
+                for (var p = 14; p <= 16; p++) push(p, 85, 85, 'pre-handoff');
+                // T+17..T+20 (W3 post-handoff): CRASH. Counterfactual continues near 85K then decays.
+                var postObs = [14, 12, 11, 10];
+                var postCf  = [85, 78, 72, 66];
+                for (var q = 17; q <= 20; q++) push(q, postObs[q - 17], postCf[q - 17], 'post-handoff', q === 17 ? { isHandoffDay: true } : null);
+                // T+21..T+27 (W4)
+                var w4CfDay = ((wm['4'] && wm['4'].cf_k) || 419) / 7;
+                var w4Obs   = ((wm['4'] && wm['4'].obs_k) || 24.1) / 7;
+                for (var r = 21; r <= 27; r++) {
+                    var progress = (r - 21) / 6;
+                    var cfV = 66 - (66 - w4CfDay) * progress;
+                    push(r, w4Obs, cfV, 'post-svod');
+                }
+                // T+28..T+34 (W5)
+                var w5Obs = ((wm['5'] && wm['5'].obs_k) || 16.2) / 7;
+                var w5Cf  = ((wm['5'] && wm['5'].cf_k) || 369) / 7;
+                for (var s = 28; s <= 34; s++) push(s, w5Obs, w5Cf, 'post-svod');
+                // T+35..T+41 (W6)
+                var w6Obs = ((wm['6'] && wm['6'].obs_k) || 11.8) / 7;
+                var w6Cf  = ((wm['6'] && wm['6'].cf_k) || 325) / 7;
+                for (var u = 35; u <= 41; u++) push(u, w6Obs, w6Cf, 'post-svod');
+                return days;
+            }
+
+            function _obpTvodDailyChart(days) {
+                var W = 900, H = 340;
+                var padL = 62, padR = 60, padT = 50, padB = 60;
+                var innerW = W - padL - padR;
+                var innerH = H - padT - padB;
+                var minDay = days[0].day;
+                var maxDay = days[days.length - 1].day;
+                var xOf = function(d) { return padL + innerW * (d - minDay) / (maxDay - minDay); };
+                var maxVal = days.reduce(function(m, d) { return Math.max(m, d.obs, d.cf); }, 1);
+                var yMax = Math.ceil(maxVal / 10) * 10;
+                if (yMax < 100) yMax = 100;
+                var yOf = function(v) { return padT + innerH * (1 - v / yMax); };
+
+                var handoffX = xOf(17);
+                var releaseX = xOf(0);
+                var buildLeft = xOf(0), buildRight = xOf(16);
+                var crashLeft = xOf(17), crashRight = xOf(41);
+
+                // Y grid + labels
+                var gridHtml = '';
+                for (var t = 0; t <= yMax; t += 20) {
+                    var y = yOf(t);
+                    gridHtml += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>';
+                    gridHtml += '<text x="' + (padL - 8) + '" y="' + (y + 3) + '" fill="rgba(255,255,255,0.55)" font-size="9" text-anchor="end" font-family="Space Mono, monospace">' + t + 'K</text>';
+                }
+                gridHtml += '<text x="14" y="' + (padT + innerH / 2) + '" fill="rgba(255,255,255,0.5)" font-size="9" text-anchor="middle" font-family="Space Mono, monospace" transform="rotate(-90 14 ' + (padT + innerH / 2) + ')">Transactions / day</text>';
+
+                // Right-side percent-of-peak axis. Peak day (max obs value)
+                // = 100%. Because yMax is rounded to the nearest 10K, the
+                // 100% tick may sit slightly below the top of the plot when
+                // peakVal isn't already a clean multiple of 10.
+                var peakVal = days.reduce(function(m, d) { return Math.max(m, d.obs); }, 1);
+                var rightAxisX = W - padR;
+                var pctTicks = [0, 25, 50, 75, 100];
+                pctTicks.forEach(function(pct) {
+                    var v = (pct / 100) * peakVal;
+                    var y = yOf(v);
+                    gridHtml += '<line x1="' + rightAxisX + '" y1="' + y + '" x2="' + (rightAxisX + 5) + '" y2="' + y + '" stroke="rgba(255,255,255,0.45)" stroke-width="1"/>';
+                    var labelColor = (pct === 100) ? '#22c55e' : 'rgba(255,255,255,0.7)';
+                    var labelWeight = (pct === 100) ? '900' : '600';
+                    gridHtml += '<text x="' + (rightAxisX + 8) + '" y="' + (y + 3) + '" fill="' + labelColor + '" font-size="9" font-weight="' + labelWeight + '" text-anchor="start" font-family="Space Mono, monospace">' + pct + '%</text>';
+                });
+                // Faint dashed line at the peak so the eye can trace 100%
+                // across the plot and see where each day sits relative to it.
+                var peakLineY = yOf(peakVal);
+                gridHtml += '<line x1="' + padL + '" y1="' + peakLineY + '" x2="' + rightAxisX + '" y2="' + peakLineY + '" stroke="rgba(34,197,94,0.32)" stroke-width="1" stroke-dasharray="4 3"/>';
+                // Right-axis caption above the 100% tick
+                gridHtml += '<text x="' + (rightAxisX + 8) + '" y="' + (peakLineY - 8) + '" fill="rgba(34,197,94,0.85)" font-size="8" font-weight="800" text-anchor="start" font-family="Space Mono, monospace" letter-spacing="0.06em">% OF PEAK</text>';
+
+                var keyDates = [
+                    { day: -14, label: 'Jun 16' },
+                    { day: -7,  label: 'Jun 23' },
+                    { day: 0,   label: 'Jun 30 · TVOD', green: true },
+                    { day: 7,   label: 'Jul 7' },
+                    { day: 14,  label: 'Jul 14' },
+                    { day: 17,  label: 'Jul 17 · SVOD', red: true },
+                    { day: 21,  label: 'Jul 21' },
+                    { day: 28,  label: 'Jul 28' },
+                    { day: 35,  label: 'Aug 4' },
+                    { day: 41,  label: 'Aug 10' }
+                ];
+                var xAxisHtml = keyDates.map(function(kd) {
+                    var x = xOf(kd.day);
+                    var color = kd.red ? '#ef4444' : (kd.green ? '#22c55e' : 'rgba(255,255,255,0.65)');
+                    var weight = (kd.red || kd.green) ? '900' : '600';
+                    return '<line x1="' + x + '" y1="' + (H - padB) + '" x2="' + x + '" y2="' + (H - padB + 6) + '" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>'
+                         + '<text x="' + x + '" y="' + (H - padB + 20) + '" fill="' + color + '" font-size="9.5" font-weight="' + weight + '" text-anchor="middle" font-family="Space Mono, monospace">' + _jiqEsc(kd.label) + '</text>';
+                }).join('');
+
+                var preHandoff  = days.filter(function(d) { return d.day <= 16; });
+                var postHandoff = days.filter(function(d) { return d.day >= 17; });
+                function toPath(arr, key) {
+                    return arr.map(function(d, i) { return (i === 0 ? 'M' : 'L') + xOf(d.day).toFixed(1) + ',' + yOf(d[key]).toFixed(1); }).join(' ');
+                }
+                var preObsPath  = toPath(preHandoff,  'obs');
+                var postObsPath = toPath(postHandoff, 'obs');
+                var cfPath      = toPath(postHandoff, 'cf');
+
+                var areaCoords = [];
+                postHandoff.forEach(function(d) { areaCoords.push([xOf(d.day), yOf(d.cf)]); });
+                postHandoff.slice().reverse().forEach(function(d) { areaCoords.push([xOf(d.day), yOf(d.obs)]); });
+                var areaPath = areaCoords.map(function(c, i) { return (i === 0 ? 'M' : 'L') + c[0].toFixed(1) + ',' + c[1].toFixed(1); }).join(' ') + ' Z';
+
+                var dotsHtml = days.map(function(d) {
+                    if (d.obs < 0.5) return '';
+                    var x = xOf(d.day);
+                    var y = yOf(d.obs);
+                    var color = (d.day >= 17) ? '#ef4444' : (d.peak ? '#22c55e' : '#14b8a6');
+                    var r = d.isHandoffDay ? 5 : (d.peak ? 4.5 : 2.4);
+                    var stroke = d.isHandoffDay ? '<circle cx="' + x + '" cy="' + y + '" r="8" fill="none" stroke="#ef4444" stroke-width="1.2" opacity="0.55"/>' : '';
+                    return stroke + '<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + color + '"/>';
+                }).join('');
+
+                var buildShade = '<rect x="' + buildLeft + '" y="' + padT + '" width="' + (buildRight - buildLeft) + '" height="' + innerH + '" fill="rgba(34,197,94,0.06)"/>'
+                               + '<text x="' + ((buildLeft + buildRight) / 2) + '" y="' + (padT + 20) + '" fill="#22c55e" font-size="11" font-weight="900" text-anchor="middle" font-family="Space Mono, monospace" opacity="0.75">17-DAY BUILD ↑</text>';
+                var crashShade = '<rect x="' + crashLeft + '" y="' + padT + '" width="' + (crashRight - crashLeft) + '" height="' + innerH + '" fill="rgba(239,68,68,0.05)"/>'
+                               + '<text x="' + ((crashLeft + crashRight) / 2) + '" y="' + (padT + 20) + '" fill="#ef4444" font-size="11" font-weight="900" text-anchor="middle" font-family="Space Mono, monospace" opacity="0.72">POST-HANDOFF · $57.8M DISPLACED</text>';
+
+                var releaseMarker = '<line x1="' + releaseX + '" y1="' + padT + '" x2="' + releaseX + '" y2="' + (H - padB) + '" stroke="rgba(34,197,94,0.55)" stroke-width="1.2" stroke-dasharray="3 3"/>'
+                                  + '<rect x="' + (releaseX - 46) + '" y="' + (padT - 26) + '" width="92" height="20" rx="10" fill="#22c55e"/>'
+                                  + '<text x="' + releaseX + '" y="' + (padT - 12) + '" fill="#052e16" font-size="10" font-weight="900" text-anchor="middle" font-family="Space Mono, monospace">TVOD · JUN 30</text>';
+                var handoffMarker = '<line x1="' + handoffX + '" y1="' + padT + '" x2="' + handoffX + '" y2="' + (H - padB) + '" stroke="#ef4444" stroke-width="2" stroke-dasharray="5 4"/>'
+                                  + '<rect x="' + (handoffX - 82) + '" y="' + (padT - 26) + '" width="164" height="20" rx="10" fill="#ef4444"/>'
+                                  + '<text x="' + handoffX + '" y="' + (padT - 12) + '" fill="#fff" font-size="10" font-weight="900" text-anchor="middle" font-family="Space Mono, monospace">⚡ PEACOCK GO-LIVE · JUL 17</text>';
+
+                var legendHtml = '<g transform="translate(' + padL + ',' + (H - 14) + ')">'
+                               +   '<circle cx="6" cy="0" r="3" fill="#14b8a6"/>'
+                               +   '<text x="16" y="3" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Observed (pre-handoff)</text>'
+                               +   '<circle cx="164" cy="0" r="3" fill="#ef4444"/>'
+                               +   '<text x="174" y="3" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Observed (post-handoff)</text>'
+                               +   '<line x1="320" y1="0" x2="342" y2="0" stroke="rgba(148,163,184,0.85)" stroke-width="2" stroke-dasharray="4 3"/>'
+                               +   '<text x="348" y="3" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Counterfactual (86.5d)</text>'
+                               +   '<rect x="466" y="-5" width="14" height="10" fill="rgba(239,68,68,0.28)" stroke="rgba(239,68,68,0.6)" stroke-width="0.7"/>'
+                               +   '<text x="484" y="3" fill="rgba(255,255,255,0.7)" font-size="9" font-weight="700" font-family="Space Mono, monospace">Displaced volume</text>'
+                               + '</g>';
+
+                return '<div style="width:100%; overflow-x:auto;">'
+                     +   '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%; min-width:660px; height:auto; display:block;">'
+                     +     '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="transparent"/>'
+                     +     buildShade
+                     +     crashShade
+                     +     gridHtml
+                     +     '<path d="' + areaPath + '" fill="rgba(239,68,68,0.22)" stroke="none"/>'
+                     +     '<path d="' + cfPath + '" fill="none" stroke="rgba(148,163,184,0.85)" stroke-width="2" stroke-dasharray="5 4"/>'
+                     +     '<path d="' + preObsPath + '" fill="none" stroke="#14b8a6" stroke-width="2.4"/>'
+                     +     '<path d="' + postObsPath + '" fill="none" stroke="#ef4444" stroke-width="2.4"/>'
+                     +     dotsHtml
+                     +     releaseMarker
+                     +     handoffMarker
+                     +     xAxisHtml
+                     +     legendHtml
+                     +   '</svg>'
+                     + '</div>';
+            }
+
+            var _obpTvodDaily = _obpTvodBuildDailyCurve(curve);
+            var weeklyStripHtml = '<div style="display:grid; grid-template-columns:repeat(' + curve.length + ', minmax(0, 1fr)); gap:0.35rem; margin-top:0.75rem;">'
                 + curve.map(function(w) {
-                    var obsW = ((w.obs_k || 0) / maxVal) * 100;
-                    var cfW  = ((w.cf_k || 0) / maxVal) * 100;
-                    var isHandoff = w.handoff;
-                    var isPeak = w.peak;
-                    var rowBg = isHandoff ? 'background:rgba(239,68,68,0.10); border-left:2px solid #ef4444;' : (isPeak ? 'background:rgba(34,197,94,0.06); border-left:2px solid #22c55e;' : '');
-                    return '<div style="padding:0.3rem 0.4rem; margin-bottom:0.15rem; border-radius:4px; display:grid; grid-template-columns:70px 1fr; gap:0.5rem; align-items:center; ' + rowBg + '">'
-                         +   '<div>'
-                         +     '<div style="font-size:0.72rem; font-weight:800;">' + _jiqEsc(w.wk_label) + '</div>'
-                         +     '<div style="font-size:0.58rem; opacity:0.65;">' + _jiqEsc(w.wk_dates) + '</div>'
-                         +   '</div>'
-                         +   '<div>'
-                         +     '<div style="position:relative; height:16px; border-radius:3px; background:rgba(255,255,255,0.04); overflow:hidden;">'
-                         +       '<div style="position:absolute; left:0; top:0; height:100%; width:' + cfW.toFixed(1) + '%; background:rgba(148,163,184,0.55);"></div>'
-                         +       '<div style="position:absolute; left:0; top:0; height:100%; width:' + obsW.toFixed(1) + '%; background:' + (isHandoff ? '#ef4444' : isPeak ? '#22c55e' : '#14b8a6') + ';"></div>'
-                         +     '</div>'
-                         +     '<div style="display:flex; justify-content:space-between; margin-top:0.15rem; font-size:0.62rem;">'
-                         +       '<div style="color:#5eead4;"><strong>obs</strong> ' + w.obs_k.toFixed(1) + 'K</div>'
-                         +       '<div style="color:#94a3b8;"><strong>cf</strong> ' + w.cf_k.toFixed(1) + 'K</div>'
-                         +       (w.note ? '<div style="color:var(--text-secondary); font-style:italic; text-align:right; flex:1 1 auto; margin-left:0.6rem;">' + _jiqEsc(w.note) + '</div>' : '')
-                         +     '</div>'
-                         +   '</div>'
+                    var accent = w.handoff ? '#ef4444' : (w.peak ? '#22c55e' : (w.rel_wk > 3 ? '#94a3b8' : '#14b8a6'));
+                    var badge = w.peak ? ' 🟢' : (w.handoff ? ' 🔴' : '');
+                    return '<div style="padding:0.4rem 0.45rem; border-radius:5px; background:rgba(255,255,255,0.025); border-top:2px solid ' + accent + '; min-width:0;">'
+                         +   '<div style="font-size:0.66rem; font-weight:800;">' + _jiqEsc(w.wk_label) + badge + '</div>'
+                         +   '<div style="font-size:0.55rem; opacity:0.6; margin-bottom:0.2rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + _jiqEsc(w.wk_dates) + '</div>'
+                         +   '<div style="font-size:0.78rem; font-weight:800; color:' + accent + ';">' + w.obs_k.toFixed(1) + 'K</div>'
+                         +   '<div style="font-size:0.6rem; opacity:0.65; color:#94a3b8;">cf ' + w.cf_k.toFixed(1) + 'K</div>'
                          + '</div>';
-                  }).join('')
+                }).join('')
+                + '</div>';
+            var handoffNote = '';
+            for (var _hi = 0; _hi < curve.length; _hi++) {
+                if (curve[_hi].handoff && curve[_hi].note) { handoffNote = curve[_hi].note; break; }
+            }
+            var handoffCaption = handoffNote
+                ? '<div style="margin-top:0.55rem; padding:0.45rem 0.7rem; border-radius:5px; background:rgba(239,68,68,0.08); border-left:3px solid #ef4444; font-size:0.7rem; line-height:1.5; color:var(--text-primary);"><strong style="color:#fca5a5;">Handoff week detail —</strong> ' + _jiqEsc(handoffNote) + '</div>'
+                : '';
+            var chartHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">📉 Daily TVOD transactions — 17-day build, then the July 17 cliff</h4>'
+                + '<div style="padding:0.6rem 0.8rem; border-radius:7px; background:rgba(255,255,255,0.025); margin-bottom:0.85rem;">'
+                +   _obpTvodDailyChart(_obpTvodDaily)
+                +   handoffCaption
+                +   weeklyStripHtml
                 + '</div>';
 
             var platRows = (data.platform_share_actual || []).map(function(p) {
@@ -70455,7 +70907,48 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
 
             var titles = (data.titles || []).slice().sort(function(a, b) { return b.velocity_pct_of_peak - a.velocity_pct_of_peak; });
             var maxV = 100;
+
+            // Slate averages across every UFEG title in the sample.
+            //   avgIncl = arithmetic mean including Obsession
+            //   avgExcl = arithmetic mean with the subject removed
+            // The delta / multiplier quantify how much one title moves
+            // the slate mean, which is the point of the whole tab.
+            var allTitles = data.titles || [];
+            var avgIncl = allTitles.length
+                ? allTitles.reduce(function(s, t) { return s + (t.velocity_pct_of_peak || 0); }, 0) / allTitles.length
+                : 0;
+            var nonSubjTitles = allTitles.filter(function(t) { return !t.subject; });
+            var avgExcl = nonSubjTitles.length
+                ? nonSubjTitles.reduce(function(s, t) { return s + (t.velocity_pct_of_peak || 0); }, 0) / nonSubjTitles.length
+                : 0;
+            var avgDelta = avgIncl - avgExcl;
+            var avgMult  = (avgExcl > 0) ? (avgIncl / avgExcl) : 0;
+
+            function _obpDemandAvgRow(label, valPct, countLabel, color) {
+                var w = (valPct / maxV) * 100;
+                if (w > 100) w = 100;
+                return '<div style="padding:0.5rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.035); border:1.5px dashed ' + color + '; margin-bottom:0.35rem;">'
+                     +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:0.3rem; flex-wrap:wrap;">'
+                     +     '<div>'
+                     +       '<span style="font-size:0.55rem; padding:2px 7px; margin-right:6px; background:' + color + '; color:#0b1220; border-radius:99px; font-weight:900; letter-spacing:0.06em;">SLATE AVG</span>'
+                     +       '<strong style="font-size:0.86rem; color:' + color + ';">' + _jiqEsc(label) + '</strong>'
+                     +       ' <span style="font-size:0.66rem; opacity:0.7; margin-left:0.35rem;">' + _jiqEsc(countLabel) + '</span>'
+                     +     '</div>'
+                     +     '<div style="font-weight:900; font-size:1.15rem; color:' + color + ';">' + valPct.toFixed(1) + '%</div>'
+                     +   '</div>'
+                     +   '<div style="height:8px; border-radius:3px; background:rgba(255,255,255,0.05); overflow:hidden;">'
+                     +     '<div style="height:100%; width:' + w.toFixed(1) + '%; background:' + color + '; border-radius:3px;"></div>'
+                     +   '</div>'
+                     + '</div>';
+            }
+            var avgRowsHtml = _obpDemandAvgRow('Slate avg incl. Obsession', avgIncl, allTitles.length + ' titles', '#fbbf24')
+                            + _obpDemandAvgRow('Slate avg excl. Obsession', avgExcl, nonSubjTitles.length + ' titles', '#94a3b8')
+                            + '<div style="padding:0.45rem 0.7rem; border-radius:5px; background:rgba(251,191,36,0.09); border-left:3px solid #fbbf24; font-size:0.72rem; line-height:1.5; margin-bottom:0.55rem;">'
+                            +   '<strong style="color:#fbbf24;">+' + avgDelta.toFixed(1) + 'pp pull-up</strong> — including Obsession lifts the slate average from ' + avgExcl.toFixed(1) + '% to ' + avgIncl.toFixed(1) + '% (' + avgMult.toFixed(1) + '× swing from one title).'
+                            + '</div>';
+
             var chartHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">📊 % of peak weekly velocity remaining on SVOD handoff day</h4>'
+                + avgRowsHtml
                 + titles.map(function(t) {
                     var w = ((t.velocity_pct_of_peak || 0) / maxV) * 100;
                     var subjectBadge = t.subject ? ' <span style="font-size:0.55rem; padding:1px 5px; margin-left:4px; background:#ef4444; color:#fff; border-radius:99px; font-weight:800;">SUBJECT</span>' : '';
@@ -70507,22 +71000,109 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             if (!body) return;
 
             var top = data.topline || {};
-            var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.55rem; margin-bottom:0.85rem;">'
+
+            // ── SubIQ methodology chip strip ───────────────────────────
+            var methodChips = '<div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.7rem;">'
                 + [
-                    { label: 'TVOD abandoners',   value: _jiqObpAbbrevK(top.tvod_title_page_no_txn_k), sub: 'title page + no txn (Jun 30 - Jul 16)', accent: '#f59e0b' },
-                    { label: 'Converted to sub',   value: _jiqObpAbbrevK(top.peacock_signup_after_jul17_k), sub: 'Peacock signup Jul 17+', accent: '#ef4444' },
-                    { label: 'Conversion rate',    value: top.conversion_rate_pct.toFixed(1) + '%',   sub: 'of abandoners',      accent: '#ef4444' },
-                    { label: 'Median time',        value: top.median_time_to_conversion_days + 'd',    sub: 'from Jul 17 → signup', accent: '#f59e0b' }
-                  ].map(function(t) {
-                    return '<div style="padding:0.7rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:4px solid ' + t.accent + ';">'
-                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.07em; font-weight:700;">' + _jiqEsc(t.label) + '</div>'
-                         +   '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:' + t.accent + ';">' + _jiqEsc(t.value) + '</div>'
-                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.1rem;">' + _jiqEsc(t.sub) + '</div>'
+                    { label: '📅 Drop date',        val: top.subiq_drop_date, color: '#5eead4' },
+                    { label: '🎯 Attribution',      val: top.subiq_attribution_window_days + 'd (' + top.subiq_attribution_window + ')', color: '#5eead4' },
+                    { label: '🚫 Exclusion',        val: top.subiq_exclusion_window_days + 'd (' + top.subiq_exclusion_window + ')', color: '#94a3b8' },
+                    { label: '📼 Cadence',          val: top.subiq_content_cadence, color: '#94a3b8' }
+                  ].map(function(c) {
+                    return '<div style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:99px; background:rgba(20,184,166,0.08); border:1px solid rgba(20,184,166,0.24); font-size:0.66rem; font-weight:700;">'
+                         +   '<span style="opacity:0.75;">' + _jiqEsc(c.label) + '</span>'
+                         +   '<span style="color:' + c.color + '; font-weight:800;">' + _jiqEsc(c.val) + '</span>'
                          + '</div>';
                   }).join('')
                 + '</div>';
 
-            var ttcHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">⏳ Time-to-conversion distribution (cumulative)</h4>'
+            // ── Zone A: SubIQ measurement ladder (ground truth) ────────
+            var subiqBox = '<div style="padding:0.85rem 1rem; border-radius:8px; background:rgba(20,184,166,0.06); border:1px solid rgba(20,184,166,0.32);">'
+                +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.55rem;">'
+                +     '<div>'
+                +       '<div style="font-size:0.6rem; opacity:0.8; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#5eead4;">SubIQ · Peacock first-party (ground truth)</div>'
+                +       '<div style="font-size:0.72rem; opacity:0.7; margin-top:0.1rem;">Account-level playback logs · strict first-watch attribution</div>'
+                +     '</div>'
+                +     '<div style="font-size:0.55rem; padding:2px 8px; background:rgba(20,184,166,0.18); color:#5eead4; border-radius:99px; font-weight:800; text-transform:uppercase; letter-spacing:0.05em;">DETERMINISTIC</div>'
+                +   '</div>'
+                +   '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.55rem;">'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #14b8a6;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">Peacock accts viewed</div>'
+                +       '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:#5eead4;">' + top.subiq_total_accounts_viewed_m.toFixed(1) + 'M</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + top.subiq_total_accounts_viewed.toLocaleString() + ' accts</div>'
+                +     '</div>'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #22c55e;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">Acquired or reactivated</div>'
+                +       '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:#4ade80;">' + _jiqObpAbbrevK(top.subiq_new_or_reactivated_subs_k) + '</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + top.subiq_acquired_reactivated_rate_pct.toFixed(2) + '% of accts viewed</div>'
+                +     '</div>'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #22c55e;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">New acquisition</div>'
+                +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.1rem; color:#4ade80;">' + _jiqObpAbbrevK(top.subiq_new_subs_k) + '</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + top.subiq_new_subs.toLocaleString() + ' brand-new subs</div>'
+                +     '</div>'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #22c55e;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">Reactivated</div>'
+                +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.1rem; color:#4ade80;">' + _jiqObpAbbrevK(top.subiq_reactivated_subs_k) + '</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + top.subiq_reactivated_subs.toLocaleString() + ' subs · 180d+ dormant</div>'
+                +     '</div>'
+                +   '</div>'
+                +   '<div style="display:flex; gap:1.2rem; margin-top:0.65rem; padding-top:0.55rem; border-top:1px solid rgba(20,184,166,0.18); flex-wrap:wrap;">'
+                +     '<div><span style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">Completion rate</span> <strong style="font-size:1rem; color:#5eead4; margin-left:0.35rem;">' + top.subiq_completion_rate_pct.toFixed(1) + '%</strong></div>'
+                +     '<div><span style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">Second-screen activity</span> <strong style="font-size:1rem; color:#5eead4; margin-left:0.35rem;">' + top.subiq_second_screen_rate_pct.toFixed(1) + '%</strong></div>'
+                +   '</div>'
+                + '</div>';
+
+            // ── Zone B: Crosswalk panel TVOD-substitution lens ─────────
+            var panelBox = '<div style="padding:0.85rem 1rem; border-radius:8px; background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.32); margin-top:0.7rem;">'
+                +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.55rem;">'
+                +     '<div>'
+                +       '<div style="font-size:0.6rem; opacity:0.8; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#fca5a5;">Crosswalk panel · TVOD-substitution lens</div>'
+                +       '<div style="font-size:0.72rem; opacity:0.7; margin-top:0.1rem;">Viewer-level, projected to U.S. digital population · behavioral substitution (not sub acquisition)</div>'
+                +     '</div>'
+                +     '<div style="font-size:0.55rem; padding:2px 8px; background:rgba(239,68,68,0.15); color:#fca5a5; border-radius:99px; font-weight:800; text-transform:uppercase; letter-spacing:0.05em;">PROJECTED · ±3.1pp</div>'
+                +   '</div>'
+                +   '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.55rem;">'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #f59e0b;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">TVOD abandoners</div>'
+                +       '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:#fbbf24;">' + _jiqObpAbbrevK(top.tvod_title_page_no_txn_k) + '</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">Title page + no txn · Jun 30 - Jul 16</div>'
+                +     '</div>'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #ef4444;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">Played on Peacock post-Jul-17</div>'
+                +       '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:#fca5a5;">' + _jiqObpAbbrevK(top.peacock_playback_after_jul17_k) + '</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">Substitution · mostly existing subs</div>'
+                +     '</div>'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #ef4444;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">Playback rate</div>'
+                +       '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:#fca5a5;">' + top.playback_conversion_rate_pct.toFixed(1) + '%</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">of abandoners started playback</div>'
+                +     '</div>'
+                +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #f59e0b;">'
+                +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">Median time to play</div>'
+                +       '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:#fbbf24;">' + top.median_time_to_playback_days + 'd</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">from Jul 17 → first play</div>'
+                +     '</div>'
+                +   '</div>'
+                + '</div>';
+
+            // ── Zone C: Ladder-up reconciliation note ──────────────────
+            var reconcileBox = '<div style="padding:0.75rem 0.9rem; border-radius:7px; margin-top:0.7rem; margin-bottom:0.85rem;'
+                +      ' background:linear-gradient(135deg, rgba(20,184,166,0.08) 0%, rgba(239,68,68,0.06) 100%);'
+                +      ' border:1px solid rgba(196,181,253,0.28);">'
+                +   '<div style="font-size:0.6rem; opacity:0.85; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#c4b5fd; margin-bottom:0.3rem;">🔗 How the two lenses ladder up</div>'
+                +   '<div style="font-size:0.78rem; line-height:1.6;">'
+                +     '<strong style="color:#5eead4;">SubIQ (138K acquired/reactivated)</strong> and <strong style="color:#fca5a5;">Crosswalk panel (618K TVOD-abandoners-who-played)</strong> measure different questions on the same universe of 9.5M Peacock-viewer accounts. '
+                +     'SubIQ counts <em>subscription-acquisition events</em> under strict first-watch attribution — new subs (76K) and 180d+ reactivations (62K) whose acquiring watch was Obsession inside the 30d post-drop window. '
+                +     'Crosswalk counts <em>playback-substitution events</em> at the identified-viewer level — TVOD abandoners who then played on Peacock. Most of the 618K already carried an active Peacock sub before Jul 17 and simply substituted playback destination (paid TVOD → free-with-sub Peacock). '
+                +     'The overlap between the two cohorts is directionally small (~15-25K estimated): a subset of the 138K SubIQ new/reactivated who also touched TVOD pre-Jul-17. '
+                +     '<strong style="color:#c4b5fd;">The two numbers don\'t sum, and they don\'t ladder 1:1 — but both are ground truth for their respective questions.</strong>'
+                +   '</div>'
+                + '</div>';
+
+            var tilesHtml = methodChips + subiqBox + panelBox + reconcileBox;
+
+            var ttcHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">⏳ Time-to-first-play distribution (cumulative, abandoner → Peacock playback)</h4>'
                 + (data.time_to_conversion_distribution || []).map(function(t) {
                     var w = t.share_pct;
                     return '<div style="padding:0.35rem 0.6rem; margin-bottom:0.2rem; display:grid; grid-template-columns:140px 1fr 60px 60px; gap:0.5rem; align-items:center; border-bottom:1px solid rgba(255,255,255,0.04);">'
@@ -70546,7 +71126,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                   }).join('')
                 + '</table></div>';
 
-            var pathHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">🧾 Peacock sign-up path type</h4>'
+            var pathHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">🧾 Peacock sign-up path type — new / reactivated cohort only (' + _jiqObpAbbrevK(top.subiq_new_or_reactivated_subs_k) + ' subs · SubIQ)</h4>'
                 + (data.sub_path_type || []).map(function(pt) {
                     var w = (pt.share_pct / 70) * 100;
                     return '<div style="padding:0.4rem 0.65rem; margin-bottom:0.25rem; border-radius:5px; background:rgba(255,255,255,0.025); border-left:3px solid #14b8a6;">'
@@ -70593,18 +71173,27 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             if (!body) return;
 
             var t = data.acquisition_topline || {};
-            var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.55rem; margin-bottom:0.85rem;">'
+            var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.55rem; margin-bottom:0.55rem;">'
                 + [
-                    { label: 'Signups (30d after Jul 17)', value: _jiqObpAbbrevK(t.signups_30d_after_jul17_k), sub: '+' + t.lift_vs_trailing_8wk_pct.toFixed(1) + '% vs 8-wk baseline · +' + t.lift_vs_2025_pct.toFixed(1) + '% vs 2025', accent: '#ef4444' },
-                    { label: 'Obsession-attributed',        value: t.obsession_attributed_share_pct.toFixed(1) + '%',         sub: _jiqObpAbbrevK(t.obsession_attributed_k) + ' signups · touchpoint in prior 14d', accent: '#ef4444' },
-                    { label: 'Net-new to Peacock',          value: t.net_new_share_of_attributed_pct.toFixed(1) + '%',        sub: _jiqObpAbbrevK(t.net_new_k) + ' signups · never touched Peacock since Jan 2021', accent: '#22c55e' }
+                    { label: 'Signups (30d after Jul 17)', value: _jiqObpAbbrevK(t.signups_30d_after_jul17_k), sub: '+' + t.lift_vs_trailing_8wk_pct.toFixed(1) + '% vs 8-wk baseline · +' + t.lift_vs_2025_pct.toFixed(1) + '% vs 2025', accent: '#ef4444', badge: null },
+                    { label: 'Digital-touchpoint attributed', value: t.obsession_attributed_share_pct.toFixed(1) + '%',         sub: _jiqObpAbbrevK(t.obsession_attributed_k) + ' signups · Obsession touchpoint in prior 14d (broad net)', accent: '#ef4444', badge: 'BROAD ATTRIB.' },
+                    { label: 'Net-new to Peacock',          value: t.net_new_share_of_attributed_pct.toFixed(1) + '%',        sub: _jiqObpAbbrevK(t.net_new_k) + ' signups · never touched Peacock since Jan 2021', accent: '#f59e0b', badge: null },
+                    { label: 'SubIQ first-watch attributed', value: _jiqObpAbbrevK(t.subiq_first_watch_attributed_k),       sub: t.subiq_first_watch_new_k + 'K new + ' + t.subiq_first_watch_reactivated_k + 'K reactivated · ' + t.subiq_first_watch_share_of_signups_pct.toFixed(1) + '% of signups', accent: '#22c55e', badge: 'STRICT / GROUND TRUTH' }
                   ].map(function(x) {
+                    var badgeHtml = x.badge ? ('<span style="font-size:0.5rem; padding:1px 5px; margin-left:5px; background:' + x.accent + '; color:#fff; border-radius:99px; font-weight:800; letter-spacing:0.03em;">' + x.badge + '</span>') : '';
                     return '<div style="padding:0.7rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:4px solid ' + x.accent + ';">'
-                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.07em; font-weight:700;">' + _jiqEsc(x.label) + '</div>'
+                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.07em; font-weight:700;">' + _jiqEsc(x.label) + badgeHtml + '</div>'
                          +   '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:' + x.accent + ';">' + _jiqEsc(x.value) + '</div>'
                          +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.1rem;">' + _jiqEsc(x.sub) + '</div>'
                          + '</div>';
                   }).join('')
+                + '</div>'
+                // Reconciliation strip — why 1.78M ≠ 138K
+                + '<div style="padding:0.7rem 0.9rem; border-radius:7px; margin-bottom:0.85rem;'
+                +      ' background:linear-gradient(135deg, rgba(239,68,68,0.06) 0%, rgba(34,197,94,0.06) 100%);'
+                +      ' border:1px solid rgba(196,181,253,0.28);">'
+                +   '<div style="font-size:0.6rem; opacity:0.85; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#c4b5fd; margin-bottom:0.25rem;">🔗 Why the broad and strict attribution numbers diverge</div>'
+                +   '<div style="font-size:0.76rem; line-height:1.6;">' + _jiqEsc(t.reconciliation_note || '') + '</div>'
                 + '</div>';
 
             var attrHtml = '<h4 style="font-size:0.85rem; margin:0.4rem 0 0.35rem;">🎯 Antecedent touchpoints — share of Obsession-attributed sign-ups</h4>'
@@ -70686,7 +71275,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 + (data.cohorts || []).map(function(c) {
                     return '<div style="padding:0.7rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.025); border-left:4px solid ' + c.color + ';">'
                          +   '<div style="font-size:0.66rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:' + c.color + ';">' + _jiqEsc(c.label) + '</div>'
-                         +   '<div style="font-size:1.35rem; font-weight:900; margin-top:0.15rem;">' + _jiqObpAbbrevM(c.size_m) + ' viewers</div>'
+                         +   '<div style="font-size:1.35rem; font-weight:900; margin-top:0.15rem;">' + _jiqObpAbbrevM(c.size_m) + ' ' + _jiqEsc(c.unit_label || 'viewers') + '</div>'
                          +   '<div style="font-size:0.68rem; opacity:0.75; margin-top:0.2rem; line-height:1.5;">' + _jiqEsc(c.definition) + '</div>'
                          + '</div>';
                   }).join('')
