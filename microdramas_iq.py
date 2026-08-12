@@ -107,6 +107,96 @@ COMPETITOR_SOURCES = [
 
 
 # ============================================================================
+# Platform user-flow calibration
+# ============================================================================
+# Weekly gross-new / gross-churn rates per platform, calibrated so
+# (weekly_new - weekly_churned) / total_users matches published QoQ
+# growth rates:
+#   * Peacock:   +7% QoQ Q2 2026    (NBCU Q2 2026 10-Q)
+#   * ReelShort: ~+40% QoQ mid-2026 (Sensor Tower Q2 2026)
+#   * DramaBox:  ~+15% QoQ          (Sensor Tower Q2 2026)
+#   * GoodShort: ~+10% QoQ          (NewTV disclosures)
+#   * NetShort:  ~+25% QoQ          (Sensor Tower + growth-stage press)
+#
+# Churn rates set per-platform reality:
+#   * Peacock:   ~1.1% weekly (streaming sub churn norm)
+#   * App-based: ~4.5-5.0% weekly (app MAU churn is much higher than
+#                paid-sub churn - people install, sample, uninstall
+#                or go dormant within a month)
+#
+# Gross-new derived from `net + gross_churn` so both directions
+# reconcile cleanly. All numbers are unique users, not sessions.
+#
+# For a look-back window of N days, we scale weekly rates by N/7 -
+# so a 14-day window shows exactly 2x the 7-day figures.
+PLATFORM_USER_FLOW = {
+    'peacock': {
+        'total_users':          34_000_000,   # Q2 2026 paid subs
+        'weekly_new_users':        555_000,   # ~7.2M/quarter gross adds
+        'weekly_churned_users':    375_000,   # ~4.9M/quarter churn
+    },
+    'reelshort': {
+        'total_users':          18_000_000,   # MAU (Q2 2026)
+        'weekly_new_users':      1_350_000,
+        'weekly_churned_users':    810_000,
+    },
+    'dramabox': {
+        'total_users':          13_000_000,
+        'weekly_new_users':        730_000,
+        'weekly_churned_users':    585_000,
+    },
+    'goodshort': {
+        'total_users':           6_000_000,
+        'weekly_new_users':        345_000,
+        'weekly_churned_users':    300_000,
+    },
+    'netshort': {
+        'total_users':           3_000_000,
+        'weekly_new_users':        207_000,
+        'weekly_churned_users':    150_000,
+    },
+}
+
+
+def _user_flow_for_window(source: str, window_days: int) -> Optional[dict]:
+    """Return window-scaled user-flow numbers for a platform.
+
+    Shape:
+      {
+        'total_users':      34_000_000,     # snapshot, not window-scaled
+        'new_users':           1_110_000,   # gross adds in the window
+        'churned_users':         750_000,   # gross churn in the window
+        'net_new':               360_000,   # new - churned
+        'net_growth_pct':          1.06,    # net_new / total_users * 100
+        'window_days':                 7,
+      }
+
+    Weekly rates are scaled linearly by window_days/7 (flat model - a
+    28-day window shows 4x the 7-day figures). If we later add real
+    daily observations of installs/churn, this is the point to swap
+    the flat scaling for a date-summed integral.
+    """
+    cfg = PLATFORM_USER_FLOW.get((source or '').lower())
+    if not cfg:
+        return None
+    window_days = max(1, int(window_days or 7))
+    scale = window_days / 7.0
+    total_users   = int(cfg['total_users'])
+    new_users     = int(round(cfg['weekly_new_users']     * scale))
+    churned_users = int(round(cfg['weekly_churned_users'] * scale))
+    net_new       = new_users - churned_users
+    growth_pct    = (net_new / total_users * 100.0) if total_users > 0 else 0.0
+    return {
+        'total_users':    total_users,
+        'new_users':      new_users,
+        'churned_users':  churned_users,
+        'net_new':        net_new,
+        'net_growth_pct': round(growth_pct, 2),
+        'window_days':    window_days,
+    }
+
+
+# ============================================================================
 # View-estimate calibration
 # ============================================================================
 # Methodology (recalibrated 2026-08-12):
@@ -1847,6 +1937,11 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
         wsum    = p.pop('_paid_wsum', 0.0)
         p['free_to_paid_pct'] = (round(wsum / views_w, 1)
                                   if views_w > 0 else None)
+        # Platform-level user flow scaled to the active window. Powers
+        # the "total users / new subs / cancellations / net growth"
+        # stats grid on each platform card of the All Platforms
+        # rollup. None when the platform isn't in PLATFORM_USER_FLOW.
+        p['user_flow'] = _user_flow_for_window(p['source'], pc_window)
 
     # Small stats block (kept for backward-compat with the header): how
     # many titles from each platform ended up in the trimmed top-N.
