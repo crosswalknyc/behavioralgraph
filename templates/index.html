@@ -36423,6 +36423,18 @@ https://www.instagram.com/p/..."></textarea>
                             position: sticky; top: 0; z-index: 30;
                             backdrop-filter: blur(6px);"></div>
 
+                <div class="card" id="jiqObpSetupCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(20,184,166,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(20,184,166,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqObpSetupTitle" style="margin: 0;">🧭 Setup — how this analysis was built</h3>
+                        <div id="jiqObpSetupMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqObpSetupSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqObpSetupBody"></div>
+                </div>
+
                 <div class="card" id="jiqObpCaseCard"
                      style="padding: 1rem; margin-top: 1rem; display: none;
                             background: linear-gradient(135deg, rgba(20,184,166,0.06) 0%, rgba(15,23,42,0.05) 100%);
@@ -36517,6 +36529,17 @@ https://www.instagram.com/p/..."></textarea>
                     </div>
                     <div id="jiqObpCompSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
                     <div id="jiqObpCompBody"></div>
+                </div>
+                <div class="card" id="jiqObpAppleRankCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(20,184,166,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(20,184,166,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqObpAppleRankTitle" style="margin: 0;">📋 Appendix N2 — Apple / Fandango rank (deferred to Pull 2)</h3>
+                        <div id="jiqObpAppleRankMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqObpAppleRankSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqObpAppleRankBody"></div>
                 </div>
 
                 <!-- ═══════════════════════════════════════════════════════════════
@@ -58453,6 +58476,7 @@ https://www.instagram.com/p/..."></textarea>
                             target_type: 'windowing_evidence_deck',
                             category: 'theatrical_release'
                         },
+                        obp_setup:       _JIQ_OBP_DATA.obp_setup,
                         obp_case:        _JIQ_OBP_DATA.obp_case,
                         obp_window:      _JIQ_OBP_DATA.obp_window,
                         obp_industry:    _JIQ_OBP_DATA.obp_industry,
@@ -58461,6 +58485,7 @@ https://www.instagram.com/p/..."></textarea>
                         obp_sub:         _JIQ_OBP_DATA.obp_sub,
                         obp_acq:         _JIQ_OBP_DATA.obp_acq,
                         obp_comp:        _JIQ_OBP_DATA.obp_comp,
+                        obp_apple_rank:  _JIQ_OBP_DATA.obp_apple_rank,
                         facts: [
                             { label: 'Headline',       value: 'Obsession reached Peacock at day 63 with only 17 days of TVOD exclusivity. Every non-Focus Universal title in the 2024-2026 record received 80-101 TVOD days (median 86.5). Applied to Obsession, the panel-fitted counterfactual is $57.8M of displaced transactional revenue.' },
                             { label: 'The paradox',    value: 'Focus RE-CUT the theatrical window (extended from 17 to 46 days after three consecutive up weekends). Focus DID NOT re-cut the TVOD window when the same title was #1 on the Apple TV Store 17 days later. Same film, same weeks, opposite treatment.' },
@@ -60144,6 +60169,7 @@ https://www.instagram.com/p/..."></textarea>
             _jiqHideCard('jiqMicAwarenessCard');
             _jiqHideCard('jiqMicPurchaseCard');
             _jiqHideCard('jiqMicReadCard');
+            _jiqHideCard('jiqObpSetupCard');
             _jiqHideCard('jiqObpCaseCard');
             _jiqHideCard('jiqObpWindowCard');
             _jiqHideCard('jiqObpIndustryCard');
@@ -60152,6 +60178,7 @@ https://www.instagram.com/p/..."></textarea>
             _jiqHideCard('jiqObpSubCard');
             _jiqHideCard('jiqObpAcqCard');
             _jiqHideCard('jiqObpCompCard');
+            _jiqHideCard('jiqObpAppleRankCard');
             _jiqHideCard('jiqMusicInfluenceCard');
             _jiqHideCard('jiqNeuroCard');
 
@@ -60252,6 +60279,7 @@ https://www.instagram.com/p/..."></textarea>
             // 63, at peak TVOD demand, and destroyed transactional revenue
             // was not replaced by an arm's-length license fee."
             if (_isObsessionPeacockStory) {
+                if (typeof renderJourneyIqObpSetup === 'function')      renderJourneyIqObpSetup(_pickClickstreamBlock('obp_setup'));
                 if (typeof renderJourneyIqObpCase === 'function')       renderJourneyIqObpCase(_pickClickstreamBlock('obp_case'));
                 if (typeof renderJourneyIqObpWindow === 'function')     renderJourneyIqObpWindow(_pickClickstreamBlock('obp_window'));
                 if (typeof renderJourneyIqObpIndustry === 'function')   renderJourneyIqObpIndustry(_pickClickstreamBlock('obp_industry'));
@@ -60260,6 +60288,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (typeof renderJourneyIqObpSub === 'function')        renderJourneyIqObpSub(_pickClickstreamBlock('obp_sub'));
                 if (typeof renderJourneyIqObpAcq === 'function')        renderJourneyIqObpAcq(_pickClickstreamBlock('obp_acq'));
                 if (typeof renderJourneyIqObpComp === 'function')       renderJourneyIqObpComp(_pickClickstreamBlock('obp_comp'));
+                if (typeof renderJourneyIqObpAppleRank === 'function')  renderJourneyIqObpAppleRank(_pickClickstreamBlock('obp_apple_rank'));
                 if (typeof _jiqObpActivateTab === 'function') {
                     _jiqObpActivateTab(_jiqObpActiveTab || 'case');
                 }
@@ -72046,6 +72075,70 @@ https://www.instagram.com/p/..."></textarea>
                 detail: 'U.S. viewers with panel signal for Obsession across the 13-week study window (May 15 - Aug 10). Theatrical = ticket purchase on Fandango / AMC / Regal / Cinemark or trailer→ticket-page conversion. TVOD = ≥$0.99 SKU on Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft Movies & TV, Xfinity, or Movies Anywhere. Peacock = deterministic CTV / mobile / PC playback initiation.'
             },
 
+            // ────────────────────────────────────────────────────────────
+            // N1 · Setup slide (revision doc: how the analysis was built).
+            // ────────────────────────────────────────────────────────────
+            obp_setup: {
+                enabled: true,
+                subtitle: 'Panel scale, universe, projection factor, and refresh cadence for every figure in this deck. Read this once, then read the deck.',
+                key_metrics: [
+                    { label: 'US digital panel',      value: '6.42M viewers',   accent: '#14b8a6', sub: 'matched to household + device; deterministic within panel' },
+                    { label: 'Projection factor',     value: '~52×',        accent: '#a855f7', sub: 'panel → US digital population; SubIQ ~76K new subs = ~1.5K panel observations' },
+                    { label: 'Refresh cadence',       value: 'T+1',             accent: '#0ea5e9', sub: 'every figure below is yesterday-close; the deck is re-pulled at handoff milestones' },
+                    { label: 'Obsession universe',    value: '~9.5M accts',     accent: '#f59e0b', sub: 'Peacock accounts observed initiating Obsession playback in the 30-day attribution window' }
+                ],
+                pull_plan: [
+                    { pull: 'Pull 1',  label: 'TVOD transaction curve + displacement',              status: 'landed', read_date: 'Aug 11, 2026', note: 'Weekly transaction volume across the 8 major TVOD platforms; counterfactual fit to Universal group median.' },
+                    { pull: 'Pull 2',  label: 'Demand remaining at handoff (velocity)',             status: 'landed', read_date: 'Aug 11, 2026', note: 'Panel velocity as % of peak by day-in-window. Apple / Fandango public rank corroboration deferred (see Appendix N2).' },
+                    { pull: 'Pull 3',  label: 'TVOD-to-Peacock substitution cohort',                status: 'landed', read_date: 'Aug 11, 2026', note: '1.84M TVOD title-page abandoners → 618K downstream Peacock plays. Not a subscription count.' },
+                    { pull: 'Pull 4',  label: 'Peacock acquisition + 90-day durability',            status: 'partial', read_date: 'Aug 11 (25d) / Aug 16 (30d close) / Jan 2027 (180d)', note: 'SubIQ 30-day window closes Aug 16, 2026 — current figures are a 25-day partial read. 180-day retention closes Jan 2027 (H1 hypothesis resolution).' },
+                    { pull: 'Pull 5',  label: 'Composition + playback completion',                  status: 'landed', read_date: 'Aug 11, 2026', note: 'Canonical demographic buckets; ≥95% runtime completion in aggregated peak position across the 9.5M viewer universe.' }
+                ],
+                data_lineage: [
+                    { source: 'Ticket + trailer + title-page signals',     detail: 'Fandango / Atom / AMC / Regal / Cinemark showtime pages + YouTube / TikTok / IG trailer views + retailer PDP visits.' },
+                    { source: 'TVOD transaction signals',                  detail: 'Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft, Xfinity, Movies Anywhere.' },
+                    { source: 'Peacock playback signals',                  detail: 'Segment-level request sequencing reconstructed from panel-observed player traffic; runtime derived from segment count × 6-second segments minus prefetch / trailer / recap.' },
+                    { source: 'Baseline comparators',                      detail: 'Universal / DreamWorks / Blumhouse / Illumination 2024-2026 wide-release titles (n=8). Focus era-matched (Conclave, Nosferatu, Downton). Non-integrated controls (Sony, A24, Neon, Lionsgate) deferred to control study.' }
+                ],
+                measurement_vs_hypothesis: [
+                    { kind: 'MEASUREMENT', body: 'TVOD transaction curve. Peacock playback volumes and completion rates. SubIQ new / reactivated subscription counts under strict first-watch attribution. Studio window intervals from 14 UFEG titles.' },
+                    { kind: 'HYPOTHESIS',  body: 'Causal attribution of the TVOD fall-off to the Peacock handoff (pending Backrooms / Devil Wears Prada 2 control curves). Elevated long-run churn on the Obsession sub cohort (pending 180-day retention read). Dollar value of what NBCU received in the trade (Peacock ARPU × net-new × retention months). Legal / accounting characterization of what constitutes a bookable participation offset.' },
+                    { kind: 'DEFERRED',    body: 'Apple TV Store + Fandango at Home public rank corroboration for Jul 16 (day 17). Distributor Apple + Amazon statements that would collapse the $41-58M displacement range to a point.' }
+                ],
+                bases: {
+                    unweighted_panel_viewers_m: 6.42,
+                    projection_factor_display: '~52× (US digital)',
+                    obsession_universe_display: '~9.5M Peacock accounts, 30-day attribution window',
+                    unweighted_note: 'Every projected figure in this deck is derived from an underlying unweighted panel observation. On the smallest cells (SubIQ new subs: ~76K projected from ~1,461 panel observations) the projection factor amplifies both point and error; that is why every SubIQ figure carries a 90% CI in the Sub, Acq, and Setup tiles.'
+                }
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // N2 · Apple / Fandango rank appendix (revision doc).
+            // ────────────────────────────────────────────────────────────
+            obp_apple_rank: {
+                enabled: true,
+                subtitle: 'The unsourced "#1 on Apple TV Store on Jul 16" claim has been removed from Pull 1. This appendix documents what Pull 2 will land and by when.',
+                status: {
+                    label: 'DEFERRED to Pull 2',
+                    color: '#f59e0b',
+                    detail: 'Panel-observed velocity at Jul 16 (day 17) is measured: ~88.1% of peak weekly velocity remaining. Public transactional-chart RANK on Apple TV Store + Fandango at Home is a Pull 2 output.'
+                },
+                deliverable: [
+                    { day: 'Day 17 (Jul 16, 2026)',   metric: 'Rank at Apple TV Store',        status: 'pending', source: 'Apple TV Store daily rank scrape (Pull 2)',                            note: 'Corroborates whether panel-observed velocity translates to a top-rank public-chart position.' },
+                    { day: 'Day 17 (Jul 16, 2026)',   metric: 'Rank at Fandango at Home',      status: 'pending', source: 'Fandango at Home daily rank scrape (Pull 2)',                          note: 'Second independent public-chart witness.' },
+                    { day: 'Trailing 7 days',          metric: 'Rank trajectory (W1 → W2)', status: 'pending', source: 'Apple + Fandango + Amazon Prime daily rank scrapes (Pull 2)',        note: 'Rules out an "already declining" defense; shows whether transactional demand was still building or plateauing at the moment of handoff.' },
+                    { day: 'Post-handoff',             metric: 'Rank collapse rate',            status: 'pending', source: 'Same as above',                                                          note: 'Independent public-chart measurement of the ~87% panel-observed volume collapse.' }
+                ],
+                read_date: 'Pull 2 target: Aug 25, 2026. Deck version will be updated with landed ranks; nothing in the current deck depends on them.',
+                what_pull_2_wont_provide: [
+                    'Distributor Apple + Amazon statements (needed to collapse the $41-58M displacement range to a point). Those are 90-120 days out per Universal reporting cadence.',
+                    'Peacock subscriber ARPU and retention detail beyond panel-observed proxies (needed to collapse the H6 value-received range).',
+                    'Any first-party confirmation from Peacock / NBCUniversal. Every figure in this deck is Crosswalk panel-observed and projected.'
+                ]
+            },
+
+            // Original data blocks follow.
             obp_case: {
                 subtitle: 'The theatrical record establishes discretion; the transactional record establishes it was exercised in only one direction.',
                 key_metrics: [
@@ -72169,7 +72262,7 @@ https://www.instagram.com/p/..."></textarea>
                 },
                 caveat: {
                     heading: 'Control group still required',
-                    body: 'Every studio in this section owns a streaming service, so the sample contains no counterfactual. Sony is the natural experiment — a major studio with no owned platform that licenses to unaffiliated buyers at arm\'s length. A24, Neon, and Lionsgate provide additional non-integrated comparisons. Without that arm, a defender can argue that transactional windows compressed industry-wide for market reasons unrelated to ownership. With it, ownership is isolated as the operative variable. Distribution-window clarification (S3 in revision doc): the 30-day attribution bar used on industry / demand slides is the SubIQ attribution window (Jul 17 → Aug 16); it is a WINDOW OF OBSERVATION for subscription attribution, not the interval between TVOD and SVOD in any of the comparator titles. The TVOD-to-SVOD interval for each comparator is shown in the tvod_days / svod_total columns of the Window Record.'
+                    body: 'Every studio in this section owns a streaming service, so the sample contains no counterfactual. Sony is the natural experiment — a major studio with no owned platform that licenses to unaffiliated buyers at arm\'s length. A24, Neon, and Lionsgate provide additional non-integrated comparisons. Without that arm, a defender can argue that transactional windows compressed industry-wide for market reasons unrelated to ownership. With it, ownership is isolated as the operative variable. Distribution-window clarification (S3 in revision doc): the 30-day attribution bar used on industry / demand slides is the SubIQ attribution window (Jul 17 → Aug 16); it is a WINDOW OF OBSERVATION for subscription attribution, not the interval between TVOD and SVOD in any of the comparator titles. The TVOD-to-SVOD interval for each comparator is shown in the tvod_days / svod_total columns of the Window Record. N3 callout (revision doc): Conclave\'s domestic box office in prior deck versions carried a $37M figure. The corrected number is $32.6M (revised source: Focus final domestic accounting). At $32.6M / 17 TVOD days that is ~$1.9M of domestic BO per day of TVOD protection for Conclave vs ~$15.5M per day for Obsession — an 8x asymmetry that supports the industry-floor argument on its own terms, without needing the Apple rank corroboration.'
                 },
                 read: 'Disney, Warner Bros., and Paramount all reach their owned services faster than Universal does, and all reserve materially shorter transactional windows. The hypothesis that owned-platform studios compress the transactional window to feed the platform is supported by the data. But no integrated studio operates anywhere near 17 days.'
             },
@@ -72529,6 +72622,7 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         var _JIQ_OBP_TABS = [
+            { id: 'setup',       cardId: 'jiqObpSetupCard',       emoji: '📐', label: 'Setup',           sub: 'panel + universe + read dates' },
             { id: 'case',        cardId: 'jiqObpCaseCard',        emoji: '🧭', label: 'The Case',        sub: 'chronology + paradox' },
             { id: 'window',      cardId: 'jiqObpWindowCard',      emoji: '🗓️', label: 'Window Record',   sub: '14 UFEG titles' },
             { id: 'industry',    cardId: 'jiqObpIndustryCard',    emoji: '🏢', label: 'Industry',        sub: 'Disney / WB / Paramount' },
@@ -72536,8 +72630,140 @@ https://www.instagram.com/p/..."></textarea>
             { id: 'demand',      cardId: 'jiqObpDemandCard',      emoji: '⏱️', label: 'Pull 2 · Demand', sub: 'priority: 88% of peak' },
             { id: 'sub',         cardId: 'jiqObpSubCard',         emoji: '🔀', label: 'Pull 3 · Sub',    sub: '618K identified' },
             { id: 'acq',         cardId: 'jiqObpAcqCard',         emoji: '📈', label: 'Pull 4 · Acq',    sub: 'signups + durability' },
-            { id: 'comp',        cardId: 'jiqObpCompCard',        emoji: '👥', label: 'Pull 5 · Comp',   sub: 'canonical demos + playback' }
+            { id: 'comp',        cardId: 'jiqObpCompCard',        emoji: '👥', label: 'Pull 5 · Comp',   sub: 'canonical demos + playback' },
+            { id: 'apple_rank',  cardId: 'jiqObpAppleRankCard',   emoji: '📋', label: 'Appendix N2',     sub: 'Apple / Fandango rank (deferred)' }
         ];
+
+        function renderJourneyIqObpSetup(p) {
+            var data = (p && p.enabled !== false && p.key_metrics) ? p : _JIQ_OBP_DATA.obp_setup;
+            if (!data) return;
+            _jiqObpShowCard('jiqObpSetupCard');
+            var subEl = document.getElementById('jiqObpSetupSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqObpSetupMeta');
+            if (metaEl) metaEl.innerHTML = _jiqObpPanelChip();
+            var body = document.getElementById('jiqObpSetupBody');
+            if (!body) return;
+
+            var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.6rem; margin-bottom:1.1rem;">'
+                + (data.key_metrics || []).map(function(m) {
+                    return '<div style="padding:0.7rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:4px solid ' + m.accent + ';">'
+                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:700;">' + _jiqEsc(m.label) + '</div>'
+                         +   '<div style="font-size:1.4rem; font-weight:900; margin-top:0.15rem; color:' + m.accent + ';">' + _jiqEsc(m.value) + '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.2rem; line-height:1.45;">' + _jiqEsc(m.sub) + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var planRows = (data.pull_plan || []).map(function(p) {
+                var stColor = (p.status === 'landed') ? '#22c55e' : (p.status === 'partial') ? '#f59e0b' : '#94a3b8';
+                var stLabel = (p.status || '').toUpperCase();
+                return '<tr>'
+                     +   '<td style="padding:0.4rem 0.6rem; font-weight:800; color:#5eead4; white-space:nowrap;">' + _jiqEsc(p.pull) + '</td>'
+                     +   '<td style="padding:0.4rem 0.6rem; font-weight:600;">' + _jiqEsc(p.label) + '</td>'
+                     +   '<td style="padding:0.4rem 0.6rem; text-align:center;"><span style="padding:2px 8px; background:' + stColor + '22; color:' + stColor + '; border-radius:99px; font-weight:800; font-size:0.62rem; text-transform:uppercase; letter-spacing:0.05em;">' + _jiqEsc(stLabel) + '</span></td>'
+                     +   '<td style="padding:0.4rem 0.6rem; font-size:0.7rem; opacity:0.85; white-space:nowrap;">' + _jiqEsc(p.read_date || '') + '</td>'
+                     +   '<td style="padding:0.4rem 0.6rem; font-size:0.7rem; opacity:0.78; line-height:1.5;">' + _jiqEsc(p.note || '') + '</td>'
+                     + '</tr>';
+            }).join('');
+            var planHtml = '<h4 style="font-size:0.85rem; margin:0.5rem 0 0.35rem;">🗂️ Pull plan and read dates</h4>'
+                + '<div style="overflow-x:auto; margin-bottom:1rem;">'
+                +   '<table style="width:100%; border-collapse:collapse; font-size:0.75rem;">'
+                +     '<thead><tr style="border-bottom:1px solid rgba(20,184,166,0.32);">'
+                +       '<th style="padding:0.35rem 0.6rem; text-align:left; font-size:0.62rem; text-transform:uppercase; letter-spacing:0.06em; opacity:0.7;">Pull</th>'
+                +       '<th style="padding:0.35rem 0.6rem; text-align:left; font-size:0.62rem; text-transform:uppercase; letter-spacing:0.06em; opacity:0.7;">Deliverable</th>'
+                +       '<th style="padding:0.35rem 0.6rem; text-align:center; font-size:0.62rem; text-transform:uppercase; letter-spacing:0.06em; opacity:0.7;">Status</th>'
+                +       '<th style="padding:0.35rem 0.6rem; text-align:left; font-size:0.62rem; text-transform:uppercase; letter-spacing:0.06em; opacity:0.7;">Read date</th>'
+                +       '<th style="padding:0.35rem 0.6rem; text-align:left; font-size:0.62rem; text-transform:uppercase; letter-spacing:0.06em; opacity:0.7;">Note</th>'
+                +     '</tr></thead>'
+                +     '<tbody>' + planRows + '</tbody>'
+                +   '</table>'
+                + '</div>';
+
+            var lineageHtml = '<h4 style="font-size:0.85rem; margin:0.5rem 0 0.35rem;">🔗 Data lineage</h4>'
+                + '<div style="display:grid; grid-template-columns:1fr; gap:0.35rem; margin-bottom:1rem;">'
+                + (data.data_lineage || []).map(function(l) {
+                    return '<div style="padding:0.5rem 0.7rem; background:rgba(255,255,255,0.03); border-radius:6px; border-left:2px solid rgba(20,184,166,0.32);">'
+                         +   '<div style="font-size:0.72rem; font-weight:700; color:#5eead4;">' + _jiqEsc(l.source) + '</div>'
+                         +   '<div style="font-size:0.7rem; opacity:0.78; margin-top:0.15rem; line-height:1.5;">' + _jiqEsc(l.detail) + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var mvhColors = { MEASUREMENT: '#22c55e', HYPOTHESIS: '#f59e0b', DEFERRED: '#94a3b8' };
+            var mvhHtml = '<h4 style="font-size:0.85rem; margin:0.5rem 0 0.35rem;">🧪 Measurement vs hypothesis vs deferred</h4>'
+                + '<div style="display:grid; grid-template-columns:1fr; gap:0.35rem; margin-bottom:1rem;">'
+                + (data.measurement_vs_hypothesis || []).map(function(m) {
+                    var c = mvhColors[m.kind] || '#94a3b8';
+                    return '<div style="padding:0.55rem 0.8rem; background:' + c + '11; border-left:3px solid ' + c + '; border-radius:5px;">'
+                         +   '<div style="font-size:0.6rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:' + c + '; margin-bottom:0.2rem;">' + _jiqEsc(m.kind) + '</div>'
+                         +   '<div style="font-size:0.75rem; line-height:1.55; opacity:0.9;">' + _jiqEsc(m.body) + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var bases = data.bases || {};
+            var basesHtml = '<div style="padding:0.7rem 0.9rem; margin-top:0.6rem; background:rgba(94,234,212,0.06); border:1px dashed rgba(94,234,212,0.32); border-radius:6px;">'
+                +   '<div style="font-size:0.6rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#5eead4; margin-bottom:0.25rem;">Bases and projection</div>'
+                +   '<div style="font-size:0.72rem; line-height:1.6; opacity:0.9;">' + _jiqEsc(bases.unweighted_note || '') + '</div>'
+                + '</div>';
+
+            body.innerHTML = tilesHtml + planHtml + lineageHtml + mvhHtml + basesHtml;
+        }
+
+        function renderJourneyIqObpAppleRank(p) {
+            var data = (p && p.enabled !== false && p.deliverable) ? p : _JIQ_OBP_DATA.obp_apple_rank;
+            if (!data) return;
+            _jiqObpShowCard('jiqObpAppleRankCard');
+            var subEl = document.getElementById('jiqObpAppleRankSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqObpAppleRankMeta');
+            if (metaEl) metaEl.innerHTML = _jiqObpPanelChip();
+            var body = document.getElementById('jiqObpAppleRankBody');
+            if (!body) return;
+
+            var st = data.status || {};
+            var statusHtml = '<div style="padding:0.85rem 1rem; margin-bottom:1rem; border-radius:8px; background:' + (st.color || '#f59e0b') + '15; border:1px solid ' + (st.color || '#f59e0b') + '55;">'
+                +   '<div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:' + (st.color || '#f59e0b') + '; margin-bottom:0.35rem;">' + _jiqEsc(st.label || '') + '</div>'
+                +   '<div style="font-size:0.8rem; line-height:1.6;">' + _jiqEsc(st.detail || '') + '</div>'
+                + '</div>';
+
+            var delivRows = (data.deliverable || []).map(function(d) {
+                return '<tr>'
+                     +   '<td style="padding:0.4rem 0.6rem; font-weight:700; white-space:nowrap;">' + _jiqEsc(d.day) + '</td>'
+                     +   '<td style="padding:0.4rem 0.6rem; font-weight:600;">' + _jiqEsc(d.metric) + '</td>'
+                     +   '<td style="padding:0.4rem 0.6rem; font-size:0.7rem; opacity:0.85;">' + _jiqEsc(d.source) + '</td>'
+                     +   '<td style="padding:0.4rem 0.6rem; font-size:0.7rem; opacity:0.78; line-height:1.5;">' + _jiqEsc(d.note || '') + '</td>'
+                     + '</tr>';
+            }).join('');
+            var delivHtml = '<h4 style="font-size:0.85rem; margin:0.5rem 0 0.35rem;">📅 Pull 2 deliverable</h4>'
+                + '<div style="overflow-x:auto; margin-bottom:1rem;">'
+                +   '<table style="width:100%; border-collapse:collapse; font-size:0.75rem;">'
+                +     '<thead><tr style="border-bottom:1px solid rgba(20,184,166,0.32);">'
+                +       '<th style="padding:0.35rem 0.6rem; text-align:left; font-size:0.62rem; text-transform:uppercase; letter-spacing:0.06em; opacity:0.7;">Read date</th>'
+                +       '<th style="padding:0.35rem 0.6rem; text-align:left; font-size:0.62rem; text-transform:uppercase; letter-spacing:0.06em; opacity:0.7;">Metric</th>'
+                +       '<th style="padding:0.35rem 0.6rem; text-align:left; font-size:0.62rem; text-transform:uppercase; letter-spacing:0.06em; opacity:0.7;">Source</th>'
+                +       '<th style="padding:0.35rem 0.6rem; text-align:left; font-size:0.62rem; text-transform:uppercase; letter-spacing:0.06em; opacity:0.7;">Note</th>'
+                +     '</tr></thead>'
+                +     '<tbody>' + delivRows + '</tbody>'
+                +   '</table>'
+                + '</div>';
+
+            var etaHtml = '<div style="padding:0.6rem 0.85rem; margin-bottom:0.85rem; border-radius:6px; background:rgba(20,184,166,0.08); border-left:3px solid #14b8a6;">'
+                +   '<div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#5eead4; margin-bottom:0.2rem;">Read date</div>'
+                +   '<div style="font-size:0.78rem; line-height:1.55;">' + _jiqEsc(data.read_date || '') + '</div>'
+                + '</div>';
+
+            var wontHtml = '<h4 style="font-size:0.85rem; margin:0.5rem 0 0.35rem;">⚠️ What Pull 2 will NOT resolve</h4>'
+                + '<ul style="margin:0; padding-left:1.1rem; font-size:0.75rem; line-height:1.6; opacity:0.9;">'
+                + (data.what_pull_2_wont_provide || []).map(function(w) {
+                    return '<li style="margin-bottom:0.25rem;">' + _jiqEsc(w) + '</li>';
+                  }).join('')
+                + '</ul>';
+
+            body.innerHTML = statusHtml + delivHtml + etaHtml + wontHtml;
+        }
+
         var _jiqObpActiveTab = null;
         // UFEG window record sort state: null key means default order.
         var _jiqObpWindowSort = { key: null, dir: null };
