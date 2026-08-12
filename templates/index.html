@@ -44647,7 +44647,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     var freeTip = 'Share of viewers who watch through the free tier'
                                 + (freeEps ? ' (ep 1 through ep ' + freeEps + ')' : '');
                     parts.push('<span class="miq-comp-chip miq-chip-completion" title="' + _miqEscape(freeTip) + '">'
-                             +   '<span class="miq-comp-chip-label">Free done</span>'
+                             +   '<span class="miq-comp-chip-label">Free Completion</span>'
                              +   '<span class="miq-comp-chip-value">' + Math.round(c.free_completion_pct) + '%</span>'
                              + '</span>');
                 }
@@ -44656,6 +44656,13 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     parts.push('<span class="miq-comp-chip miq-chip-payer" title="' + _miqEscape(payTip) + '">'
                              +   '<span class="miq-comp-chip-label">Payers</span>'
                              +   '<span class="miq-comp-chip-value">' + Math.round(c.paid_pct) + '%</span>'
+                             + '</span>');
+                }
+                if (c.payer_completion_pct != null) {
+                    var payerCompTip = 'Of viewers who paid at least one ep, share who finish the whole series';
+                    parts.push('<span class="miq-comp-chip miq-chip-series" title="' + _miqEscape(payerCompTip) + '">'
+                             +   '<span class="miq-comp-chip-label">Payer Completion</span>'
+                             +   '<span class="miq-comp-chip-value">' + Math.round(c.payer_completion_pct) + '%</span>'
                              + '</span>');
                 }
             }
@@ -45772,10 +45779,11 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 items.push({ k: 'Series completion', v: Math.round(comp.series_completion_pct) + '%', hint: 'Finish all ' + comp.total_episodes + ' episodes' });
                 items.push({ k: 'Total episodes',    v: comp.total_episodes });
             } else {
-                items.push({ k: 'Free-tier completion',  v: Math.round(comp.free_completion_pct) + '%', hint: 'Watch to end of free eps (' + comp.free_episodes + ')' });
-                items.push({ k: 'Payer conversion',      v: Math.round(comp.paywall_conversion_pct) + '%', hint: 'Of free-tier completers, watch at least one paid ep' });
-                items.push({ k: 'Payers (of viewers)',   v: Math.round(comp.paid_pct) + '%', hint: 'Watch at least one post-paywall ep' });
-                items.push({ k: 'Series completion',     v: (comp.series_completion_pct < 1 ? comp.series_completion_pct.toFixed(1) : Math.round(comp.series_completion_pct)) + '%', hint: 'Finish all ' + comp.total_episodes + ' episodes' });
+                items.push({ k: 'Free Completion',       v: Math.round(comp.free_completion_pct) + '%', hint: 'Share of viewers who watch to end of free eps (' + comp.free_episodes + ')' });
+                items.push({ k: 'Payer Conversion',      v: Math.round(comp.paywall_conversion_pct) + '%', hint: 'Of free-tier completers, share who cross the paywall and watch at least one paid ep' });
+                items.push({ k: 'Payers (of viewers)',   v: Math.round(comp.paid_pct) + '%', hint: 'Share of ALL viewers who watch at least one post-paywall ep' });
+                items.push({ k: 'Payer Completion',      v: Math.round(comp.payer_completion_pct) + '%', hint: 'Of viewers who paid at least one ep, share who finish the whole series (' + comp.total_episodes + ' eps)' });
+                items.push({ k: 'Series Completion',     v: (comp.series_completion_pct < 1 ? comp.series_completion_pct.toFixed(1) : Math.round(comp.series_completion_pct)) + '%', hint: 'Share of ALL viewers who finish all ' + comp.total_episodes + ' episodes' });
             }
             return items.map(function(it) {
                 var hint = it.hint ? ' title="' + _miqEscape(it.hint) + '"' : '';
