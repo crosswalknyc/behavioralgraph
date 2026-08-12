@@ -733,6 +733,96 @@
             margin: 0.3rem 0;
         }
 
+        /* How-To Videos submenu (nested under the user dropdown) */
+        .user-dropdown-submenu {
+            display: none;
+            overflow: hidden;
+        }
+        .user-dropdown-submenu.open { display: block; }
+        .user-dropdown-subitem {
+            display: block;
+            width: 100%;
+            padding: 0.5rem 1rem 0.5rem 1.9rem;
+            color: var(--text-secondary);
+            font-size: 0.84rem;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.12s, color 0.12s;
+            background: none;
+            border: none;
+            text-align: left;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+        .user-dropdown-subitem:hover {
+            background: rgba(255,255,255,0.07);
+            color: var(--text-primary);
+        }
+        .user-dropdown-caret {
+            float: right;
+            transition: transform 0.18s ease;
+            font-size: 0.7rem;
+            opacity: 0.7;
+        }
+        .user-dropdown-item.open .user-dropdown-caret { transform: rotate(180deg); }
+
+        /* How-To video modal */
+        .howto-video-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(5, 12, 22, 0.8);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100000;
+            padding: 2rem;
+        }
+        .howto-video-overlay.show { display: flex; }
+        .howto-video-modal {
+            width: 48vw;
+            min-width: 360px;
+            max-width: 860px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+            overflow: hidden;
+            animation: howto-modal-pop 0.2s ease-out;
+        }
+        @keyframes howto-modal-pop {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .howto-video-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .howto-video-header h2 {
+            font-size: 0.95rem;
+            color: var(--accent-cyan);
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            margin: 0;
+        }
+        .howto-video-close {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            transition: color 0.2s, background 0.2s;
+        }
+        .howto-video-close:hover { color: var(--text-primary); background: rgba(255,255,255,0.07); }
+        .howto-video-modal video { display: block; width: 100%; height: auto; background: #000; }
+        @media (max-width: 900px) { .howto-video-modal { width: 90vw; } }
+
         /* Methodology modal */
         .methodology-header {
             display: flex;
@@ -18642,6 +18732,19 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
         </div>
     </div>
 
+    <!-- How-To video modal -->
+    <div class="howto-video-overlay" id="howToVideoOverlay">
+        <div class="howto-video-modal">
+            <div class="howto-video-header">
+                <h2 id="howToVideoTitle">How-To Video</h2>
+                <button type="button" class="howto-video-close" id="howToVideoClose" aria-label="Close">&times;</button>
+            </div>
+            <video id="howToVideoPlayer" controls playsinline preload="metadata">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+    </div>
+
     <!-- Methodology modal -->
     <div id="methodologyModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeMethodologyModal()">
         <div class="modal-content methodology-modal-content" style="max-width: 1100px; width: 92vw; max-height: 88vh; overflow: hidden; display: flex; flex-direction: column; padding: 0;">
@@ -18717,6 +18820,10 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                                     <div class="user-dropdown-divider"></div>
                                     <a class="user-dropdown-item" href="/download" target="_blank" rel="noopener">Download Desktop App</a>
                                     <button type="button" class="user-dropdown-item" id="btnOpenMethodology">Methodology</button>
+                                    <button type="button" class="user-dropdown-item" id="btnHowToVideos" aria-expanded="false">How-To Videos<span class="user-dropdown-caret">&#9662;</span></button>
+                                    <div class="user-dropdown-submenu" id="howToVideosSubmenu">
+                                        <button type="button" class="user-dropdown-subitem" data-howto-video="{{ url_for('static', filename='videos/subscriber-iq.mp4') }}" data-howto-title="Subscriber IQ">Subscriber IQ</button>
+                                    </div>
                                     <div class="user-dropdown-divider"></div>
                                     <a class="user-dropdown-item" href="/logout">Logout</a>
                                 </div>
@@ -38248,6 +38355,45 @@ https://www.instagram.com/p/..."></textarea>
                         if (typeof window.openMethodologyModal === 'function') window.openMethodologyModal();
                     });
                 }
+
+                // How-To Videos submenu toggle + video modal
+                var btnHowTo = document.getElementById('btnHowToVideos');
+                var howToSubmenu = document.getElementById('howToVideosSubmenu');
+                if (btnHowTo && howToSubmenu) {
+                    btnHowTo.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        var isOpen = howToSubmenu.classList.toggle('open');
+                        btnHowTo.classList.toggle('open', isOpen);
+                        btnHowTo.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                    });
+                }
+                var howToOverlay = document.getElementById('howToVideoOverlay');
+                var howToPlayer = document.getElementById('howToVideoPlayer');
+                var howToTitle = document.getElementById('howToVideoTitle');
+                var howToClose = document.getElementById('howToVideoClose');
+                function openHowToVideo(src, title) {
+                    if (!howToOverlay || !howToPlayer) return;
+                    howToPlayer.src = src;
+                    if (howToTitle) howToTitle.textContent = title || 'How-To Video';
+                    howToOverlay.classList.add('show');
+                    try { howToPlayer.currentTime = 0; } catch (err) {}
+                    var p = howToPlayer.play(); if (p && p.catch) p.catch(function(){});
+                }
+                function closeHowToVideo() {
+                    if (!howToOverlay || !howToPlayer) return;
+                    howToOverlay.classList.remove('show');
+                    howToPlayer.pause();
+                }
+                Array.prototype.forEach.call(document.querySelectorAll('[data-howto-video]'), function(el) {
+                    el.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        dropdown.classList.remove('open');
+                        openHowToVideo(el.getAttribute('data-howto-video'), el.getAttribute('data-howto-title'));
+                    });
+                });
+                if (howToClose) howToClose.addEventListener('click', function(e) { e.stopPropagation(); closeHowToVideo(); });
+                if (howToOverlay) howToOverlay.addEventListener('click', function(e) { if (e.target === howToOverlay) closeHowToVideo(); });
+                document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeHowToVideo(); });
             });
         })();
 
