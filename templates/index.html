@@ -25685,6 +25685,87 @@ https://www.instagram.com/p/..."></textarea>
             }
             // ------------------------------------------------------------
 
+            // ------------------------------------------------------------
+            // // __IIQ_TAB_VISIBILITY_v1__
+            // Per-title tab visibility. Reads overview.enabled_tabs
+            // (populated by _apply_title_type_defaults / the ingest agent)
+            // and hides top-level buttons + inner Performance sub-tabs
+            // that are explicitly disabled. Missing key = enabled (so
+            // existing film titles are unchanged).
+            //
+            // Top-level key mapping is 1:1 with data-iiq-subtab attribute
+            // values (overview / assets / questions / inflight /
+            // conversion). Inner qid mapping to enabled_tabs key:
+            //
+            //     q1                -> q1_engagement
+            //     q2                -> q2_paid_vs_organic
+            //     audiences         -> audiences
+            //     q3                -> q3_intent_to_buy
+            //     q4                -> q4_talent
+            //     q5                -> q5_trailer
+            //     q6                -> q6_cohorts
+            //     journey           -> journey
+            window._IIQ_QID_TO_ETKEY = {
+                q1:         'q1_engagement',
+                q2:         'q2_paid_vs_organic',
+                audiences:  'audiences',
+                q3:         'q3_intent_to_buy',
+                q4:         'q4_talent',
+                q5:         'q5_trailer',
+                q6:         'q6_cohorts',
+                journey:    'journey'
+            };
+            window._iiqEnabledTabs = function() {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                return ov.enabled_tabs || null;   // null = no per-title config (film default)
+            };
+            window._iiqTabEnabled = function(key) {
+                var et = window._iiqEnabledTabs();
+                if (!et) return true;   // no per-title config -> everything enabled (film default)
+                if (!(key in et)) return true;   // missing key -> enabled (safe default)
+                return et[key] !== false;
+            };
+            window._iiqQidEnabled = function(qid) {
+                var et = window._iiqEnabledTabs();
+                if (!et) return true;
+                var etKey = window._IIQ_QID_TO_ETKEY[qid] || qid;
+                if (!(etKey in et)) return true;
+                return et[etKey] !== false;
+            };
+            window._iiqApplyTopLevelTabVisibility = function() {
+                try {
+                    var buttons = document.querySelectorAll('#intentIQView .iiq-subtab');
+                    var firstEnabled = null;
+                    var currentHidden = false;
+                    Array.prototype.forEach.call(buttons, function(btn) {
+                        var key = btn.getAttribute('data-iiq-subtab');
+                        var on = window._iiqTabEnabled(key);
+                        btn.style.display = on ? '' : 'none';
+                        if (on && !firstEnabled) firstEnabled = key;
+                        if (!on && btn.classList.contains('active')) currentHidden = true;
+                    });
+                    // Also hide the corresponding panel wrapper
+                    Array.prototype.forEach.call(
+                        document.querySelectorAll('#intentIQView [id^="iiqPanel-"]'),
+                        function(panel) {
+                            var key = panel.id.replace('iiqPanel-', '');
+                            if (!window._iiqTabEnabled(key)) {
+                                panel.style.display = 'none';
+                                panel.classList.remove('active');
+                            }
+                        }
+                    );
+                    // If the active tab was hidden, fall back to the first
+                    // enabled tab (overview if it exists, else whatever).
+                    if (currentHidden && firstEnabled && typeof showIntentIQSubtab === 'function') {
+                        showIntentIQSubtab(firstEnabled);
+                    }
+                } catch (e) {
+                    console.warn('iiq top-level tab visibility failed', e);
+                }
+            };
+            // ------------------------------------------------------------
+
 
             function _iiqHideAllOtherViews() {
                 // 2026-07-28: delegate to the canonical helper defined
@@ -25764,6 +25845,7 @@ https://www.instagram.com/p/..."></textarea>
                     populateAssetFilterDropdowns();
                     reloadIntentIQAssets();
                     try { _iiqApplyBrandLabels(); } catch(_e) {}
+                    try { _iiqApplyTopLevelTabVisibility(); } catch(_e) {}
                     document.getElementById('iiqStatus').textContent = 'Loaded ' + slug + '.';
                 }).catch(function(e) {
                     document.getElementById('iiqStatus').textContent = 'Load failed: ' + (e.message || e);
@@ -31367,11 +31449,13 @@ https://www.instagram.com/p/..."></textarea>
                 if (window.__intentIQAssetCache) {
                     delete window.__intentIQAssetCache[slug]; // force re-fetch on title switch
                 }
-                var qids = Object.keys(IIQ_QMETA);
+                var qids = Object.keys(IIQ_QMETA).filter(function(q) {
+                    return (typeof _iiqQidEnabled === 'function') ? _iiqQidEnabled(q) : true;
+                });
                 document.getElementById('iiqQNav').innerHTML = qids.map(function(q, i) {
                     return '<button class="iiq-q-tab" data-q="' + q + '" onclick="showIntentIQQuestion(\'' + q + '\')" style="background: rgba(255,255,255,0.04); color:#cbd5e1; border:1px solid rgba(255,255,255,0.08); padding:0.4rem 0.75rem; border-radius:6px; cursor:pointer; font-size:0.78rem;">' + escapeHtml(IIQ_QMETA[q].short) + '</button>';
                 }).join('');
-                showIntentIQQuestion('q1');
+                showIntentIQQuestion(qids.length ? qids[0] : 'q1');
             }
 
             window.showIntentIQQuestion = function(qid) {
