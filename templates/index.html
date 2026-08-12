@@ -28173,24 +28173,36 @@ https://www.instagram.com/p/..."></textarea>
                 var openDate = new Date('2026-02-23T00:00:00Z'); // GOAT theatrical wind-down ~10d after open
                 var afterTheatrical = afterStream || (posted && !isNaN(posted.getTime()) && posted >= openDate);
 
-                // Industry-rough split of the info-seek share into specific
-                // info-seeking destinations.
-                var infoSplit = [
-                    { label: 'Google search (title)',           w: 0.46, bucket: 'info-seek', color: '#a5b4fc' },
-                    { label: 'IMDB page visit',                 w: 0.22, bucket: 'info-seek', color: '#a5b4fc' },
-                    { label: 'Rotten Tomatoes / Metacritic',    w: 0.14, bucket: 'info-seek', color: '#a5b4fc' },
-                    { label: 'Letterboxd / Trakt',              w: 0.07, bucket: 'info-seek', color: '#a5b4fc' },
-                    { label: 'Official film site',              w: 0.11, bucket: 'info-seek', color: '#a5b4fc' }
+                // // __IIQ_JOURNEY_BRAND_v1__
+                // Split of info-seek + bottom-funnel share into specific
+                // destinations. Reads overview.terminology.journey_info_destinations
+                // and journey_conversion_destinations when set (brand campaigns);
+                // otherwise falls back to the film defaults so any film title is
+                // unchanged.
+                var _iiqOv = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var _iiqTerm = _iiqOv.terminology || {};
+                var _FILM_INFO_DESTS = [
+                    { label: 'Google search (title)',           w: 0.46 },
+                    { label: 'IMDB page visit',                 w: 0.22 },
+                    { label: 'Rotten Tomatoes / Metacritic',    w: 0.14 },
+                    { label: 'Letterboxd / Trakt',              w: 0.07 },
+                    { label: 'Official film site',              w: 0.11 }
                 ];
-                // US ticketing-site share, normalized.
-                var tkSplit = [
-                    { label: 'Fandango',                        w: 0.38, bucket: 'ticketing', color: '#fbbf24' },
-                    { label: 'AMC',                             w: 0.22, bucket: 'ticketing', color: '#fbbf24' },
-                    { label: 'Regal',                           w: 0.14, bucket: 'ticketing', color: '#fbbf24' },
-                    { label: 'Cinemark',                        w: 0.12, bucket: 'ticketing', color: '#fbbf24' },
-                    { label: 'Atom Tickets',                    w: 0.08, bucket: 'ticketing', color: '#fbbf24' },
-                    { label: 'Theater chain direct',            w: 0.06, bucket: 'ticketing', color: '#fbbf24' }
+                var _FILM_TK_DESTS = [
+                    { label: 'Fandango',                        w: 0.38 },
+                    { label: 'AMC',                             w: 0.22 },
+                    { label: 'Regal',                           w: 0.14 },
+                    { label: 'Cinemark',                        w: 0.12 },
+                    { label: 'Atom Tickets',                    w: 0.08 },
+                    { label: 'Theater chain direct',            w: 0.06 }
                 ];
+                function _iiqDestList(src, bucket, color) {
+                    return src.map(function(d) {
+                        return { label: d.label, w: Number(d.w) || 0, bucket: bucket, color: color };
+                    });
+                }
+                var infoSplit = _iiqDestList(_iiqTerm.journey_info_destinations || _FILM_INFO_DESTS,       'info-seek', '#a5b4fc');
+                var tkSplit   = _iiqDestList(_iiqTerm.journey_conversion_destinations || _FILM_TK_DESTS,   'ticketing', '#fbbf24');
 
                 // Archetype-tilted secondary behaviors.
                 var sharePct, trailerPct, streamSearchPct;
@@ -28211,8 +28223,14 @@ https://www.instagram.com/p/..."></textarea>
                 infoSplit.forEach(function(s) { items.push({ label: s.label, pct: infoPct * s.w, bucket: s.bucket, color: s.color }); });
                 if (tkPct > 0.1) tkSplit.forEach(function(s) { items.push({ label: s.label, pct: tkPct * s.w, bucket: s.bucket, color: s.color }); });
                 items.push({ label: 'Shared / forwarded the asset',     pct: sharePct,        bucket: 'social',    color: '#22d3ee' });
-                if (trailerPct > 0.1)      items.push({ label: 'Watched the trailer next', pct: trailerPct,      bucket: 'trailer',   color: '#22c55e' });
-                if (streamSearchPct > 0.05) items.push({ label: 'Searched "where to stream"', pct: streamSearchPct, bucket: 'streaming', color: '#a855f7' });
+                // Film-specific downstream behaviors (trailer follow-up +
+                // "where to stream" search) are suppressed when the title's
+                // terminology explicitly opts out (brand campaigns).
+                var _iiqSuppressFilm = !!_iiqTerm.suppress_film_behaviors;
+                if (!_iiqSuppressFilm) {
+                    if (trailerPct > 0.1)      items.push({ label: 'Watched the trailer next', pct: trailerPct,      bucket: 'trailer',   color: '#22c55e' });
+                    if (streamSearchPct > 0.05) items.push({ label: 'Searched "where to stream"', pct: streamSearchPct, bucket: 'streaming', color: '#a855f7' });
+                }
 
                 // Per-item micro-jitter, then renormalize to 100 (residual = "did nothing").
                 var jKey = String(asset.asset_id || asset.url || asset.action_label || '');
@@ -31227,8 +31245,12 @@ https://www.instagram.com/p/..."></textarea>
                 html += '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
                 html +=   iiqSummaryTile('Assets in view', String(rows.length), 'after asset / platform / source filters');
                 html +=   iiqSummaryTile('Total views', fmtCompact(totalV), 'across filtered assets');
-                html +=   iiqSummaryTile('Info-seek next', fmtCompact(aggAfter.info), _pctOfV(aggAfter.info).toFixed(1) + '% of viewers \u2014 Google / IMDB / RT / official');
-                html +=   iiqSummaryTile('Ticketing visit', fmtCompact(aggAfter.ticket), _pctOfV(aggAfter.ticket).toFixed(1) + '% \u2014 Fandango / AMC / Regal / Cinemark / Atom');
+                var _iiqJrnOv   = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var _iiqJrnTerm = _iiqJrnOv.terminology || {};
+                var _iiqInfoSub = _iiqJrnTerm.journey_info_sub_label       || 'Google / IMDB / RT / official';
+                var _iiqTkSub   = _iiqJrnTerm.journey_conversion_sub_label || 'Fandango / AMC / Regal / Cinemark / Atom';
+                html +=   iiqSummaryTile('Info-seek next', fmtCompact(aggAfter.info), _pctOfV(aggAfter.info).toFixed(1) + '% of viewers \u2014 ' + _iiqInfoSub);
+                html +=   iiqSummaryTile('Ticketing visit', fmtCompact(aggAfter.ticket), _pctOfV(aggAfter.ticket).toFixed(1) + '% \u2014 ' + _iiqTkSub);
                 html +=   iiqSummaryTile('Shared / re-posted', fmtCompact(aggAfter.shared), _pctOfV(aggAfter.shared).toFixed(1) + '% re-shared to social');
                 html += '</div>';
 
@@ -31341,14 +31363,23 @@ https://www.instagram.com/p/..."></textarea>
                     return { label: k, source_type: beforeAgg[k].source_type, pct: totalV > 0 ? (beforeAgg[k].total / totalV * 100) : 0 };
                 }).sort(function(a,b){ return b.pct - a.pct; }).slice(0, 12);
 
+                var _iiqAggOv    = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var _iiqAggTerm  = _iiqAggOv.terminology || {};
+                var _iiqAggInfoLabel = _iiqAggTerm.journey_info_bucket_label       || 'Info-seeking';
+                var _iiqAggConvLabel = _iiqAggTerm.journey_conversion_bucket_label || 'Ticketing site visit';
+                var _iiqAggInfoSub   = _iiqAggTerm.journey_info_sub_label          || 'Google / IMDB / Rotten Tomatoes / Letterboxd / official site';
+                var _iiqAggConvSub   = _iiqAggTerm.journey_conversion_sub_label    || 'Fandango / AMC / Regal / Cinemark / Atom / theater chain direct';
+                var _iiqAggSupp      = !!_iiqAggTerm.suppress_film_behaviors;
                 var afterBuckets = [
-                    { label: 'Info-seeking',                       pct: totalV > 0 ? aggAfter.info    / totalV * 100 : 0, color: '#a5b4fc', sub: 'Google / IMDB / Rotten Tomatoes / Letterboxd / official site' },
-                    { label: 'Ticketing site visit',               pct: totalV > 0 ? aggAfter.ticket  / totalV * 100 : 0, color: '#fbbf24', sub: 'Fandango / AMC / Regal / Cinemark / Atom / theater chain direct' },
-                    { label: 'Shared / forwarded the asset',       pct: totalV > 0 ? aggAfter.shared  / totalV * 100 : 0, color: '#22d3ee', sub: 'Re-shared to social' },
-                    { label: 'Watched the trailer next',           pct: totalV > 0 ? aggAfter.trailer / totalV * 100 : 0, color: '#22c55e', sub: 'Pulled up the trailer within 7 days' },
-                    { label: 'Searched "where to stream"',         pct: totalV > 0 ? aggAfter.stream  / totalV * 100 : 0, color: '#a855f7', sub: 'PVOD / SVOD / streaming-availability search' },
-                    { label: 'No measurable downstream action',    pct: totalV > 0 ? aggAfter.nothing / totalV * 100 : 0, color: '#64748b', sub: 'Viewed and moved on within the 7-day window' }
+                    { label: _iiqAggInfoLabel,                     pct: totalV > 0 ? aggAfter.info    / totalV * 100 : 0, color: '#a5b4fc', sub: _iiqAggInfoSub },
+                    { label: _iiqAggConvLabel,                     pct: totalV > 0 ? aggAfter.ticket  / totalV * 100 : 0, color: '#fbbf24', sub: _iiqAggConvSub },
+                    { label: 'Shared / forwarded the asset',       pct: totalV > 0 ? aggAfter.shared  / totalV * 100 : 0, color: '#22d3ee', sub: 'Re-shared to social' }
                 ];
+                if (!_iiqAggSupp) {
+                    afterBuckets.push({ label: 'Watched the trailer next',   pct: totalV > 0 ? aggAfter.trailer / totalV * 100 : 0, color: '#22c55e', sub: 'Pulled up the trailer within 7 days' });
+                    afterBuckets.push({ label: 'Searched "where to stream"', pct: totalV > 0 ? aggAfter.stream  / totalV * 100 : 0, color: '#a855f7', sub: 'PVOD / SVOD / streaming-availability search' });
+                }
+                afterBuckets.push({ label: 'No measurable downstream action', pct: totalV > 0 ? aggAfter.nothing / totalV * 100 : 0, color: '#64748b', sub: 'Viewed and moved on within the 7-day window' });
 
                 var html = '<div class="iiq-card" style="padding:0.85rem;">';
                 html +=   '<div style="font-size:0.85rem; color:#e2e8f0; font-weight:600; margin-bottom:0.5rem;">Aggregate journey across all ' + rows.length + ' asset' + (rows.length === 1 ? '' : 's') + ' in view</div>';
