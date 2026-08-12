@@ -25417,7 +25417,7 @@ https://www.instagram.com/p/..."></textarea>
                 <div style="margin-bottom: 0.65rem;">
                     <h4 style="margin: 0;">Asset performance scoreboard</h4>
                     <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Every individual marketing touchpoint in the campaign, ranked by measured engagement. Use this to drill into "which specific posts moved the needle" - the Performance tab rolls these up by category / paid-organic / talent.</div>
-                    <div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.25rem; opacity:0.85;">
+                    <div id="iiqAssetsMetricsCaption" style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.25rem; opacity:0.85;">
                         <strong style="color:#cbd5e1;">Views</strong> = impressions (how many times the asset was seen). <strong style="color:#cbd5e1;">Engagement</strong> = likes + comments + shares (active participation). <strong style="color:#cbd5e1;">Eng. rate</strong> = engagement / views - high rate means a small reach with a participatory audience; low rate means broad reach but passive consumption. <span style="color:#a5b4fc;"><strong>Info-seek %</strong></span> = share of viewers who then searched the title / visited IMDB / Rotten Tomatoes / Letterboxd / official site within 7 days. <span style="color:#fbbf24;"><strong>Ticketing %</strong></span> = share who then visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days.
                     </div>
                 </div>
@@ -25766,6 +25766,58 @@ https://www.instagram.com/p/..."></textarea>
             };
             // ------------------------------------------------------------
 
+            // ------------------------------------------------------------
+            // // __IIQ_ASSETS_CAPTION_v1__
+            // Rewrite the Assets tab metrics caption based on the loaded
+            // title's terminology. For film titles (no terminology) the
+            // caption reads exactly the same as the static HTML default
+            // (IMDB / RT / Letterboxd / official site + Fandango / AMC /
+            // Regal / Cinemark / Atom). For brand titles it uses the
+            // journey_info_destinations / journey_conversion_destinations
+            // arrays to build the destination example list, plus the
+            // bottom_funnel_label so the label reads "Website visit %"
+            // (or whatever the brand preset says) instead of "Ticketing %".
+            window._iiqAssetsCaptionSample = function(dests, fallback, n) {
+                if (dests && Array.isArray(dests) && dests.length) {
+                    return dests.slice(0, n || 4).map(function(d) { return d.label; }).join(' / ');
+                }
+                return fallback;
+            };
+            window._iiqUpdateAssetsMetricsCaption = function() {
+                try {
+                    var el = document.getElementById('iiqAssetsMetricsCaption');
+                    if (!el) return;
+                    var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                    var term = ov.terminology || {};
+                    var isBrand = ov.title_type === 'brand';
+                    var bfl = term.bottom_funnel_label || 'Ticketing';
+                    var subjectNoun = isBrand ? 'the brand' : 'the title';
+                    var infoExamples = window._iiqAssetsCaptionSample(
+                        term.journey_info_destinations,
+                        'IMDB / Rotten Tomatoes / Letterboxd / official site',
+                        4
+                    );
+                    var convExamples = window._iiqAssetsCaptionSample(
+                        term.journey_conversion_destinations,
+                        'Fandango / AMC / Regal / Cinemark / Atom',
+                        4
+                    );
+                    var convLead = isBrand ? 'share who then visited '
+                                            : 'share who then visited a ticketing site (';
+                    var convTail = isBrand ? '' : ')';
+                    var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){return String(s==null?'':s);};
+                    el.innerHTML =
+                        '<strong style="color:#cbd5e1;">Views</strong> = impressions (how many times the asset was seen). '
+                      + '<strong style="color:#cbd5e1;">Engagement</strong> = likes + comments + shares (active participation). '
+                      + '<strong style="color:#cbd5e1;">Eng. rate</strong> = engagement / views \u2014 high rate means a small reach with a participatory audience; low rate means broad reach but passive consumption. '
+                      + '<span style="color:#a5b4fc;"><strong>Info-seek %</strong></span> = share of viewers who then searched ' + esc(subjectNoun) + ' / visited ' + esc(infoExamples) + ' within 7 days. '
+                      + '<span style="color:#fbbf24;"><strong>' + esc(bfl) + ' %</strong></span> = ' + convLead + esc(convExamples) + convTail + ' within 7 days.';
+                } catch (e) {
+                    console.warn('iiq assets caption update failed', e);
+                }
+            };
+            // ------------------------------------------------------------
+
 
             function _iiqHideAllOtherViews() {
                 // 2026-07-28: delegate to the canonical helper defined
@@ -25846,6 +25898,7 @@ https://www.instagram.com/p/..."></textarea>
                     reloadIntentIQAssets();
                     try { _iiqApplyBrandLabels(); } catch(_e) {}
                     try { _iiqApplyTopLevelTabVisibility(); } catch(_e) {}
+                    try { _iiqUpdateAssetsMetricsCaption(); } catch(_e) {}
                     document.getElementById('iiqStatus').textContent = 'Loaded ' + slug + '.';
                 }).catch(function(e) {
                     document.getElementById('iiqStatus').textContent = 'Load failed: ' + (e.message || e);
