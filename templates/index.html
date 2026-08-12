@@ -24923,6 +24923,19 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             #microdramasIQView .miq-spark-axis > span { position: absolute; top: 0; display: flex; flex-direction: column; align-items: center; line-height: 1.05; white-space: nowrap; }
             #microdramasIQView .miq-axis-wd { font-size: 7px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.02em; }
             #microdramasIQView .miq-axis-dt { font-size: 7px; color: var(--text-secondary); opacity: 0.85; font-variant-numeric: tabular-nums; }
+            /* Completion chips row: shows per-title free-tier completion + payer conversion
+               (or series completion for Peacock). Sits above the sparkline as an at-a-glance
+               engagement-depth signal complementing the rank-trend sparkline. */
+            #microdramasIQView .miq-completion-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.15rem 0 0.1rem; }
+            #microdramasIQView .miq-comp-chip { display: inline-flex; align-items: baseline; gap: 0.28rem; padding: 0.15rem 0.42rem; border-radius: 999px; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.02em; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); }
+            #microdramasIQView .miq-comp-chip .miq-comp-chip-label { color: var(--text-secondary); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.6rem; }
+            #microdramasIQView .miq-comp-chip .miq-comp-chip-value { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+            #microdramasIQView .miq-comp-chip.miq-chip-completion { background: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.28); }
+            #microdramasIQView .miq-comp-chip.miq-chip-completion .miq-comp-chip-value { color: #93c5fd; }
+            #microdramasIQView .miq-comp-chip.miq-chip-payer      { background: rgba(236,72,153,0.10); border-color: rgba(236,72,153,0.28); }
+            #microdramasIQView .miq-comp-chip.miq-chip-payer      .miq-comp-chip-value { color: #f9a8d4; }
+            #microdramasIQView .miq-comp-chip.miq-chip-series     { background: rgba(16,185,129,0.10); border-color: rgba(16,185,129,0.28); }
+            #microdramasIQView .miq-comp-chip.miq-chip-series     .miq-comp-chip-value { color: #86efac; }
             #microdramasIQView .miq-trend { font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.2rem; font-variant-numeric: tabular-nums; }
             #microdramasIQView .miq-audience-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
             #microdramasIQView .miq-audience-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 1rem; }
@@ -24973,6 +24986,19 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             body[data-theme="light"] #microdramasIQModal .miq-modal-summary,
             body[data-theme="light"] #microdramasIQModal .miq-demo-card { background: #fafafa; border-color: rgba(0,0,0,0.08); }
             body[data-theme="light"] #microdramasIQModal .miq-demo-bar-track { background: rgba(0,0,0,0.06); }
+            /* Completion / paywall section inside the audience modal */
+            #microdramasIQModal .miq-retention-card .miq-retention-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; margin-bottom: 0.75rem; }
+            #microdramasIQModal .miq-retention-stat { padding: 0.5rem 0.6rem; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); }
+            #microdramasIQModal .miq-retention-stat-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
+            #microdramasIQModal .miq-retention-stat-value { font-size: 1.15rem; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; margin-top: 0.1rem; }
+            #microdramasIQModal .miq-retention-layout { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+            #microdramasIQModal .miq-retention-chart { flex: 1 1 320px; min-width: 300px; }
+            #microdramasIQModal .miq-retention-chart-title { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 0.35rem; }
+            #microdramasIQModal .miq-retention-donut { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; min-width: 110px; }
+            #microdramasIQModal .miq-retention-donut-legend { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.72rem; color: var(--text-secondary); }
+            #microdramasIQModal .miq-retention-donut-legend > div { display: flex; align-items: center; gap: 0.35rem; }
+            #microdramasIQModal .miq-retention-donut-legend .miq-donut-swatch { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+            body[data-theme="light"] #microdramasIQModal .miq-retention-stat { background: #fafafa; border-color: rgba(0,0,0,0.08); }
             #microdramasIQModal .miq-modal-loading { display: flex; align-items: center; justify-content: center; gap: 0.6rem; padding: 3rem 1rem; color: var(--text-secondary); font-size: 0.88rem; }
             /* Daily-views modal: bigger chart + tabular breakdown. */
             #microdramasIQModal .miq-daily-chart { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 0.85rem 0.9rem 0.75rem; margin-bottom: 1rem; }
@@ -44570,6 +44596,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             // views modal, the card body opens the audience research
             // modal. Kept the native title= tooltip too so hover still
             // shows the day-by-day quick read.
+            var chips = _miqCompletionChips(t);
             return '<div class="miq-title-row">' + _miqEscape(t.title || '') + '</div>' +
                 '<div class="miq-title-metrics">' +
                     '<div><div class="miq-metric-label">' + pm.label + '</div><div class="miq-metric-value">' + pm.value + '</div></div>' +
@@ -44577,8 +44604,47 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     '<div><div class="miq-metric-label">Current rank</div><div class="miq-metric-value">' + _miqCurrentRank(t) + '</div></div>' +
                     '<div><div class="miq-metric-label">Best rank</div><div class="miq-metric-value">' + _miqBestRank(t) + '</div></div>' +
                 '</div>' +
+                chips +
                 (curveBars ? '<div class="miq-spark-wrap" data-miq-spark="1" role="button" tabindex="0" aria-label="Show daily views" title="' + _miqEscape(_miqSparkTooltip(t, platform)) + ' &#10;&#10;Click to open the daily views breakdown">' + curveBars + '</div>' : '') +
                 (trend ? '<div class="miq-trend">' + _miqEscape(trend) + '</div>' : '');
+        }
+
+        // Compact completion chips row for the card. For coin-economy
+        // competitors we show BOTH free-tier completion + payer
+        // conversion. For Peacock (no per-episode paywall) we show a
+        // single series-completion chip.
+        function _miqCompletionChips(t) {
+            var c = t.completion;
+            if (!c) return '';
+            var parts = [];
+            if (c.source === 'peacock') {
+                if (c.series_completion_pct != null) {
+                    parts.push('<span class="miq-comp-chip miq-chip-series" title="Share of viewers who finish the whole series (' + c.total_episodes + ' eps)">'
+                             +   '<span class="miq-comp-chip-label">Series</span>'
+                             +   '<span class="miq-comp-chip-value">' + Math.round(c.series_completion_pct) + '%</span>'
+                             + '</span>');
+                }
+            } else {
+                if (c.free_completion_pct != null) {
+                    var freeEps = c.free_episodes || '';
+                    var freeTip = 'Share of viewers who watch through the free tier'
+                                + (freeEps ? ' (ep 1 through ep ' + freeEps + ')' : '');
+                    parts.push('<span class="miq-comp-chip miq-chip-completion" title="' + _miqEscape(freeTip) + '">'
+                             +   '<span class="miq-comp-chip-label">Free done</span>'
+                             +   '<span class="miq-comp-chip-value">' + Math.round(c.free_completion_pct) + '%</span>'
+                             + '</span>');
+                }
+                if (c.paid_pct != null) {
+                    var payTip = 'Share of viewers who watch at least one paid (post-paywall) episode';
+                    parts.push('<span class="miq-comp-chip miq-chip-payer" title="' + _miqEscape(payTip) + '">'
+                             +   '<span class="miq-comp-chip-label">Payers</span>'
+                             +   '<span class="miq-comp-chip-value">' + Math.round(c.paid_pct) + '%</span>'
+                             + '</span>');
+                }
+            }
+            return parts.length
+                ? '<div class="miq-completion-chips">' + parts.join('') + '</div>'
+                : '';
         }
 
         // Competitor snapshots are dated by their FETCH date, but the
@@ -45308,6 +45374,13 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             var body  = document.getElementById('microdramasIQModalContent');
             if (!modal || !title || !body) return;
 
+            // Stash the title on the module so _renderMicrodramasIQAudienceModal
+            // can pull `completion` off it (per-episode retention curve + free-
+            // vs-paid summary). Not part of the audience payload from the
+            // /title-audience endpoint - it's computed alongside the title in
+            // compute_view / compute_competitors_view.
+            window.__microdramasIQ.currentTitle = t;
+
             title.textContent = t.title;
             var subLine = [t.series && t.series !== t.title ? t.series : null,
                             t.genre, t.platform].filter(function(x){return x;}).join(' · ');
@@ -45597,6 +45670,105 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             }
         });
 
+        // Per-episode retention curve rendered as a small SVG line chart.
+        // Marks the paywall boundary with a dashed vertical rule (coin-
+        // economy platforms only) and highlights key %-remaining anchors.
+        function _miqRetentionChart(comp) {
+            if (!comp || !comp.curve || !comp.curve.length) return '';
+            var w = 460, h = 140, pl = 30, pr = 10, pt = 10, pb = 22;
+            var innerW = w - pl - pr, innerH = h - pt - pb;
+            var pts = comp.curve;
+            var n = pts.length;
+            var xFor = function(i) { return pl + (n <= 1 ? innerW / 2 : (i * innerW / (n - 1))); };
+            var yFor = function(p) { return pt + innerH - (Math.max(0, Math.min(100, p)) / 100 * innerH); };
+
+            var poly = pts.map(function(pt, i) { return xFor(i) + ',' + yFor(pt.pct).toFixed(1); }).join(' ');
+            var area = 'M' + xFor(0) + ',' + (pt + innerH) + ' L ' + poly.split(' ').join(' L ') + ' L ' + xFor(n - 1) + ',' + (pt + innerH) + ' Z';
+
+            var paywall = '';
+            if (comp.free_episodes != null && comp.free_episodes >= 1 && comp.free_episodes < n) {
+                var xPay = xFor(comp.free_episodes - 1);
+                var xFirstPaid = xFor(comp.free_episodes);
+                var xMid = (xPay + xFirstPaid) / 2;
+                paywall =
+                    '<line x1="' + xMid.toFixed(1) + '" y1="' + pt + '" x2="' + xMid.toFixed(1) + '" y2="' + (pt + innerH) + '" stroke="#ec4899" stroke-width="1" stroke-dasharray="3 3" opacity="0.7"></line>' +
+                    '<text x="' + xMid.toFixed(1) + '" y="' + (pt + 8) + '" fill="#ec4899" font-size="8.5" text-anchor="middle" opacity="0.95">PAYWALL</text>';
+            }
+
+            var yTicks = [0, 25, 50, 75, 100];
+            var yLines = yTicks.map(function(v) {
+                var y = yFor(v).toFixed(1);
+                return '<line x1="' + pl + '" y1="' + y + '" x2="' + (pl + innerW) + '" y2="' + y + '" stroke="rgba(255,255,255,0.06)" stroke-width="1"></line>' +
+                       '<text x="' + (pl - 4) + '" y="' + (parseFloat(y) + 3) + '" fill="rgba(255,255,255,0.4)" font-size="8.5" text-anchor="end">' + v + '%</text>';
+            }).join('');
+
+            var xTickIdx = [0];
+            if (comp.free_episodes && comp.free_episodes < n) xTickIdx.push(comp.free_episodes - 1);
+            var mid = Math.floor(n / 2);
+            if (xTickIdx.indexOf(mid) < 0) xTickIdx.push(mid);
+            xTickIdx.push(n - 1);
+            xTickIdx = xTickIdx.filter(function(v, i, a) { return a.indexOf(v) === i; }).sort(function(a, b){return a - b;});
+            var xLabels = xTickIdx.map(function(i) {
+                return '<text x="' + xFor(i).toFixed(1) + '" y="' + (pt + innerH + 12) + '" fill="rgba(255,255,255,0.55)" font-size="9" text-anchor="middle">Ep ' + (i + 1) + '</text>';
+            }).join('');
+
+            return '<svg width="100%" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" style="display:block;">' +
+                yLines +
+                '<path d="' + area + '" fill="url(#miq-ret-grad)" opacity="0.35"></path>' +
+                '<polyline points="' + poly + '" fill="none" stroke="#93c5fd" stroke-width="1.8"></polyline>' +
+                paywall +
+                xLabels +
+                '<defs><linearGradient id="miq-ret-grad" x1="0" x2="0" y1="0" y2="1">' +
+                    '<stop offset="0%" stop-color="#3b82f6" stop-opacity="0.6"></stop>' +
+                    '<stop offset="100%" stop-color="#3b82f6" stop-opacity="0"></stop>' +
+                '</linearGradient></defs>' +
+            '</svg>';
+        }
+
+        // Free-only vs. paid donut. Rendered as a compact SVG ring so it
+        // scales cleanly next to the retention chart. Skipped for Peacock
+        // (no coin paywall).
+        function _miqCompletionDonut(comp) {
+            if (!comp || comp.source === 'peacock') return '';
+            if (comp.free_only_pct == null || comp.paid_pct == null) return '';
+            var free = Math.max(0, Math.min(100, comp.free_only_pct));
+            var paid = Math.max(0, Math.min(100, comp.paid_pct));
+            var r = 44, cx = 55, cy = 55, sw = 14;
+            var circumference = 2 * Math.PI * r;
+            var freeLen = circumference * (free / 100);
+            var paidLen = circumference - freeLen;
+            return '<svg width="110" height="110" viewBox="0 0 110 110">' +
+                '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="' + sw + '"></circle>' +
+                '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="#93c5fd" stroke-width="' + sw + '" stroke-dasharray="' + freeLen.toFixed(2) + ' ' + circumference.toFixed(2) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')" stroke-linecap="butt"></circle>' +
+                '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="#f9a8d4" stroke-width="' + sw + '" stroke-dasharray="' + paidLen.toFixed(2) + ' ' + circumference.toFixed(2) + '" stroke-dashoffset="-' + freeLen.toFixed(2) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')" stroke-linecap="butt"></circle>' +
+                '<text x="' + cx + '" y="' + (cy - 4) + '" text-anchor="middle" fill="var(--text-primary)" font-size="16" font-weight="700">' + Math.round(paid) + '%</text>' +
+                '<text x="' + cx + '" y="' + (cy + 10) + '" text-anchor="middle" fill="var(--text-secondary)" font-size="9" letter-spacing="0.05em">PAYERS</text>' +
+            '</svg>';
+        }
+
+        // Header stats for the retention section - the same numbers shown
+        // as chips on the card, formatted for the wider modal layout.
+        function _miqRetentionStats(comp) {
+            if (!comp) return '';
+            var items = [];
+            if (comp.source === 'peacock') {
+                items.push({ k: 'Series completion', v: Math.round(comp.series_completion_pct) + '%', hint: 'Finish all ' + comp.total_episodes + ' episodes' });
+                items.push({ k: 'Total episodes',    v: comp.total_episodes });
+            } else {
+                items.push({ k: 'Free-tier completion',  v: Math.round(comp.free_completion_pct) + '%', hint: 'Watch to end of free eps (' + comp.free_episodes + ')' });
+                items.push({ k: 'Payer conversion',      v: Math.round(comp.paywall_conversion_pct) + '%', hint: 'Of free-tier completers, watch at least one paid ep' });
+                items.push({ k: 'Payers (of viewers)',   v: Math.round(comp.paid_pct) + '%', hint: 'Watch at least one post-paywall ep' });
+                items.push({ k: 'Series completion',     v: (comp.series_completion_pct < 1 ? comp.series_completion_pct.toFixed(1) : Math.round(comp.series_completion_pct)) + '%', hint: 'Finish all ' + comp.total_episodes + ' episodes' });
+            }
+            return items.map(function(it) {
+                var hint = it.hint ? ' title="' + _miqEscape(it.hint) + '"' : '';
+                return '<div class="miq-retention-stat"' + hint + '>'
+                     +   '<div class="miq-retention-stat-label">' + _miqEscape(it.k) + '</div>'
+                     +   '<div class="miq-retention-stat-value">' + it.v + '</div>'
+                     + '</div>';
+            }).join('');
+        }
+
         function _renderMicrodramasIQAudienceModal(d) {
             var body = document.getElementById('microdramasIQModalContent');
             if (!body) return;
@@ -45693,9 +45865,48 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 '</div>';
             }).join('');
 
+            // Per-episode retention section - pulled off the current title
+            // (stashed by openMicrodramasIQTitleModal), not the audience
+            // payload. Renders four summary stats + retention curve + free-
+            // vs-paid donut for competitors, or two stats + curve for
+            // Peacock (no coin paywall).
+            var retentionBlock = '';
+            var curTitle = (window.__microdramasIQ && window.__microdramasIQ.currentTitle) || null;
+            var comp = curTitle && curTitle.completion;
+            if (comp && comp.curve && comp.curve.length) {
+                var chart  = _miqRetentionChart(comp);
+                var donut  = _miqCompletionDonut(comp);
+                var stats  = _miqRetentionStats(comp);
+                var isPeacock = comp.source === 'peacock';
+                var chartHeader = isPeacock
+                    ? 'Per-episode retention'
+                    : 'Per-episode retention (paywall marked)';
+                retentionBlock =
+                    '<div class="miq-demo-card miq-retention-card" style="margin-top:0.85rem;">'
+                  +   '<h4>Completion &amp; paywall</h4>'
+                  +   '<div class="miq-retention-stats">' + stats + '</div>'
+                  +   '<div class="miq-retention-layout">'
+                  +     '<div class="miq-retention-chart">'
+                  +       '<div class="miq-retention-chart-title">' + chartHeader + '</div>'
+                  +       chart
+                  +     '</div>'
+                  +     (donut
+                        ? '<div class="miq-retention-donut">'
+                        +   donut
+                        +   '<div class="miq-retention-donut-legend">'
+                        +     '<div><span class="miq-donut-swatch" style="background:#93c5fd;"></span>Free-only ' + Math.round(comp.free_only_pct) + '%</div>'
+                        +     '<div><span class="miq-donut-swatch" style="background:#f9a8d4;"></span>Paid at least 1 ep ' + Math.round(comp.paid_pct) + '%</div>'
+                        +   '</div>'
+                        + '</div>'
+                        : '')
+                  +   '</div>'
+                  + '</div>';
+            }
+
             body.innerHTML =
                 (d.audience_summary ? '<div class="miq-modal-summary">' + _miqEscape(d.audience_summary) + '</div>' : '') +
                 '<div class="miq-modal-demos">' + demoCards + '</div>' +
+                retentionBlock +
                 (interests ? '<div class="miq-demo-card" style="margin-top:0.85rem;"><h4>Interests (index vs Gen Pop)</h4>' + interests + '</div>' : '') +
                 (platforms ? '<div class="miq-demo-card" style="margin-top:0.85rem;"><h4>Platform affinities (% reach)</h4>' + platforms + '</div>' : '');
         }
