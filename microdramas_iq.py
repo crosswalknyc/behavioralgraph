@@ -1735,6 +1735,13 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
                 'title_count':     0,
                 'top_title':       None,
                 'top_title_views': 0,
+                # View-weighted running sums for the platform-level
+                # "% of all viewers who cross the paywall" metric.
+                # Weighted by views (not title count) so a mega-hit
+                # dominates the aggregate the same way it dominates
+                # actual audience reach.
+                '_paid_wsum':      0.0,   # sum(paid_pct * views)
+                '_paid_views':     0,     # sum(views over titles with a paid_pct)
             }
             per_platform_all[source] = slot
         return slot
@@ -1753,6 +1760,9 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
         if views > slot['top_title_views']:
             slot['top_title']       = t.get('title') or t.get('series')
             slot['top_title_views'] = views
+        # Peacock is subscription-only (no per-title paywall) so no
+        # paid_pct contribution here - the platform will surface as
+        # N/A on the rollup.
 
     for p in comp_platforms:
         p_source = p.get('source') or ''
@@ -1772,6 +1782,11 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
             if views > slot['top_title_views']:
                 slot['top_title']       = t.get('title') or t.get('series')
                 slot['top_title_views'] = views
+            comp = t.get('completion') or {}
+            paid_pct = comp.get('paid_pct')
+            if paid_pct is not None and views > 0:
+                slot['_paid_wsum']  += float(paid_pct) * views
+                slot['_paid_views'] += views
 
     aggregated.sort(key=lambda r: -int(r.get('sort_views') or 0))
     aggregated = aggregated[:top_n_final]
@@ -1788,9 +1803,21 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
     # Attach a share-of-total percent per platform so the frontend can
     # render the rollup as a stacked bar / horizontal chart without
     # having to compute the denominator on the client.
+    #
+    # Also finalize the view-weighted "free -> paid conversion" metric:
+    # of ALL viewers on this platform (not just free-tier completers),
+    # what share crossed the paywall into paid episodes. Peacock is
+    # subscription-only so it stays null and renders as N/A. For the
+    # coin-economy platforms this is a low number by design because
+    # the denominator is every viewer who ever tuned in - many bounce
+    # before the paywall even shows.
     for p in platform_totals:
         p['share_pct'] = (round(p['total_views'] / grand_total_views * 100, 1)
                           if grand_total_views > 0 else 0.0)
+        views_w = p.pop('_paid_views', 0)
+        wsum    = p.pop('_paid_wsum', 0.0)
+        p['free_to_paid_pct'] = (round(wsum / views_w, 1)
+                                  if views_w > 0 else None)
 
     # Small stats block (kept for backward-compat with the header): how
     # many titles from each platform ended up in the trimmed top-N.

@@ -24897,6 +24897,15 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             #microdramasIQView .miq-rollup-card-share { font-size: 0.7rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
             #microdramasIQView .miq-rollup-card-views { font-size: 1.05rem; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
             #microdramasIQView .miq-rollup-card-sub { font-size: 0.68rem; color: var(--text-secondary); }
+            /* Platform-wide free -> paid conversion, shown as a small
+               labeled chip line inside each platform rollup card. Muted
+               grey for the label, subtle pink for the value (matches the
+               miq-chip-payer color family used on card completion chips
+               so the visual grammar stays consistent). */
+            #microdramasIQView .miq-rollup-card-conv { display: flex; align-items: baseline; justify-content: space-between; gap: 0.4rem; margin-top: 0.15rem; padding-top: 0.35rem; border-top: 1px dashed rgba(255,255,255,0.08); }
+            #microdramasIQView .miq-rollup-conv-label { font-size: 0.62rem; color: var(--text-secondary); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+            #microdramasIQView .miq-rollup-conv-value { font-size: 0.78rem; font-weight: 700; color: #f9a8d4; font-variant-numeric: tabular-nums; }
+            #microdramasIQView .miq-rollup-card-conv-na .miq-rollup-conv-value { color: var(--text-secondary); font-weight: 500; }
             #microdramasIQView .miq-rollup-card-top { font-size: 0.68rem; color: var(--text-secondary); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             /* Keep long titles from colliding with the badge. */
             #microdramasIQView .miq-title-card.miq-has-badge .miq-title-row { padding-right: 5.5rem; }
@@ -45290,6 +45299,30 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                              + '</div>';
                 }
                 var titleCount = (p.title_count || 0);
+                // Free-to-Paid conversion: platform-wide, view-weighted
+                // share of viewers who cross the paywall into any paid ep.
+                // This is intentionally over-the-full-audience (not just
+                // free-tier completers), so numbers land in the mid-teens
+                // for coin-economy platforms and null for Peacock (no
+                // per-title paywall, subscription-only).
+                var convBlock;
+                if (p.free_to_paid_pct != null) {
+                    var convTip = 'View-weighted share of ALL viewers on ' + (p.platform || 'platform')
+                                + ' who cross the paywall into paid episodes. '
+                                + 'Denominator is every tracked viewer, not just free-tier completers - '
+                                + 'so the number reads lower than the per-title Payer Conversion chip.';
+                    convBlock = '<div class="miq-rollup-card-conv" title="' + _miqEscape(convTip) + '">'
+                              +   '<span class="miq-rollup-conv-label">Free to Paid</span>'
+                              +   '<span class="miq-rollup-conv-value">' + Math.round(p.free_to_paid_pct) + '%</span>'
+                              + '</div>';
+                } else {
+                    var convNaTip = (p.platform || 'This platform') + ' is subscription-only, '
+                                  + 'so there is no per-title paywall to convert into.';
+                    convBlock = '<div class="miq-rollup-card-conv miq-rollup-card-conv-na" title="' + _miqEscape(convNaTip) + '">'
+                              +   '<span class="miq-rollup-conv-label">Free to Paid</span>'
+                              +   '<span class="miq-rollup-conv-value">N/A</span>'
+                              + '</div>';
+                }
                 return '<div class="miq-rollup-card">'
                      +   '<div class="miq-rollup-card-head">'
                      +     '<div class="miq-rollup-card-name"><span class="' + dotCls + '"></span>' + _miqEscape(p.platform || 'Unknown') + '</div>'
@@ -45297,6 +45330,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                      +   '</div>'
                      +   '<div class="miq-rollup-card-views">' + _miqFormatNumber(p.total_views || 0) + '</div>'
                      +   '<div class="miq-rollup-card-sub">across ' + titleCount + ' ' + (titleCount === 1 ? 'title' : 'titles') + '</div>'
+                     +   convBlock
                      +   topBlock
                      + '</div>';
             }).join('');
