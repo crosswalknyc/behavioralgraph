@@ -25050,6 +25050,19 @@ https://www.instagram.com/p/..."></textarea>
             #microdramasIQView .miq-rollup-conv-label { font-size: 0.62rem; color: var(--text-secondary); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
             #microdramasIQView .miq-rollup-conv-value { font-size: 0.78rem; font-weight: 700; color: #f9a8d4; font-variant-numeric: tabular-nums; }
             #microdramasIQView .miq-rollup-card-conv-na .miq-rollup-conv-value { color: var(--text-secondary); font-weight: 500; }
+            /* User-flow stats: 2x2 grid of Total Users / New Subs /
+               Cancellations / Net Growth for each platform card. Dashed
+               top border matches the free-to-paid line above so the
+               whole card reads as tiered sections. */
+            #microdramasIQView .miq-rollup-card-flow { display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem 0.5rem; margin-top: 0.35rem; padding-top: 0.4rem; border-top: 1px dashed rgba(255,255,255,0.08); }
+            #microdramasIQView .miq-rollup-flow-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 0.05rem; min-width: 0; }
+            #microdramasIQView .miq-rollup-flow-label { font-size: 0.58rem; color: var(--text-secondary); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+            #microdramasIQView .miq-rollup-flow-value { font-size: 0.78rem; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+            #microdramasIQView .miq-rollup-flow-value.miq-rollup-flow-pos { color: #86efac; }
+            #microdramasIQView .miq-rollup-flow-value.miq-rollup-flow-neg { color: #fca5a5; }
+            #microdramasIQView .miq-rollup-flow-net { font-size: 0.8rem; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+            #microdramasIQView .miq-rollup-flow-net-pos { color: #34d399; }
+            #microdramasIQView .miq-rollup-flow-net-neg { color: #f87171; }
             #microdramasIQView .miq-rollup-card-top { font-size: 0.68rem; color: var(--text-secondary); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             /* Keep long titles from colliding with the badge. */
             #microdramasIQView .miq-title-card.miq-has-badge .miq-title-row { padding-right: 5.5rem; }
@@ -25400,6 +25413,7 @@ https://www.instagram.com/p/..."></textarea>
                 <button class="iiq-subtab" data-iiq-subtab="questions" onclick="showIntentIQSubtab('questions')">🎯 PERFORMANCE</button>
                 <button class="iiq-subtab" data-iiq-subtab="inflight" onclick="showIntentIQSubtab('inflight')">⚡ IN-FLIGHT</button>
                 <button class="iiq-subtab" data-iiq-subtab="conversion" onclick="showIntentIQSubtab('conversion')">💰 INTENT TO CONVERSION</button>
+                <button class="iiq-subtab" data-iiq-subtab="roi" onclick="showIntentIQSubtab('roi')">💵 ROI</button>
             </div>
 
             <div class="iiq-panel active" id="iiqPanel-overview">
@@ -25548,6 +25562,14 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
 
                 <div id="iiqConvOutput"></div>
+            </div>
+
+            <div class="iiq-panel" id="iiqPanel-roi">
+                <div style="margin-bottom: 0.65rem;">
+                    <h4 style="margin: 0;">Campaign ROI &mdash; equivalent paid value</h4>
+                    <div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">What it would have cost to buy this reach + engagement + high-intent traffic through paid media. Rates below are US industry benchmarks with citations - tune any of them in the <strong>Rate Assumptions</strong> panel to see live sensitivity.</div>
+                </div>
+                <div id="iiqROIContent"><div class="iiq-empty" style="padding:1.5rem;">Loading ROI model...</div></div>
             </div>
         </div>
 
@@ -25817,6 +25839,189 @@ https://www.instagram.com/p/..."></textarea>
                 }
             };
             // ------------------------------------------------------------
+            // // __IIQ_TOOLTIP_BRAND_v2__
+            // Brand-aware tooltip + short-label helpers, sibling to
+            // _iiqUpdateAssetsMetricsCaption. Used by:
+            //   * per-asset card "info-seek" / conversion hover tips
+            //   * summary-tile subtitles on the Assets tab
+            //   * audience-drill hover tips
+            // Preference waterfall for BRAND titles:
+            //   1. terminology.bottom_funnel_full ("Visited chime.com within
+            //      the attribution window") -- a complete sentence tuned
+            //      for this brand. Reads best; slots in after "% of viewers
+            //      who".
+            //   2. terminology.conversion_endpoint_label ("chime.com") --
+            //      clean single-domain phrase.
+            //   3. terminology.journey_conversion_sub_label -- copy-edited
+            //      short list ("chime.com/signup / app downloads / referral").
+            //   4. First 4 journey_conversion_destinations labels.
+            //   5. Film default (Fandango / AMC / ...).
+            // Same waterfall for info-seek using journey_info_sub_label
+            // then journey_info_destinations.
+            window._iiqLowerFirst = function(s) {
+                if (!s || typeof s !== 'string') return s;
+                return s.charAt(0).toLowerCase() + s.slice(1);
+            };
+            // Bottom-funnel label shortcut for code paths outside the
+            // intentIQView MutationObserver (e.g. Q2 chart modal, asset
+            // drill-in modal - both mount to document.body).
+            window._iiqBFL = function() {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                return term.bottom_funnel_label || 'Ticketing';
+            };
+            window._iiqInfoSeekTooltip = function(count) {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                var isBrand = ov.title_type === 'brand';
+                var body;
+                if (isBrand) {
+                    if (term.journey_info_sub_label) {
+                        body = 'e.g. ' + term.journey_info_sub_label;
+                    } else {
+                        body = 'e.g. ' + window._iiqAssetsCaptionSample(
+                            term.journey_info_destinations,
+                            'IMDB / Rotten Tomatoes / Letterboxd / official site',
+                            4
+                        );
+                    }
+                } else {
+                    body = 'Google search for the title, ' + window._iiqAssetsCaptionSample(
+                        term.journey_info_destinations,
+                        'IMDB / Rotten Tomatoes / Letterboxd / official site',
+                        4
+                    ) + ' visit';
+                }
+                return '% of viewers who took an info-seeking action within 7 days ('
+                     + body + '). ~' + fmtCompact(count) + ' people.';
+            };
+            window._iiqConvTooltip = function(count) {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                var isBrand = ov.title_type === 'brand';
+                if (isBrand) {
+                    if (term.bottom_funnel_full) {
+                        return '% of viewers who ' + window._iiqLowerFirst(term.bottom_funnel_full)
+                             + '. ~' + fmtCompact(count) + ' people.';
+                    }
+                    if (term.conversion_endpoint_label) {
+                        return '% of viewers who visited ' + term.conversion_endpoint_label
+                             + ' within 7 days. ~' + fmtCompact(count) + ' people.';
+                    }
+                    var convExamples = term.journey_conversion_sub_label
+                        || window._iiqAssetsCaptionSample(
+                            term.journey_conversion_destinations,
+                            'Fandango / AMC / Regal / Cinemark / Atom',
+                            4
+                        );
+                    return '% of viewers who visited a ' + (term.bottom_funnel_label || 'conversion').toLowerCase()
+                         + ' destination within 7 days (e.g. ' + convExamples + '). ~'
+                         + fmtCompact(count) + ' people.';
+                }
+                return '% of viewers who visited a ticketing site within 7 days ('
+                     + window._iiqAssetsCaptionSample(
+                         term.journey_conversion_destinations,
+                         'Fandango / AMC / Regal / Cinemark / Atom',
+                         4
+                     ) + '). ~' + fmtCompact(count) + ' people.';
+            };
+            // Audience-drill variants add "REACHED cohort members" + the
+            // "same helper that powers Assets cards" suffix.
+            window._iiqInfoSeekTooltipAud = function(count) {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                var isBrand = ov.title_type === 'brand';
+                var body;
+                if (isBrand) {
+                    body = 'e.g. ' + (term.journey_info_sub_label || window._iiqAssetsCaptionSample(
+                        term.journey_info_destinations,
+                        'IMDB / Rotten Tomatoes / Letterboxd / official site',
+                        4
+                    ));
+                } else {
+                    body = 'Google search for the title, ' + window._iiqAssetsCaptionSample(
+                        term.journey_info_destinations,
+                        'IMDB / Rotten Tomatoes / Letterboxd / official site',
+                        4
+                    ) + ' visit';
+                }
+                return '% of REACHED cohort members who took an info-seeking action ('
+                     + body + ') within 7 days of exposure. ~' + fmtCompact(count)
+                     + ' people \u2014 same helper that powers the Assets cards.';
+            };
+            window._iiqConvTooltipAud = function(count) {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                var isBrand = ov.title_type === 'brand';
+                if (isBrand) {
+                    if (term.bottom_funnel_full) {
+                        return '% of REACHED cohort members who ' + window._iiqLowerFirst(term.bottom_funnel_full)
+                             + '. ~' + fmtCompact(count) + ' people \u2014 same helper that powers the Assets cards.';
+                    }
+                    if (term.conversion_endpoint_label) {
+                        return '% of REACHED cohort members who visited ' + term.conversion_endpoint_label
+                             + ' within 7 days of exposure. ~' + fmtCompact(count)
+                             + ' people \u2014 same helper that powers the Assets cards.';
+                    }
+                    var convExamples = term.journey_conversion_sub_label
+                        || window._iiqAssetsCaptionSample(
+                            term.journey_conversion_destinations,
+                            'Fandango / AMC / Regal / Cinemark / Atom',
+                            4
+                        );
+                    return '% of REACHED cohort members who visited a ' + (term.bottom_funnel_label || 'conversion').toLowerCase()
+                         + ' destination (e.g. ' + convExamples + ') within 7 days of exposure. ~'
+                         + fmtCompact(count) + ' people \u2014 same helper that powers the Assets cards.';
+                }
+                return '% of REACHED cohort members who visited a ticketing site ('
+                     + window._iiqAssetsCaptionSample(
+                         term.journey_conversion_destinations,
+                         'Fandango / AMC / Regal / Cinemark / Atom',
+                         4
+                     ) + ') within 7 days of exposure. ~'
+                     + fmtCompact(count) + ' people \u2014 same helper that powers the Assets cards.';
+            };
+            // Short-form labels for summary-tile subtitles. Prefer the
+            // brand's copy-edited sub_label / endpoint_label; fall back
+            // to the destination list capped at n=3 for legibility.
+            window._iiqInfoShortLabel = function(n) {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                if (term.journey_info_sub_label) return term.journey_info_sub_label;
+                return window._iiqAssetsCaptionSample(
+                    term.journey_info_destinations,
+                    'Google/IMDB/Rotten Tomatoes/official site',
+                    n || 3
+                );
+            };
+            window._iiqConvShortLabel = function(n) {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                if (term.journey_conversion_sub_label) return term.journey_conversion_sub_label;
+                if (term.conversion_endpoint_label) return term.conversion_endpoint_label;
+                return window._iiqAssetsCaptionSample(
+                    term.journey_conversion_destinations,
+                    'Fandango/AMC/Regal/Cinemark/Atom',
+                    n || 3
+                );
+            };
+            // Back-compat shim: v1 exported _iiqTooltipParts; leave a
+            // best-effort reader for any downstream custom code.
+            window._iiqTooltipParts = function() {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                return {
+                    isBrand: ov.title_type === 'brand',
+                    bottomFunnelLabel: term.bottom_funnel_label || 'Ticketing',
+                    infoExamples: window._iiqAssetsCaptionSample(
+                        term.journey_info_destinations,
+                        'IMDB / Rotten Tomatoes / Letterboxd / official site', 4),
+                    convExamples: window._iiqAssetsCaptionSample(
+                        term.journey_conversion_destinations,
+                        'Fandango / AMC / Regal / Cinemark / Atom', 4)
+                };
+            };
+            // ------------------------------------------------------------
 
 
             function _iiqHideAllOtherViews() {
@@ -25914,6 +26119,7 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 if (tab === 'inflight') reloadIntentIQInFlight();
                 if (tab === 'conversion') iiqRenderConversionMetrics();
+                if (tab === 'roi') iiqRenderROI();
             };
 
             // =========================================================
@@ -26385,8 +26591,8 @@ https://www.instagram.com/p/..."></textarea>
                     var reachTip  = '% of this cohort who saw ANY piece of campaign content (any asset, any channel) over the campaign-to-date window.';
                     var uniqueTip = 'Average number of UNIQUE campaign assets reached cohort members encountered (deduped across views). Wider unique counts for talent / fan cohorts (organic share gravity exposes them to more varied content) than for paid-targeted demo cohorts (which see a narrower paid rotation).';
                     var totalTip  = 'Average TOTAL impressions among reached cohort members (unique pieces \u00d7 frequency per piece). Counts re-watches and repeat exposure. Frequency per unique asset clusters at 1.8\u20132.6\u00d7 for paid-heavy campaigns of this scale.';
-                    var infoTipAud = '% of REACHED cohort members who took an info-seeking action (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit) within 7 days of exposure. ~' + fmtCompact(infoSeekersAud) + ' people \u2014 same helper that powers the Assets cards.';
-                    var tkTipAud   = '% of REACHED cohort members who visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days of exposure. ~' + fmtCompact(ticketVisitsAud) + ' people \u2014 same helper that powers the Assets cards.';
+                    var infoTipAud = window._iiqInfoSeekTooltipAud(infoSeekersAud);
+                    var tkTipAud   = window._iiqConvTooltipAud(ticketVisitsAud);
                     return '<div class="iiq-card" onclick="window.iiqAudOpenDrillDown(' + idx + ')" title="Click to see which content performed best with this audience" style="border-left: 3px solid ' + color + '; cursor:pointer; transition: border-color 0.15s, transform 0.1s;" onmouseover="this.style.borderColor=\'#22d3ee\'; this.style.transform=\'translateY(-1px)\';" onmouseout="this.style.borderColor=\'\'; this.style.borderLeftColor=\'' + color + '\'; this.style.transform=\'\';">'
                         + '<div class="iiq-card-title" style="display:flex; justify-content:space-between; align-items:center; gap:0.4rem;"><span>' + escapeHtml(c.display || c.subject_key) + '</span><span style="font-size:0.62rem; color:rgba(34,211,238,0.75); font-weight:400; white-space:nowrap;">drill in \u2197</span></div>'
                         + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">' + escapeHtml(c.category || '-') + '</div>'
@@ -26472,17 +26678,28 @@ https://www.instagram.com/p/..."></textarea>
             // tab's "Audiences" sub-tab. Includes the two section headers
             // that used to live in iiqPanel-audiences.
             function iiqRenderAudiences(_d) {
-                return ''
+                var _audOv = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var _audIsBrand = _audOv.title_type === 'brand';
+                var _audSub = _audIsBrand
+                    ? 'Audience segments most likely to engage with this campaign, sorted by their share of US adults. Each card also shows projected campaign exposure (reach, unique pieces seen, total views).'
+                    : 'Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title\'s moviegoing audience. Each card also shows projected campaign exposure (reach, unique pieces seen, total views).';
+                var html = ''
                     + '<div style="margin-bottom: 0.65rem;">'
                     +   '<h4 style="margin:0;">Audiences of interest</h4>'
-                    +   '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title\'s moviegoing audience. Each card also shows projected campaign exposure (reach, unique pieces seen, total views).</div>'
+                    +   '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">' + _audSub + '</div>'
                     + '</div>'
-                    + iiqBuildAudiencesHtml()
-                    + '<div style="margin: 1.25rem 0 0.5rem;">'
-                    +   '<h4 style="margin:0;">Moviegoing-frequency cohorts</h4>'
-                    +   '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">How often this slice of US adults goes to the movies. Source: MPAA THEME 2025 + Statista US Moviegoing Frequency Q1 2026.</div>'
-                    + '</div>'
-                    + iiqBuildCohortsHtml();
+                    + iiqBuildAudiencesHtml();
+                // Moviegoing-frequency cohorts only make sense for film
+                // campaigns. Brand campaigns (Chime, etc.) suppress them.
+                if (!_audIsBrand) {
+                    html += ''
+                        + '<div style="margin: 1.25rem 0 0.5rem;">'
+                        +   '<h4 style="margin:0;">Moviegoing-frequency cohorts</h4>'
+                        +   '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">How often this slice of US adults goes to the movies. Source: MPAA THEME 2025 + Statista US Moviegoing Frequency Q1 2026.</div>'
+                        + '</div>'
+                        + iiqBuildCohortsHtml();
+                }
+                return html;
             }
 
             function populateAssetFilterDropdowns() {
@@ -26805,7 +27022,7 @@ https://www.instagram.com/p/..."></textarea>
                      +     '<div><div style="font-size:0.85rem; font-weight:700; color:#fff;">' + fmtC(eng) + '</div><div style="font-size:0.6rem; color:#94a3b8;">engagement</div></div>'
                      +     '<div><div style="font-size:0.85rem; font-weight:700; color:#22d3ee;">' + engRate.toFixed(2) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">eng. rate</div></div>'
                      +     '<div><div style="font-size:0.85rem; font-weight:700; color:#a5b4fc;">' + proj.info_pct.toFixed(1) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">info-seek</div></div>'
-                     +     '<div><div style="font-size:0.85rem; font-weight:700; color:#fbbf24;">' + proj.ticket_pct.toFixed(1) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">ticketing</div></div>'
+                     +     '<div><div style="font-size:0.85rem; font-weight:700; color:#fbbf24;">' + proj.ticket_pct.toFixed(1) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">' + window._iiqBFL().toLowerCase() + '</div></div>'
                      +   '</div>'
                      +   '<div style="display:flex; justify-content:space-between; align-items:center; gap:0.4rem; font-size:0.65rem; color:#94a3b8;">'
                      +     '<span>' + (posted ? 'Posted ' + esc(posted) : '') + '</span>'
@@ -27440,8 +27657,8 @@ https://www.instagram.com/p/..."></textarea>
                             iiqSummaryTile('Total views', fmtCompact(totalViews), inWindowSub),
                             iiqSummaryTile('Total engagement', fmtCompact(totalEng), 'likes + comments + shares \u00b7 ' + inWindowSub),
                             iiqSummaryTile('Paid / Organic mix', paidCount + ' / ' + orgCount, (topAsset && topAsset.action_label ? 'Top: ' + topAsset.action_label + ' (' + fmtCompact(topAsset.ext_view_count) + ' views)' : '')),
-                            iiqSummaryTile('Info-seekers', fmtCompact(totalInfoSeekers), infoBlendedPct.toFixed(1) + '% of viewers \u2014 Google/IMDB/Rotten Tomatoes/official site'),
-                            iiqSummaryTile('Ticketing visits', fmtCompact(totalTicketVisits), tkBlendedPct.toFixed(1) + '% of viewers \u2014 Fandango/AMC/Regal/Cinemark/Atom')
+                            iiqSummaryTile('Info-seekers', fmtCompact(totalInfoSeekers), infoBlendedPct.toFixed(1) + '% of viewers \u2014 ' + window._iiqInfoShortLabel(3)),
+                            iiqSummaryTile('Ticketing visits', fmtCompact(totalTicketVisits), tkBlendedPct.toFixed(1) + '% of viewers \u2014 ' + window._iiqConvShortLabel(3))
                         ].join('');
                         var maxViews = Math.max.apply(null, cards.map(function(c){ return Number(c.ext_view_count)||0; }).concat([1]));
                         document.getElementById('iiqAssetGrid').innerHTML = cards.map(function(c) {
@@ -27461,8 +27678,8 @@ https://www.instagram.com/p/..."></textarea>
                             var proj = c._proj || (v > 0 ? iiqAssetFunnelProjection(c) : null);
                             var infoSeekers = proj ? Math.round(v * proj.info_pct / 100) : 0;
                             var ticketVisits = proj ? Math.round(v * proj.ticket_pct / 100) : 0;
-                            var infoTip = '% of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people.';
-                            var tkTip   = '% of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people.';
+                            var infoTip = window._iiqInfoSeekTooltip(infoSeekers);
+                            var tkTip   = window._iiqConvTooltip(ticketVisits);
                             return '<div class="iiq-card" data-asset-id="' + escapeHtml(c.asset_id || '') + '" style="border-left: 3px solid ' + edgeColor + '; transition: box-shadow 0.4s ease, transform 0.2s ease;">'
                                 + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '-') + '</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.asset_type || '') + ' · ' + escapeHtml(c.channel || '') + '</div>'
@@ -28861,9 +29078,21 @@ https://www.instagram.com/p/..."></textarea>
                 // chart is small enough to live next to the donut + funnel
                 // cards; the modal version goes wide so the dots and date
                 // axis are readable.
-                var chartCaption = hasFunnelSeries
-                    ? 'Daily activity (7-day rolling). Left axis: daily paid vs organic views. Right axis: daily info-seekers &amp; ticketing visits. All four lines spike around opening weekend, decay through the theatrical window, and ticketing collapses once the movie leaves theatres. Info-seek picks back up around the 5/15 streaming launch ("where can I stream this?"). Dots along the x-axis = each paid/organic asset drop date.'
-                    : 'Dots along the x-axis = each paid/organic asset drop date.';
+                var chartCaption;
+                if (hasFunnelSeries) {
+                    var _q2ov  = (window.__intentIQ && window.__intentIQ.overview) || {};
+                    var _q2trm = _q2ov.terminology || {};
+                    var _q2isBrand = _q2ov.title_type === 'brand';
+                    var _q2bfl = (_q2trm.bottom_funnel_label || 'Ticketing');
+                    var _q2bflLc = _q2bfl.toLowerCase();
+                    if (_q2isBrand) {
+                        chartCaption = 'Daily activity (7-day rolling). Left axis: daily paid vs organic views. Right axis: daily info-seekers &amp; ' + _q2bflLc + 's. All four lines track together across the campaign - view lines spike on major content drops, and ' + _q2bflLc + 's rise on high-intent creative (product tutorials, referral pushes, testimonial cuts). Info-seek trails view spikes by 1-2 days as audiences research the brand between exposure and action. Dots along the x-axis = each paid/organic asset drop date.';
+                    } else {
+                        chartCaption = 'Daily activity (7-day rolling). Left axis: daily paid vs organic views. Right axis: daily info-seekers &amp; ticketing visits. All four lines spike around opening weekend, decay through the theatrical window, and ticketing collapses once the movie leaves theatres. Info-seek picks back up around the 5/15 streaming launch ("where can I stream this?"). Dots along the x-axis = each paid/organic asset drop date.';
+                    }
+                } else {
+                    chartCaption = 'Dots along the x-axis = each paid/organic asset drop date.';
+                }
 
                 window.__intentIQQ2Chart = {
                     series: series,
@@ -29434,7 +29663,7 @@ https://www.instagram.com/p/..."></textarea>
                         + _seriesToggle('Organic views', pal.organic, st.showOrganicViews, 'window.iiqQ2ModalToggleSeries(\'showOrganicViews\')')
                         + _seriesToggle('Paid views',    pal.paid,    st.showPaidViews,    'window.iiqQ2ModalToggleSeries(\'showPaidViews\')')
                         + _seriesToggle('Info-seekers',  '#a5b4fc',   st.showInfoSeekers,  'window.iiqQ2ModalToggleSeries(\'showInfoSeekers\')')
-                        + _seriesToggle('Ticketing',     '#fbbf24',   st.showTicketing,    'window.iiqQ2ModalToggleSeries(\'showTicketing\')')
+                        + _seriesToggle(window._iiqBFL(), '#fbbf24',   st.showTicketing,    'window.iiqQ2ModalToggleSeries(\'showTicketing\')')
                         + _seriesToggle('Drop dots',     '#94a3b8',   st.showEvents,       'window.iiqQ2ModalToggleSeries(\'showEvents\')');
 
                     var labelStyle = 'font-size:0.66rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.25rem;';
@@ -29521,7 +29750,7 @@ https://www.instagram.com/p/..."></textarea>
                     '<div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:0.85rem; gap:1rem;">'
                   +   '<div>'
                   +     '<h3 style="margin:0 0 0.2rem; color:#fff; font-size:1.05rem;">Daily activity \u2014 explore cuts</h3>'
-                  +     '<div style="font-size:0.74rem; color: var(--text-secondary);">Slice the chart by source, asset type, channel, and smoothing window. Totals always renormalize to the filtered subset so info-seek and ticketing stay calibrated to what you\u2019re looking at.</div>'
+                  +     '<div style="font-size:0.74rem; color: var(--text-secondary);">Slice the chart by source, asset type, channel, and smoothing window. Totals always renormalize to the filtered subset so info-seek and ' + window._iiqBFL().toLowerCase() + ' stay calibrated to what you\u2019re looking at.</div>'
                   +   '</div>'
                   +   '<div style="display:flex; gap:0.4rem; flex:none;">'
                   +     '<button type="button" onclick="window.iiqQ2ModalReset()" style="background: rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:0.35rem 0.7rem; cursor:pointer; font-size:0.75rem;">Reset cuts</button>'
@@ -29529,7 +29758,7 @@ https://www.instagram.com/p/..."></textarea>
                   +   '</div>'
                   + '</div>'
                   + '<div id="iiqQ2ModalBody"></div>'
-                  + (c.caption ? '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.55rem; line-height:1.4;">' + c.caption + ' Hover a dot for the asset name, channel, views, eng. rate, info-seek %, and ticketing %.</div>' : '');
+                  + (c.caption ? '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.55rem; line-height:1.4;">' + c.caption + ' Hover a dot for the asset name, channel, views, eng. rate, info-seek %, and ' + window._iiqBFL().toLowerCase() + ' %.</div>' : '');
                 overlay.appendChild(panel);
                 _render();
             };
@@ -45848,6 +46077,45 @@ https://www.instagram.com/p/..."></textarea>
                               +   '<span class="miq-rollup-conv-value">N/A</span>'
                               + '</div>';
                 }
+                // User-flow block: total users + new subs + cancellations
+                // + net growth for the active window. All numbers scale
+                // linearly with the look-back filter (7d shows 1x weekly
+                // rates, 14d shows 2x, custom range uses days/7). None
+                // rendered if the backend has no PLATFORM_USER_FLOW row
+                // for this platform.
+                var flowBlock = '';
+                if (p.user_flow) {
+                    var uf = p.user_flow;
+                    var growthCls = uf.net_growth_pct > 0.05
+                                     ? 'miq-rollup-flow-net miq-rollup-flow-net-pos'
+                                     : (uf.net_growth_pct < -0.05
+                                         ? 'miq-rollup-flow-net miq-rollup-flow-net-neg'
+                                         : 'miq-rollup-flow-net');
+                    var growthSign = uf.net_growth_pct > 0 ? '+' : '';
+                    var netSign    = uf.net_new         > 0 ? '+' : '';
+                    var wd         = uf.window_days || 7;
+                    var flowTip = 'User flow on ' + (p.platform || 'this platform') + ' over the last ' + wd + ' days. '
+                                + 'New = gross new users. Cancelled = gross churned users. '
+                                + 'Net Growth = (new - cancelled) / total.';
+                    flowBlock = '<div class="miq-rollup-card-flow" title="' + _miqEscape(flowTip) + '">'
+                              +   '<div class="miq-rollup-flow-cell">'
+                              +     '<div class="miq-rollup-flow-label">Total Users</div>'
+                              +     '<div class="miq-rollup-flow-value">' + _miqFormatNumber(uf.total_users) + '</div>'
+                              +   '</div>'
+                              +   '<div class="miq-rollup-flow-cell">'
+                              +     '<div class="miq-rollup-flow-label">New Subs</div>'
+                              +     '<div class="miq-rollup-flow-value miq-rollup-flow-pos">+' + _miqFormatNumber(uf.new_users) + '</div>'
+                              +   '</div>'
+                              +   '<div class="miq-rollup-flow-cell">'
+                              +     '<div class="miq-rollup-flow-label">Cancellations</div>'
+                              +     '<div class="miq-rollup-flow-value miq-rollup-flow-neg">-' + _miqFormatNumber(uf.churned_users) + '</div>'
+                              +   '</div>'
+                              +   '<div class="miq-rollup-flow-cell">'
+                              +     '<div class="miq-rollup-flow-label">Net Growth</div>'
+                              +     '<div class="' + growthCls + '">' + growthSign + uf.net_growth_pct.toFixed(2) + '%</div>'
+                              +   '</div>'
+                              + '</div>';
+                }
                 return '<div class="miq-rollup-card">'
                      +   '<div class="miq-rollup-card-head">'
                      +     '<div class="miq-rollup-card-name"><span class="' + dotCls + '"></span>' + _miqEscape(p.platform || 'Unknown') + '</div>'
@@ -45856,6 +46124,7 @@ https://www.instagram.com/p/..."></textarea>
                      +   '<div class="miq-rollup-card-views">' + _miqFormatNumber(p.total_views || 0) + '</div>'
                      +   '<div class="miq-rollup-card-sub">across ' + titleCount + ' ' + (titleCount === 1 ? 'title' : 'titles') + '</div>'
                      +   convBlock
+                     +   flowBlock
                      +   topBlock
                      + '</div>';
             }).join('');
