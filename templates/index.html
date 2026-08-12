@@ -25817,87 +25817,147 @@ https://www.instagram.com/p/..."></textarea>
                 }
             };
             // ------------------------------------------------------------
-            // // __IIQ_TOOLTIP_BRAND_v1__
+            // // __IIQ_TOOLTIP_BRAND_v2__
             // Brand-aware tooltip + short-label helpers, sibling to
             // _iiqUpdateAssetsMetricsCaption. Used by:
-            //   * per-asset card "info-seek" / "ticketing" hover tips
+            //   * per-asset card "info-seek" / conversion hover tips
             //   * summary-tile subtitles on the Assets tab
-            //   * audience-drill "info-seek" / "ticketing" hover tips
-            // All read from window.__intentIQ.overview.terminology so
-            // brand titles show Reddit / NerdWallet / chime.com etc.
-            // instead of IMDB / Fandango / AMC.
-            window._iiqTooltipParts = function() {
+            //   * audience-drill hover tips
+            // Preference waterfall for BRAND titles:
+            //   1. terminology.bottom_funnel_full ("Visited chime.com within
+            //      the attribution window") -- a complete sentence tuned
+            //      for this brand. Reads best; slots in after "% of viewers
+            //      who".
+            //   2. terminology.conversion_endpoint_label ("chime.com") --
+            //      clean single-domain phrase.
+            //   3. terminology.journey_conversion_sub_label -- copy-edited
+            //      short list ("chime.com/signup / app downloads / referral").
+            //   4. First 4 journey_conversion_destinations labels.
+            //   5. Film default (Fandango / AMC / ...).
+            // Same waterfall for info-seek using journey_info_sub_label
+            // then journey_info_destinations.
+            window._iiqLowerFirst = function(s) {
+                if (!s || typeof s !== 'string') return s;
+                return s.charAt(0).toLowerCase() + s.slice(1);
+            };
+            window._iiqInfoSeekTooltip = function(count) {
                 var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
                 var term = ov.terminology || {};
                 var isBrand = ov.title_type === 'brand';
-                var bfl = term.bottom_funnel_label || 'Ticketing';
-                var infoExamples = window._iiqAssetsCaptionSample(
-                    term.journey_info_destinations,
-                    'IMDB / Rotten Tomatoes / Letterboxd / official site',
-                    4
-                );
-                var convExamples = window._iiqAssetsCaptionSample(
-                    term.journey_conversion_destinations,
-                    'Fandango / AMC / Regal / Cinemark / Atom',
-                    4
-                );
-                return {
-                    isBrand: isBrand,
-                    bottomFunnelLabel: bfl,
-                    infoExamples: infoExamples,
-                    convExamples: convExamples
-                };
-            };
-            // Full-length hover tips for per-asset cards. For brand the
-            // destination list already contains "Google search (Chime)"
-            // style entries, so we drop the "Google search for the title"
-            // preamble the film default carries.
-            window._iiqInfoSeekTooltip = function(count) {
-                var p = window._iiqTooltipParts();
-                var body = p.isBrand
-                    ? ('e.g. ' + p.infoExamples)
-                    : ('Google search for the title, ' + p.infoExamples + ' visit');
+                var body;
+                if (isBrand) {
+                    if (term.journey_info_sub_label) {
+                        body = 'e.g. ' + term.journey_info_sub_label;
+                    } else {
+                        body = 'e.g. ' + window._iiqAssetsCaptionSample(
+                            term.journey_info_destinations,
+                            'IMDB / Rotten Tomatoes / Letterboxd / official site',
+                            4
+                        );
+                    }
+                } else {
+                    body = 'Google search for the title, ' + window._iiqAssetsCaptionSample(
+                        term.journey_info_destinations,
+                        'IMDB / Rotten Tomatoes / Letterboxd / official site',
+                        4
+                    ) + ' visit';
+                }
                 return '% of viewers who took an info-seeking action within 7 days ('
                      + body + '). ~' + fmtCompact(count) + ' people.';
             };
             window._iiqConvTooltip = function(count) {
-                var p = window._iiqTooltipParts();
-                if (p.isBrand) {
-                    return '% of viewers who visited ' + p.bottomFunnelLabel.toLowerCase()
-                         + ' destinations within 7 days (e.g. ' + p.convExamples + '). ~'
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                var isBrand = ov.title_type === 'brand';
+                if (isBrand) {
+                    if (term.bottom_funnel_full) {
+                        return '% of viewers who ' + window._iiqLowerFirst(term.bottom_funnel_full)
+                             + '. ~' + fmtCompact(count) + ' people.';
+                    }
+                    if (term.conversion_endpoint_label) {
+                        return '% of viewers who visited ' + term.conversion_endpoint_label
+                             + ' within 7 days. ~' + fmtCompact(count) + ' people.';
+                    }
+                    var convExamples = term.journey_conversion_sub_label
+                        || window._iiqAssetsCaptionSample(
+                            term.journey_conversion_destinations,
+                            'Fandango / AMC / Regal / Cinemark / Atom',
+                            4
+                        );
+                    return '% of viewers who visited a ' + (term.bottom_funnel_label || 'conversion').toLowerCase()
+                         + ' destination within 7 days (e.g. ' + convExamples + '). ~'
                          + fmtCompact(count) + ' people.';
                 }
                 return '% of viewers who visited a ticketing site within 7 days ('
-                     + p.convExamples + '). ~' + fmtCompact(count) + ' people.';
+                     + window._iiqAssetsCaptionSample(
+                         term.journey_conversion_destinations,
+                         'Fandango / AMC / Regal / Cinemark / Atom',
+                         4
+                     ) + '). ~' + fmtCompact(count) + ' people.';
             };
-            // Audience-drill variants add "REACHED cohort members" +
-            // the "same helper that powers Assets cards" suffix so the
-            // user understands the number ties out to the main Assets tab.
+            // Audience-drill variants add "REACHED cohort members" + the
+            // "same helper that powers Assets cards" suffix.
             window._iiqInfoSeekTooltipAud = function(count) {
-                var p = window._iiqTooltipParts();
-                var body = p.isBrand
-                    ? ('e.g. ' + p.infoExamples)
-                    : ('Google search for the title, ' + p.infoExamples + ' visit');
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                var isBrand = ov.title_type === 'brand';
+                var body;
+                if (isBrand) {
+                    body = 'e.g. ' + (term.journey_info_sub_label || window._iiqAssetsCaptionSample(
+                        term.journey_info_destinations,
+                        'IMDB / Rotten Tomatoes / Letterboxd / official site',
+                        4
+                    ));
+                } else {
+                    body = 'Google search for the title, ' + window._iiqAssetsCaptionSample(
+                        term.journey_info_destinations,
+                        'IMDB / Rotten Tomatoes / Letterboxd / official site',
+                        4
+                    ) + ' visit';
+                }
                 return '% of REACHED cohort members who took an info-seeking action ('
                      + body + ') within 7 days of exposure. ~' + fmtCompact(count)
                      + ' people \u2014 same helper that powers the Assets cards.';
             };
             window._iiqConvTooltipAud = function(count) {
-                var p = window._iiqTooltipParts();
-                if (p.isBrand) {
-                    return '% of REACHED cohort members who visited ' + p.bottomFunnelLabel.toLowerCase()
-                         + ' destinations (e.g. ' + p.convExamples + ') within 7 days of exposure. ~'
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                var isBrand = ov.title_type === 'brand';
+                if (isBrand) {
+                    if (term.bottom_funnel_full) {
+                        return '% of REACHED cohort members who ' + window._iiqLowerFirst(term.bottom_funnel_full)
+                             + '. ~' + fmtCompact(count) + ' people \u2014 same helper that powers the Assets cards.';
+                    }
+                    if (term.conversion_endpoint_label) {
+                        return '% of REACHED cohort members who visited ' + term.conversion_endpoint_label
+                             + ' within 7 days of exposure. ~' + fmtCompact(count)
+                             + ' people \u2014 same helper that powers the Assets cards.';
+                    }
+                    var convExamples = term.journey_conversion_sub_label
+                        || window._iiqAssetsCaptionSample(
+                            term.journey_conversion_destinations,
+                            'Fandango / AMC / Regal / Cinemark / Atom',
+                            4
+                        );
+                    return '% of REACHED cohort members who visited a ' + (term.bottom_funnel_label || 'conversion').toLowerCase()
+                         + ' destination (e.g. ' + convExamples + ') within 7 days of exposure. ~'
                          + fmtCompact(count) + ' people \u2014 same helper that powers the Assets cards.';
                 }
                 return '% of REACHED cohort members who visited a ticketing site ('
-                     + p.convExamples + ') within 7 days of exposure. ~'
+                     + window._iiqAssetsCaptionSample(
+                         term.journey_conversion_destinations,
+                         'Fandango / AMC / Regal / Cinemark / Atom',
+                         4
+                     ) + ') within 7 days of exposure. ~'
                      + fmtCompact(count) + ' people \u2014 same helper that powers the Assets cards.';
             };
-            // Short-form labels for summary-tile subtitles (Assets tab).
-            // Capped at 3 destinations so the subtitle stays legible.
+            // Short-form labels for summary-tile subtitles. Prefer the
+            // brand's copy-edited sub_label / endpoint_label; fall back
+            // to the destination list capped at n=3 for legibility.
             window._iiqInfoShortLabel = function(n) {
                 var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
                 var term = ov.terminology || {};
+                if (term.journey_info_sub_label) return term.journey_info_sub_label;
                 return window._iiqAssetsCaptionSample(
                     term.journey_info_destinations,
                     'Google/IMDB/Rotten Tomatoes/official site',
@@ -25907,11 +25967,29 @@ https://www.instagram.com/p/..."></textarea>
             window._iiqConvShortLabel = function(n) {
                 var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
                 var term = ov.terminology || {};
+                if (term.journey_conversion_sub_label) return term.journey_conversion_sub_label;
+                if (term.conversion_endpoint_label) return term.conversion_endpoint_label;
                 return window._iiqAssetsCaptionSample(
                     term.journey_conversion_destinations,
                     'Fandango/AMC/Regal/Cinemark/Atom',
                     n || 3
                 );
+            };
+            // Back-compat shim: v1 exported _iiqTooltipParts; leave a
+            // best-effort reader for any downstream custom code.
+            window._iiqTooltipParts = function() {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                return {
+                    isBrand: ov.title_type === 'brand',
+                    bottomFunnelLabel: term.bottom_funnel_label || 'Ticketing',
+                    infoExamples: window._iiqAssetsCaptionSample(
+                        term.journey_info_destinations,
+                        'IMDB / Rotten Tomatoes / Letterboxd / official site', 4),
+                    convExamples: window._iiqAssetsCaptionSample(
+                        term.journey_conversion_destinations,
+                        'Fandango / AMC / Regal / Cinemark / Atom', 4)
+                };
             };
             // ------------------------------------------------------------
 
