@@ -25817,6 +25817,103 @@ https://www.instagram.com/p/..."></textarea>
                 }
             };
             // ------------------------------------------------------------
+            // // __IIQ_TOOLTIP_BRAND_v1__
+            // Brand-aware tooltip + short-label helpers, sibling to
+            // _iiqUpdateAssetsMetricsCaption. Used by:
+            //   * per-asset card "info-seek" / "ticketing" hover tips
+            //   * summary-tile subtitles on the Assets tab
+            //   * audience-drill "info-seek" / "ticketing" hover tips
+            // All read from window.__intentIQ.overview.terminology so
+            // brand titles show Reddit / NerdWallet / chime.com etc.
+            // instead of IMDB / Fandango / AMC.
+            window._iiqTooltipParts = function() {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                var isBrand = ov.title_type === 'brand';
+                var bfl = term.bottom_funnel_label || 'Ticketing';
+                var infoExamples = window._iiqAssetsCaptionSample(
+                    term.journey_info_destinations,
+                    'IMDB / Rotten Tomatoes / Letterboxd / official site',
+                    4
+                );
+                var convExamples = window._iiqAssetsCaptionSample(
+                    term.journey_conversion_destinations,
+                    'Fandango / AMC / Regal / Cinemark / Atom',
+                    4
+                );
+                return {
+                    isBrand: isBrand,
+                    bottomFunnelLabel: bfl,
+                    infoExamples: infoExamples,
+                    convExamples: convExamples
+                };
+            };
+            // Full-length hover tips for per-asset cards. For brand the
+            // destination list already contains "Google search (Chime)"
+            // style entries, so we drop the "Google search for the title"
+            // preamble the film default carries.
+            window._iiqInfoSeekTooltip = function(count) {
+                var p = window._iiqTooltipParts();
+                var body = p.isBrand
+                    ? ('e.g. ' + p.infoExamples)
+                    : ('Google search for the title, ' + p.infoExamples + ' visit');
+                return '% of viewers who took an info-seeking action within 7 days ('
+                     + body + '). ~' + fmtCompact(count) + ' people.';
+            };
+            window._iiqConvTooltip = function(count) {
+                var p = window._iiqTooltipParts();
+                if (p.isBrand) {
+                    return '% of viewers who visited ' + p.bottomFunnelLabel.toLowerCase()
+                         + ' destinations within 7 days (e.g. ' + p.convExamples + '). ~'
+                         + fmtCompact(count) + ' people.';
+                }
+                return '% of viewers who visited a ticketing site within 7 days ('
+                     + p.convExamples + '). ~' + fmtCompact(count) + ' people.';
+            };
+            // Audience-drill variants add "REACHED cohort members" +
+            // the "same helper that powers Assets cards" suffix so the
+            // user understands the number ties out to the main Assets tab.
+            window._iiqInfoSeekTooltipAud = function(count) {
+                var p = window._iiqTooltipParts();
+                var body = p.isBrand
+                    ? ('e.g. ' + p.infoExamples)
+                    : ('Google search for the title, ' + p.infoExamples + ' visit');
+                return '% of REACHED cohort members who took an info-seeking action ('
+                     + body + ') within 7 days of exposure. ~' + fmtCompact(count)
+                     + ' people \u2014 same helper that powers the Assets cards.';
+            };
+            window._iiqConvTooltipAud = function(count) {
+                var p = window._iiqTooltipParts();
+                if (p.isBrand) {
+                    return '% of REACHED cohort members who visited ' + p.bottomFunnelLabel.toLowerCase()
+                         + ' destinations (e.g. ' + p.convExamples + ') within 7 days of exposure. ~'
+                         + fmtCompact(count) + ' people \u2014 same helper that powers the Assets cards.';
+                }
+                return '% of REACHED cohort members who visited a ticketing site ('
+                     + p.convExamples + ') within 7 days of exposure. ~'
+                     + fmtCompact(count) + ' people \u2014 same helper that powers the Assets cards.';
+            };
+            // Short-form labels for summary-tile subtitles (Assets tab).
+            // Capped at 3 destinations so the subtitle stays legible.
+            window._iiqInfoShortLabel = function(n) {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                return window._iiqAssetsCaptionSample(
+                    term.journey_info_destinations,
+                    'Google/IMDB/Rotten Tomatoes/official site',
+                    n || 3
+                );
+            };
+            window._iiqConvShortLabel = function(n) {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                return window._iiqAssetsCaptionSample(
+                    term.journey_conversion_destinations,
+                    'Fandango/AMC/Regal/Cinemark/Atom',
+                    n || 3
+                );
+            };
+            // ------------------------------------------------------------
 
 
             function _iiqHideAllOtherViews() {
@@ -26385,8 +26482,8 @@ https://www.instagram.com/p/..."></textarea>
                     var reachTip  = '% of this cohort who saw ANY piece of campaign content (any asset, any channel) over the campaign-to-date window.';
                     var uniqueTip = 'Average number of UNIQUE campaign assets reached cohort members encountered (deduped across views). Wider unique counts for talent / fan cohorts (organic share gravity exposes them to more varied content) than for paid-targeted demo cohorts (which see a narrower paid rotation).';
                     var totalTip  = 'Average TOTAL impressions among reached cohort members (unique pieces \u00d7 frequency per piece). Counts re-watches and repeat exposure. Frequency per unique asset clusters at 1.8\u20132.6\u00d7 for paid-heavy campaigns of this scale.';
-                    var infoTipAud = '% of REACHED cohort members who took an info-seeking action (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit) within 7 days of exposure. ~' + fmtCompact(infoSeekersAud) + ' people \u2014 same helper that powers the Assets cards.';
-                    var tkTipAud   = '% of REACHED cohort members who visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days of exposure. ~' + fmtCompact(ticketVisitsAud) + ' people \u2014 same helper that powers the Assets cards.';
+                    var infoTipAud = window._iiqInfoSeekTooltipAud(infoSeekersAud);
+                    var tkTipAud   = window._iiqConvTooltipAud(ticketVisitsAud);
                     return '<div class="iiq-card" onclick="window.iiqAudOpenDrillDown(' + idx + ')" title="Click to see which content performed best with this audience" style="border-left: 3px solid ' + color + '; cursor:pointer; transition: border-color 0.15s, transform 0.1s;" onmouseover="this.style.borderColor=\'#22d3ee\'; this.style.transform=\'translateY(-1px)\';" onmouseout="this.style.borderColor=\'\'; this.style.borderLeftColor=\'' + color + '\'; this.style.transform=\'\';">'
                         + '<div class="iiq-card-title" style="display:flex; justify-content:space-between; align-items:center; gap:0.4rem;"><span>' + escapeHtml(c.display || c.subject_key) + '</span><span style="font-size:0.62rem; color:rgba(34,211,238,0.75); font-weight:400; white-space:nowrap;">drill in \u2197</span></div>'
                         + '<div class="iiq-card-meta" style="font-size:0.7rem; opacity:0.7;">' + escapeHtml(c.category || '-') + '</div>'
@@ -27440,8 +27537,8 @@ https://www.instagram.com/p/..."></textarea>
                             iiqSummaryTile('Total views', fmtCompact(totalViews), inWindowSub),
                             iiqSummaryTile('Total engagement', fmtCompact(totalEng), 'likes + comments + shares \u00b7 ' + inWindowSub),
                             iiqSummaryTile('Paid / Organic mix', paidCount + ' / ' + orgCount, (topAsset && topAsset.action_label ? 'Top: ' + topAsset.action_label + ' (' + fmtCompact(topAsset.ext_view_count) + ' views)' : '')),
-                            iiqSummaryTile('Info-seekers', fmtCompact(totalInfoSeekers), infoBlendedPct.toFixed(1) + '% of viewers \u2014 Google/IMDB/Rotten Tomatoes/official site'),
-                            iiqSummaryTile('Ticketing visits', fmtCompact(totalTicketVisits), tkBlendedPct.toFixed(1) + '% of viewers \u2014 Fandango/AMC/Regal/Cinemark/Atom')
+                            iiqSummaryTile('Info-seekers', fmtCompact(totalInfoSeekers), infoBlendedPct.toFixed(1) + '% of viewers \u2014 ' + window._iiqInfoShortLabel(3)),
+                            iiqSummaryTile('Ticketing visits', fmtCompact(totalTicketVisits), tkBlendedPct.toFixed(1) + '% of viewers \u2014 ' + window._iiqConvShortLabel(3))
                         ].join('');
                         var maxViews = Math.max.apply(null, cards.map(function(c){ return Number(c.ext_view_count)||0; }).concat([1]));
                         document.getElementById('iiqAssetGrid').innerHTML = cards.map(function(c) {
@@ -27461,8 +27558,8 @@ https://www.instagram.com/p/..."></textarea>
                             var proj = c._proj || (v > 0 ? iiqAssetFunnelProjection(c) : null);
                             var infoSeekers = proj ? Math.round(v * proj.info_pct / 100) : 0;
                             var ticketVisits = proj ? Math.round(v * proj.ticket_pct / 100) : 0;
-                            var infoTip = '% of viewers who took an info-seeking action within 7 days (Google search for the title, IMDB / Rotten Tomatoes / Letterboxd / official-site visit). ~' + fmtCompact(infoSeekers) + ' people.';
-                            var tkTip   = '% of viewers who visited a ticketing site within 7 days (Fandango / AMC / Regal / Cinemark / Atom). ~' + fmtCompact(ticketVisits) + ' people.';
+                            var infoTip = window._iiqInfoSeekTooltip(infoSeekers);
+                            var tkTip   = window._iiqConvTooltip(ticketVisits);
                             return '<div class="iiq-card" data-asset-id="' + escapeHtml(c.asset_id || '') + '" style="border-left: 3px solid ' + edgeColor + '; transition: box-shadow 0.4s ease, transform 0.2s ease;">'
                                 + '<div class="iiq-card-title">' + escapeHtml(c.action_label || c.asset_type || '-') + '</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.72rem; opacity:0.7;">' + escapeHtml(c.asset_type || '') + ' · ' + escapeHtml(c.channel || '') + '</div>'
