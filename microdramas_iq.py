@@ -249,13 +249,27 @@ def _estimate_daily_views_from_rank(rank: Optional[int],
 #   points inside the plausible band.
 # ============================================================================
 
-# Baseline attrition params per platform. Tuned so that a rank-15
-# title on ReelShort/DramaBox lands near the published medians:
-#   - free-tier completion ~52% (ep 10, 93% ep-to-ep retention)
-#   - payer conversion of free completers ~28% (paywall retains 30%)
-#   - series completion ~1-3% (paid tier decays 6% per ep across 55 eps)
+# Baseline attrition params per platform. Recalibrated 2026-08-12
+# against published data for the coin-economy microdrama space:
+#   * ReelShort Sensor Tower Q1 2026 study:    6-7% of MAU pays monthly
+#   * ReelShort investor materials:            10-12% lifetime paying rate
+#   * data.ai vertical shorts 2025:            4-8% per-title cross-paywall
+#   * Public ARPU/ARPPU ratios (all majors):   5-10% paying share of MAU
+#
+# The paywall cliff is the dominant knob. Prior tuning had it at
+# ~30% cross-through rate of free-completers which took per-title
+# paid_pct to ~15-20% - about 2-3x too high vs published ranges.
+# New cliff of ~13% of free-completers puts a rank-15 title near
+# the median published cross-paywall rate (~6-7% of all viewers)
+# and lets rank-1 hits push toward the 10-12% upper band via
+# _rank_tier_bonus. Long-tail titles land near 3-4%, matching the
+# bottom of the published distribution.
+#
+# Free-tier completion stays at ~52% for a rank-15 title (published
+# in-app funnel data supports this - the ep 10 paywall filter is
+# not the bounce point, the ep 1-3 hook is).
 # Peacock retains better ep-to-ep (no paywall cliff, 30-ep series):
-#   - 30-ep completion ~26% baseline (0.955^29), matching the NewTV
+#   * 30-ep completion ~26% baseline (0.955^29), matching the NewTV
 #     leak's median vertical microdrama series-completion figure
 COMPLETION_PROFILES = {
     'peacock': {
@@ -267,28 +281,28 @@ COMPLETION_PROFILES = {
         'free_eps':          10,          # ReelShort modal: ep 10 paywall
         'default_eps':       65,
         'free_ep_retention': 0.930,       # ep-to-ep retention in free tier
-        'paywall_retention': 0.30,        # 70% cliff drop at first paid ep
+        'paywall_retention': 0.14,        # 86% cliff drop at first paid ep
         'paid_ep_retention': 0.940,       # slower decay post-paywall (payers are committed)
     },
     'dramabox': {
         'free_eps':          10,
         'default_eps':       60,
         'free_ep_retention': 0.928,
-        'paywall_retention': 0.28,
+        'paywall_retention': 0.13,
         'paid_ep_retention': 0.938,
     },
     'goodshort': {
         'free_eps':           8,
         'default_eps':       50,
         'free_ep_retention': 0.925,
-        'paywall_retention': 0.28,
+        'paywall_retention': 0.12,
         'paid_ep_retention': 0.935,
     },
     'netshort': {
         'free_eps':           8,
         'default_eps':       50,
         'free_ep_retention': 0.920,
-        'paywall_retention': 0.26,
+        'paywall_retention': 0.10,
         'paid_ep_retention': 0.930,
     },
 }
