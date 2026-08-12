@@ -23067,6 +23067,9 @@ https://www.instagram.com/p/..."></textarea>
                             </div>
                             <!-- Action Buttons (right-aligned) -->
                             <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
+                                <div class="display-mode-toggle" onclick="openHowToVideo('{{ url_for('static', filename='videos/subscriber-iq.mp4') }}', 'Subscriber IQ')" title="Watch the Subscriber IQ how-to video">
+                                    <span>HELP</span>
+                                </div>
                                 <div class="display-mode-toggle" onclick="closeAllSubscriberTabs()" title="Close all open Subscriber IQ tabs">
                                     <span>CLOSE ALL TABS</span>
                                 </div>
@@ -38379,6 +38382,7 @@ https://www.instagram.com/p/..."></textarea>
                     try { howToPlayer.currentTime = 0; } catch (err) {}
                     var p = howToPlayer.play(); if (p && p.catch) p.catch(function(){});
                 }
+                window.openHowToVideo = openHowToVideo;
                 function closeHowToVideo() {
                     if (!howToOverlay || !howToPlayer) return;
                     howToOverlay.classList.remove('show');
