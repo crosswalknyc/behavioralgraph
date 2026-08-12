@@ -233,6 +233,182 @@ def _load_normalized_snapshot(title_slug: str) -> Optional[dict]:
         return None
 
 
+# ---------------------------------------------------------------------------
+# S3-snapshot fallback helpers — used when ClickHouse returns 0 rows for a
+# brand-only-in-S3 title (any title built by the Analysis IQ "Build Intent
+# Campaign" agent lives in S3 but not in ClickHouse).
+#
+# Bug this fixes: prior to 2026-08-12 every CH-first endpoint would happily
+# return `{"cards": []}` on a CH-empty result and never try S3, so brand
+# campaigns rendered as empty tabs (Assets, Q1, Q2, Q6, In-Flight). The
+# S3 fallback was only triggered by CH exceptions, not empty results.
+# ---------------------------------------------------------------------------
+
+
+def _is_brand_snapshot(snap: Optional[dict]) -> bool:
+    return bool(snap and (snap.get("title") or {}).get("title_type") == "brand")
+
+
+def _snap_default_window(snap: Optional[dict], window: Optional[str]) -> Optional[str]:
+    """Pick the effective assets/window for a title. Brand campaigns default
+    to 'all' (campaign-to-date) because their asset dates typically sit in a
+    prior year and the film-style YTD default would filter them all out."""
+    if window:
+        return window
+    if _is_brand_snapshot(snap):
+        return "all"
+    return None   # caller resolves to its own default (typically 'ytd')
+
+
+def _snapshot_assets_filtered(snap: dict,
+                               phase: Optional[str] = None,
+                               asset_type: Optional[str] = None,
+                               paid_or_organic: Optional[str] = None,
+                               lo: Optional[str] = None,
+                               hi: Optional[str] = None) -> list[dict]:
+    """Apply the same filters `get_assets` uses to a snapshot's assets list."""
+    cards = list(snap.get("assets", []) or [])
+    if phase:           cards = [a for a in cards if a.get("phase_name") == phase]
+    if asset_type:      cards = [a for a in cards if a.get("asset_type") == asset_type]
+    if paid_or_organic: cards = [a for a in cards if a.get("paid_or_organic") == paid_or_organic]
+    if lo:              cards = [a for a in cards if (a.get("posted_date") or "") >= lo]
+    if hi:              cards = [a for a in cards if (a.get("posted_date") or "") <= hi]
+    return cards
+
+
+def _snap_q1_from_snapshot(snap: dict) -> list[dict]:
+    """Aggregate snapshot assets into Q1's [{asset_type, paid_or_organic,
+    asset_count, mean_views_7d, median_views_7d}, ...] shape. Uses
+    ext_view_count as the proxy for "views in the +0/+7d window" since
+    S3-only titles don't have per-day series."""
+    buckets: dict[tuple, list[int]] = defaultdict(list)
+    for a in snap.get("assets", []) or []:
+        key = (a.get("asset_type") or "", a.get("paid_or_organic") or "")
+        views = int(a.get("ext_view_count") or 0)
+        if views > 0:
+            buckets[key].append(views)
+        else:
+            buckets[key].append(0)   # keep asset_count accurate
+    rows = []
+    for (atype, porg), views_list in buckets.items():
+        pos = [v for v in views_list if v > 0]
+        mean = (sum(pos) / len(pos)) if pos else 0.0
+        med = 0.0
+        if pos:
+            s = sorted(pos)
+            n = len(s)
+            med = float(s[n // 2] if n % 2 == 1 else (s[n // 2 - 1] + s[n // 2]) / 2.0)
+        rows.append({
+            "asset_type":      atype,
+            "paid_or_organic": porg,
+            "asset_count":     len(views_list),
+            "mean_views_7d":   float(mean),
+            "median_views_7d": float(med),
+        })
+    rows.sort(key=lambda r: r["mean_views_7d"], reverse=True)
+    return rows
+
+
+def _snap_q2_from_snapshot(snap: dict) -> dict:
+    """Q2 shape: cumulative curve by (date, paid_or_organic) + top 10 assets
+    by view volume. Straight aggregation of the snapshot's ext_view_count."""
+    cum: dict[tuple, dict] = defaultdict(lambda: {"asset_drops": 0, "cumulative_views_to_date": 0})
+    for a in snap.get("assets", []) or []:
+        d = (a.get("posted_date") or "").strip()[:10]
+        if not d:
+            continue
+        key = (d, a.get("paid_or_organic") or "organic")
+        cum[key]["asset_drops"] += 1
+        cum[key]["cumulative_views_to_date"] += int(a.get("ext_view_count") or 0)
+    cumulative = []
+    for (d, porg), agg in sorted(cum.items()):
+        cumulative.append({"date": d, "paid_or_organic": porg, **agg})
+
+    best = sorted(
+        snap.get("assets", []) or [],
+        key=lambda a: int(a.get("ext_view_count") or 0),
+        reverse=True,
+    )[:10]
+    best_cards = []
+    for a in best:
+        v = int(a.get("ext_view_count") or 0)
+        e = int(a.get("ext_engagement_count") or 0)
+        best_cards.append({
+            "asset_id":             a.get("asset_id"),
+            "action_label":         a.get("action_label"),
+            "asset_type":           a.get("asset_type"),
+            "channel":              a.get("channel"),
+            "phase_name":           a.get("phase_name"),
+            "paid_or_organic":      a.get("paid_or_organic"),
+            "url":                  a.get("url"),
+            "posted_date":          (a.get("posted_date") or "")[:10],
+            "ext_view_count":       v,
+            "ext_engagement_count": e,
+            "views_total":          v,
+            "engagement_total":     e,
+        })
+    return {"cumulative": cumulative, "best": best_cards}
+
+
+def _snap_inflight_from_snapshot(snap: dict) -> dict:
+    """Best-of-window paid + organic asset from snapshot. No window filter
+    (brand campaigns default to campaign-to-date)."""
+    def _cardify(a: dict) -> dict:
+        v = int(a.get("ext_view_count") or 0)
+        e = int(a.get("ext_engagement_count") or 0)
+        return {
+            "asset_id":             a.get("asset_id"),
+            "action_label":         a.get("action_label"),
+            "asset_type":           a.get("asset_type"),
+            "paid_or_organic":      a.get("paid_or_organic"),
+            "url":                  a.get("url"),
+            "posted_date":          (a.get("posted_date") or "")[:10],
+            "views_total":          v,
+            "engagement_total":     e,
+            "ext_view_count":       v,
+            "ext_engagement_count": e,
+            "channel":              a.get("channel"),
+            "phase_name":           a.get("phase_name"),
+        }
+    assets = sorted(snap.get("assets", []) or [],
+                    key=lambda a: int(a.get("ext_view_count") or 0),
+                    reverse=True)
+    paid = next((_cardify(a) for a in assets
+                 if (a.get("paid_or_organic") or "").lower() == "paid"), None)
+    organic = next((_cardify(a) for a in assets
+                    if (a.get("paid_or_organic") or "").lower() in ("organic", "natural")), None)
+    return {"best_paid": paid, "best_organic": organic,
+            "all_candidates": [_cardify(a) for a in assets[:25]]}
+
+
+def _snap_q6_cohort_meta(snap: dict) -> list[dict]:
+    """Cohort metadata from a snapshot (no timeseries). The frontend still
+    renders the picker + a graceful "no daily series yet" message so brand
+    dashboards don't show a totally-empty tab. Real daily series requires
+    the panel-level engagement pipeline; brand campaigns don't have that
+    yet so we surface the definitions."""
+    out = []
+    for c in snap.get("cohorts", []) or []:
+        out.append({
+            "cohort_slug":  c.get("cohort_slug"),
+            "display":      c.get("display_name") or c.get("cohort_slug"),
+            "category":     "BRAND_COHORT",
+            "archetype":    "brand",
+            "panel_count":  int(c.get("panel_count") or 0),
+            "gen_pop_share": float(c.get("gen_pop_share") or 0.0),
+            "default_on":   True,
+            "points":       [],   # frontend shows "no daily series yet"
+            "total_engagers":       0,
+            "peak_engagers":        0,
+            "peak_engagement_pct":  0.0,
+            "peak_date":            "",
+            "today_engagement_pct": 0.0,
+            "today_engagers":       0,
+            "rationale":            c.get("rationale") or c.get("frequency_band") or "",
+        })
+    return out
+
+
 def _scrub_nonfinite(v):
     """Replace NaN / +inf / -inf floats with 0 so json.dumps emits valid
     JSON. ClickHouse avgIf / quantileIf return NaN when the predicate
@@ -464,7 +640,12 @@ def get_assets(title_slug: str, phase: Optional[str] = None,
     if phase:           where_clauses.append(f"a.phase_name = '{phase}'")
     if asset_type:      where_clauses.append(f"a.asset_type = '{asset_type}'")
     if paid_or_organic: where_clauses.append(f"a.paid_or_organic = '{paid_or_organic}'")
-    lo, hi, window_label = _resolve_assets_window(window, from_date, to_date)
+    # Brand campaigns default to campaign-to-date (unbounded). Films keep
+    # the historical YTD default. See _snap_default_window docstring for
+    # why: a 2025 brand campaign viewed in 2026 with YTD returns 0 assets.
+    _snap_for_window = _load_normalized_snapshot(title_slug) if not window else None
+    effective_window = _snap_default_window(_snap_for_window, window) or window
+    lo, hi, window_label = _resolve_assets_window(effective_window, from_date, to_date)
     where_sql = " AND ".join(where_clauses)
 
     bounded = bool(lo or hi)
@@ -556,26 +737,26 @@ def get_assets(title_slug: str, phase: Optional[str] = None,
             cards = _rows_to_dicts(rows, cols)
             for c in cards:
                 c["posted_date"] = _safe_iso_date(c.get("posted_date"))
-            return {"success": True, "title_slug": title_slug, "cards": cards,
-                    "total": len(cards), "source": "clickhouse",
-                    "window": (window or "ytd").lower(), "window_label": window_label,
-                    "window_from": lo, "window_to": hi,
-                    "windowed_totals": bounded}
+            # If CH returned rows, we're done. If it returned zero rows
+            # (typical for brand-only-in-S3 titles built by the Analysis
+            # IQ agent, since those never got a ClickHouse insert), fall
+            # through to the S3 snapshot fallback so the tab still renders.
+            if cards:
+                return {"success": True, "title_slug": title_slug, "cards": cards,
+                        "total": len(cards), "source": "clickhouse",
+                        "window": (effective_window or "ytd").lower(), "window_label": window_label,
+                        "window_from": lo, "window_to": hi,
+                        "windowed_totals": bounded}
         except Exception as e:
             logger.warning("Intent IQ: get_assets CH failed: %s", e)
 
-    snap = _load_normalized_snapshot(title_slug)
+    snap = _snap_for_window or _load_normalized_snapshot(title_slug)
     if not snap:
         return {"success": False, "error": f"Title not found: {title_slug}"}
-    cards = snap.get("assets", [])
-    if phase:           cards = [a for a in cards if a.get("phase_name") == phase]
-    if asset_type:      cards = [a for a in cards if a.get("asset_type") == asset_type]
-    if paid_or_organic: cards = [a for a in cards if a.get("paid_or_organic") == paid_or_organic]
-    if lo:              cards = [a for a in cards if (a.get("posted_date") or "") >= lo]
-    if hi:              cards = [a for a in cards if (a.get("posted_date") or "") <= hi]
+    cards = _snapshot_assets_filtered(snap, phase, asset_type, paid_or_organic, lo, hi)
     return {"success": True, "title_slug": title_slug, "cards": cards,
             "total": len(cards), "source": "s3_snapshot", "fallback": True,
-            "window": (window or "ytd").lower(), "window_label": window_label,
+            "window": (effective_window or "ytd").lower(), "window_label": window_label,
             "window_from": lo, "window_to": hi,
             "windowed_totals": False}
 
@@ -842,44 +1023,51 @@ def _q1_content_categories_to_engagement(title_slug: str) -> dict:
     Returns ranked asset types per title + pooled across titles.
     """
     ch = _ch_client()
-    if ch is None:
-        return {"success": True, "rows": [], "fallback": True,
-                "note": "ClickHouse unavailable; returning empty ranking. Backend will "
-                         "populate once asset_engagement_daily has data."}
-    try:
-        sql = f"""
-        WITH per_asset AS (
-            SELECT
-                a.asset_type AS asset_type,
-                a.paid_or_organic AS paid_or_organic,
-                a.asset_id AS asset_id,
-                a.posted_date AS drop_date,
-                sumIf(e.views,
-                       e.date BETWEEN a.posted_date AND addDays(a.posted_date, 7))
-                    AS views_7d
-            FROM intent.campaign_assets a
-            LEFT JOIN intent.asset_engagement_daily e
-                ON e.asset_id = a.asset_id
-            WHERE a.title_slug = '{title_slug}'
-            GROUP BY a.asset_type, a.paid_or_organic, a.asset_id, a.posted_date
-        )
-        SELECT asset_type, paid_or_organic,
-               count() AS asset_count,
-               ifNotFinite(avgIf(views_7d, views_7d > 0), 0)
-                   AS mean_views_7d,
-               ifNotFinite(quantileIf(0.5)(views_7d, views_7d > 0), 0)
-                   AS median_views_7d
-        FROM per_asset
-        GROUP BY asset_type, paid_or_organic
-        ORDER BY mean_views_7d DESC
-        """
-        rows = ch.query(sql).result_rows
-        return {"success": True, "rows": _rows_to_dicts(rows, [
-            "asset_type", "paid_or_organic", "asset_count",
-            "mean_views_7d", "median_views_7d"
-        ])}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    if ch is not None:
+        try:
+            sql = f"""
+            WITH per_asset AS (
+                SELECT
+                    a.asset_type AS asset_type,
+                    a.paid_or_organic AS paid_or_organic,
+                    a.asset_id AS asset_id,
+                    a.posted_date AS drop_date,
+                    sumIf(e.views,
+                           e.date BETWEEN a.posted_date AND addDays(a.posted_date, 7))
+                        AS views_7d
+                FROM intent.campaign_assets a
+                LEFT JOIN intent.asset_engagement_daily e
+                    ON e.asset_id = a.asset_id
+                WHERE a.title_slug = '{title_slug}'
+                GROUP BY a.asset_type, a.paid_or_organic, a.asset_id, a.posted_date
+            )
+            SELECT asset_type, paid_or_organic,
+                   count() AS asset_count,
+                   ifNotFinite(avgIf(views_7d, views_7d > 0), 0)
+                       AS mean_views_7d,
+                   ifNotFinite(quantileIf(0.5)(views_7d, views_7d > 0), 0)
+                       AS median_views_7d
+            FROM per_asset
+            GROUP BY asset_type, paid_or_organic
+            ORDER BY mean_views_7d DESC
+            """
+            rows = ch.query(sql).result_rows
+            ch_rows = _rows_to_dicts(rows, [
+                "asset_type", "paid_or_organic", "asset_count",
+                "mean_views_7d", "median_views_7d"
+            ])
+            if ch_rows:
+                return {"success": True, "rows": ch_rows}
+        except Exception as e:
+            logger.warning("Intent IQ: Q1 CH failed: %s", e)
+
+    # S3 fallback for brand-only-in-S3 titles.
+    snap = _load_normalized_snapshot(title_slug)
+    if snap:
+        return {"success": True, "rows": _snap_q1_from_snapshot(snap),
+                "fallback": True, "source": "s3_snapshot"}
+    return {"success": True, "rows": [], "fallback": True,
+            "note": "No data available for this title."}
 
 
 def _q2_organic_paid_interplay(title_slug: str) -> dict:
@@ -891,6 +1079,17 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
     """
     ch = _ch_client()
     if ch is None:
+        # CH totally down: try S3 snapshot before returning a bare stub.
+        snap = _load_normalized_snapshot(title_slug)
+        if snap:
+            q2 = _snap_q2_from_snapshot(snap)
+            return {"success": True, "fallback": True, "source": "s3_snapshot",
+                    "cumulative": q2["cumulative"],
+                    "best_in_flight_ytd": q2["best"],
+                    "best_in_flight_window_label": "Campaign-to-date",
+                    "best_in_flight_14d": q2["best"],
+                    "position_weighted_attribution": [],
+                    "cumulative_lift_curve": []}
         return {"success": True, "fallback": True,
                 "note": "ClickHouse unavailable; returning stub. Requires panel-level "
                          "asset exposure joins (URL referrer log)."}
@@ -985,15 +1184,35 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
         for r in best:
             r["posted_date"] = _safe_iso_date(r["posted_date"])
 
-        return {"success": True,
-                 "cumulative": cumulative,
-                 "best_in_flight_ytd": best,
-                 "best_in_flight_window_label": f"YTD (since {ytd_start})",
-                 "best_in_flight_14d": best,  # legacy key, kept for back-compat
-                 "position_weighted_attribution": position_weighted,
-                 "cumulative_lift_curve": cumulative_curve}
+        if cumulative or best:
+            return {"success": True,
+                     "cumulative": cumulative,
+                     "best_in_flight_ytd": best,
+                     "best_in_flight_window_label": f"YTD (since {ytd_start})",
+                     "best_in_flight_14d": best,  # legacy key, kept for back-compat
+                     "position_weighted_attribution": position_weighted,
+                     "cumulative_lift_curve": cumulative_curve}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        logger.warning("Intent IQ: Q2 CH failed: %s", e)
+
+    # CH returned empty (brand-only-in-S3 title): fall back to snapshot.
+    snap = _load_normalized_snapshot(title_slug)
+    if snap:
+        q2 = _snap_q2_from_snapshot(snap)
+        return {"success": True, "fallback": True, "source": "s3_snapshot",
+                "cumulative": q2["cumulative"],
+                "best_in_flight_ytd": q2["best"],
+                "best_in_flight_window_label": "Campaign-to-date",
+                "best_in_flight_14d": q2["best"],
+                "position_weighted_attribution": [],
+                "cumulative_lift_curve": []}
+    return {"success": True, "fallback": True,
+             "cumulative": [], "best_in_flight_ytd": [],
+             "best_in_flight_window_label": "No data",
+             "best_in_flight_14d": [],
+             "position_weighted_attribution": [],
+             "cumulative_lift_curve": [],
+             "note": "No data available for this title."}
 
 
 def _q3_intent_to_buy(title_slug: str) -> dict:
@@ -1292,6 +1511,14 @@ def _q6_audience_shift_over_campaign(title_slug: str) -> dict:
     """
     ch = _ch_client()
     if ch is None:
+        snap = _load_normalized_snapshot(title_slug)
+        if snap and snap.get("cohorts"):
+            return {"success": True, "fallback": True, "source": "s3_snapshot",
+                    "cohorts": _snap_q6_cohort_meta(snap),
+                    "category_order": ["BRAND_COHORT"],
+                    "note": ("Brand-campaign cohorts synthesized from the campaign "
+                              "definition. Daily engagement curves populate once "
+                              "the panel-level engagement pipeline runs for this title.")}
         return {"success": True, "fallback": True, "cohorts": [],
                 "note": "ClickHouse unreachable."}
     try:
@@ -1339,6 +1566,17 @@ def _q6_audience_shift_over_campaign(title_slug: str) -> dict:
             }
 
         if not meta:
+            # CH has no cohorts for this title (typical for brand-only-in-S3
+            # titles). Fall back to the snapshot's cohort definitions so the
+            # tab renders the picker + a graceful "no daily series yet" note.
+            snap = _load_normalized_snapshot(title_slug)
+            if snap and snap.get("cohorts"):
+                return {"success": True, "fallback": True, "source": "s3_snapshot",
+                        "cohorts": _snap_q6_cohort_meta(snap),
+                        "category_order": ["BRAND_COHORT"],
+                        "note": ("Brand-campaign cohorts synthesized from the campaign "
+                                  "definition. Daily engagement curves populate once "
+                                  "the panel-level engagement pipeline runs for this title.")}
             return {"success": True, "cohorts": [],
                     "note": "No cohorts found for this title."}
 
@@ -1448,6 +1686,14 @@ def get_in_flight(title_slug: str, as_of: Optional[str] = None,
     """
     ch = _ch_client()
     if ch is None:
+        snap = _load_normalized_snapshot(title_slug)
+        if snap and snap.get("assets"):
+            inflight = _snap_inflight_from_snapshot(snap)
+            return {"success": True, "fallback": True, "source": "s3_snapshot",
+                    "as_of": as_of or _safe_iso_date(datetime.utcnow()),
+                    "window": (window or "all").lower(),
+                    "window_label": "Campaign-to-date",
+                    **inflight}
         return {"success": True, "fallback": True,
                  "best_paid": None, "best_organic": None,
                  "window_label": "YTD"}
@@ -1505,12 +1751,28 @@ def get_in_flight(title_slug: str, as_of: Optional[str] = None,
             best_paid    = best_paid    or next((c for c in cards_all if c["paid_or_organic"] == "paid"),    None)
             best_organic = best_organic or next((c for c in cards_all if c["paid_or_organic"] == "organic" or c["paid_or_organic"] == "natural"), None)
             if not cards: cards = cards_all
-        return {"success": True, "as_of": as_of or _safe_iso_date(datetime.utcnow()),
-                 "window": requested, "window_label": label_used,
-                 "best_paid": best_paid, "best_organic": best_organic,
-                 "all_candidates": cards[:25]}
+        if cards or best_paid or best_organic:
+            return {"success": True, "as_of": as_of or _safe_iso_date(datetime.utcnow()),
+                     "window": requested, "window_label": label_used,
+                     "best_paid": best_paid, "best_organic": best_organic,
+                     "all_candidates": cards[:25]}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        logger.warning("Intent IQ: get_in_flight CH failed: %s", e)
+
+    # CH empty (brand-only-in-S3 title): fall back to snapshot.
+    snap = _load_normalized_snapshot(title_slug)
+    if snap and snap.get("assets"):
+        inflight = _snap_inflight_from_snapshot(snap)
+        return {"success": True, "fallback": True, "source": "s3_snapshot",
+                "as_of": as_of or _safe_iso_date(datetime.utcnow()),
+                "window": (window or "all").lower(),
+                "window_label": "Campaign-to-date",
+                **inflight}
+    return {"success": True, "fallback": True,
+             "best_paid": None, "best_organic": None,
+             "all_candidates": [],
+             "window_label": "No data",
+             "note": "No data available for this title."}
 
 
 __all__ = [
