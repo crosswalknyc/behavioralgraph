@@ -24871,6 +24871,33 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             #microdramasIQView .miq-platform-badge.miq-plat-dramabox  { background: rgba(168,85,247,0.22);  color: #d8b4fe; border-color: rgba(168,85,247,0.4); }
             #microdramasIQView .miq-platform-badge.miq-plat-goodshort { background: rgba(16,185,129,0.22);  color: #86efac; border-color: rgba(16,185,129,0.4); }
             #microdramasIQView .miq-platform-badge.miq-plat-netshort  { background: rgba(249,115,22,0.22);  color: #fdba74; border-color: rgba(249,115,22,0.4); }
+            /* Platform rollup: which streaming provider has the most window views. Renders as a
+               stacked share bar plus one small stat card per platform, sitting above the by-show ranker on the All Platforms tab. */
+            #microdramasIQView .miq-platform-rollup { display: flex; flex-direction: column; gap: 0.6rem; margin: 0.35rem 0 0.85rem; padding: 0.75rem 0.85rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
+            #microdramasIQView .miq-rollup-title { font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+            #microdramasIQView .miq-rollup-title .miq-rollup-total { font-size: 0.72rem; color: var(--text-primary); font-weight: 700; letter-spacing: 0.02em; text-transform: none; font-variant-numeric: tabular-nums; }
+            #microdramasIQView .miq-rollup-bar { display: flex; width: 100%; height: 10px; border-radius: 5px; overflow: hidden; background: rgba(255,255,255,0.05); }
+            #microdramasIQView .miq-rollup-bar-seg { height: 100%; transition: filter 0.15s ease; }
+            #microdramasIQView .miq-rollup-bar-seg:hover { filter: brightness(1.2); }
+            #microdramasIQView .miq-rollup-bar-seg.miq-plat-peacock   { background: #3b82f6; }
+            #microdramasIQView .miq-rollup-bar-seg.miq-plat-reelshort { background: #ec4899; }
+            #microdramasIQView .miq-rollup-bar-seg.miq-plat-dramabox  { background: #a855f7; }
+            #microdramasIQView .miq-rollup-bar-seg.miq-plat-goodshort { background: #10b981; }
+            #microdramasIQView .miq-rollup-bar-seg.miq-plat-netshort  { background: #f97316; }
+            #microdramasIQView .miq-rollup-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.5rem; }
+            #microdramasIQView .miq-rollup-card { padding: 0.55rem 0.65rem; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; gap: 0.25rem; }
+            #microdramasIQView .miq-rollup-card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+            #microdramasIQView .miq-rollup-card-name { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; display: flex; align-items: center; gap: 0.35rem; }
+            #microdramasIQView .miq-rollup-card-name .miq-rollup-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+            #microdramasIQView .miq-rollup-card-name .miq-rollup-dot.miq-plat-peacock   { background: #3b82f6; }
+            #microdramasIQView .miq-rollup-card-name .miq-rollup-dot.miq-plat-reelshort { background: #ec4899; }
+            #microdramasIQView .miq-rollup-card-name .miq-rollup-dot.miq-plat-dramabox  { background: #a855f7; }
+            #microdramasIQView .miq-rollup-card-name .miq-rollup-dot.miq-plat-goodshort { background: #10b981; }
+            #microdramasIQView .miq-rollup-card-name .miq-rollup-dot.miq-plat-netshort  { background: #f97316; }
+            #microdramasIQView .miq-rollup-card-share { font-size: 0.7rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+            #microdramasIQView .miq-rollup-card-views { font-size: 1.05rem; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+            #microdramasIQView .miq-rollup-card-sub { font-size: 0.68rem; color: var(--text-secondary); }
+            #microdramasIQView .miq-rollup-card-top { font-size: 0.68rem; color: var(--text-secondary); font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             /* Keep long titles from colliding with the badge. */
             #microdramasIQView .miq-title-card.miq-has-badge .miq-title-row { padding-right: 5.5rem; }
             /* Aggregated rank pill on the left side of the title row. */
@@ -25074,6 +25101,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             <!-- All Platforms panel: default landing tab. Aggregated top titles across every platform, sorted by estimated views. -->
             <div class="miq-panel active" data-panel="all">
                 <div id="microdramasIQAllMeta" class="miq-meta"></div>
+                <div id="microdramasIQAllPlatformRollup" class="miq-platform-rollup"></div>
                 <div id="microdramasIQAllGrid" class="miq-title-grid"></div>
             </div>
 
@@ -45137,6 +45165,62 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             return '';
         }
 
+        // Render the "which streaming provider had the most views" rollup:
+        // a stacked share bar plus per-platform stat cards, showing window-
+        // scoped total unique views. Sits above the by-show ranker on the
+        // All Platforms tab.
+        function renderMicrodramasIQPlatformRollup(d) {
+            var host = document.getElementById('microdramasIQAllPlatformRollup');
+            if (!host) return;
+            var totals = d.platform_totals || [];
+            var grand  = d.grand_total_views || 0;
+            if (!totals.length || grand <= 0) {
+                host.innerHTML = '';
+                host.style.display = 'none';
+                return;
+            }
+            host.style.display = '';
+
+            var barSegs = totals.map(function(p) {
+                var k = _miqPlatformCssKey(p.platform || p.source || '');
+                var w = Math.max(0.5, (p.share_pct || 0));
+                var cls = k ? ('miq-rollup-bar-seg miq-plat-' + k) : 'miq-rollup-bar-seg';
+                var titleAttr = (p.platform || '') + ': ' + _miqFormatNumber(p.total_views || 0) + ' views (' + (p.share_pct || 0) + '%)';
+                return '<div class="' + cls + '" style="width:' + w + '%" title="' + _miqEscape(titleAttr) + '"></div>';
+            }).join('');
+
+            var cards = totals.map(function(p) {
+                var k = _miqPlatformCssKey(p.platform || p.source || '');
+                var dotCls = k ? ('miq-rollup-dot miq-plat-' + k) : 'miq-rollup-dot';
+                var topBlock = '';
+                if (p.top_title) {
+                    topBlock = '<div class="miq-rollup-card-top" title="' + _miqEscape(p.top_title) + '">'
+                             + 'Top: ' + _miqEscape(p.top_title)
+                             + ' (' + _miqFormatNumber(p.top_title_views || 0) + ')'
+                             + '</div>';
+                }
+                var titleCount = (p.title_count || 0);
+                return '<div class="miq-rollup-card">'
+                     +   '<div class="miq-rollup-card-head">'
+                     +     '<div class="miq-rollup-card-name"><span class="' + dotCls + '"></span>' + _miqEscape(p.platform || 'Unknown') + '</div>'
+                     +     '<div class="miq-rollup-card-share">' + (p.share_pct || 0) + '%</div>'
+                     +   '</div>'
+                     +   '<div class="miq-rollup-card-views">' + _miqFormatNumber(p.total_views || 0) + '</div>'
+                     +   '<div class="miq-rollup-card-sub">across ' + titleCount + ' ' + (titleCount === 1 ? 'title' : 'titles') + '</div>'
+                     +   topBlock
+                     + '</div>';
+            }).join('');
+
+            var windowDays = (d.filters && d.filters.window_days) ? d.filters.window_days : 7;
+            host.innerHTML =
+                '<div class="miq-rollup-title">'
+              +   '<span>Views by platform &middot; last ' + windowDays + ' days</span>'
+              +   '<span class="miq-rollup-total">' + _miqFormatNumber(grand) + ' total views</span>'
+              + '</div>'
+              + '<div class="miq-rollup-bar">' + barSegs + '</div>'
+              + '<div class="miq-rollup-cards">' + cards + '</div>';
+        }
+
         function renderMicrodramasIQAllPlatforms(d) {
             var meta = document.getElementById('microdramasIQAllMeta');
             var grid = document.getElementById('microdramasIQAllGrid');
@@ -45153,6 +45237,9 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     meta.textContent = '';
                 }
             }
+
+            renderMicrodramasIQPlatformRollup(d);
+
             if (!titles.length) {
                 grid.innerHTML = '<div class="miq-empty">No titles yet. The daily scraper (05:30 UTC) populates automatically once snapshots land.</div>';
                 return;
