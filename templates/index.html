@@ -26655,17 +26655,28 @@ https://www.instagram.com/p/..."></textarea>
             // tab's "Audiences" sub-tab. Includes the two section headers
             // that used to live in iiqPanel-audiences.
             function iiqRenderAudiences(_d) {
-                return ''
+                var _audOv = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var _audIsBrand = _audOv.title_type === 'brand';
+                var _audSub = _audIsBrand
+                    ? 'Audience segments most likely to engage with this campaign, sorted by their share of US adults. Each card also shows projected campaign exposure (reach, unique pieces seen, total views).'
+                    : 'Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title\'s moviegoing audience. Each card also shows projected campaign exposure (reach, unique pieces seen, total views).';
+                var html = ''
                     + '<div style="margin-bottom: 0.65rem;">'
                     +   '<h4 style="margin:0;">Audiences of interest</h4>'
-                    +   '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title\'s moviegoing audience. Each card also shows projected campaign exposure (reach, unique pieces seen, total views).</div>'
+                    +   '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">' + _audSub + '</div>'
                     + '</div>'
-                    + iiqBuildAudiencesHtml()
-                    + '<div style="margin: 1.25rem 0 0.5rem;">'
-                    +   '<h4 style="margin:0;">Moviegoing-frequency cohorts</h4>'
-                    +   '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">How often this slice of US adults goes to the movies. Source: MPAA THEME 2025 + Statista US Moviegoing Frequency Q1 2026.</div>'
-                    + '</div>'
-                    + iiqBuildCohortsHtml();
+                    + iiqBuildAudiencesHtml();
+                // Moviegoing-frequency cohorts only make sense for film
+                // campaigns. Brand campaigns (Chime, etc.) suppress them.
+                if (!_audIsBrand) {
+                    html += ''
+                        + '<div style="margin: 1.25rem 0 0.5rem;">'
+                        +   '<h4 style="margin:0;">Moviegoing-frequency cohorts</h4>'
+                        +   '<div style="font-size:0.72rem; color: var(--text-secondary); margin-top:0.15rem;">How often this slice of US adults goes to the movies. Source: MPAA THEME 2025 + Statista US Moviegoing Frequency Q1 2026.</div>'
+                        + '</div>'
+                        + iiqBuildCohortsHtml();
+                }
+                return html;
             }
 
             function populateAssetFilterDropdowns() {
