@@ -72270,15 +72270,57 @@ https://www.instagram.com/p/..."></textarea>
             obp_tvod: {
                 subtitle: 'Panel-observed weekly TVOD transaction volume for Obsession, with the July 17 SVOD handoff marked. Counterfactual fitted from the pre-Jul 17 trajectory and projected forward under an 86-day window (Universal group median).',
                 methodology: 'Behavioral transaction index built from panel-observed touchpoints (projected to the US digital population) across Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft, Xfinity, and Movies Anywhere. Displacement dollars presented as a range: purchase and rental modeled separately on a date-specific price series (launch: $24.99 purchase / $19.99 rental; rental cut to $9.99 landed inside the same 7-day period as the Jul 17 handoff). Reported range: ~$41M (observed prices, price cut modeled) to ~$58M (launch price held constant). Point estimate withheld pending distributor Apple and Amazon statements. HYPOTHESIS-vs-MEASUREMENT split (H4 in revision doc): the OBSERVED trajectory is measurement; the CAUSAL attribution of the post-Jul-17 decline to the Peacock handoff (versus a natural end-of-window fall-off shared by titles with no owned SVOD destination) is a hypothesis pending control curves. Backrooms (theatrical with no Peacock handoff) and Devil Wears Prada 2 (same digital date, arm\'s-length license) are the two controls that convert the causal claim from expectation to measurement.',
+                // C7: series rebuilt to start at Jun 30 (release day / W1).
+                // Pre-release rows removed; deck is now a release-window read only.
+                curve_start_date: 'Jun 30, 2026',
+                curve_read_date: 'Aug 10, 2026 (T+1)',
                 curve_weekly: [
-                    { rel_wk: -2, wk_label: 'W-2',  wk_dates: 'Jun 16-22', obs_k:   0.0, cf_k:   0.0, phase: 'pre-tvod',    note: '' },
-                    { rel_wk: -1, wk_label: 'W-1',  wk_dates: 'Jun 23-29', obs_k:  12.4, cf_k:  12.4, phase: 'pre-order',   note: 'Pre-order + early digital seed.' },
-                    { rel_wk:  1, wk_label: 'W1',   wk_dates: 'Jun 30-Jul 6', obs_k: 615.0, cf_k: 615.0, phase: 'tvod-live',   note: 'PEAK: #1 on Apple TV Store, top-3 on Prime Video.', peak: true },
+                    { rel_wk:  1, wk_label: 'W1',   wk_dates: 'Jun 30-Jul 6', obs_k: 615.0, cf_k: 615.0, phase: 'tvod-live',   note: 'Panel-observed peak week. Public transactional-chart rank corroboration deferred to Appendix N2.', peak: true },
                     { rel_wk:  2, wk_label: 'W2',   wk_dates: 'Jul 7-13',  obs_k: 542.0, cf_k: 542.0, phase: 'tvod-live',   note: 'Panel volume held near W1 levels; ~88.1% of peak weekly velocity remaining at handoff (see Pull 2). Public transactional-chart rank corroboration deferred to Appendix N2 pending Apple + Fandango weekly.' },
                     { rel_wk:  3, wk_label: 'W3',   wk_dates: 'Jul 14-20', obs_k: 187.0, cf_k: 477.0, phase: 'handoff',     note: 'SVOD hit on Jul 17. Partial week (3 pre-handoff days at ~85K/day + 4 post-handoff days at ~14K/day).', handoff: true },
                     { rel_wk:  4, wk_label: 'W4',   wk_dates: 'Jul 21-27', obs_k:  24.1, cf_k: 419.0, phase: 'post-svod',    note: 'Free on Peacock for anyone with a $10.99 sub. Panel-observed weekly transaction volume collapsed by ~87%, consistent with substitution to the free destination.' },
                     { rel_wk:  5, wk_label: 'W5',   wk_dates: 'Jul 28-Aug 3', obs_k:  16.2, cf_k: 369.0, phase: 'post-svod',    note: '' },
                     { rel_wk:  6, wk_label: 'W6',   wk_dates: 'Aug 4-10',  obs_k:  11.8, cf_k: 325.0, phase: 'post-svod',    note: 'T+1 panel through Aug 10. Counterfactual continues under the 86.5d Universal median to the projected window close; weekly detail refreshes daily as the projection window unfolds.' }
+                ],
+                // C8: four confounds annotated directly on the chart. The
+                // renderer overlays these as vertical guidelines / spans over
+                // the daily line so nothing about the trajectory is presented
+                // without the reader seeing what else was moving that day.
+                confound_annotations: [
+                    {
+                        id: 'fandango_price_cut',
+                        kind: 'span',
+                        start_date: 'Jul 12, 2026',
+                        end_date:   'Jul 17, 2026',
+                        label: 'Fandango rental $19.99 -> $9.99 (confound)',
+                        color: '#f59e0b',
+                        note: 'Fandango at Home cut the Obsession rental from $19.99 to $9.99 inside the same 7-day period as the Jul 17 handoff. Part of the observed Fandango transaction decline that week reflects the price cut, not the handoff. This is the primary reason the displacement figure is reported as a range ($41-58M) rather than a point.'
+                    },
+                    {
+                        id: 'july_4_holiday',
+                        kind: 'line',
+                        date: 'Jul 4, 2026',
+                        label: 'US Independence Day (confound)',
+                        color: '#94a3b8',
+                        note: 'Historical TVOD seasonality: transactional volume rises across the holiday weekend (viewing occasions), then dips Jul 5-6 as travel and outdoor activity displace at-home rental. This flattens W1 slightly and reduces the apparent W1 -> W2 decline.'
+                    },
+                    {
+                        id: 'peacock_handoff',
+                        kind: 'line',
+                        date: 'Jul 17, 2026',
+                        label: 'Peacock SVOD drop (primary event)',
+                        color: '#ef4444',
+                        note: 'The 17-day SVOD handoff. Post-line panel-observed transaction volume collapses by ~87%. This is the primary event the deck measures; the causal attribution of the entire collapse to this line is H4 (hypothesis pending controls).'
+                    },
+                    {
+                        id: 'august_seasonality',
+                        kind: 'span',
+                        start_date: 'Aug 1, 2026',
+                        end_date:   'Aug 10, 2026',
+                        label: 'Late-summer TVOD seasonality (confound)',
+                        color: '#60a5fa',
+                        note: 'August is historically the slowest TVOD month; industry weekly baselines run 12-18% below the annual mean. Some fraction of the Aug 1+ decline in the observed series would have happened without the handoff. The counterfactual line (cf_k) is fitted to the Universal group and already carries a seasonality adjustment; the observed line does not.'
+                    }
                 ],
                 displacement_summary: {
                     obs_total_tvod_k: 1344.0,
@@ -73532,6 +73574,24 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         // ─── TAB 5: ⏱️ Pull 2 · Demand remaining (PRIORITY) ──────────
+        function _jiqObpRenderConfoundStrip(annotations) {
+            if (!annotations || !annotations.length) return '';
+            var rows = annotations.map(function(a) {
+                var dateStr = a.kind === 'span' ? (a.start_date + ' -> ' + a.end_date) : a.date;
+                return '<div style="display:flex; gap:0.6rem; padding:0.4rem 0.6rem; border-left:3px solid ' + (a.color || '#94a3b8') + '; background:rgba(255,255,255,0.03); margin-bottom:0.3rem; border-radius:0 5px 5px 0;">'
+                     +   '<div style="flex:0 0 auto; font-size:0.62rem; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; color:' + (a.color || '#94a3b8') + '; white-space:nowrap;">' + _jiqEsc(dateStr) + '</div>'
+                     +   '<div style="flex:1 1 auto;">'
+                     +     '<div style="font-size:0.75rem; font-weight:700;">' + _jiqEsc(a.label) + '</div>'
+                     +     '<div style="font-size:0.68rem; opacity:0.78; margin-top:0.15rem; line-height:1.5;">' + _jiqEsc(a.note || '') + '</div>'
+                     +   '</div>'
+                     + '</div>';
+            }).join('');
+            return '<div style="margin-top:0.85rem; padding:0.75rem 0.85rem; border-radius:6px; background:rgba(148,163,184,0.06); border:1px dashed rgba(148,163,184,0.28);">'
+                +    '<div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; opacity:0.7; margin-bottom:0.35rem;">Confounds on this chart (C8 revision doc)</div>'
+                +    rows
+                + '</div>';
+        }
+
         function renderJourneyIqObpDemand(p) {
             var data = (p && p.enabled !== false && p.titles) ? p : _JIQ_OBP_DATA.obp_demand;
             if (!data) return;
