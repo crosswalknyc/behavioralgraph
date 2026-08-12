@@ -19237,6 +19237,16 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                         🗺️ Digital Journey IQ <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
                     </button>
                     {% endif %}
+                    {% if 'digital_journey' in analysis_iq_modules or 'journey_iq' in analysis_iq_modules or has_journey_iq_access or role == 'super_admin' or role == 'admin' %}
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('digital-journey')" id="customAnalysisTabDigitalJourney">
+                        🧭 Digital Journey <span style="font-size: 0.7em; opacity: 0.9;">(10 credits)</span>
+                    </button>
+                    {% endif %}
+                    {% if 'intent_ingest' in analysis_iq_modules or role == 'super_admin' or role == 'admin' %}
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('intent-ingest')" id="customAnalysisTabIntentIngest">
+                        🎯 Build Intent IQ Campaign <span style="font-size: 0.7em; opacity: 0.9;">(5 credits)</span>
+                    </button>
+                    {% endif %}
                     {% if has_sentiment_iq_access or role == 'super_admin' or role == 'admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('sentiment-iq')" id="customAnalysisTabSentimentIQ">
                         💬 Sentiment IQ
@@ -20820,6 +20830,140 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                             <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
                                 <button type="button" class="btn" style="width: 100%; background: var(--accent-primary); color: white;" onclick="if(typeof showJourneyIQ==='function') showJourneyIQ();">🗺️ Open Digital Journey IQ Dashboard</button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Intent IQ Ingest Tab Content -->
+                <div id="customAnalysisTabContentIntentIngest" class="custom-analysis-tab-content">
+                    <div class="main-grid">
+                        <div class="card">
+                            <h2>🎯 Build Intent IQ Campaign</h2>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">5 Credits Per Build</div>
+                            <p class="section-description">Turn a brand-campaign brief into a fully-formed Intent IQ dashboard in minutes. Paste the campaign asset URLs (YouTube / TikTok / Instagram / Facebook / X / owned media). An agent scrapes each URL for OG metadata, uses Claude to identify featured talent, synthesizes 4-6 audience cohorts and 3-6 audience cards appropriate for the brand and category, groups assets into campaign phases, and applies brand-specific dashboard terminology (chime.com visits instead of ticketing, etc.). The completed title appears in the Intent IQ dropdown as soon as the job finishes.</p>
+                            <form id="iiingForm" onsubmit="event.preventDefault(); submitIntentIngest();">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Brand Name *</label>
+                                        <input type="text" id="iiingBrandName" placeholder="e.g. Chime" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Halo brand. Shows as the parent on the dashboard.</div>
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Campaign Name *</label>
+                                        <input type="text" id="iiingCampaignName" placeholder="e.g. Mama I Made It" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">This becomes the Intent IQ title.</div>
+                                    </div>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Brand Category</label>
+                                        <select id="iiingBrandCategory" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                            <option value="">Loading...</option>
+                                        </select>
+                                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Picks dashboard terminology preset.</div>
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Campaign Launch Date *</label>
+                                        <input type="date" id="iiingLaunchDate" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Campaign End Date</label>
+                                        <input type="date" id="iiingEndDate" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Leave blank for in-flight.</div>
+                                    </div>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 3fr; gap: 1rem; margin-bottom: 1rem;">
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Attribution Window (days)</label>
+                                        <input type="number" id="iiingAttribution" min="1" max="90" placeholder="14" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Blank = category default.</div>
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Notes for the Agent</label>
+                                        <input type="text" id="iiingNotes" placeholder="e.g. Latino-family finance campaign anchored on Mother's Day; focus on multigenerational audiences." style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Shapes cohort + audience synthesis.</div>
+                                    </div>
+                                </div>
+                                <div style="margin-bottom: 1rem;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Campaign Asset URLs *</label>
+                                    <textarea id="iiingAssetUrls" rows="8" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; font-family: 'SF Mono', Monaco, monospace;" placeholder="One URL per line. Supports YouTube, TikTok, Instagram, Facebook, X, LinkedIn, owned web pages, etc.
+
+https://www.youtube.com/watch?v=...
+https://www.tiktok.com/@brand/video/...
+https://www.instagram.com/p/..."></textarea>
+                                    <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Agent scrapes each URL for OG title, description, thumbnail. Failed scrapes fall back to URL slug; view counts refresh on next YT/IG batch. Max 500 URLs.</div>
+                                </div>
+                                <div style="margin-bottom: 1rem;">
+                                    <details style="border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.75rem; background: var(--bg-primary);">
+                                        <summary style="cursor: pointer; font-weight: 600; font-size: 13px;">Advanced: Custom Campaign Phases</summary>
+                                        <div style="margin-top: 0.5rem; font-size: 12px; color: var(--text-secondary);">By default assets are grouped into one phase spanning launch → end. To break into named phases, add one JSON object per phase below. Each phase gets its own color on the dashboard timeline.</div>
+                                        <textarea id="iiingPhasesJson" rows="4" style="width: 100%; padding: 8px 12px; margin-top: 6px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); font-size: 12px; font-family: 'SF Mono', Monaco, monospace;" placeholder='[{"name":"Teaser","start_date":"2026-08-01","end_date":"2026-08-14"},{"name":"Peak","start_date":"2026-08-15","end_date":"2026-08-31"}]'></textarea>
+                                    </details>
+                                </div>
+                                <div style="display: flex; gap: 0.75rem; align-items: center;">
+                                    <button type="submit" id="iiingSubmitBtn" class="btn primary" style="background: var(--accent-primary); color: white; padding: 10px 24px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer;">🚀 Build Intent IQ Campaign</button>
+                                    <button type="button" class="btn" onclick="loadIntentIngestPresetChime()" style="padding: 10px 16px; border-radius: 8px; font-weight: 500; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); cursor: pointer; font-size: 13px;">Load Chime example</button>
+                                    <span id="iiingCreditsInfo" style="margin-left: auto; font-size: 12px; color: var(--text-secondary);"></span>
+                                </div>
+                            </form>
+
+                            <!-- Progress panel (shown while a job is running) -->
+                            <div id="iiingStatus" style="display:none; margin-top: 1.25rem; padding: 1rem; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-primary);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <div style="font-weight: 600; font-size: 14px;" id="iiingStatusTitle">Building campaign...</div>
+                                    <div style="font-size: 12px; color: var(--text-secondary);" id="iiingStatusPct">0%</div>
+                                </div>
+                                <div style="height: 8px; border-radius: 4px; background: var(--bg-secondary); overflow: hidden;">
+                                    <div id="iiingProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #22c55e, #3b82f6); transition: width 300ms ease;"></div>
+                                </div>
+                                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;" id="iiingStatusText">Queued</div>
+                                <div id="iiingSuccessBox" style="display:none; margin-top: 1rem; padding: 0.75rem 1rem; border-radius: 8px; background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.4); color: var(--text-primary); font-size: 13px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Digital Journey Tab Content (lightweight, brand + endpoints + type) -->
+                <div id="customAnalysisTabContentDigitalJourney" class="custom-analysis-tab-content">
+                    <div class="main-grid">
+                        <div class="card">
+                            <h2>🧭 Digital Journey</h2>
+                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
+                            <p class="section-description">Pick a brand and one or more ending URLs, tell us if it's Content, Subscription, or Purchase, and Crosswalk's AI agent will research the brand externally and synthesize a defensible Discovery → Consideration → Conversion journey — audience size, per-stage duration, top touchpoints, and endpoint mix. Results render inline below when the run completes.</p>
+                            <form id="djForm" onsubmit="event.preventDefault(); submitDigitalJourney();">
+                                <div style="margin-bottom: 1rem;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Brand Name <span style="color:#ef4444;">*</span></label>
+                                    <input type="text" id="djBrandName" placeholder="e.g. Recess, Peacock, Squarespace, Cava" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                    <small style="color: var(--text-secondary); font-size: 0.75rem;">Subject of the digital journey. The agent will look up the brand's category, positioning, competitive set, and audience estimates via live web research.</small>
+                                </div>
+                                <div style="margin-bottom: 1rem; padding: 0.6rem 0.8rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary);">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Journey type <span style="color:#ef4444;">*</span></label>
+                                    <select id="djJourneyType" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
+                                        <option value="purchase">🛒 Purchase &mdash; funnel ends in a checkout / cart / order-confirmed</option>
+                                        <option value="subscription">✍️ Subscription &mdash; funnel ends in a signup / free-trial / plan-selection</option>
+                                        <option value="content">▶️ Content &mdash; funnel ends in a watch / play / read event</option>
+                                    </select>
+                                    <small style="color: var(--text-secondary); font-size: 0.7rem;"><strong>Purchase:</strong> pre-buy behavior across PDP, reviews, price-check. <strong>Subscription:</strong> pre-signup behavior across comparison + pricing. <strong>Content:</strong> pre-watch behavior across social feeds, streaming carousels, editorial.</small>
+                                </div>
+                                <div style="margin-bottom: 1rem;">
+                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Ending URL(s) <span style="color:#ef4444;">*</span></label>
+                                    <textarea id="djEndingUrls" rows="4" required placeholder="amazon.com/dp/B08XYZ&#10;target.com/p/recess-mood-6pk&#10;brand.com/subscribe" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; font-family: monospace; resize: vertical;"></textarea>
+                                    <small style="color: var(--text-secondary); font-size: 0.7rem;">One URL per line (or comma-separated). These are the conversion endpoints where the journey terminates &mdash; the checkout page, watch page, or signup page. Every URL will appear in the endpoint mix in the result.</small>
+                                </div>
+                                <button type="submit" id="djSubmitBtn" class="btn btn-primary" style="width: 100%;">Run Digital Journey (10 credits)</button>
+                            </form>
+                            <div id="djStatus" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 8px; background: var(--bg-secondary); text-align: center;">
+                                <div id="djStatusText" style="font-weight: 600; margin-bottom: 4px;"></div>
+                                <div style="background: var(--border-color); border-radius: 4px; height: 6px; overflow: hidden;"><div id="djProgressBar" style="height: 100%; background: var(--accent-primary); transition: width 0.3s; width: 0%;"></div></div>
+                            </div>
+                            <div id="djResultContainer" style="display: none; margin-top: 1.25rem;"></div>
+                        </div>
+                        <div class="card">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <h2 style="margin:0;">Past Runs</h2>
+                                <button type="button" class="btn btn-small" onclick="refreshDigitalJourneyList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
+                            </div>
+                            <div id="djResultsList" style="max-height: 480px; overflow-y: auto;"><div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No runs yet. Submit one to populate.</div></div>
                         </div>
                     </div>
                 </div>
@@ -55132,7 +55276,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             const tabIds = ['customAnalysisTabProfileIQ', 'customAnalysisTabTalentSearch', 'customAnalysisTabTalentTheater',
                            'customAnalysisTabSVODAcquisition', 'customAnalysisTabCampaignROI', 'customAnalysisTabCrossShow',
                            'customAnalysisTabWatchTime', 'customAnalysisTabTicketSalesTracker', 'customAnalysisTabSFLFConversion',
-                           'customAnalysisTabRoasIQ', 'customAnalysisTabEcommerceIQ', 'customAnalysisTabBrandPartnership', 'customAnalysisTabJourneyIQ', 'customAnalysisTabSentimentIQ', 'customAnalysisTabTalentFit', 'customAnalysisTabFlywheelConversion',
+                           'customAnalysisTabRoasIQ', 'customAnalysisTabEcommerceIQ', 'customAnalysisTabBrandPartnership', 'customAnalysisTabJourneyIQ', 'customAnalysisTabDigitalJourney', 'customAnalysisTabIntentIngest', 'customAnalysisTabSentimentIQ', 'customAnalysisTabTalentFit', 'customAnalysisTabFlywheelConversion',
                            'customAnalysisTabShareOfTime', 'customAnalysisTabIncidenceCheck'];
             tabIds.forEach(id => {
                 const el = document.getElementById(id);
@@ -55147,6 +55291,8 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                                'customAnalysisTabContentSFLFConversion', 'customAnalysisTabContentRoasIQ', 'customAnalysisTabContentEcommerceIQ',
                                'customAnalysisTabContentBrandPartnership',
                                'customAnalysisTabContentJourneyIQ',
+                               'customAnalysisTabContentDigitalJourney',
+                               'customAnalysisTabContentIntentIngest',
                                'customAnalysisTabContentSentimentIQ',
                                'customAnalysisTabContentTalentFit', 'customAnalysisTabContentFlywheelConversion',
                                'customAnalysisTabContentShareOfTime', 'customAnalysisTabContentIncidenceCheck'];
@@ -55234,6 +55380,12 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 if (tab) tab.classList.add('active');
                 if (content) content.classList.add('active');
                 if (typeof refreshJourneyIqList === 'function') refreshJourneyIqList();
+            } else if (tabName === 'digital-journey') {
+                const tab = document.getElementById('customAnalysisTabDigitalJourney');
+                const content = document.getElementById('customAnalysisTabContentDigitalJourney');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
+                if (typeof refreshDigitalJourneyList === 'function') refreshDigitalJourneyList();
                 const jStart = document.getElementById('jiqStartDate');
                 const jEnd = document.getElementById('jiqEndDate');
                 if (jStart && !jStart.value) {
@@ -55243,6 +55395,12 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 if (jEnd && !jEnd.value) {
                     jEnd.value = new Date().toISOString().split('T')[0];
                 }
+            } else if (tabName === 'intent-ingest') {
+                const tab = document.getElementById('customAnalysisTabIntentIngest');
+                const content = document.getElementById('customAnalysisTabContentIntentIngest');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
+                if (typeof initIntentIngestForm === 'function') initIntentIngestForm();
             } else if (tabName === 'sentiment-iq') {
                 const tab = document.getElementById('customAnalysisTabSentimentIQ');
                 const content = document.getElementById('customAnalysisTabContentSentimentIQ');
@@ -56489,6 +56647,160 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             });
         }
 
+        // ============================================================
+        // Intent IQ Ingest form — submit + poll + preset loader
+        // ============================================================
+        var _iiingPollingId = null;
+        var _iiingPresetsLoaded = false;
+
+        function initIntentIngestForm() {
+            if (_iiingPresetsLoaded) return;
+            _iiingPresetsLoaded = true;
+            var sel = document.getElementById('iiingBrandCategory');
+            if (!sel) return;
+            fetch('/api/intent-ingest/terminology-presets').then(function(r){ return r.json(); }).then(function(data){
+                sel.innerHTML = '';
+                var blank = document.createElement('option'); blank.value = ''; blank.textContent = 'Generic brand (default)'; sel.appendChild(blank);
+                (data.categories || []).forEach(function(cat){
+                    var o = document.createElement('option'); o.value = cat; o.textContent = cat; sel.appendChild(o);
+                });
+            }).catch(function(e){
+                sel.innerHTML = '<option value="">Generic brand (default)</option>';
+            });
+        }
+
+        function loadIntentIngestPresetChime() {
+            var setV = function(id,v){ var el=document.getElementById(id); if(el) el.value=v; };
+            setV('iiingBrandName',    'Chime');
+            setV('iiingCampaignName', 'Mama I Made It');
+            setV('iiingBrandCategory','Digital Banking');
+            setV('iiingLaunchDate',   '2025-05-08');
+            setV('iiingEndDate',      '2025-06-30');
+            setV('iiingAttribution',  '14');
+            setV('iiingNotes',        'Latino-family finance campaign anchored on Mother\'s Day. Multigenerational (mom + daughter creators). Focused on non-member acquisition + reactivating dormant members.');
+            setV('iiingAssetUrls',
+                'https://www.youtube.com/watch?v=e3bSIL9J7yA\n' +
+                'https://www.instagram.com/p/DYATt8XjJzu/\n' +
+                'https://www.tiktok.com/@chime/video/7641277892499967245');
+        }
+
+        function submitIntentIngest() {
+            var btn = document.getElementById('iiingSubmitBtn');
+            var status = document.getElementById('iiingStatus');
+            var stTitle = document.getElementById('iiingStatusTitle');
+            var stText = document.getElementById('iiingStatusText');
+            var stPct = document.getElementById('iiingStatusPct');
+            var bar = document.getElementById('iiingProgressBar');
+            var successBox = document.getElementById('iiingSuccessBox');
+            if (successBox) { successBox.style.display = 'none'; successBox.innerHTML = ''; }
+
+            var payload = {
+                brand_name:         (document.getElementById('iiingBrandName')||{}).value || '',
+                campaign_name:      (document.getElementById('iiingCampaignName')||{}).value || '',
+                brand_category:     (document.getElementById('iiingBrandCategory')||{}).value || '',
+                launch_date:        (document.getElementById('iiingLaunchDate')||{}).value || '',
+                end_date:           (document.getElementById('iiingEndDate')||{}).value || '',
+                attribution_window: parseInt((document.getElementById('iiingAttribution')||{}).value || '0', 10) || 0,
+                notes:              (document.getElementById('iiingNotes')||{}).value || '',
+                asset_urls:         (document.getElementById('iiingAssetUrls')||{}).value || '',
+            };
+            var phasesRaw = (document.getElementById('iiingPhasesJson')||{}).value || '';
+            if (phasesRaw.trim()) {
+                try { payload.phases = JSON.parse(phasesRaw); }
+                catch (e) { alert('Custom Campaign Phases: invalid JSON - ' + e.message); return; }
+            }
+            if (!payload.brand_name || !payload.campaign_name || !payload.launch_date) {
+                alert('Brand, Campaign, and Launch Date are required.'); return;
+            }
+            if (!payload.asset_urls.trim()) {
+                alert('At least one asset URL is required.'); return;
+            }
+
+            if (btn) { btn.disabled = true; btn.textContent = 'Queuing...'; }
+            if (status) status.style.display = 'block';
+            if (stTitle) stTitle.textContent = 'Building "' + payload.campaign_name + '"...';
+            if (stText) stText.textContent = 'Submitting...';
+            if (stPct) stPct.textContent = '0%';
+            if (bar) bar.style.width = '0%';
+
+            fetch('/api/intent-ingest/submit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload),
+            }).then(function(r){ return r.json().then(function(j){ return {status: r.status, body: j}; }); })
+              .then(function(res){
+                if (res.status !== 200) {
+                    if (stText) stText.textContent = 'Error: ' + (res.body.error || 'submit failed');
+                    if (btn) { btn.disabled = false; btn.textContent = '🚀 Build Intent IQ Campaign'; }
+                    return;
+                }
+                if (stText) stText.textContent = res.body.message || 'Queued';
+                _pollIntentIngest(res.body.job_id);
+            }).catch(function(e){
+                if (stText) stText.textContent = 'Error: ' + e.message;
+                if (btn) { btn.disabled = false; btn.textContent = '🚀 Build Intent IQ Campaign'; }
+            });
+        }
+
+        function _pollIntentIngest(jobId) {
+            if (_iiingPollingId) clearInterval(_iiingPollingId);
+            var stText = document.getElementById('iiingStatusText');
+            var stPct = document.getElementById('iiingStatusPct');
+            var bar = document.getElementById('iiingProgressBar');
+            var btn = document.getElementById('iiingSubmitBtn');
+            var successBox = document.getElementById('iiingSuccessBox');
+            _iiingPollingId = setInterval(function(){
+                fetch('/api/job-status/' + jobId).then(function(r){ return r.json(); }).then(function(data){
+                    if (stText) stText.textContent = data.message || data.status || '';
+                    if (stPct) stPct.textContent = (data.progress || 0) + '%';
+                    if (bar) bar.style.width = (data.progress || 0) + '%';
+                    if (data.status === 'completed') {
+                        clearInterval(_iiingPollingId);
+                        if (btn) { btn.disabled = false; btn.textContent = '🚀 Build Intent IQ Campaign'; }
+                        var r = data.result || {};
+                        var slug = r.title_slug || '';
+                        var name = r.display_name || '';
+                        if (successBox) {
+                            successBox.style.display = 'block';
+                            successBox.innerHTML = '<strong>✅ Build complete.</strong><br>' +
+                                'Title: <strong>' + (name || slug) + '</strong> (' + slug + ')<br>' +
+                                'Assets: ' + (r.asset_count || 0) + ' &middot; ' +
+                                'Cohorts: ' + (r.cohort_count || 0) + ' &middot; ' +
+                                'Audiences: ' + (r.audience_count || 0) + ' &middot; ' +
+                                'Phases: ' + (r.phase_count || 0) + ' &middot; ' +
+                                'Talent: ' + (r.talent_count || 0) + '<br>' +
+                                '<button type="button" class="btn" style="margin-top: 0.5rem; background: var(--accent-primary); color: white; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer;" onclick="_openIntentIQWithTitle(\'' + slug + '\')">🎯 Open in Intent IQ</button>';
+                        }
+                    } else if (data.status === 'failed') {
+                        clearInterval(_iiingPollingId);
+                        if (btn) { btn.disabled = false; btn.textContent = '🚀 Build Intent IQ Campaign'; }
+                        if (successBox) {
+                            successBox.style.display = 'block';
+                            successBox.style.background = 'rgba(239,68,68,0.12)';
+                            successBox.style.borderColor = 'rgba(239,68,68,0.4)';
+                            successBox.innerHTML = '<strong>❌ Build failed.</strong><br>' +
+                                (data.error || data.message || 'Unknown error');
+                        }
+                    }
+                }).catch(function(e){
+                    // Transient network errors - keep polling
+                });
+            }, 2500);
+        }
+
+        function _openIntentIQWithTitle(slug) {
+            try {
+                var sel = document.getElementById('productSelect');
+                if (sel) {
+                    sel.value = 'intentIQ';
+                    if (typeof handleProductChange === 'function') handleProductChange();
+                }
+                if (slug && typeof loadIntentIQTitle === 'function') {
+                    setTimeout(function(){ loadIntentIQTitle(slug); }, 400);
+                }
+            } catch(e) {}
+        }
+
         function _pollJourneyIq(jobId) {
             if (_jiqPollingId) clearInterval(_jiqPollingId);
             _jiqPollingId = setInterval(function() {
@@ -56512,6 +56824,257 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 }).catch(function() {});
             }, 2500);
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // Digital Journey (Analysis IQ tab — brand + ending URLs + type)
+        // Lightweight sister of Digital Journey IQ. Uses Claude + web_search
+        // to research a brand externally and render a Discovery →
+        // Consideration → Conversion card inline, same shape as the
+        // Neurotrophic Drinks segment cards.
+        // ═══════════════════════════════════════════════════════════════
+
+        var _djPollingId = null;
+        var _djLastKey = null;
+
+        function _djEscape(s) {
+            if (s == null) return '';
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function submitDigitalJourney() {
+            var brand = (document.getElementById('djBrandName') || {}).value || '';
+            var jtype = (document.getElementById('djJourneyType') || {}).value || 'purchase';
+            var urls  = (document.getElementById('djEndingUrls') || {}).value || '';
+            brand = brand.trim();
+            urls = urls.trim();
+            if (!brand) { alert('Brand Name is required.'); return; }
+            if (!urls)  { alert('At least one ending URL is required.'); return; }
+
+            var btn = document.getElementById('djSubmitBtn');
+            if (btn) btn.disabled = true;
+            var st  = document.getElementById('djStatus');
+            var stTxt = document.getElementById('djStatusText');
+            var stBar = document.getElementById('djProgressBar');
+            var res = document.getElementById('djResultContainer');
+            if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+            if (st) st.style.display = 'block';
+            if (stTxt) stTxt.textContent = 'Submitting...';
+            if (stBar) stBar.style.width = '2%';
+
+            fetch('/api/digital-journey/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    brand_name:   brand,
+                    ending_urls:  urls,
+                    journey_type: jtype
+                })
+            }).then(function(r) { return r.json(); }).then(function(data) {
+                if (data.error) {
+                    if (stTxt) stTxt.textContent = 'Error: ' + data.error;
+                    if (btn) btn.disabled = false;
+                    return;
+                }
+                if (stTxt) stTxt.textContent = 'Queued...';
+                _pollDigitalJourney(data.job_id);
+            }).catch(function(e) {
+                if (stTxt) stTxt.textContent = 'Network error: ' + e;
+                if (btn) btn.disabled = false;
+            });
+        }
+
+        function _pollDigitalJourney(jobId) {
+            if (_djPollingId) clearInterval(_djPollingId);
+            _djPollingId = setInterval(function() {
+                fetch('/api/job-status/' + jobId).then(function(r) { return r.json(); }).then(function(data) {
+                    var stTxt = document.getElementById('djStatusText');
+                    var stBar = document.getElementById('djProgressBar');
+                    if (stTxt) stTxt.textContent = data.message || data.status || '';
+                    if (stBar) stBar.style.width = (data.progress || 0) + '%';
+                    if (data.status === 'completed' || data.status === 'failed') {
+                        clearInterval(_djPollingId);
+                        var btn = document.getElementById('djSubmitBtn');
+                        if (btn) btn.disabled = false;
+                        if (data.status === 'completed') {
+                            if (stTxt) stTxt.textContent = 'Done — rendering journey...';
+                            refreshDigitalJourneyList();
+                            if (data.s3_key) {
+                                _djLastKey = data.s3_key;
+                                _djLoadAndRender(data.s3_key);
+                            }
+                        }
+                    }
+                }).catch(function() {});
+            }, 2500);
+        }
+
+        function _djLoadAndRender(key) {
+            fetch('/api/digital-journey/results/' + encodeURIComponent(key), { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(payload) {
+                    if (!payload.success) { alert('Failed to load result: ' + (payload.error || '')); return; }
+                    renderDigitalJourneyCard(payload.data);
+                }).catch(function(e) { alert('Network error: ' + e); });
+        }
+
+        function refreshDigitalJourneyList() {
+            var list = document.getElementById('djResultsList');
+            if (!list) return;
+            list.innerHTML = '<div style="padding: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);">Loading...</div>';
+            fetch('/api/digital-journey/list', { credentials: 'same-origin' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var runs = (data && data.runs) || [];
+                    if (!runs.length) {
+                        list.innerHTML = '<div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No runs yet. Submit one to populate.</div>';
+                        return;
+                    }
+                    list.innerHTML = runs.map(function(r) {
+                        var brand = _djEscape(r.brand_name || 'Untitled');
+                        var jtype = _djEscape(r.journey_type || '');
+                        var when = _djEscape((r.created_at || '').slice(0, 16).replace('T', ' '));
+                        var who  = _djEscape(r.created_by || '');
+                        var aud  = _djEscape(r.audience_size_line || '');
+                        var typeEmoji = { content: '▶️', subscription: '✍️', purchase: '🛒' }[jtype] || '🧭';
+                        return '<div style="padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--border-color); cursor: pointer;" onclick="_djLoadAndRender(\''+ encodeURIComponent(r.key || '') +'\')">'
+                             +   '<div style="font-weight:700; font-size:0.85rem;">' + typeEmoji + ' ' + brand + '</div>'
+                             +   '<div style="font-size:0.7rem; opacity:0.7; margin-top:2px;">' + when + (who ? ' · ' + who : '') + (aud ? ' · ' + aud : '') + '</div>'
+                             + '</div>';
+                    }).join('');
+                }).catch(function() {
+                    list.innerHTML = '<div style="padding: 1rem; font-size: 0.8rem; color: #ef4444;">Failed to load runs.</div>';
+                });
+        }
+
+        function renderDigitalJourneyCard(data) {
+            var container = document.getElementById('djResultContainer');
+            if (!container || !data) return;
+            var meta = data.meta || {};
+            var bs = data.brand_summary || {};
+            var aud = data.audience || {};
+            var stages = data.stages || [];
+            var endpoints = data.endpoints || {};
+            var read = data.read || '';
+            var sources = data.sources || [];
+            var jtype = (meta.journey_type || 'purchase');
+            var jtypeEmoji = { content: '▶️', subscription: '✍️', purchase: '🛒' }[jtype] || '🧭';
+            var jtypeLabel = { content: 'Content', subscription: 'Subscription', purchase: 'Purchase' }[jtype] || jtype;
+
+            var totalDur = data.total_median_days || '';
+            var stageColors = ['#38bdf8', '#a78bfa', '#22c55e'];
+
+            var attrsHtml = ''
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                +   (bs.what_it_is ? '<div style="padding:0.65rem 0.8rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:3px solid #14b8a6;">'
+                +     '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800;">What it is</div>'
+                +     '<div style="font-size:0.8rem; line-height:1.5; margin-top:0.15rem;">' + _djEscape(bs.what_it_is) + '</div>'
+                +   '</div>' : '')
+                +   (aud.size_line ? '<div style="padding:0.65rem 0.8rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:3px solid #22c55e;">'
+                +     '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800;">Audience size</div>'
+                +     '<div style="font-size:0.8rem; line-height:1.5; margin-top:0.15rem;">' + _djEscape(aud.size_line) + '</div>'
+                +     (aud.size_notes ? '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.2rem; font-style:italic;">' + _djEscape(aud.size_notes) + '</div>' : '')
+                +   '</div>' : '')
+                +   (aud.who ? '<div style="padding:0.65rem 0.8rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:3px solid #f59e0b;">'
+                +     '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800;">Who</div>'
+                +     '<div style="font-size:0.8rem; line-height:1.5; margin-top:0.15rem;">' + _djEscape(aud.who) + '</div>'
+                +   '</div>' : '')
+                +   (bs.positioning_line ? '<div style="padding:0.65rem 0.8rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:3px solid #a78bfa;">'
+                +     '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800;">Positioning</div>'
+                +     '<div style="font-size:0.8rem; line-height:1.5; margin-top:0.15rem;">' + _djEscape(bs.positioning_line) + '</div>'
+                +   '</div>' : '')
+                + '</div>';
+
+            var stagesHtml = '<h4 style="margin:0.65rem 0 0.45rem; font-size:0.85rem;">Digital journey — Discovery → Consideration → ' + _djEscape(jtypeLabel) + '</h4>'
+                + '<div style="display:grid; grid-template-columns:1fr 24px 1fr 24px 1fr; gap:0.4rem; align-items:stretch; margin-bottom:0.85rem;">'
+                + stages.map(function(st, idx) {
+                    var color = stageColors[idx] || '#94a3b8';
+                    var tps = (st.touchpoints || []).map(function(tp) {
+                        var pct = Number(tp.pct || 0);
+                        var w = Math.min(pct * 2, 100);
+                        return '<div style="padding:3px 0; display:grid; grid-template-columns:110px 1fr 46px; gap:6px; align-items:center; font-size:0.7rem;">'
+                             +   '<div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + _djEscape(tp.host) + '</div>'
+                             +   '<div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.05);"><div style="height:100%; width:' + w.toFixed(1) + '%; background:' + color + '; border-radius:3px;"></div></div>'
+                             +   '<div style="text-align:right; font-weight:800; color:' + color + ';">' + pct.toFixed(1) + '%</div>'
+                             +   '<div style="grid-column: 1 / span 3; font-size:0.62rem; opacity:0.55; margin-top:-1px; margin-left:2px;">' + _djEscape(tp.label) + '</div>'
+                             + '</div>';
+                    }).join('');
+                    var daysChip = (st.median_days != null && st.median_days !== '')
+                        ? '<div style="display:inline-block; margin-top:2px; padding:1px 8px; border-radius:99px; background:rgba(56,189,248,0.14); color:#7dd3fc; font-size:0.6rem; font-weight:800; letter-spacing:0.06em;">median ' + Number(st.median_days) + 'd</div>'
+                        : '';
+                    var stageCard = '<div style="padding:0.7rem 0.85rem; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid ' + color + '55; min-height:200px;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.25rem;">'
+                         +     '<div><span style="font-size:1.3rem; margin-right:6px;">' + _djEscape(st.emoji) + '</span><span style="font-weight:900; font-size:0.85rem; color:' + color + ';">' + _djEscape(st.label) + '</span></div>'
+                         +     '<div style="font-size:1.15rem; font-weight:900; color:' + color + ';">' + Number(st.share_pct || 0).toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   daysChip
+                         +   '<div style="font-size:0.66rem; opacity:0.65; font-style:italic; margin:0.35rem 0;">' + _djEscape(st.sub) + '</div>'
+                         +   (tps || '<div style="font-size:0.7rem; opacity:0.55; font-style:italic; padding:0.3rem 0;">Endpoint split shown below.</div>')
+                         + '</div>';
+                    var arrow = (idx < stages.length - 1)
+                        ? '<div style="display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:' + color + '; opacity:0.55;">→</div>'
+                        : '';
+                    return stageCard + (arrow ? arrow : '');
+                }).join('')
+                + '</div>';
+
+            function endpointList(items, title, tintRgba, tintColor) {
+                if (!items || !items.length) return '';
+                return '<div style="padding:0.6rem 0.8rem; border-radius:7px; background:' + tintRgba + '; border:1px solid ' + tintColor + '55;">'
+                     +   '<div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:' + tintColor + '; margin-bottom:0.35rem;">' + _djEscape(title) + '</div>'
+                     +   items.map(function(e) {
+                            var pct = Number(e.share_pct || 0);
+                            var w = Math.min(pct * 2, 100);
+                            return '<div style="padding:2px 0; display:grid; grid-template-columns:130px 1fr 46px; gap:6px; align-items:center; font-size:0.72rem;">'
+                                 +   '<div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + _djEscape(e.endpoint) + '</div>'
+                                 +   '<div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.05);"><div style="height:100%; width:' + w.toFixed(1) + '%; background:' + tintColor + '; border-radius:3px;"></div></div>'
+                                 +   '<div style="text-align:right; font-weight:800; color:' + tintColor + ';">' + pct.toFixed(1) + '%</div>'
+                                 +   (e.note ? '<div style="grid-column: 1 / span 3; font-size:0.6rem; opacity:0.55; margin-top:-1px; margin-left:2px;">' + _djEscape(e.note) + '</div>' : '')
+                                 + '</div>';
+                        }).join('')
+                     + '</div>';
+            }
+            var endpointsHtml = '<h4 style="margin:0.65rem 0 0.45rem; font-size:0.85rem;">Endpoint mix — where the conversion actually lands</h4>'
+                + '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-bottom:0.85rem;">'
+                +   endpointList(endpoints.direct     || [], 'Direct (owned / DTC)', 'rgba(20,184,166,0.06)', '#14b8a6')
+                +   endpointList(endpoints.aggregator || [], 'Aggregator / marketplace', 'rgba(168,139,250,0.06)', '#a78bfa')
+                + '</div>';
+
+            var readHtml = read
+                ? '<div style="padding:0.6rem 0.85rem; margin-bottom:0.75rem; border-radius:7px; background:rgba(56,189,248,0.06); border:1px solid rgba(56,189,248,0.22); font-size:0.8rem; line-height:1.55;"><span style="font-size:0.58rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#7dd3fc; margin-right:0.4rem;">Read</span>' + _djEscape(read) + '</div>'
+                : '';
+            var sourcesHtml = (sources && sources.length)
+                ? '<div style="margin-top:0.6rem; font-size:0.68rem; opacity:0.7;"><strong>Sources:</strong> '
+                  + sources.map(function(s) {
+                        var t = _djEscape(s.title || s.url || 'source');
+                        var u = _djEscape(s.url || '#');
+                        return '<a href="' + u + '" target="_blank" rel="noopener" style="color:#7dd3fc; margin-right:0.6rem;">' + t + '</a>';
+                    }).join(' · ')
+                  + '</div>'
+                : '';
+
+            var totalDurBadge = totalDur
+                ? '<span style="padding:2px 8px; margin-left:0.4rem; border-radius:99px; background:rgba(56,189,248,0.14); color:#7dd3fc; font-weight:800; letter-spacing:0.08em;">JOURNEY · median ' + _djEscape(totalDur) + '</span>'
+                : '';
+            var typeBadge = '<span style="padding:2px 8px; border-radius:99px; background:rgba(168,139,250,0.14); color:#c4b5fd; font-weight:800; letter-spacing:0.08em;">' + jtypeEmoji + ' ' + _djEscape(jtypeLabel).toUpperCase() + '</span>';
+
+            container.innerHTML = ''
+                + '<div style="padding:1rem; border:1px solid var(--border-color); border-radius:12px; background:var(--bg-secondary);">'
+                +   '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem; flex-wrap:wrap; gap:0.5rem;">'
+                +     '<h3 style="margin:0; font-size:1.05rem;">🧭 ' + _djEscape(meta.brand_name || 'Digital Journey') + '</h3>'
+                +     '<div style="font-size:0.65rem;">' + typeBadge + totalDurBadge + '</div>'
+                +   '</div>'
+                +   (bs.category ? '<div style="font-size:0.72rem; opacity:0.7; margin-bottom:0.55rem;">' + _djEscape(bs.category) + '</div>' : '')
+                +   attrsHtml
+                +   readHtml
+                +   stagesHtml
+                +   endpointsHtml
+                +   sourcesHtml
+                + '</div>';
+            container.style.display = 'block';
+        }
+
 
         // ---------- Dashboard view (SELECT PRODUCT → Digital Journey IQ) ----------
 

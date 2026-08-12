@@ -7894,6 +7894,12 @@ _ANALYSIS_IQ_MODULES_FULL = [
     'profile_analysis', 'talent_search', 'talent_theater', 'svod', 'campaign',
     'cross_show', 'watch_time', 'ticket_sales_tracker', 'sf_lf_conversion', 'talent_fit',
     'flywheel_conversion', 'brand_partnership_iq', 'journey_iq',
+    # 2026-08-12: 'intent_ingest' - Analysis IQ agent that takes a
+    # brand-campaign form (brand, campaign, dates, URLs) and builds a
+    # full Intent IQ title (scrapes assets, Claude cohort/audience
+    # synthesis, writes normalized snapshot to S3, registers title).
+    # Backed by migration/intent_ingest_agent.py.
+    'intent_ingest',
 ]
 
 
@@ -37168,6 +37174,216 @@ def submit_journey_iq():
                         'credits_used': CREDITS_JOURNEY_IQ})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ============================================================
+# Intent IQ Ingest - Analysis IQ agent for brand campaigns
+# ============================================================
+# Takes a compact form (brand, campaign, dates, attribution window,
+# asset URL list, notes) and produces a fully-formed brand-mode
+# Intent IQ title. Runs inside a spawn_heavy_analysis background
+# thread; frontend polls /api/job-status/<job_id> like Journey IQ.
+# See migration/intent_ingest_agent.py for the pipeline.
+# ============================================================
+
+CREDITS_INTENT_INGEST = 5   # cheaper than Journey IQ since assets are
+                            # user-supplied and no CH-heavy scan runs.
+
+
+def _run_intent_ingest(job_id):
+    """Background worker for Intent IQ brand-campaign ingest.
+
+    Adapter around `migration.intent_ingest_agent.run_ingest` that forwards
+    progress updates through the shared update_job_status pipe. Mirrors the
+    `_run_journey_iq` pattern exactly.
+    """
+    try:
+        from migration import intent_ingest_agent as _iia
+    except Exception as e:
+        update_job_status(job_id, status='failed',
+                          error=f'intent_ingest_agent import failed: {e}',
+                          message=f'Import error: {e}', progress=100)
+        return
+    try:
+        job = jobs.get(job_id) or {}
+        params = job.get('params') or {}
+
+        def _cb(progress=None, message=None, **_ignored):
+            update_job_status(job_id, progress=progress, message=message)
+
+        update_job_status(job_id, status='running', progress=1,
+                          message='Starting brand-campaign ingest...')
+        result = _iia.run_ingest(
+            job_id=job_id,
+            params=params,
+            progress_cb=_cb,
+            s3_client=s3_client,
+        )
+        if result and result.get('success'):
+            update_job_status(job_id, status='completed', progress=100,
+                              message=(f"Built '{result.get('display_name')}' "
+                                        f"({result.get('asset_count')} assets, "
+                                        f"{result.get('cohort_count')} cohorts, "
+                                        f"{result.get('audience_count')} audiences)."),
+                              s3_key=result.get('s3_key'))
+            # Stash result under jobs[job_id]['result'] so the frontend
+            # can deep-link into Intent IQ with the new title selected.
+            try:
+                jobs[job_id]['result'] = {
+                    'title_slug':      result.get('title_slug'),
+                    'display_name':    result.get('display_name'),
+                    'asset_count':     result.get('asset_count'),
+                    'cohort_count':    result.get('cohort_count'),
+                    'audience_count':  result.get('audience_count'),
+                    'phase_count':     result.get('phase_count'),
+                    'talent_count':    result.get('talent_count'),
+                }
+                if s3_client:
+                    _save_job_status_to_s3(job_id, jobs[job_id])
+            except Exception:
+                pass
+        else:
+            update_job_status(job_id, status='failed', progress=100,
+                              message='Ingest did not complete',
+                              error='Ingest did not complete')
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        update_job_status(job_id, status='failed', error=str(e),
+                          message=f'Error: {e}', progress=100)
+
+
+@app.route('/api/intent-ingest/submit', methods=['POST'])
+@requires_auth
+def submit_intent_ingest():
+    """Kick off a brand-campaign Intent IQ build from the Analysis IQ form."""
+    try:
+        username = session.get('username')
+        user = get_current_user()
+        if not user:
+            return jsonify({'error': 'User not authenticated'}), 401
+        if not user_can_run_analysis_module(user, 'intent_ingest'):
+            return jsonify({'error': 'Analysis IQ access with Intent Ingest '
+                            'module required'}), 403
+
+        data = request.get_json() or {}
+        brand_name    = (data.get('brand_name')    or '').strip()
+        campaign_name = (data.get('campaign_name') or '').strip()
+        brand_cat     = (data.get('brand_category') or '').strip()
+        launch_date   = (data.get('launch_date')   or '').strip()
+        end_date      = (data.get('end_date')      or '').strip()
+        notes         = (data.get('notes')         or '').strip()
+
+        try:
+            attribution_window = int(data.get('attribution_window') or 0)
+        except Exception:
+            attribution_window = 0
+
+        # Asset URLs: accept a list OR a newline/comma-separated string.
+        urls_raw = data.get('asset_urls') or ''
+        if isinstance(urls_raw, str):
+            urls = [u.strip() for u in re.split(r'[\n,;\s]+', urls_raw) if u.strip()]
+        else:
+            urls = [str(u).strip() for u in (urls_raw or []) if str(u).strip()]
+        urls = [u for u in urls if u.startswith(('http://', 'https://'))]
+
+        # Optional user-defined phases (each: {name, start_date, end_date, description}).
+        phases_in = data.get('phases') or []
+        if not isinstance(phases_in, list):
+            phases_in = []
+        phases_in = phases_in[:12]
+
+        # Optional overrides
+        terminology_overrides   = data.get('terminology_overrides')   or {}
+        enabled_tabs_overrides  = data.get('enabled_tabs_overrides')  or {}
+        brand_config_overrides  = data.get('brand_config_overrides')  or {}
+
+        # Validation
+        if not brand_name:
+            return jsonify({'error': 'brand_name required'}), 400
+        if not campaign_name:
+            return jsonify({'error': 'campaign_name required'}), 400
+        if not launch_date:
+            return jsonify({'error': 'launch_date required'}), 400
+        if not urls:
+            return jsonify({'error': 'at least one asset URL is required'}), 400
+        if len(urls) > 500:
+            return jsonify({'error': 'max 500 asset URLs per campaign'}), 400
+
+        if not has_credits_for(username, CREDITS_INTENT_INGEST):
+            _, credits_left = check_user_credits(username)
+            return jsonify({
+                'error': (f'Intent Ingest requires {CREDITS_INTENT_INGEST} credits. '
+                          f'You have {"no" if credits_left == 0 else credits_left} remaining.'),
+                'credits_left': 0 if credits_left != -1 else -1,
+            }), 403
+
+        job_id = str(uuid.uuid4())[:8]
+        jobs[job_id] = {
+            'status': 'queued', 'progress': 0, 'message': 'Queued',
+            'created_at': datetime.now().isoformat(),
+            'project_name': f'{brand_name} - {campaign_name}',
+            'error': None, 'result_file': None,
+            'logs': [], 's3_key': None, 'username': username,
+            'created_by': username,
+            'type': 'intent_ingest',
+            'params': {
+                'brand_name':             brand_name,
+                'campaign_name':          campaign_name,
+                'brand_category':         brand_cat,
+                'launch_date':            launch_date,
+                'end_date':               end_date,
+                'attribution_window':     attribution_window,
+                'notes':                  notes,
+                'asset_urls':             urls,
+                'phases':                 phases_in,
+                'terminology_overrides':  terminology_overrides,
+                'enabled_tabs_overrides': enabled_tabs_overrides,
+                'brand_config_overrides': brand_config_overrides,
+            },
+        }
+        if s3_client:
+            _save_job_status_to_s3(job_id, jobs[job_id])
+
+        desc = f"{campaign_name} (Intent Ingest: {brand_name} - {len(urls)} assets)"
+        if not consume_credit(username, description=desc, job_id=job_id,
+                              pull_type='Intent IQ Ingest',
+                              credits_used=CREDITS_INTENT_INGEST):
+            return jsonify({'error': 'Insufficient credits.'}), 403
+
+        spawn_heavy_analysis(_run_intent_ingest, args=(job_id,),
+                             tool='intent_ingest',
+                             job_id=job_id, username=username)
+
+        return jsonify({
+            'job_id': job_id,
+            'message': f'Intent IQ ingest queued ({len(urls)} assets)',
+            'status': 'queued',
+            'credits_used': CREDITS_INTENT_INGEST,
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/intent-ingest/terminology-presets', methods=['GET'])
+@requires_auth
+def intent_ingest_terminology_presets():
+    """Return the list of brand-category presets so the frontend form can
+    populate its dropdown. Client uses this to preview the labels that
+    will appear on the dashboard for the chosen category."""
+    try:
+        from migration.intent_ingest_agent import (
+            BRAND_CATEGORY_TERMINOLOGY_PRESETS,
+            build_terminology_for_brand_category,
+        )
+    except Exception as e:
+        return jsonify({'error': f'intent_ingest_agent unavailable: {e}'}), 500
+    out = {}
+    for cat in BRAND_CATEGORY_TERMINOLOGY_PRESETS.keys():
+        out[cat] = build_terminology_for_brand_category(cat)
+    return jsonify({'success': True, 'categories': list(out.keys()),
+                    'presets': out,
+                    'default': build_terminology_for_brand_category(None)})
 
 
 @app.route('/api/journey-iq/estimate-audience', methods=['POST'])
