@@ -25840,6 +25840,14 @@ https://www.instagram.com/p/..."></textarea>
                 if (!s || typeof s !== 'string') return s;
                 return s.charAt(0).toLowerCase() + s.slice(1);
             };
+            // Bottom-funnel label shortcut for code paths outside the
+            // intentIQView MutationObserver (e.g. Q2 chart modal, asset
+            // drill-in modal - both mount to document.body).
+            window._iiqBFL = function() {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                return term.bottom_funnel_label || 'Ticketing';
+            };
             window._iiqInfoSeekTooltip = function(count) {
                 var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
                 var term = ov.terminology || {};
@@ -26980,7 +26988,7 @@ https://www.instagram.com/p/..."></textarea>
                      +     '<div><div style="font-size:0.85rem; font-weight:700; color:#fff;">' + fmtC(eng) + '</div><div style="font-size:0.6rem; color:#94a3b8;">engagement</div></div>'
                      +     '<div><div style="font-size:0.85rem; font-weight:700; color:#22d3ee;">' + engRate.toFixed(2) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">eng. rate</div></div>'
                      +     '<div><div style="font-size:0.85rem; font-weight:700; color:#a5b4fc;">' + proj.info_pct.toFixed(1) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">info-seek</div></div>'
-                     +     '<div><div style="font-size:0.85rem; font-weight:700; color:#fbbf24;">' + proj.ticket_pct.toFixed(1) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">ticketing</div></div>'
+                     +     '<div><div style="font-size:0.85rem; font-weight:700; color:#fbbf24;">' + proj.ticket_pct.toFixed(1) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">' + window._iiqBFL().toLowerCase() + '</div></div>'
                      +   '</div>'
                      +   '<div style="display:flex; justify-content:space-between; align-items:center; gap:0.4rem; font-size:0.65rem; color:#94a3b8;">'
                      +     '<span>' + (posted ? 'Posted ' + esc(posted) : '') + '</span>'
@@ -29036,9 +29044,21 @@ https://www.instagram.com/p/..."></textarea>
                 // chart is small enough to live next to the donut + funnel
                 // cards; the modal version goes wide so the dots and date
                 // axis are readable.
-                var chartCaption = hasFunnelSeries
-                    ? 'Daily activity (7-day rolling). Left axis: daily paid vs organic views. Right axis: daily info-seekers &amp; ticketing visits. All four lines spike around opening weekend, decay through the theatrical window, and ticketing collapses once the movie leaves theatres. Info-seek picks back up around the 5/15 streaming launch ("where can I stream this?"). Dots along the x-axis = each paid/organic asset drop date.'
-                    : 'Dots along the x-axis = each paid/organic asset drop date.';
+                var chartCaption;
+                if (hasFunnelSeries) {
+                    var _q2ov  = (window.__intentIQ && window.__intentIQ.overview) || {};
+                    var _q2trm = _q2ov.terminology || {};
+                    var _q2isBrand = _q2ov.title_type === 'brand';
+                    var _q2bfl = (_q2trm.bottom_funnel_label || 'Ticketing');
+                    var _q2bflLc = _q2bfl.toLowerCase();
+                    if (_q2isBrand) {
+                        chartCaption = 'Daily activity (7-day rolling). Left axis: daily paid vs organic views. Right axis: daily info-seekers &amp; ' + _q2bflLc + 's. All four lines track together across the campaign - view lines spike on major content drops, and ' + _q2bflLc + 's rise on high-intent creative (product tutorials, referral pushes, testimonial cuts). Info-seek trails view spikes by 1-2 days as audiences research the brand between exposure and action. Dots along the x-axis = each paid/organic asset drop date.';
+                    } else {
+                        chartCaption = 'Daily activity (7-day rolling). Left axis: daily paid vs organic views. Right axis: daily info-seekers &amp; ticketing visits. All four lines spike around opening weekend, decay through the theatrical window, and ticketing collapses once the movie leaves theatres. Info-seek picks back up around the 5/15 streaming launch ("where can I stream this?"). Dots along the x-axis = each paid/organic asset drop date.';
+                    }
+                } else {
+                    chartCaption = 'Dots along the x-axis = each paid/organic asset drop date.';
+                }
 
                 window.__intentIQQ2Chart = {
                     series: series,
@@ -29609,7 +29629,7 @@ https://www.instagram.com/p/..."></textarea>
                         + _seriesToggle('Organic views', pal.organic, st.showOrganicViews, 'window.iiqQ2ModalToggleSeries(\'showOrganicViews\')')
                         + _seriesToggle('Paid views',    pal.paid,    st.showPaidViews,    'window.iiqQ2ModalToggleSeries(\'showPaidViews\')')
                         + _seriesToggle('Info-seekers',  '#a5b4fc',   st.showInfoSeekers,  'window.iiqQ2ModalToggleSeries(\'showInfoSeekers\')')
-                        + _seriesToggle('Ticketing',     '#fbbf24',   st.showTicketing,    'window.iiqQ2ModalToggleSeries(\'showTicketing\')')
+                        + _seriesToggle(window._iiqBFL(), '#fbbf24',   st.showTicketing,    'window.iiqQ2ModalToggleSeries(\'showTicketing\')')
                         + _seriesToggle('Drop dots',     '#94a3b8',   st.showEvents,       'window.iiqQ2ModalToggleSeries(\'showEvents\')');
 
                     var labelStyle = 'font-size:0.66rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.25rem;';
@@ -29696,7 +29716,7 @@ https://www.instagram.com/p/..."></textarea>
                     '<div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:0.85rem; gap:1rem;">'
                   +   '<div>'
                   +     '<h3 style="margin:0 0 0.2rem; color:#fff; font-size:1.05rem;">Daily activity \u2014 explore cuts</h3>'
-                  +     '<div style="font-size:0.74rem; color: var(--text-secondary);">Slice the chart by source, asset type, channel, and smoothing window. Totals always renormalize to the filtered subset so info-seek and ticketing stay calibrated to what you\u2019re looking at.</div>'
+                  +     '<div style="font-size:0.74rem; color: var(--text-secondary);">Slice the chart by source, asset type, channel, and smoothing window. Totals always renormalize to the filtered subset so info-seek and ' + window._iiqBFL().toLowerCase() + ' stay calibrated to what you\u2019re looking at.</div>'
                   +   '</div>'
                   +   '<div style="display:flex; gap:0.4rem; flex:none;">'
                   +     '<button type="button" onclick="window.iiqQ2ModalReset()" style="background: rgba(255,255,255,0.06); color:#cbd5e1; border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:0.35rem 0.7rem; cursor:pointer; font-size:0.75rem;">Reset cuts</button>'
@@ -29704,7 +29724,7 @@ https://www.instagram.com/p/..."></textarea>
                   +   '</div>'
                   + '</div>'
                   + '<div id="iiqQ2ModalBody"></div>'
-                  + (c.caption ? '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.55rem; line-height:1.4;">' + c.caption + ' Hover a dot for the asset name, channel, views, eng. rate, info-seek %, and ticketing %.</div>' : '');
+                  + (c.caption ? '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.55rem; line-height:1.4;">' + c.caption + ' Hover a dot for the asset name, channel, views, eng. rate, info-seek %, and ' + window._iiqBFL().toLowerCase() + ' %.</div>' : '');
                 overlay.appendChild(panel);
                 _render();
             };
