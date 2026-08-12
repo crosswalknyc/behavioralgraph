@@ -44753,7 +44753,11 @@ https://www.instagram.com/p/..."></textarea>
 
         function _miqCurrentFilters() {
             // Read the unified filter bar. Returns { window_days,
-            // start_date, end_date, top_n, genre }.
+            // start_date, end_date, top_n, genre }. Also side-effects
+            // window.__microdramasIQ.currentWindowDays / Start / End so
+            // downstream card helpers (Unique Viewers chip tooltip,
+            // sparkline range labels) can describe the window without
+            // re-reading the filter DOM.
             var winEl = document.getElementById('microdramasIQWindow');
             var winVal = (winEl && winEl.value) || '7';
             var start_date = '', end_date = '';
@@ -44764,13 +44768,26 @@ https://www.instagram.com/p/..."></textarea>
             } else {
                 window_days = parseInt(winVal, 10);
             }
-            return {
+            var out = {
                 window_days: window_days,
                 start_date:  start_date || null,
                 end_date:    end_date   || null,
                 top_n:       parseInt((document.getElementById('microdramasIQTopN') || {}).value || '20', 10),
                 genre:       (document.getElementById('microdramasIQGenre') || {}).value || '',
             };
+            if (window.__microdramasIQ) {
+                var effDays = out.window_days;
+                if (!effDays && out.start_date && out.end_date) {
+                    var ms = Date.parse(out.end_date) - Date.parse(out.start_date);
+                    if (!isNaN(ms) && ms >= 0) {
+                        effDays = Math.round(ms / 86400000) + 1;
+                    }
+                }
+                window.__microdramasIQ.currentWindowDays = effDays || 7;
+                window.__microdramasIQ.currentStartDate  = out.start_date;
+                window.__microdramasIQ.currentEndDate    = out.end_date;
+            }
+            return out;
         }
 
         // Dispatch Apply to the correct loader based on which tab is
@@ -44912,28 +44929,81 @@ https://www.instagram.com/p/..."></textarea>
         // competitors we show BOTH free-tier completion + payer
         // conversion. For Peacock (no per-episode paywall) we show a
         // single series-completion chip.
+        // Mirror of microdramas_iq.py::_title_window_views. Returns
+        // cumulative unique-viewer estimate for a title over the
+        // ACTIVE look-back window (7 / 14 / 28 / custom), in the same
+        // units the All Platforms rollup uses:
+        //   Peacock:     view_window_estimate -> view_28d_estimate
+        //   Competitors: sum(reads_by_date)   -> read_count
+        // Backend already prunes reads_by_date + view_window_estimate
+        // to the requested window, so summing what's on the title
+        // record is correct without any client-side date filtering.
+        function _miqWindowViewers(t, source) {
+            if (!t) return null;
+            if (source === 'peacock') {
+                if (typeof t.view_window_estimate === 'number' && t.view_window_estimate > 0) {
+                    return t.view_window_estimate;
+                }
+                if (typeof t.view_28d_estimate === 'number' && t.view_28d_estimate > 0) {
+                    return t.view_28d_estimate;
+                }
+                return null;
+            }
+            var rbd = t.reads_by_date;
+            if (rbd && typeof rbd === 'object') {
+                var sum = 0;
+                for (var d in rbd) {
+                    if (!Object.prototype.hasOwnProperty.call(rbd, d)) continue;
+                    var v = rbd[d];
+                    if (typeof v === 'number' && v > 0) sum += v;
+                }
+                if (sum > 0) return Math.round(sum);
+            }
+            if (typeof t.read_count === 'number' && t.read_count > 0) {
+                return t.read_count;
+            }
+            return null;
+        }
+
+        // Human-readable label for the active look-back window. Used
+        // in the Unique Viewers chip tooltip so users understand what
+        // window the sum reflects. Custom ranges show the raw dates;
+        // preset windows show "the last N days".
+        function _miqActiveWindowLabel() {
+            var st = window.__microdramasIQ || {};
+            if (st.currentStartDate && st.currentEndDate) {
+                return st.currentStartDate + ' -> ' + st.currentEndDate;
+            }
+            var wd = st.currentWindowDays;
+            if (typeof wd === 'number' && wd > 0) {
+                if (wd === 1)  return 'the last day';
+                if (wd === 7)  return 'the last 7 days';
+                if (wd === 14) return 'the last 14 days';
+                if (wd === 28) return 'the last 28 days';
+                return 'the last ' + wd + ' days';
+            }
+            return 'the active window';
+        }
+
         function _miqCompletionChips(t) {
             var c = t.completion;
             if (!c) return '';
             var parts = [];
-            // Unique Viewers chip: raw 28-day lifetime unique-viewer
-            // count. Same underlying number as the card top-of-card
-            // "Views" metric but framed as a chip so it sits next to
-            // the engagement-rate percentages for a compact scan of
-            // "how big is this title's audience and how deep does it
-            // engage". Replaced the Free Completion chip on 2026-08-12
-            // per user directive - free-tier completion is still
-            // available in the audience-details modal.
-            var uniqueViewers = null;
-            if (c.source === 'peacock') {
-                uniqueViewers = (t.view_28d_estimate != null)
-                              ? t.view_28d_estimate
-                              : t.view_window_estimate;
-            } else if (t.read_count != null) {
-                uniqueViewers = t.read_count;
-            }
+            // Unique Viewers chip: cumulative unique viewers over the
+            // active look-back window (7 / 14 / 28 / custom). Mirrors
+            // microdramas_iq.py::_title_window_views so the per-card
+            // number reconciles exactly with the All Platforms rollup
+            // total for the same title. Was previously hardcoded to
+            // fixed 28d numbers (view_28d_estimate / read_count) which
+            // ignored the filter bar. Replaced the Free Completion
+            // chip on 2026-08-12; Free Completion still lives in the
+            // audience-details modal.
+            var uniqueViewers = _miqWindowViewers(t, c.source);
             if (uniqueViewers != null && uniqueViewers > 0) {
-                var uvTip = 'Estimated 28-day unique viewers on ' + (t.platform_label || (c.source === 'peacock' ? 'Peacock' : 'this platform'));
+                var uvWindow = _miqActiveWindowLabel();
+                var uvPlatformName = t.platform_label || (c.source === 'peacock' ? 'Peacock' : 'this platform');
+                var uvTip = 'Estimated unique viewers on ' + uvPlatformName + ' over ' + uvWindow + '. '
+                          + 'Changes with the look-back filter above the grid.';
                 parts.push('<span class="miq-comp-chip miq-chip-completion" title="' + _miqEscape(uvTip) + '">'
                          +   '<span class="miq-comp-chip-label">Unique Viewers</span>'
                          +   '<span class="miq-comp-chip-value">' + _miqFormatNumber(uniqueViewers) + '</span>'
