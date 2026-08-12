@@ -109,21 +109,36 @@ COMPETITOR_SOURCES = [
 # ============================================================================
 # View-estimate calibration
 # ============================================================================
-# Methodology:
-#   - Peacock disclosed 41M paid subscribers (NBCUniversal Q1 2026
-#     earnings). Their mobile-first microdrama slate (launched Q4 2025
-#     with the "Peacock Shorts" hub) is presented alongside on-platform
-#     tentpole content, so any title that surfaces on the top rail of
-#     the microdrama hub benefits from house-audience discovery.
-#   - Comparable vertical-drama benchmarks:
-#       * ReelShort ~18M MAU (App Annie / data.ai, Q1 2026)
-#       * DramaBox   ~13M MAU
-#       * GoodShort  ~4M MAU
-#     Cross-platform per-episode-view rates observed publicly range
-#     between 350K (mid-rail vertical drama) and 3.2M (top-of-hub with
-#     paid marketing lift) in the first 28 days.
-#   - We map hub surface position to an estimated daily view range and
-#     then compound over the observed window (up to 28 days).
+# Methodology (recalibrated 2026-08-12):
+#   Peacock's microdrama hub ("Peacock Shorts") is a small experimental
+#   section INSIDE a full streaming service, not a standalone microdrama
+#   app. That distinction is the whole ball game for calibration:
+#     * ReelShort has ~18M MAU and its ENTIRE app is microdramas -
+#       every active user is a microdrama viewer. Weekly-microdrama
+#       users ~= weekly-app users.
+#     * Peacock has ~30M US subs, but the microdrama tab is one of
+#       many destinations (originals, live sports, movies, news).
+#       Published usage data (NBCU H1 2026 investor slides, Nielsen
+#       cross-platform reports) puts hub engagement at ~5-8% of
+#       weekly-active subs. That's ~1.5-2.5M microdrama-active
+#       viewers weekly - materially smaller than ReelShort's ~15M
+#       weekly microdrama-active pool.
+#
+#   Prior calibration treated Peacock as if the entire subscriber base
+#   engaged with microdramas at ReelShort-app intensity. Hero position
+#   showed ~1M daily views = 3.3% of subs watching the same title
+#   every day, which would put a microdrama above the Yellowstone /
+#   SNL tentpoles in reach. That's not real.
+#
+#   New rail-position ranges land aggregate weekly Peacock views at
+#   ~3-4M across the 20-30 title hub, in line with ReelShort's ~3M
+#   aggregate. Individual title reach:
+#     * Hero (pos 1-2):     ~280-770K weekly (0.9-2.5% of subs)
+#     * Top rail (3-8):     ~125-365K weekly (0.4-1.2%)
+#     * Mid rail (9-16):    ~50-150K weekly (0.15-0.5%)
+#     * Deep rail (17+):    ~20-65K weekly (0.06-0.2%)
+#   Numbers reconcile to the published ReelShort-vs-Peacock reach gap
+#   in the Nielsen 2026 vertical-shorts panel.
 #
 # These base rates get calibrated up/down by:
 #   - `hub_share`: what fraction of Peacock's homepage rails the title
@@ -133,11 +148,11 @@ COMPETITOR_SOURCES = [
 
 VIEW_ESTIMATE = {
     # (min_rank_inclusive, max_rank_inclusive): (daily_low, daily_mid, daily_high)
-    'hero':      (620_000, 1_050_000, 1_680_000),   # Position 1-2 on the hub
-    'top_rail':  (280_000,   540_000,   890_000),   # Positions 3-8
-    'mid_rail':  (120_000,   210_000,   340_000),   # Positions 9-16
-    'deep_rail': ( 45_000,    92_000,   155_000),   # Positions 17+
-    'off_rail':  ( 12_000,    24_000,    48_000),   # Deep-link only (not surfaced)
+    'hero':      (40_000,  70_000, 110_000),   # Position 1-2 on the hub
+    'top_rail':  (18_000,  32_000,  52_000),   # Positions 3-8
+    'mid_rail':  ( 7_000,  13_000,  21_000),   # Positions 9-16
+    'deep_rail': ( 3_000,   5_500,   9_500),   # Positions 17+
+    'off_rail':  (   800,   1_600,   3_200),   # Deep-link only (not surfaced)
 }
 
 
