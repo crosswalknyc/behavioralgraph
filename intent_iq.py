@@ -56,6 +56,135 @@ QUESTIONS = {
 }
 
 
+# ============================================================
+# Title-type config (film vs. brand campaign)
+# ------------------------------------------------------------
+# Intent IQ was originally film-only. Brand campaigns (Chime, etc.)
+# now carry `title_type: 'brand'` and a `terminology` block on their
+# registry entry. Frontend reads these and swaps labels, hides
+# film-only tabs (Intent-to-Conversion, Q3 Intent-to-Buy comparable
+# titles, Q5 Trailer Performance) when title_type != 'film'.
+# Films get the historical GOAT labels (back-compat).
+# ============================================================
+
+TITLE_TYPE_DEFAULTS = {
+    "film": {
+        "terminology": {
+            "title_noun":                 "Title",
+            "audience_noun":              "Audience",
+            "opening_moment_noun":        "Opening weekend",
+            "launch_date_label":          "Opening date",
+            "presale_date_label":         "Ticketing on sale",
+            "parent_org_label":           "Distributor",
+            "top_funnel_label":           "Engagement",
+            "mid_funnel_label":           "Info-seek",
+            "mid_funnel_full":            "Searched title / IMDB / Rotten Tomatoes / Letterboxd / official site within 7 days",
+            "bottom_funnel_label":        "Ticketing",
+            "bottom_funnel_full":         "Visited a ticketing site (Fandango / AMC / Regal / Cinemark / Atom) within 7 days",
+            "conversion_noun":            "ticket buyer",
+            "conversion_verb":            "buy a ticket",
+            "conversion_endpoint_label":  "ticketing sites",
+            "attribution_window_days":    7,
+        },
+        "enabled_tabs": {
+            "overview":            True,
+            "assets":              True,
+            "questions":           True,
+            "q1_engagement":       True,
+            "q2_paid_vs_organic":  True,
+            "audiences":           True,
+            "q3_intent_to_buy":    True,
+            "q4_talent":           True,
+            "q5_trailer":          True,
+            "q6_cohorts":          True,
+            "journey":             True,
+            "inflight":            True,
+            "conversion":          True,
+        },
+    },
+    "brand": {
+        "terminology": {
+            "title_noun":                 "Campaign",
+            "audience_noun":              "Audience",
+            "opening_moment_noun":        "Campaign peak",
+            "launch_date_label":          "Campaign launch",
+            "presale_date_label":         "Attribution window opens",
+            "parent_org_label":           "Brand",
+            "top_funnel_label":           "Engagement",
+            "mid_funnel_label":           "Research",
+            "mid_funnel_full":            "Engaged another brand post, searched the brand "
+                                          "on Google / Safari / AEO, visited brand social "
+                                          "profile, or opened brand app-store listing within "
+                                          "the attribution window",
+            "bottom_funnel_label":        "Site visit",
+            "bottom_funnel_full":         "Visited the brand website within the attribution window",
+            "conversion_noun":            "signup",
+            "conversion_verb":            "sign up",
+            "conversion_endpoint_label":  "brand website",
+            "attribution_window_days":    14,
+        },
+        "enabled_tabs": {
+            "overview":            True,
+            "assets":              True,
+            "questions":           True,
+            "q1_engagement":       True,
+            "q2_paid_vs_organic":  True,
+            "audiences":           True,
+            "q3_intent_to_buy":    False,   # comparable-titles chart is film-only
+            "q4_talent":           True,
+            "q5_trailer":          False,   # Trailer Performance is film-only
+            "q6_cohorts":          True,
+            "journey":             True,
+            "inflight":            True,
+            "conversion":          False,   # Intent-to-Conversion (BO projector) is film-only
+        },
+    },
+}
+
+
+def _apply_title_type_defaults(title: dict) -> dict:
+    """Ensure every title dict has title_type + terminology + enabled_tabs.
+
+    Missing values default to 'film' so old registry entries (goat) keep
+    rendering identically. Per-title overrides in the registry win.
+    """
+    ttype = (title.get("title_type") or "film").lower()
+    if ttype not in TITLE_TYPE_DEFAULTS:
+        ttype = "film"
+    d = TITLE_TYPE_DEFAULTS[ttype]
+    out = dict(title)
+    out["title_type"] = ttype
+    term = dict(d["terminology"])
+    term.update(title.get("terminology") or {})
+    out["terminology"] = term
+    tabs = dict(d["enabled_tabs"])
+    tabs.update(title.get("enabled_tabs") or {})
+    out["enabled_tabs"] = tabs
+    return out
+
+
+# Brand-mode cohort fallback. Replaces moviegoing-frequency cohorts for
+# titles where a member/prospect segmentation is more meaningful. Ingest
+# can override via a `cohorts` list on the normalized snapshot.
+BRAND_COHORTS_FALLBACK = [
+    {"cohort_slug": "existing_member",       "display_name": "Existing Members",
+     "frequency_band": "Active brand-app user (last 30d)", "min_events_12mo": 1,
+     "max_events_12mo": 0, "panel_count": 0, "gen_pop_share": 0.0, "last_refreshed": ""},
+    {"cohort_slug": "high_intent_prospect",  "display_name": "High-Intent Prospects",
+     "frequency_band": "Actively comparing brands in category",
+     "min_events_12mo": 3, "max_events_12mo": 0, "panel_count": 0,
+     "gen_pop_share": 0.0, "last_refreshed": ""},
+    {"cohort_slug": "aware_non_customer",    "display_name": "Aware Non-Customers",
+     "frequency_band": "Category-aware but not shopping",
+     "min_events_12mo": 0, "max_events_12mo": 2, "panel_count": 0,
+     "gen_pop_share": 0.0, "last_refreshed": ""},
+    {"cohort_slug": "lapsed_member",         "display_name": "Lapsed Members",
+     "frequency_band": "Prior member, inactive last 90d",
+     "min_events_12mo": 0, "max_events_12mo": 0, "panel_count": 0,
+     "gen_pop_share": 0.0, "last_refreshed": ""},
+]
+
+
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
 def _ch_client():
@@ -165,12 +294,14 @@ def list_titles() -> dict:
             for t in merged:
                 t["opening_date"] = _safe_iso_date(t.get("opening_date"))
                 t["ticketing_open_date"] = _safe_iso_date(t.get("ticketing_open_date"))
+            merged = [_apply_title_type_defaults(t) for t in merged]
             return {"success": True, "titles": merged, "source": "clickhouse+registry"}
         except Exception as e:
             logger.warning("Intent IQ: list_titles CH failed: %s", e)
     for t in titles_meta:
         t["opening_date"] = _safe_iso_date(t.get("opening_date"))
         t["ticketing_open_date"] = _safe_iso_date(t.get("ticketing_open_date"))
+    titles_meta = [_apply_title_type_defaults(t) for t in titles_meta]
     return {"success": True, "titles": titles_meta, "source": "registry", "fallback": True}
 
 
@@ -208,7 +339,13 @@ def get_overview(title_slug: str) -> dict:
                     f"SELECT count() FROM intent.campaign_assets FINAL "
                     f"WHERE title_slug = '{title_slug}'"
                 ).result_rows
-                return {
+                # Merge registry (may carry title_type + terminology +
+                # enabled_tabs) before applying defaults so per-title
+                # overrides win over the film default.
+                registry = _load_registry()
+                reg_meta = next((x for x in registry.get("titles", [])
+                                 if x.get("title_slug") == title_slug), {})
+                out = {
                     "success": True,
                     "title_slug": title_slug,
                     "display_name": t[0],
@@ -223,7 +360,11 @@ def get_overview(title_slug: str) -> dict:
                     "asset_count": int(asset_count_rows[0][0] if asset_count_rows else 0),
                     "phases": phases,
                     "source": "clickhouse",
+                    **{k: reg_meta[k] for k in ("title_type", "terminology",
+                                                 "enabled_tabs", "brand_config")
+                       if k in reg_meta},
                 }
+                return _apply_title_type_defaults(out)
         except Exception as e:
             logger.warning("Intent IQ: get_overview CH failed: %s", e)
 
@@ -233,7 +374,7 @@ def get_overview(title_slug: str) -> dict:
         phases = []
         for p in snap.get("phases", []):
             phases.append({**p, "color_hex": p.get("color_hex") or _phase_color(p.get("phase_name", ""))})
-        return {
+        out = {
             "success": True,
             "title_slug": title_slug,
             "display_name": t.get("display_name"),
@@ -249,7 +390,13 @@ def get_overview(title_slug: str) -> dict:
             "phases": phases,
             "source": "s3_snapshot",
             "fallback": True,
+            # Snapshot carries title_type + terminology + enabled_tabs
+            # when the ingest sets them (brand campaigns do; films may omit).
+            **{k: t.get(k) for k in ("title_type", "terminology",
+                                       "enabled_tabs", "brand_config")
+               if t.get(k) is not None},
         }
+        return _apply_title_type_defaults(out)
     return {"success": False, "error": f"Title not found: {title_slug}"}
 
 
@@ -550,10 +697,20 @@ def get_audiences(title_slug: str) -> dict:
             logger.warning("Intent IQ: get_audiences CH failed: %s", e)
 
     by_key = {a["subject_key"]: a for a in db_overlap}
+
+    # Catalog resolution order:
+    #   (1) hardcoded film catalog for this slug (GOAT cast/talent/demo)
+    #   (2) `audiences` list on the S3 normalized snapshot (this is how
+    #        brand ingests supply audiences without touching the codebase)
     catalog = AUDIENCES_OF_INTEREST_DEFAULT.get(title_slug, [])
+    if not catalog:
+        snap = _load_normalized_snapshot(title_slug) or {}
+        catalog = snap.get("audiences", []) or []
+
     cards = []
     for entry in catalog:
-        merged = {**entry, "overlap_bp": None, "profile_iq_link": None}
+        merged = {**entry, "overlap_bp": entry.get("overlap_bp"),
+                  "profile_iq_link": entry.get("profile_iq_link")}
         if entry["subject_key"] in by_key:
             db = by_key[entry["subject_key"]]
             merged["overlap_bp"] = float(db.get("overlap_bp") or 0)
@@ -570,8 +727,9 @@ def get_audiences(title_slug: str) -> dict:
                 "source":      db["source"],
             })
 
+    src = "clickhouse" if db_overlap else ("snapshot" if catalog else "default_catalog")
     return {"success": True, "title_slug": title_slug, "cards": cards,
-            "total": len(cards), "source": "clickhouse" if db_overlap else "default_catalog"}
+            "total": len(cards), "source": src}
 
 
 # ── 5. Moviegoing cohorts ───────────────────────────────────────────────────
@@ -598,24 +756,39 @@ def get_cohorts(title_slug: Optional[str] = None) -> dict:
             logger.warning("Intent IQ: get_cohorts CH failed: %s", e)
 
     if not cohorts:
-        cohorts = [
-            {"cohort_slug": "weekly",     "display_name": "Very Frequent Moviegoers",
-             "frequency_band": "At least once a week",  "min_events_12mo": 50,
-             "max_events_12mo": 0,  "panel_count": 0, "gen_pop_share": 0.0,
-             "last_refreshed": ""},
-            {"cohort_slug": "monthly",    "display_name": "Frequent Moviegoers",
-             "frequency_band": "Once or twice a month", "min_events_12mo": 12,
-             "max_events_12mo": 49, "panel_count": 0, "gen_pop_share": 0.0,
-             "last_refreshed": ""},
-            {"cohort_slug": "bimonthly",  "display_name": "Occasional Moviegoers",
-             "frequency_band": "Every other month or so", "min_events_12mo": 5,
-             "max_events_12mo": 11, "panel_count": 0, "gen_pop_share": 0.0,
-             "last_refreshed": ""},
-            {"cohort_slug": "occasional", "display_name": "Infrequent Moviegoers",
-             "frequency_band": "Few times a year or less", "min_events_12mo": 1,
-             "max_events_12mo": 4,  "panel_count": 0, "gen_pop_share": 0.0,
-             "last_refreshed": ""},
-        ]
+        # Brand titles get member/prospect cohorts; films keep the
+        # moviegoing-frequency default. Snapshot may also override with a
+        # `cohorts` list (highest precedence).
+        use_brand = False
+        snap_cohorts = None
+        if title_slug:
+            snap = _load_normalized_snapshot(title_slug) or {}
+            title_type = ((snap.get("title") or {}).get("title_type") or "film").lower()
+            use_brand = (title_type == "brand")
+            snap_cohorts = snap.get("cohorts")
+        if snap_cohorts:
+            cohorts = list(snap_cohorts)
+        elif use_brand:
+            cohorts = [dict(c) for c in BRAND_COHORTS_FALLBACK]
+        else:
+            cohorts = [
+                {"cohort_slug": "weekly",     "display_name": "Very Frequent Moviegoers",
+                 "frequency_band": "At least once a week",  "min_events_12mo": 50,
+                 "max_events_12mo": 0,  "panel_count": 0, "gen_pop_share": 0.0,
+                 "last_refreshed": ""},
+                {"cohort_slug": "monthly",    "display_name": "Frequent Moviegoers",
+                 "frequency_band": "Once or twice a month", "min_events_12mo": 12,
+                 "max_events_12mo": 49, "panel_count": 0, "gen_pop_share": 0.0,
+                 "last_refreshed": ""},
+                {"cohort_slug": "bimonthly",  "display_name": "Occasional Moviegoers",
+                 "frequency_band": "Every other month or so", "min_events_12mo": 5,
+                 "max_events_12mo": 11, "panel_count": 0, "gen_pop_share": 0.0,
+                 "last_refreshed": ""},
+                {"cohort_slug": "occasional", "display_name": "Infrequent Moviegoers",
+                 "frequency_band": "Few times a year or less", "min_events_12mo": 1,
+                 "max_events_12mo": 4,  "panel_count": 0, "gen_pop_share": 0.0,
+                 "last_refreshed": ""},
+            ]
 
     out = {"success": True, "cohorts": cohorts, "title_slug": title_slug}
     if title_slug and ch is not None:
@@ -1001,11 +1174,28 @@ def _q4_talent_influencer_lift(title_slug: str) -> dict:
 
     Reads pre-computed talent halo from intent.attribution_results when
     available (via scripts/intent_attribution.py); falls back to the simpler
-    "per-talent asset view total" computed directly from campaign_assets.
+    "per-talent asset view total" computed directly from campaign_assets;
+    if ClickHouse is unreachable, aggregates talent_tags off the S3
+    normalized snapshot so brand ingests (Chime MIMI, etc.) can render
+    the Talent Attribution tab without a CH round-trip.
     """
     ch = _ch_client()
     if ch is None:
-        return {"success": True, "fallback": True, "rows": []}
+        snap = _load_normalized_snapshot(title_slug) or {}
+        agg = defaultdict(lambda: {"asset_count": 0, "views_total": 0,
+                                     "engagement_total": 0})
+        for a in snap.get("assets", []):
+            for talent in (a.get("talent_tags") or []):
+                agg[talent]["asset_count"]      += 1
+                agg[talent]["views_total"]      += int(a.get("ext_view_count") or 0)
+                agg[talent]["engagement_total"] += int(a.get("ext_engagement_count") or 0)
+        rows = [{"talent": t, **v, "source": "s3_snapshot"}
+                for t, v in agg.items()]
+        rows.sort(key=lambda r: (-r["asset_count"], -r["views_total"], r["talent"]))
+        return {"success": True, "fallback": True, "rows": rows,
+                "note": ("Per-talent asset counts + view totals from the "
+                          "ingest snapshot. Run scripts/intent_attribution.py "
+                          "--apply for proper halo math when CH is back.")}
     try:
         attr_rows = ch.query(
             "SELECT bucket AS talent, sample_size AS asset_count, "
