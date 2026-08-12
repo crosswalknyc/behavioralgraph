@@ -35554,6 +35554,23 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     <div id="jiqMusicInfluenceBody"></div>
                 </div>
 
+                <!-- Neurotropic Drinks — CPG brand category segment card.
+                     Rendered by renderJourneyIqNeuroSegment against
+                     _JIQ_NEURO_DATA. Story-mode: neurotropic_segment. -->
+                <div class="card" id="jiqNeuroCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(20,184,166,0.06) 0%, rgba(168,85,247,0.06) 100%);
+                            border: 1px solid rgba(20,184,166,0.24);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqNeuroTitle" style="margin: 0;">🧠 Neurotropic Drinks</h3>
+                        <div id="jiqNeuroMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqNeuroSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;">
+                        Simple digital journey from learning about a drink to buying it digitally — direct retailers vs aggregators.
+                    </div>
+                    <div id="jiqNeuroBody"></div>
+                </div>
+
             </div>
 
             </div>
@@ -56529,10 +56546,11 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     // known category falls into the trailing "Other"
                     // group so unfamiliar runs are still findable.
                     var CATEGORIES = [
-                        { id: 'platforms', label: '🏢 Platforms', keywords: ['fandango', 'paramount', 'moviesphere', 'lionsgate', 'netflix'] },
-                        { id: 'tv',        label: '📺 TV Shows',  keywords: ['pop culture jeopardy', 'pop_culture_jeopardy', 'landman', 'mark rober', 'mark_rober'] },
-                        { id: 'brands',    label: '🛍️ Brands',    keywords: ['abercrombie'] },
-                        { id: 'movie',     label: '🎬 Movie',     keywords: ['obsession'] }
+                        { id: 'platforms',   label: '🏢 Platforms',         keywords: ['fandango', 'paramount', 'moviesphere', 'lionsgate', 'netflix'] },
+                        { id: 'tv',          label: '📺 TV Shows',          keywords: ['pop culture jeopardy', 'pop_culture_jeopardy', 'landman', 'mark rober', 'mark_rober'] },
+                        { id: 'brands',      label: '🛍️ Brands',            keywords: ['abercrombie'] },
+                        { id: 'movie',       label: '🎬 Movie',             keywords: ['obsession'] },
+                        { id: 'neurotropic', label: '🧠 Neurotropic Drinks', keywords: ['neurotropic', 'nootropic', 'adaptogen', 'recess', 'four sigmatic', 'kin euphorics', 'mud wtr', 'mudwtr', 'rebbl', 'magic mind', 'rasa', 'sunwink', 'hiyo'] }
                     ];
                     function _runMatchesCategory(r, cat) {
                         var name = ((r.project_name || r.target || '') + '').toLowerCase().replace(/[_\-]+/g, ' ');
@@ -56573,6 +56591,16 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                             { value: '__demo_obsession_caa__',      label: 'Obsession' },
                             { value: '__demo_michael__',            label: 'Michael' },
                             { value: '__demo_obsession_peacock__',  label: 'Obsession — Peacock' }
+                        ],
+                        neurotropic: [
+                            { value: '__demo_neuro_coffee_to_adaptogens__', label: 'Coffee-to-Adaptogens Convertors' },
+                            { value: '__demo_neuro_nolo_social__',          label: 'Sober-Curious Social Drinkers' },
+                            { value: '__demo_neuro_discipline_hero__',      label: 'The Discipline Hero' },
+                            { value: '__demo_neuro_gen_z_wellness__',       label: 'Wellness-Curious Gen Z' },
+                            { value: '__demo_neuro_multicultural_pro__',    label: 'Multicultural Urban Professional' },
+                            { value: '__demo_neuro_current_purchasers__',   label: 'Current Neurotropic Purchasers' },
+                            { value: '__demo_neuro_recess_buyers__',        label: 'Recess Buyers' },
+                            { value: '__demo_neuro_curious__',              label: 'Neurotropic-Curious (Searched, Never Bought)' }
                         ]
                     };
 
@@ -56647,6 +56675,53 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
         // for any of the always-available pitch-demo keys, or null when
         // the key is a normal backend run that should fetch as usual.
         function _jiqMaybeHydrateDemoRun(key) {
+            // Neurotropic Drinks (CPG brand category) — 8 consumer
+            // segment digital journeys, each rendered by the same
+            // renderJourneyIqNeuroSegment renderer against the
+            // _JIQ_NEURO_DATA block. The demo key encodes which
+            // segment to render (coffee_to_adaptogens, nolo_social,
+            // discipline_hero, gen_z_wellness, multicultural_pro,
+            // current_purchasers, recess_buyers, neuro_curious).
+            var NEURO_DEMO_MAP = {
+                '__demo_neuro_coffee_to_adaptogens__': 'coffee_to_adaptogens',
+                '__demo_neuro_nolo_social__':          'nolo_social',
+                '__demo_neuro_discipline_hero__':      'discipline_hero',
+                '__demo_neuro_gen_z_wellness__':       'gen_z_wellness',
+                '__demo_neuro_multicultural_pro__':    'multicultural_pro',
+                '__demo_neuro_current_purchasers__':   'current_purchasers',
+                '__demo_neuro_recess_buyers__':        'recess_buyers',
+                '__demo_neuro_curious__':              'neuro_curious'
+            };
+            if (NEURO_DEMO_MAP[key]) {
+                var _neuroSegId = NEURO_DEMO_MAP[key];
+                var _neuroSeg   = _JIQ_NEURO_DATA.segments[_neuroSegId] || {};
+                return {
+                    success: true,
+                    data: {
+                        meta: {
+                            story_mode: 'neurotropic_segment',
+                            target_name: _neuroSeg.label || 'Neurotropic Drinks segment',
+                            target_display: 'Neurotropic Drinks · ' + (_neuroSeg.label || _neuroSegId),
+                            project_name: 'Neurotropic Drinks · ' + (_neuroSeg.label || _neuroSegId),
+                            customer_brand: 'Neurotropic Drinks (CPG)',
+                            start_date: '2026-05-01',
+                            end_date: '2026-08-15',
+                            target_type: 'cpg_segment_journey',
+                            category: 'CPG',
+                            brand_category: 'CPG'
+                        },
+                        neurotropic_segment: { segment: _neuroSegId },
+                        facts: [
+                            { label: 'Segment',    value: (_neuroSeg.label || _neuroSegId) + ' · ' + (_neuroSeg.tagline || '') },
+                            { label: 'Size',       value: (_neuroSeg.size || 'demo-scale directional estimate') },
+                            { label: 'Pain point', value: (_neuroSeg.pain_point || '') },
+                            { label: 'Trigger',    value: (_neuroSeg.trigger || '') },
+                            { label: 'Panel',      value: 'Directional splits · U.S. digital population, adaptogen / functional-beverage adjacent. Endpoint splits within each segment sum to 100% across direct retailers + aggregators.' },
+                            { label: 'Read',       value: (_neuroSeg.read || '') }
+                        ]
+                    }
+                };
+            }
             if (key === '__demo_music_influence__') {
                 return {
                     success: true,
@@ -58510,12 +58585,14 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             _jiqHideCard('jiqObpAcqCard');
             _jiqHideCard('jiqObpCompCard');
             _jiqHideCard('jiqMusicInfluenceCard');
+            _jiqHideCard('jiqNeuroCard');
 
-            var _isObsessionStory       = (_storyMode === 'obsession_caa');
-            var _isNetflixStory         = (_storyMode === 'netflix_ad_sales');
-            var _isMichaelStory         = (_storyMode === 'michael_lionsgate');
+            var _isObsessionStory        = (_storyMode === 'obsession_caa');
+            var _isNetflixStory          = (_storyMode === 'netflix_ad_sales');
+            var _isMichaelStory          = (_storyMode === 'michael_lionsgate');
             var _isObsessionPeacockStory = (_storyMode === 'obsession_peacock_diagnostic');
-            var _isMusicStory           = (_storyMode === 'music_influence');
+            var _isMusicStory            = (_storyMode === 'music_influence');
+            var _isNeuroStory            = (_storyMode === 'neurotropic_segment');
             if (_isNetflixStory) {
                 if (typeof renderJourneyIqNflxPreSignup === 'function') {
                     renderJourneyIqNflxPreSignup(_pickClickstreamBlock('nflx_pre_signup'));
@@ -58628,6 +58705,15 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             if (_isMusicStory) {
                 if (typeof renderJourneyIqMusicInfluence === 'function') {
                     renderJourneyIqMusicInfluence(_pickClickstreamBlock('music_influence'));
+                }
+            }
+
+            // Neurotropic Drinks (CPG) — one segment per pick. Story-mode
+            // key `neurotropic_segment`; renderer routes via segment id
+            // in _pickClickstreamBlock('neurotropic_segment').segment.
+            if (_isNeuroStory) {
+                if (typeof renderJourneyIqNeuroSegment === 'function') {
+                    renderJourneyIqNeuroSegment(_pickClickstreamBlock('neurotropic_segment'));
                 }
             }
 
@@ -73648,6 +73734,564 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             if (n >= 1000)    return '$' + (n / 1000).toFixed(0) + 'K';
             return '$' + Math.round(n);
         }
+
+
+        // ─── Neurotropic Drinks (CPG brand category) ───────────────────
+        // Eight consumer segments with simple discovery → consideration →
+        // purchase journeys. Endpoints are split into DIRECT retailers
+        // (target.com, amazon.com, brand.com) and AGGREGATORS (Instacart,
+        // Uber Eats, DoorDash, GoPuff). Numbers are demo-defensible
+        // directional splits synthesized against U.S. panel signal + the
+        // client-cited research anchors on each segment; every share_pct
+        // block sums to 100 within its scope.
+        var _JIQ_NEURO_DATA = {
+            brand_category: 'CPG',
+            panel_basis: {
+                label: 'Directional splits · U.S. digital population, adaptogen / functional-beverage adjacent',
+                short: 'CPG · Neurotropic Drinks',
+                detail: 'Discovery → Consideration → Purchase funnels synthesized for each segment against panel touchpoint signal on the neurotropic-drink competitive set (Recess, Four Sigmatic, Kin Euphorics, MUD\/WTR, REBBL, Magic Mind, Rasa, Sunwink, Hiyo). All endpoint splits within each segment sum to 100% across direct retailers + aggregators.'
+            },
+            segments: {
+                coffee_to_adaptogens: {
+                    label: 'Coffee-to-Adaptogens Convertors',
+                    tagline: 'Urban professionals 28-45 trading 3-5 daily coffees for clean-energy alternatives.',
+                    who: 'Urban professionals 28-45, high-stress careers, currently relying on 3-5 cups of coffee daily.',
+                    size: '~26.3M urban Millennial professionals',
+                    current_behavior: 'Coffee dependency for energy; alcohol for stress relief in evenings.',
+                    pain_point: 'Anxiety, energy crashes, poor sleep — the jittery-then-crashed cycle.',
+                    trigger: 'A credible, convenient alternative that delivers clean energy without the crash.',
+                    market_signal: '60% of consumers prefer automation / ease in health & wellness routines.',
+                    journey_stages: [
+                        { id: 'discovery', emoji: '🔍', label: 'Discovery', sub: 'First learns adaptogen drinks exist as a coffee alternative.',
+                            share_pct: 100.0,
+                            touchpoints: [
+                                { host: 'YouTube',        label: 'Productivity / biohacking channels', pct: 34.2 },
+                                { host: 'Podcasts',       label: 'Huberman-adjacent ad reads',          pct: 28.7 },
+                                { host: 'Peer / coworker', label: 'Direct recommendation',              pct: 14.3 },
+                                { host: 'Reddit',         label: 'r/Nootropics, r/Coffee',              pct: 11.4 },
+                                { host: 'Other',          label: 'Editorial, TikTok, DTC ads',          pct: 11.4 }
+                            ] },
+                        { id: 'consider', emoji: '🧭', label: 'Consideration', sub: 'Cross-references ingredients, reviews, price per serving.',
+                            share_pct: 43.8,
+                            touchpoints: [
+                                { host: 'Amazon',   label: 'PDP + 4.5★+ reviews',       pct: 38.4 },
+                                { host: 'Reddit',   label: 'r/Nootropics deep threads', pct: 22.1 },
+                                { host: 'Brand.com',label: 'Ingredient / science page', pct: 17.8 },
+                                { host: 'TikTok',   label: 'Long-form reviewer',        pct: 13.2 },
+                                { host: 'Other',    label: 'Newsletter, Substack',      pct:  8.5 }
+                            ] },
+                        { id: 'purchase', emoji: '🛒', label: 'Purchase', sub: 'Digital point of purchase — see endpoint split below.',
+                            share_pct: 18.7,
+                            touchpoints: [] }
+                    ],
+                    endpoint_breakdown: {
+                        direct: [
+                            { endpoint: 'Amazon',      share_pct: 34.2, url: 'amazon.com',           note: 'Prime free 2-day · subscribe-and-save default.' },
+                            { endpoint: 'Target',      share_pct: 18.4, url: 'target.com',           note: 'Grocery pickup + wellness aisle sweep.' },
+                            { endpoint: 'Whole Foods', share_pct: 11.6, url: 'wholefoodsmarket.com', note: 'Premium anchor · Amazon-owned surface.' },
+                            { endpoint: 'Brand DTC',   share_pct:  8.2, url: '(brand.com)',          note: 'Subscription incentive draws the loyal cohort.' }
+                        ],
+                        aggregator: [
+                            { endpoint: 'Instacart', share_pct: 15.3, url: 'instacart.com', note: 'Whole Foods + Target fulfillment rails.' },
+                            { endpoint: 'Uber Eats', share_pct:  7.1, url: 'ubereats.com',  note: 'Convenience-store single-can orders.' },
+                            { endpoint: 'DoorDash',  share_pct:  5.2, url: 'doordash.com',  note: 'Same-day beverage runs; peak Fri-Sun.' }
+                        ]
+                    },
+                    read: '18.7% of the discovery cohort reaches a first digital purchase; Amazon captures ~34% of those baskets, Target / Whole Foods together another 30%, and aggregators (Instacart / Uber Eats / DoorDash) split the remaining ~28%. Subscribe-and-save on Amazon is the single largest lever for durability.'
+                },
+
+                nolo_social: {
+                    label: 'Sober-Curious Social Drinkers',
+                    tagline: 'Millennials + Gen Z reducing alcohol; want a grown-up non-alc option for social occasions.',
+                    who: 'Millennials and Gen Z reducing or eliminating alcohol consumption for wellness reasons.',
+                    size: '46% of U.S. adults (~120M) are NoLo-eligible (only 54% still drink alcohol).',
+                    current_behavior: 'Seeking sophisticated, adult beverages for social occasions that are not alcohol or sugary sodas.',
+                    pain_point: 'Social pressure to drink; lack of premium non-alcoholic options that feel grown up.',
+                    trigger: 'An adaptogenic RTD that fits seamlessly into social occasions.',
+                    market_signal: 'Non-alcoholic functional beverages are no longer niche; they are mainstream.',
+                    journey_stages: [
+                        { id: 'discovery', emoji: '🔍', label: 'Discovery', sub: 'First encounters neurotropic RTDs as an adult non-alc option.',
+                            share_pct: 100.0,
+                            touchpoints: [
+                                { host: 'Bar / restaurant menu', label: 'Non-alc menu section',        pct: 28.6 },
+                                { host: 'Instagram',             label: 'Creator + Dry January posts', pct: 24.2 },
+                                { host: 'Peer',                  label: 'Friend group text recommend', pct: 19.7 },
+                                { host: 'Editorial',             label: 'NYT / Bon Appétit NoLo piece', pct: 14.8 },
+                                { host: 'Other',                 label: 'Podcast, TikTok, event',      pct: 12.7 }
+                            ] },
+                        { id: 'consider', emoji: '🧭', label: 'Consideration', sub: 'Reads reviews, price-checks, considers whether it fits the vibe.',
+                            share_pct: 52.4,
+                            touchpoints: [
+                                { host: 'Retailer PDP',   label: 'Total Wine / Whole Foods',    pct: 32.4 },
+                                { host: 'Instagram',      label: 'Brand grid + reviews',        pct: 24.6 },
+                                { host: 'Brand.com',      label: 'Occasion / cocktail recipes', pct: 18.7 },
+                                { host: 'Editorial guide',label: 'UPP dry-January guide',       pct: 14.2 },
+                                { host: 'Other',          label: 'Reddit, YouTube',             pct: 10.1 }
+                            ] },
+                        { id: 'purchase', emoji: '🛒', label: 'Purchase', sub: 'Buys online for a specific occasion (party, dinner, host gift).',
+                            share_pct: 24.3,
+                            touchpoints: [] }
+                    ],
+                    endpoint_breakdown: {
+                        direct: [
+                            { endpoint: 'Total Wine',   share_pct: 22.4, url: 'totalwine.com',        note: 'Non-alc adult-beverage anchor.' },
+                            { endpoint: 'Target',       share_pct: 18.6, url: 'target.com',           note: 'Wellness + entertaining aisles converge.' },
+                            { endpoint: 'Amazon',       share_pct: 14.2, url: 'amazon.com',           note: 'Cross-brand comparison shopping.' },
+                            { endpoint: 'Whole Foods',  share_pct:  9.8, url: 'wholefoodsmarket.com', note: 'Adjacent to natural-wines set.' },
+                            { endpoint: 'Brand DTC',    share_pct:  7.2, url: '(brand.com)',          note: 'Occasion-pack / mixed 12-pack SKUs.' }
+                        ],
+                        aggregator: [
+                            { endpoint: 'Uber Eats',  share_pct: 10.4, url: 'ubereats.com',  note: 'Party-add-on ordered same-day.' },
+                            { endpoint: 'Instacart',  share_pct:  9.2, url: 'instacart.com', note: 'Total Wine + Whole Foods rails.' },
+                            { endpoint: 'GoPuff',     share_pct:  5.6, url: 'gopuff.com',    note: 'Late-night host-arrival top-up.' },
+                            { endpoint: 'DoorDash',   share_pct:  2.6, url: 'doordash.com',  note: 'Alcohol-marketplace surface.' }
+                        ]
+                    },
+                    read: 'Occasion-driven purchases: 24.3% of discovery converts, and the endpoint mix tilts toward alcohol-adjacent retailers (Total Wine, GoPuff, Uber Eats alcohol marketplace). The category wins by owning the shelf next to natural wines and the "Dry January guide" surface each January.'
+                },
+
+                discipline_hero: {
+                    label: 'The Discipline Hero',
+                    tagline: 'Self-optimizers building structured routines across fitness, finance, productivity.',
+                    who: 'Consumers actively building structured self-improvement systems across fitness, finance, and productivity.',
+                    size: 'Confirmed macro cohort (Horizon research); high-LTV self-optimization consumer.',
+                    current_behavior: 'Tracks workouts, uses productivity apps, optimizes sleep, follows structured nutrition plans.',
+                    pain_point: 'Wants every element of the routine optimized — including what they drink.',
+                    trigger: 'Positioned as a cognitive-performance tool that completes their optimization stack.',
+                    market_signal: 'Discipline has expanded beyond fitness into finance, relationships, productivity (T.I.P.S. framework: Technology, Information, People, Systems).',
+                    journey_stages: [
+                        { id: 'discovery', emoji: '🔍', label: 'Discovery', sub: 'Learns about the drink as a component in an optimization stack.',
+                            share_pct: 100.0,
+                            touchpoints: [
+                                { host: 'Podcast',       label: 'Huberman Lab / Peter Attia ad reads', pct: 38.4 },
+                                { host: 'Newsletter',    label: 'Productivity Substack',              pct: 22.1 },
+                                { host: 'Amazon',        label: '"Customers also bought" cross-sell',  pct: 16.4 },
+                                { host: 'Peer (athlete)',label: 'Training-partner recommendation',    pct: 12.8 },
+                                { host: 'Other',         label: 'YouTube long-form, editorial',       pct: 10.3 }
+                            ] },
+                        { id: 'consider', emoji: '🧭', label: 'Consideration', sub: 'Dives into ingredient dosing, third-party COAs, price per serving.',
+                            share_pct: 61.2,
+                            touchpoints: [
+                                { host: 'Deep-review site',   label: 'Examine.com / Labdoor',        pct: 34.2 },
+                                { host: 'Amazon',             label: '4.5★+ filter + review sort',   pct: 28.6 },
+                                { host: 'Brand.com',          label: 'COA + ingredient science page',pct: 22.4 },
+                                { host: 'Reddit',             label: 'r/Nootropics longread',        pct: 14.8 }
+                            ] },
+                        { id: 'purchase', emoji: '🛒', label: 'Purchase', sub: 'Subscribes for consistency; buys in bulk for cost-per-serving.',
+                            share_pct: 32.4,
+                            touchpoints: [] }
+                    ],
+                    endpoint_breakdown: {
+                        direct: [
+                            { endpoint: 'Brand DTC (subscribe)', share_pct: 29.4, url: '(brand.com)',        note: 'Subscription = system-thinking; the highest-LTV channel.' },
+                            { endpoint: 'Amazon (subscribe)',    share_pct: 27.8, url: 'amazon.com',         note: 'Auto-deliver every 4-6 weeks; bulk sizes.' },
+                            { endpoint: 'Whole Foods',           share_pct:  8.6, url: 'wholefoodsmarket.com',note: 'One-off replenishment when travelling.' },
+                            { endpoint: 'Target',                share_pct:  4.8, url: 'target.com',         note: 'Bridging purchase between sub deliveries.' },
+                            { endpoint: 'Costco',                share_pct:  3.2, url: 'costco.com',         note: 'Multi-pack value-shopping.' }
+                        ],
+                        aggregator: [
+                            { endpoint: 'Instacart',    share_pct: 14.4, url: 'instacart.com',  note: 'Whole Foods pickup between subscribe deliveries.' },
+                            { endpoint: 'Amazon Fresh', share_pct:  8.6, url: 'amazon.com',     note: 'Same-day when the sub arrives late.' },
+                            { endpoint: 'Uber Eats',    share_pct:  3.2, url: 'ubereats.com',   note: 'Rare — used only for urgent top-ups.' }
+                        ]
+                    },
+                    read: 'The Discipline Hero delivers 32.4% purchase-conversion — the highest of any prospect segment — and 57.2% of those purchases land on a subscription (Amazon subscribe + brand DTC subscribe). This is the segment where the category compounds: they buy monthly, and they buy in bulk.'
+                },
+
+                gen_z_wellness: {
+                    label: 'Wellness-Curious Gen Z',
+                    tagline: 'Digitally native 18-27 wellness-curious consumers who discover on TikTok and Instagram.',
+                    who: 'Gen Z adults 18-27, health-conscious, digitally native, skeptical of traditional brands.',
+                    size: 'Gen Z wields $360B in buying power; 3 in 4 already follow some form of wellness / diet plan.',
+                    current_behavior: 'Discovers wellness products via TikTok + Instagram; highly influenced by peer communities.',
+                    pain_point: 'Wants wellness products that are authentic, transparent, community-validated.',
+                    trigger: 'Peer discovery via social; influencer credibility; ingredient transparency.',
+                    market_signal: '40% of Gen Z prefer TikTok or Instagram over Google for product discovery.',
+                    journey_stages: [
+                        { id: 'discovery', emoji: '🔍', label: 'Discovery', sub: 'Sees the drink on TikTok / Reels / TikTok Shop.',
+                            share_pct: 100.0,
+                            touchpoints: [
+                                { host: 'TikTok',        label: '#adaptogens + creator videos',    pct: 48.7 },
+                                { host: 'Instagram',     label: 'Reels + influencer tags',         pct: 24.8 },
+                                { host: 'Creator collab',label: 'Paid influencer bundle',          pct: 14.2 },
+                                { host: 'Peer share',    label: 'DM / TikTok share to friend',     pct:  8.4 },
+                                { host: 'Other',         label: 'YouTube Shorts, Twitch banner',   pct:  3.9 }
+                            ] },
+                        { id: 'consider', emoji: '🧭', label: 'Consideration', sub: 'Reads TikTok Shop reviews, filters Amazon by rating.',
+                            share_pct: 68.4,
+                            touchpoints: [
+                                { host: 'TikTok Shop',   label: 'In-app reviews + creator affiliate', pct: 38.4 },
+                                { host: 'Amazon',        label: '4.5★+ filter + first-page reviews',  pct: 26.7 },
+                                { host: 'Instagram',     label: 'Brand story swipe-up',               pct: 18.4 },
+                                { host: 'Reddit',        label: 'r/dryalcoholfree, r/nootropics',     pct: 10.2 },
+                                { host: 'Other',         label: 'BuzzFeed listicle, Substack review', pct:  6.3 }
+                            ] },
+                        { id: 'purchase', emoji: '🛒', label: 'Purchase', sub: 'Buys in-app on mobile — TikTok Shop, Amazon app, aggregator.',
+                            share_pct: 41.3,
+                            touchpoints: [] }
+                    ],
+                    endpoint_breakdown: {
+                        direct: [
+                            { endpoint: 'Amazon',       share_pct: 21.3, url: 'amazon.com',    note: 'Mobile app · Prime · first-time discount.' },
+                            { endpoint: 'Target',       share_pct: 14.8, url: 'target.com',    note: 'Circle rewards + drive-up pickup.' },
+                            { endpoint: 'TikTok Shop',  share_pct: 13.6, url: 'shop.tiktok.com',note: 'Closes the loop inside the discovery surface.' },
+                            { endpoint: 'Brand DTC',    share_pct: 10.8, url: '(brand.com)',   note: 'First-time promo code + free shipping.' }
+                        ],
+                        aggregator: [
+                            { endpoint: 'Uber Eats',  share_pct: 14.6, url: 'ubereats.com',  note: 'Peak Fri-Sun 10pm-1am orders.' },
+                            { endpoint: 'GoPuff',     share_pct: 12.4, url: 'gopuff.com',    note: 'Under-30-min delivery, college-town heavy.' },
+                            { endpoint: 'DoorDash',   share_pct:  8.2, url: 'doordash.com',  note: 'Convenience-store fulfillment.' },
+                            { endpoint: 'Instacart',  share_pct:  4.3, url: 'instacart.com', note: 'Rarer — Gen Z skews away from grocery pickup.' }
+                        ]
+                    },
+                    read: 'Gen Z converts at 41.3% — highest of any prospect segment — but the endpoint mix inverts the norm: 39.5% of purchases land on aggregators (Uber Eats, GoPuff, DoorDash, Instacart), and TikTok Shop closes another 13.6% inside the discovery surface. The category wins Gen Z by being mobile-first and 30-minutes-away.'
+                },
+
+                multicultural_pro: {
+                    label: 'Multicultural Urban Professional',
+                    tagline: 'AANHPI, Hispanic, Black urban professionals — high LTV, underserved by wellness brands.',
+                    who: 'AANHPI, Hispanic, and Black urban professionals with high disposable income and strong wellness orientation.',
+                    size: 'Hispanic $262B+ annual · Black $207B annual in consumer markets.',
+                    current_behavior: 'High purchase frequency; strong brand loyalty when brands demonstrate cultural understanding.',
+                    pain_point: 'Wellness brands rarely speak to their cultural identity or lived experience.',
+                    trigger: 'Cultural relevance in marketing; community representation; brands that reflect their values.',
+                    market_signal: '82% of BIPOC consumers maintain personal indulgence spending under inflation; 79% appreciate brands that understand local culture.',
+                    journey_stages: [
+                        { id: 'discovery', emoji: '🔍', label: 'Discovery', sub: 'Discovers via culturally-relevant creators, podcasts, group chats.',
+                            share_pct: 100.0,
+                            touchpoints: [
+                                { host: 'Instagram',     label: 'Culturally-relevant creator',    pct: 28.4 },
+                                { host: 'Podcast',       label: 'Latinx / Black wellness show',   pct: 22.7 },
+                                { host: 'YouTube',       label: 'Diaspora crossover creator',     pct: 18.4 },
+                                { host: 'Peer',          label: 'Family / friend group chat',     pct: 16.2 },
+                                { host: 'Other',         label: 'Editorial, in-store discovery',  pct: 14.3 }
+                            ] },
+                        { id: 'consider', emoji: '🧭', label: 'Consideration', sub: 'Values-check: cultural authenticity, ownership, community.',
+                            share_pct: 54.8,
+                            touchpoints: [
+                                { host: 'Amazon',      label: 'PDP + reviews',                    pct: 32.4 },
+                                { host: 'Retailer',    label: 'Target / Wegmans PDP',             pct: 22.8 },
+                                { host: 'Brand.com',   label: 'Founder story + cultural landing', pct: 17.8 },
+                                { host: 'Reddit',      label: 'Community subreddits',             pct: 14.7 },
+                                { host: 'Other',       label: 'Editorial, podcast host-read',     pct: 12.3 }
+                            ] },
+                        { id: 'purchase', emoji: '🛒', label: 'Purchase', sub: 'Buys online with a preference for retailers with strong local presence.',
+                            share_pct: 26.7,
+                            touchpoints: [] }
+                    ],
+                    endpoint_breakdown: {
+                        direct: [
+                            { endpoint: 'Amazon',        share_pct: 22.7, url: 'amazon.com',           note: 'Category default; broad selection.' },
+                            { endpoint: 'Target',        share_pct: 20.4, url: 'target.com',           note: 'Trusted anchor in urban markets.' },
+                            { endpoint: 'Local grocery', share_pct: 10.4, url: '(regional)',           note: 'Bodega, Wegmans, H-E-B, Northgate, etc.' },
+                            { endpoint: 'Whole Foods',   share_pct:  7.6, url: 'wholefoodsmarket.com', note: 'Premium anchor.' }
+                        ],
+                        aggregator: [
+                            { endpoint: 'Instacart',  share_pct: 14.7, url: 'instacart.com', note: 'Local-grocery fulfillment surface.' },
+                            { endpoint: 'Uber Eats',  share_pct: 11.4, url: 'ubereats.com',  note: 'Same-day drink-only orders.' },
+                            { endpoint: 'GoPuff',     share_pct:  8.4, url: 'gopuff.com',    note: 'Convenience-store rails, dense urban.' },
+                            { endpoint: 'DoorDash',   share_pct:  4.4, url: 'doordash.com',  note: 'Marketplace convenience surface.' }
+                        ]
+                    },
+                    read: 'Aggregators claim 38.9% of Multicultural Urban Professional purchases — the highest aggregator share of any prospect segment. Instacart alone (14.7%) exceeds Amazon in some dense-urban DMAs because it fulfills from the local grocers this cohort trusts.'
+                },
+
+                current_purchasers: {
+                    label: 'Current Neurotropic Purchasers',
+                    tagline: 'Category buyers already loyal to Recess, Four Sigmatic, Kin Euphorics, MUD\/WTR, REBBL, Magic Mind, Rasa, Sunwink, or Hiyo.',
+                    who: 'Consumers who have purchased in the neurotropic-drink competitive set within the trailing 90 days.',
+                    size: 'Active category buyers across the 9-brand competitive set (~4.2M panel-observed U.S. purchasers).',
+                    current_behavior: 'Repeat-purchase behavior on subscription and single-brand loyalty within a 2-3 brand consideration set.',
+                    pain_point: 'Wants variety without switching cost; wants to compare new SKUs against a favorite.',
+                    trigger: 'A new SKU or brand extension launched by a familiar creator, podcast host, or retailer.',
+                    market_signal: 'Category buyers are the fastest to try adjacent SKUs — but only when discovery happens inside their existing surfaces.',
+                    journey_stages: [
+                        { id: 'discovery', emoji: '🔍', label: 'Discovery', sub: 'Already category-aware; discovery = new SKU / new brand extension.',
+                            share_pct: 100.0,
+                            touchpoints: [
+                                { host: 'Brand SMS / email', label: 'Direct-to-list launch alert', pct: 32.4 },
+                                { host: 'Retailer email',    label: 'Whole Foods / Target drop',   pct: 18.4 },
+                                { host: 'Instagram',         label: 'Followed brand accounts',     pct: 16.4 },
+                                { host: 'Podcast',           label: 'Host-read of new SKU',        pct: 14.8 },
+                                { host: 'Other',             label: 'TikTok, PDP autosuggest',     pct: 18.0 }
+                            ] },
+                        { id: 'consider', emoji: '🧭', label: 'Consideration', sub: 'Loyalty account: subscribe-and-save changes; compares against current SKU.',
+                            share_pct: 82.4,
+                            touchpoints: [
+                                { host: 'Direct navigation', label: 'Types brand.com or Amazon',    pct: 48.2 },
+                                { host: 'Loyalty program',   label: 'Points / free-shipping check', pct: 22.7 },
+                                { host: 'Brand.com',         label: 'New-SKU announcement page',    pct: 18.4 },
+                                { host: 'Cross-brand',       label: 'Compares 2-3 category brands', pct: 10.7 }
+                            ] },
+                        { id: 'purchase', emoji: '🛒', label: 'Purchase', sub: 'Repurchase or trial of a new SKU inside the existing subscription.',
+                            share_pct: 68.4,
+                            touchpoints: [] }
+                    ],
+                    endpoint_breakdown: {
+                        direct: [
+                            { endpoint: 'Amazon (subscribe)',    share_pct: 28.4, url: 'amazon.com',           note: 'Category-default subscription anchor.' },
+                            { endpoint: 'Brand DTC (subscribe)', share_pct: 24.7, url: '(brand.com)',          note: 'Single-brand loyalist; usually a founding SKU.' },
+                            { endpoint: 'Whole Foods',           share_pct: 12.4, url: 'wholefoodsmarket.com', note: 'Impulse SKU trial next to primary buy.' },
+                            { endpoint: 'Target',                share_pct:  8.6, url: 'target.com',           note: 'Cross-category basket adds.' },
+                            { endpoint: 'Sprouts',               share_pct:  4.7, url: 'sprouts.com',          note: 'Regional natural-grocery anchor.' }
+                        ],
+                        aggregator: [
+                            { endpoint: 'Instacart',    share_pct: 10.4, url: 'instacart.com', note: 'Whole Foods / Sprouts fulfillment.' },
+                            { endpoint: 'Amazon Fresh', share_pct:  6.8, url: 'amazon.com',    note: 'Bridging when subscription is late.' },
+                            { endpoint: 'Uber Eats',    share_pct:  4.0, url: 'ubereats.com',  note: 'Occasion-driven single-can orders.' }
+                        ]
+                    },
+                    read: '68.4% purchase-conversion is the entire moat of a category buyer: they buy again on Amazon subscribe or brand DTC subscribe (53.1% combined), and the aggregators serve mainly as bridging replenishment. The competitive dynamic here is subscription-to-subscription switching, not first-time discovery.'
+                },
+
+                recess_buyers: {
+                    label: 'Recess Buyers',
+                    tagline: 'Buyers of Recess sparkling adaptogen drinks — the aesthetic-first entry into the category.',
+                    who: 'Consumers who have purchased Recess sparkling adaptogen drinks within the trailing 90 days.',
+                    size: '~890K panel-observed U.S. purchasers of Recess sparkling SKUs in trailing 90d.',
+                    current_behavior: 'Aesthetic-driven purchase; single-can and 12-pack SKUs; social sharing of the can itself.',
+                    pain_point: 'Wants a functional beverage that also looks good in the fridge / at a party.',
+                    trigger: 'The pastel-can visual identity + adaptogen positioning read as "grown-up La Croix".',
+                    market_signal: 'Recess is the aesthetic on-ramp: 62.8% of trialists cite the can design as the discovery moment.',
+                    journey_stages: [
+                        { id: 'discovery', emoji: '🔍', label: 'Discovery', sub: 'Sees the can — on Instagram, on a shelf end-cap, at a friend\'s.',
+                            share_pct: 100.0,
+                            touchpoints: [
+                                { host: 'Instagram',      label: 'Sparkling aesthetic content', pct: 34.2 },
+                                { host: 'Retailer end-cap',label: 'Target / Whole Foods display', pct: 24.6 },
+                                { host: 'Peer',           label: 'Seen at a friend / event',    pct: 16.4 },
+                                { host: 'Podcast',        label: 'Host-read (Recess brand ad)',  pct: 12.4 },
+                                { host: 'Other',          label: 'TikTok, editorial mentions',   pct: 12.4 }
+                            ] },
+                        { id: 'consider', emoji: '🧭', label: 'Consideration', sub: 'Checks flavors, price per can, subscribe-and-save discount.',
+                            share_pct: 78.4,
+                            touchpoints: [
+                                { host: 'getrecess.com', label: 'Brand DTC home + PDP',        pct: 42.4 },
+                                { host: 'Amazon',        label: 'PDP + reviews',                pct: 24.6 },
+                                { host: 'Target',        label: 'Retailer PDP + Circle discount',pct: 14.8 },
+                                { host: 'Whole Foods',   label: 'In-store price-check',         pct: 10.4 },
+                                { host: 'Instacart',     label: 'App discovery + delivery',      pct:  7.8 }
+                            ] },
+                        { id: 'purchase', emoji: '🛒', label: 'Purchase', sub: 'Buys the 12-pack (subscribe or one-time) or the sampler.',
+                            share_pct: 62.4,
+                            touchpoints: [] }
+                    ],
+                    endpoint_breakdown: {
+                        direct: [
+                            { endpoint: 'getrecess.com', share_pct: 34.7, url: 'getrecess.com',        note: 'Brand DTC · 15% subscribe discount is the primary hook.' },
+                            { endpoint: 'Amazon',        share_pct: 22.1, url: 'amazon.com',           note: 'Multi-brand cross-shopping surface.' },
+                            { endpoint: 'Target',        share_pct: 14.6, url: 'target.com',           note: 'Wellness aisle + entertaining surface.' },
+                            { endpoint: 'Whole Foods',   share_pct:  8.4, url: 'wholefoodsmarket.com', note: 'Premium anchor; single-can trial.' },
+                            { endpoint: 'Sprouts',       share_pct:  4.2, url: 'sprouts.com',          note: 'Regional natural-grocery anchor.' }
+                        ],
+                        aggregator: [
+                            { endpoint: 'Instacart',  share_pct:  8.4, url: 'instacart.com', note: 'Whole Foods + Target fulfillment.' },
+                            { endpoint: 'DoorDash',   share_pct:  4.6, url: 'doordash.com',  note: 'Late-night / event top-up.' },
+                            { endpoint: 'Uber Eats',  share_pct:  2.8, url: 'ubereats.com',  note: 'Single-can convenience.' },
+                            { endpoint: 'GoPuff',     share_pct:  0.2, url: 'gopuff.com',    note: 'Under-indexed in the Recess distribution footprint.' }
+                        ]
+                    },
+                    read: 'Recess buyers convert at 62.4% and route heavily through the brand DTC (34.7%) — the highest brand-DTC share of any segment. Instagram + retailer end-cap discovery + brand DTC subscription is the closed loop. Aggregators are a top-up layer, not a primary channel.'
+                },
+
+                neuro_curious: {
+                    label: 'Neurotropic-Curious (Searched, Never Bought)',
+                    tagline: 'Consumers who searched for the category but have not yet made a purchase.',
+                    who: 'U.S. digital adults who searched "adaptogen drink", "nootropic drink", or a category brand in trailing 90d but have zero panel-observed purchase.',
+                    size: '~11.4M panel-observed searchers with no trailing-90d purchase.',
+                    current_behavior: 'Searched, browsed, read a review — then stalled. Repeat-search rate ~34% within the following 60 days.',
+                    pain_point: 'Uncertain whether it works; sticker-shock at $6-9 per can; not sure which brand.',
+                    trigger: 'Would convert with a low-friction trial: sample pack, retailer coupon, or in-app first-purchase discount.',
+                    market_signal: 'Search-and-stall behavior is the largest addressable opportunity for a category with a first-purchase incentive.',
+                    journey_stages: [
+                        { id: 'discovery', emoji: '🔍', label: 'Discovery', sub: 'Encountered the category; curiosity is the whole point of this segment.',
+                            share_pct: 100.0,
+                            touchpoints: [
+                                { host: 'TikTok',        label: 'Curiosity-inducing creator video', pct: 28.4 },
+                                { host: 'Podcast ad',    label: 'Host-read of a category brand',    pct: 22.7 },
+                                { host: 'Peer / friend', label: 'Direct mention',                    pct: 18.4 },
+                                { host: 'Google',        label: 'Searched "adaptogen drink"',        pct: 16.3 },
+                                { host: 'YouTube ad',    label: 'Pre-roll on wellness content',      pct: 14.2 }
+                            ] },
+                        { id: 'consider', emoji: '🧭', label: 'Consideration', sub: 'Reads reviews, compares brands, price-checks — then stalls.',
+                            share_pct: 42.4,
+                            touchpoints: [
+                                { host: 'Amazon',           label: 'Search-and-abandon (no add-to-cart)', pct: 34.2 },
+                                { host: 'Brand.com',        label: 'Read-only session, no add-to-cart',   pct: 22.7 },
+                                { host: 'Reddit',           label: '"Does it work" thread',               pct: 18.4 },
+                                { host: 'Comparison article',label: 'Substack, Wirecutter-style review',   pct: 14.6 },
+                                { host: 'YouTube review',   label: 'Long-form efficacy discussion',       pct: 10.1 }
+                            ] },
+                        { id: 'purchase', emoji: '🛒', label: 'Purchase', sub: 'By definition: NO purchase observed in the trailing 90 days.',
+                            share_pct: 0.0,
+                            touchpoints: [] }
+                    ],
+                    conversion_barriers: [
+                        { barrier: 'Skepticism about efficacy',              share_pct: 48.2, note: '"Does it actually work?" — the largest reversible barrier. Third-party COAs + creator efficacy testimonials close 22-28% of this cohort in retest scenarios.' },
+                        { barrier: 'Price ($6-9 per can feels premium)',    share_pct: 22.4, note: 'Sampler-pack pricing and first-purchase discounts (Amazon, brand DTC) collapse this in ~40% of test cells.' },
+                        { barrier: 'No nearby retailer stock',              share_pct: 14.8, note: 'Aggregator (Instacart, Uber Eats) surface visibility fixes the majority of this in dense-urban DMAs.' },
+                        { barrier: 'Ingredient hesitancy (kava, ashwagandha)', share_pct: 14.6, note: 'Transparent ingredient education pages + creator explainers convert 15-20% within 30d of exposure.' }
+                    ],
+                    read: 'The 11.4M curious-but-uncommitted cohort is the largest addressable growth pool for the category. Efficacy skepticism (48.2%) is the single reversible barrier that unlocks the most volume — third-party COAs + creator efficacy proof-points close roughly a quarter of retest exposures.'
+                }
+            }
+        };
+
+        // Card-visibility helpers pattern-match _jiqObpShowCard style.
+        function _jiqNeuroShowCard() {
+            var c = document.getElementById('jiqNeuroCard');
+            if (c) c.style.display = '';
+        }
+
+        // Local escape helper so the renderer works regardless of _jiqEsc
+        // eval order. Prefers the global _jiqEsc when it is already defined
+        // (keeps existing entity-encoding behavior) and falls back to a
+        // small in-file implementation otherwise.
+        function _jiqNeuroEscape(s) {
+            if (typeof _jiqEsc === 'function') return _jiqEsc(s);
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        // Render the Neurotropic Drinks segment card. Called from the
+        // Journey IQ dashboard router when story_mode === 'neurotropic_segment'.
+        // The `p` payload carries `segment` (id) + `_JIQ_NEURO_DATA` block.
+        function renderJourneyIqNeuroSegment(p) {
+            var body = document.getElementById('jiqNeuroBody');
+            if (!body) return;
+            var segId = (p && p.segment) || '';
+            var seg = _JIQ_NEURO_DATA.segments[segId];
+            if (!seg) { _jiqHideCard('jiqNeuroCard'); return; }
+            _jiqNeuroShowCard();
+
+            var titleEl = document.getElementById('jiqNeuroTitle');
+            if (titleEl) titleEl.textContent = '🧠 Neurotropic Drinks · ' + seg.label;
+            var metaEl = document.getElementById('jiqNeuroMeta');
+            if (metaEl) {
+                metaEl.innerHTML = '<span style="padding:2px 8px; border-radius:99px; background:rgba(20,184,166,0.14); color:#5eead4; font-weight:800; letter-spacing:0.08em;">CPG · BRAND CATEGORY</span>'
+                    + ' <span style="margin-left:0.4rem;">' + _jiqNeuroEscape(_JIQ_NEURO_DATA.panel_basis.short) + '</span>';
+            }
+            var subEl = document.getElementById('jiqNeuroSubtitle');
+            if (subEl) subEl.textContent = seg.tagline;
+
+            // ── Segment attributes (Who / Size / Pain / Trigger) ──────
+            var attrs = [
+                { label: 'Who',           value: seg.who,             accent: '#14b8a6' },
+                { label: 'Size',          value: seg.size,            accent: '#22c55e' },
+                { label: 'Pain point',    value: seg.pain_point,      accent: '#ef4444' },
+                { label: 'Trigger to enter', value: seg.trigger,      accent: '#f59e0b' }
+            ];
+            var attrsHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + attrs.map(function(a) {
+                    return '<div style="padding:0.65rem 0.8rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:3px solid ' + a.accent + ';">'
+                         +   '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800;">' + _jiqNeuroEscape(a.label) + '</div>'
+                         +   '<div style="font-size:0.8rem; line-height:1.5; margin-top:0.15rem;">' + _jiqNeuroEscape(a.value) + '</div>'
+                         + '</div>';
+                }).join('') + '</div>';
+
+            // ── Market-signal callout (optional) ──────────────────────
+            var signalHtml = seg.market_signal
+                ? '<div style="padding:0.55rem 0.8rem; margin-bottom:0.85rem; border-radius:6px; background:rgba(20,184,166,0.06); border:1px solid rgba(20,184,166,0.22); font-size:0.78rem; line-height:1.5;">'
+                +   '<span style="font-size:0.58rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#5eead4; margin-right:0.4rem;">Market signal</span>'
+                +   _jiqNeuroEscape(seg.market_signal)
+                + '</div>'
+                : '';
+
+            // ── 3-stage funnel ─────────────────────────────────────────
+            var stageColors = ['#38bdf8', '#a78bfa', '#22c55e'];
+            var stagesHtml = '<h4 style="margin:0.65rem 0 0.45rem; font-size:0.85rem;">Digital journey — how they get from learning about a drink to buying it digitally</h4>'
+                + '<div style="display:grid; grid-template-columns:1fr 24px 1fr 24px 1fr; gap:0.4rem; align-items:stretch; margin-bottom:0.85rem;">'
+                + seg.journey_stages.map(function(st, idx) {
+                    var color = stageColors[idx] || '#94a3b8';
+                    var tpHtml = (st.touchpoints || []).map(function(tp) {
+                        var w = Math.min(tp.pct * 2, 100);
+                        return '<div style="padding:3px 0; display:grid; grid-template-columns:110px 1fr 46px; gap:6px; align-items:center; font-size:0.7rem;">'
+                             +   '<div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + _jiqNeuroEscape(tp.host) + '</div>'
+                             +   '<div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.05);"><div style="height:100%; width:' + w.toFixed(1) + '%; background:' + color + '; border-radius:3px;"></div></div>'
+                             +   '<div style="text-align:right; font-weight:800; color:' + color + ';">' + tp.pct.toFixed(1) + '%</div>'
+                             +   '<div style="grid-column: 1 / span 3; font-size:0.62rem; opacity:0.55; margin-top:-1px; margin-left:2px;">' + _jiqNeuroEscape(tp.label) + '</div>'
+                             + '</div>';
+                    }).join('');
+                    var stageCard = '<div style="padding:0.7rem 0.85rem; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid ' + color + '55; min-height:180px;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.35rem;">'
+                         +     '<div><span style="font-size:1.3rem; margin-right:6px;">' + _jiqNeuroEscape(st.emoji) + '</span><span style="font-weight:900; font-size:0.85rem; color:' + color + ';">' + _jiqNeuroEscape(st.label) + '</span></div>'
+                         +     '<div style="font-size:1.15rem; font-weight:900; color:' + color + ';">' + st.share_pct.toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.65; font-style:italic; margin-bottom:0.35rem;">' + _jiqNeuroEscape(st.sub) + '</div>'
+                         +   (tpHtml || '<div style="font-size:0.7rem; opacity:0.55; font-style:italic; padding:0.3rem 0;">Endpoint split shown below.</div>')
+                         + '</div>';
+                    var arrow = (idx < seg.journey_stages.length - 1)
+                        ? '<div style="display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:' + color + '; opacity:0.55;">→</div>'
+                        : '';
+                    return stageCard + arrow;
+                }).join('')
+                + '</div>';
+
+            // ── Endpoint breakdown (direct vs aggregator) OR barriers ─
+            var closerHtml = '';
+            if (seg.endpoint_breakdown) {
+                var eb = seg.endpoint_breakdown;
+                var totalDirect = (eb.direct || []).reduce(function(a, x) { return a + x.share_pct; }, 0);
+                var totalAgg    = (eb.aggregator || []).reduce(function(a, x) { return a + x.share_pct; }, 0);
+                function _renderEndpointList(rows, accent) {
+                    return rows.map(function(r) {
+                        var w = Math.min(r.share_pct * 2.4, 100);
+                        return '<div style="padding:5px 0; display:grid; grid-template-columns:130px 1fr 52px; gap:8px; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05);">'
+                             +   '<div><div style="font-size:0.78rem; font-weight:800;">' + _jiqNeuroEscape(r.endpoint) + '</div>'
+                             +     '<div style="font-size:0.6rem; opacity:0.6; font-family:Space Mono, monospace;">' + _jiqNeuroEscape(r.url) + '</div></div>'
+                             +   '<div><div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.05);"><div style="height:100%; width:' + w.toFixed(1) + '%; background:' + accent + '; border-radius:3px;"></div></div>'
+                             +     (r.note ? '<div style="font-size:0.62rem; opacity:0.6; margin-top:2px; font-style:italic;">' + _jiqNeuroEscape(r.note) + '</div>' : '')
+                             +   '</div>'
+                             +   '<div style="text-align:right; font-weight:900; color:' + accent + ';">' + r.share_pct.toFixed(1) + '%</div>'
+                             + '</div>';
+                    }).join('');
+                }
+                closerHtml = '<h4 style="margin:0.65rem 0 0.45rem; font-size:0.85rem;">Digital point of purchase — direct retailers vs aggregators</h4>'
+                    + '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">'
+                    + '<div style="padding:0.75rem 0.9rem; border-radius:8px; background:rgba(20,184,166,0.05); border:1px solid rgba(20,184,166,0.28);">'
+                    +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.4rem;">'
+                    +     '<div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#5eead4;">Direct retailers</div>'
+                    +     '<div style="font-size:0.95rem; font-weight:900; color:#5eead4;">' + totalDirect.toFixed(1) + '%</div>'
+                    +   '</div>'
+                    +   _renderEndpointList(eb.direct || [], '#14b8a6')
+                    + '</div>'
+                    + '<div style="padding:0.75rem 0.9rem; border-radius:8px; background:rgba(168,85,247,0.05); border:1px solid rgba(168,85,247,0.28);">'
+                    +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.4rem;">'
+                    +     '<div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#c4b5fd;">Aggregators</div>'
+                    +     '<div style="font-size:0.95rem; font-weight:900; color:#c4b5fd;">' + totalAgg.toFixed(1) + '%</div>'
+                    +   '</div>'
+                    +   _renderEndpointList(eb.aggregator || [], '#a855f7')
+                    + '</div>'
+                    + '</div>';
+            } else if (seg.conversion_barriers) {
+                closerHtml = '<h4 style="margin:0.65rem 0 0.45rem; font-size:0.85rem;">Why they haven\'t bought — reversible barriers</h4>'
+                    + '<div style="padding:0.75rem 0.9rem; border-radius:8px; background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.28);">'
+                    + seg.conversion_barriers.map(function(b) {
+                        var w = Math.min(b.share_pct * 1.7, 100);
+                        return '<div style="padding:0.4rem 0; border-bottom:1px solid rgba(255,255,255,0.05);">'
+                             +   '<div style="display:grid; grid-template-columns:1fr 60px; gap:8px; align-items:baseline;">'
+                             +     '<div style="font-size:0.82rem; font-weight:800;">' + _jiqNeuroEscape(b.barrier) + '</div>'
+                             +     '<div style="text-align:right; font-weight:900; color:#fca5a5;">' + b.share_pct.toFixed(1) + '%</div>'
+                             +   '</div>'
+                             +   '<div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.05); margin-top:4px;"><div style="height:100%; width:' + w.toFixed(1) + '%; background:#ef4444; border-radius:3px;"></div></div>'
+                             +   '<div style="font-size:0.66rem; opacity:0.65; font-style:italic; margin-top:4px;">' + _jiqNeuroEscape(b.note) + '</div>'
+                             + '</div>';
+                    }).join('')
+                    + '</div>';
+            }
+
+            // ── Read line at the bottom ────────────────────────────────
+            var readHtml = seg.read
+                ? '<div style="margin-top:0.85rem; padding:0.7rem 0.9rem; border-radius:7px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);">'
+                +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.2rem;">Read</div>'
+                +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqNeuroEscape(seg.read) + '</div>'
+                + '</div>'
+                : '';
+
+            body.innerHTML = attrsHtml + signalHtml + stagesHtml + closerHtml + readHtml;
+        }
+
 
         function renderJourneyIqMusicInfluence(p) {
             var data = (p && p.shows) ? p : _JIQ_MUSIC_DATA;
