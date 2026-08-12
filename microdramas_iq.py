@@ -897,6 +897,21 @@ def integrate_snapshot(snapshot: dict, *, source: str = 'peacock') -> dict:
         if row.get('genre'):
             entry['genre'] = row['genre']
 
+        # Microdrama classification. Sticky: once True, stays True (a
+        # title that appeared on the microdrama hub is a microdrama even
+        # if a later broader-surface scrape doesn't tag it). Snapshot
+        # scrapers (Peacock in particular) mark this explicitly; older
+        # snapshots without the field leave the entry's existing value
+        # in place.
+        if row.get('is_microdrama') is True:
+            entry['is_microdrama'] = True
+        # Rail name: helpful for debugging + audits, e.g. seeing which
+        # Peacock rail promoted a given title on which day.
+        if row.get('rail_name'):
+            entry.setdefault('rail_names', [])
+            if row['rail_name'] not in entry['rail_names']:
+                entry['rail_names'].append(row['rail_name'])
+
         entry['last_observed_date'] = today
         entry['observations'].append({
             'observed_date': today,
@@ -916,6 +931,116 @@ def integrate_snapshot(snapshot: dict, *, source: str = 'peacock') -> dict:
         titles[k] = entry
 
     return catalog
+
+
+# ============================================================================
+# Microdrama classification (Peacock catalog gate)
+# ============================================================================
+# The Peacock scraper NOW tags every incoming row `is_microdrama=True`
+# after applying rail-name and deep-link filters at the source (see
+# scripts/microdramas_scrapers/peacock.py). But the persistent catalog
+# has ~200 legacy entries from earlier broad scrapes that pulled from
+# Peacock's homepage/trending rails, so it contains Yellowstone / SNL
+# / Chicago Fire / Sunday Night Football etc. mixed in with legit
+# microdramas.
+#
+# Product rule (2026-08-12, Jenna): "we shouldn't show movies or TV
+# for peacock, just microdramas. nothing else on this just microdramas."
+#
+# Fix: gate at compute_view time using this classifier. Anything
+# missing the tag AND lacking positive title / genre / deep-link
+# evidence of microdrama-ness is dropped from the render. Catalog is
+# preserved on disk so a future policy change can revisit these
+# entries; only the display is filtered.
+
+# Positive title tropes - overlaps with peacock.py's _MICRODRAMA_TITLE_TOKENS
+# on purpose. Both sides evolve together; keep the lists in sync.
+_MICRODRAMA_TITLE_TOKENS_CATALOG = (
+    'billionaire', 'tycoon',
+    'ceo', 'the boss', 'my boss', 'the alpha', 'alpha ',
+    'mafia', 'cartel', 'assassin', 'bodyguard',
+    'werewolf', 'vampire', 'luna', 'omega', 'dragon',
+    'bride', 'wife', 'husband', 'fiancee', 'fiance',
+    'marriage', 'married to', 'contract', 'fake ', 'runaway',
+    'stepbrother', 'stepsister', 'stepson', 'stepdaughter',
+    'reincarnat', 'rebirth', 'revenge',
+    'substitute', 'forbidden', 'secret', 'doting',
+    'ex-husband', 'ex husband', 'ex-wife', 'ex wife',
+    "boss's", "billionaire's", "ceo's", "prince's", "king's",
+    'divorced wife', 'ivy elite', 'snow mountain',
+)
+
+_MICRODRAMA_GENRE_TOKENS = {
+    'billionaire', 'mafia', 'werewolf', 'vampire', 'ceo', 'boss',
+    'alpha', 'luna', 'second chance', 'revenge', 'contract',
+    'reincarnation', 'forbidden', 'fake', 'runaway', 'bodyguard',
+    'assassin', 'microdrama', 'vertical', 'shorts',
+}
+
+# Deep-link paths that indicate NON-microdrama Peacock content.
+_NON_MICRODRAMA_PATH_TOKENS_CATALOG = (
+    '/movies/', '/movie/', '/films/',
+    '/sports/', '/live/', '/nfl/', '/premier-league/', '/wwe/',
+    '/news/', '/kids/', '/telemundo/',
+    '/tv/', '/shows/', '/show/', '/series/', '/season/',
+    '/originals/', '/late-night/', '/reality/',
+)
+
+
+def _entry_is_microdrama(entry: dict) -> bool:
+    """Classify a catalog entry as a microdrama.
+
+    PASS if any of:
+      - entry.is_microdrama is True (scraper-tagged, strongest signal)
+      - rail_names contains a microdrama-signal token
+      - genre matches a known microdrama genre
+      - title contains a microdrama trope
+
+    FAIL if any of:
+      - deep_link routes to a known non-microdrama Peacock path
+      - none of the positive signals fire (default deny per product rule)
+
+    Only applies to Peacock entries; competitor tabs (ReelShort etc.)
+    are microdrama-native by construction and skip this gate.
+    """
+    if not isinstance(entry, dict):
+        return False
+    # Deep-link kill-switch: if the URL routes through a
+    # non-microdrama section, drop regardless of anything else.
+    deep_link = str(entry.get('deep_link') or '').lower()
+    if deep_link and any(tok in deep_link for tok in _NON_MICRODRAMA_PATH_TOKENS_CATALOG):
+        return False
+
+    # Scraper-tagged is the authoritative positive signal.
+    if entry.get('is_microdrama') is True:
+        return True
+
+    # Rail-name evidence: any prior observation on a rail whose name
+    # contains a microdrama token counts as positive.
+    rail_names = entry.get('rail_names') or []
+    for name in rail_names:
+        if isinstance(name, str) and any(
+            tok in name.lower() for tok in
+            ('microdrama', 'vertical', 'short-form', 'short form', 'shorts')
+        ):
+            return True
+
+    # Genre-tag evidence (curated baseline sets these; live scrapes
+    # sometimes lift them from Peacock's own genre labels).
+    genre = str(entry.get('genre') or '').lower()
+    if genre:
+        for tok in _MICRODRAMA_GENRE_TOKENS:
+            if tok in genre:
+                return True
+
+    # Title-trope evidence (fallback for entries lacking rail/genre info).
+    title = str(entry.get('title') or entry.get('series') or '').lower()
+    if title:
+        for tok in _MICRODRAMA_TITLE_TOKENS_CATALOG:
+            if tok in title:
+                return True
+
+    return False
 
 
 # ============================================================================
@@ -1928,8 +2053,15 @@ def compute_view(filters: Optional[dict] = None,
     catalog = read_catalog()
     titles_dict = catalog.get('titles') or {}
 
+    # Microdrama-only gate. Legacy catalog entries from earlier broad
+    # scrapes (Peacock homepage / trending) can be regular TV shows /
+    # movies / sports; drop them here so the dashboard only ever shows
+    # microdramas per the product rule. See _entry_is_microdrama.
+    microdrama_entries = [e for e in titles_dict.values()
+                           if _entry_is_microdrama(e)]
+
     serialized = [_serialize_title(e, window_days=window_days)
-                   for e in titles_dict.values()]
+                   for e in microdrama_entries]
     if genre_filter:
         serialized = [t for t in serialized
                        if genre_filter in (t.get('genre') or '').lower()]
