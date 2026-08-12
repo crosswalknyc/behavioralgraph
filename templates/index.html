@@ -25557,6 +25557,134 @@ https://www.instagram.com/p/..."></textarea>
         // ============================================================
         (function() {
             window.__intentIQ = window.__intentIQ || { titles: [], currentSlug: null, overview: null, cohorts: null };
+            // ------------------------------------------------------------
+            // // __IIQ_BRAND_LABEL_SWAP_v1__
+            // Brand-mode label swap. When the loaded Intent IQ title has
+            // terminology overrides (title_type='brand', overview.terminology
+            // populated by the Analysis IQ ingest agent), swap the film-era
+            // hardcoded labels ("Ticketing", "Ticketing %", "Ticketing visits"
+            // etc.) for the brand-specific equivalents ("Website visit",
+            // "Website visit %", "Website visits" ...). Text nodes only, so
+            // attribute values / JS state are untouched.
+            //
+            // The observer is scoped to #intentIQView and is torn down when
+            // switching to a film title so film labels aren't accidentally
+            // swapped.
+            window.__iiqLabelObserver = window.__iiqLabelObserver || null;
+            window.__iiqLabelSwapMap  = window.__iiqLabelSwapMap  || null;
+
+            function _iiqBuildLabelSwapMap(term) {
+                if (!term) return null;
+                var bfl = term.bottom_funnel_label || '';
+                var map = [];
+                // Only swap the bottom-funnel label (Ticketing -> brand
+                // equivalent, e.g. "Website visit" / "Site visit" / "Cart
+                // add"). The mid-funnel "Info-seek" label is intentionally
+                // NOT swapped -- it's universally intuitive for both film
+                // and brand marketing and Jenna explicitly said keep it.
+                //
+                // Order matters: longer / more-specific first so the exact
+                // "Ticketing %" swap fires before the bare "Ticketing".
+                if (bfl && bfl !== 'Ticketing') {
+                    var bflLower = bfl.toLowerCase();
+                    map.push(['Ticketing visits', bfl + 's']);
+                    map.push(['ticketing visits', bflLower + 's']);
+                    map.push(['Ticketing sites',  bfl + 's']);
+                    map.push(['ticketing sites',  bflLower + 's']);
+                    map.push(['Ticketing site',   bfl]);
+                    map.push(['ticketing site',   bflLower]);
+                    map.push(['Ticket %',         bfl + ' %']);
+                    map.push(['Ticketing %',      bfl + ' %']);
+                    map.push(['ticketing %',      bflLower + ' %']);
+                    map.push(['Ticketing',        bfl]);
+                    map.push(['ticketing',        bflLower]);
+                }
+                return map.length ? map : null;
+            }
+
+            function _iiqSwapTextNodesIn(root, swapMap) {
+                if (!root || !swapMap) return;
+                var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+                    acceptNode: function(n) {
+                        // Skip empty + script/style
+                        if (!n.nodeValue || !n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+                        var p = n.parentNode;
+                        if (p && (p.nodeName === 'SCRIPT' || p.nodeName === 'STYLE')) return NodeFilter.FILTER_REJECT;
+                        return NodeFilter.FILTER_ACCEPT;
+                    }
+                });
+                var toChange = [];
+                while (walker.nextNode()) toChange.push(walker.currentNode);
+                for (var i = 0; i < toChange.length; i++) {
+                    var n = toChange[i];
+                    var orig = n.nodeValue;
+                    var next = orig;
+                    for (var j = 0; j < swapMap.length; j++) {
+                        var pair = swapMap[j];
+                        if (next.indexOf(pair[0]) !== -1) {
+                            next = next.split(pair[0]).join(pair[1]);
+                        }
+                    }
+                    if (next !== orig) n.nodeValue = next;
+                }
+            }
+
+            function _iiqApplyBrandLabels() {
+                try {
+                    // Tear down any previous observer regardless of new state
+                    if (window.__iiqLabelObserver) {
+                        try { window.__iiqLabelObserver.disconnect(); } catch (_e) {}
+                        window.__iiqLabelObserver = null;
+                    }
+                    var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                    var isBrand = ov.title_type === 'brand';
+                    var swapMap = isBrand ? _iiqBuildLabelSwapMap(ov.terminology || {}) : null;
+                    window.__iiqLabelSwapMap = swapMap;
+                    if (!swapMap) return;
+                    var root = document.getElementById('intentIQView');
+                    if (!root) return;
+                    // Initial sweep
+                    _iiqSwapTextNodesIn(root, swapMap);
+                    // Observe future mutations (renderers re-run on tab
+                    // switch, filter change, sort, etc.)
+                    var obs = new MutationObserver(function(records) {
+                        for (var i = 0; i < records.length; i++) {
+                            var r = records[i];
+                            for (var k = 0; k < r.addedNodes.length; k++) {
+                                var node = r.addedNodes[k];
+                                if (node.nodeType === 3) {   // text node
+                                    var v = node.nodeValue;
+                                    for (var j = 0; j < swapMap.length; j++) {
+                                        if (v.indexOf(swapMap[j][0]) !== -1) {
+                                            v = v.split(swapMap[j][0]).join(swapMap[j][1]);
+                                        }
+                                    }
+                                    if (v !== node.nodeValue) node.nodeValue = v;
+                                } else if (node.nodeType === 1) {   // element
+                                    _iiqSwapTextNodesIn(node, swapMap);
+                                }
+                            }
+                            // Also handle characterData mutations (e.g. when
+                            // a renderer overwrites textContent directly).
+                            if (r.type === 'characterData' && r.target && r.target.nodeType === 3) {
+                                var v2 = r.target.nodeValue;
+                                for (var jj = 0; jj < swapMap.length; jj++) {
+                                    if (v2.indexOf(swapMap[jj][0]) !== -1) {
+                                        v2 = v2.split(swapMap[jj][0]).join(swapMap[jj][1]);
+                                    }
+                                }
+                                if (v2 !== r.target.nodeValue) r.target.nodeValue = v2;
+                            }
+                        }
+                    });
+                    obs.observe(root, { childList: true, subtree: true, characterData: true });
+                    window.__iiqLabelObserver = obs;
+                } catch (e) {
+                    console.warn('iiq brand label swap failed', e);
+                }
+            }
+            // ------------------------------------------------------------
+
 
             function _iiqHideAllOtherViews() {
                 // 2026-07-28: delegate to the canonical helper defined
@@ -25635,6 +25763,7 @@ https://www.instagram.com/p/..."></textarea>
                     renderIntentIQQuestions();
                     populateAssetFilterDropdowns();
                     reloadIntentIQAssets();
+                    try { _iiqApplyBrandLabels(); } catch(_e) {}
                     document.getElementById('iiqStatus').textContent = 'Loaded ' + slug + '.';
                 }).catch(function(e) {
                     document.getElementById('iiqStatus').textContent = 'Load failed: ' + (e.message || e);
