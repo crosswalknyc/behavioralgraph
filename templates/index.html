@@ -44787,6 +44787,29 @@ https://www.instagram.com/p/..."></textarea>
             var c = t.completion;
             if (!c) return '';
             var parts = [];
+            // Unique Viewers chip: raw 28-day lifetime unique-viewer
+            // count. Same underlying number as the card top-of-card
+            // "Views" metric but framed as a chip so it sits next to
+            // the engagement-rate percentages for a compact scan of
+            // "how big is this title's audience and how deep does it
+            // engage". Replaced the Free Completion chip on 2026-08-12
+            // per user directive - free-tier completion is still
+            // available in the audience-details modal.
+            var uniqueViewers = null;
+            if (c.source === 'peacock') {
+                uniqueViewers = (t.view_28d_estimate != null)
+                              ? t.view_28d_estimate
+                              : t.view_window_estimate;
+            } else if (t.read_count != null) {
+                uniqueViewers = t.read_count;
+            }
+            if (uniqueViewers != null && uniqueViewers > 0) {
+                var uvTip = 'Estimated 28-day unique viewers on ' + (t.platform_label || (c.source === 'peacock' ? 'Peacock' : 'this platform'));
+                parts.push('<span class="miq-comp-chip miq-chip-completion" title="' + _miqEscape(uvTip) + '">'
+                         +   '<span class="miq-comp-chip-label">Unique Viewers</span>'
+                         +   '<span class="miq-comp-chip-value">' + _miqFormatNumber(uniqueViewers) + '</span>'
+                         + '</span>');
+            }
             if (c.source === 'peacock') {
                 if (c.series_completion_pct != null) {
                     parts.push('<span class="miq-comp-chip miq-chip-series" title="Share of viewers who finish the whole series (' + c.total_episodes + ' eps)">'
@@ -44795,15 +44818,6 @@ https://www.instagram.com/p/..."></textarea>
                              + '</span>');
                 }
             } else {
-                if (c.free_completion_pct != null) {
-                    var freeEps = c.free_episodes || '';
-                    var freeTip = 'Share of viewers who watch through the free tier'
-                                + (freeEps ? ' (ep 1 through ep ' + freeEps + ')' : '');
-                    parts.push('<span class="miq-comp-chip miq-chip-completion" title="' + _miqEscape(freeTip) + '">'
-                             +   '<span class="miq-comp-chip-label">Free Completion</span>'
-                             +   '<span class="miq-comp-chip-value">' + Math.round(c.free_completion_pct) + '%</span>'
-                             + '</span>');
-                }
                 if (c.paid_pct != null) {
                     var payTip = 'Share of viewers who watch at least one paid (post-paywall) episode';
                     parts.push('<span class="miq-comp-chip miq-chip-payer" title="' + _miqEscape(payTip) + '">'
