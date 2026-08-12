@@ -35554,15 +35554,15 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     <div id="jiqMusicInfluenceBody"></div>
                 </div>
 
-                <!-- Neurotropic Drinks — CPG brand category segment card.
+                <!-- Neurotrophic Drinks — CPG brand category segment card.
                      Rendered by renderJourneyIqNeuroSegment against
-                     _JIQ_NEURO_DATA. Story-mode: neurotropic_segment. -->
+                     _JIQ_NEURO_DATA. Story-mode: neurotropic_segment (id kept for stability). -->
                 <div class="card" id="jiqNeuroCard"
                      style="padding: 1rem; margin-top: 1rem; display: none;
                             background: linear-gradient(135deg, rgba(20,184,166,0.06) 0%, rgba(168,85,247,0.06) 100%);
                             border: 1px solid rgba(20,184,166,0.24);">
                     <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
-                        <h3 id="jiqNeuroTitle" style="margin: 0;">🧠 Neurotropic Drinks</h3>
+                        <h3 id="jiqNeuroTitle" style="margin: 0;">🧠 Neurotrophic Drinks</h3>
                         <div id="jiqNeuroMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
                     </div>
                     <div id="jiqNeuroSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;">
@@ -56550,7 +56550,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                         { id: 'tv',          label: '📺 TV Shows',          keywords: ['pop culture jeopardy', 'pop_culture_jeopardy', 'landman', 'mark rober', 'mark_rober'] },
                         { id: 'brands',      label: '🛍️ Brands',            keywords: ['abercrombie'] },
                         { id: 'movie',       label: '🎬 Movie',             keywords: ['obsession'] },
-                        { id: 'neurotropic', label: '🧠 Neurotropic Drinks', keywords: ['neurotropic', 'nootropic', 'adaptogen', 'recess', 'four sigmatic', 'kin euphorics', 'mud wtr', 'mudwtr', 'rebbl', 'magic mind', 'rasa', 'sunwink', 'hiyo'] }
+                        { id: 'neurotropic', label: '🧠 Neurotrophic Drinks', keywords: ['neurotrophic', 'neurotropic', 'nootropic', 'adaptogen', 'recess', 'four sigmatic', 'kin euphorics', 'mud wtr', 'mudwtr', 'rebbl', 'magic mind', 'rasa', 'sunwink', 'hiyo'] }
                     ];
                     function _runMatchesCategory(r, cat) {
                         var name = ((r.project_name || r.target || '') + '').toLowerCase().replace(/[_\-]+/g, ' ');
@@ -56598,9 +56598,9 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                             { value: '__demo_neuro_discipline_hero__',      label: 'The Discipline Hero' },
                             { value: '__demo_neuro_gen_z_wellness__',       label: 'Wellness-Curious Gen Z' },
                             { value: '__demo_neuro_multicultural_pro__',    label: 'Multicultural Urban Professional' },
-                            { value: '__demo_neuro_current_purchasers__',   label: 'Current Neurotropic Purchasers' },
+                            { value: '__demo_neuro_current_purchasers__',   label: 'Current Neurotrophic Purchasers' },
                             { value: '__demo_neuro_recess_buyers__',        label: 'Recess Buyers' },
-                            { value: '__demo_neuro_curious__',              label: 'Neurotropic-Curious (Searched, Never Bought)' }
+                            { value: '__demo_neuro_curious__',              label: 'Neurotrophic-Curious (Searched, Never Bought)' }
                         ]
                     };
 
@@ -56675,7 +56675,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
         // for any of the always-available pitch-demo keys, or null when
         // the key is a normal backend run that should fetch as usual.
         function _jiqMaybeHydrateDemoRun(key) {
-            // Neurotropic Drinks (CPG brand category) — 8 consumer
+            // Neurotrophic Drinks (CPG brand category) — 8 consumer
             // segment digital journeys, each rendered by the same
             // renderJourneyIqNeuroSegment renderer against the
             // _JIQ_NEURO_DATA block. The demo key encodes which
@@ -56700,10 +56700,10 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     data: {
                         meta: {
                             story_mode: 'neurotropic_segment',
-                            target_name: _neuroSeg.label || 'Neurotropic Drinks segment',
-                            target_display: 'Neurotropic Drinks · ' + (_neuroSeg.label || _neuroSegId),
-                            project_name: 'Neurotropic Drinks · ' + (_neuroSeg.label || _neuroSegId),
-                            customer_brand: 'Neurotropic Drinks (CPG)',
+                            target_name: _neuroSeg.label || 'Neurotrophic Drinks segment',
+                            target_display: 'Neurotrophic Drinks · ' + (_neuroSeg.label || _neuroSegId),
+                            project_name: 'Neurotrophic Drinks · ' + (_neuroSeg.label || _neuroSegId),
+                            customer_brand: 'Neurotrophic Drinks (CPG)',
                             start_date: '2026-05-01',
                             end_date: '2026-08-15',
                             target_type: 'cpg_segment_journey',
@@ -58708,7 +58708,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 }
             }
 
-            // Neurotropic Drinks (CPG) — one segment per pick. Story-mode
+            // Neurotrophic Drinks (CPG) — one segment per pick. Story-mode
             // key `neurotropic_segment`; renderer routes via segment id
             // in _pickClickstreamBlock('neurotropic_segment').segment.
             if (_isNeuroStory) {
@@ -73736,7 +73736,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
         }
 
 
-        // ─── Neurotropic Drinks (CPG brand category) ───────────────────
+        // ─── Neurotrophic Drinks (CPG brand category) ──────────────────
         // Eight consumer segments with simple discovery → consideration →
         // purchase journeys. Endpoints are split into DIRECT retailers
         // (target.com, amazon.com, brand.com) and AGGREGATORS (Instacart,
@@ -73748,8 +73748,8 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             brand_category: 'CPG',
             panel_basis: {
                 label: 'Directional splits · U.S. digital population, adaptogen / functional-beverage adjacent',
-                short: 'CPG · Neurotropic Drinks',
-                detail: 'Discovery → Consideration → Purchase funnels synthesized for each segment against panel touchpoint signal on the neurotropic-drink competitive set (Recess, Four Sigmatic, Kin Euphorics, MUD\/WTR, REBBL, Magic Mind, Rasa, Sunwink, Hiyo). All endpoint splits within each segment sum to 100% across direct retailers + aggregators.'
+                short: 'CPG · Neurotrophic Drinks',
+                detail: 'Discovery → Consideration → Purchase funnels synthesized for each segment against panel touchpoint signal on the neurotrophic-drink competitive set (Recess, Four Sigmatic, Kin Euphorics, MUD\/WTR, REBBL, Magic Mind, Rasa, Sunwink, Hiyo). All endpoint splits within each segment sum to 100% across direct retailers + aggregators.'
             },
             segments: {
                 coffee_to_adaptogens: {
@@ -73810,7 +73810,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     trigger: 'An adaptogenic RTD that fits seamlessly into social occasions.',
                     market_signal: 'Non-alcoholic functional beverages are no longer niche; they are mainstream.',
                     journey_stages: [
-                        { id: 'discovery', emoji: '🔍', label: 'Discovery', sub: 'First encounters neurotropic RTDs as an adult non-alc option.',
+                        { id: 'discovery', emoji: '🔍', label: 'Discovery', sub: 'First encounters neurotrophic RTDs as an adult non-alc option.',
                             share_pct: 100.0,
                             touchpoints: [
                                 { host: 'Bar / restaurant menu', label: 'Non-alc menu section',        pct: 28.6 },
@@ -73997,9 +73997,9 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 },
 
                 current_purchasers: {
-                    label: 'Current Neurotropic Purchasers',
+                    label: 'Current Neurotrophic Purchasers',
                     tagline: 'Category buyers already loyal to Recess, Four Sigmatic, Kin Euphorics, MUD\/WTR, REBBL, Magic Mind, Rasa, Sunwink, or Hiyo.',
-                    who: 'Consumers who have purchased in the neurotropic-drink competitive set within the trailing 90 days.',
+                    who: 'Consumers who have purchased in the neurotrophic-drink competitive set within the trailing 90 days.',
                     size: 'Active category buyers across the 9-brand competitive set (~4.2M panel-observed U.S. purchasers).',
                     current_behavior: 'Repeat-purchase behavior on subscription and single-brand loyalty within a 2-3 brand consideration set.',
                     pain_point: 'Wants variety without switching cost; wants to compare new SKUs against a favorite.',
@@ -74095,7 +74095,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 },
 
                 neuro_curious: {
-                    label: 'Neurotropic-Curious (Searched, Never Bought)',
+                    label: 'Neurotrophic-Curious (Searched, Never Bought)',
                     tagline: 'Consumers who searched for the category but have not yet made a purchase.',
                     who: 'U.S. digital adults who searched "adaptogen drink", "nootropic drink", or a category brand in trailing 90d but have zero panel-observed purchase.',
                     size: '~11.4M panel-observed searchers with no trailing-90d purchase.',
@@ -74154,7 +74154,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                 .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
-        // Render the Neurotropic Drinks segment card. Called from the
+        // Render the Neurotrophic Drinks segment card. Called from the
         // Journey IQ dashboard router when story_mode === 'neurotropic_segment'.
         // The `p` payload carries `segment` (id) + `_JIQ_NEURO_DATA` block.
         function renderJourneyIqNeuroSegment(p) {
@@ -74166,7 +74166,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             _jiqNeuroShowCard();
 
             var titleEl = document.getElementById('jiqNeuroTitle');
-            if (titleEl) titleEl.textContent = '🧠 Neurotropic Drinks · ' + seg.label;
+            if (titleEl) titleEl.textContent = '🧠 Neurotrophic Drinks · ' + seg.label;
             var metaEl = document.getElementById('jiqNeuroMeta');
             if (metaEl) {
                 metaEl.innerHTML = '<span style="padding:2px 8px; border-radius:99px; background:rgba(20,184,166,0.14); color:#5eead4; font-weight:800; letter-spacing:0.08em;">CPG · BRAND CATEGORY</span>'
