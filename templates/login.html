@@ -271,6 +271,120 @@
             left: -100px;
             background: radial-gradient(circle, rgba(200, 255, 0, 0.05) 0%, transparent 70%);
         }
+
+        /* Help button beneath the login card */
+        .help-signin {
+            text-align: center;
+            margin-top: 1.5rem;
+        }
+
+        .help-signin-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(102, 217, 239, 0.08);
+            border: 1px solid var(--border-color);
+            color: var(--accent-cyan);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            padding: 0.7rem 1.25rem;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s, transform 0.2s;
+        }
+
+        .help-signin-btn:hover {
+            background: rgba(102, 217, 239, 0.15);
+            border-color: var(--accent-cyan);
+            transform: translateY(-1px);
+        }
+
+        .help-signin-btn svg {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+        }
+
+        /* Video modal */
+        .video-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(5, 12, 22, 0.8);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 2rem;
+        }
+
+        .video-modal-overlay.show {
+            display: flex;
+        }
+
+        .video-modal {
+            width: 33.333vw;
+            min-width: 320px;
+            max-width: 640px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+            animation: modal-pop 0.2s ease-out;
+        }
+
+        @keyframes modal-pop {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .video-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .video-modal-header h2 {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.95rem;
+            color: var(--accent-cyan);
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .video-modal-close {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            transition: color 0.2s, background 0.2s;
+        }
+
+        .video-modal-close:hover {
+            color: var(--text-primary);
+            background: var(--bg-input);
+        }
+
+        .video-modal video {
+            display: block;
+            width: 100%;
+            height: auto;
+            background: #000;
+        }
+
+        @media (max-width: 900px) {
+            .video-modal {
+                width: 90vw;
+            }
+        }
     </style>
 </head>
 <body>
@@ -329,9 +443,54 @@
                 Crosswalk &copy; 2025
             </p>
         </div>
+
+        <div class="help-signin">
+            <button type="button" class="help-signin-btn" onclick="openHelpVideo()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                Need help signing in?
+            </button>
+        </div>
+    </div>
+
+    <div class="video-modal-overlay" id="helpVideoOverlay" onclick="closeHelpVideo(event)">
+        <div class="video-modal" onclick="event.stopPropagation()">
+            <div class="video-modal-header">
+                <h2>How to sign in</h2>
+                <button type="button" class="video-modal-close" onclick="closeHelpVideo()" aria-label="Close">&times;</button>
+            </div>
+            <video id="helpVideo" controls playsinline preload="metadata">
+                <source src="{{ url_for('static', filename='videos/login-orientation.mp4') }}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
     </div>
 
     <script>
+        // Help video modal
+        function openHelpVideo() {
+            const overlay = document.getElementById('helpVideoOverlay');
+            const video = document.getElementById('helpVideo');
+            overlay.classList.add('show');
+            video.currentTime = 0;
+            video.play().catch(() => {});
+        }
+
+        function closeHelpVideo(e) {
+            if (e && e.target !== e.currentTarget && e.type === 'click') return;
+            const overlay = document.getElementById('helpVideoOverlay');
+            const video = document.getElementById('helpVideo');
+            overlay.classList.remove('show');
+            video.pause();
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeHelpVideo();
+        });
+
         // Show error if redirected with error
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('error') === '1') {
