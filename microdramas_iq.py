@@ -226,34 +226,23 @@ def _estimate_daily_views_from_rank(rank: Optional[int],
 
 def _derive_daily_reads_by_date(entry: dict, mau_millions: float,
                                  salt: str = '') -> None:
-    """Normalize `reads_by_date` to DAILY FLOW (views per day), in place.
+    """Normalize `reads_by_date` to DAILY UNIQUE VIEWS (per day), in place.
 
-    Sources today store two different things in `reads_by_date`:
+    Now that competitor `read_count` is standardized to a rank-derived
+    unique-reach estimate (see the `_estimate_views_from_rank`
+    override in `compute_competitors_view`), the daily curve must use
+    the same calibration or the two would be off by 5-100x depending
+    on the platform.
 
-      * ReelShort / DramaBox / GoodShort: each day's snapshot stamps
-        the platform's lifetime cumulative `read_count`. Delta between
-        consecutive snapshots is the actual daily view volume - the
-        raw snapshots barely move day to day for mature titles, so
-        showing them raw makes every day look identical.
+    So the default path is: for every observed date, estimate that
+    day's unique views from that day's chart rank via
+    `_estimate_daily_views_from_rank`. Same model as the lifetime
+    estimate, just applied per-day, which means peak_daily * ~24-30
+    days ≈ lifetime - the two numbers reconcile.
 
-      * NetShort: the storefront ships no read counter at all, so
-        `reads_by_date` is empty. Frontend previously spread the
-        current-rank cumulative estimate across the window uniformly,
-        producing "same exact number of views each day".
-
-    Both cases resolve here to `reads_by_date[date] = daily_views`:
-
-      1. If we see 2+ cumulative snapshots (values monotonically
-         non-decreasing within 2% tolerance), diff consecutive pairs.
-         First day gets a rank-derived estimate because there's no
-         prior snapshot to subtract from.
-
-      2. Otherwise (no snapshots, or 1 snapshot, or values already
-         look like daily flow) we estimate every day from that day's
-         chart rank via `_estimate_daily_views_from_rank`.
-
-    Preserves keys that come with a truthy value on the same day even
-    when the platform switches between the two modes.
+    Preserved: the raw cumulative-delta path (kept behind a legacy
+    flag) so we can compare against the platform's own counter if
+    needed. Not used by the dashboard.
     """
     ranks = entry.get('ranks_by_date') or {}
     reads = entry.get('reads_by_date') or {}
@@ -261,18 +250,37 @@ def _derive_daily_reads_by_date(entry: dict, mau_millions: float,
     if not dates:
         return
 
+    # Stash the pre-derived reads_by_date as raw_reads_by_date so the
+    # platform's own daily counter is auditable even though the
+    # dashboard now renders rank-derived unique-view estimates.
+    if reads and 'raw_reads_by_date' not in entry:
+        entry['raw_reads_by_date'] = dict(reads)
+
+    # Rank-derived per-day estimate for every observed date. This
+    # replaces the earlier cumulative-delta path so the daily curve
+    # stays on the same calibration as the lifetime estimate.
+    new_reads: dict = {}
+    for d in dates:
+        r = ranks.get(d)
+        est = _estimate_daily_views_from_rank(
+            r, mau_millions, day_key=d, salt=salt)
+        if est is not None:
+            new_reads[d] = est
+    if new_reads:
+        entry['reads_by_date'] = new_reads
+        return
+
+    # Legacy cumulative-delta fallback (only reachable when rank data
+    # is missing on every observed date, which shouldn't happen for
+    # any of the four competitor platforms today). Preserved so the
+    # module still degrades gracefully in that unlikely case.
     numeric = [(d, reads.get(d)) for d in dates
                if isinstance(reads.get(d), (int, float))]
-
     is_cumulative = False
     if len(numeric) >= 2:
         vals = [v for _, v in numeric]
-        # Non-decreasing with a small tolerance for hostmap dedupe or
-        # occasional platform recompute (2% jitter tolerated).
         is_cumulative = all(vals[i + 1] >= vals[i] * 0.98
                              for i in range(len(vals) - 1))
-
-    new_reads: dict = {}
     if is_cumulative:
         prev_val = None
         for d in dates:
@@ -1103,22 +1111,44 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
         # Cap to top_n by current rank (or best rank if dropped)
         titles = titles[:top_n]
 
-        # Backfill view estimates on platforms that don't publish raw
-        # counts (currently NetShort - its storefront ships no read/
-        # view counter on the RSC payload). Uses the shared rank ->
-        # views curve anchored to the platform's MAU so every tab
-        # renders a "Views" number instead of an inconsistent "Chart
-        # pos" fallback.
+        # Normalize the "Views" number across every competitor platform.
+        #
+        # Problem this solves: each platform's raw read_count means a
+        # different thing:
+        #   * ReelShort: lifetime EPISODE-PLAYS counter (a user watching
+        #     85 episodes = 85 reads -> top title shows 465M, which
+        #     labeled as "Views" is 3-4x the platform's own MAU).
+        #   * DramaBox:  daily/weekly sub-metric of unknown semantics
+        #     (top title reads 18K, way too LOW to be lifetime views).
+        #   * GoodShort: lifetime some-kind-of-plays (top title 12M,
+        #     roughly right ballpark but semantics still opaque).
+        #   * NetShort:  no read_count at all.
+        #
+        # Rendering all four verbatim under one "Views" label gave the
+        # ReelShort tab absurdly high numbers and DramaBox absurdly
+        # low ones. Fix: derive a consistent UNIQUE-VIEWER estimate
+        # from rank + platform MAU (see _estimate_views_from_rank,
+        # calibrated to Statista 2026 + data.ai Q1 2026 microdrama
+        # reach benchmarks). This is what the "Views" column now
+        # renders; the platform's own counter is preserved on the
+        # payload as `raw_read_count` for auditing.
         mau_m = cfg.get('mau_millions') or 0
         for t in titles:
-            if t.get('read_count') is None:
-                est = _estimate_views_from_rank(
-                    t.get('current_rank') or t.get('best_rank'),
-                    mau_m,
-                    salt=f"{source}|{t.get('key','')}",
-                )
-                if est is not None:
-                    t['read_count'] = est
+            # Preserve the platform's native counter for audit / future
+            # use (e.g. a "Reads" column, engagement-depth analysis).
+            if t.get('read_count') is not None and 'raw_read_count' not in t:
+                t['raw_read_count'] = t['read_count']
+
+            est = _estimate_views_from_rank(
+                t.get('current_rank') or t.get('best_rank'),
+                mau_m,
+                salt=f"{source}|{t.get('key','')}",
+            )
+            if est is not None:
+                # Always overwrite so the display value is consistent
+                # across platforms and comparable in the aggregated
+                # "All Platforms" ranker.
+                t['read_count'] = est
 
         # Normalize reads_by_date to DAILY FLOW (views on that day),
         # not lifetime cumulative snapshots. Fixes two bugs:
