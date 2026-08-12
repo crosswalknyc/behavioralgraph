@@ -58466,7 +58466,7 @@ https://www.instagram.com/p/..."></textarea>
                             { label: 'The paradox',    value: 'Focus RE-CUT the theatrical window (extended from 17 to 46 days after three consecutive up weekends). Focus DID NOT re-cut the TVOD window when the same title was #1 on the Apple TV Store 17 days later. Same film, same weeks, opposite treatment.' },
                             { label: 'Demand remaining', value: 'Priority pull. Obsession sat at 88% of its peak weekly TVOD velocity on the day SVOD arrived. Every other Focus + Universal title in the 2022-2026 record sat at ≤32% (Conclave), with the Universal median at 3%. Same 17-day calendar; opposite position on the curve.' },
                             { label: 'Substitution',   value: 'Pull 3 identifies 618K panelists (projected) who reached an Obsession TVOD title page on Apple TV or Prime Video during Jun 30 - Jul 16 without transacting, then started Peacock playback of Obsession on/after Jul 17. Of that cohort, 138K new + reactivated Peacock subs are attributed to Obsession in SubIQ (76K new / 62K reactivated, 30d window) — the strict-subscription subset. Not a correlation between aggregate curves; the same individuals abandoning a paid transaction in favor of watching on Peacock once the substitute appeared.' },
-                            { label: 'Acquisition',    value: 'Peacock signups in the 30 days after Jul 17: 2.85M projected, +153% vs the trailing-8-week baseline and +107% vs the same 2025 window. Two attribution cuts on that cohort: SubIQ first-watch attribution (strict, first-party) = 138K subs (76K new + 62K reactivated · 4.8% of signups) — the platform-of-record acquisition anchor. Crosswalk digital-touchpoint attribution (broad panel net) = 1.78M signups (62.4%) with an Obsession touchpoint in the 14 days prior; 74.8% of those were net-new to Peacock since Jan 2021. Full reconciliation on Pull 4.' },
+                            { label: 'Acquisition',    value: 'Peacock signups in the 30 days after Jul 17: 2.85M projected, +153% vs the trailing-8-week baseline and +107% vs the same 2025 window. Two attribution cuts on that cohort: SubIQ first-watch attribution (strict, panel-observed, projected) = 138K subs (76K new + 62K reactivated · 4.8% of signups) — the platform-of-record acquisition anchor. Crosswalk digital-touchpoint attribution (broad panel net) = 1.78M signups (62.4%) with an Obsession touchpoint in the 14 days prior; 74.8% of those were net-new to Peacock since Jan 2021. Full reconciliation on Pull 4.' },
                             { label: 'Durability',     value: 'The Obsession-attributed sign-up cohort churns at ~1.5× the Peacock baseline. Day-90 retention 39.7% vs baseline 54.6%; cancellation-path entry within 90 days 34.2% vs baseline 18.6%. Permanent transactional revenue was traded for a temporary subscriber count.' },
                             { label: 'Composition',    value: 'Obsession theatrical audience is 74.8% aged 18-34 (panel-measured, ticket-touchpoint cohort). Peacock subscriber base is 21.2% aged 18-34. The delivered cohort is the age band Peacock structurally under-indexes on and cannot acquire from its own slate. Canonical demo buckets throughout.' },
                             { label: 'Completion',     value: 'Two completion cuts, both consistent with a displaced-purchase pattern. SubIQ headline completion rate across all 9.5M Peacock accounts that viewed Obsession: 58.4% (Peacock platform metric). Panel-measured ≥95%-of-runtime completion on the Obsession playback cohort specifically: 78.4%, vs a 34.2% Peacock film-viewer baseline — a 44.2pp lift. Median exit at minute 108 (end of narrative). The subscription was acquired FOR Obsession and consumed FOR Obsession, not sampled incidentally from the library.' }
@@ -72012,10 +72012,15 @@ https://www.instagram.com/p/..."></textarea>
         // ══════════════════════════════════════════════════════════════
         // OBSESSION → PEACOCK — Focus/NBCU windowing-evidence data
         //
-        // Every figure in this deck is a Crosswalk first-party panel
-        // observation. Release milestones (dates, ticket volumes,
-        // weekend totals) reflect ticket / trailer / title-page /
-        // playback signals observed across the panel.
+        // Every figure in this deck is a Crosswalk panel-observed
+        // signal, projected to the US digital population. Release
+        // milestones (dates, ticket volumes, weekend totals) reflect
+        // ticket / trailer / title-page / playback signals observed
+        // across the panel. Peacock sign-up and playback activity is
+        // panel-observed, not sourced from NBCUniversal. Cross-device
+        // linkage is deterministic within panel households;
+        // person-level attribution on connected TV is probabilistic.
+        // All figures are T+1.
         //
         // Cohort math sanity check:
         //   theatrical audience:         8.42M U.S. viewers with a
@@ -72034,6 +72039,9 @@ https://www.instagram.com/p/..."></textarea>
                 peacock_playback_initiators_m: 3.24,
                 substitution_cohort_k: 618,
                 displacement_usd_m: 57.8,
+                displacement_usd_m_range_low: 41.0,
+                displacement_usd_m_range_high: 58.0,
+                displacement_usd_m_range_display: '$41-58M',
                 short: '05/15 theatrical → 06/30 TVOD → 07/17 Peacock · panel through 08/10',
                 detail: 'U.S. viewers with panel signal for Obsession across the 13-week study window (May 15 - Aug 10). Theatrical = ticket purchase on Fandango / AMC / Regal / Cinemark or trailer→ticket-page conversion. TVOD = ≥$0.99 SKU on Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft Movies & TV, Xfinity, or Movies Anywhere. Peacock = deterministic CTV / mobile / PC playback initiation.'
             },
@@ -72041,10 +72049,10 @@ https://www.instagram.com/p/..."></textarea>
             obp_case: {
                 subtitle: 'The theatrical record establishes discretion; the transactional record establishes it was exercised in only one direction.',
                 key_metrics: [
-                    { label: 'Domestic box office', value: '$253.3M',  accent: '#14b8a6', sub: 'highest Focus release ever; #1 Apple TV Store on 7/17' },
+                    { label: 'Domestic box office', value: '$263.4M',  accent: '#14b8a6', sub: 'highest Focus release ever; through Aug 10, in release' },
                     { label: 'Theatrical window',   value: '46 days',  accent: '#22c55e', sub: 'longest of any Focus title in the record' },
                     { label: 'TVOD window',         value: '17 days',  accent: '#ef4444', sub: 'shortest of any integrated-studio title in the sample' },
-                    { label: 'Displaced TVOD $',    value: '$57.8M',   accent: '#ef4444', sub: 'panel-fitted counterfactual vs Universal 86.5d median' }
+                    { label: 'Est. displaced TVOD $', value: '$41-58M', accent: '#ef4444', sub: 'range vs Universal 86.5d median. $58M holds launch price constant; $41M models the rental cut ($19.99 → $9.99) that landed inside the handoff week.' }
                 ],
                 chronology: [
                     { label: 'TIFF Midnight premiere',        date: 'Sep 5, 2025',   note: 'Curry Barker feature debut; $750K production budget.' },
@@ -72068,22 +72076,22 @@ https://www.instagram.com/p/..."></textarea>
             },
 
             obp_window: {
-                subtitle: '14 UFEG titles under the same Peacock pay-one arrangement, 2022-2026. Every handoff interval is anchored to first-party panel signals — TVOD title-page + transaction volume for the TVOD date, and Peacock playback initiation for the SVOD date.',
+                subtitle: '14 UFEG titles under the same Peacock pay-one arrangement, 2022-2026. Every handoff interval is anchored to panel-observed signals, projected to the US digital population. TVOD date derived from title-page + transaction volume; SVOD date derived from Peacock playback initiation.',
                 titles: [
-                    { title: 'Minions: The Rise of Gru',    studio: 'Illumination',           dom_bo_m: 370, tv_days: 32, tvod_days: 52,  svod_total: 84,   theatrical: 'Jul 1, 2022',  tvod: 'Aug 2, 2022',  svod: 'Sep 23, 2022',  focus: false, era: 'prior', in_median: false },
-                    { title: 'Despicable Me 4',             studio: 'Illumination',           dom_bo_m: 360, tv_days: 34, tvod_days: 86,  svod_total: 120,  theatrical: 'Jul 3, 2024',  tvod: 'Aug 6, 2024',  svod: 'Oct 31, 2024',  focus: false, era: '24-26',  in_median: true },
-                    { title: 'Twisters',                    studio: 'Universal',              dom_bo_m: 267, tv_days: 25, tvod_days: 94,  svod_total: 119,  theatrical: 'Jul 19, 2024', tvod: 'Aug 13, 2024', svod: 'Nov 15, 2024',  focus: false, era: '24-26',  in_median: true },
-                    { title: 'The Wild Robot',              studio: 'DreamWorks',             dom_bo_m: 144, tv_days: 18, tvod_days: 101, svod_total: 119,  theatrical: 'Sep 27, 2024', tvod: 'Oct 15, 2024', svod: 'Jan 24, 2025',  focus: false, era: '24-26',  in_median: true },
-                    { title: 'Conclave',                    studio: 'Focus',                  dom_bo_m: 37,  tv_days: 32, tvod_days: 17,  svod_total: 49,   theatrical: 'Oct 25, 2024', tvod: 'Nov 26, 2024', svod: 'Dec 13, 2024',  focus: true,  era: '24-26',  in_median: true,  note: 'Awards-timing SVOD placement; the studio-cited comp.' },
-                    { title: 'Wicked',                      studio: 'Universal',              dom_bo_m: 473, tv_days: 39, tvod_days: 80,  svod_total: 119,  theatrical: 'Nov 22, 2024', tvod: 'Dec 31, 2024', svod: 'Mar 21, 2025',  focus: false, era: '24-26',  in_median: true },
-                    { title: 'Nosferatu',                   studio: 'Focus',                  dom_bo_m: 95,  tv_days: 27, tvod_days: 31,  svod_total: 58,   theatrical: 'Dec 25, 2024', tvod: 'Jan 21, 2025', svod: 'Feb 21, 2025',  focus: true,  era: '24-26',  in_median: true },
-                    { title: 'How to Train Your Dragon',    studio: 'Universal / DreamWorks', dom_bo_m: 263, tv_days: 32, tvod_days: 87,  svod_total: 119,  theatrical: 'Jun 13, 2025', tvod: 'Jul 15, 2025', svod: 'Oct 10, 2025',  focus: false, era: '24-26',  in_median: true },
-                    { title: 'Jurassic World Rebirth',      studio: 'Universal',              dom_bo_m: 340, tv_days: 34, tvod_days: 86,  svod_total: 120,  theatrical: 'Jul 2, 2025',  tvod: 'Aug 5, 2025',  svod: 'Oct 30, 2025',  focus: false, era: '24-26',  in_median: true },
-                    { title: 'Downton Abbey: Grand Finale', studio: 'Focus',                  dom_bo_m: 45,  tv_days: 18, tvod_days: 38,  svod_total: 56,   theatrical: 'Sep 12, 2025', tvod: 'Sep 30, 2025', svod: 'Nov 7, 2025',   focus: true,  era: '24-26',  in_median: true },
-                    { title: 'Wicked: For Good',            studio: 'Universal',              dom_bo_m: 297, tv_days: 39, tvod_days: 80,  svod_total: 119,  theatrical: 'Nov 21, 2025', tvod: 'Dec 30, 2025', svod: 'Mar 20, 2026',  focus: false, era: '24-26',  in_median: true },
-                    { title: 'Five Nights at Freddy\'s 2',  studio: 'Universal / Blumhouse',  dom_bo_m: 109, tv_days: 18, tvod_days: 101, svod_total: 119,  theatrical: 'Dec 5, 2025',  tvod: 'Dec 23, 2025', svod: 'Apr 3, 2026',   focus: false, era: '24-26',  in_median: true },
-                    { title: 'Obsession',                   studio: 'Focus',                  dom_bo_m: 253, tv_days: 46, tvod_days: 17,  svod_total: 63,   theatrical: 'May 15, 2026', tvod: 'Jun 30, 2026', svod: 'Jul 17, 2026',  focus: true,  era: '24-26',  in_median: false, subject: true },
-                    { title: 'Minions & Monsters',          studio: 'Illumination',           dom_bo_m: 170, tv_days: 41, tvod_days: null, svod_total: null, theatrical: 'Jul 1, 2026',  tvod: 'Announced (Aug)', svod: 'Not announced', focus: false, era: '24-26',  in_median: false, note: 'Concurrent: full sell-through campaign on a franchise underperformer at the same parent, 18 days after Obsession moved to Peacock.' }
+                    { title: 'Minions: The Rise of Gru',    studio: 'Illumination',           dom_bo_m: 370.5, tv_days: 32, tvod_days: 52,  svod_total: 84,   theatrical: 'Jul 1, 2022',  tvod: 'Aug 2, 2022',  svod: 'Sep 23, 2022',  focus: false, era: 'prior', in_median: false },
+                    { title: 'Despicable Me 4',             studio: 'Illumination',           dom_bo_m: 361.0, tv_days: 34, tvod_days: 86,  svod_total: 120,  theatrical: 'Jul 3, 2024',  tvod: 'Aug 6, 2024',  svod: 'Oct 31, 2024',  focus: false, era: '24-26',  in_median: true },
+                    { title: 'Twisters',                    studio: 'Universal',              dom_bo_m: 267.8, tv_days: 25, tvod_days: 94,  svod_total: 119,  theatrical: 'Jul 19, 2024', tvod: 'Aug 13, 2024', svod: 'Nov 15, 2024',  focus: false, era: '24-26',  in_median: true },
+                    { title: 'The Wild Robot',              studio: 'DreamWorks',             dom_bo_m: 143.9, tv_days: 18, tvod_days: 101, svod_total: 119,  theatrical: 'Sep 27, 2024', tvod: 'Oct 15, 2024', svod: 'Jan 24, 2025',  focus: false, era: '24-26',  in_median: true },
+                    { title: 'Conclave',                    studio: 'Focus',                  dom_bo_m: 32.6, tv_days: 32, tvod_days: 17,  svod_total: 49,   theatrical: 'Oct 25, 2024', tvod: 'Nov 26, 2024', svod: 'Dec 13, 2024',  focus: true,  era: '24-26',  in_median: true,  note: 'Awards-timing SVOD placement; the studio-cited comp.' },
+                    { title: 'Wicked',                      studio: 'Universal',              dom_bo_m: 473.2, tv_days: 39, tvod_days: 80,  svod_total: 119,  theatrical: 'Nov 22, 2024', tvod: 'Dec 31, 2024', svod: 'Mar 21, 2025',  focus: false, era: '24-26',  in_median: true },
+                    { title: 'Nosferatu',                   studio: 'Focus',                  dom_bo_m: 95.6, tv_days: 27, tvod_days: 31,  svod_total: 58,   theatrical: 'Dec 25, 2024', tvod: 'Jan 21, 2025', svod: 'Feb 21, 2025',  focus: true,  era: '24-26',  in_median: true },
+                    { title: 'How to Train Your Dragon',    studio: 'Universal / DreamWorks', dom_bo_m: 263.6, tv_days: 32, tvod_days: 87,  svod_total: 119,  theatrical: 'Jun 13, 2025', tvod: 'Jul 15, 2025', svod: 'Oct 10, 2025',  focus: false, era: '24-26',  in_median: true },
+                    { title: 'Jurassic World Rebirth',      studio: 'Universal',              dom_bo_m: 339.6, tv_days: 34, tvod_days: 86,  svod_total: 120,  theatrical: 'Jul 2, 2025',  tvod: 'Aug 5, 2025',  svod: 'Oct 30, 2025',  focus: false, era: '24-26',  in_median: true },
+                    { title: 'Downton Abbey: Grand Finale', studio: 'Focus',                  dom_bo_m: 45.0, tv_days: 18, tvod_days: 38,  svod_total: 56,   theatrical: 'Sep 12, 2025', tvod: 'Sep 30, 2025', svod: 'Nov 7, 2025',   focus: true,  era: '24-26',  in_median: true },
+                    { title: 'Wicked: For Good',            studio: 'Universal',              dom_bo_m: 342.9, tv_days: 39, tvod_days: 80,  svod_total: 119,  theatrical: 'Nov 21, 2025', tvod: 'Dec 30, 2025', svod: 'Mar 20, 2026',  focus: false, era: '24-26',  in_median: true },
+                    { title: 'Five Nights at Freddy\'s 2',  studio: 'Universal / Blumhouse',  dom_bo_m: 127.7, tv_days: 18, tvod_days: 101, svod_total: 119,  theatrical: 'Dec 5, 2025',  tvod: 'Dec 23, 2025', svod: 'Apr 3, 2026',   focus: false, era: '24-26',  in_median: true },
+                    { title: 'Obsession',                   studio: 'Focus',                  dom_bo_m: 263.4, tv_days: 46, tvod_days: 17,  svod_total: 63,   theatrical: 'May 15, 2026', tvod: 'Jun 30, 2026', svod: 'Jul 17, 2026',  focus: true,  era: '24-26',  in_median: false, subject: true },
+                    { title: 'Minions & Monsters',          studio: 'Illumination',           dom_bo_m: 169.7, tv_days: 41, tvod_days: null, svod_total: null, theatrical: 'Jul 1, 2026',  tvod: 'Announced (Aug)', svod: 'Not announced', focus: false, era: '24-26',  in_median: false, note: 'Concurrent: full sell-through campaign on a franchise underperformer at the same parent, 18 days after Obsession moved to Peacock.' }
                 ],
                 studio_averages: [
                     // Per-studio averages across all 14 titles in the record,
@@ -72092,17 +72100,17 @@ https://www.instagram.com/p/..."></textarea>
                     // subject can be compared to its own label's baseline.
                     { label: 'Universal',              n: 4, tvod_svod_n: 4, dom_bo_m: 344, tv_days: 34, tvod_days: 85,  svod_total: 119, color: '#14b8a6', family: 'universal' },
                     { label: 'Universal / DreamWorks', n: 1, tvod_svod_n: 1, dom_bo_m: 263, tv_days: 32, tvod_days: 87,  svod_total: 119, color: '#14b8a6', family: 'universal' },
-                    { label: 'Universal / Blumhouse', n: 1, tvod_svod_n: 1, dom_bo_m: 109, tv_days: 18, tvod_days: 101, svod_total: 119, color: '#14b8a6', family: 'universal' },
+                    { label: 'Universal / Blumhouse', n: 1, tvod_svod_n: 1, dom_bo_m: 127.7, tv_days: 18, tvod_days: 101, svod_total: 119, color: '#14b8a6', family: 'universal' },
                     { label: 'DreamWorks',             n: 1, tvod_svod_n: 1, dom_bo_m: 144, tv_days: 18, tvod_days: 101, svod_total: 119, color: '#14b8a6', family: 'universal' },
                     { label: 'Illumination',           n: 3, tvod_svod_n: 2, dom_bo_m: 300, tv_days: 36, tvod_days: 69,  svod_total: 102, color: '#14b8a6', family: 'universal', note: 'TVOD/SVOD averages over 2 titles — Minions & Monsters not yet announced.' },
                     { label: 'Focus, excl. Obsession', n: 3, tvod_svod_n: 3, dom_bo_m: 59,  tv_days: 26, tvod_days: 29,  svod_total: 54,  color: '#a855f7', family: 'focus' },
-                    { label: 'Obsession',              n: 1, tvod_svod_n: 1, dom_bo_m: 253, tv_days: 46, tvod_days: 17,  svod_total: 63,  color: '#ef4444', family: 'obsession', subject: true }
+                    { label: 'Obsession',              n: 1, tvod_svod_n: 1, dom_bo_m: 263.4, tv_days: 46, tvod_days: 17,  svod_total: 63,  color: '#ef4444', family: 'obsession', subject: true }
                 ],
                 studio_averages_caption: 'Averages computed across the 14 titles in the record above, grouped by exact studio label. Universal-family labels (Universal, Universal / DreamWorks, Universal / Blumhouse, DreamWorks, Illumination) share the Peacock pay-1 arrangement. Focus is UFEG\'s specialty label — its non-Obsession slate lands 49-58 days total. Obsession, at 63 days total and 17 TVOD days, sits below every non-Focus average and shorter on TVOD than every Focus average.',
                 medians: {
-                    universal_group_24_26: { titles: 8, dom_bo_m: 280, tv_days: 33,   tvod_days: 86.5, svod_total: 119, label: 'Universal group, 2024-2026' },
+                    universal_group_24_26: { titles: 8, dom_bo_m: 303.7, tv_days: 33,   tvod_days: 86.5, svod_total: 119, label: 'Universal group, 2024-2026' },
                     focus_excl_obsession:  { titles: 3, dom_bo_m: 45,  tv_days: 27,   tvod_days: 31,   svod_total: 56,  label: 'Focus, excluding Obsession' },
-                    obsession:             { titles: 1, dom_bo_m: 253, tv_days: 46,   tvod_days: 17,   svod_total: 63,  label: 'Obsession' }
+                    obsession:             { titles: 1, dom_bo_m: 263.4, tv_days: 46,   tvod_days: 17,   svod_total: 63,  label: 'Obsession' }
                 },
                 read: 'The eight non-Focus Universal titles from 2024-2026 reached Peacock at 119-120 days. Every one. Across four labels, two calendar years, and box office from $109M to $473M — commercial scale had no observable effect on the interval. Obsession received 63 days total and 17 TVOD days, below the shortest home window Universal has granted a major title in this record (Rise of Gru, 84 days in 2022 during the streaming-subscriber contest).'
             },
@@ -72132,7 +72140,7 @@ https://www.instagram.com/p/..."></textarea>
                     // 2024-2026 UFEG titles from obp_window; Disney / WB /
                     // Paramount averages are computed across obp_industry's
                     // title_level rows.
-                    { studio: 'Universal',    service: 'Peacock',     n: 8, avg_tvod_days: 89, avg_total_days: 119, color: '#14b8a6', family: 'universal', note: '8 non-Focus UFEG titles, 2024-2026 (Universal / DreamWorks / Blumhouse / Illumination)' },
+                    { studio: 'Universal',    service: 'Peacock',     n: 8, avg_tvod_days: 86, avg_total_days: 119, median_tvod_days: 86.5, mean_tvod_days: 89, color: '#14b8a6', family: 'universal', note: '8 non-Focus UFEG titles, 2024-2026 (Universal / DreamWorks / Blumhouse / Illumination). Primary Universal figure = 86.5-day MEDIAN TVOD. Mean is 89 days across the same 8; median is the house standard used throughout.' },
                     { studio: 'Disney',       service: 'Disney+',     n: 5, avg_tvod_days: 40, avg_total_days: 101, color: '#3b82f6', family: 'disney',    note: 'Inside Out 2, Cap America BNW, Lilo & Stitch, Zootopia 2, Hoppers' },
                     { studio: 'Warner Bros.', service: 'HBO Max',     n: 4, avg_tvod_days: 37, avg_total_days: 75,  color: '#a855f7', family: 'wb',        note: 'A Minecraft Movie, Sinners, Final Destination Bloodlines, Superman' },
                     { studio: 'Paramount',    service: 'Paramount+',  n: 1, avg_tvod_days: 28, avg_total_days: 60,  color: '#0ea5e9', family: 'paramount', note: 'Gladiator II — panel-confirmed slate-average posture' },
@@ -72168,14 +72176,14 @@ https://www.instagram.com/p/..."></textarea>
 
             obp_tvod: {
                 subtitle: 'Panel-observed weekly TVOD transaction volume for Obsession, with the July 17 SVOD handoff marked. Counterfactual fitted from the pre-Jul 17 trajectory and projected forward under an 86-day window (Universal group median).',
-                methodology: 'Behavioral transaction index built from first-party panel touchpoints across Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft, Xfinity, and Movies Anywhere. Displacement dollars derived by applying the panel-observed blended ASP ($21.59 per transaction, 68% rental + 32% purchase, inferred from SKU-level title-page pricing) to the volume gap.',
+                methodology: 'Behavioral transaction index built from panel-observed touchpoints (projected to the US digital population) across Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft, Xfinity, and Movies Anywhere. Displacement dollars presented as a range: purchase and rental modeled separately on a date-specific price series (launch: $24.99 purchase / $19.99 rental; rental cut to $9.99 landed inside the same 7-day period as the Jul 17 handoff). Reported range: ~$41M (observed prices, price cut modeled) to ~$58M (launch price held constant). Point estimate withheld pending distributor Apple and Amazon statements.',
                 curve_weekly: [
                     { rel_wk: -2, wk_label: 'W-2',  wk_dates: 'Jun 16-22', obs_k:   0.0, cf_k:   0.0, phase: 'pre-tvod',    note: '' },
                     { rel_wk: -1, wk_label: 'W-1',  wk_dates: 'Jun 23-29', obs_k:  12.4, cf_k:  12.4, phase: 'pre-order',   note: 'Pre-order + early digital seed.' },
                     { rel_wk:  1, wk_label: 'W1',   wk_dates: 'Jun 30-Jul 6', obs_k: 615.0, cf_k: 615.0, phase: 'tvod-live',   note: 'PEAK: #1 on Apple TV Store, top-3 on Prime Video.', peak: true },
-                    { rel_wk:  2, wk_label: 'W2',   wk_dates: 'Jul 7-13',  obs_k: 542.0, cf_k: 542.0, phase: 'tvod-live',   note: 'Still #1 on Apple TV Store on Jul 16 (day 17).' },
+                    { rel_wk:  2, wk_label: 'W2',   wk_dates: 'Jul 7-13',  obs_k: 542.0, cf_k: 542.0, phase: 'tvod-live',   note: 'Panel volume held near W1 levels; ~88.1% of peak weekly velocity remaining at handoff (see Pull 2). Public transactional-chart rank corroboration deferred to Appendix N2 pending Apple + Fandango weekly.' },
                     { rel_wk:  3, wk_label: 'W3',   wk_dates: 'Jul 14-20', obs_k: 187.0, cf_k: 477.0, phase: 'handoff',     note: 'SVOD hit on Jul 17. Partial week (3 pre-handoff days at ~85K/day + 4 post-handoff days at ~14K/day).', handoff: true },
-                    { rel_wk:  4, wk_label: 'W4',   wk_dates: 'Jul 21-27', obs_k:  24.1, cf_k: 419.0, phase: 'post-svod',    note: 'Free on Peacock for anyone with a $10.99 sub. Transactional demand extinguished.' },
+                    { rel_wk:  4, wk_label: 'W4',   wk_dates: 'Jul 21-27', obs_k:  24.1, cf_k: 419.0, phase: 'post-svod',    note: 'Free on Peacock for anyone with a $10.99 sub. Panel-observed weekly transaction volume collapsed by ~87%, consistent with substitution to the free destination.' },
                     { rel_wk:  5, wk_label: 'W5',   wk_dates: 'Jul 28-Aug 3', obs_k:  16.2, cf_k: 369.0, phase: 'post-svod',    note: '' },
                     { rel_wk:  6, wk_label: 'W6',   wk_dates: 'Aug 4-10',  obs_k:  11.8, cf_k: 325.0, phase: 'post-svod',    note: 'T+1 panel through Aug 10. Counterfactual continues under the 86.5d Universal median to the projected window close; weekly detail refreshes daily as the projection window unfolds.' }
                 ],
@@ -72185,6 +72193,8 @@ https://www.instagram.com/p/..."></textarea>
                     displaced_transactions_k: 2675.0,
                     displaced_transactions_display: '2.675M',
                     asp_blended_usd: 21.59,
+                    asp_blended_usd_display: '$15-$22 range',
+                    asp_blended_usd_note: 'Blended ASP presented as a range pending distributor Apple and Amazon statements. Launch prices: $24.99 purchase / $19.99 rental. Rental cut to $9.99 landed inside the same 7-day period as the Jul 17 handoff, so a meaningful share of the observed Fandango decline is price, not volume. Point ASP withheld until statements arrive.',
                     asp_rental_usd: 19.99,
                     asp_purchase_usd: 24.99,
                     rental_share_pct: 68,
@@ -72192,6 +72202,10 @@ https://www.instagram.com/p/..."></textarea>
                     displaced_rental_usd_m: 36.4,
                     displaced_purchase_usd_m: 21.4,
                     displaced_total_usd_m: 57.8,
+                    displaced_total_usd_m_low: 41.0,
+                    displaced_total_usd_m_high: 58.0,
+                    displaced_total_usd_m_display: '$41-58M',
+                    displaced_total_note: 'Displaced revenue reported as a RANGE. $58M assumes launch price held constant; $41M models the mid-window rental cut ($19.99 → $9.99). Distributor statements will collapse the range to a point.',
                     obs_actual_tvod_usd_m: 29.0,
                     cf_86d_tvod_usd_m: 86.8,
                     universal_median_tvod_days: 86.5
@@ -72206,25 +72220,25 @@ https://www.instagram.com/p/..."></textarea>
                     { platform: 'Xfinity On Demand',     share_pct:  1.6, note: '' },
                     { platform: 'Movies Anywhere',       share_pct:  1.8, note: '' }
                 ],
-                read: 'Weeks 1 and 2 tracked as expected for a #1 Apple TV Store title in the panel. The Jul 17 SVOD handoff produced an immediate ~87% collapse in weekly transaction volume, sustained through the projected window. Fitting the pre-handoff decay (12% W1→W2) and projecting under the Universal group median (86.5 TVOD days) yields 4.02M projected transactions vs 1.34M observed — a 2.68M transaction shortfall. At the panel-observed blended ASP of $21.59, the displaced transactional revenue is $57.8M.'
+                read: 'Weeks 1 and 2 tracked as a top-transaction-rank Focus release. The Jul 17 SVOD handoff produced an immediate ~87% collapse in weekly transaction volume, sustained through the projected window. Fitting the pre-handoff decay (12% W1→W2) and projecting under the Universal group median (86.5 TVOD days) yields ~4.02M projected transactions vs ~1.34M observed. The transaction gap is reported to the nearest hundred-thousand: ~2.68M. Applying the ASP range ($15-$22, purchase and rental modeled separately on a date-specific price series) produces an estimated displaced revenue range of ~$41-58M. Point estimate withheld until distributor Apple and Amazon statements arrive; distributor statements will collapse this range.'
             },
 
             obp_demand: {
                 subtitle: 'Priority pull. For every UFEG title since 2022, the share of peak weekly TVOD velocity remaining in the seven days immediately preceding SVOD arrival. Converts the dispute from days elapsed (where Focus can cite Conclave) to demand destroyed (where Focus has no comparable title).',
                 titles: [
-                    { title: 'Wicked: For Good',            studio: 'Universal',              tvod_days: 80,  velocity_pct_of_peak: 3.8,  volume_share_last_7d_pct: 2.1, color: '#14b8a6', dom_bo_m: 297 },
-                    { title: 'Wicked',                      studio: 'Universal',              tvod_days: 80,  velocity_pct_of_peak: 4.1,  volume_share_last_7d_pct: 2.4, color: '#14b8a6', dom_bo_m: 473 },
-                    { title: 'Jurassic World Rebirth',      studio: 'Universal',              tvod_days: 86,  velocity_pct_of_peak: 2.7,  volume_share_last_7d_pct: 1.8, color: '#14b8a6', dom_bo_m: 340 },
-                    { title: 'Despicable Me 4',             studio: 'Illumination',           tvod_days: 86,  velocity_pct_of_peak: 3.2,  volume_share_last_7d_pct: 2.0, color: '#14b8a6', dom_bo_m: 360 },
-                    { title: 'How to Train Your Dragon',    studio: 'Universal / DreamWorks', tvod_days: 87,  velocity_pct_of_peak: 3.4,  volume_share_last_7d_pct: 2.2, color: '#14b8a6', dom_bo_m: 263 },
-                    { title: 'Twisters',                    studio: 'Universal',              tvod_days: 94,  velocity_pct_of_peak: 2.8,  volume_share_last_7d_pct: 1.7, color: '#14b8a6', dom_bo_m: 267 },
-                    { title: 'The Wild Robot',              studio: 'DreamWorks',             tvod_days: 101, velocity_pct_of_peak: 1.9,  volume_share_last_7d_pct: 1.2, color: '#14b8a6', dom_bo_m: 144 },
-                    { title: 'Five Nights at Freddy\'s 2',  studio: 'Universal / Blumhouse',  tvod_days: 101, velocity_pct_of_peak: 1.6,  volume_share_last_7d_pct: 1.1, color: '#14b8a6', dom_bo_m: 109 },
-                    { title: 'Minions: The Rise of Gru',    studio: 'Illumination',           tvod_days: 52,  velocity_pct_of_peak: 6.1,  volume_share_last_7d_pct: 3.4, color: '#94a3b8', dom_bo_m: 370, era_note: '2022 (prior era)' },
-                    { title: 'Downton Abbey: Grand Finale', studio: 'Focus',                  tvod_days: 38,  velocity_pct_of_peak: 11.4, volume_share_last_7d_pct: 6.8, color: '#a855f7', dom_bo_m: 45,  focus: true },
-                    { title: 'Nosferatu',                   studio: 'Focus',                  tvod_days: 31,  velocity_pct_of_peak: 18.3, volume_share_last_7d_pct: 9.4, color: '#a855f7', dom_bo_m: 95,  focus: true },
-                    { title: 'Conclave',                    studio: 'Focus',                  tvod_days: 17,  velocity_pct_of_peak: 31.7, volume_share_last_7d_pct: 22.8, color: '#a855f7', dom_bo_m: 37,  focus: true,  note: 'The studio-cited comp. Demand substantially exhausted at day 17.' },
-                    { title: 'Obsession',                   studio: 'Focus',                  tvod_days: 17,  velocity_pct_of_peak: 88.1, volume_share_last_7d_pct: 37.4, color: '#ef4444', dom_bo_m: 253, focus: true,  subject: true, note: 'Same 17-day calendar as Conclave. Opposite position on the curve.' }
+                    { title: 'Wicked: For Good',            studio: 'Universal',              tvod_days: 80,  velocity_pct_of_peak: 3.8,  volume_share_last_7d_pct: 2.1, color: '#14b8a6', dom_bo_m: 342.9 },
+                    { title: 'Wicked',                      studio: 'Universal',              tvod_days: 80,  velocity_pct_of_peak: 4.1,  volume_share_last_7d_pct: 2.4, color: '#14b8a6', dom_bo_m: 473.2 },
+                    { title: 'Jurassic World Rebirth',      studio: 'Universal',              tvod_days: 86,  velocity_pct_of_peak: 2.7,  volume_share_last_7d_pct: 1.8, color: '#14b8a6', dom_bo_m: 339.6 },
+                    { title: 'Despicable Me 4',             studio: 'Illumination',           tvod_days: 86,  velocity_pct_of_peak: 3.2,  volume_share_last_7d_pct: 2.0, color: '#14b8a6', dom_bo_m: 361.0 },
+                    { title: 'How to Train Your Dragon',    studio: 'Universal / DreamWorks', tvod_days: 87,  velocity_pct_of_peak: 3.4,  volume_share_last_7d_pct: 2.2, color: '#14b8a6', dom_bo_m: 263.6 },
+                    { title: 'Twisters',                    studio: 'Universal',              tvod_days: 94,  velocity_pct_of_peak: 2.8,  volume_share_last_7d_pct: 1.7, color: '#14b8a6', dom_bo_m: 267.8 },
+                    { title: 'The Wild Robot',              studio: 'DreamWorks',             tvod_days: 101, velocity_pct_of_peak: 1.9,  volume_share_last_7d_pct: 1.2, color: '#14b8a6', dom_bo_m: 143.9 },
+                    { title: 'Five Nights at Freddy\'s 2',  studio: 'Universal / Blumhouse',  tvod_days: 101, velocity_pct_of_peak: 1.6,  volume_share_last_7d_pct: 1.1, color: '#14b8a6', dom_bo_m: 127.7 },
+                    { title: 'Minions: The Rise of Gru',    studio: 'Illumination',           tvod_days: 52,  velocity_pct_of_peak: 6.1,  volume_share_last_7d_pct: 3.4, color: '#94a3b8', dom_bo_m: 370.5, era_note: '2022 (prior era)' },
+                    { title: 'Downton Abbey: Grand Finale', studio: 'Focus',                  tvod_days: 38,  velocity_pct_of_peak: 11.4, volume_share_last_7d_pct: 6.8, color: '#a855f7', dom_bo_m: 45.0, focus: true },
+                    { title: 'Nosferatu',                   studio: 'Focus',                  tvod_days: 31,  velocity_pct_of_peak: 18.3, volume_share_last_7d_pct: 9.4, color: '#a855f7', dom_bo_m: 95.6, focus: true },
+                    { title: 'Conclave',                    studio: 'Focus',                  tvod_days: 17,  velocity_pct_of_peak: 31.7, volume_share_last_7d_pct: 22.8, color: '#a855f7', dom_bo_m: 32.6, focus: true,  note: 'The studio-cited comp. Day-17 demand-remaining figure sourced from Pull 2 (deferred until landed).' },
+                    { title: 'Obsession',                   studio: 'Focus',                  tvod_days: 17,  velocity_pct_of_peak: 88.1, volume_share_last_7d_pct: 37.4, color: '#ef4444', dom_bo_m: 263.4, focus: true,  subject: true, note: 'Same 17-day calendar as Conclave. Opposite position on the curve.' }
                 ],
                 distribution: {
                     universal_median_pct_of_peak: 3.0,
@@ -72238,17 +72252,17 @@ https://www.instagram.com/p/..."></textarea>
                     max_non_subject_pct: 31.7
                 },
                 same_interval_read: {
-                    conclave: 'At day 17, Conclave\'s TVOD volume was 31.7% of its peak weekly velocity. A niche awards title at $37M dom BO. Demand substantially exhausted; the Peacock placement served an awards campaign timed ahead of nomination voting, and the resulting visibility fed back into theatrical and downstream value FOR the content owner. $2.2M box office per TVOD day.',
-                    obsession: 'At day 17, Obsession\'s TVOD volume was 88.1% of its peak weekly velocity. A $253.3M breakout — nearly 7× Conclave — at #1 on the Apple TV Store when the window closed. Demand LIVE, not exhausted. The Peacock placement served subscriber acquisition on the sibling service AT the expense of the content owner. $14.9M box office per TVOD day.',
+                    conclave: 'Conclave sits at $32.6M domestic. The December 13 Peacock placement was timed ahead of awards nomination voting, and the visibility fed back into theatrical and downstream value the content owner shares in. $1.9M domestic box office per day of TVOD protection. Day-17 demand-remaining figure is a Pull 2 output; until it lands, any statement that Conclave\'s transactional demand was substantially spent at day 17 is an expectation, not a measurement.',
+                    obsession: 'At day 17, Obsession\'s TVOD volume was 88.1% of its peak weekly velocity, panel-observed and projected. A $263.4M breakout, roughly 8× Conclave\'s domestic gross, with panel volume near peak when the window closed. Demand LIVE, not exhausted. The Peacock placement was scheduled at a moment when transactional demand was still near its peak. $15.5M domestic box office per day of TVOD protection.',
                     verdict: 'Same interval, opposite purpose. The purposes are documentable from the studio\'s own promotional activity around each release.'
                 },
                 read: 'Every non-subject title in this record sits at ≤32% of peak weekly TVOD velocity when Peacock arrives, with a Universal median of 3.0% and a Focus median of 18.3%. Obsession sits at 88.1%. This is not an outlier by degree — it is a category distinction. Focus has no precedent for a title at Obsession\'s demand curve position, because Focus has never had one.'
             },
 
             obp_sub: {
-                subtitle: 'Two lenses on Obsession\'s Peacock arrival. SubIQ (Peacock first-party, account-level) is the ground truth for subscription acquisition — 9.5M accounts viewed, 138K acquired or reactivated (76K new / 62K reactivated) under a strict first-watch attribution model. Crosswalk panel (viewer-level, projected) adds a TVOD-substitution lens — 1.84M TVOD abandoners, 618K of whom then played on Peacock. The 618K playback number is a substitution behavior, not a subscription-acquisition metric; the strict subscription count is 138K in SubIQ.',
+                subtitle: 'Two lenses on Obsession\'s Peacock arrival, both panel-observed and projected to the US digital population. Lens 1: SubIQ measurement (viewer-level, strict first-watch attribution) reads ~9.5M Peacock accounts initiating playback and ~138K acquired or reactivated (~76K new / ~62K reactivated) inside the 30-day post-drop window. Lens 2: Crosswalk TVOD-substitution (viewer-level, projected) reads ~1.84M TVOD abandoners, ~618K of whom then played on Peacock. The 618K measures playback substitution, not subscription acquisition; the strict subscription figure is 138K. 9.5M denominator = Peacock accounts observed in the panel that initiated Obsession playback inside the 30-day attribution window; playback threshold is any positive playback event.',
                 topline: {
-                    // ── SubIQ ground truth (first-party account logs) ─────────
+                    // ── SubIQ measurement (panel-observed, viewer-level, projected) ──
                     subiq_drop_date: 'Jul 17, 2026',
                     subiq_attribution_window: 'Jul 17 → Aug 16, 2026',
                     subiq_attribution_window_days: 30,
@@ -72272,7 +72286,7 @@ https://www.instagram.com/p/..."></textarea>
                     playback_conversion_rate_pct: 33.5,
                     median_time_to_playback_days: 4,
                     // ── Reconciliation between the two lenses ─────────────────
-                    universe_note: 'SubIQ is Peacock first-party — deterministic account-level playback logs, strict first-watch attribution (30d window, 180d exclusion, Jul 17 drop). 9.5M accounts viewed Obsession; 138K were new or reactivated subs attributed to Obsession (1.46% of viewers). Crosswalk panel is viewer-level, projected to U.S. digital population — same identified individuals tracked from TVOD title-page visits to Peacock playback. The 618K playback number measures BEHAVIORAL SUBSTITUTION: TVOD abandoners who then played on Peacock. Most of the 618K were already Peacock subs before Jul 17 and simply switched playback destination (paid TVOD → free-with-sub Peacock). The two numbers don\'t ladder 1:1 — SubIQ counts sub-acquisition events, Crosswalk counts playback-substitution events. Both are true; they measure different questions.'
+                    universe_note: 'SubIQ is a Crosswalk panel-observed measurement projected to the US digital population, applying strict first-watch attribution (30-day window, 180-day exclusion, Jul 17 drop). ~9.5M Peacock accounts observed initiating Obsession playback; ~138K new or reactivated subs (1.46% of viewers) attributed to Obsession under the strict definition. Crosswalk panel TVOD-substitution lens is the same viewer-level panel, projected to US digital — identified individuals tracked from TVOD title-page visits to Peacock playback. The ~618K playback number measures BEHAVIORAL SUBSTITUTION: TVOD abandoners who then played on Peacock. Most of the 618K already carried an active Peacock sub before Jul 17 and simply switched playback destination (paid TVOD → free-with-sub Peacock). The two numbers do not ladder 1:1: SubIQ counts subscription-acquisition events, Crosswalk counts playback-substitution events. Both are true; they measure different questions.'
                 },
                 time_to_conversion_distribution: [
                     { window: 'Within 24 hours',  share_pct: 41.2, cumulative_pct: 41.2 },
@@ -72298,11 +72312,11 @@ https://www.instagram.com/p/..."></textarea>
                 ],
                 strength_of_claim: {
                     heading: 'Why this is the strongest single output in the package',
-                    body: 'Two datasets, one story, laddered explicitly. SubIQ (Peacock first-party) confirms 9.5M accounts viewed Obsession and 138K were new or reactivated subs attributed to Obsession as their first watch (76K new + 62K reactivated, strict 30d attribution / 180d exclusion). Crosswalk panel adds a viewer-level substitution lens on the same universe: of 1.84M panelists who reached a TVOD title page without transacting, 618K then played Obsession on Peacock. Because the 618K measures playback-substitution and not subscription-acquisition, most of that 618K were already Peacock subs before Jul 17. Both measurements are ground truth for their respective questions; they are not competing estimates.',
+                    body: 'Two lenses on the same panel-observed universe, laddered explicitly. SubIQ (viewer-level, projected, strict first-watch attribution) reads ~9.5M Peacock accounts initiating Obsession playback and ~138K new or reactivated subs attributed to Obsession as their first watch (~76K new + ~62K reactivated, 30-day post-drop attribution / 180-day exclusion). Crosswalk panel TVOD-substitution lens (same viewers, different question) reads ~1.84M panelists who reached a TVOD title page without transacting, ~618K of whom then played on Peacock. The 618K measures playback substitution, not subscription acquisition: most were already Peacock subs before Jul 17. Both lenses are measurement outputs on the same panel, not competing estimates.',
                     caveats: [
                         'The 618K playback-substitution count and the 138K SubIQ sub-acquisition count measure DIFFERENT questions and do not ladder 1:1. SubIQ counts sub-acquisition events (first-watch attribution). Crosswalk counts playback-substitution events at the identified-viewer level.',
                         'Crosswalk panel figures (1.84M abandoners, 618K playback) are projected to U.S. digital population; confidence ±3.1pp on the playback conversion rate at n=1,842K.',
-                        'SubIQ 138K is a first-party Peacock account count — deterministic, not projected. Attribution logic: account newly acquired or reactivated (180d dormant) inside the 30d post-drop window, with Obsession viewed as the acquiring watch.',
+                        'SubIQ 138K is a panel-observed measurement projected to the US digital population. Attribution logic: viewer newly acquired or reactivated (180-day dormant) inside the 30-day post-drop window, with Obsession viewed as the acquiring watch. Reported as ~138K with a projection interval; the deck will be re-pulled at 30-day close on Aug 16.',
                         'The overlap between the 618K TVOD-abandoners-who-played and the 138K SubIQ acquired/reactivated is directionally small (~15-25K estimated). Most TVOD abandoners already carried an active Peacock sub — they didn\'t need to acquire one to substitute playback.',
                         'A subset of TVOD abandonment is normal price-elasticity behavior (window shopping). The 33.5% within-4d playback conversion rate against the Peacock hard-arrival date is the departure from that baseline.'
                     ]
@@ -72330,7 +72344,7 @@ https://www.instagram.com/p/..."></textarea>
                     subiq_first_watch_new_k: 76,
                     subiq_first_watch_reactivated_k: 62,
                     subiq_first_watch_share_of_signups_pct: 4.8,
-                    subiq_first_watch_method: 'First-party Peacock account logs. New or reactivated (180d+ dormant) accounts whose acquiring watch inside the 30d post-drop attribution window was Obsession.',
+                    subiq_first_watch_method: 'Panel-observed viewer-level measurement, projected to the US digital population. Viewers newly acquired or reactivated (180d+ dormant) whose acquiring Peacock watch inside the 30d post-drop attribution window was Obsession.',
                     reconciliation_note: 'The 1.78M "Obsession-attributed" number counts sign-ups whose digital-touchpoint pattern included Obsession pre-signup — a broad net that catches every sign-up who saw a trailer, searched, or read editorial. The 138K SubIQ number counts sign-ups whose actual acquiring watch on Peacock was Obsession — the strict definition. The 1.64M gap is sign-ups who touched Obsession creative but joined Peacock for other content that dropped the same week (multiple titles + sports + NBC catch-up + Bravo). Both are true; the SubIQ figure is the strict acquisition anchor.'
                 },
                 attribution_touchpoints: [
@@ -72353,7 +72367,7 @@ https://www.instagram.com/p/..."></textarea>
                     peacock_subs_temporary_k: 1329,
                     peacock_subs_participation: 'Peacock subscriber value accrues to NBCUniversal / Comcast. Content-owner holds no participation interest in Peacock ARPU, retention, or churn reduction.',
                     day90_cancel_path_k: Math.round(1329 * 0.342),
-                    read: 'Universal traded $57.8M of PERMANENT transactional revenue — booked, reported, and shared with the content-owner — for approximately 1.33M net-new Peacock signups accruing to a corporate sibling. 34.2% of those signups had entered a cancellation path by day 90, materially higher than the 18.6% Peacock baseline. This is the framing that carries weight with a participation auditor, an arbitrator, or a board.'
+                    read: 'The estimated $41-58M in displaced transactional revenue is not covered by any known intercompany transfer or arm\'s-length license fee between Peacock and the content-owner, based on public disclosures. In exchange, panel-observed data shows ~1.33M net-new Peacock signups attributable to Obsession, of which 34.2% had entered a cancellation path by day 90, materially higher than the 18.6% Peacock baseline. Whether this represents a bookable participation offset is a legal / accounting determination outside the scope of this measurement.'
                 },
                 read: 'Peacock sign-ups in the 30 days after Jul 17 ran at 2.53× the trailing-8-week baseline and 2.07× the same 2025 window. 62.4% of the incremental cohort carried an Obsession touchpoint in the two weeks prior; 74.8% of those were net-new to Peacock. Day-90 retention on the Obsession-attributed cohort is 14.9pp below the Peacock baseline. Permanent transactional revenue belonging to the content-owner was converted into a temporary, elevated-churn subscriber count belonging to a sibling.'
             },
@@ -72984,7 +72998,7 @@ https://www.instagram.com/p/..."></textarea>
                 + [
                     { label: 'Observed TVOD (17d)',        value: _jiqObpAbbrevUsd(d.obs_actual_tvod_usd_m),  sub: _jiqObpAbbrevK(d.obs_total_tvod_k) + ' transactions', accent: '#14b8a6' },
                     { label: 'Counterfactual (86.5d)',    value: _jiqObpAbbrevUsd(d.cf_86d_tvod_usd_m),      sub: _jiqObpAbbrevK(d.cf_total_86d_k) + ' transactions', accent: '#94a3b8' },
-                    { label: 'Displaced revenue',         value: _jiqObpAbbrevUsd(d.displaced_total_usd_m),  sub: d.displaced_transactions_display + ' transactions',   accent: '#ef4444' },
+                    { label: 'Est. displaced revenue (range)',         value: _jiqObpAbbrevUsd(d.displaced_total_usd_m),  sub: d.displaced_transactions_display + ' transactions',   accent: '#ef4444' },
                     { label: 'Blended ASP',                value: '$' + d.asp_blended_usd.toFixed(2),        sub: d.rental_share_pct + '% rent / ' + d.purchase_share_pct + '% buy', accent: '#f59e0b' }
                   ].map(function(t) {
                     return '<div style="padding:0.7rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:4px solid ' + t.accent + ';">'
@@ -73397,10 +73411,10 @@ https://www.instagram.com/p/..."></textarea>
             var subiqBox = '<div style="padding:0.85rem 1rem; border-radius:8px; background:rgba(20,184,166,0.06); border:1px solid rgba(20,184,166,0.32);">'
                 +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.55rem;">'
                 +     '<div>'
-                +       '<div style="font-size:0.6rem; opacity:0.8; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#5eead4;">SubIQ · Peacock first-party (ground truth)</div>'
-                +       '<div style="font-size:0.72rem; opacity:0.7; margin-top:0.1rem;">Account-level playback logs · strict first-watch attribution</div>'
+                +       '<div style="font-size:0.6rem; opacity:0.8; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#5eead4;">SubIQ · panel measurement (viewer-level, projected)</div>'
+                +       '<div style="font-size:0.72rem; opacity:0.7; margin-top:0.1rem;">Panel-observed · projected to US digital · strict first-watch attribution</div>'
                 +     '</div>'
-                +     '<div style="font-size:0.55rem; padding:2px 8px; background:rgba(20,184,166,0.18); color:#5eead4; border-radius:99px; font-weight:800; text-transform:uppercase; letter-spacing:0.05em;">DETERMINISTIC</div>'
+                +     '<div style="font-size:0.55rem; padding:2px 8px; background:rgba(20,184,166,0.18); color:#5eead4; border-radius:99px; font-weight:800; text-transform:uppercase; letter-spacing:0.05em;">STRICT / T+1</div>'
                 +   '</div>'
                 +   '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.55rem;">'
                 +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #14b8a6;">'
