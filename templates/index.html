@@ -26646,45 +26646,83 @@ https://www.instagram.com/p/..."></textarea>
                   + '</details>';
             }
 
+            // Cache the last-fetched assets so re-renders (from rate
+            // edits) don't need another API round-trip.
+            window.__iiqROICache = window.__iiqROICache || { slug: null, assets: null, ts: 0 };
+            function _iiqROIRenderFromCache() {
+                var host = document.getElementById('iiqROIContent');
+                if (!host) return;
+                try {
+                    var assets = (window.__iiqROICache && window.__iiqROICache.assets) || [];
+                    var rates  = _iiqROIActiveRates();
+                    var bd     = _iiqROICompute(assets, rates);
+                    var term   = (window.__intentIQ && window.__intentIQ.overview && window.__intentIQ.overview.terminology) || {};
+                    host.innerHTML = ''
+                      + _iiqROIHero(bd, rates, term)
+                      + _iiqROIChannelTable(bd, rates)
+                      + _iiqROIRateEditor(rates)
+                      + _iiqROIMethodology(rates);
+                } catch (err) {
+                    console.error('[ROI] render failed:', err);
+                    host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">ROI render error: ' + escapeHtml(err && err.message || String(err)) + '<br><span style="font-size:0.7rem; color:#94a3b8;">Check the browser console for a full stack trace.</span></div>';
+                }
+            }
+
             window.iiqROISetRate = function(id, val) {
                 var n = Number(val);
                 if (!isFinite(n) || n < 0) return;
                 window.__iiqROIOverrides = window.__iiqROIOverrides || {};
                 window.__iiqROIOverrides[id] = n;
-                // Re-render preserving user scroll position
+                // Re-render from cache so rate edits are instant.
                 var y = window.scrollY;
-                iiqRenderROI();
+                _iiqROIRenderFromCache();
                 setTimeout(function() { window.scrollTo(0, y); }, 0);
             };
             window.iiqROIResetRates = function() {
                 window.__iiqROIOverrides = {};
                 var y = window.scrollY;
-                iiqRenderROI();
+                _iiqROIRenderFromCache();
                 setTimeout(function() { window.scrollTo(0, y); }, 0);
             };
 
             window.iiqRenderROI = function() {
                 var slug = window.__intentIQ && window.__intentIQ.currentSlug;
                 var host = document.getElementById('iiqROIContent');
-                if (!host) return;
+                if (!host) { console.warn('[ROI] host div #iiqROIContent missing'); return; }
                 if (!slug) { host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem;">Load a campaign first.</div>'; return; }
-                host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem;">Loading ROI model...</div>';
+                // Serve from cache if same slug fetched within 5min
+                if (window.__iiqROICache.slug === slug && window.__iiqROICache.assets && (Date.now() - window.__iiqROICache.ts) < 300000) {
+                    console.log('[ROI] rendering from cache (' + window.__iiqROICache.assets.length + ' assets)');
+                    _iiqROIRenderFromCache();
+                    return;
+                }
+                console.log('[ROI] fetching /api/intent/' + slug + '/assets?window=all');
+                host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem;">Loading ROI model &mdash; fetching assets...</div>';
                 fetch('/api/intent/' + slug + '/assets?window=all', { credentials: 'same-origin' })
-                    .then(function(r) { return r.json(); })
+                    .then(function(r) {
+                        console.log('[ROI] response status', r.status);
+                        if (r.status === 401 || r.status === 403) {
+                            throw new Error('Not authorized (HTTP ' + r.status + ') - your session may have expired. Refresh the page and sign in again.');
+                        }
+                        if (!r.ok) {
+                            throw new Error('Server returned HTTP ' + r.status);
+                        }
+                        return r.json();
+                    })
                     .then(function(d) {
-                        if (!d.success) { host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem;">Failed: ' + escapeHtml(d.error || '') + '</div>'; return; }
+                        console.log('[ROI] response payload keys:', d && Object.keys(d));
+                        if (!d || !d.success) {
+                            host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">API returned failure: ' + escapeHtml((d && d.error) || 'no error message') + '</div>';
+                            return;
+                        }
                         var assets = d.cards || d.assets || [];
-                        var rates = _iiqROIActiveRates();
-                        var bd = _iiqROICompute(assets, rates);
-                        var term = (window.__intentIQ && window.__intentIQ.overview && window.__intentIQ.overview.terminology) || {};
-                        host.innerHTML = ''
-                          + _iiqROIHero(bd, rates, term)
-                          + _iiqROIChannelTable(bd, rates)
-                          + _iiqROIRateEditor(rates)
-                          + _iiqROIMethodology(rates);
+                        console.log('[ROI] got ' + assets.length + ' assets; sample:', assets[0]);
+                        window.__iiqROICache = { slug: slug, assets: assets, ts: Date.now() };
+                        _iiqROIRenderFromCache();
                     })
                     .catch(function(e) {
-                        host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem;">Failed: ' + escapeHtml(e.message || String(e)) + '</div>';
+                        console.error('[ROI] fetch chain failed:', e);
+                        host.innerHTML = '<div class="iiq-empty" style="padding:1.5rem; color:#fca5a5;">ROI load failed: ' + escapeHtml(e.message || String(e)) + '<br><span style="font-size:0.7rem; color:#94a3b8;">Check the browser console for a full stack trace.</span></div>';
                     });
             };
             // ============================================================
