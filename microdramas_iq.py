@@ -1322,45 +1322,116 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
         comp_payload = {'success': False, 'platforms': []}
     comp_platforms = comp_payload.get('platforms') or []
 
+    # Window-view helper: extract the SAME unit across platforms so
+    # the platform rollup is apples-to-apples. Both Peacock and the
+    # competitor pipelines settle on window-scoped unique views per
+    # title after the earlier standardization work; grab whichever
+    # field a given source populates.
+    def _title_window_views(t: dict) -> int:
+        # Peacock: view_window_estimate is the sum of the daily view
+        # curve clipped to the active window. Fall back to
+        # view_28d_estimate for the (rare) full-28d case.
+        v = t.get('view_window_estimate')
+        if isinstance(v, (int, float)) and v > 0:
+            return int(v)
+        v = t.get('view_28d_estimate')
+        if isinstance(v, (int, float)) and v > 0:
+            return int(v)
+        # Competitor: sum reads_by_date across observed dates - each
+        # entry is a rank-derived daily unique-view estimate after
+        # _derive_daily_reads_by_date, so the sum matches Peacock's
+        # window semantics.
+        rbd = t.get('reads_by_date') or {}
+        if rbd:
+            s = sum(int(x) for x in rbd.values()
+                     if isinstance(x, (int, float)))
+            if s > 0:
+                return s
+        # Last-resort fallback: use whatever read_count is on the
+        # title. Rank-derived and lifetime-ish, but at least
+        # non-zero so this title still contributes to the rollup.
+        rc = t.get('read_count')
+        if isinstance(rc, (int, float)) and rc > 0:
+            return int(rc)
+        return 0
+
     # --- Flatten with per-title platform tag + uniform sort key ---
+    # Also collect ALL pulled titles per platform (not just the
+    # top-N cross-platform winners) so the platform-total rollup
+    # reflects actual platform-wide activity in the window, not
+    # just what happens to land in the leaderboard.
     aggregated: list[dict] = []
+    per_platform_all: dict[str, dict] = {}
+
+    def _platform_slot(source: str, label: str) -> dict:
+        slot = per_platform_all.get(source)
+        if slot is None:
+            slot = {
+                'platform':        label,
+                'source':          source,
+                'total_views':     0,
+                'title_count':     0,
+                'top_title':       None,
+                'top_title_views': 0,
+            }
+            per_platform_all[source] = slot
+        return slot
 
     for t in pc_titles:
-        views = (t.get('view_window_estimate')
-                  if t.get('view_window_estimate') is not None
-                  else t.get('view_28d_estimate'))
-        # Stash the platform-side observed_dates ONTO the title so the
-        # frontend can render sparklines without needing a separate
-        # platform meta lookup.
+        views = _title_window_views(t)
         row = dict(t)
         row['platform_source'] = 'peacock'
         row['platform_label']  = 'Peacock'
-        row['sort_views']      = int(views) if isinstance(views, (int, float)) else 0
+        row['sort_views']      = views
         row['observed_dates']  = t.get('observed_dates') or []
         aggregated.append(row)
+        slot = _platform_slot('peacock', 'Peacock')
+        slot['total_views'] += views
+        slot['title_count'] += 1
+        if views > slot['top_title_views']:
+            slot['top_title']       = t.get('title') or t.get('series')
+            slot['top_title_views'] = views
 
     for p in comp_platforms:
         p_source = p.get('source') or ''
         p_label  = p.get('label') or p_source.title()
         p_obs    = p.get('observed_dates') or []
+        slot = _platform_slot(p_source, p_label)
         for t in (p.get('titles') or []):
-            reads = t.get('read_count')
+            views = _title_window_views(t)
             row = dict(t)
             row['platform_source'] = p_source
             row['platform_label']  = p_label
-            row['sort_views']      = int(reads) if isinstance(reads, (int, float)) else 0
-            # Copy the platform's observed_dates onto the title itself
-            # so competitor sparklines have the same self-contained
-            # shape as Peacock's.
+            row['sort_views']      = views
             row['observed_dates']  = p_obs
             aggregated.append(row)
+            slot['total_views'] += views
+            slot['title_count'] += 1
+            if views > slot['top_title_views']:
+                slot['top_title']       = t.get('title') or t.get('series')
+                slot['top_title_views'] = views
 
     aggregated.sort(key=lambda r: -int(r.get('sort_views') or 0))
     aggregated = aggregated[:top_n_final]
 
-    # Small stats block: how many titles came from each platform in
-    # the trimmed top-N list, for a "top 20 = 8 Peacock, 5 ReelShort..."
-    # summary in the header.
+    # Platform-total rollup: which streaming provider had the most
+    # views across ALL its tracked titles in this window. Sorted by
+    # total_views desc so the top of the list is the biggest
+    # provider by aggregate reach.
+    platform_totals = sorted(
+        list(per_platform_all.values()),
+        key=lambda x: -x.get('total_views', 0),
+    )
+    grand_total_views = sum(p.get('total_views', 0) for p in platform_totals)
+    # Attach a share-of-total percent per platform so the frontend can
+    # render the rollup as a stacked bar / horizontal chart without
+    # having to compute the denominator on the client.
+    for p in platform_totals:
+        p['share_pct'] = (round(p['total_views'] / grand_total_views * 100, 1)
+                          if grand_total_views > 0 else 0.0)
+
+    # Small stats block (kept for backward-compat with the header): how
+    # many titles from each platform ended up in the trimmed top-N.
     platform_counts: dict[str, int] = {}
     for r in aggregated:
         lbl = r.get('platform_label') or 'Unknown'
@@ -1379,11 +1450,13 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
             'start_date':  filters.get('start_date') or None,
             'end_date':    filters.get('end_date') or None,
         },
-        'generated_at':   datetime.now(timezone.utc).isoformat(),
-        'titles':         aggregated,
-        'platform_mix':   platform_mix,
-        'total_pulled':   len(pc_titles) + sum(len(p.get('titles') or [])
-                                                for p in comp_platforms),
+        'generated_at':      datetime.now(timezone.utc).isoformat(),
+        'titles':            aggregated,
+        'platform_mix':      platform_mix,
+        'platform_totals':   platform_totals,
+        'grand_total_views': grand_total_views,
+        'total_pulled':      len(pc_titles) + sum(len(p.get('titles') or [])
+                                                    for p in comp_platforms),
     }
     _view_cache_set(_cache_key, payload)
     return payload
