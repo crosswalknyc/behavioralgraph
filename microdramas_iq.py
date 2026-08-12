@@ -428,6 +428,14 @@ def _estimate_completion(title: dict,
     paywall_conv = round((paid_pct / free_completion * 100.0)
                           if free_completion > 0 else 0.0, 1)
     series_completion = curve[-1]['pct']
+    # Payer completion: of viewers who crossed the paywall (paid at
+    # least one ep), what % went on to finish the entire series.
+    # series_completion is % of ALL viewers who finished; dividing by
+    # paid_pct rebases to the payer cohort. Complements
+    # paywall_conversion which measures the OTHER end of the payer
+    # funnel (free-tier finishers -> at-least-one-paid-ep).
+    payer_completion = round((series_completion / paid_pct * 100.0)
+                              if paid_pct > 0 else 0.0, 1)
 
     return {
         'source':                 source,
@@ -439,6 +447,7 @@ def _estimate_completion(title: dict,
         'series_completion_pct':  round(series_completion, 2),
         'free_only_pct':          free_only_pct,
         'paid_pct':               round(paid_pct, 1),
+        'payer_completion_pct':   payer_completion,
     }
 
 
