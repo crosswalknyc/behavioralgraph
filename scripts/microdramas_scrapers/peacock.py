@@ -52,13 +52,18 @@ logger = logging.getLogger(__name__)
 
 
 PEACOCK_HUB_URLS = [
-    # Primary microdrama hub
+    # Primary microdrama hub - dedicated microdrama surface
     ('Microdramas hub',   'https://www.peacocktv.com/stream/microdramas'),
-    # Secondary discovery surfaces where microdramas surface alongside
-    # other short-form content
+    # Peacock Shorts - vertical short-form product where microdramas
+    # live. Some non-drama shorts can appear (comedy clips etc.), so
+    # per-rail + per-item filtering below keeps only microdrama rows.
     ('Peacock Shorts',    'https://www.peacocktv.com/stream-tv/peacock-shorts'),
-    ('Homepage',          'https://www.peacocktv.com/'),
-    ('Trending',          'https://www.peacocktv.com/stream/trending'),
+    # NB: previously included /  (Homepage) + /stream/trending, but
+    # those are full-catalog surfaces that dump Yellowstone / SNF /
+    # Bridgerton / regular Peacock TV+movies into the walker. Per the
+    # product decision "just microdramas, nothing else" we only pull
+    # from microdrama-dedicated surfaces now. If we need broader
+    # coverage later, add a new dedicated URL - never a general one.
 ]
 
 
@@ -66,6 +71,68 @@ _NEXT_DATA_RE = re.compile(
     r'<script[^>]+id="__NEXT_DATA__"[^>]*>(.+?)</script>',
     re.DOTALL | re.IGNORECASE,
 )
+
+
+# ---------------------------------------------------------------- microdrama classification
+# Positive rail-name signals: a rail whose title/name contains any of
+# these strings is treated as a microdrama rail and its items are
+# admitted to the catalog. Everything else on a page is dropped.
+_MICRODRAMA_RAIL_TOKENS = (
+    'microdrama', 'micro-drama', 'micro drama',
+    'vertical', 'short-form', 'short form', 'shorts',
+    'reelshort', 'dramabox',
+)
+
+# Positive title signals: even in an unnamed / mislabeled rail, these
+# tropes are strong indicators the item IS a microdrama. Kept
+# permissive so legit vertical dramas aren't accidentally dropped.
+_MICRODRAMA_TITLE_TOKENS = (
+    'billionaire', 'tycoon',
+    'ceo', 'the boss', 'my boss', 'the alpha', 'alpha ',
+    'mafia', 'cartel', 'assassin', 'bodyguard',
+    'werewolf', 'vampire', 'luna', 'omega', 'dragon',
+    'bride', 'wife', 'husband', 'fiancee', 'fiance',
+    'marriage', 'married to', 'contract', 'fake ', 'runaway',
+    'stepbrother', 'stepsister', 'stepson', 'stepdaughter',
+    'reincarnat', 'rebirth', 'revenge',
+    'substitute', 'forbidden', 'secret', 'doting',
+    'ex-husband', 'ex husband', 'ex-wife', 'ex wife',
+    "boss's", "billionaire's", "ceo's", "prince's", "king's",
+    'divorced wife', 'ivy elite',
+)
+
+# Deep-link path segments that indicate a NON-microdrama surface on
+# Peacock. Even if the title looks microdrama-ish, if the deep link
+# points to /movies/, /shows/, /sports/, etc. we drop the row - Peacock
+# never routes microdramas through those paths.
+_NON_MICRODRAMA_PATH_TOKENS = (
+    '/movies/', '/movie/', '/films/',
+    '/sports/', '/live/', '/nfl/', '/premier-league/', '/wwe/',
+    '/news/', '/kids/', '/telemundo/',
+    '/tv/', '/shows/', '/show/', '/series/', '/season/',
+    '/originals/', '/late-night/', '/reality/',
+)
+
+
+def _rail_looks_microdrama(rail_name: str) -> bool:
+    if not rail_name:
+        return False
+    s = rail_name.lower()
+    return any(tok in s for tok in _MICRODRAMA_RAIL_TOKENS)
+
+
+def _title_looks_microdrama(title: str) -> bool:
+    if not title:
+        return False
+    s = title.lower()
+    return any(tok in s for tok in _MICRODRAMA_TITLE_TOKENS)
+
+
+def _deep_link_looks_non_microdrama(deep_link: str) -> bool:
+    if not deep_link:
+        return False
+    s = deep_link.lower()
+    return any(tok in s for tok in _NON_MICRODRAMA_PATH_TOKENS)
 
 
 # Curated baseline - Peacock microdrama titles that are known to be in
@@ -171,13 +238,32 @@ def _extract_next_data(html: str) -> Optional[dict]:
         return None
 
 
-def _walk_rails(node: Any, out: list[dict]) -> None:
+def _walk_rails(node: Any, out: list[dict], *,
+                 page_is_microdrama_only: bool = False) -> None:
     """Depth-first walk of the Next.js hydration blob. Any node that
     looks like a rail (has `items[]` with title-bearing children) gets
-    flattened."""
+    flattened.
+
+    Filters items to microdramas only:
+      - If the surrounding rail's name/title matches a microdrama
+        signal (see _MICRODRAMA_RAIL_TOKENS) OR the entire page is a
+        microdrama-only surface, the rail is admitted and every item
+        on it is tagged is_microdrama=True.
+      - Otherwise, the walker still recurses into children (to catch
+        nested microdrama rails) but the items on THIS rail are
+        dropped, matching the product rule "just microdramas".
+      - Item-level safety net: if the item's deep_link routes to a
+        known non-microdrama path segment (/movies/, /sports/, etc.),
+        we drop it even inside a microdrama rail.
+    """
     if isinstance(node, dict):
         items = node.get('items') or node.get('tiles') or node.get('entries')
         if isinstance(items, list) and items:
+            rail_name = str(node.get('title') or node.get('headline')
+                             or node.get('name') or node.get('label')
+                             or '').strip()
+            rail_is_microdrama = (page_is_microdrama_only
+                                   or _rail_looks_microdrama(rail_name))
             for item in items:
                 if not isinstance(item, dict):
                     continue
@@ -186,25 +272,42 @@ def _walk_rails(node: Any, out: list[dict]) -> None:
                           or (item.get('metadata') or {}).get('title'))
                 if not title:
                     continue
+                title_str = str(title).strip()
+                deep_link = (item.get('deepLink')
+                              or item.get('url')
+                              or item.get('href')
+                              or '')
+                # Even in a microdrama rail, if the item's deep link
+                # routes through a non-microdrama path we drop it.
+                if _deep_link_looks_non_microdrama(deep_link):
+                    continue
+                # Admit if the rail is microdrama OR if the title
+                # itself matches microdrama tropes strongly enough to
+                # override an unlabeled rail (defensive: sometimes rail
+                # titles come back empty in Peacock's Next.js payload).
+                is_micro = rail_is_microdrama or _title_looks_microdrama(title_str)
+                if not is_micro:
+                    continue
                 out.append({
-                    'title': str(title).strip(),
-                    'series': (item.get('seriesTitle') or item.get('series')
-                                or item.get('showTitle') or '').strip(),
+                    'title':     title_str,
+                    'series':    (item.get('seriesTitle') or item.get('series')
+                                    or item.get('showTitle') or '').strip(),
                     'poster_url': (item.get('image')
                                     or item.get('poster')
                                     or (item.get('images') or {}).get('poster')
                                     or ''),
-                    'deep_link': (item.get('deepLink')
-                                    or item.get('url')
-                                    or item.get('href')
-                                    or ''),
-                    'episodes': item.get('episodes') or [],
+                    'deep_link': deep_link,
+                    'episodes':  item.get('episodes') or [],
+                    'rail_name': rail_name,
+                    'is_microdrama': True,
                 })
         for v in node.values():
-            _walk_rails(v, out)
+            _walk_rails(v, out,
+                         page_is_microdrama_only=page_is_microdrama_only)
     elif isinstance(node, list):
         for v in node:
-            _walk_rails(v, out)
+            _walk_rails(v, out,
+                         page_is_microdrama_only=page_is_microdrama_only)
 
 
 def _dedupe_and_rank(rows: list[dict]) -> list[dict]:
@@ -242,19 +345,33 @@ def fetch_live() -> list[dict]:
             logger.info('peacock: %s returned no __NEXT_DATA__ blob '
                          '(likely unauthenticated shell)', label)
             continue
+        # The /stream/microdramas hub is by construction a microdrama-
+        # only page, so any rail on it - even one with a blank title -
+        # gets admitted. /stream-tv/peacock-shorts hosts both microdramas
+        # and non-drama shorts, so we still gate per-rail there.
+        page_is_micro_only = '/microdramas' in url
         pulled: list[dict] = []
-        _walk_rails(data, pulled)
+        _walk_rails(data, pulled,
+                     page_is_microdrama_only=page_is_micro_only)
         rows.extend(pulled)
         if pulled:
-            logger.info('peacock: %s -> %d titles', label, len(pulled))
+            logger.info('peacock: %s -> %d microdrama titles',
+                         label, len(pulled))
 
     return _dedupe_and_rank(rows)
 
 
 def fetch_baseline() -> list[dict]:
     """Curated Peacock microdrama slate - used when live auth fails
-    (no donated cookies yet) so the dashboard renders on day 0."""
-    return [dict(t) for t in CURATED_BASELINE_TITLES]
+    (no donated cookies yet) so the dashboard renders on day 0. Every
+    entry is a microdrama by construction, so we tag it explicitly."""
+    out = []
+    for t in CURATED_BASELINE_TITLES:
+        row = dict(t)
+        row['is_microdrama'] = True
+        row.setdefault('rail_name', 'Curated microdrama baseline')
+        out.append(row)
+    return out
 
 
 def fetch() -> dict:
