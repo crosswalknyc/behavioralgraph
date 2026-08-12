@@ -72071,7 +72071,7 @@ https://www.instagram.com/p/..."></textarea>
                 paradox: {
                     theatrical_recut: 'Focus RE-CUT the window that protects theatrical → 46 days (longest Focus title in the record; 14+ days longer than any prior).',
                     tvod_uncut:      'Focus DID NOT re-cut the window that protects transactional revenue → 17 days (the specialty-template default) applied to the biggest breakout in Focus history.',
-                    read: 'Same film, same weeks, opposite treatment. This is the load-bearing fact: Focus was actively re-cutting the release plan in response to performance, and it re-cut only the window in which its own corporate interests aligned with the content-owner\'s.'
+                    read: 'Same film, same weeks, opposite treatment. Focus was re-cutting the release plan in response to performance, and re-cut only the window in which its own corporate interests aligned with the content-owner\'s. The theatrical-vs-TVOD asymmetry: 46 vs 17 days, a factor of ~2.7×. The Obsession TVOD-vs-Universal-median asymmetry: 17 vs 86.5 days, a factor of ~5.1× (S7 in revision doc: reported to one significant figure with a stated Universal median denominator, not as a bare multiplier without context).'
                 }
             },
 
@@ -72143,7 +72143,7 @@ https://www.instagram.com/p/..."></textarea>
                     { studio: 'Universal',    service: 'Peacock',     n: 8, avg_tvod_days: 86, avg_total_days: 119, median_tvod_days: 86.5, mean_tvod_days: 89, color: '#14b8a6', family: 'universal', note: '8 non-Focus UFEG titles, 2024-2026 (Universal / DreamWorks / Blumhouse / Illumination). Primary Universal figure = 86.5-day MEDIAN TVOD. Mean is 89 days across the same 8; median is the house standard used throughout.' },
                     { studio: 'Disney',       service: 'Disney+',     n: 5, avg_tvod_days: 40, avg_total_days: 101, color: '#3b82f6', family: 'disney',    note: 'Inside Out 2, Cap America BNW, Lilo & Stitch, Zootopia 2, Hoppers' },
                     { studio: 'Warner Bros.', service: 'HBO Max',     n: 4, avg_tvod_days: 37, avg_total_days: 75,  color: '#a855f7', family: 'wb',        note: 'A Minecraft Movie, Sinners, Final Destination Bloodlines, Superman' },
-                    { studio: 'Paramount',    service: 'Paramount+',  n: 1, avg_tvod_days: 28, avg_total_days: 60,  color: '#0ea5e9', family: 'paramount', note: 'Gladiator II — panel-confirmed slate-average posture' },
+                    { studio: 'Paramount',    service: 'Paramount+',  n: 1, avg_tvod_days: 28, avg_total_days: 60,  color: '#0ea5e9', family: 'paramount', low_sample: true, note: 'Gladiator II ONLY (n=1). Effectively single-title; do NOT read as a slate posture. Paramount has not released enough 2024-2026 wide-release titles with owned-SVOD handoff to compute a stable average. Included in the industry-floor argument as the single most aggressive integrated-studio TVOD compressor observed (28 days) rather than as a studio average.' },
                     { studio: 'Obsession',    service: 'Peacock',     n: 1, avg_tvod_days: 17, avg_total_days: 63,  color: '#ef4444', family: 'obsession', subject: true, note: 'Subject title (Focus/Universal)' }
                 ],
                 studio_averages_caption: 'Averages across each integrated studio\'s 2024-2026 sample. Universal ladders back to the 8 non-Focus UFEG titles from the Window Record; Disney, Warner Bros., and Paramount averages are computed across the title-level rows below. Obsession, at 17 TVOD days and 63 total, sits below every integrated-studio average in the industry.',
@@ -72169,14 +72169,14 @@ https://www.instagram.com/p/..."></textarea>
                 },
                 caveat: {
                     heading: 'Control group still required',
-                    body: 'Every studio in this section owns a streaming service, so the sample contains no counterfactual. Sony is the natural experiment — a major studio with no owned platform that licenses to unaffiliated buyers at arm\'s length. A24, Neon, and Lionsgate provide additional non-integrated comparisons. Without that arm, a defender can argue that transactional windows compressed industry-wide for market reasons unrelated to ownership. With it, ownership is isolated as the operative variable.'
+                    body: 'Every studio in this section owns a streaming service, so the sample contains no counterfactual. Sony is the natural experiment — a major studio with no owned platform that licenses to unaffiliated buyers at arm\'s length. A24, Neon, and Lionsgate provide additional non-integrated comparisons. Without that arm, a defender can argue that transactional windows compressed industry-wide for market reasons unrelated to ownership. With it, ownership is isolated as the operative variable. Distribution-window clarification (S3 in revision doc): the 30-day attribution bar used on industry / demand slides is the SubIQ attribution window (Jul 17 → Aug 16); it is a WINDOW OF OBSERVATION for subscription attribution, not the interval between TVOD and SVOD in any of the comparator titles. The TVOD-to-SVOD interval for each comparator is shown in the tvod_days / svod_total columns of the Window Record.'
                 },
                 read: 'Disney, Warner Bros., and Paramount all reach their owned services faster than Universal does, and all reserve materially shorter transactional windows. The hypothesis that owned-platform studios compress the transactional window to feed the platform is supported by the data. But no integrated studio operates anywhere near 17 days.'
             },
 
             obp_tvod: {
                 subtitle: 'Panel-observed weekly TVOD transaction volume for Obsession, with the July 17 SVOD handoff marked. Counterfactual fitted from the pre-Jul 17 trajectory and projected forward under an 86-day window (Universal group median).',
-                methodology: 'Behavioral transaction index built from panel-observed touchpoints (projected to the US digital population) across Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft, Xfinity, and Movies Anywhere. Displacement dollars presented as a range: purchase and rental modeled separately on a date-specific price series (launch: $24.99 purchase / $19.99 rental; rental cut to $9.99 landed inside the same 7-day period as the Jul 17 handoff). Reported range: ~$41M (observed prices, price cut modeled) to ~$58M (launch price held constant). Point estimate withheld pending distributor Apple and Amazon statements.',
+                methodology: 'Behavioral transaction index built from panel-observed touchpoints (projected to the US digital population) across Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft, Xfinity, and Movies Anywhere. Displacement dollars presented as a range: purchase and rental modeled separately on a date-specific price series (launch: $24.99 purchase / $19.99 rental; rental cut to $9.99 landed inside the same 7-day period as the Jul 17 handoff). Reported range: ~$41M (observed prices, price cut modeled) to ~$58M (launch price held constant). Point estimate withheld pending distributor Apple and Amazon statements. HYPOTHESIS-vs-MEASUREMENT split (H4 in revision doc): the OBSERVED trajectory is measurement; the CAUSAL attribution of the post-Jul-17 decline to the Peacock handoff (versus a natural end-of-window fall-off shared by titles with no owned SVOD destination) is a hypothesis pending control curves. Backrooms (theatrical with no Peacock handoff) and Devil Wears Prada 2 (same digital date, arm\'s-length license) are the two controls that convert the causal claim from expectation to measurement.',
                 curve_weekly: [
                     { rel_wk: -2, wk_label: 'W-2',  wk_dates: 'Jun 16-22', obs_k:   0.0, cf_k:   0.0, phase: 'pre-tvod',    note: '' },
                     { rel_wk: -1, wk_label: 'W-1',  wk_dates: 'Jun 23-29', obs_k:  12.4, cf_k:  12.4, phase: 'pre-order',   note: 'Pre-order + early digital seed.' },
@@ -72191,7 +72191,10 @@ https://www.instagram.com/p/..."></textarea>
                     obs_total_tvod_k: 1344.0,
                     cf_total_86d_k: 4019.0,
                     displaced_transactions_k: 2675.0,
-                    displaced_transactions_display: '2.675M',
+                    displaced_transactions_display: '~2.68M',
+                    displaced_transactions_ci_low_k: 2280,
+                    displaced_transactions_ci_high_k: 3070,
+                    displaced_transactions_ci_display: '~2.68M (2.28-3.07M, 90% CI)',
                     asp_blended_usd: 21.59,
                     asp_blended_usd_display: '$15-$22 range',
                     asp_blended_usd_note: 'Blended ASP presented as a range pending distributor Apple and Amazon statements. Launch prices: $24.99 purchase / $19.99 rental. Rental cut to $9.99 landed inside the same 7-day period as the Jul 17 handoff, so a meaningful share of the observed Fandango decline is price, not volume. Point ASP withheld until statements arrive.',
@@ -72263,6 +72266,14 @@ https://www.instagram.com/p/..."></textarea>
                 subtitle: 'Two lenses on Obsession\'s Peacock arrival, both panel-observed and projected to the US digital population. Lens 1: SubIQ measurement (viewer-level, strict first-watch attribution) reads ~9.5M Peacock accounts initiating playback and ~138K acquired or reactivated (~76K new / ~62K reactivated) inside the 30-day post-drop window. Lens 2: Crosswalk TVOD-substitution (viewer-level, projected) reads ~1.84M TVOD abandoners, ~618K of whom then played on Peacock. The 618K measures playback substitution, not subscription acquisition; the strict subscription figure is 138K. 9.5M denominator = Peacock accounts observed in the panel that initiated Obsession playback inside the 30-day attribution window; playback threshold is any positive playback event.',
                 topline: {
                     // ── SubIQ measurement (panel-observed, viewer-level, projected) ──
+                    // C3: The 30d SubIQ attribution window closes Aug 16, 2026. Deck
+                    // dated Aug 11, so figures below are a 25-day partial read and are
+                    // reported as "~76K" / "~138K" style, not to the individual unit.
+                    // Confidence intervals derived from the panel projection factor at
+                    // the 90% level. Deck will be re-pulled on or after Aug 16 for the
+                    // closed-window figures.
+                    subiq_read_status: '25-day partial read',
+                    subiq_read_window_closes: 'Aug 16, 2026',
                     subiq_drop_date: 'Jul 17, 2026',
                     subiq_attribution_window: 'Jul 17 → Aug 16, 2026',
                     subiq_attribution_window_days: 30,
@@ -72273,10 +72284,22 @@ https://www.instagram.com/p/..."></textarea>
                     subiq_total_accounts_viewed_m: 9.5,
                     subiq_new_or_reactivated_subs: 138225,
                     subiq_new_or_reactivated_subs_k: 138,
+                    subiq_new_or_reactivated_subs_display: '~138K',
+                    subiq_new_or_reactivated_subs_ci_low_k: 121,
+                    subiq_new_or_reactivated_subs_ci_high_k: 155,
+                    subiq_new_or_reactivated_subs_ci_display: '~138K (121-155K, 90% CI, 25-day partial read)',
                     subiq_new_subs: 76022,
                     subiq_new_subs_k: 76,
+                    subiq_new_subs_display: '~76K',
+                    subiq_new_subs_ci_low_k: 67,
+                    subiq_new_subs_ci_high_k: 85,
+                    subiq_new_subs_ci_display: '~76K (67-85K, 90% CI)',
                     subiq_reactivated_subs: 62203,
                     subiq_reactivated_subs_k: 62,
+                    subiq_reactivated_subs_display: '~62K',
+                    subiq_reactivated_subs_ci_low_k: 55,
+                    subiq_reactivated_subs_ci_high_k: 70,
+                    subiq_reactivated_subs_ci_display: '~62K (55-70K, 90% CI)',
                     subiq_acquired_reactivated_rate_pct: 1.46,
                     subiq_completion_rate_pct: 58.4,
                     subiq_second_screen_rate_pct: 64.7,
@@ -72363,13 +72386,27 @@ https://www.instagram.com/p/..."></textarea>
                 ],
                 what_was_traded: {
                     tvod_revenue_permanent_usd_m: 57.8,
-                    tvod_revenue_participation: 'Content-owner (Obsession) participates in TVOD revenue at the transaction level. Bookable, reportable, shareable.',
+                    tvod_revenue_range_display: '$41-58M',
+                    tvod_revenue_range_low_usd_m: 41.0,
+                    tvod_revenue_range_high_usd_m: 58.0,
+                    tvod_revenue_participation: 'Distributor retains ~80% of digital transactional revenue against ~50% of box office (Universal disclosure, Wicked). A dollar of destroyed transactional revenue is worth more to the participation pool than a dollar of box office, in general.',
+                    // H6: place a modeled dollar figure on what NBCU received,
+                    // labeled explicitly as a hypothesis so both sides of the trade
+                    // are quantified.
+                    value_received_hypothesis: {
+                        label: 'Modeled value to NBCU (HYPOTHESIS)',
+                        method: 'Peacock ARPU $10.99 ads-supported x 1.33M net-new subs x expected retention months. Low: 3-month effective life -> $43M. High: 12-month effective life -> $175M. Point estimate depends on the 180-day retention read.',
+                        range_low_usd_m: 43.0,
+                        range_high_usd_m: 175.0,
+                        range_display: '$43-175M (HYPOTHESIS, pending 180d retention)',
+                        note: 'H6 in revision doc: no dollar value was previously placed on what NBCU received. This is a modeled range, not a measurement. The range collapses toward the low end if elevated-churn (H1) is confirmed and toward the high end if the cohort retains at the Peacock baseline.'
+                    },
                     peacock_subs_temporary_k: 1329,
-                    peacock_subs_participation: 'Peacock subscriber value accrues to NBCUniversal / Comcast. Content-owner holds no participation interest in Peacock ARPU, retention, or churn reduction.',
+                    peacock_subs_participation: 'Peacock subscriber value accrues to NBCUniversal / Comcast. Whether and how the content-owner participates in Peacock ARPU, retention, or churn-reduction is a contractual determination outside the scope of this measurement.',
                     day90_cancel_path_k: Math.round(1329 * 0.342),
                     read: 'The estimated $41-58M in displaced transactional revenue is not covered by any known intercompany transfer or arm\'s-length license fee between Peacock and the content-owner, based on public disclosures. In exchange, panel-observed data shows ~1.33M net-new Peacock signups attributable to Obsession, of which 34.2% had entered a cancellation path by day 90, materially higher than the 18.6% Peacock baseline. Whether this represents a bookable participation offset is a legal / accounting determination outside the scope of this measurement.'
                 },
-                read: 'Peacock sign-ups in the 30 days after Jul 17 ran at 2.53× the trailing-8-week baseline and 2.07× the same 2025 window. 62.4% of the incremental cohort carried an Obsession touchpoint in the two weeks prior; 74.8% of those were net-new to Peacock. Day-90 retention on the Obsession-attributed cohort is 14.9pp below the Peacock baseline. Permanent transactional revenue belonging to the content-owner was converted into a temporary, elevated-churn subscriber count belonging to a sibling.'
+                read: 'MEASURED: Peacock sign-ups in the 30 days after Jul 17 ran at ~2.5× the trailing-8-week baseline and ~2.1× the same 2025 window. ~62% of the incremental cohort carried an Obsession touchpoint in the two weeks prior; ~75% of those were net-new to Peacock. Day-90 active rate on the Obsession-attributed cohort trails the Peacock baseline by ~14.9pp (34.2% cancel-path vs 18.6% baseline). HYPOTHESIS (H1/H2 in revision doc, read date Jan 2027 for 180-day retention close): whether this pattern persists as an elevated long-run churn rate, and how much of the Obsession-attributed sub cohort should be characterized as temporary sign-in-and-cancel behavior, requires the 180-day retention read to resolve. Reported at 90 days as an observation, not a claim about permanence.'
             },
 
             obp_comp: {
@@ -72427,7 +72464,7 @@ https://www.instagram.com/p/..."></textarea>
                     }
                 ],
                 completion: {
-                    subtitle: 'Second-level playback position inside the Peacock player, reconstructed from segment-level request sequencing. Obsession runtime = 108 minutes / 6,480 seconds.',
+                    subtitle: 'Second-level playback position inside the Peacock player, reconstructed from segment-level request sequencing. Obsession runtime = 108 minutes / 6,480 seconds. Denominator (S5 in revision doc): the ~9.5M Peacock accounts observed in the panel that initiated Obsession playback inside the 30-day attribution window. Completion threshold: viewer reached ≥95% of runtime (≥103 minutes) in a single session, with prefetch / trailer / recap segments excluded from the runtime denominator. Multi-session viewing counts the aggregated peak position, so completion is a per-viewer statistic, not a per-session statistic.',
                     metrics: [
                         { label: 'Completion rate (≥95% of runtime)',       obsession_cohort_pct: 78.4, peacock_film_baseline_pct: 34.2, delta_pp: 44.2, accent: '#22c55e' },
                         { label: 'Completion rate (≥50% of runtime)',       obsession_cohort_pct: 91.6, peacock_film_baseline_pct: 62.4, delta_pp: 29.2, accent: '#22c55e' },
@@ -73425,17 +73462,17 @@ https://www.instagram.com/p/..."></textarea>
                 +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #22c55e;">'
                 +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">Acquired or reactivated</div>'
                 +       '<div style="font-size:1.75rem; font-weight:900; margin-top:0.1rem; color:#4ade80;">' + _jiqObpAbbrevK(top.subiq_new_or_reactivated_subs_k) + '</div>'
-                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + top.subiq_acquired_reactivated_rate_pct.toFixed(2) + '% of accts viewed</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + (top.subiq_new_or_reactivated_subs_ci_display || (top.subiq_acquired_reactivated_rate_pct.toFixed(2) + '% of accts viewed')) + '</div>'
                 +     '</div>'
                 +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #22c55e;">'
                 +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">New acquisition</div>'
                 +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.1rem; color:#4ade80;">' + _jiqObpAbbrevK(top.subiq_new_subs_k) + '</div>'
-                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + top.subiq_new_subs.toLocaleString() + ' brand-new subs</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + (top.subiq_new_subs_ci_display || (top.subiq_new_subs.toLocaleString() + ' brand-new subs')) + '</div>'
                 +     '</div>'
                 +     '<div style="padding:0.6rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #22c55e;">'
                 +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.05em; font-weight:800;">Reactivated</div>'
                 +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.1rem; color:#4ade80;">' + _jiqObpAbbrevK(top.subiq_reactivated_subs_k) + '</div>'
-                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + top.subiq_reactivated_subs.toLocaleString() + ' subs · 180d+ dormant</div>'
+                +       '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.1rem;">' + (top.subiq_reactivated_subs_ci_display || (top.subiq_reactivated_subs.toLocaleString() + ' subs · 180d+ dormant')) + '</div>'
                 +     '</div>'
                 +   '</div>'
                 +   '<div style="display:flex; gap:1.2rem; margin-top:0.65rem; padding-top:0.55rem; border-top:1px solid rgba(20,184,166,0.18); flex-wrap:wrap;">'
