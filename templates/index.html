@@ -31922,12 +31922,49 @@ https://www.instagram.com/p/..."></textarea>
                 rows = rows.filter(function(a) { return (Number(a.ext_view_count) || 0) > 0; });
 
                 // Pick: top by views unless user has clicked something specific.
+                // Selection can be a raw asset_id OR a special '__PHASE__<name>' token
+                // that renders the phase-aggregate detail instead of a single asset.
                 var topByViews = rows.slice().sort(function(a,b){ return (Number(b.ext_view_count) || 0) - (Number(a.ext_view_count) || 0); });
                 var pickedId = window[_iiqJrnPickKey()];
+                var pickedPhase = null;
                 var pickedAsset = null;
-                if (pickedId) pickedAsset = rows.find(function(a) { return String(a.asset_id) === String(pickedId); });
-                if (!pickedAsset) pickedAsset = topByViews[0] || null;
-                if (pickedAsset) window[_iiqJrnPickKey()] = pickedAsset.asset_id;
+                if (pickedId && String(pickedId).indexOf('__PHASE__') === 0) {
+                    pickedPhase = String(pickedId).slice('__PHASE__'.length);
+                    // Verify the phase still has assets after filters; if not, fall back to top asset.
+                    var phaseAssetCheck = rows.filter(function(a) { return (a.phase_name || '') === pickedPhase; });
+                    if (!phaseAssetCheck.length) { pickedPhase = null; }
+                }
+                if (!pickedPhase) {
+                    if (pickedId) pickedAsset = rows.find(function(a) { return String(a.asset_id) === String(pickedId); });
+                    if (!pickedAsset) pickedAsset = topByViews[0] || null;
+                    if (pickedAsset) window[_iiqJrnPickKey()] = pickedAsset.asset_id;
+                }
+
+                // Phase list (in phase_order if overview.phases is available;
+                // else discovery order from assets). Each phase becomes a
+                // campaign-rollup pill + dropdown entry.
+                var _iiqJrnOvPhases = ((window.__intentIQ && window.__intentIQ.overview && window.__intentIQ.overview.phases) || []);
+                var phaseOrder = {};
+                _iiqJrnOvPhases.forEach(function(p, i) {
+                    if (p && p.phase_name) phaseOrder[p.phase_name] = (typeof p.phase_order === 'number') ? p.phase_order : (i + 1);
+                });
+                var phaseColorByName = {};
+                _iiqJrnOvPhases.forEach(function(p) { if (p && p.phase_name) phaseColorByName[p.phase_name] = p.color_hex || null; });
+                var phaseCountsRaw = {};
+                var phaseViewsRaw  = {};
+                rows.forEach(function(a) {
+                    var pn = a.phase_name || '';
+                    if (!pn) return;
+                    phaseCountsRaw[pn] = (phaseCountsRaw[pn] || 0) + 1;
+                    phaseViewsRaw[pn]  = (phaseViewsRaw[pn]  || 0) + (Number(a.ext_view_count) || 0);
+                });
+                var phaseNames = Object.keys(phaseCountsRaw).sort(function(a, b) {
+                    var oa = phaseOrder[a], ob = phaseOrder[b];
+                    if (oa != null && ob != null) return oa - ob;
+                    if (oa != null) return -1;
+                    if (ob != null) return 1;
+                    return a.localeCompare(b);
+                });
 
                 var html = '';
 
@@ -31993,24 +32030,56 @@ https://www.instagram.com/p/..."></textarea>
                 html +=   iiqSummaryTile('Shared / re-posted', fmtCompact(aggAfter.shared), _pctOfV(aggAfter.shared).toFixed(1) + '% re-shared to social');
                 html += '</div>';
 
-                // ===== Asset picker (top-8 pills + full dropdown) =====
+                // ===== Asset picker (campaign-rollup pills + top-8 asset pills + full dropdown) =====
                 var topAssets = topByViews.slice(0, 8);
                 html += '<div class="iiq-card" style="padding:0.65rem 0.85rem; margin-bottom:0.6rem;">';
                 html +=   '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.45rem 0.75rem; margin-bottom:0.45rem;">';
                 html +=     '<div style="font-size:0.82rem; color:#e2e8f0; font-weight:600;">Pick an asset to inspect</div>';
-                html +=     '<div style="font-size:0.7rem; color: var(--text-secondary); flex:1 1 180px; min-width:0;">Top 8 by views shown as pills \u2014 use the dropdown for any of the ' + rows.length + ' matching.</div>';
+                html +=     '<div style="font-size:0.7rem; color: var(--text-secondary); flex:1 1 180px; min-width:0;">' + (phaseNames.length ? 'Campaign rollups + top-8 by views shown as pills' : 'Top 8 by views shown as pills') + ' \u2014 use the dropdown for any of the ' + rows.length + ' matching.</div>';
                 html +=     '<select onchange="window.iiqJrnPickAsset(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); font-size:0.72rem; padding:0.22rem 0.45rem; border-radius:4px; max-width:420px;">';
+                if (phaseNames.length) {
+                    html += '<optgroup label="Campaign roll-ups (all assets combined)">';
+                    phaseNames.forEach(function(pn) {
+                        var val = '__PHASE__' + pn;
+                        var isSel = (pickedPhase === pn);
+                        html += '<option value="' + escapeHtml(val) + '"' + (isSel ? ' selected' : '') + '>All \u2014 ' + escapeHtml(pn) + ' (' + phaseCountsRaw[pn] + ' assets \u00b7 ' + fmtCompact(phaseViewsRaw[pn]) + ' views)</option>';
+                    });
+                    html += '</optgroup>';
+                    html += '<optgroup label="Individual assets">';
+                }
                 rows.slice(0, 250).forEach(function(a) {
                     var v = Number(a.ext_view_count) || 0;
                     var lab = (a.action_label || a.asset_type || ('Asset #' + a.asset_id));
-                    var isSel = pickedAsset && String(a.asset_id) === String(pickedAsset.asset_id);
+                    var isSel = !pickedPhase && pickedAsset && String(a.asset_id) === String(pickedAsset.asset_id);
                     html += '<option value="' + escapeHtml(String(a.asset_id || '')) + '"' + (isSel ? ' selected' : '') + '>' + escapeHtml(lab) + ' \u2014 ' + fmtCompact(v) + ' views</option>';
                 });
+                if (phaseNames.length) html += '</optgroup>';
                 html +=     '</select>';
                 html +=   '</div>';
+                // Campaign-rollup pills row (larger + distinct color per phase).
+                if (phaseNames.length) {
+                    html += '<div style="display:flex; flex-wrap:wrap; gap:0.4rem; padding-bottom:0.5rem; margin-bottom:0.5rem; border-bottom:1px dashed rgba(255,255,255,0.08);">';
+                    phaseNames.forEach(function(pn) {
+                        var on   = (pickedPhase === pn);
+                        var accent = phaseColorByName[pn] || '#34d399';
+                        var bg   = on ? 'rgba(52,211,153,0.22)' : 'rgba(52,211,153,0.06)';
+                        var bd   = on ? '1px solid ' + accent : '1px solid rgba(52,211,153,0.28)';
+                        var col  = on ? '#f0fdf4' : '#a7f3d0';
+                        // Use the phase's own color if present
+                        if (phaseColorByName[pn]) {
+                            bg = on ? (phaseColorByName[pn] + '33') : (phaseColorByName[pn] + '14');
+                            bd = '1px solid ' + phaseColorByName[pn] + (on ? '' : '55');
+                            col = on ? '#ffffff' : phaseColorByName[pn];
+                        }
+                        var tip = 'Combined BEFORE + AFTER across all ' + phaseCountsRaw[pn] + ' assets in the ' + pn + ' campaign (' + fmtCompact(phaseViewsRaw[pn]) + ' views).';
+                        var val = '__PHASE__' + pn;
+                        html += '<button type="button" onclick="window.iiqJrnPickAsset(\'' + escapeHtml(val) + '\')" title="' + escapeHtml(tip) + '" style="background:' + bg + '; border:' + bd + '; color:' + col + '; font-size:0.75rem; font-weight:600; padding:0.32rem 0.75rem; border-radius:16px; cursor:pointer; white-space:nowrap;">All \u2014 ' + escapeHtml(pn) + ' \u00b7 <span style="opacity:0.75; font-weight:400;">' + phaseCountsRaw[pn] + ' assets</span></button>';
+                    });
+                    html += '</div>';
+                }
                 html +=   '<div style="display:flex; flex-wrap:wrap; gap:0.3rem;">';
                 topAssets.forEach(function(a) {
-                    var on  = pickedAsset && String(a.asset_id) === String(pickedAsset.asset_id);
+                    var on  = !pickedPhase && pickedAsset && String(a.asset_id) === String(pickedAsset.asset_id);
                     var bg  = on ? 'rgba(34,211,238,0.22)' : 'rgba(148,163,184,0.08)';
                     var bd  = on ? '1px solid rgba(34,211,238,0.55)' : '1px solid rgba(148,163,184,0.22)';
                     var col = on ? '#67e8f9' : '#cbd5e1';
@@ -32022,7 +32091,12 @@ https://www.instagram.com/p/..."></textarea>
                 html += '</div>';
 
                 // ===== Per-asset BEFORE + AFTER detail =====
-                if (pickedAsset) html += _iiqJrnRenderDetail(pickedAsset);
+                if (pickedPhase) {
+                    var phaseAssets = rows.filter(function(a) { return (a.phase_name || '') === pickedPhase; });
+                    html += _iiqJrnRenderPhaseDetail(pickedPhase, phaseAssets);
+                } else if (pickedAsset) {
+                    html += _iiqJrnRenderDetail(pickedAsset);
+                }
 
                 // ===== Aggregate roll-up across all filtered assets =====
                 html += _iiqJrnRenderAggregate(rows, aggAfter, totalV);
@@ -32080,6 +32154,118 @@ https://www.instagram.com/p/..."></textarea>
                 html +=         '<div>Destination</div><div></div><div style="text-align:right;">%</div><div style="text-align:right;">People</div>';
                 html +=       '</div>';
                 after.forEach(function(a) { html += _iiqJrnRow(a, a.color || '#94a3b8', v); });
+                html +=     '</div>';
+                html +=   '</div>';
+                html += '</div>';
+                return html;
+            }
+
+            // Render a campaign-rollup detail card in the same shape as the
+            // per-asset detail, but with BEFORE / AFTER computed across every
+            // asset in the phase. View-weighted; matches the aggregate math
+            // used by _iiqJrnRenderAggregate but scoped to a single phase.
+            function _iiqJrnRenderPhaseDetail(phaseName, phaseAssets) {
+                var totalV = 0, totalE = 0;
+                var beforeAgg = {};
+                var afterAgg  = { info: 0, ticket: 0, shared: 0, trailer: 0, stream: 0, nothing: 0 };
+                (phaseAssets || []).forEach(function(a) {
+                    var v = Number(a.ext_view_count) || 0;
+                    if (v <= 0) return;
+                    totalV += v;
+                    totalE += Number(a.ext_engagement_count) || 0;
+                    var bf = iiqAssetBeforeFunnel(a);
+                    bf.forEach(function(b) {
+                        if (!beforeAgg[b.label]) beforeAgg[b.label] = { total: 0, source_type: b.source_type };
+                        beforeAgg[b.label].total += v * b.pct / 100;
+                    });
+                    var af = iiqAssetAfterFunnel(a);
+                    af.forEach(function(item) {
+                        if      (item.bucket === 'info-seek') afterAgg.info    += v * item.pct / 100;
+                        else if (item.bucket === 'ticketing') afterAgg.ticket  += v * item.pct / 100;
+                        else if (item.bucket === 'social')    afterAgg.shared  += v * item.pct / 100;
+                        else if (item.bucket === 'trailer')   afterAgg.trailer += v * item.pct / 100;
+                        else if (item.bucket === 'streaming') afterAgg.stream  += v * item.pct / 100;
+                        else                                  afterAgg.nothing += v * item.pct / 100;
+                    });
+                });
+                var beforeRows = Object.keys(beforeAgg).map(function(k) {
+                    return { label: k, source_type: beforeAgg[k].source_type,
+                             pct: totalV > 0 ? (beforeAgg[k].total / totalV * 100) : 0 };
+                }).sort(function(a,b){ return b.pct - a.pct; }).slice(0, 12);
+
+                var _pOv    = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var _pTerm  = _pOv.terminology || {};
+                var _pInfoLabel = _pTerm.journey_info_bucket_label       || 'Info-seeking';
+                var _pConvLabel = _pTerm.journey_conversion_bucket_label || 'Ticketing site visit';
+                var _pInfoSub   = _pTerm.journey_info_sub_label          || 'Google / IMDB / Rotten Tomatoes / Letterboxd / official site';
+                var _pConvSub   = _pTerm.journey_conversion_sub_label    || 'Fandango / AMC / Regal / Cinemark / Atom / theater chain direct';
+                var _pSupp      = !!_pTerm.suppress_film_behaviors;
+                var afterBuckets = [
+                    { label: _pInfoLabel,                          pct: totalV > 0 ? afterAgg.info    / totalV * 100 : 0, color: '#a5b4fc', sub: _pInfoSub },
+                    { label: _pConvLabel,                          pct: totalV > 0 ? afterAgg.ticket  / totalV * 100 : 0, color: '#fbbf24', sub: _pConvSub },
+                    { label: 'Shared / forwarded the asset',       pct: totalV > 0 ? afterAgg.shared  / totalV * 100 : 0, color: '#22d3ee', sub: 'Re-shared to social' }
+                ];
+                if (!_pSupp) {
+                    afterBuckets.push({ label: 'Watched the trailer next',   pct: totalV > 0 ? afterAgg.trailer / totalV * 100 : 0, color: '#22c55e', sub: 'Pulled up the trailer within 7 days' });
+                    afterBuckets.push({ label: 'Searched \"where to stream\"', pct: totalV > 0 ? afterAgg.stream  / totalV * 100 : 0, color: '#a855f7', sub: 'PVOD / SVOD / streaming-availability search' });
+                }
+                afterBuckets.push({ label: 'No measurable downstream action', pct: totalV > 0 ? afterAgg.nothing / totalV * 100 : 0, color: '#64748b', sub: 'Viewed and moved on within the 7-day window' });
+
+                // Phase color from overview.phases (fallback: emerald)
+                var phList = (_pOv.phases || []);
+                var pMeta = null;
+                phList.forEach(function(p) { if (p && p.phase_name === phaseName) pMeta = p; });
+                var edgeColor = (pMeta && pMeta.color_hex) || '#34d399';
+                var phaseDesc = (pMeta && pMeta.description) || '';
+                var phaseDates = '';
+                if (pMeta) {
+                    var s = pMeta.start_date || '';
+                    var e = pMeta.end_date   || 'in flight';
+                    phaseDates = s ? (s + ' \u2192 ' + e) : '';
+                }
+                var engRate = totalV > 0 ? (totalE / totalV * 100) : 0;
+
+                var html = '<div class="iiq-card" style="padding:0.85rem; margin-bottom:0.6rem; border-left:3px solid ' + edgeColor + '; background: linear-gradient(180deg, ' + edgeColor + '10, rgba(15,23,42,0));">';
+                html +=   '<div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.5rem;">';
+                html +=     '<div>';
+                html +=       '<div style="font-size:0.65rem; color:' + edgeColor + '; text-transform:uppercase; letter-spacing:0.08em; font-weight:700;">Campaign roll-up</div>';
+                html +=       '<div style="font-size:1.05rem; font-weight:700; color:#fff;">All \u2014 ' + escapeHtml(phaseName) + '</div>';
+                html +=       '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.15rem;">' + phaseAssets.length + ' asset' + (phaseAssets.length === 1 ? '' : 's') + ' combined \u00b7 view-weighted BEFORE + AFTER' + (phaseDates ? ' \u00b7 ' + escapeHtml(phaseDates) : '') + '</div>';
+                if (phaseDesc) {
+                    html +=   '<div style="font-size:0.7rem; color:#cbd5e1; margin-top:0.35rem; max-width:560px; line-height:1.5;">' + escapeHtml(phaseDesc) + '</div>';
+                }
+                html +=     '</div>';
+                html +=     '<div style="text-align:right;">';
+                html +=       '<div style="font-size:1.4rem; font-weight:700; color:#fff;">' + fmtCompact(totalV) + '</div>';
+                html +=       '<div style="font-size:0.65rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.05em;">total views</div>';
+                html +=       '<div style="font-size:0.7rem; color: var(--text-secondary); margin-top:0.35rem;">' + fmtCompact(totalE) + ' engagement \u00b7 ' + engRate.toFixed(1) + '% rate</div>';
+                html +=     '</div>';
+                html +=   '</div>';
+                html +=   '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">';
+                // BEFORE column
+                html +=     '<div>';
+                html +=       '<div style="font-size:0.78rem; color:#e2e8f0; font-weight:600; margin-bottom:0.3rem;">BEFORE: how viewers arrived</div>';
+                html +=       '<div style="font-size:0.66rem; color: var(--text-secondary); margin-bottom:0.45rem;">Referrer mix view-weighted across every asset in this campaign \u2014 100% of the ' + fmtCompact(totalV) + ' campaign views, split across sources. <span style="color:#22d3ee;">Cyan</span> = paid; <span style="color:#22c55e;">green</span> = organic.</div>';
+                html +=       '<div style="display:grid; grid-template-columns: minmax(150px, 1fr) 1fr 60px 70px; gap:0.55rem; padding-bottom:0.3rem; font-size:0.65rem; color: var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.08);">';
+                html +=         '<div>Source</div><div></div><div style="text-align:right;">%</div><div style="text-align:right;">People</div>';
+                html +=       '</div>';
+                beforeRows.forEach(function(b) {
+                    var color = (b.source_type === 'paid') ? '#22d3ee' : '#22c55e';
+                    b.color = color;
+                    html += _iiqJrnRow(b, color, totalV);
+                });
+                html +=     '</div>';
+                // AFTER column
+                html +=     '<div>';
+                html +=       '<div style="font-size:0.78rem; color:#e2e8f0; font-weight:600; margin-bottom:0.3rem;">AFTER (within 7 days): what they did next</div>';
+                html +=       '<div style="font-size:0.66rem; color: var(--text-secondary); margin-bottom:0.45rem;">Downstream behavior projected from info-seek % + ' + escapeHtml(((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing')).toLowerCase()) + ' % per Assets card, view-weighted across the campaign.</div>';
+                html +=       '<div style="display:grid; grid-template-columns: minmax(150px, 1fr) 1fr 60px 70px; gap:0.55rem; padding-bottom:0.3rem; font-size:0.65rem; color: var(--text-secondary); border-bottom:1px solid rgba(255,255,255,0.08);">';
+                html +=         '<div>Destination</div><div></div><div style="text-align:right;">%</div><div style="text-align:right;">People</div>';
+                html +=       '</div>';
+                afterBuckets.forEach(function(b) {
+                    if (b.pct < 0.05) return;
+                    html += _iiqJrnRow({ label: b.label, pct: b.pct, color: b.color }, b.color, totalV);
+                });
                 html +=     '</div>';
                 html +=   '</div>';
                 html += '</div>';
