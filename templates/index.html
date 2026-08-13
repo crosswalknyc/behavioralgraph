@@ -30421,7 +30421,7 @@ https://www.instagram.com/p/..."></textarea>
                             '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:0.5rem; margin-bottom:0.7rem;">'
                           +   iiqSummaryTile(headerLabel + ' views',         fmtCompact(totViews), 'across ' + rows.length + ' assets')
                           +   iiqSummaryTile('Info-seekers',                 fmtCompact(totInfo),  totViews > 0 ? (totInfo / totViews * 100).toFixed(1) + '% blended rate' : '\u2014')
-                          +   iiqSummaryTile('Ticketing visits',             fmtCompact(totTk),    totViews > 0 ? (totTk   / totViews * 100).toFixed(1) + '% blended rate' : '\u2014')
+                          +   iiqSummaryTile(((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing')) + 's',   fmtCompact(totTk),    totViews > 0 ? (totTk   / totViews * 100).toFixed(1) + '% blended rate' : '\u2014')
                           +   iiqSummaryTile('Top asset type',               escapeHtml(topType),  topTypeShare.toFixed(0) + '% of cohort views')
                           + '</div>';
 
@@ -30451,8 +30451,8 @@ https://www.instagram.com/p/..."></textarea>
                                +     _th('views',         'Cohort views',  true)
                                +     _th('info_pct',      'Info %',        true)
                                +     _th('info_seekers',  'Info #',        true)
-                               +     _th('ticket_pct',    'Ticket %',      true)
-                               +     _th('ticket_visits', 'Ticket #',      true)
+                               +     _th('ticket_pct',    ((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing')) + ' %',      true)
+                               +     _th('ticket_visits', ((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing')) + ' #',      true)
                                +   '</tr></thead>'
                                +   '<tbody>' + rowsHtml + '</tbody>'
                                + '</table></div>'
@@ -30460,7 +30460,7 @@ https://www.instagram.com/p/..."></textarea>
                             : '<div class="iiq-empty">No assets match the current cut.</div>';
 
                         var foot = '<div style="font-size:0.68rem; color: var(--text-secondary); margin-top:0.55rem; line-height:1.4;">'
-                                 + 'Cohort views = asset views \u00d7 audience\u2019s share of US adults \u00d7 audience-asset affinity (talent / sport / franchise / genre / demo / moviegoing-frequency tilts). Info-seek % and ticketing % start from the per-asset projection and tilt by audience intent intensity. Same helper that drives the Cohort Engagement tab \u2014 numbers ladder up.'
+                                 + 'Cohort views = asset views \u00d7 audience\u2019s share of US adults \u00d7 audience-asset affinity (talent / sport / franchise / genre / demo tilts). Info-seek % and ' + ((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing').toLowerCase()) + ' % start from the per-asset projection and tilt by audience intent intensity. Same helper that drives the Cohort Engagement tab \u2014 numbers ladder up.'
                                  + '</div>';
 
                         var body = document.getElementById('iiqAudDrillBody');
