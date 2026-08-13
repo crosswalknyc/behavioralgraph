@@ -346,6 +346,18 @@ def _snap_q2_from_snapshot(snap: dict) -> dict:
             "ext_engagement_count": e,
             "views_total":          v,
             "engagement_total":     e,
+            # Calibrated per-asset funnel rates so the frontend's
+            # iiqAssetFunnelProjection() short-circuit fires with the
+            # BRAND-scale rates from the attribution_funnel_rates_agent
+            # (0.4-1.2% info-seek for brand IG/TT) instead of falling
+            # through to the film-industry model (5-14% info-seek).
+            # Without these fields the top-10 in-flight table on the
+            # Performance tab was rendering film rates and blowing
+            # past the campaign aggregate that IS calibrated (Jenna
+            # 2026-08-13 screenshot audit).
+            "ext_info_seek_pct":       a.get("ext_info_seek_pct"),
+            "ext_website_visit_pct":   a.get("ext_website_visit_pct"),
+            "ext_funnel_rates_source": a.get("ext_funnel_rates_source"),
         })
     return {"cumulative": cumulative, "best": best_cards}
 
@@ -369,6 +381,12 @@ def _snap_inflight_from_snapshot(snap: dict) -> dict:
             "ext_engagement_count": e,
             "channel":              a.get("channel"),
             "phase_name":           a.get("phase_name"),
+            # Calibrated brand-scale funnel rates so downstream renderers
+            # (Q2 top-10 in-flight, In-Flight best paid/organic pills)
+            # match the campaign aggregate (Jenna 2026-08-13 audit).
+            "ext_info_seek_pct":       a.get("ext_info_seek_pct"),
+            "ext_website_visit_pct":   a.get("ext_website_visit_pct"),
+            "ext_funnel_rates_source": a.get("ext_funnel_rates_source"),
         }
     assets = sorted(snap.get("assets", []) or [],
                     key=lambda a: int(a.get("ext_view_count") or 0),
