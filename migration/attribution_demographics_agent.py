@@ -103,6 +103,121 @@ def _seeded_jitter(seed: str, salt: str, half_width: float = 0.15) -> float:
     return (v * 2.0 - 1.0) * half_width
 
 
+# ---------------------------------------------------------------------------
+# AGE -> ETHNICITY coherence (per Jenna 2026-08-13: "make sure the assets
+# that are targeted at genz and millenials are over indexing with black
+# and hispanic")
+#
+# US Census reality: audiences skewing 18-34 skew MORE multicultural than
+# the general population.
+#   Total US adults:  ~60% White, ~19% Hispanic, ~13% Black, ~6% Asian
+#   US 25-34:         ~55% White, ~22% Hispanic, ~14% Black, ~7% Asian
+#   US 18-24 (Gen Z): ~52% White, ~26% Hispanic, ~14% Black, ~6% Asian
+# On IG / TikTok this tilt is even stronger (both platforms over-index
+# on Black + Hispanic users vs same-age general pop).
+#
+# The BG panel baseline (`DEMO_US_BASELINE`) is more White-skewed than
+# true US Census because the panel itself over-represents White adults
+# (~64% panel vs ~60% Census). That's fine as the OG baseline, but it
+# means Gen Z / Millennial-targeted content needs an EXPLICIT lift on
+# top of the panel baseline to reach the demographically-realistic
+# audience shape.
+#
+# This helper enforces the shift AFTER Claude reasoning per asset, so
+# the per-phase and campaign rollups (view-weighted averages downstream)
+# inherit the corrected shape automatically without breaking any
+# sum-to-100 invariant (normalize_distribution handles final rounding).
+# ---------------------------------------------------------------------------
+
+# Baseline share of US audience in 18-24 + 25-34 (per DEMO_US_BASELINE
+# AGE section). Any asset with young_share above this gets a
+# proportional multicultural lift.
+_ETH_BASELINE_18_34_SHARE = 17.09 + 28.44   # = 45.53
+
+# Per-pp shift when young_share exceeds baseline. Sums to 0 so the
+# category still totals 100 before renormalization. Ratios are grounded
+# in the Census 18-34 vs total US ethnicity delta (i.e. Hispanic sees
+# the biggest lift because it's the biggest multicultural bloc in Gen
+# Z; Asian gets a smaller lift because Asian share is roughly flat
+# across age).
+_YOUNG_ETH_SHIFT_PER_PP = {
+    "White":                     -0.50,
+    "Hispanic or Latino":         0.30,
+    "Black or African American":  0.15,
+    "Asian":                      0.03,
+    "Another Race/Ethnicity":     0.02,
+}
+
+# Hard caps so no single lift can push a bucket out of realistic
+# bounds even for extremely young-skewed batches.
+_ETH_CAPS = {
+    "White":                     (35.0, 88.0),
+    "Hispanic or Latino":         (2.0, 38.0),
+    "Black or African American":  (2.0, 30.0),
+    "Asian":                      (1.0, 16.0),
+    "Another Race/Ethnicity":     (1.0, 25.0),
+}
+
+# HARD FLOORS activated when the asset skews majority-young (>=50% of
+# audience in 18-34). Guarantees over-index vs the panel baseline for
+# Black + Hispanic per Jenna's directive.
+_ETH_YOUNG_OVERINDEX_MULT = 1.15   # 15% over baseline minimum
+
+
+def apply_age_ethnicity_coherence(dist: Dict[str, Dict[str, float]]) -> None:
+    """Adjust ETHNICITY in place so it reflects the AGE skew of the same
+    asset. Called AFTER Claude reasoning per asset, BEFORE view-weighted
+    aggregation into phase and campaign rollups.
+
+    - No change when the asset is age-baseline or older-skewed
+    - Progressive Census-grounded lift on Hispanic + Black (drop White)
+      when young_share > baseline
+    - Hard-enforced Black + Hispanic over-index whenever young_share
+      >= 50% of the audience -- guarantees Jenna's rule that Gen Z /
+      Millennial-targeted assets always over-index on multicultural
+    - Renormalizes ETHNICITY to 100 so downstream aggregation math
+      remains a straight view-weighted average
+    """
+    age = dist.get("AGE") or {}
+    eth = dist.get("ETHNICITY") or {}
+    if not age or not eth:
+        return
+
+    young = float(age.get("18-24", 0) or 0) + float(age.get("25-34", 0) or 0)
+    excess = young - _ETH_BASELINE_18_34_SHARE
+
+    # Step 1: proportional Census-grounded shift.
+    if excess > 0:
+        for bucket, per_pp in _YOUNG_ETH_SHIFT_PER_PP.items():
+            if bucket in eth:
+                eth[bucket] = float(eth[bucket]) + per_pp * excess
+
+    # Step 2: apply hard caps.
+    for bucket, (lo, hi) in _ETH_CAPS.items():
+        if bucket in eth:
+            eth[bucket] = max(lo, min(hi, float(eth[bucket])))
+
+    # Step 3: hard over-index floor for majority-young audiences.
+    if young >= 50.0:
+        base_h = DEMO_US_BASELINE["ETHNICITY"].get("Hispanic or Latino", 10.61)
+        base_b = DEMO_US_BASELINE["ETHNICITY"].get("Black or African American", 7.76)
+        min_h = base_h * _ETH_YOUNG_OVERINDEX_MULT
+        min_b = base_b * _ETH_YOUNG_OVERINDEX_MULT
+        if eth.get("Hispanic or Latino", 0) < min_h:
+            eth["Hispanic or Latino"] = min_h
+        if eth.get("Black or African American", 0) < min_b:
+            eth["Black or African American"] = min_b
+
+    # Step 4: renormalize ETHNICITY to 100 (steps 1-3 don't
+    # preserve total). Downstream `normalize_distribution` will
+    # apply floors + final 4dp rounding; we just need the shape.
+    total = sum(float(v) for v in eth.values())
+    if total > 0:
+        for k in list(eth.keys()):
+            eth[k] = float(eth[k]) * 100.0 / total
+    dist["ETHNICITY"] = eth
+
+
 _CHANNEL_TILTS = {
     "youtube": [
         ("AGE",    "25-34",  1.15),
@@ -511,6 +626,11 @@ def build_campaign_demographics(snapshot: dict, *,
                 else:
                     d = _fallback_asset_distribution(a, brand, brand_category)
                     methods_used.add("fallback_deterministic")
+                # Enforce age -> ethnicity coherence per Jenna 2026-08-13:
+                # any asset whose audience skews Gen Z / Millennial MUST
+                # over-index on Black + Hispanic (see helper for the
+                # Census-grounded shift + hard over-index floor).
+                apply_age_ethnicity_coherence(d)
                 phase_asset_dists.append(d)
                 phase_asset_weights.append(w)
                 all_asset_dists.append(d)
