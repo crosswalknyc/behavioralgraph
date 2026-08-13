@@ -1570,8 +1570,10 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
     window_days = int(filters.get('window_days') or 7)
     # Only cap window_days when we're in "last N days" mode. Custom
     # range mode is bounded by the actual date range the user picked.
+    # Cap at 365 (1 year) so YTD-like ad-hoc queries don't blow up
+    # but "Last 30 days" doesn't get silently truncated to 30 either.
     if not (start_date and end_date):
-        window_days = max(1, min(30, window_days))
+        window_days = max(1, min(365, window_days))
     top_n       = int(filters.get('top_n') or 20)
     top_n       = max(1, min(25, top_n))
     genre_filter = (filters.get('genre') or '').strip().lower()
@@ -2260,7 +2262,10 @@ def compute_view(filters: Optional[dict] = None,
     if top_n:
         top_n = max(1, min(50, top_n))
     # Custom range: derive window_days from the requested date range
-    # (inclusive). Otherwise cap window_days at 28 as before.
+    # (inclusive). Otherwise cap at 365 so YTD-like ad-hoc queries
+    # don't blow up but "Last 30 days" doesn't get silently truncated
+    # to 28 either (which was the legacy behaviour when _daily_estimate
+    # was hardcoded to 28d - now it extends with the window).
     if start_date_s and end_date_s:
         try:
             _s = datetime.fromisoformat(start_date_s).date()
@@ -2270,7 +2275,7 @@ def compute_view(filters: Optional[dict] = None,
         except Exception:
             pass
     else:
-        window_days = max(1, min(28, window_days))
+        window_days = max(1, min(365, window_days))
 
     # View cache: identical filters within 15 min return instantly.
     # force_refresh (used by future admin tools) bypasses the cache.
