@@ -31996,7 +31996,7 @@ https://www.instagram.com/p/..."></textarea>
                     });
                     return;
                 }
-                body.innerHTML = '<div class="iiq-empty">Loading ' + qid.toUpperCase() + '...</div>';
+                body.innerHTML = '<div class="iiq-empty">Loading...</div>';
                 fetch('/api/intent/' + slug + '/questions/' + qid, { credentials: 'same-origin' })
                     .then(function(r) { return r.json(); })
                     .then(function(d) {
