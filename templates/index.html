@@ -31537,8 +31537,7 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 function _pctOfV(n) { return totalV > 0 ? (n / totalV * 100) : 0; }
 
-                html += '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
-                html +=   iiqSummaryTile('Assets in view', String(rows.length), 'after asset / platform / source filters');
+                html += '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">';
                 html +=   iiqSummaryTile('Total views', fmtCompact(totalV), 'across filtered assets');
                 var _iiqJrnOv   = (window.__intentIQ && window.__intentIQ.overview) || {};
                 var _iiqJrnTerm = _iiqJrnOv.terminology || {};
