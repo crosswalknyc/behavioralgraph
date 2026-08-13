@@ -27719,11 +27719,17 @@ https://www.instagram.com/p/..."></textarea>
                         if (!d.success) throw new Error(d.error || 'Failed');
                         var cards = (d.cards || []).slice();
                         var winLabel = d.window_label || 'YTD';
+                        // Reset + repopulate every time so switching titles
+                        // (e.g. GOAT -> Chime) doesn't leave stale film-era
+                        // types like "AMC Ticketing" / "Fandango Checkout"
+                        // hanging around in a brand-campaign dropdown.
                         var typeSel = document.getElementById('iiqAssetFilterType');
-                        if (typeSel.options.length <= 1) {
-                            var types = Array.from(new Set(cards.map(function(c) { return c.asset_type; }).filter(Boolean))).sort();
-                            types.forEach(function(t) { typeSel.appendChild(new Option(t, t)); });
-                        }
+                        var prevType = typeSel.value || '';
+                        typeSel.innerHTML = '<option value="">All</option>';
+                        var types = Array.from(new Set(cards.map(function(c) { return c.asset_type; }).filter(Boolean))).sort();
+                        types.forEach(function(t) { typeSel.appendChild(new Option(t, t)); });
+                        // Preserve the user's current selection when possible
+                        if (prevType && types.indexOf(prevType) >= 0) typeSel.value = prevType;
                         window.__intentIQAssetsRaw = {
                             slug: slug, cards: cards, winLabel: winLabel,
                             sortBy: sortBy, windowed: !!d.windowed_totals,
