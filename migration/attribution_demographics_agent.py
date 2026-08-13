@@ -134,34 +134,45 @@ def _seeded_jitter(seed: str, salt: str, half_width: float = 0.15) -> float:
 # proportional multicultural lift.
 _ETH_BASELINE_18_34_SHARE = 17.09 + 28.44   # = 45.53
 
-# Per-pp shift when young_share exceeds baseline. Sums to 0 so the
+# Per-pp shift when young_share exceeds baseline. Sums to ~0 so the
 # category still totals 100 before renormalization. Ratios are grounded
 # in the Census 18-34 vs total US ethnicity delta (i.e. Hispanic sees
 # the biggest lift because it's the biggest multicultural bloc in Gen
 # Z; Asian gets a smaller lift because Asian share is roughly flat
-# across age).
+# across age). Magnitudes tuned 2026-08-13 so the shifts reach the
+# Gen_Pop_2026 over-index floor (below) organically before the floor
+# has to kick in.
 _YOUNG_ETH_SHIFT_PER_PP = {
-    "White":                     -0.50,
-    "Hispanic or Latino":         0.30,
-    "Black or African American":  0.15,
-    "Asian":                      0.03,
-    "Another Race/Ethnicity":     0.02,
+    "White":                     -0.85,
+    "Hispanic or Latino":         0.50,
+    "Black or African American":  0.25,
+    "Asian":                      0.05,
+    "Another Race/Ethnicity":     0.05,
 }
 
 # Hard caps so no single lift can push a bucket out of realistic
 # bounds even for extremely young-skewed batches.
 _ETH_CAPS = {
-    "White":                     (35.0, 88.0),
-    "Hispanic or Latino":         (2.0, 38.0),
-    "Black or African American":  (2.0, 30.0),
+    "White":                     (32.0, 88.0),
+    "Hispanic or Latino":         (2.0, 40.0),
+    "Black or African American":  (2.0, 32.0),
     "Asian":                      (1.0, 16.0),
     "Another Race/Ethnicity":     (1.0, 25.0),
 }
 
 # HARD FLOORS activated when the asset skews majority-young (>=50% of
-# audience in 18-34). Guarantees over-index vs the panel baseline for
-# Black + Hispanic per Jenna's directive.
-_ETH_YOUNG_OVERINDEX_MULT = 1.15   # 15% over baseline minimum
+# audience in 18-34). Guarantees over-index vs the actual US Gen Pop
+# (Gen_Pop_2026.csv) for Black + Hispanic per Jenna's 2026-08-13
+# directive: "make sure the assets that are targeted at genz and
+# millenials are over indexing with black and hispanic".
+#
+# Anchoring on Gen_Pop_2026 (~US Census) not the BG panel baseline
+# because the panel is 6pp Whiter than actual US population, so
+# "over-index vs panel" was only reaching Census-mean, not
+# over-indexing vs what the dashboard shows the user.
+_ETH_GEN_POP_HISPANIC = 17.98   # Gen_Pop_2026.csv 2026-08-13
+_ETH_GEN_POP_BLACK    = 11.92   # Gen_Pop_2026.csv 2026-08-13
+_ETH_YOUNG_OVERINDEX_MULT = 1.15   # 15% over Gen Pop minimum
 
 
 def apply_age_ethnicity_coherence(dist: Dict[str, Dict[str, float]]) -> None:
@@ -198,11 +209,12 @@ def apply_age_ethnicity_coherence(dist: Dict[str, Dict[str, float]]) -> None:
             eth[bucket] = max(lo, min(hi, float(eth[bucket])))
 
     # Step 3: hard over-index floor for majority-young audiences.
+    # Anchored on Gen_Pop_2026 (~US Census) so an "over-index" reads
+    # as an over-index in the dashboard's own Gen Pop comparison,
+    # not just vs the older/whiter BG panel baseline.
     if young >= 50.0:
-        base_h = DEMO_US_BASELINE["ETHNICITY"].get("Hispanic or Latino", 10.61)
-        base_b = DEMO_US_BASELINE["ETHNICITY"].get("Black or African American", 7.76)
-        min_h = base_h * _ETH_YOUNG_OVERINDEX_MULT
-        min_b = base_b * _ETH_YOUNG_OVERINDEX_MULT
+        min_h = _ETH_GEN_POP_HISPANIC * _ETH_YOUNG_OVERINDEX_MULT   # 20.68%
+        min_b = _ETH_GEN_POP_BLACK    * _ETH_YOUNG_OVERINDEX_MULT   # 13.71%
         if eth.get("Hispanic or Latino", 0) < min_h:
             eth["Hispanic or Latino"] = min_h
         if eth.get("Black or African American", 0) < min_b:

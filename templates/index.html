@@ -26638,34 +26638,110 @@ https://www.instagram.com/p/..."></textarea>
                 return pal[Math.min(idx, pal.length - 1)];
             };
 
-            window._iiqDemoRenderCatCard = function(cat, label, dist, phase_view_count) {
+            // Format helpers for the AGE / INCOME median header line.
+            window._iiqDemoFmtAge    = function(v) { return (v == null) ? '\u2014' : v.toFixed(1) + ' yrs'; };
+            window._iiqDemoFmtIncome = function(v) {
+                if (v == null) return '\u2014';
+                if (v >= 100000) return '$' + (v / 1000).toFixed(1) + 'k';
+                if (v >=  10000) return '$' + Math.round(v / 1000) + 'k';
+                return '$' + Math.round(v);
+            };
+
+            // Colored delta pill for the AGE / INCOME median comparison
+            // vs Gen Pop. Blue = younger / lower-income, orange = older /
+            // higher-income, gray = within 1 unit.
+            window._iiqDemoMedianDelta = function(cutMed, gpMed, unitStr, fmtFn) {
+                if (cutMed == null || gpMed == null) return '';
+                var d = cutMed - gpMed;
+                var absD = Math.abs(d);
+                var sign = d > 0 ? '+' : (d < 0 ? '\u2212' : '');
+                var deltaLabel = sign + (fmtFn ? fmtFn(absD) : absD.toFixed(1));
+                var color = (absD < 1) ? '#94a3b8'
+                            : (d < 0)  ? '#60a5fa'
+                                       : '#fb923c';
+                return ' <span style="color:' + color + '; font-weight:600;">' + deltaLabel + '</span>'
+                     + ' <span style="color:var(--text-secondary); opacity:0.7;">vs GP</span>';
+            };
+
+            window._iiqDemoRenderCatCard = function(cat, label, dist, phase_view_count, gpDist, medians, gpMedians) {
+                gpDist    = gpDist    || {};
+                medians   = medians   || {};
+                gpMedians = gpMedians || {};
+
                 var entries = Object.keys(dist || {}).map(function(k) {
                     return { bucket: k, pct: Number(dist[k]) || 0 };
                 }).sort(function(a, b) { return b.pct - a.pct; });
                 var maxPct = entries.length ? Math.max.apply(null, entries.map(function(e) { return e.pct; })) : 1;
+                Object.keys(gpDist).forEach(function(k) {
+                    var v = Number(gpDist[k]) || 0;
+                    if (v > maxPct) maxPct = v;
+                });
                 if (maxPct <= 0) maxPct = 1;
+
                 var rows = entries.map(function(e, i) {
-                    // Bar width relative to the largest bucket in this
-                    // category so tiny cuts (Trans Male, LGBTQ+, Chinese
-                    // etc.) still get a visible sliver rather than
-                    // being crushed against a 100% scale.
                     var wPct = Math.max(2, Math.round(e.pct / maxPct * 100));
                     var barColor = window._iiqDemoBarColor(i, cat);
                     var absCount = Math.round((e.pct / 100) * (phase_view_count || 0));
                     var absStr = phase_view_count ? '  \u00b7  ' + fmtCompact(absCount) : '';
+
+                    var gpPct = Number(gpDist[e.bucket]);
+                    var tickHtml = '';
+                    var deltaHtml = '';
+                    if (isFinite(gpPct) && gpPct > 0) {
+                        var tickPos = Math.max(0, Math.min(100, gpPct / maxPct * 100));
+                        tickHtml = '<div title="Gen Pop: ' + gpPct.toFixed(1) + '%" style="'
+                                 + 'position:absolute; left:' + tickPos.toFixed(2) + '%; top:-2px; bottom:-2px;'
+                                 + ' width:2px; background:#e5e7eb; opacity:0.85; border-radius:1px;'
+                                 + ' box-shadow: 0 0 0 1px rgba(0,0,0,0.4);"></div>';
+                        var delta = e.pct - gpPct;
+                        var absD = Math.abs(delta);
+                        var dColor = (absD < 0.5) ? '#94a3b8'
+                                     : (delta > 0) ? '#34d399' : '#f87171';
+                        var dSign = delta > 0 ? '+' : (delta < 0 ? '\u2212' : '');
+                        deltaHtml = ' <span title="vs Gen Pop ' + gpPct.toFixed(1) + '%" style="color:' + dColor + '; font-size:0.66rem; font-variant-numeric:tabular-nums; margin-left:0.25rem;">'
+                                  + dSign + absD.toFixed(1) + 'pp</span>';
+                    }
+
                     return '<div style="display:grid; grid-template-columns: 160px 1fr auto; gap:0.5rem; align-items:center; font-size:0.72rem; line-height:1.2; margin-bottom:0.28rem;">'
                         +    '<div style="color:#cbd5e1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(e.bucket) + '">' + escapeHtml(e.bucket) + '</div>'
-                        +    '<div style="height:10px; background: rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">'
+                        +    '<div style="position:relative; height:10px; background: rgba(255,255,255,0.05); border-radius:3px; overflow:visible;">'
                         +      '<div style="width:' + wPct + '%; height:100%; background:' + barColor + '; border-radius:3px;"></div>'
+                        +      tickHtml
                         +    '</div>'
-                        +    '<div style="min-width:90px; text-align:right; color:#fff; font-variant-numeric:tabular-nums;">'
+                        +    '<div style="min-width:130px; text-align:right; color:#fff; font-variant-numeric:tabular-nums;">'
                         +      '<span style="font-weight:600;">' + e.pct.toFixed(1) + '%</span>'
+                        +      deltaHtml
                         +      '<span style="color:var(--text-secondary); opacity:0.7;">' + absStr + '</span>'
                         +    '</div>'
                         +  '</div>';
                 }).join('');
+
+                var medianHeader = '';
+                if (cat === 'AGE' && medians.median_age != null) {
+                    var gpAge = gpMedians.median_age;
+                    medianHeader = '<div style="font-size:0.7rem; color:#e2e8f0; margin: 0 0 0.5rem; padding:0.35rem 0.5rem; background: rgba(59,130,246,0.08); border-left: 2px solid #60a5fa; border-radius: 0 3px 3px 0;">'
+                                 + '<span style="opacity:0.7;">Median age:</span> '
+                                 + '<span style="font-weight:700;">' + window._iiqDemoFmtAge(medians.median_age) + '</span>'
+                                 + (gpAge != null
+                                    ? ' <span style="opacity:0.5;">| Gen Pop ' + window._iiqDemoFmtAge(gpAge) + '</span>'
+                                      + window._iiqDemoMedianDelta(medians.median_age, gpAge, 'yrs', function(v){ return v.toFixed(1) + ' yrs'; })
+                                    : '')
+                                 + '</div>';
+                } else if (cat === 'INCOME' && medians.median_income != null) {
+                    var gpInc = gpMedians.median_income;
+                    medianHeader = '<div style="font-size:0.7rem; color:#e2e8f0; margin: 0 0 0.5rem; padding:0.35rem 0.5rem; background: rgba(16,185,129,0.08); border-left: 2px solid #34d399; border-radius: 0 3px 3px 0;">'
+                                 + '<span style="opacity:0.7;">Median income:</span> '
+                                 + '<span style="font-weight:700;">' + window._iiqDemoFmtIncome(medians.median_income) + '</span>'
+                                 + (gpInc != null
+                                    ? ' <span style="opacity:0.5;">| Gen Pop ' + window._iiqDemoFmtIncome(gpInc) + '</span>'
+                                      + window._iiqDemoMedianDelta(medians.median_income, gpInc, '$', window._iiqDemoFmtIncome)
+                                    : '')
+                                 + '</div>';
+                }
+
                 return '<div class="iiq-card" style="padding:0.75rem 0.85rem;">'
                     +    '<div style="font-size:0.78rem; font-weight:600; color:#fff; margin-bottom:0.5rem; letter-spacing:0.02em;">' + escapeHtml(label) + '</div>'
+                    +    medianHeader
                     +    rows
                     +  '</div>';
             };
@@ -26747,10 +26823,21 @@ https://www.instagram.com/p/..."></textarea>
                 var cats = d.categories || Object.keys(picked.demographics || {});
                 var labels = d.category_labels || {};
 
+                // Gen Pop payload + per-cut medians (Jenna 2026-08-13).
+                // Backend attaches median_age + median_income to every
+                // cut (phases + all_campaigns) so the frontend can just
+                // read them; Gen Pop distributions + medians ride in on
+                // d.gen_pop.
+                var gp        = d.gen_pop || {};
+                var gpDemos   = gp.demographics || {};
+                var gpMedians = { median_age: gp.median_age, median_income: gp.median_income };
+                var pickedMedians = { median_age: picked.median_age, median_income: picked.median_income };
+
                 var cards = cats.map(function(cat) {
                     var dist = (picked.demographics || {})[cat] || {};
                     var lbl  = labels[cat] || cat;
-                    return _iiqDemoRenderCatCard(cat, lbl, dist, picked.view_count);
+                    return _iiqDemoRenderCatCard(cat, lbl, dist, picked.view_count,
+                                                  gpDemos[cat] || {}, pickedMedians, gpMedians);
                 }).join('');
 
                 return ''
@@ -26771,7 +26858,7 @@ https://www.instagram.com/p/..."></textarea>
                     +   cards
                     + '</div>'
                     + '<div style="margin-top:1rem; font-size:0.66rem; color: var(--text-secondary); opacity:0.65; line-height:1.4;">'
-                    +   'Per-asset audience mix reasoned from channel, talent, paid/organic, and brand context, then view-weighted to the phase level. Every category sums to 100%; every bucket is floored to prevent 0% cells. Bars are relative to the largest bucket in each category so small buckets remain visible.'
+                    +   'Colored bars = campaign audience share. Vertical white tick on each bar = Gen Pop share (Gen_Pop_2026 baseline); green / red pp delta shows over- / under-index vs Gen Pop. Median age + median income are linearly-interpolated from the bucketed distributions.'
                     + '</div>';
             }
 
