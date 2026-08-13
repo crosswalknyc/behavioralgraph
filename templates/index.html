@@ -45523,7 +45523,7 @@ https://www.instagram.com/p/..."></textarea>
         // ===================== MICRODRAMAS IQ VIEW =====================
         // Peacock mobile-first microdrama audience insights. Titles catalog +
         // 28-day audience windows from first-observed date + audience profile.
-        window.__microdramasIQ = { filterOptions: null, lastData: null, activePanel: 'peacock', inFlight: null };
+        window.__microdramasIQ = { filterOptions: null, lastData: null, activePanel: 'all', inFlight: null };
 
         function _microdramasIQHideAllOtherViews() {
             var ids = ['dashboardView','subscriberIQView','sfConversionView','rankerIQView',
@@ -45670,7 +45670,21 @@ https://www.instagram.com/p/..."></textarea>
         // currently active. Default panel is 'all' - the aggregated
         // cross-platform ranker.
         function applyMicrodramasIQUnified() {
-            var panel = (window.__microdramasIQ && window.__microdramasIQ.activePanel) || 'all';
+            // Defensive: the source of truth for "which tab is visible" is
+            // whichever .miq-panel has the .active class in the DOM.
+            // Fall back to activePanel state only if no panel is active
+            // (should not happen in practice). This prevents state drift
+            // (e.g. stale activePanel from a previous session) from
+            // misrouting auto-apply to a hidden tab.
+            var panel = null;
+            try {
+                var activeEl = document.querySelector('.miq-panel.active[data-panel]');
+                if (activeEl) panel = activeEl.getAttribute('data-panel');
+            } catch (e) { /* ignore */ }
+            if (!panel) {
+                panel = (window.__microdramasIQ && window.__microdramasIQ.activePanel) || 'all';
+            }
+            if (window.__microdramasIQ) window.__microdramasIQ.activePanel = panel;
             if (panel === 'all')     return applyMicrodramasIQAll();
             if (panel === 'peacock') return applyMicrodramasIQFilters();
             return applyMicrodramasIQCompetitors();
