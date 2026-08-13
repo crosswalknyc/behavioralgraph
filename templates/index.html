@@ -25185,6 +25185,11 @@ https://www.instagram.com/p/..."></textarea>
                     map.push(['ticketing sites',  bflLower + 's']);
                     map.push(['Ticketing site',   bfl]);
                     map.push(['ticketing site',   bflLower]);
+                    // Short-form "Ticket visits" (Q4 Talent Attribution
+                    // header uses this shorter phrasing). Belt-and-
+                    // suspenders in case a code path still emits it.
+                    map.push(['Ticket visits',    bfl + 's']);
+                    map.push(['ticket visits',    bflLower + 's']);
                     map.push(['Ticket %',         bfl + ' %']);
                     map.push(['Ticketing %',      bfl + ' %']);
                     map.push(['ticketing %',      bflLower + ' %']);
@@ -30688,8 +30693,12 @@ https://www.instagram.com/p/..."></textarea>
                     +   _q4Hdr('eng_pct',       'Engagement %',  '#fb923c', 'right', 'View-weighted average per-asset engagement rate (likes+comments+shares / views), per-asset capped at 60% to suppress junk-bot ratios.')
                     +   _q4Hdr('info_pct',      'Info-seek %',   '#a5b4fc', 'right', 'View-weighted mean per-asset info-seek %. Same formula as Assets page.')
                     +   _q4Hdr('info_seekers',  'Info-seekers',  '#a5b4fc', 'right', 'Total info-seekers = view-weighted info-seek % \u00d7 total views. Same formula as Assets page.')
-                    +   _q4Hdr('ticket_pct',    'Ticketing %',   '#fbbf24', 'right', 'View-weighted mean per-asset ticketing %. Same formula as Assets page.')
-                    +   _q4Hdr('ticket_visits', 'Ticket visits', '#fbbf24', 'right', 'Total ticket visits = view-weighted ticketing % \u00d7 total views. Same formula as Assets page.')
+                    +   (function() {
+                            var _bfl = (typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Ticketing';
+                            var _bflLower = _bfl.toLowerCase();
+                            return _q4Hdr('ticket_pct',    _bfl + ' %',  '#fbbf24', 'right', 'View-weighted mean per-asset ' + _bflLower + ' %. Same formula as Assets page.')
+                                +  _q4Hdr('ticket_visits', _bfl + 's',   '#fbbf24', 'right', 'Total ' + _bflLower + 's = view-weighted ' + _bflLower + ' % \u00d7 total views. Same formula as Assets page.');
+                        })()
                     + '</tr></thead><tbody>';
 
                 rows.forEach(function(r) {
