@@ -26112,16 +26112,17 @@ https://www.instagram.com/p/..."></textarea>
                 return '$' + n.toFixed(2);
             }
 
-            function _iiqROIHero(bd, rates, term) {
+            function _iiqROIHero(bd, rates, term, selectedPhase) {
                 var t = bd.totals;
                 // Use terminology to label the bottom-funnel destination
                 var bfl = (typeof window._iiqBFL === 'function') ? window._iiqBFL() : 'Website visit';
                 var brand = (window.__intentIQ && window.__intentIQ.overview && window.__intentIQ.overview.display_name) || 'the campaign';
+                var _phaseLabel = selectedPhase ? (' - ' + selectedPhase) : ' - All campaigns';
                 return ''
                   + '<div class="iiq-card" style="padding:1.1rem; margin-bottom:0.85rem; background: linear-gradient(135deg, rgba(34,197,94,0.14), rgba(16,185,129,0.06)); border:1px solid rgba(34,197,94,0.35);">'
                   +   '<div style="display:flex; align-items:center; gap:0.55rem;"><div style="font-size:0.72rem; color:#a7f3d0; letter-spacing:0.06em; text-transform:uppercase;">Estimated campaign value</div><div style="font-size:0.65rem; color:#6ee7b7; opacity:0.7;">(equivalent paid-media cost)</div></div>'
                   +   '<div style="font-size:2.4rem; font-weight:800; color:#f0fdf4; line-height:1.1; margin-top:0.25rem;">' + _iiqROIFmtUSD(t.grand_value) + '</div>'
-                  +   '<div style="font-size:0.78rem; color:#bbf7d0; margin-top:0.2rem;">What ' + escapeHtml(brand) + ' would have paid to buy equivalent reach + engagement + high-intent traffic through paid media.</div>'
+                  +   '<div style="font-size:0.78rem; color:#bbf7d0; margin-top:0.2rem;">What ' + escapeHtml(brand) + ' would have paid to buy equivalent reach + engagement + high-intent traffic through paid media' + escapeHtml(_phaseLabel) + '.</div>'
                   + '</div>'
                   + '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 1rem;">'
                   +   _iiqROITile('Views value',       t.views_value, fmtInt(Math.round(t.views))        + ' views',        '#22d3ee')
@@ -26246,16 +26247,92 @@ https://www.instagram.com/p/..."></textarea>
             // Cache the last-fetched assets so re-renders (from rate
             // edits) don't need another API round-trip.
             window.__iiqROICache = window.__iiqROICache || { slug: null, assets: null, ts: 0 };
+
+            // Which campaign (phase_name) the ROI panel is currently cut
+            // to. '' means "All campaigns" (the default full-portfolio
+            // view). Persists across rate edits so the user's slice
+            // sticks while they tune rates.
+            window.__iiqROISelectedPhase = window.__iiqROISelectedPhase || '';
+
+            function _iiqROIFilterByPhase(assets, phase) {
+                if (!phase) return assets || [];
+                return (assets || []).filter(function(a) {
+                    return (a.phase_name || '') === phase;
+                });
+            }
+
+            function _iiqROIPhasePicker(overview, selectedPhase, allAssets) {
+                // Build [All, ...distinct phase_names in asset order] with
+                // per-pill asset counts. Prefer overview.phases order so
+                // pills match the timeline order; fall back to the order
+                // the assets appear in.
+                var phaseOrder = [];
+                var seen = {};
+                (overview && overview.phases || []).forEach(function(p) {
+                    if (p && p.phase_name && !seen[p.phase_name]) {
+                        seen[p.phase_name] = true;
+                        phaseOrder.push(p.phase_name);
+                    }
+                });
+                (allAssets || []).forEach(function(a) {
+                    var pn = a && a.phase_name;
+                    if (pn && !seen[pn]) { seen[pn] = true; phaseOrder.push(pn); }
+                });
+                if (phaseOrder.length === 0) return '';
+
+                var counts = { '': (allAssets || []).length };
+                phaseOrder.forEach(function(pn) {
+                    counts[pn] = (allAssets || []).filter(function(a) { return (a.phase_name || '') === pn; }).length;
+                });
+
+                function _pill(value, label, count) {
+                    var isActive = (value === selectedPhase);
+                    var bg = isActive ? 'rgba(34,197,94,0.22)' : 'rgba(255,255,255,0.05)';
+                    var bc = isActive ? 'rgba(34,197,94,0.65)' : 'rgba(255,255,255,0.10)';
+                    var col= isActive ? '#f0fdf4' : '#cbd5e1';
+                    var esc = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    return '<button type="button" onclick="iiqROISetPhase(\'' + esc + '\')" '
+                        + 'style="background:' + bg + '; color:' + col + '; border:1px solid ' + bc + '; '
+                        +   'border-radius:999px; padding:0.32rem 0.85rem; font-size:0.78rem; font-weight:600; '
+                        +   'cursor:pointer; display:inline-flex; align-items:center; gap:0.4rem;">'
+                        +   escapeHtml(label)
+                        +   '<span style="opacity:0.65; font-weight:500;">(' + count + ')</span>'
+                        + '</button>';
+                }
+
+                var pillsHtml = _pill('', 'All campaigns', counts['']);
+                phaseOrder.forEach(function(pn) {
+                    pillsHtml += _pill(pn, pn, counts[pn] || 0);
+                });
+
+                return ''
+                  + '<div class="iiq-card" style="padding:0.75rem 1rem; margin-bottom:0.85rem; display:flex; align-items:center; gap:0.85rem; flex-wrap:wrap;">'
+                  +   '<div style="font-size:0.72rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">Cut by campaign</div>'
+                  +   '<div style="display:flex; gap:0.4rem; flex-wrap:wrap;">' + pillsHtml + '</div>'
+                  + '</div>';
+            }
+
+            window.iiqROISetPhase = function(phase) {
+                window.__iiqROISelectedPhase = phase || '';
+                var y = window.scrollY;
+                _iiqROIRenderFromCache();
+                setTimeout(function() { window.scrollTo(0, y); }, 0);
+            };
+
             function _iiqROIRenderFromCache() {
                 var host = document.getElementById('iiqROIContent');
                 if (!host) return;
                 try {
-                    var assets = (window.__iiqROICache && window.__iiqROICache.assets) || [];
-                    var rates  = _iiqROIActiveRates();
-                    var bd     = _iiqROICompute(assets, rates);
-                    var term   = (window.__intentIQ && window.__intentIQ.overview && window.__intentIQ.overview.terminology) || {};
+                    var allAssets   = (window.__iiqROICache && window.__iiqROICache.assets) || [];
+                    var overview    = (window.__intentIQ && window.__intentIQ.overview) || {};
+                    var selected    = window.__iiqROISelectedPhase || '';
+                    var assets      = _iiqROIFilterByPhase(allAssets, selected);
+                    var rates       = _iiqROIActiveRates();
+                    var bd          = _iiqROICompute(assets, rates);
+                    var term        = overview.terminology || {};
                     host.innerHTML = ''
-                      + _iiqROIHero(bd, rates, term)
+                      + _iiqROIPhasePicker(overview, selected, allAssets)
+                      + _iiqROIHero(bd, rates, term, selected)
                       + _iiqROIChannelTable(bd, rates)
                       + _iiqROIRateEditor(rates)
                       + _iiqROIMethodology(rates);
