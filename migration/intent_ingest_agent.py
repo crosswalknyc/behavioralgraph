@@ -560,10 +560,23 @@ def scrape_asset(url: str) -> dict:
 # =====================================================================
 
 def _claude() -> Optional[Callable]:
-    """Return the claude_messages callable, or None if unavailable."""
+    """Return the claude_messages callable, or None if unavailable.
+
+    Resolves across the three deployment contexts we run in:
+      1. Parent-repo scripts on the workstation / Hetzner ->
+         `migration.claude_client` from /root/finished_codes.
+      2. bg-webapp submodule on Render -> `claude_client` at bg-webapp
+         repo root (not inside `migration/`, that's just how the
+         bg-webapp layout has always been).
+      3. bg-webapp submodule imported via the `bg_webapp` namespace
+         path (older callers).
+
+    The order matters: parent-repo claude_client has the multi-key
+    pool + retry logic, bg-webapp's has a single-key path. Both
+    expose the same `claude_messages(system=, user=, ...)` signature.
+    """
     try:
-        # Prefer the parent-repo claude_client (has key pool) if present;
-        # fall back to the submodule copy.
+        # (1) Parent-repo path (workstation / Hetzner)
         try:
             sys.path.insert(0, "/root/finished_codes")
         except Exception:
@@ -573,6 +586,13 @@ def _claude() -> Optional[Callable]:
             return claude_messages
         except Exception:
             pass
+        # (2) bg-webapp Render deploy: claude_client at the repo root
+        try:
+            from claude_client import claude_messages  # type: ignore
+            return claude_messages
+        except Exception:
+            pass
+        # (3) Legacy namespaced submodule import
         try:
             from bg_webapp.migration.claude_client import claude_messages  # type: ignore
             return claude_messages
@@ -1422,55 +1442,77 @@ def run_ingest(job_id: str, params: dict,
         "job_id":      job_id,
     }
 
-    # Auto-generate per-asset funnel rates (info-seek %, website-visit %)
-    # BEFORE demographics so the dashboard's absolute conversion numbers
-    # honor real digital-marketing benchmarks instead of the film-model
-    # base rates (which over-predict brand-campaign funnel by ~10x).
-    # See migration/attribution_funnel_rates_agent.py for benchmarks +
-    # per-asset Claude reasoning.
-    try:
-        from migration.attribution_funnel_rates_agent import (
-            build_campaign_funnel_rates, save_to_snapshot as _save_fr,
-        )
-        try:
-            from migration.claude_client import claude_messages as _fr_claude
-        except Exception:
-            _fr_claude = None
-        _p(86, "Reasoning per-asset funnel rates (info-seek + website-visit)...")
-        fr_summary = build_campaign_funnel_rates(snapshot, claude_fn=_fr_claude,
-                                                    batch_size=8)
-        _save_fr(snapshot, fr_summary)
-        _p(87, f"Funnel rates ({fr_summary.get('method')}): "
-                f"{fr_summary.get('aggregate_info_pct'):.2f}% info-seek, "
-                f"{fr_summary.get('aggregate_website_pct'):.2f}% website")
-    except Exception as e:
-        logger.warning("Intent ingest: funnel-rate generation failed (%s); "
-                        "will run when scripts/build_intent_funnel_rates.py --slug %s --apply "
-                        "is invoked", e, title_slug)
+    # Reasoning agents that must run for EVERY brand-campaign ingest,
+    # regardless of whether the trigger is a parent-repo script (Hetzner
+    # / workstation) or the Analysis IQ dashboard form on Render. Same
+    # code, same prompts, same benchmarks, same output shape -- so a
+    # dashboard-triggered ingest yields byte-identical funnel + demo
+    # numbers as a hand-invoked scripts/build_intent_*.py run.
+    #
+    # Both agents live in `migration/` in the parent repo AND in
+    # `bg-webapp/migration/` (copied identically on every release). The
+    # `_load_agent()` helper below tolerates either layout so the
+    # module resolves on any host.
+    _fr_claude   = _claude()
+    _demo_claude = _fr_claude   # single resolve, shared by both agents
 
-    # Auto-generate the demographics block so the Performance ->
-    # Demographics tab lights up on first load. Uses Claude if the
-    # ANTHROPIC_API_KEY is set, deterministic fallback otherwise.
-    # See migration/attribution_demographics_agent.py for the reasoning
-    # heuristics and canonical schema.
-    try:
-        from migration.attribution_demographics_agent import (
-            build_campaign_demographics, save_to_snapshot,
-        )
+    def _load_agent(mod_names):
+        """Import the first available module from a list of candidate
+        dotted paths. Returns the imported module or None."""
+        import importlib
+        for name in mod_names:
+            try:
+                return importlib.import_module(name)
+            except Exception:
+                continue
+        return None
+
+    # ----- Funnel rates (info-seek % + website-visit %) -----
+    # canonical impl: migration/attribution_funnel_rates_agent.py
+    _fr_mod = _load_agent([
+        "migration.attribution_funnel_rates_agent",       # both layouts
+        "attribution_funnel_rates_agent",                  # bare (rare)
+    ])
+    if _fr_mod is not None:
         try:
-            from migration.claude_client import claude_messages as _demo_claude
-        except Exception:
-            _demo_claude = None
-        _p(88, "Reasoning per-asset demographic distributions...")
-        demos = build_campaign_demographics(snapshot, claude_fn=_demo_claude,
-                                              batch_size=6)
-        save_to_snapshot(snapshot, demos)
-        _p(89, f"Demographics generated ({demos.get('method')}) "
-                f"for {len(demos.get('phases') or [])} phases")
-    except Exception as e:
-        logger.warning("Intent ingest: demographics generation failed (%s); "
-                        "will run when scripts/build_intent_demographics.py --slug %s --apply "
-                        "is invoked", e, title_slug)
+            _p(86, "Reasoning per-asset funnel rates (info-seek + website-visit)...")
+            fr_summary = _fr_mod.build_campaign_funnel_rates(
+                snapshot, claude_fn=_fr_claude, batch_size=8)
+            _fr_mod.save_to_snapshot(snapshot, fr_summary)
+            _p(87, f"Funnel rates ({fr_summary.get('method')}): "
+                    f"{fr_summary.get('aggregate_info_pct'):.2f}% info-seek, "
+                    f"{fr_summary.get('aggregate_website_pct'):.2f}% website")
+        except Exception as e:
+            logger.warning("Intent ingest: funnel-rate generation failed (%s); "
+                            "will run when scripts/build_intent_funnel_rates.py "
+                            "--slug %s --apply is invoked", e, title_slug)
+    else:
+        logger.warning("Intent ingest: attribution_funnel_rates_agent module "
+                        "not importable; skipping (dashboard funnel numbers "
+                        "will fall back to the film-industry base model).")
+
+    # ----- Demographics (per-phase + all-campaigns distributions) -----
+    # canonical impl: migration/attribution_demographics_agent.py
+    _demo_mod = _load_agent([
+        "migration.attribution_demographics_agent",
+        "attribution_demographics_agent",
+    ])
+    if _demo_mod is not None:
+        try:
+            _p(88, "Reasoning per-asset demographic distributions...")
+            demos = _demo_mod.build_campaign_demographics(
+                snapshot, claude_fn=_demo_claude, batch_size=6)
+            _demo_mod.save_to_snapshot(snapshot, demos)
+            _p(89, f"Demographics generated ({demos.get('method')}) "
+                    f"for {len(demos.get('phases') or [])} phases")
+        except Exception as e:
+            logger.warning("Intent ingest: demographics generation failed (%s); "
+                            "will run when scripts/build_intent_demographics.py "
+                            "--slug %s --apply is invoked", e, title_slug)
+    else:
+        logger.warning("Intent ingest: attribution_demographics_agent module "
+                        "not importable; skipping (Performance -> Demographics "
+                        "tab will be empty until a hand-invoked build runs).")
 
     snap_key = SNAPSHOT_KEY_FMT.format(slug=title_slug)
     body = json.dumps(snapshot, default=str).encode()
