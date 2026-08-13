@@ -19354,11 +19354,6 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                         🎯 Build Attribution IQ Campaign <span style="font-size: 0.7em; opacity: 0.9;">(50 credits)</span>
                     </button>
                     {% endif %}
-                    {% if has_sentiment_iq_access or role == 'super_admin' or role == 'admin' %}
-                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('sentiment-iq')" id="customAnalysisTabSentimentIQ">
-                        💬 Sentiment IQ
-                    </button>
-                    {% endif %}
                     {% if 'flywheel_conversion' in analysis_iq_modules or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('flywheel-conversion')" id="customAnalysisTabFlywheelConversion">
                         🔄 Flywheel Conversion <span style="font-size: 0.7em; opacity: 0.9;">(25 credits)</span>
@@ -21071,73 +21066,6 @@ https://www.instagram.com/p/..."></textarea>
                                 <button type="button" class="btn btn-small" onclick="refreshDigitalJourneyList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
                             </div>
                             <div id="djResultsList" style="max-height: 480px; overflow-y: auto;"><div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No runs yet. Submit one to populate.</div></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Sentiment IQ Tab Content -->
-                <div id="customAnalysisTabContentSentimentIQ" class="custom-analysis-tab-content">
-                    <div class="main-grid">
-                        <div class="card">
-                            <h2>💬 Sentiment IQ</h2>
-                            <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits to start a tracker (Ongoing-only is free)</div>
-                            <p class="section-description">Track public sentiment around any brand or term across search engines, social media, news, reviews, forums, and complaint platforms. Three layers combined: behavioral signals from our panel clickstream, page-content sentiment classified by OpenAI, and a live web-search AI rollup of positive / negative / neutral themes with sample quotes and source links. Demographic and geographic breakdowns of who is talking. Toggle Ongoing for daily refreshes via a cron job, and enable email alerts to be notified when sentiment shifts materially.</p>
-                            <form id="sentimentIQForm" onsubmit="event.preventDefault(); submitSentimentIQ();">
-                                <div style="margin-bottom: 1rem;">
-                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Project Name</label>
-                                    <input type="text" id="sentimentIQProjectName" placeholder="e.g. Nike sentiment Q1 2026" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                </div>
-                                <div style="margin-bottom: 1rem;">
-                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Brand / Terms to Track <span style="font-weight: 400; color: var(--text-secondary);">(comma- or newline-separated; multiple variants OK)</span></label>
-                                    <textarea id="sentimentIQBrandTerms" rows="3" placeholder="e.g. Nike, nike.com, just do it, nike running" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
-                                </div>
-                                <div style="margin-bottom: 1rem;">
-                                    <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Competitor Terms <span style="font-weight: 400; color: var(--text-secondary);">(optional, for compare view)</span></label>
-                                    <textarea id="sentimentIQCompetitorTerms" rows="2" placeholder="e.g. Adidas, Puma, Under Armour" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px; resize: vertical;"></textarea>
-                                </div>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-                                    <div>
-                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Start Date <span style="font-weight: 400; color: var(--text-secondary);">(optional)</span></label>
-                                        <input type="date" id="sentimentIQStartDate" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                    </div>
-                                    <div>
-                                        <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">End Date <span style="font-weight: 400; color: var(--text-secondary);">(optional)</span></label>
-                                        <input type="date" id="sentimentIQEndDate" style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                    </div>
-                                </div>
-                                <div style="margin-bottom: 0.5rem; font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                                    Leave both dates blank for an Ongoing-only tracker (starts fresh tomorrow, free).
-                                    Fill in a <strong>Start Date</strong> only to backfill from that date through yesterday.
-                                    Fill in both for a fixed range. Each backfill costs 10 credits.
-                                </div>
-                                <div style="margin-bottom: 1rem; padding: 12px 14px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
-                                    <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
-                                        <input type="checkbox" id="sentimentIQOngoing" checked style="margin-top: 3px; accent-color: var(--accent-primary);">
-                                        <span style="font-size: 13px;"><strong>Ongoing</strong> &mdash; refresh this tracker every morning via daily cron. Combine with a Start Date to backfill history first, then continue ongoing from there.</span>
-                                    </label>
-                                </div>
-                                <div style="margin-bottom: 1.5rem; padding: 12px 14px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
-                                    <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
-                                        <input type="checkbox" id="sentimentIQAlertEmail" style="margin-top: 3px; accent-color: var(--accent-primary);">
-                                        <span style="font-size: 13px;"><strong>Email me when sentiment shifts materially</strong> &mdash; we'll send a dashboard-styled alert when positive share drops by 15+ points or negative volume spikes by 25%+ vs. the prior day.</span>
-                                    </label>
-                                </div>
-                                <button type="submit" id="sentimentIQSubmitBtn" class="btn btn-primary" style="width: 100%;">Create Sentiment IQ Tracker</button>
-                            </form>
-                            <div id="sentimentIQStatus" style="display: none; margin-top: 1rem; padding: 1rem; border-radius: 8px; background: var(--bg-secondary); text-align: center;">
-                                <div id="sentimentIQStatusText" style="font-weight: 600; margin-bottom: 4px;"></div>
-                                <div style="background: var(--border-color); border-radius: 4px; height: 6px; overflow: hidden;"><div id="sentimentIQProgressBar" style="height: 100%; background: var(--accent-primary); transition: width 0.3s; width: 0%;"></div></div>
-                            </div>
-                        </div>
-                        <div class="card">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                                <h2 style="margin:0;">Past Trackers</h2>
-                                <button type="button" class="btn btn-small" onclick="refreshSentimentIQList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
-                            </div>
-                            <div id="sentimentIQTrackersList" style="max-height: 360px; overflow-y: auto;"><div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No trackers yet. Create one to start tracking sentiment.</div></div>
-                            <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
-                                <button type="button" class="btn" style="width: 100%; background: var(--accent-primary); color: white;" onclick="if(typeof showSentimentIQ==='function'){showSentimentIQ();}">📊 Open Sentiment IQ Dashboard</button>
-                            </div>
                         </div>
                     </div>
                 </div>
