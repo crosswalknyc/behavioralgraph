@@ -31944,9 +31944,19 @@ https://www.instagram.com/p/..."></textarea>
                     }
                 });
                 var meta = IIQ_QMETA[qid];
-                document.getElementById('iiqQTitle').innerHTML =
-                    '<h4 style="margin:0;">' + escapeHtml(meta.title) + '</h4>'
-                    + '<div style="font-size:0.74rem; color: var(--text-secondary); margin-top:0.2rem;">' + escapeHtml(meta.intro) + '</div>';
+                // The Audiences sub-tab renders its own "Audiences of
+                // interest" header + brand-aware caption inside
+                // iiqRenderAudiences(). Hide the outer sub-tab header
+                // for that tab so we don't render two titles + a stale
+                // film-flavored caption ("...moviegoing audience...")
+                // on brand campaigns like Chime.
+                if (qid === 'audiences') {
+                    document.getElementById('iiqQTitle').innerHTML = '';
+                } else {
+                    document.getElementById('iiqQTitle').innerHTML =
+                        '<h4 style="margin:0;">' + escapeHtml(meta.title) + '</h4>'
+                        + '<div style="font-size:0.74rem; color: var(--text-secondary); margin-top:0.2rem;">' + escapeHtml(meta.intro) + '</div>';
+                }
                 var body = document.getElementById('iiqQBody');
                 if (IIQ_QCACHE[qid]) {
                     body.innerHTML = IIQ_QCACHE[qid];
