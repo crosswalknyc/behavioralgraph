@@ -557,6 +557,7 @@ def get_overview(title_slug: str) -> dict:
             "distributor":  t.get("distributor"),
             "opening_date": t.get("opening_date"),
             "ticketing_open_date": t.get("ticketing_open_date"),
+            "end_date": t.get("end_date"),
             "genre": t.get("genre"),
             "mpaa_rating": t.get("mpaa_rating"),
             "predicted_bo_low_usd":  t.get("predicted_bo_low_usd", 0),

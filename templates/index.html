@@ -26310,10 +26310,32 @@ https://www.instagram.com/p/..."></textarea>
                     document.getElementById('iiqPhaseTimeline').innerHTML = '';
                     return;
                 }
+                // Brand mode swaps the film labels ("Opening date" /
+                // "Ticketing on sale") for campaign-appropriate ones and
+                // shows campaign_end_date instead of the ticketing-open date
+                // (which is meaningless for a brand campaign). Falls back to
+                // deriving end_date from phases[] for pre-Aug-2026 brand
+                // ingests that don't have title.end_date set.
+                var _iiqIsBrand = (ov.title_type === 'brand');
+                var _iiqBrandEnd = ov.end_date || '';
+                if (!_iiqBrandEnd && _iiqIsBrand && Array.isArray(ov.phases) && ov.phases.length) {
+                    var _phasesActiveFlag = false;
+                    var _maxEnd = '';
+                    ov.phases.forEach(function(p) {
+                        if (!p) return;
+                        if (!p.end_date) { _phasesActiveFlag = true; return; }
+                        if (p.end_date > _maxEnd) _maxEnd = p.end_date;
+                    });
+                    _iiqBrandEnd = _phasesActiveFlag ? 'In flight' : (_maxEnd || 'In flight');
+                }
+                var _iiqCard2Label = _iiqIsBrand ? 'Campaign launch day' : 'Opening date';
+                var _iiqCard2Value = ov.opening_date || '-';
+                var _iiqCard3Label = _iiqIsBrand ? 'Campaign end date'   : 'Ticketing on sale';
+                var _iiqCard3Value = _iiqIsBrand ? (_iiqBrandEnd || 'In flight') : (ov.ticketing_open_date || '-');
                 document.getElementById('iiqOverviewMeta').innerHTML = [
                     metaCard('Distributor', ov.distributor || '-'),
-                    metaCard('Opening date', ov.opening_date || '-'),
-                    metaCard('Ticketing on sale', ov.ticketing_open_date || '-'),
+                    metaCard(_iiqCard2Label, _iiqCard2Value),
+                    metaCard(_iiqCard3Label, _iiqCard3Value),
                     metaCard('Genre', ov.genre || '-'),
                     metaCard('Assets ingested', fmtInt(ov.asset_count)),
                 ].join('');

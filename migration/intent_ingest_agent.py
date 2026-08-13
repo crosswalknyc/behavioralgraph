@@ -1322,6 +1322,7 @@ def run_ingest(job_id: str, params: dict,
         "distributor":           brand,        # brand goes in the "distributor" slot (renders as "Brand" in brand-mode)
         "opening_date":          launch_date,
         "ticketing_open_date":   launch_date,
+        "end_date":              end_date or None,  # brand-mode: campaign end (None = in flight)
         "mpaa_rating":           "",
         "runtime_min":           0,
         "genre":                 brand_cat or "",
