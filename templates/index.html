@@ -24820,7 +24820,7 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
                 <div id="microdramasIQTopNWrap">
                     <label for="microdramasIQTopN">Show</label>
-                    <select id="microdramasIQTopN">
+                    <select id="microdramasIQTopN" onchange="applyMicrodramasIQUnified()">
                         <option value="10">Top 10</option>
                         <option value="20" selected>Top 20</option>
                         <option value="25">Top 25</option>
@@ -24828,7 +24828,7 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
                 <div>
                     <label for="microdramasIQGenre">Genre</label>
-                    <select id="microdramasIQGenre">
+                    <select id="microdramasIQGenre" onchange="applyMicrodramasIQUnified()">
                         <option value="">All genres</option>
                         <option value="Werewolf">Werewolf</option>
                         <option value="Billionaire">Billionaire</option>
@@ -45461,13 +45461,22 @@ https://www.instagram.com/p/..."></textarea>
         function _miqOnWindowChange() {
             // Show or hide the date-range inputs depending on whether
             // the user picked "Custom range..." from the Look back
-            // dropdown.
+            // dropdown. For preset values (Today, N days, YTD) we
+            // also kick off the request immediately so the numbers
+            // update the moment the dropdown changes - matching how
+            // the user expects a filter to behave. Custom range
+            // still waits for the Apply button because the user
+            // typically needs to set both From and To first.
             var winEl = document.getElementById('microdramasIQWindow');
-            var custom = winEl && winEl.value === 'custom';
+            var val = winEl ? winEl.value : '7';
+            var custom = val === 'custom';
             var fromWrap = document.getElementById('microdramasIQCustomFromWrap');
             var toWrap   = document.getElementById('microdramasIQCustomToWrap');
             if (fromWrap) fromWrap.style.display = custom ? '' : 'none';
             if (toWrap)   toWrap.style.display   = custom ? '' : 'none';
+            if (!custom && typeof applyMicrodramasIQUnified === 'function') {
+                applyMicrodramasIQUnified();
+            }
         }
 
         function _miqCurrentFilters() {
