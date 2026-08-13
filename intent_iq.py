@@ -1412,10 +1412,7 @@ def _q4_talent_influencer_lift(title_slug: str) -> dict:
         rows = [{"talent": t, **v, "source": "s3_snapshot"}
                 for t, v in agg.items()]
         rows.sort(key=lambda r: (-r["asset_count"], -r["views_total"], r["talent"]))
-        return {"success": True, "fallback": True, "rows": rows,
-                "note": ("Per-talent asset counts + view totals from the "
-                          "ingest snapshot. Run scripts/intent_attribution.py "
-                          "--apply for proper halo math when CH is back.")}
+        return {"success": True, "fallback": True, "rows": rows}
     try:
         attr_rows = ch.query(
             "SELECT bucket AS talent, sample_size AS asset_count, "
@@ -1454,9 +1451,7 @@ def _q4_talent_influencer_lift(title_slug: str) -> dict:
         ])
         for r in result:
             r["source"] = "campaign_assets_fallback"
-        return {"success": True, "rows": result,
-                 "note": "Showing raw view totals; run "
-                          "scripts/intent_attribution.py --apply for proper halo math."}
+        return {"success": True, "rows": result}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
