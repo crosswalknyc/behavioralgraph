@@ -29135,13 +29135,13 @@ https://www.instagram.com/p/..."></textarea>
                         +       '<div style="font-size:0.8rem; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escapeHtml(label) + '"><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:' + dotColor + '; margin-right:0.45rem; vertical-align:middle;"></span>' + escapeHtml(label) + '</div>'
                         +       '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.15rem; padding-left:1rem;">' + escapeHtml(g.paid_or_organic || 'unknown') + ' \u00b7 ' + g.n + ' asset' + (g.n === 1 ? '' : 's') + ' \u00b7 ' + fmtCompact(g.views) + ' views</div>'
                         +     '</div>'
-                        +     _miniBar(g.share_pct, maxShare, '#a855f7')
-                        +     _miniBar(g.info_pct,  maxInfo,  '#a5b4fc')
-                        +     _miniBar(g.ticket_pct, maxTk,   '#fbbf24')
+                        +     _miniBar(g.share_pct, 100, '#a855f7')
+                        +     _miniBar(g.info_pct,  100, '#a5b4fc')
+                        +     _miniBar(g.ticket_pct, 100, '#fbbf24')
                         +   '</div>';
                 });
 
-                html += '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.6rem; line-height:1.5;">Reach (purple) = each category\'s share of total YTD views across all assets. Mid-funnel (indigo) and bottom-funnel (amber) are view-weighted means of per-asset projection rates, identical to the values shown on the In-Flight Assets page. Bars within a column are scaled to that column\'s maximum so you can scan vertically: a category long in purple but short in amber is high reach / low ticketing intent, and vice versa.</div>';
+                html += '<div style="font-size:0.66rem; color: var(--text-secondary); margin-top:0.6rem; line-height:1.5;">Reach (purple) = each category\'s share of total YTD views across all assets. Mid-funnel (indigo) and bottom-funnel (amber) are view-weighted means of per-asset projection rates, identical to the values shown on the In-Flight Assets page. Bars are scaled to a fixed 0-100% axis so magnitudes are directly comparable across categories and across columns: a 1.4% bar looks proportionally tiny next to an 81% bar. Website-visit % values are typically 1-3% for brand campaigns, so those bars should be narrow slivers by design.</div>';
                 html += '</div>';
                 return html;
             }
