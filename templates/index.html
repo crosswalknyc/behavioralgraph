@@ -122752,6 +122752,7 @@ https://www.instagram.com/p/..."></textarea>
         
         function renderSavedSegments() {
             const container = document.getElementById('savedSegmentsList');
+            if (!container) return;
             container.innerHTML = savedSegments.map((seg, idx) => `
                 <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                     <span class="saved-segment-chip" onclick="loadSavedSegment(${idx})" style="flex: 1;">${seg.name}</span>
