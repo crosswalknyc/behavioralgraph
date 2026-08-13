@@ -26541,11 +26541,11 @@ https://www.instagram.com/p/..."></textarea>
                         + '</div>'
                         + '<div style="margin-top:0.45rem; padding-top:0.45rem; border-top:1px dashed rgba(255,255,255,0.06); display:grid; grid-template-columns: 1fr 1fr 1fr; gap:0.35rem;">'
                             + '<div title="' + escapeHtml(infoTipAud) + '" style="text-align:left;">'
-                                + '<div style="font-size:0.95rem; font-weight:700; color:#a5b4fc; line-height:1;">' + exp.info_pct.toFixed(1) + '%</div>'
+                                + '<div style="font-size:0.95rem; font-weight:700; color:#a5b4fc; line-height:1;">' + exp.info_pct.toFixed(2) + '%</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.6rem; opacity:0.7; margin-top:0.1rem; line-height:1.2;">info-seek <span style="opacity:0.55;">~' + fmtCompact(infoSeekersAud) + '</span></div>'
                             + '</div>'
                             + '<div title="' + escapeHtml(tkTipAud) + '" style="text-align:left;">'
-                                + '<div style="font-size:0.95rem; font-weight:700; color:#fbbf24; line-height:1;">' + exp.ticket_pct.toFixed(1) + '%</div>'
+                                + '<div style="font-size:0.95rem; font-weight:700; color:#fbbf24; line-height:1;">' + exp.ticket_pct.toFixed(2) + '%</div>'
                                 + '<div class="iiq-card-meta" style="font-size:0.6rem; opacity:0.7; margin-top:0.1rem; line-height:1.2;">ticketing <span style="opacity:0.55;">~' + fmtCompact(ticketVisitsAud) + '</span></div>'
                             + '</div>'
                             + '<div></div>'
@@ -27178,8 +27178,8 @@ https://www.instagram.com/p/..."></textarea>
                      +   '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:0.45rem; margin-bottom:0.55rem;">'
                      +     '<div><div style="font-size:0.85rem; font-weight:700; color:#fff;">' + fmtC(eng) + '</div><div style="font-size:0.6rem; color:#94a3b8;">engagement</div></div>'
                      +     '<div><div style="font-size:0.85rem; font-weight:700; color:#22d3ee;">' + engRate.toFixed(2) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">eng. rate</div></div>'
-                     +     '<div><div style="font-size:0.85rem; font-weight:700; color:#a5b4fc;">' + proj.info_pct.toFixed(1) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">info-seek</div></div>'
-                     +     '<div><div style="font-size:0.85rem; font-weight:700; color:#fbbf24;">' + proj.ticket_pct.toFixed(1) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">' + window._iiqBFL().toLowerCase() + '</div></div>'
+                     +     '<div><div style="font-size:0.85rem; font-weight:700; color:#a5b4fc;">' + proj.info_pct.toFixed(2) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">info-seek</div></div>'
+                     +     '<div><div style="font-size:0.85rem; font-weight:700; color:#fbbf24;">' + proj.ticket_pct.toFixed(2) + '%</div><div style="font-size:0.6rem; color:#94a3b8;">' + window._iiqBFL().toLowerCase() + '</div></div>'
                      +   '</div>'
                      +   '<div style="display:flex; justify-content:space-between; align-items:center; gap:0.4rem; font-size:0.65rem; color:#94a3b8;">'
                      +     '<span>' + (posted ? 'Posted ' + esc(posted) : '') + '</span>'
@@ -27851,8 +27851,8 @@ https://www.instagram.com/p/..."></textarea>
                                 + '<div style="margin-top:0.5rem; display:flex; align-items:baseline; justify-content:space-between; gap:0.4rem;">'
                                     + '<div title="Likes + comments + shares - how many people did something with the asset, not just saw it"><div style="font-size:0.9rem; font-weight:600; color:#cbd5e1; line-height:1;">' + fmtCompact(e) + '</div><div class="iiq-card-meta" style="font-size:0.62rem; opacity:0.7;">engagement</div></div>'
                                     + (v > 0 ? '<div title="Engagement rate = engagement / views. Higher = more participatory audience."><div style="font-size:0.9rem; font-weight:600; color:#94a3b8; line-height:1;">' + (e/v*100).toFixed(2) + '%</div><div class="iiq-card-meta" style="font-size:0.62rem; opacity:0.7;">eng. rate</div></div>' : '')
-                                    + (proj ? '<div title="' + escapeHtml(infoTip) + '"><div style="font-size:0.9rem; font-weight:600; color:#a5b4fc; line-height:1;">' + proj.info_pct.toFixed(1) + '%</div><div class="iiq-card-meta" style="font-size:0.62rem; opacity:0.7;">info-seek</div></div>' : '')
-                                    + (proj ? '<div title="' + escapeHtml(tkTip)   + '"><div style="font-size:0.9rem; font-weight:600; color:#fbbf24; line-height:1;">' + proj.ticket_pct.toFixed(1) + '%</div><div class="iiq-card-meta" style="font-size:0.62rem; opacity:0.7;">ticketing</div></div>' : '')
+                                    + (proj ? '<div title="' + escapeHtml(infoTip) + '"><div style="font-size:0.9rem; font-weight:600; color:#a5b4fc; line-height:1;">' + proj.info_pct.toFixed(2) + '%</div><div class="iiq-card-meta" style="font-size:0.62rem; opacity:0.7;">info-seek</div></div>' : '')
+                                    + (proj ? '<div title="' + escapeHtml(tkTip)   + '"><div style="font-size:0.9rem; font-weight:600; color:#fbbf24; line-height:1;">' + proj.ticket_pct.toFixed(2) + '%</div><div class="iiq-card-meta" style="font-size:0.62rem; opacity:0.7;">ticketing</div></div>' : '')
                                 + '</div>'
                                 + '<div style="margin-top:0.45rem; background: rgba(255,255,255,0.06); height:4px; border-radius: 2px; overflow:hidden;" title="' + barPct.toFixed(1) + '% of top performer">'
                                     + '<div style="height:100%; width:' + barPct.toFixed(1) + '%; background:' + edgeColor + ';"></div>'
@@ -27969,7 +27969,7 @@ https://www.instagram.com/p/..."></textarea>
                 q4: { short: 'Talent Attribution', title: 'How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
                 q5: { short: 'Trailer Performance', title: 'Trailer Performance', intro: 'Daily trailer views with overlaid funnel conversion (% of viewers who became info-seekers or visited a ticketing site within 7 days). Second chart traces the PVOD / SVOD search tail that builds after theatrical, peaking at the 5/15 streaming launch.' },
                 q6: { short: 'Cohort Engagement', title: 'Which content drives info-seek + ticketing for each audience?', intro: 'Per-asset attribution sliced by audience. Pick any cohort from the Audiences tab (Steph Curry fans, cast members, family-animation fans, Disney+ family subs, demographic cuts) plus the four moviegoing-frequency cohorts \u2014 each selected cohort gets its own set of columns showing that cohort\'s views, info-seek %, and ticketing % per asset. Cut by platform (YouTube / TikTok / etc.), Paid vs Organic, and asset type to isolate which specific pieces of content are converting which audiences. Same projection helper as Assets / Q1 / Q2 \u2014 numbers ladder up.' },
-                demographics: { short: 'Demographics', title: 'Who engaged with each campaign?', intro: 'Per-campaign demographic breakdown of the actual audience that watched + engaged with each asset. Reasoned per-asset (channel + talent + paid/organic + brand context) then view-weighted to phase-level. Every category sums to 100% and every bucket has a value \u2014 canonical schema matches the Behavioral Graph panel.' },
+                demographics: { short: 'Demographics', title: 'Who engaged with each campaign?', intro: 'Per-campaign demographic breakdown of the actual audience that watched + engaged with each asset.' },
                 journey: { short: 'Digital Journey', title: 'What do people do before and after engaging with each asset?', intro: 'Per-asset BEFORE / AFTER funnel. BEFORE = referrer mix (YouTube Up-Next / TikTok FYP / paid display / etc.) calibrated to the asset\'s channel and paid-vs-organic status. AFTER (7-day window) = downstream destinations split across Google / IMDB / RT / Letterboxd / official site for info-seek, Fandango / AMC / Regal / Cinemark / Atom for ticketing, plus shared-to-social, watched-trailer-next, and "where to stream" search. Tilts by phase: ticketing collapses after theatrical, streaming search ramps. Info-seek % + ticketing % ladder up to Assets / Q1 / Q2.' },
             };
             var IIQ_QPALETTE = {
@@ -29552,8 +29552,8 @@ https://www.instagram.com/p/..."></textarea>
                                 +   '<div style="background: rgba(255,255,255,0.06); height: 16px; border-radius: 4px; overflow:hidden;"><div style="height:100%; width:' + pct.toFixed(1) + '%; background:' + barColor + ';"></div></div>'
                                 +   '<div style="font-size:0.82rem; font-weight:600; color:#fff; text-align:right;">' + fmtCompact(b.views_total||0) + '</div>'
                                 +   '<div style="font-size:0.78rem; color:#cbd5e1; text-align:right;">' + fmtCompact(b.engagement_total||0) + '</div>'
-                                +   '<div style="font-size:0.78rem; font-weight:600; color:#a5b4fc; text-align:right;">' + proj.info_pct.toFixed(1) + '%</div>'
-                                +   '<div style="font-size:0.78rem; font-weight:600; color:#fbbf24; text-align:right;">' + proj.ticket_pct.toFixed(1) + '%</div>'
+                                +   '<div style="font-size:0.78rem; font-weight:600; color:#a5b4fc; text-align:right;">' + proj.info_pct.toFixed(2) + '%</div>'
+                                +   '<div style="font-size:0.78rem; font-weight:600; color:#fbbf24; text-align:right;">' + proj.ticket_pct.toFixed(2) + '%</div>'
                                 + '</div>';
                         }).join('');
                         return headerHtml + rowsHtml;
@@ -30110,9 +30110,9 @@ https://www.instagram.com/p/..."></textarea>
                                 +   '<td style="padding:0.45rem 0.55rem; color:#cbd5e1; font-size:0.72rem;">' + escapeHtml(r.channel || '\u2014') + '</td>'
                                 +   '<td style="padding:0.45rem 0.55rem; color:#cbd5e1; font-size:0.72rem;">' + escapeHtml(r.paid_or_organic) + '</td>'
                                 +   '<td style="padding:0.45rem 0.55rem; color:#fff; font-size:0.78rem; text-align:right; font-variant-numeric:tabular-nums;">' + fmtCompact(r.views) + '</td>'
-                                +   '<td style="padding:0.45rem 0.55rem; color:#a5b4fc; font-size:0.78rem; text-align:right; font-variant-numeric:tabular-nums;">' + r.info_pct.toFixed(1) + '%</td>'
+                                +   '<td style="padding:0.45rem 0.55rem; color:#a5b4fc; font-size:0.78rem; text-align:right; font-variant-numeric:tabular-nums;">' + r.info_pct.toFixed(2) + '%</td>'
                                 +   '<td style="padding:0.45rem 0.55rem; color:#a5b4fc; font-size:0.72rem; text-align:right; font-variant-numeric:tabular-nums;">' + fmtCompact(r.info_seekers) + '</td>'
-                                +   '<td style="padding:0.45rem 0.55rem; color:#fbbf24; font-size:0.78rem; text-align:right; font-variant-numeric:tabular-nums;">' + r.ticket_pct.toFixed(1) + '%</td>'
+                                +   '<td style="padding:0.45rem 0.55rem; color:#fbbf24; font-size:0.78rem; text-align:right; font-variant-numeric:tabular-nums;">' + r.ticket_pct.toFixed(2) + '%</td>'
                                 +   '<td style="padding:0.45rem 0.55rem; color:#fbbf24; font-size:0.72rem; text-align:right; font-variant-numeric:tabular-nums;">' + fmtCompact(r.ticket_visits) + '</td>'
                                 + '</tr>';
                         }).join('');
@@ -30219,8 +30219,8 @@ https://www.instagram.com/p/..."></textarea>
                   +   iiqSummaryTile('Views (' + (asset.window_label || 'YTD') + ')', fmtCompact(views), '')
                   +   iiqSummaryTile('Engagement', fmtCompact(eng), 'likes + comments + shares')
                   +   iiqSummaryTile('Eng. rate', engRate.toFixed(2) + '%', 'engagement / views')
-                  +   iiqSummaryTile('Info-seek %', proj.info_pct.toFixed(1) + '%', '~' + fmtCompact(infoCount) + ' viewers within 7d')
-                  +   iiqSummaryTile(((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing')) + ' %', proj.ticket_pct.toFixed(1) + '%', '~' + fmtCompact(tkCount) + ' viewers within 7d')
+                  +   iiqSummaryTile('Info-seek %', proj.info_pct.toFixed(2) + '%', '~' + fmtCompact(infoCount) + ' viewers within 7d')
+                  +   iiqSummaryTile(((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing')) + ' %', proj.ticket_pct.toFixed(2) + '%', '~' + fmtCompact(tkCount) + ' viewers within 7d')
                   + '</div>'
                   + '<div id="iiqAssetModalChart" class="iiq-card" style="padding:0.85rem;">'
                   +   '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Daily performance (loading\u2026)</div>'
@@ -30894,9 +30894,9 @@ https://www.instagram.com/p/..."></textarea>
                     var barPct = maxV > 0 ? v / maxV * 100 : 0;
                     var engCell = r.eng_pct == null ? '<span style="opacity:0.4;">-</span>'
                         : r.eng_pct.toFixed(1) + '%';
-                    var infoPctCell   = r.info_pct      == null ? '<span style="opacity:0.4;">-</span>' : r.info_pct.toFixed(1) + '%';
+                    var infoPctCell   = r.info_pct      == null ? '<span style="opacity:0.4;">-</span>' : r.info_pct.toFixed(2) + '%';
                     var infoCntCell   = r.info_seekers  == null ? '<span style="opacity:0.4;">-</span>' : fmtCompact(r.info_seekers||0);
-                    var tkPctCell     = r.ticket_pct    == null ? '<span style="opacity:0.4;">-</span>' : r.ticket_pct.toFixed(1) + '%';
+                    var tkPctCell     = r.ticket_pct    == null ? '<span style="opacity:0.4;">-</span>' : r.ticket_pct.toFixed(2) + '%';
                     var tkCntCell     = r.ticket_visits == null ? '<span style="opacity:0.4;">-</span>' : fmtCompact(r.ticket_visits||0);
                     html += '<tr>'
                         +   '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04);">' + escapeHtml(r.talent) + '</td>'
@@ -31490,8 +31490,8 @@ https://www.instagram.com/p/..."></textarea>
                     selected.forEach(function(c) {
                         var p = row.perCohort[c.slug];
                         html += '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#cbd5e1; font-variant-numeric: tabular-nums; border-left:2px solid ' + c._color + ';">' + fmtCompact(Math.round(p.views)) + '</td>'
-                             +  '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#a5b4fc; font-variant-numeric: tabular-nums;">' + p.info_pct.toFixed(1) + '%</td>'
-                             +  '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#fbbf24; font-variant-numeric: tabular-nums;">' + p.ticket_pct.toFixed(1) + '%</td>';
+                             +  '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#a5b4fc; font-variant-numeric: tabular-nums;">' + p.info_pct.toFixed(2) + '%</td>'
+                             +  '<td style="padding:0.4rem 0.5rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:right; color:#fbbf24; font-variant-numeric: tabular-nums;">' + p.ticket_pct.toFixed(2) + '%</td>';
                     });
                     html += '</tr>';
                 });
@@ -32308,8 +32308,8 @@ https://www.instagram.com/p/..."></textarea>
                                 + '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:0.4rem; margin-top:0.65rem;">'
                                     + pill('Engagement',  fmtCompact(e),              '#fff')
                                     + pill('Eng. rate',   engRate.toFixed(2) + '%',   '#fff')
-                                    + pill('Info-seek %', proj.info_pct.toFixed(1) + '%', '#a5b4fc')
-                                    + pill('Ticketing %', proj.ticket_pct.toFixed(1) + '%', '#fbbf24')
+                                    + pill('Info-seek %', proj.info_pct.toFixed(2) + '%', '#a5b4fc')
+                                    + pill('Ticketing %', proj.ticket_pct.toFixed(2) + '%', '#fbbf24')
                                 + '</div>'
                                 + '<div class="iiq-card-meta" style="margin-top:0.55rem; font-size:0.72rem; opacity:0.7;">Posted ' + escapeHtml(c.posted_date) + '</div>'
                                 + (c.url ? '<div style="margin-top:0.35rem;"><a href="' + escapeHtml(c.url) + '" target="_blank" rel="noopener" style="color: var(--accent-cyan, #5a9ad9); font-size:0.78rem;">Open asset</a></div>' : '')
