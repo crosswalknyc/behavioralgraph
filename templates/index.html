@@ -27337,6 +27337,20 @@ https://www.instagram.com/p/..."></textarea>
                 STREAMING:       '2026-05-15'
             };
             function iiqCalendarFunnelMultiplier(dateIso) {
+                // BRAND SHORT-CIRCUIT (Jenna 2026-08-13): brand campaigns
+                // have no ticketing-presale / opening-weekend / streaming-
+                // launch structure. Info-seek + web-visit should track
+                // views day-by-day at a flat multiplier so the daily
+                // renormalization spreads them proportionally over the
+                // whole campaign, not piled on the fake film opening
+                // date. Without this, Chime's info-seek line collapsed
+                // to zero for the first 90% of the campaign and spiked
+                // near Feb 13 (GOAT's opening) because the film curve
+                // returned info_mult=~0.04 pre-presale.
+                var _iiqCal_ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                if (_iiqCal_ov.title_type === 'brand') {
+                    return { info_mult: 1.0, ticket_mult: 1.0 };
+                }
                 var DAY = 86400000;
                 var dT  = new Date(dateIso + 'T12:00:00Z').getTime();
                 var psT = new Date(IIQ_CAMPAIGN_DATES.PRESALE        + 'T12:00:00Z').getTime();
@@ -27415,6 +27429,16 @@ https://www.instagram.com/p/..."></textarea>
             // ladder-up totals on the donut, funnel-comparison card, or
             // Assets page.
             function iiqCalendarViewMultiplier(dateIso) {
+                // BRAND SHORT-CIRCUIT (Jenna 2026-08-13): brand campaigns
+                // don't decay to a 0.08-0.10 floor after the fake theatrical
+                // window closes. Daily views for brand campaigns should
+                // track posted-content activity 1:1 so the renormalization
+                // pass distributes lifetime views proportionally across
+                // the actual campaign window.
+                var _iiqCalV_ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                if (_iiqCalV_ov.title_type === 'brand') {
+                    return { paid_mult: 1.0, organic_mult: 1.0 };
+                }
                 var DAY = 86400000;
                 var dT  = new Date(dateIso + 'T12:00:00Z').getTime();
                 var owT = new Date(IIQ_CAMPAIGN_DATES.OPENING        + 'T12:00:00Z').getTime();
