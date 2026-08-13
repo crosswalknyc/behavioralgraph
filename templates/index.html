@@ -31962,9 +31962,19 @@ https://www.instagram.com/p/..."></textarea>
                 if (qid === 'audiences') {
                     document.getElementById('iiqQTitle').innerHTML = '';
                 } else {
+                    // Brand campaigns can supply a per-subtab intro
+                    // override via terminology.subtab_intros[qid] so
+                    // movie-flavored copy (IMDB, Fandango, "theatrical",
+                    // "trailer", etc.) doesn't leak into Chime / other
+                    // brand campaigns' Digital Journey / Eng x Category
+                    // sub-tabs.
+                    var _iiqSubOv = (window.__intentIQ && window.__intentIQ.overview) || {};
+                    var _iiqSubTerm = (_iiqSubOv.terminology && _iiqSubOv.terminology.subtab_intros) || {};
+                    var _iiqIntro = (_iiqSubTerm[qid] != null) ? _iiqSubTerm[qid] : meta.intro;
+                    var _iiqTitle = (_iiqSubTerm[qid + '_title'] != null) ? _iiqSubTerm[qid + '_title'] : meta.title;
                     document.getElementById('iiqQTitle').innerHTML =
-                        '<h4 style="margin:0;">' + escapeHtml(meta.title) + '</h4>'
-                        + '<div style="font-size:0.74rem; color: var(--text-secondary); margin-top:0.2rem;">' + escapeHtml(meta.intro) + '</div>';
+                        '<h4 style="margin:0;">' + escapeHtml(_iiqTitle) + '</h4>'
+                        + (_iiqIntro ? '<div style="font-size:0.74rem; color: var(--text-secondary); margin-top:0.2rem;">' + escapeHtml(_iiqIntro) + '</div>' : '');
                 }
                 var body = document.getElementById('iiqQBody');
                 if (IIQ_QCACHE[qid]) {

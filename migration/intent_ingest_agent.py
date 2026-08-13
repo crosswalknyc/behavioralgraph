@@ -127,6 +127,25 @@ _GENERIC_BRAND_TERMINOLOGY = {
         "Referral / promo link",
     ],
     "suppress_film_behaviors":         True,
+    # Per-sub-tab intro overrides. Frontend prefers these over the
+    # hardcoded film-flavored IIQ_QMETA[qid].intro strings so brand
+    # campaigns never render "Fandango / AMC / Regal / Letterboxd /
+    # trailer / theatrical / streaming ramps" style copy. Keys match
+    # the sub-tab id (q1, q2, q3, q4, q5, q6, journey, audiences).
+    # Only override tabs that (a) are visible for brand campaigns and
+    # (b) have movie-flavored default copy that would leak through.
+    "subtab_intros": {
+        "journey": (
+            "Per-asset BEFORE / AFTER funnel. BEFORE = referrer mix "
+            "(paid feed placement, organic feed, brand search, direct, "
+            "dark-social, etc.) calibrated to the asset's channel and "
+            "paid-vs-organic status. AFTER (attribution window) = "
+            "downstream destinations split across brand search + review "
+            "sites for info-seek and the brand's website / app / signup "
+            "destinations for conversion, plus shared-to-social. "
+            "Info-seek % + site visit % ladder up to Assets / Performance."
+        ),
+    },
 }
 
 BRAND_CATEGORY_TERMINOLOGY_PRESETS: Dict[str, Dict[str, Any]] = {
@@ -157,6 +176,19 @@ BRAND_CATEGORY_TERMINOLOGY_PRESETS: Dict[str, Dict[str, Any]] = {
             "iOS / Android app install",
             "Referral / promo link",
         ],
+        "subtab_intros": {
+            "journey": (
+                "Per-asset BEFORE / AFTER funnel. BEFORE = referrer mix "
+                "(paid social placement, organic feed, brand search, direct, "
+                "influencer swipe-up, etc.) calibrated to the asset's "
+                "channel and paid-vs-organic status. AFTER (attribution "
+                "window) = downstream destinations split across brand "
+                "search, finance comparison sites, and app-store listings "
+                "for info-seek, plus brand.com signup / app install / "
+                "referral link for conversion. Info-seek % + website visit "
+                "% ladder up to Assets / Performance."
+            ),
+        },
     },
     "DTC / eCommerce": {
         "mid_funnel_label":           "Consideration",
