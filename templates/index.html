@@ -30644,7 +30644,7 @@ https://www.instagram.com/p/..."></textarea>
                     html += iiqAssetFilterBarHtml(_q4AssetTypesList);
                 }
                 html += '<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.6rem; margin-bottom: 0.85rem;">'
-                    + iiqSummaryTile('Cast members surfaced', String(rows.length), 'in tagged campaign assets')
+                    + iiqSummaryTile('Talent', String(rows.length), 'in tagged campaign assets')
                     + iiqSummaryTile('Talent-driven views', fmtCompact(totalV), 'across all cast-tagged assets')
                     + iiqSummaryTile('Top contributor', top ? top.talent : '-', top ? fmtCompact(top.views) + ' views · ' + top.asset_count + ' assets' : '')
                     + iiqSummaryTile('Info-seekers', fmtCompact(totalInfo), usingAssets ? blendedInfo.toFixed(1) + '% of viewers - matches Assets page' : 'requires asset feed')
