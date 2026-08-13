@@ -861,6 +861,68 @@ AUDIENCES_OF_INTEREST_DEFAULT = {
 }
 
 
+def get_demographics(title_slug: str) -> dict:
+    """Return the per-campaign demographic distributions saved on the
+    normalized snapshot by `attribution_demographics_agent`.
+
+    Response shape:
+      {
+        "success":       True,
+        "title_slug":    "<slug>",
+        "method":        "claude" | "fallback_deterministic" | "mixed",
+        "generated_at":  "<utc iso>",
+        "categories":    ["AGE", "GENDER", ...],   # canonical order
+        "category_labels": {"AGE": "Age", ...},
+        "phases":        [ {phase_name, asset_count, view_count, demographics}, ... ],
+        "all_campaigns": {asset_count, view_count, demographics}
+      }
+
+    If the snapshot has no demographics yet (older ingest run), returns
+    success=False with a hint pointing at scripts/build_intent_demographics.py.
+    """
+    snap = _load_normalized_snapshot(title_slug) or {}
+    demos = snap.get("demographics") or None
+
+    # Category schema import is lazy so this endpoint doesn't crash on
+    # dev boxes that haven't installed the demographics module yet.
+    try:
+        from migration.attribution_demographics_schema import (   # type: ignore
+            DEMO_SCHEMA, DEMO_CATEGORY_LABELS,
+        )
+        categories = list(DEMO_SCHEMA.keys())
+        category_labels = dict(DEMO_CATEGORY_LABELS)
+    except Exception:
+        categories = ["AGE", "GENDER", "ETHNICITY", "INCOME", "EDUCATION",
+                      "PARENTAL_STATUS", "NUMBER_OF_CHILDREN", "AGE_OF_CHILDREN",
+                      "RELATIONSHIP", "SEXUAL_ORIENTATION", "OCCUPATION",
+                      "PRIMARY_LANGUAGE"]
+        category_labels = {c: c.replace("_", " ").title() for c in categories}
+
+    if not demos:
+        return {
+            "success":         False,
+            "error":           ("Demographics not yet generated for this title. "
+                                "Run: python3 scripts/build_intent_demographics.py "
+                                f"--slug {title_slug} --apply"),
+            "title_slug":      title_slug,
+            "categories":      categories,
+            "category_labels": category_labels,
+            "phases":          [],
+            "all_campaigns":   None,
+        }
+
+    return {
+        "success":         True,
+        "title_slug":      title_slug,
+        "method":          demos.get("method"),
+        "generated_at":    demos.get("generated_at_utc"),
+        "categories":      categories,
+        "category_labels": category_labels,
+        "phases":          demos.get("phases") or [],
+        "all_campaigns":   demos.get("all_campaigns") or None,
+    }
+
+
 def get_audiences(title_slug: str) -> dict:
     ch = _ch_client()
     db_overlap: list[dict] = []

@@ -25174,14 +25174,15 @@ https://www.instagram.com/p/..."></textarea>
             //     q6                -> q6_cohorts
             //     journey           -> journey
             window._IIQ_QID_TO_ETKEY = {
-                q1:         'q1_engagement',
-                q2:         'q2_paid_vs_organic',
-                audiences:  'audiences',
-                q3:         'q3_intent_to_buy',
-                q4:         'q4_talent',
-                q5:         'q5_trailer',
-                q6:         'q6_cohorts',
-                journey:    'journey'
+                q1:            'q1_engagement',
+                q2:            'q2_paid_vs_organic',
+                audiences:     'audiences',
+                q3:            'q3_intent_to_buy',
+                q4:            'q4_talent',
+                q5:            'q5_trailer',
+                q6:            'q6_cohorts',
+                demographics:  'demographics',
+                journey:       'journey'
             };
             window._iiqEnabledTabs = function() {
                 var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
@@ -26595,6 +26596,185 @@ https://www.instagram.com/p/..."></textarea>
             // frequency cohort cards into one HTML blob for the Performance
             // tab's "Audiences" sub-tab. Includes the two section headers
             // that used to live in iiqPanel-audiences.
+            // ============================================================
+            // Demographics sub-tab renderer  (2026-08-13)
+            //
+            // Renders per-campaign demographic distributions built by
+            // migration/attribution_demographics_agent.py (Claude-reasoned
+            // per-asset -> view-weighted per-phase). Payload shape:
+            //   { success, method, generated_at,
+            //     categories:      [cat...],       // canonical order
+            //     category_labels: {cat -> label},
+            //     phases:          [{phase_name, asset_count, view_count,
+            //                         demographics: {cat: {bucket: pct}}}, ...],
+            //     all_campaigns:   {asset_count, view_count, demographics} }
+            //
+            // UI: pill-picker at top (All + one per phase), then a 2-col
+            // responsive grid of category cards. Each card shows a
+            // horizontal-bar list of buckets sorted by pct desc. The
+            // picker uses per-slug state so switching titles doesn't
+            // carry the wrong phase.
+            // ============================================================
+            window._iiqDemoState = window._iiqDemoState || {};
+
+            window._iiqDemoBarColor = function(idx, cat) {
+                // Category-tinted palette so different demo cards read
+                // distinctly at a glance. Idx desaturates further down.
+                var palettes = {
+                    AGE:                ['#60a5fa','#3b82f6','#2563eb','#1d4ed8','#1e40af','#1e3a8a','#172554'],
+                    GENDER:             ['#f472b6','#ec4899','#db2777','#be185d','#9d174d','#831843'],
+                    ETHNICITY:          ['#fbbf24','#f59e0b','#d97706','#b45309','#92400e','#78350f'],
+                    INCOME:             ['#34d399','#10b981','#059669','#047857','#065f46','#064e3b','#022c22'],
+                    EDUCATION:          ['#a78bfa','#8b5cf6','#7c3aed','#6d28d9','#5b21b6'],
+                    PARENTAL_STATUS:    ['#22d3ee','#06b6d4','#0891b2'],
+                    NUMBER_OF_CHILDREN: ['#67e8f9','#22d3ee','#06b6d4','#0891b2','#0e7490'],
+                    AGE_OF_CHILDREN:    ['#5eead4','#2dd4bf','#14b8a6','#0d9488','#0f766e','#115e59'],
+                    RELATIONSHIP:       ['#fb923c','#f97316','#ea580c','#c2410c','#9a3412','#7c2d12'],
+                    SEXUAL_ORIENTATION: ['#f9a8d4','#f472b6','#ec4899','#db2777','#be185d'],
+                    OCCUPATION:         ['#94a3b8','#64748b','#475569','#334155','#1e293b','#0f172a','#94a3b8','#64748b','#475569','#334155','#1e293b','#0f172a','#94a3b8'],
+                    PRIMARY_LANGUAGE:   ['#c4b5fd','#a78bfa','#8b5cf6','#7c3aed'],
+                };
+                var pal = palettes[cat] || ['#60a5fa','#3b82f6','#2563eb'];
+                return pal[Math.min(idx, pal.length - 1)];
+            };
+
+            window._iiqDemoRenderCatCard = function(cat, label, dist, phase_view_count) {
+                var entries = Object.keys(dist || {}).map(function(k) {
+                    return { bucket: k, pct: Number(dist[k]) || 0 };
+                }).sort(function(a, b) { return b.pct - a.pct; });
+                var maxPct = entries.length ? Math.max.apply(null, entries.map(function(e) { return e.pct; })) : 1;
+                if (maxPct <= 0) maxPct = 1;
+                var rows = entries.map(function(e, i) {
+                    // Bar width relative to the largest bucket in this
+                    // category so tiny cuts (Trans Male, LGBTQ+, Chinese
+                    // etc.) still get a visible sliver rather than
+                    // being crushed against a 100% scale.
+                    var wPct = Math.max(2, Math.round(e.pct / maxPct * 100));
+                    var barColor = window._iiqDemoBarColor(i, cat);
+                    var absCount = Math.round((e.pct / 100) * (phase_view_count || 0));
+                    var absStr = phase_view_count ? '  \u00b7  ' + fmtCompact(absCount) : '';
+                    return '<div style="display:grid; grid-template-columns: 160px 1fr auto; gap:0.5rem; align-items:center; font-size:0.72rem; line-height:1.2; margin-bottom:0.28rem;">'
+                        +    '<div style="color:#cbd5e1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(e.bucket) + '">' + escapeHtml(e.bucket) + '</div>'
+                        +    '<div style="height:10px; background: rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">'
+                        +      '<div style="width:' + wPct + '%; height:100%; background:' + barColor + '; border-radius:3px;"></div>'
+                        +    '</div>'
+                        +    '<div style="min-width:90px; text-align:right; color:#fff; font-variant-numeric:tabular-nums;">'
+                        +      '<span style="font-weight:600;">' + e.pct.toFixed(1) + '%</span>'
+                        +      '<span style="color:var(--text-secondary); opacity:0.7;">' + absStr + '</span>'
+                        +    '</div>'
+                        +  '</div>';
+                }).join('');
+                return '<div class="iiq-card" style="padding:0.75rem 0.85rem;">'
+                    +    '<div style="font-size:0.78rem; font-weight:600; color:#fff; margin-bottom:0.5rem; letter-spacing:0.02em;">' + escapeHtml(label) + '</div>'
+                    +    rows
+                    +  '</div>';
+            };
+
+            window.iiqDemoSetPhase = function(phaseKey) {
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '_';
+                window._iiqDemoState[slug] = phaseKey;
+                // Rerender in place (no fetch, data is already cached).
+                var d = IIQ_QDATA.demographics;
+                if (d) {
+                    var body = document.getElementById('iiqQBody');
+                    if (body) {
+                        var html = iiqRenderDemographics(d);
+                        IIQ_QCACHE.demographics = html;
+                        body.innerHTML = html;
+                    }
+                }
+            };
+
+            function iiqRenderDemographics(d) {
+                if (!d || (d.success === false && !(d.phases && d.phases.length))) {
+                    var msg = (d && d.error) || 'Demographics have not been generated for this campaign yet.';
+                    var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                    return '<div class="iiq-empty" style="padding:2rem 1rem; text-align:center;">'
+                        +    '<div style="font-size:0.9rem; color:#fbbf24; margin-bottom:0.5rem;">Demographics not available</div>'
+                        +    '<div style="font-size:0.78rem; color:var(--text-secondary); max-width: 640px; margin: 0 auto;">' + escapeHtml(msg) + '</div>'
+                        +    (slug ? '<div style="margin-top:1rem; font-size:0.72rem; color:var(--text-secondary); font-family: monospace; opacity:0.6;">python3 scripts/build_intent_demographics.py --slug ' + escapeHtml(slug) + ' --apply</div>' : '')
+                        +  '</div>';
+                }
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '_';
+                var phases = d.phases || [];
+                var all = d.all_campaigns || null;
+
+                // Pill options: "All" first, then one per phase.
+                var pickOptions = [];
+                if (all) {
+                    pickOptions.push({ key: '__all__', label: 'All campaigns',
+                                        asset_count: all.asset_count,
+                                        view_count:  all.view_count,
+                                        demographics: all.demographics });
+                }
+                phases.forEach(function(p) {
+                    pickOptions.push({ key: p.phase_name,
+                                        label: p.phase_name,
+                                        asset_count: p.asset_count,
+                                        view_count:  p.view_count,
+                                        demographics: p.demographics });
+                });
+
+                var pickedKey = window._iiqDemoState[slug] || (pickOptions.length ? pickOptions[0].key : null);
+                var picked = pickOptions.filter(function(o) { return o.key === pickedKey; })[0]
+                              || pickOptions[0];
+                if (!picked) {
+                    return '<div class="iiq-empty">No demographic data.</div>';
+                }
+
+                var pills = pickOptions.map(function(o) {
+                    var active = o.key === picked.key;
+                    return '<button onclick="iiqDemoSetPhase(' + JSON.stringify(o.key).replace(/"/g, '&quot;') + ')" style="'
+                        +    'background:' + (active ? 'rgba(59,130,246,0.22)' : 'rgba(255,255,255,0.04)') + ';'
+                        +    'color:' + (active ? '#fff' : '#cbd5e1') + ';'
+                        +    'border: 1px solid ' + (active ? 'rgba(59,130,246,0.55)' : 'rgba(255,255,255,0.08)') + ';'
+                        +    'padding: 0.4rem 0.75rem; border-radius:6px; cursor:pointer; font-size:0.76rem; margin-right:0.4rem; margin-bottom:0.4rem;">'
+                        +    escapeHtml(o.label)
+                        +    ' <span style="opacity:0.65; font-size:0.68rem; margin-left:0.2rem;">(' + fmtCompact(o.view_count || 0) + ' views)</span>'
+                        +  '</button>';
+                }).join('');
+
+                var methodTag = '';
+                if (d.method) {
+                    var methodColor = (d.method === 'claude') ? '#34d399'
+                                      : (d.method === 'mixed') ? '#fbbf24' : '#94a3b8';
+                    var methodLabel = (d.method === 'claude')  ? 'Claude-reasoned'
+                                       : (d.method === 'mixed') ? 'Claude + fallback (mixed)'
+                                       : 'Deterministic fallback';
+                    methodTag = '<span style="background: rgba(255,255,255,0.05); border:1px solid ' + methodColor + '33; color:' + methodColor + '; font-size:0.66rem; padding:0.15rem 0.5rem; border-radius:8px; margin-left:0.5rem; text-transform:uppercase; letter-spacing:0.06em;">' + escapeHtml(methodLabel) + '</span>';
+                }
+
+                var cats = d.categories || Object.keys(picked.demographics || {});
+                var labels = d.category_labels || {};
+
+                var cards = cats.map(function(cat) {
+                    var dist = (picked.demographics || {})[cat] || {};
+                    var lbl  = labels[cat] || cat;
+                    return _iiqDemoRenderCatCard(cat, lbl, dist, picked.view_count);
+                }).join('');
+
+                return ''
+                    + '<div style="margin-bottom: 0.9rem;">'
+                    +   '<div style="display:flex; align-items:baseline; gap:0.5rem; flex-wrap:wrap;">'
+                    +     '<div style="font-size:0.82rem; color:#fff; font-weight:600;">'
+                    +       escapeHtml(picked.label)
+                    +     '</div>'
+                    +     '<div style="font-size:0.72rem; color: var(--text-secondary);">'
+                    +       fmtCompact(picked.view_count || 0) + ' views \u00b7 '
+                    +       fmtCompact(picked.asset_count || 0) + ' assets'
+                    +     '</div>'
+                    +     methodTag
+                    +   '</div>'
+                    +   '<div style="margin-top:0.55rem;">' + pills + '</div>'
+                    + '</div>'
+                    + '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 0.75rem;">'
+                    +   cards
+                    + '</div>'
+                    + '<div style="margin-top:1rem; font-size:0.66rem; color: var(--text-secondary); opacity:0.65; line-height:1.4;">'
+                    +   'Per-asset audience mix reasoned from channel, talent, paid/organic, and brand context, then view-weighted to the phase level. Every category sums to 100%; every bucket is floored to prevent 0% cells. Bars are relative to the largest bucket in each category so small buckets remain visible.'
+                    + '</div>';
+            }
+
             function iiqRenderAudiences(_d) {
                 var _audOv = (window.__intentIQ && window.__intentIQ.overview) || {};
                 var _audIsBrand = _audOv.title_type === 'brand';
@@ -27765,6 +27945,7 @@ https://www.instagram.com/p/..."></textarea>
                 q4: { short: 'Talent Attribution', title: 'How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
                 q5: { short: 'Trailer Performance', title: 'Trailer Performance', intro: 'Daily trailer views with overlaid funnel conversion (% of viewers who became info-seekers or visited a ticketing site within 7 days). Second chart traces the PVOD / SVOD search tail that builds after theatrical, peaking at the 5/15 streaming launch.' },
                 q6: { short: 'Cohort Engagement', title: 'Which content drives info-seek + ticketing for each audience?', intro: 'Per-asset attribution sliced by audience. Pick any cohort from the Audiences tab (Steph Curry fans, cast members, family-animation fans, Disney+ family subs, demographic cuts) plus the four moviegoing-frequency cohorts \u2014 each selected cohort gets its own set of columns showing that cohort\'s views, info-seek %, and ticketing % per asset. Cut by platform (YouTube / TikTok / etc.), Paid vs Organic, and asset type to isolate which specific pieces of content are converting which audiences. Same projection helper as Assets / Q1 / Q2 \u2014 numbers ladder up.' },
+                demographics: { short: 'Demographics', title: 'Who engaged with each campaign?', intro: 'Per-campaign demographic breakdown of the actual audience that watched + engaged with each asset. Reasoned per-asset (channel + talent + paid/organic + brand context) then view-weighted to phase-level. Every category sums to 100% and every bucket has a value \u2014 canonical schema matches the Behavioral Graph panel.' },
                 journey: { short: 'Digital Journey', title: 'What do people do before and after engaging with each asset?', intro: 'Per-asset BEFORE / AFTER funnel. BEFORE = referrer mix (YouTube Up-Next / TikTok FYP / paid display / etc.) calibrated to the asset\'s channel and paid-vs-organic status. AFTER (7-day window) = downstream destinations split across Google / IMDB / RT / Letterboxd / official site for info-seek, Fandango / AMC / Regal / Cinemark / Atom for ticketing, plus shared-to-social, watched-trailer-next, and "where to stream" search. Tilts by phase: ticketing collapses after theatrical, streaming search ramps. Info-seek % + ticketing % ladder up to Assets / Q1 / Q2.' },
             };
             var IIQ_QPALETTE = {
@@ -31994,6 +32175,28 @@ https://www.instagram.com/p/..."></textarea>
                             body.innerHTML = '<div class="iiq-empty">Render error: ' + escapeHtml(err.message || err) + '</div>';
                         }
                     });
+                    return;
+                }
+                // Demographics is served from /api/intent/<slug>/demographics
+                // (returns the per-campaign distributions the ingest
+                // agent + build_intent_demographics.py wrote to the
+                // snapshot). No _assets merge needed -- the payload is
+                // pre-aggregated.
+                if (qid === 'demographics') {
+                    body.innerHTML = '<div class="iiq-empty">Loading...</div>';
+                    fetch('/api/intent/' + slug + '/demographics', { credentials: 'same-origin' })
+                        .then(function(r) { return r.json(); })
+                        .then(function(d) {
+                            try {
+                                IIQ_QDATA.demographics = d;
+                                var html = iiqRenderDemographics(d);
+                                IIQ_QCACHE.demographics = html;
+                                body.innerHTML = html;
+                            } catch (err) {
+                                body.innerHTML = '<div class="iiq-empty">Render error: ' + escapeHtml(err.message || err) + '</div>';
+                            }
+                        })
+                        .catch(function(e) { body.innerHTML = '<div class="iiq-empty">Failed: ' + escapeHtml(e.message || e) + '</div>'; });
                     return;
                 }
                 body.innerHTML = '<div class="iiq-empty">Loading...</div>';
