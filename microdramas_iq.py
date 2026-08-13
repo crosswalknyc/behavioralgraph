@@ -691,8 +691,16 @@ def _surface_bucket(rank: Optional[int]) -> str:
 
 
 def _daily_estimate(observations: list[dict],
-                    salt: str = '') -> tuple[list[dict], int]:
+                    salt: str = '',
+                    days: int = 28) -> tuple[list[dict], int]:
     """Return (daily_curve, twenty_eight_day_rollup).
+
+    `days` controls how many days of curve to generate starting from
+    the title's first observed date. Defaults to 28 (the original
+    behaviour). For YTD / custom-range lookbacks longer than 28 days
+    the caller passes the requested window so the curve extends to
+    cover the full range - capped at "today" so we never model into
+    the future.
 
     Each day's view count is a title-and-date-salted point inside the
     rail-position's [low, high] band, NOT the bucket midpoint. Without
@@ -734,13 +742,24 @@ def _daily_estimate(observations: list[dict],
 
     import hashlib
 
-    # Build the 28-day curve. Missing days inherit the last observed
+    # Curve length: at least 28 days (the original default so nothing
+    # else in the codebase changes shape), but extend to `days` when
+    # a longer window is requested. Never extend past today - a title
+    # observed 10 days ago with a YTD lookback should give us 10 days
+    # of curve, not YTD days.
+    today = date.today()
+    days_alive = (today - first).days + 1
+    n_days = max(1, min(max(int(days or 28), 28), days_alive))
+
+    # Build the curve. Missing days inherit the last observed
     # ranking (typical decay is captured by the natural degradation of
     # hub position, so we're not adding a synthetic decay curve on top).
     curve: list[dict] = []
     last_rank = None
-    total_views = 0
-    for offset in range(28):
+    total_28 = 0    # kept strictly at first-28-days regardless of n_days
+                    # so view_28d_estimate stays a stable 28d metric
+                    # (used for sort + external comparisons)
+    for offset in range(n_days):
         d = (first + timedelta(days=offset)).isoformat()
         obs = obs_by_date.get(d)
         if obs and obs.get('rank') is not None:
@@ -769,9 +788,10 @@ def _daily_estimate(observations: list[dict],
             'bucket':  bucket,
             'views':   views,
         })
-        total_views += views
+        if offset < 28:
+            total_28 += views
 
-    return curve, total_views
+    return curve, total_28
 
 
 # ============================================================================
@@ -1859,8 +1879,16 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
                 # Weighted by views (not title count) so a mega-hit
                 # dominates the aggregate the same way it dominates
                 # actual audience reach.
-                '_paid_wsum':      0.0,   # sum(paid_pct * views)
-                '_paid_views':     0,     # sum(views over titles with a paid_pct)
+                '_paid_wsum':       0.0,   # sum(paid_pct * views)
+                '_paid_views':      0,     # sum(views over titles with a paid_pct)
+                # Same for payer-completion: what % of the platform's
+                # paying viewers finish the whole series. For Peacock
+                # every viewer is a subscriber so we roll up
+                # series_completion_pct directly; for coin platforms
+                # we roll up payer_completion_pct which is already
+                # rebased to the payer cohort.
+                '_payer_wsum':      0.0,
+                '_payer_views':     0,
             }
             per_platform_all[source] = slot
         return slot
@@ -1881,7 +1909,14 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
             slot['top_title_views'] = views
         # Peacock is subscription-only (no per-title paywall) so no
         # paid_pct contribution here - the platform will surface as
-        # N/A on the rollup.
+        # N/A on the rollup for Free-to-Paid. But every Peacock viewer
+        # IS a paying subscriber, so series_completion_pct IS the
+        # "paid completion" number for the platform.
+        pc_comp = t.get('completion') or {}
+        pc_series = pc_comp.get('series_completion_pct')
+        if pc_series is not None and views > 0:
+            slot['_payer_wsum']  += float(pc_series) * views
+            slot['_payer_views'] += views
 
     for p in comp_platforms:
         p_source = p.get('source') or ''
@@ -1906,6 +1941,10 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
             if paid_pct is not None and views > 0:
                 slot['_paid_wsum']  += float(paid_pct) * views
                 slot['_paid_views'] += views
+            payer_pct = comp.get('payer_completion_pct')
+            if payer_pct is not None and views > 0:
+                slot['_payer_wsum']  += float(payer_pct) * views
+                slot['_payer_views'] += views
 
     aggregated.sort(key=lambda r: -int(r.get('sort_views') or 0))
     aggregated = aggregated[:top_n_final]
@@ -1937,6 +1976,15 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
         wsum    = p.pop('_paid_wsum', 0.0)
         p['free_to_paid_pct'] = (round(wsum / views_w, 1)
                                   if views_w > 0 else None)
+        # Avg Paid Completion: view-weighted mean of per-title
+        # payer-completion across the platform. For Peacock this
+        # rolls up series_completion_pct (every viewer = payer);
+        # for coin platforms it rolls up payer_completion_pct which
+        # is already rebased to the payer cohort. Directly comparable.
+        pay_v = p.pop('_payer_views', 0)
+        pay_s = p.pop('_payer_wsum', 0.0)
+        p['avg_paid_completion_pct'] = (round(pay_s / pay_v, 1)
+                                         if pay_v > 0 else None)
         # Platform-level user flow scaled to the active window. Powers
         # the "total users / new subs / cancellations / net growth"
         # stats grid on each platform card of the All Platforms
@@ -2009,7 +2057,10 @@ def _serialize_title(entry: dict, *, window_days: int) -> dict:
     _title_salt = str(entry.get('key')
                        or entry.get('title')
                        or entry.get('series') or '')
-    curve, total_28 = _daily_estimate(obs, salt=_title_salt)
+    # Pass window_days so YTD / custom ranges longer than 28 days
+    # extend the curve to cover the full window (up to today).
+    curve, total_28 = _daily_estimate(obs, salt=_title_salt,
+                                       days=window_days)
 
     # Clip to the requested window (defaults to 28).
     curve_win = curve[:window_days]

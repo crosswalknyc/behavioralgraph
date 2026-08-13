@@ -24806,6 +24806,7 @@ https://www.instagram.com/p/..."></textarea>
                         <option value="14">Last 14 days</option>
                         <option value="28">Last 28 days</option>
                         <option value="30">Last 30 days</option>
+                        <option value="ytd">Year to date</option>
                         <option value="custom">Custom range...</option>
                     </select>
                 </div>
@@ -45483,6 +45484,19 @@ https://www.instagram.com/p/..."></textarea>
             if (winVal === 'custom') {
                 start_date = (document.getElementById('microdramasIQCustomFrom') || {}).value || '';
                 end_date   = (document.getElementById('microdramasIQCustomTo')   || {}).value || '';
+            } else if (winVal === 'ytd') {
+                // Year to date: Jan 1 of the current year through today
+                // (local time). We resolve it into a custom range on
+                // the wire so the backend's existing custom-range path
+                // handles it - no new API param needed.
+                var now = new Date();
+                var jan1 = new Date(now.getFullYear(), 0, 1);
+                var pad = function(n){ return n < 10 ? '0'+n : ''+n; };
+                var fmt = function(d){
+                    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+                };
+                start_date = fmt(jan1);
+                end_date   = fmt(now);
             } else {
                 window_days = parseInt(winVal, 10);
             }
@@ -45504,6 +45518,9 @@ https://www.instagram.com/p/..."></textarea>
                 window.__microdramasIQ.currentWindowDays = effDays || 7;
                 window.__microdramasIQ.currentStartDate  = out.start_date;
                 window.__microdramasIQ.currentEndDate    = out.end_date;
+                // Remember the raw dropdown mode so header labels can
+                // say "YEAR TO DATE" instead of the raw date range.
+                window.__microdramasIQ.currentWindowMode = winVal;
             }
             return out;
         }
@@ -46343,6 +46360,24 @@ https://www.instagram.com/p/..."></textarea>
         // a stacked share bar plus per-platform stat cards, showing window-
         // scoped total unique views. Sits above the by-show ranker on the
         // All Platforms tab.
+        function _miqRollupWindowLabel(d) {
+            // Prefer the user-facing dropdown mode (ytd / custom / N days)
+            // so the header reads correctly regardless of how the range
+            // was expressed on the wire. Falls back to the numeric
+            // window_days from the payload when the mode isn't set.
+            var mode = (window.__microdramasIQ && window.__microdramasIQ.currentWindowMode) || null;
+            var f    = d.filters || {};
+            if (mode === 'ytd') return 'year to date';
+            if (mode === 'custom' || (f.start_date && f.end_date && mode !== 'ytd' && !mode)) {
+                if (f.start_date && f.end_date) {
+                    return f.start_date + ' to ' + f.end_date;
+                }
+            }
+            var wd = f.window_days || (window.__microdramasIQ && window.__microdramasIQ.currentWindowDays) || 7;
+            if (wd === 1) return 'today';
+            return 'last ' + wd + ' days';
+        }
+
         function renderMicrodramasIQPlatformRollup(d) {
             var host = document.getElementById('microdramasIQAllPlatformRollup');
             if (!host) return;
@@ -46398,6 +46433,27 @@ https://www.instagram.com/p/..."></textarea>
                               +   '<span class="miq-rollup-conv-value">N/A</span>'
                               + '</div>';
                 }
+                // Avg Paid Completion: view-weighted mean of per-title
+                // Payer Completion across the platform. Rebased to the
+                // payer cohort so Peacock (where every viewer is a
+                // paying subscriber) and coin platforms (where only
+                // the paywall-crossers count) are on the same axis.
+                var paidCompBlock;
+                if (p.avg_paid_completion_pct != null) {
+                    var pcTip = 'View-weighted share of ' + (p.platform || 'platform')
+                              + ' payers who finish the entire series. For coin platforms this is the '
+                              + 'payer cohort only (viewers who bought at least one paid ep). For Peacock '
+                              + 'every viewer is a paying subscriber, so this is the same as series completion.';
+                    paidCompBlock = '<div class="miq-rollup-card-conv" title="' + _miqEscape(pcTip) + '">'
+                                  +   '<span class="miq-rollup-conv-label">Avg Paid Completion</span>'
+                                  +   '<span class="miq-rollup-conv-value">' + Math.round(p.avg_paid_completion_pct) + '%</span>'
+                                  + '</div>';
+                } else {
+                    paidCompBlock = '<div class="miq-rollup-card-conv miq-rollup-card-conv-na" title="No completion data available for this platform in the current window.">'
+                                  +   '<span class="miq-rollup-conv-label">Avg Paid Completion</span>'
+                                  +   '<span class="miq-rollup-conv-value">N/A</span>'
+                                  + '</div>';
+                }
                 // User-flow block: total users + new subs + cancellations
                 // + net growth for the active window. All numbers scale
                 // linearly with the look-back filter (7d shows 1x weekly
@@ -46415,7 +46471,8 @@ https://www.instagram.com/p/..."></textarea>
                     var growthSign = uf.net_growth_pct > 0 ? '+' : '';
                     var netSign    = uf.net_new         > 0 ? '+' : '';
                     var wd         = uf.window_days || 7;
-                    var flowTip = 'User flow on ' + (p.platform || 'this platform') + ' over the last ' + wd + ' days. '
+                    var flowWindow = _miqRollupWindowLabel(d);
+                    var flowTip = 'User flow on ' + (p.platform || 'this platform') + ' over ' + flowWindow + '. '
                                 + 'New = gross new users. Cancelled = gross churned users. '
                                 + 'Net Growth = (new - cancelled) / total.';
                     flowBlock = '<div class="miq-rollup-card-flow" title="' + _miqEscape(flowTip) + '">'
@@ -46445,15 +46502,16 @@ https://www.instagram.com/p/..."></textarea>
                      +   '<div class="miq-rollup-card-views">' + _miqFormatNumber(p.total_views || 0) + '</div>'
                      +   '<div class="miq-rollup-card-sub">across ' + titleCount + ' ' + (titleCount === 1 ? 'title' : 'titles') + '</div>'
                      +   convBlock
+                     +   paidCompBlock
                      +   flowBlock
                      +   topBlock
                      + '</div>';
             }).join('');
 
-            var windowDays = (d.filters && d.filters.window_days) ? d.filters.window_days : 7;
+            var windowLabel = _miqRollupWindowLabel(d);
             host.innerHTML =
                 '<div class="miq-rollup-title">'
-              +   '<span>Views by platform &middot; last ' + windowDays + ' days</span>'
+              +   '<span>Views by platform &middot; ' + _miqEscape(windowLabel) + '</span>'
               +   '<span class="miq-rollup-total">' + _miqFormatNumber(grand) + ' total views</span>'
               + '</div>'
               + '<div class="miq-rollup-bar">' + barSegs + '</div>'
