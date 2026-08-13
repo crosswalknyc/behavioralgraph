@@ -1,5 +1,5 @@
-"""Register a freshly ingested Intent IQ title so it appears in the
-dashboard's Intent IQ title selector.
+"""Register a freshly ingested Attribution IQ title so it appears in the
+dashboard's Attribution IQ title selector.
 
 Analogous to `migration/dashboard_register.py`, but writes into
 `intent/registry.json` in s3://dashboard-inputs/ (separate file so it
@@ -92,7 +92,7 @@ def register_intent_title(
     brand_config: Optional[dict] = None,       # brand-specific config (attribution window, LTV, etc.)
     s3_client=None,
 ) -> dict:
-    """Add or update a title row in the Intent IQ registry. Idempotent.
+    """Add or update a title row in the Attribution IQ registry. Idempotent.
 
     Brand campaigns pass `title_type='brand'` plus a `terminology` block
     + `enabled_tabs` map so the dashboard can render fintech / retail /

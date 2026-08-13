@@ -59,7 +59,7 @@ QUESTIONS = {
 # ============================================================
 # Title-type config (film vs. brand campaign)
 # ------------------------------------------------------------
-# Intent IQ was originally film-only. Brand campaigns (Chime, etc.)
+# Attribution IQ was originally film-only. Brand campaigns (Chime, etc.)
 # now carry `title_type: 'brand'` and a `terminology` block on their
 # registry entry. Frontend reads these and swaps labels, hides
 # film-only tabs (Intent-to-Conversion, Q3 Intent-to-Buy comparable
@@ -195,7 +195,7 @@ def _ch_client():
             connect_timeout=10, send_receive_timeout=60,
         )
     except Exception as e:
-        logger.warning("Intent IQ: ClickHouse unreachable (%s); falling back to S3", e)
+        logger.warning("Attribution IQ: ClickHouse unreachable (%s); falling back to S3", e)
         return None
 
 
@@ -204,7 +204,7 @@ def _s3():
         import boto3
         return boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-2"))
     except Exception as e:
-        logger.warning("Intent IQ: boto3 unavailable: %s", e)
+        logger.warning("Attribution IQ: boto3 unavailable: %s", e)
         return None
 
 
@@ -216,7 +216,7 @@ def _load_registry() -> dict:
         resp = s3.get_object(Bucket=S3_BUCKET, Key=REGISTRY_KEY)
         return json.loads(resp["Body"].read().decode("utf-8"))
     except Exception as e:
-        logger.info("Intent IQ: registry not found (%s); returning empty", e)
+        logger.info("Attribution IQ: registry not found (%s); returning empty", e)
         return {"titles": []}
 
 
@@ -229,7 +229,7 @@ def _load_normalized_snapshot(title_slug: str) -> Optional[dict]:
         resp = s3.get_object(Bucket=S3_BUCKET, Key=key)
         return json.loads(resp["Body"].read().decode("utf-8"))
     except Exception as e:
-        logger.info("Intent IQ: snapshot not found for %s (%s)", title_slug, e)
+        logger.info("Attribution IQ: snapshot not found for %s (%s)", title_slug, e)
         return None
 
 
@@ -473,7 +473,7 @@ def list_titles() -> dict:
             merged = [_apply_title_type_defaults(t) for t in merged]
             return {"success": True, "titles": merged, "source": "clickhouse+registry"}
         except Exception as e:
-            logger.warning("Intent IQ: list_titles CH failed: %s", e)
+            logger.warning("Attribution IQ: list_titles CH failed: %s", e)
     for t in titles_meta:
         t["opening_date"] = _safe_iso_date(t.get("opening_date"))
         t["ticketing_open_date"] = _safe_iso_date(t.get("ticketing_open_date"))
@@ -542,7 +542,7 @@ def get_overview(title_slug: str) -> dict:
                 }
                 return _apply_title_type_defaults(out)
         except Exception as e:
-            logger.warning("Intent IQ: get_overview CH failed: %s", e)
+            logger.warning("Attribution IQ: get_overview CH failed: %s", e)
 
     snap = _load_normalized_snapshot(title_slug)
     if snap:
@@ -748,7 +748,7 @@ def get_assets(title_slug: str, phase: Optional[str] = None,
                         "window_from": lo, "window_to": hi,
                         "windowed_totals": bounded}
         except Exception as e:
-            logger.warning("Intent IQ: get_assets CH failed: %s", e)
+            logger.warning("Attribution IQ: get_assets CH failed: %s", e)
 
     snap = _snap_for_window or _load_normalized_snapshot(title_slug)
     if not snap:
@@ -797,7 +797,7 @@ def get_asset_timeseries(title_slug: str, asset_id: int,
             ])[0]
             meta["posted_date"] = _safe_iso_date(meta.get("posted_date"))
     except Exception as e:
-        logger.info("Intent IQ asset meta lookup failed: %s", e)
+        logger.info("Attribution IQ asset meta lookup failed: %s", e)
 
     where = [f"e.asset_id = {asset_id_int}"]
     if lo: where.append(f"e.date >= toDate('{lo}')")
@@ -816,7 +816,7 @@ def get_asset_timeseries(title_slug: str, asset_id: int,
         ).result_rows
         series = _rows_to_dicts(rows, ["date", "views", "engagement"])
     except Exception as e:
-        logger.info("Intent IQ asset timeseries query failed: %s", e)
+        logger.info("Attribution IQ asset timeseries query failed: %s", e)
         return {"success": False, "error": str(e)}
 
     totals = {
@@ -875,7 +875,7 @@ def get_audiences(title_slug: str) -> dict:
                                                   "category", "overlap_bp",
                                                   "rank_within_title", "source"])
         except Exception as e:
-            logger.warning("Intent IQ: get_audiences CH failed: %s", e)
+            logger.warning("Attribution IQ: get_audiences CH failed: %s", e)
 
     by_key = {a["subject_key"]: a for a in db_overlap}
 
@@ -934,7 +934,7 @@ def get_cohorts(title_slug: Optional[str] = None) -> dict:
             for c in cohorts:
                 c["last_refreshed"] = _safe_iso_date(c["last_refreshed"])
         except Exception as e:
-            logger.warning("Intent IQ: get_cohorts CH failed: %s", e)
+            logger.warning("Attribution IQ: get_cohorts CH failed: %s", e)
 
     if not cohorts:
         # Brand titles get member/prospect cohorts; films keep the
@@ -985,7 +985,7 @@ def get_cohorts(title_slug: Optional[str] = None) -> dict:
                 "cohort_slug", "panelists", "events", "avg_bp"
             ])
         except Exception as e:
-            logger.warning("Intent IQ: title cohort engagement failed: %s", e)
+            logger.warning("Attribution IQ: title cohort engagement failed: %s", e)
     return out
 
 
@@ -1007,7 +1007,7 @@ def answer_question(title_slug: str, qid: str) -> dict:
     try:
         result = handler(title_slug)
     except Exception as e:
-        logger.exception("Intent IQ Q%s failed", qid)
+        logger.exception("Attribution IQ Q%s failed", qid)
         result = {"success": False, "error": str(e)}
     result.setdefault("title_slug", title_slug)
     result["question_id"]   = qid
@@ -1059,7 +1059,7 @@ def _q1_content_categories_to_engagement(title_slug: str) -> dict:
             if ch_rows:
                 return {"success": True, "rows": ch_rows}
         except Exception as e:
-            logger.warning("Intent IQ: Q1 CH failed: %s", e)
+            logger.warning("Attribution IQ: Q1 CH failed: %s", e)
 
     # S3 fallback for brand-only-in-S3 titles.
     snap = _load_normalized_snapshot(title_slug)
@@ -1121,7 +1121,7 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
             "converters", "conversion_rate"
         ])
     except Exception as e:
-        logger.info("Intent IQ Q2 attribution table not yet available: %s", e)
+        logger.info("Attribution IQ Q2 attribution table not yet available: %s", e)
         position_weighted = []
         cumulative_curve = []
     try:
@@ -1193,7 +1193,7 @@ def _q2_organic_paid_interplay(title_slug: str) -> dict:
                      "position_weighted_attribution": position_weighted,
                      "cumulative_lift_curve": cumulative_curve}
     except Exception as e:
-        logger.warning("Intent IQ: Q2 CH failed: %s", e)
+        logger.warning("Attribution IQ: Q2 CH failed: %s", e)
 
     # CH returned empty (brand-only-in-S3 title): fall back to snapshot.
     snap = _load_normalized_snapshot(title_slug)
@@ -1273,7 +1273,7 @@ def _q3_intent_to_buy(title_slug: str) -> dict:
                 "source": "Box Office Mojo (opening 4-day gross / $13.51 avg US ticket, NATO 2024)",
             })
     except Exception as e:
-        logger.info("Intent IQ Q3 comp ticket buyers unavailable: %s", e)
+        logger.info("Attribution IQ Q3 comp ticket buyers unavailable: %s", e)
 
     subject = _measure_subject_ticket_intent(ch, title_slug, AVG_TICKET_USD)
 
@@ -1378,7 +1378,7 @@ def _measure_subject_ticket_intent(ch, title_slug: str, avg_ticket_usd: float) -
                        "signals; industry-benchmarked conversion rates)"),
         }
     except Exception as e:
-        logger.info("Intent IQ Q3 subject ticket intent failed: %s", e)
+        logger.info("Attribution IQ Q3 subject ticket intent failed: %s", e)
         return {
             "title_slug": title_slug,
             "display_name": title_slug,
@@ -1433,7 +1433,7 @@ def _q4_talent_influencer_lift(title_slug: str) -> dict:
                 r["source"] = "intent.attribution_results"
             return {"success": True, "rows": rows}
     except Exception as e:
-        logger.info("Intent IQ Q4 attribution table not populated: %s", e)
+        logger.info("Attribution IQ Q4 attribution table not populated: %s", e)
 
     try:
         sql = f"""
@@ -1757,7 +1757,7 @@ def get_in_flight(title_slug: str, as_of: Optional[str] = None,
                      "best_paid": best_paid, "best_organic": best_organic,
                      "all_candidates": cards[:25]}
     except Exception as e:
-        logger.warning("Intent IQ: get_in_flight CH failed: %s", e)
+        logger.warning("Attribution IQ: get_in_flight CH failed: %s", e)
 
     # CH empty (brand-only-in-S3 title): fall back to snapshot.
     snap = _load_normalized_snapshot(title_slug)

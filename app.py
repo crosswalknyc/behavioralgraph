@@ -26,7 +26,7 @@ try:
     import intent_iq as _intent_iq  # type: ignore
 except Exception as _intent_iq_err:
     _intent_iq = None
-    print(f"⚠️ Intent IQ module unavailable at import time: {_intent_iq_err}")
+    print(f"⚠️ Attribution IQ module unavailable at import time: {_intent_iq_err}")
 
 try:
     import trends_iq as _trends_iq  # type: ignore
@@ -4462,7 +4462,7 @@ def update_user(username):
         if 'has_intent_iq_access' in req_data:
             user['has_intent_iq_access'] = bool(req_data['has_intent_iq_access'])
         if 'allowed_intent_iq_runs' in req_data:
-            # Per-user gate for Intent IQ titles. ['*'] = all titles visible,
+            # Per-user gate for Attribution IQ titles. ['*'] = all titles visible,
             # explicit list of title_slug strings = only those. Missing or
             # non-list = default-open ['*'] for back-compat.
             raw = req_data['allowed_intent_iq_runs']
@@ -7896,7 +7896,7 @@ _ANALYSIS_IQ_MODULES_FULL = [
     'flywheel_conversion', 'brand_partnership_iq', 'journey_iq',
     # 2026-08-12: 'intent_ingest' - Analysis IQ agent that takes a
     # brand-campaign form (brand, campaign, dates, URLs) and builds a
-    # full Intent IQ title (scrapes assets, Claude cohort/audience
+    # full Attribution IQ title (scrapes assets, Claude cohort/audience
     # synthesis, writes normalized snapshot to S3, registers title).
     # Backed by migration/intent_ingest_agent.py.
     'intent_ingest',
@@ -15616,15 +15616,15 @@ def api_trends_iq_watchlist_remove():
 
 
 # ============================================================================
-# INTENT IQ — Title-scoped marketing-intent measurement
+# ATTRIBUTION IQ — Title-scoped marketing-intent measurement
 # ============================================================================
-# Surfaced as the "Intent IQ" product (added to the view-nav dropdown). Title
+# Surfaced as the "Attribution IQ" product (added to the view-nav dropdown). Title
 # data lives in ClickHouse intent.* tables on the Hetzner box; raw assets +
 # normalized JSON live in s3://dashboard-inputs/intent/<slug>/. See
 # bg-webapp/intent_iq.py for the query layer and migration/intent_clickhouse_schema.sql
 # for the DDL. See scripts/ingest_intent_campaign.py for the ingestion CLI.
 def _user_intent_iq_title_access(user):
-    """Resolve a user's Intent IQ per-title access policy.
+    """Resolve a user's Attribution IQ per-title access policy.
 
     Mirrors _user_jiq_run_access(). Returns ``(is_admin, allow_all,
     allowed_slugs)``:
@@ -15650,7 +15650,7 @@ def _user_intent_iq_title_access(user):
 
 
 def _require_intent_iq(title_slug=None):
-    """Return (False, error_response) if Intent IQ isn't available.
+    """Return (False, error_response) if Attribution IQ isn't available.
 
     When ``title_slug`` is passed, ALSO enforces the per-user allow-list.
     A user gated to only ``['goat']`` requesting ``/api/intent/other/...``
@@ -15662,14 +15662,14 @@ def _require_intent_iq(title_slug=None):
     role = _normalize_role(user.get('role', 'user'))
     acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
     if not acc.get('has_intent_iq_access', True):
-        return False, (jsonify({'success': False, 'error': 'Intent IQ access not enabled'}), 403)
+        return False, (jsonify({'success': False, 'error': 'Attribution IQ access not enabled'}), 403)
     if _intent_iq is None:
-        return False, (jsonify({'success': False, 'error': 'Intent IQ module not loaded'}), 500)
+        return False, (jsonify({'success': False, 'error': 'Attribution IQ module not loaded'}), 500)
     if title_slug:
         is_admin, allow_all, allowed = _user_intent_iq_title_access(user)
         if not (is_admin or allow_all) and title_slug not in allowed:
             return False, (jsonify({'success': False,
-                                    'error': f'Intent IQ title "{title_slug}" not in your allow-list'}), 403)
+                                    'error': f'Attribution IQ title "{title_slug}" not in your allow-list'}), 403)
     return True, None
 
 
@@ -15699,11 +15699,11 @@ def api_intent_titles_admin():
     """Ungated title list for the admin user-edit modal.
 
     The user-facing /api/intent/titles filters by the caller's own
-    allow-list; when an admin is editing a *different* user's Intent IQ
+    allow-list; when an admin is editing a *different* user's Attribution IQ
     permissions they need to see the full catalog to build the picker.
     """
     if _intent_iq is None:
-        return jsonify({'success': False, 'error': 'Intent IQ module not loaded'}), 500
+        return jsonify({'success': False, 'error': 'Attribution IQ module not loaded'}), 500
     try:
         return jsonify(_intent_iq.list_titles())
     except Exception as e:
@@ -37177,11 +37177,11 @@ def submit_journey_iq():
 
 
 # ============================================================
-# Intent IQ Ingest - Analysis IQ agent for brand campaigns
+# Attribution IQ Ingest - Analysis IQ agent for brand campaigns
 # ============================================================
 # Takes a compact form (brand, campaign, dates, attribution window,
 # asset URL list, notes) and produces a fully-formed brand-mode
-# Intent IQ title. Runs inside a spawn_heavy_analysis background
+# Attribution IQ title. Runs inside a spawn_heavy_analysis background
 # thread; frontend polls /api/job-status/<job_id> like Journey IQ.
 # See migration/intent_ingest_agent.py for the pipeline.
 # ============================================================
@@ -37191,7 +37191,7 @@ CREDITS_INTENT_INGEST = 5   # cheaper than Journey IQ since assets are
 
 
 def _run_intent_ingest(job_id):
-    """Background worker for Intent IQ brand-campaign ingest.
+    """Background worker for Attribution IQ brand-campaign ingest.
 
     Adapter around `migration.intent_ingest_agent.run_ingest` that forwards
     progress updates through the shared update_job_status pipe. Mirrors the
@@ -37227,7 +37227,7 @@ def _run_intent_ingest(job_id):
                                         f"{result.get('audience_count')} audiences)."),
                               s3_key=result.get('s3_key'))
             # Stash result under jobs[job_id]['result'] so the frontend
-            # can deep-link into Intent IQ with the new title selected.
+            # can deep-link into Attribution IQ with the new title selected.
             try:
                 jobs[job_id]['result'] = {
                     'title_slug':      result.get('title_slug'),
@@ -37255,7 +37255,7 @@ def _run_intent_ingest(job_id):
 @app.route('/api/intent-ingest/submit', methods=['POST'])
 @requires_auth
 def submit_intent_ingest():
-    """Kick off a brand-campaign Intent IQ build from the Analysis IQ form."""
+    """Kick off a brand-campaign Attribution IQ build from the Analysis IQ form."""
     try:
         username = session.get('username')
         user = get_current_user()
@@ -37346,7 +37346,7 @@ def submit_intent_ingest():
 
         desc = f"{campaign_name} (Intent Ingest: {brand_name} - {len(urls)} assets)"
         if not consume_credit(username, description=desc, job_id=job_id,
-                              pull_type='Intent IQ Ingest',
+                              pull_type='Attribution IQ Ingest',
                               credits_used=CREDITS_INTENT_INGEST):
             return jsonify({'error': 'Insufficient credits.'}), 403
 
@@ -37356,7 +37356,7 @@ def submit_intent_ingest():
 
         return jsonify({
             'job_id': job_id,
-            'message': f'Intent IQ ingest queued ({len(urls)} assets)',
+            'message': f'Attribution IQ ingest queued ({len(urls)} assets)',
             'status': 'queued',
             'credits_used': CREDITS_INTENT_INGEST,
         })

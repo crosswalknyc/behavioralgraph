@@ -2217,7 +2217,7 @@
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="intentIQ" onchange="updateHiddenProduct('intentIQ', this.checked)">
-                                <span>🎬 Intent IQ</span>
+                                <span>🎬 Attribution IQ</span>
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="impactIQ" onchange="updateHiddenProduct('impactIQ', this.checked)">
@@ -2715,7 +2715,7 @@
                                         <input type="checkbox" id="cdJourneyIQ"> Digital Journey IQ
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                        <input type="checkbox" id="cdIntentIQ" checked> Intent IQ
+                                        <input type="checkbox" id="cdIntentIQ" checked> Attribution IQ
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdBlueIQ"> Blue IQ
@@ -3681,12 +3681,12 @@
                         </div>
                     </div>
 
-                    <!-- Intent IQ Access -->
+                    <!-- Attribution IQ Access -->
                     <div class="dashboard-access-item" data-access-group="conversion">
                         <div class="dashboard-access-header" onclick="toggleDashboardSection('intentIqRunAccess')">
                             <label class="checkbox-group" onclick="event.stopPropagation()">
                                 <input type="checkbox" id="hasIntentIQAccess" onchange="syncIntentIqRunAccessVisibility()">
-                                <span style="font-weight: 600;">🎬 INTENT IQ</span>
+                                <span style="font-weight: 600;">🎬 ATTRIBUTION IQ</span>
                             </label>
                             <span class="collapse-icon rotated" id="intentIqRunAccessIcon">▼</span>
                         </div>
@@ -3695,7 +3695,7 @@
                                 <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;flex-wrap:wrap;">
                                     <label class="checkbox-group" style="margin:0;">
                                         <input type="checkbox" id="allIntentIqRuns" checked onchange="toggleAllIntentIqRuns()">
-                                        <span>ALL INTENT IQ TITLES</span>
+                                        <span>ALL ATTRIBUTION IQ TITLES</span>
                                     </label>
                                     <button type="button" class="btn btn-small btn-secondary" onclick="restoreIntentIqRunDefaults()">Restore Defaults</button>
                                     <small style="color:var(--text-secondary);font-size:0.68rem;">Pick which titles (movies) this user can open. Uncheck "ALL" to gate.</small>
@@ -3919,7 +3919,7 @@
                                     </label>
                                     <label class="checkbox-group">
                                         <input type="checkbox" id="moduleIntentIngest" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
-                                        <span>🎯 Build Intent IQ Campaign</span>
+                                        <span>🎯 Build Attribution IQ Campaign</span>
                                     </label>
                                 </div>
                                 <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Credits can be used on any selected module</small>
@@ -11012,7 +11012,7 @@
             }
             // Collapse any drawers that were auto-opened by the change
             // events above (Profile IQ / Fin IQ / Analysis IQ / Journey
-            // IQ / Intent IQ toggle their drawers open when their
+            // IQ / Attribution IQ toggle their drawers open when their
             // parent checkbox is checked). Bulk actions are about
             // grants, not configuration — keep the view compact.
             if (typeof _collapseAllProductDrawers === 'function') {
@@ -11022,7 +11022,7 @@
 
         // 2026-07-30 (Jenna): every product-access card that has a
         // sub-options drawer (Profile IQ, Fin IQ, Analysis IQ, Journey
-        // IQ, Intent IQ, Impact IQ, Rankers IQ, Share of Time) starts
+        // IQ, Attribution IQ, Impact IQ, Rankers IQ, Share of Time) starts
         // COLLAPSED when the modal opens, no matter whether the parent
         // checkbox is currently ticked. Old UX auto-opened every drawer
         // for a user with several enabled products — a wall of nested
@@ -11057,7 +11057,7 @@
         // Reset ALL product access toggles (across every group, ignoring
         // active tab / search filter) to a sensible default set:
         //   ON:  Profile IQ, Workspace, Share of Time (view+run), Impact IQ,
-        //        Intent IQ  — the always-granted defaults from the backend
+        //        Attribution IQ  — the always-granted defaults from the backend
         //   OFF: everything else
         // Matches the create-new-user preset in showAddUserModal().
         function dashboardAccessResetDefaults() {
@@ -12144,7 +12144,7 @@
         }
 
         // ──────────────────────────────────────────────────────────────────
-        // Intent IQ — per-user title gating (in user edit modal)
+        // Attribution IQ — per-user title gating (in user edit modal)
         // ──────────────────────────────────────────────────────────────────
         // Mirrors the Journey IQ pattern. _intentRunSelected = Set<slug> of
         // titles explicitly checked. _intentRunIsAll = true means "['*']"
@@ -12204,7 +12204,7 @@
 
             const titles = window._intentAdminTitles || [];
             if (titles.length === 0) {
-                container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.75rem;margin:0;padding:0.5rem;">No Intent IQ titles found.</p>';
+                container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.75rem;margin:0;padding:0.5rem;">No Attribution IQ titles found.</p>';
                 if (countEl) countEl.textContent = '';
                 return;
             }

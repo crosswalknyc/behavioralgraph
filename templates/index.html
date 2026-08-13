@@ -18840,7 +18840,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                                  Trends (group: Trends dashboard + Talent Ranker
                                    + Microdramas),
                                  Blue IQ, Fin IQ, LLMO IQ,
-                                 SF Conversion, Intent IQ, ROAS IQ,
+                                 SF Conversion, Attribution IQ, ROAS IQ,
                                  Brand Partnership, Flywheel Conversion,
                                  Analysis IQ, Share of Time, Workspace,
                                  then tail (Admin).
@@ -18890,7 +18890,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
                             <option value="sfConversion" {% if not has_sf_conversion_access and 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
-                            <option value="intentIQ" {% if not has_intent_iq_access %}disabled{% endif %}>🎬 Intent IQ</option>
+                            <option value="intentIQ" {% if not has_intent_iq_access %}disabled{% endif %}>🎬 Attribution IQ</option>
                             <option value="impactIQ" {% if not has_impact_iq_access %}disabled{% endif %}>🌊 Impact IQ</option>
                             <option value="roasIQ" {% if not has_roas_iq_access %}disabled{% endif %}>💰 ROAS IQ</option>
                             <option value="brandPartnershipIQ" {% if 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
@@ -19351,7 +19351,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     {% endif %}
                     {% if 'intent_ingest' in analysis_iq_modules or role == 'super_admin' or role == 'admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('intent-ingest')" id="customAnalysisTabIntentIngest">
-                        🎯 Build Intent IQ Campaign <span style="font-size: 0.7em; opacity: 0.9;">(5 credits)</span>
+                        🎯 Build Attribution IQ Campaign <span style="font-size: 0.7em; opacity: 0.9;">(5 credits)</span>
                     </button>
                     {% endif %}
                     {% if has_sentiment_iq_access or role == 'super_admin' or role == 'admin' %}
@@ -20941,13 +20941,13 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     </div>
                 </div>
 
-                <!-- Intent IQ Ingest Tab Content -->
+                <!-- Attribution IQ Ingest Tab Content -->
                 <div id="customAnalysisTabContentIntentIngest" class="custom-analysis-tab-content">
                     <div class="main-grid">
                         <div class="card">
-                            <h2>🎯 Build Intent IQ Campaign</h2>
+                            <h2>🎯 Build Attribution IQ Campaign</h2>
                             <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">5 Credits Per Build</div>
-                            <p class="section-description">Turn a brand-campaign brief into a fully-formed Intent IQ dashboard in minutes. Paste the campaign asset URLs (YouTube / TikTok / Instagram / Facebook / X / owned media). An agent scrapes each URL for OG metadata, uses Claude to identify featured talent, synthesizes 4-6 audience cohorts and 3-6 audience cards appropriate for the brand and category, groups assets into campaign phases, and applies brand-specific dashboard terminology (chime.com visits instead of ticketing, etc.). The completed title appears in the Intent IQ dropdown as soon as the job finishes.</p>
+                            <p class="section-description">Turn a brand-campaign brief into a fully-formed Attribution IQ dashboard in minutes. Paste the campaign asset URLs (YouTube / TikTok / Instagram / Facebook / X / owned media). An agent scrapes each URL for OG metadata, uses Claude to identify featured talent, synthesizes 4-6 audience cohorts and 3-6 audience cards appropriate for the brand and category, groups assets into campaign phases, and applies brand-specific dashboard terminology (chime.com visits instead of ticketing, etc.). The completed title appears in the Attribution IQ dropdown as soon as the job finishes.</p>
                             <form id="iiingForm" onsubmit="event.preventDefault(); submitIntentIngest();">
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                                     <div>
@@ -20958,7 +20958,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                                     <div>
                                         <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Campaign Name *</label>
                                         <input type="text" id="iiingCampaignName" placeholder="e.g. Mama I Made It" required style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 14px;">
-                                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">This becomes the Intent IQ title.</div>
+                                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">This becomes the Attribution IQ title.</div>
                                     </div>
                                 </div>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
@@ -21008,7 +21008,7 @@ https://www.instagram.com/p/..."></textarea>
                                     </details>
                                 </div>
                                 <div style="display: flex; gap: 0.75rem; align-items: center;">
-                                    <button type="submit" id="iiingSubmitBtn" class="btn primary" style="background: var(--accent-primary); color: white; padding: 10px 24px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer;">🚀 Build Intent IQ Campaign</button>
+                                    <button type="submit" id="iiingSubmitBtn" class="btn primary" style="background: var(--accent-primary); color: white; padding: 10px 24px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer;">🚀 Build Attribution IQ Campaign</button>
                                     <button type="button" class="btn" onclick="loadIntentIngestPresetChime()" style="padding: 10px 16px; border-radius: 8px; font-weight: 500; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); cursor: pointer; font-size: 13px;">Load Chime example</button>
                                     <span id="iiingCreditsInfo" style="margin-left: auto; font-size: 12px; color: var(--text-secondary);"></span>
                                 </div>
@@ -25447,7 +25447,7 @@ https://www.instagram.com/p/..."></textarea>
             </div>
         </div>
 
-        <!-- INTENT IQ VIEW (Title-scoped marketing-intent measurement) -->
+        <!-- ATTRIBUTION IQ VIEW (Title-scoped marketing-intent measurement) -->
         <style>
             #intentIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: auto; padding: 1.25rem 1.5rem; }
             #intentIQView .iiq-header { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
@@ -25497,7 +25497,7 @@ https://www.instagram.com/p/..."></textarea>
         </style>
         <div id="intentIQView">
             <div class="iiq-header">
-                <h2 class="iiq-title">🎬 Intent IQ <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Title-scoped marketing-intent measurement</span></h2>
+                <h2 class="iiq-title">🎬 Attribution IQ <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Title-scoped marketing-intent measurement</span></h2>
                 <p class="iiq-subtitle">Ingest a title's marketing-asset map and report on campaign-phase performance, audience-of-interest overlap, paid vs organic interplay, talent halo, trailer viewership, and audience shift over the campaign life.</p>
             </div>
             <div class="iiq-selector-bar">
@@ -25685,13 +25685,13 @@ https://www.instagram.com/p/..."></textarea>
 
         <script>
         // ============================================================
-        // Intent IQ - frontend controller
+        // Attribution IQ - frontend controller
         // ============================================================
         (function() {
             window.__intentIQ = window.__intentIQ || { titles: [], currentSlug: null, overview: null, cohorts: null };
             // ------------------------------------------------------------
             // // __IIQ_BRAND_LABEL_SWAP_v1__
-            // Brand-mode label swap. When the loaded Intent IQ title has
+            // Brand-mode label swap. When the loaded Attribution IQ title has
             // terminology overrides (title_type='brand', overview.terminology
             // populated by the Analysis IQ ingest agent), swap the film-era
             // hardcoded labels ("Ticketing", "Ticketing %", "Ticketing visits"
@@ -26139,7 +26139,7 @@ https://www.instagram.com/p/..."></textarea>
                 // beside `_iqTopLevelViewIds`. Old hand-rolled ids array
                 // silently missed newer views (impactIQView, trendsIQView,
                 // microdramasIQView, helmIQView) and left them stacked
-                // when you switched into Intent IQ from those products.
+                // when you switched into Attribution IQ from those products.
                 if (typeof _iqHideAllViewsExcept === 'function') {
                     _iqHideAllViewsExcept('intentIQView');
                 }
@@ -28254,8 +28254,8 @@ https://www.instagram.com/p/..."></textarea>
                     });
             };
 
-            // ===== Intent IQ Questions - sub-tabs + per-Q visualizations =====
-            // Intent IQ is about MEASURING intent, never forecasting. Q3 used
+            // ===== Attribution IQ Questions - sub-tabs + per-Q visualizations =====
+            // Attribution IQ is about MEASURING intent, never forecasting. Q3 used
             // to surface a box-office forecast; per Jenna 2026-06-17 it now
             // measures ticket-buying intent for the subject (panel signals)
             // alongside comparable titles' realized opening-weekend buyers.
@@ -40161,7 +40161,7 @@ https://www.instagram.com/p/..."></textarea>
                 customAnalysis: 'Analysis IQ: Run custom analyses and pull your own profiles (5 credits per analysis).',
                 talentFitIQ: 'Talent Fit IQ: Analyze how well talents resonate with your brand audience using behavioral data and social metrics.',
                 blueIQ: 'Blue IQ: Political-audience tracker. Filter by party (AI-imputed) and state or congressional district to see issue searches, search engines, social platforms, top politicians and articles.',
-                intentIQ: 'Intent IQ: Title-scoped marketing-intent measurement. Ingest a campaign URL map and report on phase performance, audiences-of-interest, paid vs organic interplay, talent halo, trailer viewership, and audience shift over campaign life.',
+                intentIQ: 'Attribution IQ: Title-scoped marketing-intent measurement. Ingest a campaign URL map and report on phase performance, audiences-of-interest, paid vs organic interplay, talent halo, trailer viewership, and audience shift over campaign life.',
                 admin: 'Admin: Manage users, access, and system settings.',
                 purgatory: 'Purgatory: Review and release items pending admin approval.'
             };
@@ -58004,7 +58004,7 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         // ============================================================
-        // Intent IQ Ingest form — submit + poll + preset loader
+        // Attribution IQ Ingest form — submit + poll + preset loader
         // ============================================================
         var _iiingPollingId = null;
         var _iiingPresetsLoaded = false;
@@ -58087,14 +58087,14 @@ https://www.instagram.com/p/..."></textarea>
               .then(function(res){
                 if (res.status !== 200) {
                     if (stText) stText.textContent = 'Error: ' + (res.body.error || 'submit failed');
-                    if (btn) { btn.disabled = false; btn.textContent = '🚀 Build Intent IQ Campaign'; }
+                    if (btn) { btn.disabled = false; btn.textContent = '🚀 Build Attribution IQ Campaign'; }
                     return;
                 }
                 if (stText) stText.textContent = res.body.message || 'Queued';
                 _pollIntentIngest(res.body.job_id);
             }).catch(function(e){
                 if (stText) stText.textContent = 'Error: ' + e.message;
-                if (btn) { btn.disabled = false; btn.textContent = '🚀 Build Intent IQ Campaign'; }
+                if (btn) { btn.disabled = false; btn.textContent = '🚀 Build Attribution IQ Campaign'; }
             });
         }
 
@@ -58112,7 +58112,7 @@ https://www.instagram.com/p/..."></textarea>
                     if (bar) bar.style.width = (data.progress || 0) + '%';
                     if (data.status === 'completed') {
                         clearInterval(_iiingPollingId);
-                        if (btn) { btn.disabled = false; btn.textContent = '🚀 Build Intent IQ Campaign'; }
+                        if (btn) { btn.disabled = false; btn.textContent = '🚀 Build Attribution IQ Campaign'; }
                         var r = data.result || {};
                         var slug = r.title_slug || '';
                         var name = r.display_name || '';
@@ -58125,11 +58125,11 @@ https://www.instagram.com/p/..."></textarea>
                                 'Audiences: ' + (r.audience_count || 0) + ' &middot; ' +
                                 'Phases: ' + (r.phase_count || 0) + ' &middot; ' +
                                 'Talent: ' + (r.talent_count || 0) + '<br>' +
-                                '<button type="button" class="btn" style="margin-top: 0.5rem; background: var(--accent-primary); color: white; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer;" onclick="_openIntentIQWithTitle(\'' + slug + '\')">🎯 Open in Intent IQ</button>';
+                                '<button type="button" class="btn" style="margin-top: 0.5rem; background: var(--accent-primary); color: white; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer;" onclick="_openIntentIQWithTitle(\'' + slug + '\')">🎯 Open in Attribution IQ</button>';
                         }
                     } else if (data.status === 'failed') {
                         clearInterval(_iiingPollingId);
-                        if (btn) { btn.disabled = false; btn.textContent = '🚀 Build Intent IQ Campaign'; }
+                        if (btn) { btn.disabled = false; btn.textContent = '🚀 Build Attribution IQ Campaign'; }
                         if (successBox) {
                             successBox.style.display = 'block';
                             successBox.style.background = 'rgba(239,68,68,0.12)';

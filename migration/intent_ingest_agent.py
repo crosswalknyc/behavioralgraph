@@ -1,9 +1,9 @@
-"""Intent IQ ingest agent — form-driven brand-campaign builder.
+"""Attribution IQ ingest agent — form-driven brand-campaign builder.
 
 Kicked off from the Analysis IQ "Build Intent Campaign" form. Takes a
 compact set of user inputs (campaign name, brand, dates, attribution
 window, asset URL list, notes) and produces a fully-formed brand-mode
-Intent IQ snapshot ready to render in the dashboard.
+Attribution IQ snapshot ready to render in the dashboard.
 
 Pipeline (called by `run_ingest` — one function so `spawn_heavy_analysis`
 can invoke it directly, mirroring `migration/journey_iq.py::run_job`):
@@ -975,7 +975,7 @@ def run_ingest(job_id: str, params: dict,
                           [a["display"] for a in audiences],
                           terminology, enabled_tabs, brand_config)
 
-    _p(100, f"Complete — '{campaign}' now available in Intent IQ as '{title_slug}'")
+    _p(100, f"Complete — '{campaign}' now available in Attribution IQ as '{title_slug}'")
 
     return {
         "success":         True,
