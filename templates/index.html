@@ -80,7 +80,7 @@
            where the original rule itself uses a hardcoded color (so a future
            variableization would override it cleanly). */
 
-        /* Nav tabs (INSIGHTS / DEMOGRAPHICS / BEHAVIORAL / INTERESTS / LOCATION / COMPARE / SEGMENT / EXEC SUMMARY / WORKSPACE) */
+        /* Nav tabs (INSIGHTS / DEMOGRAPHICS / BEHAVIORAL / INTERESTS / LOCATION / COMPARE / EXEC SUMMARY / WORKSPACE) */
         body[data-theme="light"] .tab-btn { color: var(--text-primary) !important; background: #ffffff; border-color: var(--border-color); }
         body[data-theme="light"] .tab-btn:not(.tool-tab):hover { background: rgba(13, 148, 136, 0.08); border-color: #0d9488; color: var(--text-primary) !important; }
         body[data-theme="light"] .tab-btn:not(.tool-tab).active { background: #0d9488; border-color: #0d9488; color: #ffffff !important; }
@@ -21021,7 +21021,6 @@ https://www.instagram.com/p/..."></textarea>
                             <div class="toolbar-section">
                                 <div class="dashboard-tabs" id="analysisToolsTabs">
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="compare" data-tooltip="Compare: Side-by-side comparison of multiple profiles to identify similarities and differences." onclick="showTab('comparison')"><span class="tab-icon">⚖️</span><span class="tab-label">COMPARE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
-                                    <button class="tab-btn tool-tab has-tooltip" data-feature="segment" data-tooltip="Segment: Audience segmentation tools to filter and create custom audience segments." onclick="showTab('segmentation')"><span class="tab-icon">🎛️</span><span class="tab-label">SEGMENT</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="execSummary" data-tooltip="Executive Summary: Strategic executive summary comparing this profile to comparison profiles and general population." onclick="generateExecutiveSummaryFromNav()"><span class="tab-icon">📄</span><span class="tab-label">EXEC SUMMARY</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="marketing" data-tooltip="Marketing: Digital ad buying playbook - media mix, per-platform priority, lookalike seed spec, geo targeting, retargeting, creator roster, and brand-partner shortlist." onclick="showTab('marketing')"><span class="tab-icon">📣</span><span class="tab-label">MARKETING</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
                                     <button class="tab-btn tool-tab has-tooltip" data-feature="collaborate" data-tooltip="Workspace: Collaborate with team members, share profiles, build presentation decks, and manage workspaces." onclick="showTab('collaboration')"><span class="tab-icon">🗂️</span><span class="tab-label">WORKSPACE</span><span class="admin-only-star" style="display: none;" title="Only visible to admin">★</span></button>
@@ -22025,138 +22024,6 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
             </div>
             
-            <!-- Segmentation Builder Tab -->
-            <div id="tab-segmentation" class="tab-content">
-                <div class="segmentation-container">
-                    <div class="seg-header">
-                        <h2 id="segmentBuilderTitle">🎯 Audience Segment Builder</h2>
-                        <p>Filter by demographics to see how behaviors change for specific segments</p>
-                    </div>
-                    
-                    <div class="seg-builder">
-                        <div class="seg-filters">
-                            <h3>Select Demographics</h3>
-                            <div class="seg-filter-grid">
-                                <div class="seg-filter-group">
-                                    <label>Gender</label>
-                                    <select id="segGender" multiple>
-                                        <option value="">All</option>
-                                        <option value="Female">Female</option>
-                                        <option value="Male">Male</option>
-                                        <option value="Trans Female">Trans Female</option>
-                                        <option value="Trans Male">Trans Male</option>
-                                        <option value="Non-Binary">Non-Binary</option>
-                                    </select>
-                                </div>
-                                <div class="seg-filter-group">
-                                    <label>Age</label>
-                                    <select id="segAge" multiple>
-                                        <option value="">All</option>
-                                        <option value="<16">&lt;16</option>
-                                        <option value="16-18">16-18</option>
-                                        <option value="18-20">18-20</option>
-                                        <option value="21-25">21-25</option>
-                                        <option value="26-30">26-30</option>
-                                        <option value="31-40">31-40</option>
-                                        <option value="41-59">41-59</option>
-                                        <option value="60+">60+</option>
-                                    </select>
-                                </div>
-                                <div class="seg-filter-group">
-                                    <label>Income</label>
-                                    <select id="segIncome" multiple>
-                                        <option value="">All</option>
-                                        <option value="$25,000 - $49,999">$25,000 - $49,999</option>
-                                        <option value="$50,000 - $74,999">$50,000 - $74,999</option>
-                                        <option value="$75,000 - $99,999">$75,000 - $99,999</option>
-                                        <option value="$100,000 - $149,999">$100,000 - $149,999</option>
-                                        <option value="$150,000 - $249,999">$150,000 - $249,999</option>
-                                        <option value="$250,000 or More">$250,000 or More</option>
-                                    </select>
-                                </div>
-                                <div class="seg-filter-group">
-                                    <label>Ethnicity</label>
-                                    <select id="segEthnicity" multiple>
-                                        <option value="">All</option>
-                                        <option value="White">White</option>
-                                        <option value="Black">Black</option>
-                                        <option value="Hispanic or Latino">Hispanic or Latino</option>
-                                        <option value="Asian">Asian</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
-                                <div class="seg-filter-group">
-                                    <label>Relationship</label>
-                                    <select id="segRelationship">
-                                        <option value="">All</option>
-                                        <option value="Single">Single</option>
-                                        <option value="In a Relationship">In a Relationship</option>
-                                        <option value="Married">Married</option>
-                                        <option value="Divorced or Separated">Divorced or Separated</option>
-                                        <option value="Prefer Not to Say">Prefer Not to Say</option>
-                                    </select>
-                                </div>
-                                <div class="seg-filter-group">
-                                    <label>Parental Status</label>
-                                    <select id="segParental">
-                                        <option value="">All</option>
-                                        <option value="No Children">No Children</option>
-                                        <option value="Has Children">Has Children</option>
-                                        <option value="Prefer Not to Say">Prefer Not to Say</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="seg-actions">
-                                <button class="btn btn-primary" onclick="runSegmentAnalysis()">🔍 Analyze Segment</button>
-                                <button class="btn btn-secondary" onclick="clearSegmentFilters()">Clear Filters</button>
-                                <button class="btn btn-secondary" onclick="saveSegment()">💾 Save Segment</button>
-                            </div>
-                            <div id="segmentStatus" class="seg-status"></div>
-                        </div>
-                        
-                        <div class="seg-results" id="segResults" style="display: none;">
-                            <div class="seg-results-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem;">
-                                <div>
-                                    <h3>📊 Segment Results: <span id="segName">Custom Segment</span></h3>
-                                    <div class="seg-sample-info">
-                                        <span>Estimated Size: <strong id="segSize">--</strong></span>
-                                        <span>% of Total: <strong id="segPercent">--</strong></span>
-                                    </div>
-                                </div>
-                                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                    <button class="btn btn-secondary" onclick="saveCurrentSegment()" style="font-size: 0.75rem; padding: 0.4rem 0.75rem;">💾 Save Segment</button>
-                                    <button class="btn btn-primary" onclick="sendSegmentToCompare()" style="font-size: 0.75rem; padding: 0.4rem 0.75rem;">📊 Send to Compare</button>
-                                </div>
-                            </div>
-                            
-                            <div class="seg-results-grid">
-                                <div class="seg-result-card">
-                                    <h4>Top Behaviors for This Segment</h4>
-                                    <div id="segTopBehaviors" class="seg-list"></div>
-                                </div>
-                                <div class="seg-result-card">
-                                    <h4>How This Segment Differs</h4>
-                                    <div id="segDifferences" class="seg-list"></div>
-                                </div>
-                                <div class="seg-result-card">
-                                    <h4>Media Consumption</h4>
-                                    <div id="segMedia" class="seg-list"></div>
-                                </div>
-                                <div class="seg-result-card">
-                                    <h4>Shopping Preferences</h4>
-                                    <div id="segShopping" class="seg-list"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="saved-segments" id="savedSegments">
-                        <h3>💾 Saved Segments</h3>
-                        <div id="savedSegmentsList" class="saved-list"></div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Comparison Tab -->
             <div id="tab-comparison" class="tab-content">
                 <!-- Comparison Analysis Tabs with Action Buttons -->
