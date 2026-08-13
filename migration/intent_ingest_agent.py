@@ -50,6 +50,7 @@ Progress callback contract (progress_cb(pct: int, message: str)):
     45  — Talent extraction done
     65  — Cohort synthesis done
     80  — Audience synthesis done
+    85  — Baseline metrics + audience shares + cohort sizes synthesized
     90  — Snapshot written to S3
     100 — Registered; done. Returns dict with `title_slug` + `s3_key`.
 """
@@ -105,6 +106,27 @@ _GENERIC_BRAND_TERMINOLOGY = {
     "conversion_verb":            "sign up",
     "conversion_endpoint_label":  "brand website",
     "attribution_window_days":    14,
+    # Digital Journey tab configuration — brand-safe defaults. Each preset
+    # overrides these with category-specific destinations so the BEFORE /
+    # AFTER funnel, tooltips, captions, and modal legends read correctly.
+    "journey_info_bucket_label":       "Research / consideration",
+    "journey_conversion_bucket_label": "Site visit",
+    "journey_info_sub_label":          "Brand search / social profile / app-store listing / review site",
+    "journey_conversion_sub_label":    "Brand website / signup page / app download",
+    "journey_info_destinations":       [
+        "Brand search",
+        "Instagram / TikTok brand profile",
+        "App-store listing",
+        "Review site (Trustpilot / G2 / Reddit)",
+        "Comparison site",
+    ],
+    "journey_conversion_destinations": [
+        "Brand website (homepage)",
+        "Signup / registration page",
+        "App download (iOS / Android)",
+        "Referral / promo link",
+    ],
+    "suppress_film_behaviors":         True,
 }
 
 BRAND_CATEGORY_TERMINOLOGY_PRESETS: Dict[str, Dict[str, Any]] = {
@@ -113,69 +135,201 @@ BRAND_CATEGORY_TERMINOLOGY_PRESETS: Dict[str, Dict[str, Any]] = {
                                        "visited the brand's IG/TikTok profile, or opened its app-store "
                                        "listing within the attribution window",
         "bottom_funnel_label":        "Website visit",
+        "bottom_funnel_full":         "Visited the brand website within the attribution window",
         "conversion_noun":            "signup",
         "conversion_verb":            "sign up",
-        "conversion_endpoint_label":  "brand website",
+        "conversion_endpoint_label":  "brand.com",
         "attribution_window_days":    14,
+        "journey_info_bucket_label":       "Research / consideration",
+        "journey_conversion_bucket_label": "Website visit",
+        "journey_info_sub_label":          "Brand search / IG-TikTok profile / app-store listing / finance comparison site",
+        "journey_conversion_sub_label":    "brand.com signup / app download / referral link",
+        "journey_info_destinations":       [
+            "Google search",
+            "brand.com / app-store listing",
+            "IG / TikTok brand profile",
+            "Finance comparison site (NerdWallet, Bankrate)",
+            "Reddit r/personalfinance / review sites",
+        ],
+        "journey_conversion_destinations": [
+            "brand.com signup",
+            "iOS / Android app install",
+            "Referral / promo link",
+        ],
     },
     "DTC / eCommerce": {
         "mid_funnel_label":           "Consideration",
         "mid_funnel_full":            "Visited a product page, added to wishlist, engaged another brand post, "
                                        "or searched the brand within the attribution window",
         "bottom_funnel_label":        "Cart add",
+        "bottom_funnel_full":         "Added an item to cart or reached the checkout page within the attribution window",
         "conversion_noun":            "purchase",
         "conversion_verb":            "purchase",
         "conversion_endpoint_label":  "checkout",
         "attribution_window_days":    14,
+        "journey_info_bucket_label":       "Consideration",
+        "journey_conversion_bucket_label": "Cart / checkout",
+        "journey_info_sub_label":          "Google shopping / IG-TikTok reviews / PDP visit / review sites",
+        "journey_conversion_sub_label":    "brand.com cart / checkout / retailer",
+        "journey_info_destinations":       [
+            "Google shopping",
+            "brand.com PDP",
+            "IG / TikTok review",
+            "Reddit / review site",
+            "Comparison shopping",
+        ],
+        "journey_conversion_destinations": [
+            "brand.com cart",
+            "Checkout page",
+            "Retailer (Amazon / Target)",
+        ],
     },
     "Streaming / SVOD": {
         "mid_funnel_label":           "Research",
         "bottom_funnel_label":        "Sign-up page visit",
+        "bottom_funnel_full":         "Visited the service's sign-up page within the attribution window",
         "conversion_noun":            "subscription",
         "conversion_verb":            "subscribe",
         "conversion_endpoint_label":  "sign-up page",
         "attribution_window_days":    14,
+        "journey_info_bucket_label":       "Research / show discovery",
+        "journey_conversion_bucket_label": "Sign-up visit",
+        "journey_info_sub_label":          "Google / IMDB / RT / Reddit fandom / official show page",
+        "journey_conversion_sub_label":    "service sign-up / free trial / app install",
+        "journey_info_destinations":       [
+            "Google search",
+            "IMDB",
+            "Rotten Tomatoes",
+            "Reddit fandom",
+            "Show official site",
+        ],
+        "journey_conversion_destinations": [
+            "Service sign-up page",
+            "Free trial",
+            "App install (Roku / Fire / iOS)",
+        ],
     },
     "QSR / Restaurant": {
         "mid_funnel_full":            "Searched the brand or opened its app / delivery-app listing within "
                                        "the attribution window",
         "bottom_funnel_label":        "Order intent",
+        "bottom_funnel_full":         "Opened brand app or delivery-app menu within the attribution window",
         "conversion_noun":            "order",
         "conversion_verb":            "order",
         "conversion_endpoint_label":  "brand app / delivery app",
         "attribution_window_days":    7,
+        "journey_info_bucket_label":       "Menu discovery",
+        "journey_conversion_bucket_label": "Order intent",
+        "journey_info_sub_label":          "Google Maps / brand app / delivery-app menu / reviews",
+        "journey_conversion_sub_label":    "brand app order / delivery-app order",
+        "journey_info_destinations":       [
+            "Google Maps",
+            "Brand app browse",
+            "DoorDash / Uber Eats menu",
+            "Yelp / Reddit review",
+        ],
+        "journey_conversion_destinations": [
+            "Brand app order",
+            "DoorDash / Uber Eats order",
+            "In-store visit",
+        ],
     },
     "Automotive": {
         "mid_funnel_label":           "Research",
         "bottom_funnel_label":        "Dealer / configurator visit",
+        "bottom_funnel_full":         "Visited a dealer inventory page or built a configurator within the attribution window",
         "conversion_noun":            "test-drive request",
         "conversion_verb":            "request a test drive",
         "conversion_endpoint_label":  "dealer site / configurator",
         "attribution_window_days":    30,
+        "journey_info_bucket_label":       "Research",
+        "journey_conversion_bucket_label": "Dealer / configurator",
+        "journey_info_sub_label":          "Google / Edmunds / Kelley Blue Book / MotorTrend",
+        "journey_conversion_sub_label":    "dealer inventory / configurator / test-drive form",
+        "journey_info_destinations":       [
+            "Google search",
+            "Edmunds",
+            "Kelley Blue Book",
+            "MotorTrend / Car & Driver",
+            "YouTube review",
+        ],
+        "journey_conversion_destinations": [
+            "OEM configurator",
+            "Local dealer inventory",
+            "Test-drive request form",
+        ],
     },
     "CPG": {
         "mid_funnel_label":           "Recall",
         "bottom_funnel_label":        "Retailer / D2C visit",
+        "bottom_funnel_full":         "Visited a retailer PDP or the brand's D2C site within the attribution window",
         "conversion_noun":            "purchase intent",
         "conversion_verb":            "add to cart",
         "conversion_endpoint_label":  "retailer / brand.com",
         "attribution_window_days":    14,
+        "journey_info_bucket_label":       "Recall / awareness",
+        "journey_conversion_bucket_label": "Retailer / brand.com",
+        "journey_info_sub_label":          "Google / brand IG / TikTok / recipe or review content",
+        "journey_conversion_sub_label":    "Amazon / Target / Walmart PDP / brand.com",
+        "journey_info_destinations":       [
+            "Google search",
+            "Brand IG / TikTok",
+            "Recipe / lifestyle content",
+            "Reddit / review site",
+        ],
+        "journey_conversion_destinations": [
+            "Amazon PDP",
+            "Target / Walmart PDP",
+            "brand.com store locator",
+        ],
     },
     "Retail": {
         "mid_funnel_label":           "Browse",
         "bottom_funnel_label":        "brand.com visit",
+        "bottom_funnel_full":         "Visited the brand's website (PDP or store locator) within the attribution window",
         "conversion_noun":            "purchase",
         "conversion_verb":            "purchase",
         "conversion_endpoint_label":  "brand.com",
         "attribution_window_days":    14,
+        "journey_info_bucket_label":       "Browse",
+        "journey_conversion_bucket_label": "brand.com visit",
+        "journey_info_sub_label":          "Google / IG / TikTok / brand app / review sites",
+        "journey_conversion_sub_label":    "brand.com PDP / cart / store locator",
+        "journey_info_destinations":       [
+            "Google shopping",
+            "Brand IG / TikTok",
+            "Brand app browse",
+            "Review / try-on video",
+        ],
+        "journey_conversion_destinations": [
+            "brand.com PDP",
+            "Cart / checkout",
+            "Store locator",
+        ],
     },
     "Fitness / Wellness": {
         "mid_funnel_label":           "Research",
         "bottom_funnel_label":        "Membership page visit",
+        "bottom_funnel_full":         "Visited the membership / trial signup page within the attribution window",
         "conversion_noun":            "membership signup",
         "conversion_verb":            "sign up",
         "conversion_endpoint_label":  "membership page",
         "attribution_window_days":    14,
+        "journey_info_bucket_label":       "Research",
+        "journey_conversion_bucket_label": "Membership signup",
+        "journey_info_sub_label":          "Google / brand app / review sites / class schedules",
+        "journey_conversion_sub_label":    "membership signup / free trial / class booking",
+        "journey_info_destinations":       [
+            "Google search",
+            "Brand app / class schedule",
+            "Reddit / review site",
+            "IG / TikTok member testimonial",
+        ],
+        "journey_conversion_destinations": [
+            "Membership signup page",
+            "Free-trial form",
+            "Class booking",
+        ],
     },
 }
 
@@ -680,6 +834,248 @@ Return ONLY JSON:
 
 
 # =====================================================================
+# Metric / audience / cohort synthesis
+# ---------------------------------------------------------------------
+# The scrape step gives us URLs + OG metadata but NOT view / engagement
+# counts (those live behind YT/IG/TikTok APIs we can't hit from the
+# form workflow). Without these fields every dashboard tile collapses
+# to zero (info-seek %, website-visit %, cumulative curves, ROI).
+#
+# We synthesize plausible values seeded deterministically per-asset
+# (so re-ingests are idempotent) using the same channel-calibrated
+# ranges as `scripts/synth_chime_metrics.py`. Numbers are brand-scale,
+# not GOAT-theatrical-scale (which would over-project by 100x).
+#
+# Audience `overlap_bp` + cohort `panel_count` / `gen_pop_share` are
+# also seeded per (brand, category, subject_key). Without these the
+# audience-drill-in modal shows 0 for VIEWS / INFO # / TICKET # even
+# though the % columns render correctly — the same Chime bug fixed by
+# `scripts/populate_chime_audience_shares.py`. Baking it in here.
+# =====================================================================
+
+_CHANNEL_VIEW_SPEC = {
+    "youtube":   {"lo":  20_000,  "hi":   800_000,  "top_hit_odds": 0.08,  "top_hit_mult": 3.0},
+    "tiktok":    {"lo":  25_000,  "hi":   600_000,  "top_hit_odds": 0.10,  "top_hit_mult": 4.5},
+    "instagram": {"lo":   8_000,  "hi":   150_000,  "top_hit_odds": 0.07,  "top_hit_mult": 3.5},
+    "twitter":   {"lo":   5_000,  "hi":    80_000,  "top_hit_odds": 0.05,  "top_hit_mult": 2.5},
+    "x":         {"lo":   5_000,  "hi":    80_000,  "top_hit_odds": 0.05,  "top_hit_mult": 2.5},
+    "facebook":  {"lo":  15_000,  "hi":   150_000,  "top_hit_odds": 0.05,  "top_hit_mult": 2.5},
+    "linkedin":  {"lo":   3_000,  "hi":    60_000,  "top_hit_odds": 0.04,  "top_hit_mult": 2.0},
+    "reddit":    {"lo":   5_000,  "hi":   100_000,  "top_hit_odds": 0.06,  "top_hit_mult": 3.0},
+    "pinterest": {"lo":   4_000,  "hi":    50_000,  "top_hit_odds": 0.03,  "top_hit_mult": 2.0},
+    "snapchat":  {"lo":   6_000,  "hi":    70_000,  "top_hit_odds": 0.04,  "top_hit_mult": 2.5},
+    "threads":   {"lo":   3_000,  "hi":    40_000,  "top_hit_odds": 0.03,  "top_hit_mult": 2.0},
+    "web":       {"lo":   1_500,  "hi":    30_000,  "top_hit_odds": 0.02,  "top_hit_mult": 1.8},
+    "unknown":   {"lo":   5_000,  "hi":    60_000,  "top_hit_odds": 0.03,  "top_hit_mult": 2.0},
+}
+
+# Engagement rate = (likes + comments + shares) / views (channel-calibrated).
+_CHANNEL_ENG_RATE = {
+    "youtube":   (0.030, 0.060),
+    "tiktok":    (0.060, 0.120),
+    "instagram": (0.040, 0.080),
+    "twitter":   (0.010, 0.030),
+    "x":         (0.010, 0.030),
+    "facebook":  (0.010, 0.030),
+    "linkedin":  (0.020, 0.045),
+    "reddit":    (0.030, 0.070),
+    "pinterest": (0.010, 0.025),
+    "snapchat":  (0.020, 0.045),
+    "threads":   (0.015, 0.040),
+    "web":       (0.005, 0.015),
+    "unknown":   (0.020, 0.050),
+}
+
+_ASSET_TYPE_VIEW_MULT = {
+    "Organic Video":   1.20,
+    "Organic Social":  1.00,
+    "Trailer":         2.50,
+    "Paid Video":      1.80,
+    "Paid Social":     1.40,
+    "Press":           0.60,
+    "Talent Post":     1.30,
+    "Web Asset":       0.55,
+}
+
+
+def _seeded_uniform(key: str, salt: str, lo: float, hi: float) -> float:
+    """Deterministic pseudo-uniform in [lo, hi] seeded by (key, salt).
+
+    Same function used across scripts/synth_chime_metrics.py and the
+    row-by-row Claude jitter pipeline so values line up on refresh."""
+    h = hashlib.sha256(f"{key}|{salt}".encode()).hexdigest()
+    u = int(h[:12], 16) / 0xFFFFFFFFFFFF
+    return lo + u * (hi - lo)
+
+
+def _seeded_bool(key: str, salt: str, prob: float) -> bool:
+    return _seeded_uniform(key, salt, 0.0, 1.0) < prob
+
+
+def _norm_channel_key(channel: str) -> str:
+    c = (channel or "").strip().lower()
+    for k in _CHANNEL_VIEW_SPEC.keys():
+        if k in c:
+            return k
+    return "unknown"
+
+
+def synth_asset_metrics(asset: dict) -> tuple:
+    """Deterministically synthesize (views, engagement) for one asset.
+
+    Log-uniform draw over the channel-specific range × asset-type
+    multiplier × small viral-boost odds. Seed = asset_id || url so
+    the same asset always renders the same numbers across ingests.
+    """
+    import math
+    url = asset.get("url") or ""
+    asset_id = asset.get("asset_id") or url
+    key = f"{asset_id}|{url}"
+
+    ch = _norm_channel_key(asset.get("channel"))
+    spec = _CHANNEL_VIEW_SPEC.get(ch, _CHANNEL_VIEW_SPEC["unknown"])
+
+    log_lo, log_hi = math.log(spec["lo"]), math.log(spec["hi"])
+    views = math.exp(_seeded_uniform(key, "views_log", log_lo, log_hi))
+
+    if _seeded_bool(key, "top_hit", spec["top_hit_odds"]):
+        boost = _seeded_uniform(key, "top_hit_boost", 1.5, spec["top_hit_mult"])
+        views *= boost
+
+    views *= _ASSET_TYPE_VIEW_MULT.get(asset.get("asset_type") or "", 1.0)
+    views = int(round(views))
+
+    lo_rate, hi_rate = _CHANNEL_ENG_RATE.get(ch, _CHANNEL_ENG_RATE["unknown"])
+    rate = _seeded_uniform(key, "eng_rate", lo_rate, hi_rate)
+    engagement = int(round(views * rate))
+
+    return views, engagement
+
+
+def synthesize_metrics_for_assets(assets: List[dict]) -> None:
+    """Populate ext_view_count + ext_engagement_count on every asset,
+    in place. Sets ext_engagement_source='synthesized_baseline' so
+    downstream refresh scripts know they can safely overwrite with
+    real API numbers when available."""
+    for a in assets:
+        v, e = synth_asset_metrics(a)
+        a["ext_view_count"] = v
+        a["ext_engagement_count"] = e
+        a["ext_engagement_source"] = "synthesized_baseline"
+
+
+def infer_paid_or_organic(assets: List[dict]) -> None:
+    """Heuristic paid/organic classification, applied in place.
+
+    Baseline is 'organic' (form users typically paste owned social).
+    A URL containing paid-media markers (`utm_medium=paid`, `cpc`,
+    `sponsored`, `promoted`, `paid=1`) OR an asset_type already tagged
+    Paid gets 'paid'. Roughly 15-20% of assets on Chime were paid;
+    if the URL heuristics catch fewer than that, we deterministically
+    flip a small share so the Paid-vs-Organic tab has both series."""
+    n = len(assets)
+    if not n:
+        return
+    paid_count = 0
+    for a in assets:
+        url = (a.get("url") or "").lower()
+        atype = (a.get("asset_type") or "").lower()
+        if ("utm_medium=paid" in url or "utm_medium=cpc" in url
+                or "sponsored" in url or "promoted" in url
+                or "paid=1" in url or atype.startswith("paid")):
+            a["paid_or_organic"] = "paid"
+            paid_count += 1
+        else:
+            a["paid_or_organic"] = "organic"
+
+    # If the URL heuristics missed everything, deterministically flip
+    # ~15% so downstream Paid-vs-Organic renders both series. Use the
+    # existing seeded RNG so this is stable across re-ingests.
+    if paid_count == 0 and n >= 4:
+        target = max(1, int(round(n * 0.15)))
+        # Sort by a hash so the choice is deterministic + spread across
+        # phases (not front-loaded on the first N assets).
+        ranked = sorted(
+            assets,
+            key=lambda a: _seeded_uniform(a.get("asset_id") or a.get("url") or "",
+                                           "paid_flip", 0.0, 1.0),
+        )
+        for a in ranked[:target]:
+            a["paid_or_organic"] = "paid"
+
+
+# Audience overlap_bp by inferred segment type. Realistic ranges for
+# US-adult panel share (as percentages, not basis points despite the
+# field name — same convention as the frontend drill-in).
+_AUDIENCE_OVERLAP_BP_BY_CATEGORY = {
+    "GOAL":      (3.5,  9.5),    # brand-goal cohorts (existing customer / prospect)
+    "TALENT":    (2.5, 14.0),    # named person; wide range for reach differences
+    "LIFESTYLE": (2.0,  8.5),
+    "INTEREST":  (2.0,  7.5),
+    "DEMO":      (4.0, 12.0),
+}
+
+
+def synthesize_audience_shares(audiences: List[dict], brand: str) -> None:
+    """Populate overlap_bp + gen_pop_share on every audience, in place.
+
+    Deterministic per (brand || subject_key) so re-ingests match and
+    across-brand comparisons vary. Ranges are category-tuned:
+    talent widest (a mainstream name can reach ~14% of adults; a
+    supporting-cast name ~3%), demo/goal bands narrower and centered
+    on realistic panel-share values."""
+    for a in audiences:
+        cat = str(a.get("category") or "LIFESTYLE").upper()
+        lo, hi = _AUDIENCE_OVERLAP_BP_BY_CATEGORY.get(cat, (3.0, 8.0))
+        seed = f"{brand}|{a.get('subject_key','')}"
+        bp = _seeded_uniform(seed, "overlap_bp", lo, hi)
+        # Round to 2dp so the drill-in doesn't render 10-decimal noise.
+        a["overlap_bp"] = round(bp, 2)
+        a["gen_pop_share"] = round(bp / 100.0, 4)
+
+
+# Cohort sizing bands (gen_pop_share, panel_count_target) by cohort archetype.
+# Slug prefix match: existing_* -> customer band, high_intent_* -> prospect
+# band, aware_* -> aware band, lapsed_* -> lapsed band, else 'other'.
+_COHORT_BANDS = {
+    "existing":    {"share_lo": 0.05,  "share_hi": 0.12,  "panel_lo": 2000, "panel_hi": 5000},
+    "high_intent": {"share_lo": 0.03,  "share_hi": 0.06,  "panel_lo": 1200, "panel_hi": 2400},
+    "aware":       {"share_lo": 0.25,  "share_hi": 0.42,  "panel_lo": 10000, "panel_hi": 17000},
+    "lapsed":      {"share_lo": 0.012, "share_hi": 0.025, "panel_lo":  500, "panel_hi": 1100},
+    "other":       {"share_lo": 0.030, "share_hi": 0.080, "panel_lo": 1200, "panel_hi": 3400},
+}
+
+
+def _cohort_band_for(slug: str) -> str:
+    s = (slug or "").lower()
+    if s.startswith("existing"):    return "existing"
+    if s.startswith("high_intent"): return "high_intent"
+    if s.startswith("aware"):       return "aware"
+    if s.startswith("lapsed"):      return "lapsed"
+    if "customer" in s and "prospect" not in s: return "existing"
+    if "prospect" in s or "shopper" in s:       return "high_intent"
+    if "aware" in s or "non_customer" in s:     return "aware"
+    if "lapsed" in s or "churned" in s:         return "lapsed"
+    return "other"
+
+
+def synthesize_cohort_sizes(cohorts: List[dict], brand: str) -> None:
+    """Populate gen_pop_share + panel_count on every cohort, in place.
+
+    Bands are calibrated so existing-customer ~5-12% (matches Chime's
+    ~8.5% of US adults), aware/awareness the largest at 25-42%, lapsed
+    the smallest at 1-2.5%. Deterministic seed (brand || cohort_slug)."""
+    for c in cohorts:
+        slug = c.get("cohort_slug") or ""
+        band = _COHORT_BANDS[_cohort_band_for(slug)]
+        seed = f"{brand}|{slug}"
+        share = _seeded_uniform(seed, "gp_share", band["share_lo"], band["share_hi"])
+        panel = int(round(_seeded_uniform(seed, "panel", band["panel_lo"], band["panel_hi"])))
+        c["gen_pop_share"] = round(share, 4)
+        c["panel_count"]   = panel
+
+
+# =====================================================================
 # Phase grouping
 # =====================================================================
 
@@ -875,6 +1271,24 @@ def run_ingest(job_id: str, params: dict,
         brand_cat, custom_overrides=params.get("terminology_overrides"))
     if attribution_days > 0:
         terminology["attribution_window_days"] = attribution_days
+
+    # ── Step 5b: baseline metric / audience / cohort synthesis ───────
+    # Assets scraped from OG metadata don't come with view / engagement
+    # counts, and Claude-synthesized cohorts/audiences don't come with
+    # panel sizes. Populate seeded baselines so the dashboard renders
+    # full numbers on first load (same values the Chime post-hoc
+    # backfill scripts produced). Users can refresh with real numbers
+    # via scripts/refresh_intent_youtube_engagement.py later.
+    infer_paid_or_organic(assets)
+    synthesize_metrics_for_assets(assets)
+    synthesize_audience_shares(audiences, brand=brand)
+    synthesize_cohort_sizes(cohorts, brand=brand)
+
+    total_views = sum(int(a.get("ext_view_count") or 0) for a in assets)
+    total_eng   = sum(int(a.get("ext_engagement_count") or 0) for a in assets)
+    paid_n      = sum(1 for a in assets if (a.get("paid_or_organic") or "") == "paid")
+    _p(85, f"Synthesized metrics: {total_views:,} views, {total_eng:,} eng, "
+           f"{paid_n} paid / {len(assets)-paid_n} organic")
 
     enabled_tabs = {
         "overview":            True,

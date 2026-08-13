@@ -37186,8 +37186,9 @@ def submit_journey_iq():
 # See migration/intent_ingest_agent.py for the pipeline.
 # ============================================================
 
-CREDITS_INTENT_INGEST = 5   # cheaper than Journey IQ since assets are
-                            # user-supplied and no CH-heavy scan runs.
+CREDITS_INTENT_INGEST = 50  # heavy: scrape N URLs + 3 Claude synthesis passes
+                            # + full metric/audience/cohort synthesis so the
+                            # output ships Chime-quality on first render.
 
 
 def _run_intent_ingest(job_id):
