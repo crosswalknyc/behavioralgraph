@@ -25440,6 +25440,28 @@ https://www.instagram.com/p/..."></textarea>
                 var term = ov.terminology || {};
                 return term.bottom_funnel_label || 'Ticketing';
             };
+            // Daily-timeseries chart labels (Q2 Paid vs Organic, Q2 modal).
+            // Brand campaigns often need custom wording that pluralizes
+            // differently than the bottom_funnel_label used elsewhere,
+            // e.g. Chime wants "Website / app views (daily)" here even
+            // though the tile / drill-in headers say "Website visit".
+            // Preference order:
+            //   1. terminology.daily_conversion_series_label (explicit brand copy)
+            //   2. terminology.bottom_funnel_label + 's (daily)' (brand-aware pluralize)
+            //   3. 'Ticketing visits (daily)' (film default)
+            window._iiqDailySeriesLabel = function(kind) {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var term = ov.terminology || {};
+                if (kind === 'info') {
+                    if (term.daily_info_series_label)  return term.daily_info_series_label;
+                    if (term.mid_funnel_label)         return term.mid_funnel_label + ' (daily)';
+                    return 'Info-seekers (daily)';
+                }
+                // default: conversion / bottom funnel
+                if (term.daily_conversion_series_label) return term.daily_conversion_series_label;
+                if (term.bottom_funnel_label)           return term.bottom_funnel_label + 's (daily)';
+                return 'Ticketing visits (daily)';
+            };
             window._iiqInfoSeekTooltip = function(count) {
                 var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
                 var term = ov.terminology || {};
@@ -28839,8 +28861,8 @@ https://www.instagram.com/p/..."></textarea>
                 // chip colors used on the Assets cards and Q1 rollup so
                 // the eye can ladder up between views.
                 var rightSeries = hasFunnelSeries ? [
-                    { name: 'Info-seekers (daily)',    color: '#a5b4fc', points: infoDailyPts, total: targetInfo },
-                    { name: 'Ticketing visits (daily)', color: '#fbbf24', points: tkDailyPts,   total: targetTk   }
+                    { name: window._iiqDailySeriesLabel('info'),       color: '#a5b4fc', points: infoDailyPts, total: targetInfo },
+                    { name: window._iiqDailySeriesLabel('conversion'), color: '#fbbf24', points: tkDailyPts,   total: targetTk   }
                 ] : [];
 
                 // ===== Per-key info/ticket daily curves for PIT splits =====
@@ -29541,8 +29563,8 @@ https://www.instagram.com/p/..."></textarea>
                     if (st.showOrganicViews && totByKey.organic > 0) leftS.push({ name: 'Organic views (daily)', color: pal.organic, points: orgPts,  total: totByKey.organic });
                     if (st.showPaidViews    && totByKey.paid    > 0) leftS.push({ name: 'Paid views (daily)',    color: pal.paid,    points: paidPts, total: totByKey.paid    });
                     var hasFunnel = (infoPts.some(function(p){ return p.y > 0; }) || tkPts.some(function(p){ return p.y > 0; }));
-                    if (hasFunnel && st.showInfoSeekers) rightS.push({ name: 'Info-seekers (daily)',    color: '#a5b4fc', points: infoPts, total: infoPts.reduce(function(s,p){return s+p.y;}, 0) });
-                    if (hasFunnel && st.showTicketing)   rightS.push({ name: 'Ticketing visits (daily)', color: '#fbbf24', points: tkPts,   total: tkPts.reduce(function(s,p){return s+p.y;},   0) });
+                    if (hasFunnel && st.showInfoSeekers) rightS.push({ name: window._iiqDailySeriesLabel('info'),       color: '#a5b4fc', points: infoPts, total: infoPts.reduce(function(s,p){return s+p.y;}, 0) });
+                    if (hasFunnel && st.showTicketing)   rightS.push({ name: window._iiqDailySeriesLabel('conversion'), color: '#fbbf24', points: tkPts,   total: tkPts.reduce(function(s,p){return s+p.y;},   0) });
                     var events = [];
                     if (st.showEvents) {
                         subset.forEach(function(a) {

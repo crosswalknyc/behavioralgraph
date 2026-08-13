@@ -140,6 +140,7 @@ BRAND_CATEGORY_TERMINOLOGY_PRESETS: Dict[str, Dict[str, Any]] = {
         "conversion_verb":            "sign up",
         "conversion_endpoint_label":  "brand.com",
         "attribution_window_days":    14,
+        "daily_conversion_series_label":   "Website / app views (daily)",
         "journey_info_bucket_label":       "Research / consideration",
         "journey_conversion_bucket_label": "Website visit",
         "journey_info_sub_label":          "Brand search / IG-TikTok profile / app-store listing / finance comparison site",
