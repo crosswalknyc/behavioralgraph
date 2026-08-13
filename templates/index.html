@@ -26823,12 +26823,47 @@ https://www.instagram.com/p/..."></textarea>
                 return 'branding';
             }
             function iiqAssetPhaseTilt(c) {
+                var _iiqPtOv = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var _iiqPtIsBrand = _iiqPtOv.title_type === 'brand';
+                var p = (c.phase_name || '').toLowerCase();
+
+                if (_iiqPtIsBrand) {
+                    // Brand campaigns don't have a hard "opening
+                    // weekend" -- phases name creative themes ("Welcome
+                    // to 30", "Feel Good Money") rather than funnel
+                    // positions. Match on funnel-stage phrases that
+                    // brands actually use; default to flat 1.0 so we
+                    // don't apply the film post-release damper to
+                    // every asset just because dates don't align with
+                    // GOAT's 2026-02-13 calendar.
+                    if (/announce|announcement|teaser|reveal|awareness|kickoff/.test(p))
+                        return {info: 1.15, ticket: 0.80};
+                    if (/launch|premiere|debut|drop\b/.test(p))
+                        return {info: 1.10, ticket: 1.10};
+                    if (/activation|conversion|promo|offer|signup|sign-?up|install|drive|retarget/.test(p))
+                        return {info: 0.95, ticket: 1.45};
+                    if (/always.?on|evergreen|maintenance|catalog|residual/.test(p))
+                        return {info: 0.90, ticket: 0.90};
+                    // Unknown / creative-theme phase -> no tilt. The
+                    // per-asset paid/organic + channel + engagement
+                    // modifiers in iiqAssetFunnelProjection still give
+                    // meaningful cross-asset spread; we just don't
+                    // want the film calendar arithmetic pinning every
+                    // brand asset into the post-release compression
+                    // band. Adds a light 5% subject-salted jitter
+                    // around 1.0 so aggregated categories don't
+                    // collide at identical rounded values.
+                    var _iiqPtSalt = (c.phase_name || '') + '|' + (c.asset_type || '');
+                    var _iiqPtJitInfo   = _iiqJitter(_iiqPtSalt, 'phase_info',   0.05);
+                    var _iiqPtJitTicket = _iiqJitter(_iiqPtSalt, 'phase_ticket', 0.05);
+                    return {info: 1.0 + _iiqPtJitInfo, ticket: 1.0 + _iiqPtJitTicket};
+                }
+
                 // GOAT opens 2026-02-13; tickets on sale 2026-01-21;
                 // streaming launch 2026-05-15. Phase-based tilt drives
                 // ticketing conversion much more than info-seek (people
                 // search for the movie all campaign long; they only buy
                 // tickets when tickets are buyable).
-                var p = (c.phase_name || '').toLowerCase();
                 if (/opening|t-?0/.test(p))      return {info: 1.10, ticket: 2.55};
                 if (/final push|t-?1\b/.test(p)) return {info: 1.00, ticket: 1.70};
                 if (/branding|t-?2/.test(p))     return {info: 0.88, ticket: 0.95};
