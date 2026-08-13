@@ -30517,7 +30517,7 @@ https://www.instagram.com/p/..."></textarea>
                   +   iiqSummaryTile('Engagement', fmtCompact(eng), 'likes + comments + shares')
                   +   iiqSummaryTile('Eng. rate', engRate.toFixed(2) + '%', 'engagement / views')
                   +   iiqSummaryTile('Info-seek %', proj.info_pct.toFixed(1) + '%', '~' + fmtCompact(infoCount) + ' viewers within 7d')
-                  +   iiqSummaryTile('Ticketing %', proj.ticket_pct.toFixed(1) + '%', '~' + fmtCompact(tkCount) + ' viewers within 7d')
+                  +   iiqSummaryTile(((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing')) + ' %', proj.ticket_pct.toFixed(1) + '%', '~' + fmtCompact(tkCount) + ' viewers within 7d')
                   + '</div>'
                   + '<div id="iiqAssetModalChart" class="iiq-card" style="padding:0.85rem;">'
                   +   '<div style="font-size:0.78rem; color: var(--text-secondary); margin-bottom:0.4rem;">Daily performance (loading\u2026)</div>'
@@ -30566,7 +30566,7 @@ https://www.instagram.com/p/..."></textarea>
                         ];
                         if (hasFunnelSynth) {
                             series.push({ name: 'Daily info-seekers',     color: '#a5b4fc', points: infoPts });
-                            series.push({ name: 'Daily ticketing visits', color: '#f472b6', points: tkPts   });
+                            series.push({ name: 'Daily ' + ((typeof window._iiqBFL === 'function' ? window._iiqBFL() : 'Ticketing').toLowerCase()) + 's', color: '#f472b6', points: tkPts   });
                         }
                         var captionTitle = 'Daily performance (' + escapeHtml(winLabel) + ')'
                             + (isSynthesized ? ' \u00b7 <span style="color: var(--text-secondary); font-weight:normal; font-size:0.72rem;">estimated daily distribution from window total + posted_date</span>' : '');
