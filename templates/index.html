@@ -24618,6 +24618,9 @@ https://www.instagram.com/p/..."></textarea>
                so the visual grammar stays consistent). */
             #microdramasIQView .miq-rollup-card-conv { display: flex; align-items: baseline; justify-content: space-between; gap: 0.4rem; margin-top: 0.15rem; padding-top: 0.35rem; border-top: 1px dashed rgba(255,255,255,0.08); }
             #microdramasIQView .miq-rollup-conv-label { font-size: 0.62rem; color: var(--text-secondary); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+            #microdramasIQView .miq-rollup-card-conv-raw { display: flex; align-items: baseline; justify-content: space-between; gap: 0.4rem; margin-top: 0.05rem; font-size: 0.62rem; color: var(--text-tertiary, rgba(255,255,255,0.5)); }
+            #microdramasIQView .miq-rollup-conv-raw-label { font-weight: 400; letter-spacing: 0.02em; text-transform: none; opacity: 0.75; }
+            #microdramasIQView .miq-rollup-conv-raw-value { font-variant-numeric: tabular-nums; font-weight: 500; opacity: 0.85; }
             #microdramasIQView .miq-rollup-conv-value { font-size: 0.78rem; font-weight: 700; color: #f9a8d4; font-variant-numeric: tabular-nums; }
             #microdramasIQView .miq-rollup-card-conv-na .miq-rollup-conv-value { color: var(--text-secondary); font-weight: 500; }
             /* User-flow stats: 2x2 grid of Total Users / New Subs /
@@ -46426,14 +46429,26 @@ https://www.instagram.com/p/..."></textarea>
                 // per-title paywall, subscription-only).
                 var convBlock;
                 if (p.free_to_paid_pct != null) {
-                    var convTip = 'View-weighted share of ALL viewers on ' + (p.platform || 'platform')
+                    var paying = p.paying_viewers;
+                    var tracked = p.tracked_views_for_paywall;
+                    var convRawStr = (paying != null && tracked != null)
+                        ? (_miqFormatNumber(paying) + ' / ' + _miqFormatNumber(tracked))
+                        : null;
+                    var convTip = 'Share of ALL viewers on ' + (p.platform || 'platform')
                                 + ' who cross the paywall into paid episodes. '
                                 + 'Denominator is every tracked viewer, not just free-tier completers - '
-                                + 'so the number reads lower than the per-title Payer Conversion chip.';
+                                + 'so the number reads lower than the per-title Payer Conversion chip.'
+                                + (convRawStr ? ' Raw: ~' + convRawStr + ' paying viewers / tracked views.' : '');
                     convBlock = '<div class="miq-rollup-card-conv" title="' + _miqEscape(convTip) + '">'
                               +   '<span class="miq-rollup-conv-label">Free to Paid</span>'
-                              +   '<span class="miq-rollup-conv-value">' + Math.round(p.free_to_paid_pct) + '%</span>'
+                              +   '<span class="miq-rollup-conv-value">' + p.free_to_paid_pct.toFixed(1) + '%</span>'
                               + '</div>';
+                    if (convRawStr) {
+                        convBlock += '<div class="miq-rollup-card-conv-raw" title="Estimated paying viewers / tracked views over the active window.">'
+                                   +   '<span class="miq-rollup-conv-raw-label">est. paying / tracked</span>'
+                                   +   '<span class="miq-rollup-conv-raw-value">' + convRawStr + '</span>'
+                                   + '</div>';
+                    }
                 } else {
                     var convNaTip = (p.platform || 'This platform') + ' is subscription-only, '
                                   + 'so there is no per-title paywall to convert into.';
@@ -46449,14 +46464,26 @@ https://www.instagram.com/p/..."></textarea>
                 // the paywall-crossers count) are on the same axis.
                 var paidCompBlock;
                 if (p.avg_paid_completion_pct != null) {
-                    var pcTip = 'View-weighted share of ' + (p.platform || 'platform')
+                    var finishers = p.paying_finishers;
+                    var payerDenom = p.paying_denominator_for_completion;
+                    var pcRawStr = (finishers != null && payerDenom != null)
+                        ? (_miqFormatNumber(finishers) + ' / ' + _miqFormatNumber(payerDenom))
+                        : null;
+                    var pcTip = 'Share of ' + (p.platform || 'platform')
                               + ' payers who finish the entire series. For coin platforms this is the '
                               + 'payer cohort only (viewers who bought at least one paid ep). For Peacock '
-                              + 'every viewer is a paying subscriber, so this is the same as series completion.';
+                              + 'every viewer is a paying subscriber, so this is the same as series completion.'
+                              + (pcRawStr ? ' Raw: ~' + pcRawStr + ' payers who finished / total payers.' : '');
                     paidCompBlock = '<div class="miq-rollup-card-conv" title="' + _miqEscape(pcTip) + '">'
                                   +   '<span class="miq-rollup-conv-label">Avg Paid Completion</span>'
-                                  +   '<span class="miq-rollup-conv-value">' + Math.round(p.avg_paid_completion_pct) + '%</span>'
+                                  +   '<span class="miq-rollup-conv-value">' + p.avg_paid_completion_pct.toFixed(1) + '%</span>'
                                   + '</div>';
+                    if (pcRawStr) {
+                        paidCompBlock += '<div class="miq-rollup-card-conv-raw" title="Estimated payers who finished the whole series / total estimated payers over the active window.">'
+                                       +   '<span class="miq-rollup-conv-raw-label">est. finishers / payers</span>'
+                                       +   '<span class="miq-rollup-conv-raw-value">' + pcRawStr + '</span>'
+                                       + '</div>';
+                    }
                 } else {
                     paidCompBlock = '<div class="miq-rollup-card-conv miq-rollup-card-conv-na" title="No completion data available for this platform in the current window.">'
                                   +   '<span class="miq-rollup-conv-label">Avg Paid Completion</span>'

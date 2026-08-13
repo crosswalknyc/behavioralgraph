@@ -1974,8 +1974,17 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
                           if grand_total_views > 0 else 0.0)
         views_w = p.pop('_paid_views', 0)
         wsum    = p.pop('_paid_wsum', 0.0)
+        # Free to Paid math: paying-viewer count = sum(paid_pct/100 * views)
+        # across titles (algebraically equal to sum(wsum)/100 since
+        # each title contributes paid_pct * views to wsum). Reporting
+        # both the ratio AND the raw counts so users can audit the
+        # math directly. Without the raw counts, two platforms whose
+        # % happens to round to the same integer look identical even
+        # when their absolute paying-viewer volumes differ 5x.
         p['free_to_paid_pct'] = (round(wsum / views_w, 1)
                                   if views_w > 0 else None)
+        p['paying_viewers']    = int(round(wsum / 100.0)) if views_w > 0 else None
+        p['tracked_views_for_paywall'] = int(views_w) if views_w > 0 else None
         # Avg Paid Completion: view-weighted mean of per-title
         # payer-completion across the platform. For Peacock this
         # rolls up series_completion_pct (every viewer = payer);
@@ -1985,6 +1994,24 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
         pay_s = p.pop('_payer_wsum', 0.0)
         p['avg_paid_completion_pct'] = (round(pay_s / pay_v, 1)
                                          if pay_v > 0 else None)
+        # Raw counts for the paid-completion metric. Numerator =
+        # payers who finished the whole series (estimated per title
+        # as paying_viewers[title] * payer_completion_pct[title]/100).
+        # For view-weighted math the equivalent is
+        # (paying_viewers_platform * avg_paid_completion / 100).
+        if p['avg_paid_completion_pct'] is not None and p.get('paying_viewers'):
+            _pay_v = p['paying_viewers']
+            p['paying_finishers'] = int(round(_pay_v * p['avg_paid_completion_pct'] / 100.0))
+            p['paying_denominator_for_completion'] = _pay_v
+        elif p['avg_paid_completion_pct'] is not None:
+            # Peacock path: no per-title paywall so paying_viewers is
+            # null. Use total tracked views as the payer denominator
+            # (every Peacock viewer is a paying subscriber).
+            p['paying_finishers'] = int(round(p.get('total_views', 0) * p['avg_paid_completion_pct'] / 100.0))
+            p['paying_denominator_for_completion'] = int(p.get('total_views', 0))
+        else:
+            p['paying_finishers'] = None
+            p['paying_denominator_for_completion'] = None
         # Platform-level user flow scaled to the active window. Powers
         # the "total users / new subs / cancellations / net growth"
         # stats grid on each platform card of the All Platforms
