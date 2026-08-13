@@ -1422,6 +1422,32 @@ def run_ingest(job_id: str, params: dict,
         "job_id":      job_id,
     }
 
+    # Auto-generate per-asset funnel rates (info-seek %, website-visit %)
+    # BEFORE demographics so the dashboard's absolute conversion numbers
+    # honor real digital-marketing benchmarks instead of the film-model
+    # base rates (which over-predict brand-campaign funnel by ~10x).
+    # See migration/attribution_funnel_rates_agent.py for benchmarks +
+    # per-asset Claude reasoning.
+    try:
+        from migration.attribution_funnel_rates_agent import (
+            build_campaign_funnel_rates, save_to_snapshot as _save_fr,
+        )
+        try:
+            from migration.claude_client import claude_messages as _fr_claude
+        except Exception:
+            _fr_claude = None
+        _p(86, "Reasoning per-asset funnel rates (info-seek + website-visit)...")
+        fr_summary = build_campaign_funnel_rates(snapshot, claude_fn=_fr_claude,
+                                                    batch_size=8)
+        _save_fr(snapshot, fr_summary)
+        _p(87, f"Funnel rates ({fr_summary.get('method')}): "
+                f"{fr_summary.get('aggregate_info_pct'):.2f}% info-seek, "
+                f"{fr_summary.get('aggregate_website_pct'):.2f}% website")
+    except Exception as e:
+        logger.warning("Intent ingest: funnel-rate generation failed (%s); "
+                        "will run when scripts/build_intent_funnel_rates.py --slug %s --apply "
+                        "is invoked", e, title_slug)
+
     # Auto-generate the demographics block so the Performance ->
     # Demographics tab lights up on first load. Uses Claude if the
     # ANTHROPIC_API_KEY is set, deterministic fallback otherwise.
@@ -1435,7 +1461,7 @@ def run_ingest(job_id: str, params: dict,
             from migration.claude_client import claude_messages as _demo_claude
         except Exception:
             _demo_claude = None
-        _p(87, "Reasoning per-asset demographic distributions...")
+        _p(88, "Reasoning per-asset demographic distributions...")
         demos = build_campaign_demographics(snapshot, claude_fn=_demo_claude,
                                               batch_size=6)
         save_to_snapshot(snapshot, demos)

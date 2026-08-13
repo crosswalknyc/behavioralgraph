@@ -27062,6 +27062,30 @@ https://www.instagram.com/p/..."></textarea>
                 return val;
             }
             function iiqAssetFunnelProjection(c) {
+                // Prefer per-asset rates that were reasoned by
+                // migration/attribution_funnel_rates_agent.py (grounded
+                // in real Meta / Google / TikTok brand-lift + CTR
+                // benchmarks) over the film-industry base model.
+                //
+                // Rates are written to the S3 snapshot per-asset and
+                // ride in on the /api/intent/<slug>/assets payload as
+                // ext_info_seek_pct + ext_website_visit_pct. Missing
+                // fields fall through to the legacy model below so
+                // film titles (GOAT) render unchanged.
+                if (c && c.ext_info_seek_pct != null && c.ext_website_visit_pct != null) {
+                    var _iiqRatedInfo = Number(c.ext_info_seek_pct);
+                    var _iiqRatedWeb  = Number(c.ext_website_visit_pct);
+                    if (!isNaN(_iiqRatedInfo) && !isNaN(_iiqRatedWeb)) {
+                        var _iiqRatedBucket = (typeof iiqClassifyAsset === 'function')
+                                              ? iiqClassifyAsset(c) : 'clip';
+                        return {
+                            info_pct:   _iiqRatedInfo,
+                            ticket_pct: _iiqRatedWeb,
+                            bucket:     _iiqRatedBucket,
+                            source:     c.ext_funnel_rates_source || 'agent'
+                        };
+                    }
+                }
                 var BASE_INFO = {
                     trailer: 14.0, clip: 11.0, talent: 10.5, press: 11.0,
                     ticketing_promo: 4.5, music: 5.5, branding: 7.5
