@@ -29620,11 +29620,7 @@ https://www.instagram.com/p/..."></textarea>
                 var presaleDate = IIQ_CAMPAIGN_DATES.PRESALE;
                 var openingDate = IIQ_CAMPAIGN_DATES.OPENING;
                 var presets = [
-                    { label: '1 mo before tickets', date: _clampDate(_addDays(presaleDate, -30)) },
-                    { label: '2 wks before tickets', date: _clampDate(_addDays(presaleDate, -14)) },
-                    { label: 'Tickets on sale',     date: _clampDate(presaleDate) },
-                    { label: 'Opening day',         date: _clampDate(openingDate) },
-                    { label: 'All data',            date: maxDate }
+                    { label: 'All dates', date: maxDate }
                 ];
                 function _presetBtn(p) {
                     var active = (p.date === asOf);
