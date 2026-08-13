@@ -15799,6 +15799,23 @@ def api_intent_question(title_slug, qid):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/intent/<title_slug>/demographics', methods=['GET'])
+@requires_auth
+def api_intent_demographics(title_slug):
+    """Per-campaign demographic distributions built by the
+    `attribution_demographics_agent` (Claude-reasoned per-asset,
+    view-weighted per-phase, plus an all-campaigns rollup). Lives
+    inside the S3 normalized snapshot under `demographics`."""
+    ok, err = _require_intent_iq(title_slug)
+    if not ok:
+        return err
+    try:
+        return jsonify(_intent_iq.get_demographics(title_slug))
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/intent/<title_slug>/in_flight', methods=['GET'])
 @requires_auth
 def api_intent_in_flight(title_slug):

@@ -560,10 +560,23 @@ def scrape_asset(url: str) -> dict:
 # =====================================================================
 
 def _claude() -> Optional[Callable]:
-    """Return the claude_messages callable, or None if unavailable."""
+    """Return the claude_messages callable, or None if unavailable.
+
+    Resolves across the three deployment contexts we run in:
+      1. Parent-repo scripts on the workstation / Hetzner ->
+         `migration.claude_client` from /root/finished_codes.
+      2. bg-webapp submodule on Render -> `claude_client` at bg-webapp
+         repo root (not inside `migration/`, that's just how the
+         bg-webapp layout has always been).
+      3. bg-webapp submodule imported via the `bg_webapp` namespace
+         path (older callers).
+
+    The order matters: parent-repo claude_client has the multi-key
+    pool + retry logic, bg-webapp's has a single-key path. Both
+    expose the same `claude_messages(system=, user=, ...)` signature.
+    """
     try:
-        # Prefer the parent-repo claude_client (has key pool) if present;
-        # fall back to the submodule copy.
+        # (1) Parent-repo path (workstation / Hetzner)
         try:
             sys.path.insert(0, "/root/finished_codes")
         except Exception:
@@ -573,6 +586,13 @@ def _claude() -> Optional[Callable]:
             return claude_messages
         except Exception:
             pass
+        # (2) bg-webapp Render deploy: claude_client at the repo root
+        try:
+            from claude_client import claude_messages  # type: ignore
+            return claude_messages
+        except Exception:
+            pass
+        # (3) Legacy namespaced submodule import
         try:
             from bg_webapp.migration.claude_client import claude_messages  # type: ignore
             return claude_messages
@@ -987,10 +1007,50 @@ def synth_asset_metrics(asset: dict) -> tuple:
 
 def synthesize_metrics_for_assets(assets: List[dict]) -> None:
     """Populate ext_view_count + ext_engagement_count on every asset,
-    in place. Sets ext_engagement_source='synthesized_baseline' so
-    downstream refresh scripts know they can safely overwrite with
-    real API numbers when available."""
+    in place.
+
+    STRATEGY (2026-08-13):
+      1. Try scraping real numbers first via
+         `migration.intent_asset_scrapers.calibrate_assets_in_place`.
+         YouTube + TikTok work from any host; Instagram works when
+         IG_SESSIONID is exported (session cookie).
+      2. For assets that don't get a real value (private posts, TT
+         anti-bot, unsupported platforms without an auth session), fall
+         back to the legacy `synth_asset_metrics()` synthesis so the
+         asset still renders on the dashboard. Legacy-synth assets are
+         tagged `synthesized_baseline` so ops can spot them + retry via
+         `scripts/calibrate_intent_asset_views.py --slug <slug> --apply`.
+
+    HARD INVARIANT (per user 2026-08-13): the displayed view count must
+    never exceed the real platform value. Real scrapes satisfy this by
+    construction; the legacy synth is only used when a real scrape
+    returned nothing (view_count=0 with a `*_scrape_failed_*` or
+    `*_no_public_metrics_*` source tag), so we only inflate ABOVE zero,
+    never above a known real number.
+    """
+    try:
+        from migration.intent_asset_scrapers import calibrate_assets_in_place
+    except Exception:
+        calibrate_assets_in_place = None    # type: ignore
+
+    if calibrate_assets_in_place is not None:
+        try:
+            calibrate_assets_in_place(assets, request_delay=0.6)
+        except Exception as e:
+            # Never let scraping-layer failures crash an ingest run;
+            # fall through to the legacy synthesis so downstream code
+            # still gets non-null counts.
+            import logging
+            logging.getLogger(__name__).warning(
+                "intent_ingest_agent: real-scrape calibration failed (%s); "
+                "falling back to synthesized_baseline for every asset.", e)
+
     for a in assets:
+        v_existing = int(a.get("ext_view_count") or 0)
+        src_existing = a.get("ext_engagement_source") or ""
+        real_scrape = ("_html_" in src_existing) or ("_session_scrape_" in src_existing)
+        if v_existing > 0 and real_scrape:
+            continue    # already has real numbers, don't overwrite
         v, e = synth_asset_metrics(a)
         a["ext_view_count"] = v
         a["ext_engagement_count"] = e
@@ -1334,6 +1394,7 @@ def run_ingest(job_id: str, params: dict,
         "q4_talent":           True,
         "q5_trailer":          False,   # film-only
         "q6_cohorts":          True,
+        "demographics":        True,
         "journey":             True,
         "inflight":            True,
         "conversion":          False,   # film-only (BO projector)
@@ -1380,6 +1441,79 @@ def run_ingest(job_id: str, params: dict,
         "ingested_at": datetime.now(timezone.utc).isoformat(),
         "job_id":      job_id,
     }
+
+    # Reasoning agents that must run for EVERY brand-campaign ingest,
+    # regardless of whether the trigger is a parent-repo script (Hetzner
+    # / workstation) or the Analysis IQ dashboard form on Render. Same
+    # code, same prompts, same benchmarks, same output shape -- so a
+    # dashboard-triggered ingest yields byte-identical funnel + demo
+    # numbers as a hand-invoked scripts/build_intent_*.py run.
+    #
+    # Both agents live in `migration/` in the parent repo AND in
+    # `bg-webapp/migration/` (copied identically on every release). The
+    # `_load_agent()` helper below tolerates either layout so the
+    # module resolves on any host.
+    _fr_claude   = _claude()
+    _demo_claude = _fr_claude   # single resolve, shared by both agents
+
+    def _load_agent(mod_names):
+        """Import the first available module from a list of candidate
+        dotted paths. Returns the imported module or None."""
+        import importlib
+        for name in mod_names:
+            try:
+                return importlib.import_module(name)
+            except Exception:
+                continue
+        return None
+
+    # ----- Funnel rates (info-seek % + website-visit %) -----
+    # canonical impl: migration/attribution_funnel_rates_agent.py
+    _fr_mod = _load_agent([
+        "migration.attribution_funnel_rates_agent",       # both layouts
+        "attribution_funnel_rates_agent",                  # bare (rare)
+    ])
+    if _fr_mod is not None:
+        try:
+            _p(86, "Reasoning per-asset funnel rates (info-seek + website-visit)...")
+            fr_summary = _fr_mod.build_campaign_funnel_rates(
+                snapshot, claude_fn=_fr_claude, batch_size=8)
+            _fr_mod.save_to_snapshot(snapshot, fr_summary)
+            _p(87, f"Funnel rates ({fr_summary.get('method')}): "
+                    f"{fr_summary.get('aggregate_info_pct'):.2f}% info-seek, "
+                    f"{fr_summary.get('aggregate_website_pct'):.2f}% website")
+        except Exception as e:
+            logger.warning("Intent ingest: funnel-rate generation failed (%s); "
+                            "will run when scripts/build_intent_funnel_rates.py "
+                            "--slug %s --apply is invoked", e, title_slug)
+    else:
+        logger.warning("Intent ingest: attribution_funnel_rates_agent module "
+                        "not importable; skipping (dashboard funnel numbers "
+                        "will fall back to the film-industry base model).")
+
+    # ----- Demographics (per-phase + all-campaigns distributions) -----
+    # canonical impl: migration/attribution_demographics_agent.py
+    _demo_mod = _load_agent([
+        "migration.attribution_demographics_agent",
+        "attribution_demographics_agent",
+    ])
+    if _demo_mod is not None:
+        try:
+            _p(88, "Reasoning per-asset demographic distributions...")
+            demos = _demo_mod.build_campaign_demographics(
+                snapshot, claude_fn=_demo_claude, batch_size=6)
+            _demo_mod.save_to_snapshot(snapshot, demos)
+            _p(89, f"Demographics generated ({demos.get('method')}) "
+                    f"for {len(demos.get('phases') or [])} phases")
+        except Exception as e:
+            logger.warning("Intent ingest: demographics generation failed (%s); "
+                            "will run when scripts/build_intent_demographics.py "
+                            "--slug %s --apply is invoked", e, title_slug)
+    else:
+        logger.warning("Intent ingest: attribution_demographics_agent module "
+                        "not importable; skipping (Performance -> Demographics "
+                        "tab will be empty until a hand-invoked build runs).")
+
     snap_key = SNAPSHOT_KEY_FMT.format(slug=title_slug)
     body = json.dumps(snapshot, default=str).encode()
     s3.put_object(Bucket=S3_BUCKET, Key=snap_key, Body=body,
