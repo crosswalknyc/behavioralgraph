@@ -861,6 +861,224 @@ AUDIENCES_OF_INTEREST_DEFAULT = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Gen Pop comparison + median helpers (per Jenna 2026-08-13)
+# ---------------------------------------------------------------------------
+#
+# The Demographics tab overlays a Gen Pop bar on every category card so a
+# marketer can see AT A GLANCE whether the campaign audience over- or
+# under-indexes vs the US baseline for each bucket. We source Gen Pop from
+# the canonical `Gen_Pop_2026.csv` at the repo root (the same file the
+# Behavioral Graph dashboard reads for its own comparisons -- see
+# `profile-iq-pipeline-rules.mdc` sections 3 + 5).
+#
+# We also compute per-audience-cut median AGE and median INCOME. Medians
+# are interpolated on the bucket boundaries (not just the midpoint of the
+# median bucket) so a distribution that's 30/40/30 across the 25-34 bucket
+# reports a median close to 30 rather than snapping to 29.5. Reported as
+# an integer year for AGE and a rounded-to-nearest-$500 dollar figure for
+# INCOME.
+
+_GEN_POP_CANONICAL_BUCKETS = {
+    # UPPERCASE (Gen_Pop) -> canonical schema label used by the agent.
+    "AGE": {
+        "17 AND UNDER": "17 and Under",
+        "18-24":         "18-24",
+        "25-34":         "25-34",
+        "35-44":         "35-44",
+        "45-54":         "45-54",
+        "55-64":         "55-64",
+        "65 OR OLDER":   "65 or Older",
+    },
+    "GENDER": {
+        "FEMALE":            "Female",
+        "MALE":              "Male",
+        "NON-BINARY":        "Non-Binary",
+        "TRANS FEMALE":      "Trans Female",
+        "TRANS MALE":        "Trans Male",
+        "PREFER NOT TO SAY": "Prefer Not to Say",
+    },
+    "ETHNICITY": {
+        "WHITE":                      "White",
+        "HISPANIC OR LATINO":         "Hispanic or Latino",
+        "BLACK OR AFRICAN AMERICAN":  "Black or African American",
+        "ASIAN":                      "Asian",
+        "ANOTHER RACE/ETHNICITY":     "Another Race/Ethnicity",
+    },
+    "INCOME": {
+        "LESS THAN $25,000":       "Less than $25,000",
+        "$25,000 - $49,999":       "$25,000 - $49,999",
+        "$50,000 - $74,999":       "$50,000 - $74,999",
+        "$75,000 - $99,999":       "$75,000 - $99,999",
+        "$100,000 - $149,999":     "$100,000 - $149,999",
+        "$150,000 - $249,999":     "$150,000 - $249,999",
+        "$250,000 OR MORE":        "$250,000 or More",
+    },
+}
+
+# Bucket boundaries used for interpolated median computation. Lower/upper
+# bounds are the actual bucket edges (17 and Under -> [0, 18); 65 or
+# Older -> [65, 90) using 90 as the top-code); linear interpolation
+# within the bucket gives a real median rather than the midpoint.
+_AGE_BOUNDS = {
+    "17 and Under": (0.0,  18.0),
+    "18-24":        (18.0, 25.0),
+    "25-34":        (25.0, 35.0),
+    "35-44":        (35.0, 45.0),
+    "45-54":        (45.0, 55.0),
+    "55-64":        (55.0, 65.0),
+    "65 or Older":  (65.0, 85.0),
+}
+_INCOME_BOUNDS = {
+    "Less than $25,000":     (0.0,       25_000.0),
+    "$25,000 - $49,999":     (25_000.0,  50_000.0),
+    "$50,000 - $74,999":     (50_000.0,  75_000.0),
+    "$75,000 - $99,999":     (75_000.0, 100_000.0),
+    "$100,000 - $149,999":  (100_000.0, 150_000.0),
+    "$150,000 - $249,999":  (150_000.0, 250_000.0),
+    "$250,000 or More":     (250_000.0, 400_000.0),
+}
+# Order matters for cumulative median calculation.
+_AGE_ORDER    = ["17 and Under", "18-24", "25-34", "35-44",
+                 "45-54", "55-64", "65 or Older"]
+_INCOME_ORDER = ["Less than $25,000", "$25,000 - $49,999",
+                 "$50,000 - $74,999", "$75,000 - $99,999",
+                 "$100,000 - $149,999", "$150,000 - $249,999",
+                 "$250,000 or More"]
+
+
+def _median_from_distribution(dist: dict, order: list, bounds: dict) -> Optional[float]:
+    """Linear-interpolated median from a bucketed distribution. Returns
+    None when the distribution is empty or doesn't sum to a meaningful
+    value. Interpolation reads the fraction of the median bucket needed
+    to reach 50% cumulative and places the median that fraction of the
+    way between the bucket's lower and upper bound."""
+    if not dist:
+        return None
+    total = sum(float(dist.get(b) or 0) for b in order)
+    if total <= 0:
+        return None
+    cum = 0.0
+    for b in order:
+        p = float(dist.get(b) or 0)
+        if p <= 0:
+            continue
+        new_cum = cum + p
+        # Check whether 50% of the total lies within this bucket.
+        target = 0.5 * total
+        if new_cum >= target:
+            lo, hi = bounds.get(b, (0.0, 0.0))
+            frac = (target - cum) / p if p > 0 else 0.0
+            frac = max(0.0, min(1.0, frac))
+            return lo + frac * (hi - lo)
+        cum = new_cum
+    return None   # unreachable when total > 0
+
+
+_GEN_POP_DEMOS_CACHE: dict = {}   # {'demographics': {...}, 'median_age': X, 'median_income': Y}
+
+
+def _load_gen_pop_demographics() -> dict:
+    """Load + normalize Gen Pop demographic percentages from the canonical
+    `Gen_Pop_2026.csv` at the repo root. Cached per-process. Falls back to
+    the DEMO_US_BASELINE panel snapshot when the file isn't readable
+    (e.g. Render deploy without the CSV committed).
+
+    Returns:
+      {'demographics':  {'AGE': {...}, 'GENDER': {...},
+                         'ETHNICITY': {...}, 'INCOME': {...}},
+       'median_age':    float,
+       'median_income': float,
+       'source':        'gen_pop_2026' | 'panel_baseline_fallback'}
+    """
+    if _GEN_POP_DEMOS_CACHE:
+        return _GEN_POP_DEMOS_CACHE
+
+    demos: dict = {}
+    source = "gen_pop_2026"
+
+    # Try repo-root Gen_Pop_2026.csv (works locally + on Render if the
+    # file is checked in; the parent repo commits it as canonical).
+    candidates = [
+        Path(__file__).resolve().parent.parent / "Gen_Pop_2026.csv",  # parent-repo root
+        Path(__file__).resolve().parent / "Gen_Pop_2026.csv",         # bg-webapp root
+        Path("/root/finished_codes/Gen_Pop_2026.csv"),                # Hetzner
+        Path("/tmp/Gen_Pop_2026.csv"),                                # last-ditch
+    ]
+    csv_path = next((p for p in candidates if p.exists()), None)
+
+    if csv_path:
+        try:
+            import csv as _csv
+            raw: dict = {}
+            with open(csv_path, "r", encoding="utf-8", errors="replace") as f:
+                for row in _csv.DictReader(f):
+                    col = (row.get("Column") or "").strip().upper()
+                    val = (row.get("Value") or "").strip().upper()
+                    bp_str = (row.get("Brand Penetration (Row)") or "").strip().rstrip("%")
+                    if col not in _GEN_POP_CANONICAL_BUCKETS or not val:
+                        continue
+                    try:
+                        pct = float(bp_str)
+                    except ValueError:
+                        continue
+                    canonical_bucket = _GEN_POP_CANONICAL_BUCKETS[col].get(val)
+                    if canonical_bucket is None:
+                        continue
+                    raw.setdefault(col, {})[canonical_bucket] = pct
+            # Renormalize each category to 100 (Gen Pop rows are already
+            # ~100 but tiny rounding drift is common in the source CSV).
+            for cat, buckets in raw.items():
+                s = sum(buckets.values())
+                if s > 0:
+                    demos[cat] = {b: v * 100.0 / s for b, v in buckets.items()}
+        except Exception as e:
+            logger.warning("gen pop demographics load failed for %s: %s", csv_path, e)
+            demos = {}
+            source = "panel_baseline_fallback"
+    else:
+        source = "panel_baseline_fallback"
+
+    if not demos:
+        # Fall back to panel baseline distributions (still useful even
+        # when we don't have the Gen Pop CSV -- panel baseline is what
+        # the coherence agent uses as its anchor).
+        try:
+            from migration.attribution_demographics_schema import (
+                DEMO_US_BASELINE,
+            )
+            for cat in ("AGE", "GENDER", "ETHNICITY", "INCOME"):
+                demos[cat] = dict(DEMO_US_BASELINE.get(cat, {}))
+        except Exception:
+            demos = {}
+
+    median_age = _median_from_distribution(demos.get("AGE") or {},
+                                             _AGE_ORDER, _AGE_BOUNDS)
+    median_income = _median_from_distribution(demos.get("INCOME") or {},
+                                                _INCOME_ORDER, _INCOME_BOUNDS)
+
+    _GEN_POP_DEMOS_CACHE.update({
+        "demographics":  demos,
+        "median_age":    median_age,
+        "median_income": median_income,
+        "source":        source,
+    })
+    return _GEN_POP_DEMOS_CACHE
+
+
+def _annotate_medians(cut: dict) -> None:
+    """Attach `median_age` + `median_income` to a phase / all_campaigns
+    cut IN-PLACE, computed from the cut's `demographics` distribution.
+    Safe on cuts that lack AGE or INCOME (returns None for missing cats)."""
+    if not cut:
+        return
+    demos = cut.get("demographics") or {}
+    cut["median_age"] = _median_from_distribution(
+        demos.get("AGE") or {}, _AGE_ORDER, _AGE_BOUNDS)
+    cut["median_income"] = _median_from_distribution(
+        demos.get("INCOME") or {}, _INCOME_ORDER, _INCOME_BOUNDS)
+
+
 def get_demographics(title_slug: str) -> dict:
     """Return the per-campaign demographic distributions saved on the
     normalized snapshot by `attribution_demographics_agent`.
@@ -898,6 +1116,8 @@ def get_demographics(title_slug: str) -> dict:
                       "PRIMARY_LANGUAGE"]
         category_labels = {c: c.replace("_", " ").title() for c in categories}
 
+    gen_pop = _load_gen_pop_demographics()
+
     if not demos:
         return {
             "success":         False,
@@ -909,7 +1129,23 @@ def get_demographics(title_slug: str) -> dict:
             "category_labels": category_labels,
             "phases":          [],
             "all_campaigns":   None,
+            "gen_pop":         {
+                "demographics":  gen_pop.get("demographics") or {},
+                "median_age":    gen_pop.get("median_age"),
+                "median_income": gen_pop.get("median_income"),
+                "source":        gen_pop.get("source"),
+            },
         }
+
+    # Annotate every cut with a linear-interpolated median age + income
+    # so the frontend can render the medians directly under the AGE +
+    # INCOME cards without recomputing them per-render.
+    phases = demos.get("phases") or []
+    for ph in phases:
+        _annotate_medians(ph)
+    all_camp = demos.get("all_campaigns") or None
+    if all_camp:
+        _annotate_medians(all_camp)
 
     return {
         "success":         True,
@@ -918,8 +1154,14 @@ def get_demographics(title_slug: str) -> dict:
         "generated_at":    demos.get("generated_at_utc"),
         "categories":      categories,
         "category_labels": category_labels,
-        "phases":          demos.get("phases") or [],
-        "all_campaigns":   demos.get("all_campaigns") or None,
+        "phases":          phases,
+        "all_campaigns":   all_camp,
+        "gen_pop":         {
+            "demographics":  gen_pop.get("demographics") or {},
+            "median_age":    gen_pop.get("median_age"),
+            "median_income": gen_pop.get("median_income"),
+            "source":        gen_pop.get("source"),
+        },
     }
 
 
