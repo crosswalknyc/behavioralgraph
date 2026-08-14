@@ -90063,13 +90063,10 @@ https://www.instagram.com/p/..."></textarea>
             
             // Display relevance percentage if available - next to "days of data"
             const relevanceHeader = document.getElementById('tickerRelevanceHeader');
-            if (data.relevance_percentage !== null && data.relevance_percentage !== undefined) {
-                relevanceHeader.textContent = `Stock Impact: ${data.relevance_percentage}%`;
-                relevanceHeader.style.display = 'block';
-                relevanceHeader.setAttribute('data-tooltip', `This KPI represents approximately ${data.relevance_percentage}% of the stock price movement. This is a force-ranked metric (0-100 scale) based on historical significance of the KPI to the company's share price behavior, determined by examining relative surprise from reporting and subsequent share price behavior over the 5-day period following earnings.`);
-            } else {
-                relevanceHeader.style.display = 'none';
-            }
+            // Stock Impact pill removed from Fin IQ profile headers per request.
+            // Element kept in the DOM (hidden) so the data-cutoff notice below
+            // can still anchor to it.
+            relevanceHeader.style.display = 'none';
             
             // Show data cutoff notice if filtering is applied
             let cutoffNotice = document.getElementById('tickerCutoffNotice');
