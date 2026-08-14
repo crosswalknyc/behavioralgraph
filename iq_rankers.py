@@ -77,8 +77,15 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
         "VERTICAL SHORTS", "VIDEO GAME",
         # SERIES variants are handled by startswith("SERIES") below.
     ],
+    # 2026-08-14 (Jenna): FAST PLATFORM + FAST CHANNEL live under
+    # PLATFORMS as sub-values (not as their own top-level bucket).
+    # Values are SINGULAR + UPPERCASE to match the BRAND CATEGORY
+    # tags in dashboard-inputs; the frontend MASTER_CATEGORIES
+    # lookup is case-sensitive.
     "PLATFORMS": [
-        "APP/PLATFORM", "BROADCAST/CABLE", "MEDIA", "MOVIE THEATER", "PLATFORMS",
+        "APP/PLATFORM", "BROADCAST/CABLE",
+        "FAST CHANNEL", "FAST PLATFORM",
+        "MEDIA", "MOVIE THEATER", "PLATFORMS",
         "SEARCH ENGINE", "SEARCH ENGINE/AI",
         "SOCIAL MEDIA", "STREAMING MUSIC",
         "STREAMING PLATFORM", "STREAMING VIDEO", "STREAMING/PLATFORM",
@@ -92,17 +99,6 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
     # digital-health brands + subjects that don't cleanly belong under
     # BRAND (retail) or PLATFORMS (media / digital services).
     "HEALTHCARE": ["HEALTHCARE"],
-    # 2026-08-14 (Jenna). FAST is broken out of PLATFORMS as its own
-    # top-level bucket so free-ad-supported streaming services (Pluto TV,
-    # Tubi, Roku Channel, Freevee, ...) and the individual FAST channels
-    # that live on those services get their own selector tab. The legacy
-    # "VIRTUAL MVPD/FAST" sub-values under PLATFORMS are left in place so
-    # existing hybrid vMVPD+FAST profiles don't move tabs.
-    # 2026-08-14 (Jenna): sub-values are SINGULAR to match the existing
-    # BRAND CATEGORY tags already in the dashboard-inputs bucket. Frontend
-    # MASTER_CATEGORIES in templates/index.html is case-sensitive, so
-    # canonical here must exactly match the data.
-    "FAST": ["FAST PLATFORM", "FAST CHANNEL"],
     "TRENDS": ["TRENDS", "SHOPPING INTENT"],
 }
 
