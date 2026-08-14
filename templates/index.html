@@ -25526,8 +25526,8 @@ https://www.instagram.com/p/..."></textarea>
                     var sel = document.getElementById('iiqTitleSelect');
                     sel.innerHTML = '';
                     if (!window.__intentIQ.titles.length) {
-                        sel.innerHTML = '<option value="">(no titles ingested yet - run scripts/ingest_intent_campaign.py)</option>';
-                        document.getElementById('iiqStatus').textContent = 'No titles. Ingest one with scripts/ingest_intent_campaign.py.';
+                        sel.innerHTML = '<option value="">(no campaigns available)</option>';
+                        document.getElementById('iiqStatus').textContent = 'No campaigns available. Use "Build Attribution IQ Campaign" under Analysis IQ to create one.';
                         return;
                     }
                     window.__intentIQ.titles.forEach(function(t) {
@@ -26574,7 +26574,7 @@ https://www.instagram.com/p/..."></textarea>
             function iiqBuildCohortsHtml() {
                 var d = window.__intentIQ.cohorts || {};
                 var cohorts = d.cohorts || [];
-                if (!cohorts.length) { return '<div class="iiq-empty">No cohorts defined yet (run scripts/build_moviegoing_cohorts.py --apply).</div>'; }
+                if (!cohorts.length) { return '<div class="iiq-empty">No cohort data available for this campaign.</div>'; }
                 // Project against total US population (329.9M) - matches the
                 // denominator used everywhere else in the dashboard
                 // (see e.g. Profile IQ category projections).
@@ -26823,11 +26823,9 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 if (!d || (d.success === false && !(d.phases && d.phases.length))) {
                     var msg = (d && d.error) || 'Demographics have not been generated for this campaign yet.';
-                    var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
                     return '<div class="iiq-empty" style="padding:2rem 1rem; text-align:center;">'
                         +    '<div style="font-size:0.9rem; color:#fbbf24; margin-bottom:0.5rem;">Demographics not available</div>'
                         +    '<div style="font-size:0.78rem; color:var(--text-secondary); max-width: 640px; margin: 0 auto;">' + escapeHtml(msg) + '</div>'
-                        +    (slug ? '<div style="margin-top:1rem; font-size:0.72rem; color:var(--text-secondary); font-family: monospace; opacity:0.6;">python3 scripts/build_intent_demographics.py --slug ' + escapeHtml(slug) + ' --apply</div>' : '')
                         +  '</div>';
                 }
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '_';
@@ -31199,7 +31197,21 @@ https://www.instagram.com/p/..."></textarea>
                         };
                     });
                 } else {
-                    return '<div class="iiq-empty">Q4 has no talent-tagged assets yet. Run scripts/backfill_intent_talent_tags.py.</div>';
+                    // Brand campaigns that run entirely on brand-owned social
+                    // channels (e.g. Chime MyPay -- 57 posts across @chime IG/TT/YT
+                    // with no external creator or celebrity) legitimately have no
+                    // talent to attribute. Show a graceful, human-readable state
+                    // instead of leaking an engineering script reference.
+                    var _tt = ((window.__intentIQ && window.__intentIQ.overview) || {}).title_type || 'film';
+                    var _brandDisplay = ((window.__intentIQ && window.__intentIQ.overview) || {}).title_display || 'This campaign';
+                    if (_tt === 'brand') {
+                        return '<div class="iiq-empty">No talent-driven content in this campaign. ' +
+                               _brandDisplay + ' runs on brand-owned social channels only, ' +
+                               'so there are no external creators or celebrities to attribute lift to. ' +
+                               'For campaigns that use influencers, cast, or public-figure appearances, ' +
+                               'those assets show up here ranked by view + engagement lift.</div>';
+                    }
+                    return '<div class="iiq-empty">No talent-tagged assets available for this campaign yet.</div>';
                 }
                 rows.sort(function(a, b) {
                     var av = a[sortKey], bv = b[sortKey];
@@ -31544,7 +31556,7 @@ https://www.instagram.com/p/..."></textarea>
                 var assetsAll = d._assets || [];
 
                 if (!cohortsFreq.length && !audCards.length) {
-                    return '<div class="iiq-empty">No cohort data yet. Run scripts/synth_goat_all_cohort_engagement.py --apply and confirm Audiences tab has data.</div>';
+                    return '<div class="iiq-empty">No audience or cohort engagement data available for this campaign.</div>';
                 }
 
                 // Build unified cohort list (moviegoing-freq + audience cards)
