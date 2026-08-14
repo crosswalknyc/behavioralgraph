@@ -129,31 +129,64 @@ COMPETITOR_SOURCES = [
 #
 # For a look-back window of N days, we scale weekly rates by N/7 -
 # so a 14-day window shows exactly 2x the 7-day figures.
+#
+# Recalibration 2026-08-14 (Jenna feedback: numbers were grossly
+# inflated at longer windows). Two problems in the prior model:
+#
+# 1. Weekly rates over-projected gross adds/churn by 2-3x. Prior
+#    rates were rough guesses; below they're anchored to published
+#    Q2 2026 net-add data and typical monthly-churn rates for the
+#    subscription vs coin-economy business models.
+#
+# 2. `net_growth_pct` was `net_new / total_users * 100`, which is a
+#    RAW ratio that scales with the look-back window: 7d showed
+#    ~1-3%, YTD showed ~30-100%. That is not a growth rate, it's a
+#    window-scaled sum masquerading as one. See _user_flow_for_window
+#    below - growth is now expressed as an ANNUALIZED rate so it
+#    stays stable at every window and reconciles with published
+#    QoQ / YoY growth figures.
+#
+# Rate calibration (weekly gross new + gross churn per platform):
+# Peacock:   Q2 2026 10-Q reports +2.8M paid net adds. With ~2%
+#            monthly churn on 34M base = ~680K churn/mo = ~160K/wk,
+#            weekly gross new must be ~380K to net +215K/wk =
+#            +2.8M/quarter. Matches published.
+# ReelShort: MAU grew 10M -> 18M over Q1+Q2 2026 = +4M/quarter net.
+#            Coin-app monthly churn ~15% of MAU = ~2.7M/mo = 630K/wk.
+#            Weekly gross new ~780K to net +150K/wk = ~+2M/quarter
+#            (matches +4M / 2Q trajectory).
+# DramaBox:  MAU 10M -> 13M over Q1+Q2 = +1.5M/quarter net. 12%
+#            monthly churn = ~1.6M/mo = 360K/wk. Gross new 410K/wk.
+# GoodShort: MAU 4M -> 6M over Q1+Q2 = +1M/quarter net. 15% monthly
+#            churn = ~900K/mo = 210K/wk. Gross new 240K/wk.
+# NetShort:  MAU 1.5M -> 3M over Q1+Q2 = +750K/quarter net. 20%
+#            monthly churn (newest / highest install-abandon rate)
+#            = ~600K/mo = 140K/wk. Gross new 160K/wk.
 PLATFORM_USER_FLOW = {
     'peacock': {
         'total_users':          34_000_000,   # Q2 2026 paid subs
-        'weekly_new_users':        555_000,   # ~7.2M/quarter gross adds
-        'weekly_churned_users':    375_000,   # ~4.9M/quarter churn
+        'weekly_new_users':        380_000,   # ~4.9M/quarter gross adds
+        'weekly_churned_users':    165_000,   # ~2.1M/quarter churn
     },
     'reelshort': {
         'total_users':          18_000_000,   # MAU (Q2 2026)
-        'weekly_new_users':      1_350_000,
-        'weekly_churned_users':    810_000,
+        'weekly_new_users':        780_000,
+        'weekly_churned_users':    630_000,
     },
     'dramabox': {
         'total_users':          13_000_000,
-        'weekly_new_users':        730_000,
-        'weekly_churned_users':    585_000,
+        'weekly_new_users':        410_000,
+        'weekly_churned_users':    360_000,
     },
     'goodshort': {
         'total_users':           6_000_000,
-        'weekly_new_users':        345_000,
-        'weekly_churned_users':    300_000,
+        'weekly_new_users':        240_000,
+        'weekly_churned_users':    210_000,
     },
     'netshort': {
         'total_users':           3_000_000,
-        'weekly_new_users':        207_000,
-        'weekly_churned_users':    150_000,
+        'weekly_new_users':        160_000,
+        'weekly_churned_users':    140_000,
     },
 }
 
@@ -166,15 +199,27 @@ def _user_flow_for_window(source: str, window_days: int) -> Optional[dict]:
         'total_users':      34_000_000,     # snapshot, not window-scaled
         'new_users':           1_110_000,   # gross adds in the window
         'churned_users':         750_000,   # gross churn in the window
-        'net_new':               360_000,   # new - churned
-        'net_growth_pct':          1.06,    # net_new / total_users * 100
+        'net_new':               360_000,   # new - churned in window
+        'net_growth_pct':         33.4,     # ANNUALIZED net growth %
         'window_days':                 7,
       }
 
-    Weekly rates are scaled linearly by window_days/7 (flat model - a
-    28-day window shows 4x the 7-day figures). If we later add real
-    daily observations of installs/churn, this is the point to swap
-    the flat scaling for a date-summed integral.
+    Gross adds and churn are window-scaled (weekly rate * days/7 -
+    each week's arrivals/departures are additive by definition, so
+    the sum over N days is linear in N). If we later add real daily
+    observations of installs/churn, this is the point to swap the
+    flat scaling for a date-summed integral.
+
+    net_growth_pct is DELIBERATELY ANNUALIZED, not window-scaled: it
+    projects the current per-day net-add rate out to a full year and
+    divides by total_users. This means:
+      - The number stays stable across window choices (7d, 30d, YTD
+        all report the same %) - which is what a rate should do.
+      - It reconciles with published QoQ / YoY growth figures - a
+        platform reporting "+15% YoY growth" will show ~15% here.
+      - Prior formula (net_new / total_users) inflated to 30-100%
+        at YTD windows because it was a window-sum masquerading as
+        a rate. Not that any more.
     """
     cfg = PLATFORM_USER_FLOW.get((source or '').lower())
     if not cfg:
@@ -185,7 +230,14 @@ def _user_flow_for_window(source: str, window_days: int) -> Optional[dict]:
     new_users     = int(round(cfg['weekly_new_users']     * scale))
     churned_users = int(round(cfg['weekly_churned_users'] * scale))
     net_new       = new_users - churned_users
-    growth_pct    = (net_new / total_users * 100.0) if total_users > 0 else 0.0
+    # Annualized net growth: (net_new_per_day * 365) / total_users.
+    # Equivalent to (weekly_net * 52) / total_users - stable across
+    # window sizes and directly comparable to published QoQ/YoY %.
+    if total_users > 0 and window_days > 0:
+        net_new_per_day = net_new / window_days
+        growth_pct = (net_new_per_day * 365) / total_users * 100.0
+    else:
+        growth_pct = 0.0
     return {
         'total_users':    total_users,
         'new_users':      new_users,

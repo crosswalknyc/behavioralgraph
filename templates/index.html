@@ -47398,11 +47398,12 @@ https://www.instagram.com/p/..."></textarea>
                                   + '</div>';
                 }
                 // User-flow block: total users + new subs + cancellations
-                // + net growth for the active window. All numbers scale
-                // linearly with the look-back filter (7d shows 1x weekly
-                // rates, 14d shows 2x, custom range uses days/7). None
-                // rendered if the backend has no PLATFORM_USER_FLOW row
-                // for this platform.
+                // + net growth for the active window. Gross new and gross
+                // churn scale linearly with the look-back filter (7d = 1x
+                // weekly rate, 30d = ~4.3x, YTD ~= 32x). Net Growth % is
+                // ANNUALIZED so it stays stable across every window and
+                // matches published QoQ / YoY growth figures. None
+                // rendered if the backend has no PLATFORM_USER_FLOW row.
                 var flowBlock = '';
                 if (p.user_flow) {
                     var uf = p.user_flow;
@@ -47416,8 +47417,9 @@ https://www.instagram.com/p/..."></textarea>
                     var wd         = uf.window_days || 7;
                     var flowWindow = _miqRollupWindowLabel(d);
                     var flowTip = 'User flow on ' + (p.platform || 'this platform') + ' over ' + flowWindow + '. '
-                                + 'New = gross new users. Cancelled = gross churned users. '
-                                + 'Net Growth = (new - cancelled) / total.';
+                                + 'New Subs = gross new users in this window. '
+                                + 'Cancellations = gross churn in this window. '
+                                + 'Net Growth is ANNUALIZED (projects the observed daily net-add rate to a full year) so it stays stable across window choices and reconciles with published QoQ/YoY growth.';
                     flowBlock = '<div class="miq-rollup-card-flow" title="' + _miqEscape(flowTip) + '">'
                               +   '<div class="miq-rollup-flow-cell">'
                               +     '<div class="miq-rollup-flow-label">Total Users</div>'
@@ -47432,8 +47434,8 @@ https://www.instagram.com/p/..."></textarea>
                               +     '<div class="miq-rollup-flow-value miq-rollup-flow-neg">-' + _miqFormatNumber(uf.churned_users) + '</div>'
                               +   '</div>'
                               +   '<div class="miq-rollup-flow-cell">'
-                              +     '<div class="miq-rollup-flow-label">Net Growth</div>'
-                              +     '<div class="' + growthCls + '">' + growthSign + uf.net_growth_pct.toFixed(2) + '%</div>'
+                              +     '<div class="miq-rollup-flow-label">Net Growth / yr</div>'
+                              +     '<div class="' + growthCls + '">' + growthSign + uf.net_growth_pct.toFixed(1) + '%</div>'
                               +   '</div>'
                               + '</div>';
                 }
