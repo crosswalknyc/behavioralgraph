@@ -25526,8 +25526,8 @@ https://www.instagram.com/p/..."></textarea>
                     var sel = document.getElementById('iiqTitleSelect');
                     sel.innerHTML = '';
                     if (!window.__intentIQ.titles.length) {
-                        sel.innerHTML = '<option value="">(no titles ingested yet - run scripts/ingest_intent_campaign.py)</option>';
-                        document.getElementById('iiqStatus').textContent = 'No titles. Ingest one with scripts/ingest_intent_campaign.py.';
+                        sel.innerHTML = '<option value="">(no campaigns available)</option>';
+                        document.getElementById('iiqStatus').textContent = 'No campaigns available. Use "Build Attribution IQ Campaign" under Analysis IQ to create one.';
                         return;
                     }
                     window.__intentIQ.titles.forEach(function(t) {
@@ -25570,6 +25570,20 @@ https://www.instagram.com/p/..."></textarea>
                     // sub-tab, so no eager DOM render is needed here.
                     renderIntentIQQuestions();
                     populateAssetFilterDropdowns();
+                    // Auto-adjust the Assets Window default per title type.
+                    // Brand campaigns (Chime, MyPay, DoorDash) typically ran
+                    // in a prior year, so the film-style YTD default would
+                    // filter every asset out ("0 assets match filters" for
+                    // a 2024 campaign viewed in 2026 -- see MyPay bug
+                    // 2026-08-14). Films keep YTD so the in-flight campaign
+                    // shows current-year momentum.
+                    try {
+                        var _wEl = document.getElementById('iiqAssetWindow');
+                        var _tt  = ((window.__intentIQ.overview || {}).title_type) || 'film';
+                        if (_wEl) {
+                            _wEl.value = (_tt === 'brand') ? 'all' : 'ytd';
+                        }
+                    } catch(_e) {}
                     reloadIntentIQAssets();
                     try { _iiqApplyBrandLabels(); } catch(_e) {}
                     try { _iiqApplyTopLevelTabVisibility(); } catch(_e) {}
@@ -26560,7 +26574,7 @@ https://www.instagram.com/p/..."></textarea>
             function iiqBuildCohortsHtml() {
                 var d = window.__intentIQ.cohorts || {};
                 var cohorts = d.cohorts || [];
-                if (!cohorts.length) { return '<div class="iiq-empty">No cohorts defined yet (run scripts/build_moviegoing_cohorts.py --apply).</div>'; }
+                if (!cohorts.length) { return '<div class="iiq-empty">No cohort data available for this campaign.</div>'; }
                 // Project against total US population (329.9M) - matches the
                 // denominator used everywhere else in the dashboard
                 // (see e.g. Profile IQ category projections).
@@ -26809,11 +26823,9 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 if (!d || (d.success === false && !(d.phases && d.phases.length))) {
                     var msg = (d && d.error) || 'Demographics have not been generated for this campaign yet.';
-                    var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
                     return '<div class="iiq-empty" style="padding:2rem 1rem; text-align:center;">'
                         +    '<div style="font-size:0.9rem; color:#fbbf24; margin-bottom:0.5rem;">Demographics not available</div>'
                         +    '<div style="font-size:0.78rem; color:var(--text-secondary); max-width: 640px; margin: 0 auto;">' + escapeHtml(msg) + '</div>'
-                        +    (slug ? '<div style="margin-top:1rem; font-size:0.72rem; color:var(--text-secondary); font-family: monospace; opacity:0.6;">python3 scripts/build_intent_demographics.py --slug ' + escapeHtml(slug) + ' --apply</div>' : '')
                         +  '</div>';
                 }
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '_';
@@ -28234,7 +28246,26 @@ https://www.instagram.com/p/..."></textarea>
                 var params = new URLSearchParams();
                 var winEl = document.getElementById('iiqAssetWindow');
                 var win = winEl ? winEl.value : 'ytd';
-                params.set('window', win);
+                // Defensive brand-window override: brand campaigns often
+                // pre-date the current YTD window (e.g. MyPay 2024 viewed
+                // in 2026 -> YTD returns 0 assets). If the current title is
+                // brand AND the WINDOW is still the film-era default 'ytd',
+                // treat it as unset and use Campaign-to-date. Any explicit
+                // user pick (14d/30d/90d/365d/custom/all) is respected.
+                // This runs on EVERY assets load so stale caches, tab-switch
+                // races, or missed reloadIntentIQ paths still self-heal.
+                try {
+                    var _ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                    if (_ov.title_type === 'brand' && win === 'ytd') {
+                        win = 'all';
+                        if (winEl) winEl.value = 'all';
+                        params.set('window', 'all');
+                    } else {
+                        params.set('window', win);
+                    }
+                } catch (_e) {
+                    params.set('window', win);
+                }
                 if (win === 'custom') {
                     var fEl = document.getElementById('iiqAssetFrom');
                     var tEl = document.getElementById('iiqAssetTo');
@@ -28304,9 +28335,9 @@ https://www.instagram.com/p/..."></textarea>
                 q2: { short: 'Paid vs. Organic', title: 'Paid vs. Organic Performance',                    intro: 'Cumulative view growth by day, paid vs organic. Top-performing in-flight assets at the bottom.' },
                 audiences: { short: '👥 Audiences', title: 'Audiences of interest', intro: 'Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title\'s moviegoing audience. Below: how often each slice of US adults goes to the movies.' },
                 q3: { short: 'Intent to Buy',    title: 'How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date - pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement - scaled by industry conversion rates. Nothing here is a forecast.' },
-                q4: { short: 'Talent Attribution', title: 'How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
+                q4: { short: 'Talent Attribution', title: 'How do talent & influencer posts boost other marketing?',     intro: 'Per-talent view + engagement totals across the campaign (cast, creators, athletes, influencers, hosts). Identifies which talent are doing disproportionate lift.' },
                 q5: { short: 'Trailer Performance', title: 'Trailer Performance', intro: 'Daily trailer views with overlaid funnel conversion (% of viewers who became info-seekers or visited a ticketing site within 7 days). Second chart traces the PVOD / SVOD search tail that builds after theatrical, peaking at the 5/15 streaming launch.' },
-                q6: { short: 'Cohort Engagement', title: 'Which content drives info-seek + ticketing for each audience?', intro: 'Per-asset attribution sliced by audience. Pick any cohort from the Audiences tab (Steph Curry fans, cast members, family-animation fans, Disney+ family subs, demographic cuts) plus the four moviegoing-frequency cohorts \u2014 each selected cohort gets its own set of columns showing that cohort\'s views, info-seek %, and ticketing % per asset. Cut by platform (YouTube / TikTok / etc.), Paid vs Organic, and asset type to isolate which specific pieces of content are converting which audiences. Same projection helper as Assets / Q1 / Q2 \u2014 numbers ladder up.' },
+                q6: { short: 'Cohort Engagement', title: 'Which content drives info-seek + ticketing for each audience?', intro: 'Per-asset attribution sliced by audience. Pick any cohort from the Audiences tab plus the frequency cohorts \u2014 each selected cohort gets its own set of columns showing that cohort\'s views, info-seek %, and ticketing % per asset. Cut by platform (YouTube / TikTok / etc.), Paid vs Organic, and asset type to isolate which specific pieces of content are converting which audiences. Same projection helper as Assets / Q1 / Q2 \u2014 numbers ladder up.' },
                 demographics: { short: 'Demographics', title: 'Who engaged with each campaign?', intro: 'Per-campaign demographic breakdown of the actual audience that watched + engaged with each asset.' },
                 journey: { short: 'Digital Journey', title: 'What do people do before and after engaging with each asset?', intro: 'Per-asset BEFORE / AFTER funnel. BEFORE = referrer mix (YouTube Up-Next / TikTok FYP / paid display / etc.) calibrated to the asset\'s channel and paid-vs-organic status. AFTER (7-day window) = downstream destinations split across Google / IMDB / RT / Letterboxd / official site for info-seek, Fandango / AMC / Regal / Cinemark / Atom for ticketing, plus shared-to-social, watched-trailer-next, and "where to stream" search. Tilts by phase: ticketing collapses after theatrical, streaming search ramps. Info-seek % + ticketing % ladder up to Assets / Q1 / Q2.' },
             };
@@ -28433,18 +28464,27 @@ https://www.instagram.com/p/..."></textarea>
                     var coDate = new Date(opts.cutoff + 'T23:59:59Z');
                     if (!isNaN(coDate.getTime())) cutoffTs = coDate.getTime();
                 }
-                function pathFor(s, syFn) {
+                function pathFor(s, syFn, strokeOpacity) {
                     var pts = (s.points || []).slice().sort(function(a,b){ return new Date(a.x) - new Date(b.x); });
                     if (!pts.length) return '';
                     function _d(pp) { return pp.map(function(p, i){ return (i === 0 ? 'M' : 'L') + sx(p.x).toFixed(1) + ',' + syFn(p.y).toFixed(1); }).join(' '); }
                     var out = '';
+                    // stroke-opacity attr (only emitted when caller passes
+                    // a value) -- lets the axis-priority renderer draw the
+                    // left-axis "views" line slightly translucent so the
+                    // right-axis funnel lines (info-seek / web-visit)
+                    // bleed through wherever they overlap perfectly in
+                    // screen space. Without this, the two curves are
+                    // colinear (info = views * info%) and whoever paints
+                    // on top completely hides the other.
+                    var soAttr = (typeof strokeOpacity === 'number') ? (' stroke-opacity="' + strokeOpacity + '"') : '';
                     if (s.style === 'area') {
                         var areaD = _d(pts) + ' L ' + sx(pts[pts.length-1].x).toFixed(1) + ',' + (H - P.b) + ' L ' + sx(pts[0].x).toFixed(1) + ',' + (H - P.b) + ' Z';
                         out += '<path d="' + areaD + '" fill="' + s.color + '" fill-opacity="0.10" />';
                     }
                     var dashAttr = s.dash ? ' stroke-dasharray="4,3"' : '';
                     if (cutoffTs == null) {
-                        out += '<path d="' + _d(pts) + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + ' />';
+                        out += '<path d="' + _d(pts) + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + soAttr + ' />';
                         return out;
                     }
                     var solid = [], faded = [];
@@ -28454,18 +28494,36 @@ https://www.instagram.com/p/..."></textarea>
                         else faded.push(p);
                     });
                     if (solid.length && faded.length) faded.unshift(solid[solid.length - 1]);
-                    if (solid.length) out += '<path d="' + _d(solid) + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + ' />';
+                    if (solid.length) out += '<path d="' + _d(solid) + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + soAttr + ' />';
                     if (faded.length) out += '<path d="' + _d(faded) + '" fill="none" stroke="' + s.color + '" stroke-width="1.5" stroke-opacity="0.22" stroke-dasharray="3,3" stroke-linejoin="round" stroke-linecap="round" />';
                     return out;
                 }
 
-                // Draw RIGHT-axis lines first so LEFT-axis lines render on
-                // top. Without this, the purple info-seekers line covers
-                // the green organic-views line wherever the two cross in
-                // screen space (the left "views" series is the primary
-                // signal, so it deserves z-priority).
-                var paths = (rightSeries || []).map(function(s){ return pathFor(s, syR); }).join('')
-                          + (leftSeries  || []).map(function(s){ return pathFor(s, syL); }).join('');
+                // Draw RIGHT-axis lines FIRST (info-seek + website/ticketing)
+                // then LEFT-axis lines LAST (views) so the primary "views"
+                // signal keeps z-priority.  Left-axis lines paint at 0.82
+                // stroke-opacity so the perfectly-colinear right-axis lines
+                // beneath them (info-seek IS just views*info%, so shape is
+                // identical) show through visibly. Without this the daily
+                // funnel line collapses to invisible whenever views has
+                // any curve of its own (Chime bug 2026-08-14).
+                //
+                // Also bump right-axis strokes to width 2.6 (vs left 2.0)
+                // so the funnel line pokes out ~0.3px on either side of
+                // the views line even where they overlap perfectly --
+                // guarantees visibility of purple/yellow along the peaks.
+                function _thickPath(s, syFn) {
+                    var pts = (s.points || []).slice().sort(function(a,b){ return new Date(a.x) - new Date(b.x); });
+                    if (!pts.length) return '';
+                    var d = pts.map(function(p, i){ return (i === 0 ? 'M' : 'L') + sx(p.x).toFixed(1) + ',' + syFn(p.y).toFixed(1); }).join(' ');
+                    var dashAttr = s.dash ? ' stroke-dasharray="4,3"' : '';
+                    if (cutoffTs == null) {
+                        return '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + ' />';
+                    }
+                    return pathFor(s, syFn);
+                }
+                var paths = (rightSeries || []).map(function(s){ return _thickPath(s, syR); }).join('')
+                          + (leftSeries  || []).map(function(s){ return pathFor(s, syL, 0.82); }).join('');
 
                 // Optional event markers (asset-drop dots etc.) -- pass via
                 // opts.events = [{x: <isoDate>, color: '#22d3ee', label: '...'}].
@@ -31158,7 +31216,22 @@ https://www.instagram.com/p/..."></textarea>
                         };
                     });
                 } else {
-                    return '<div class="iiq-empty">Q4 has no talent-tagged assets yet. Run scripts/backfill_intent_talent_tags.py.</div>';
+                    // No talent-tagged assets in the roll-up. Brand campaigns
+                    // that legitimately run on brand-owned social channels only
+                    // (no cast / creators / celebrities in any asset) hit this
+                    // branch -- show a graceful state instead of leaking an
+                    // engineering script reference (previous copy directed the
+                    // user to run scripts/backfill_intent_talent_tags.py).
+                    var _tt = ((window.__intentIQ && window.__intentIQ.overview) || {}).title_type || 'film';
+                    var _brandDisplay = ((window.__intentIQ && window.__intentIQ.overview) || {}).title_display || 'This campaign';
+                    if (_tt === 'brand') {
+                        return '<div class="iiq-empty">No talent-driven content detected in this campaign. ' +
+                               _brandDisplay + ' appears to run on brand-owned social channels only, ' +
+                               'with no external creators, celebrities, or public-figure appearances. ' +
+                               'When a campaign includes creator collabs or featured talent, those assets ' +
+                               'show up here ranked by view + engagement lift.</div>';
+                    }
+                    return '<div class="iiq-empty">No talent-tagged assets available for this campaign yet.</div>';
                 }
                 rows.sort(function(a, b) {
                     var av = a[sortKey], bv = b[sortKey];
@@ -31503,7 +31576,7 @@ https://www.instagram.com/p/..."></textarea>
                 var assetsAll = d._assets || [];
 
                 if (!cohortsFreq.length && !audCards.length) {
-                    return '<div class="iiq-empty">No cohort data yet. Run scripts/synth_goat_all_cohort_engagement.py --apply and confirm Audiences tab has data.</div>';
+                    return '<div class="iiq-empty">No audience or cohort engagement data available for this campaign.</div>';
                 }
 
                 // Build unified cohort list (moviegoing-freq + audience cards)
