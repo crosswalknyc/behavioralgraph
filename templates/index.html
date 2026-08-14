@@ -25570,6 +25570,20 @@ https://www.instagram.com/p/..."></textarea>
                     // sub-tab, so no eager DOM render is needed here.
                     renderIntentIQQuestions();
                     populateAssetFilterDropdowns();
+                    // Auto-adjust the Assets Window default per title type.
+                    // Brand campaigns (Chime, MyPay, DoorDash) typically ran
+                    // in a prior year, so the film-style YTD default would
+                    // filter every asset out ("0 assets match filters" for
+                    // a 2024 campaign viewed in 2026 -- see MyPay bug
+                    // 2026-08-14). Films keep YTD so the in-flight campaign
+                    // shows current-year momentum.
+                    try {
+                        var _wEl = document.getElementById('iiqAssetWindow');
+                        var _tt  = ((window.__intentIQ.overview || {}).title_type) || 'film';
+                        if (_wEl) {
+                            _wEl.value = (_tt === 'brand') ? 'all' : 'ytd';
+                        }
+                    } catch(_e) {}
                     reloadIntentIQAssets();
                     try { _iiqApplyBrandLabels(); } catch(_e) {}
                     try { _iiqApplyTopLevelTabVisibility(); } catch(_e) {}
