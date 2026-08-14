@@ -26664,10 +26664,14 @@ https://www.instagram.com/p/..."></textarea>
                      + ' <span style="color:var(--text-secondary); opacity:0.7;">vs GP</span>';
             };
 
-            window._iiqDemoRenderCatCard = function(cat, label, dist, phase_view_count, gpDist, medians, gpMedians) {
+            window._iiqDemoRenderCatCard = function(cat, label, dist, phase_view_count, gpDist, medians, gpMedians, cmp) {
                 gpDist    = gpDist    || {};
                 medians   = medians   || {};
                 gpMedians = gpMedians || {};
+                cmp       = cmp       || null;   // { label, dist, medians } or null
+                var cmpDist    = (cmp && cmp.dist)    ? cmp.dist    : {};
+                var cmpMedians = (cmp && cmp.medians) ? cmp.medians : {};
+                var cmpLabel   = (cmp && cmp.label)   ? cmp.label   : '';
 
                 var entries = Object.keys(dist || {}).map(function(k) {
                     return { bucket: k, pct: Number(dist[k]) || 0 };
@@ -26675,6 +26679,10 @@ https://www.instagram.com/p/..."></textarea>
                 var maxPct = entries.length ? Math.max.apply(null, entries.map(function(e) { return e.pct; })) : 1;
                 Object.keys(gpDist).forEach(function(k) {
                     var v = Number(gpDist[k]) || 0;
+                    if (v > maxPct) maxPct = v;
+                });
+                Object.keys(cmpDist).forEach(function(k) {
+                    var v = Number(cmpDist[k]) || 0;
                     if (v > maxPct) maxPct = v;
                 });
                 if (maxPct <= 0) maxPct = 1;
@@ -26702,6 +26710,25 @@ https://www.instagram.com/p/..."></textarea>
                         deltaHtml = ' <span title="vs Gen Pop ' + gpPct.toFixed(1) + '%" style="color:' + dColor + '; font-size:0.66rem; font-variant-numeric:tabular-nums; margin-left:0.25rem;">'
                                   + dSign + absD.toFixed(1) + 'pp</span>';
                     }
+                    // Comparison campaign tick + delta chip (amber).
+                    // Only rendered when a compare campaign is active AND the
+                    // bucket has a value in it. Sits above the Gen Pop tick.
+                    var cmpPct = Number(cmpDist[e.bucket]);
+                    if (isFinite(cmpPct) && cmpPct > 0) {
+                        var cmpTickPos = Math.max(0, Math.min(100, cmpPct / maxPct * 100));
+                        var cmpTip = escapeHtml(cmpLabel || 'Compare') + ': ' + cmpPct.toFixed(1) + '%';
+                        tickHtml += '<div title="' + cmpTip + '" style="'
+                                  + 'position:absolute; left:' + cmpTickPos.toFixed(2) + '%; top:-4px; bottom:-4px;'
+                                  + ' width:2px; background:#fbbf24; opacity:0.95; border-radius:1px;'
+                                  + ' box-shadow: 0 0 0 1px rgba(0,0,0,0.55);"></div>';
+                        var cDelta = e.pct - cmpPct;
+                        var cAbsD  = Math.abs(cDelta);
+                        var cColor = (cAbsD < 0.5) ? '#94a3b8'
+                                    : (cDelta > 0) ? '#34d399' : '#f87171';
+                        var cSign  = cDelta > 0 ? '+' : (cDelta < 0 ? '\u2212' : '');
+                        deltaHtml += ' <span title="vs ' + escapeHtml(cmpLabel || 'Compare') + ' ' + cmpPct.toFixed(1) + '%" style="color:' + cColor + '; background: rgba(251,191,36,0.10); border:1px solid rgba(251,191,36,0.35); border-radius:3px; padding:0 0.28rem; font-size:0.62rem; font-variant-numeric:tabular-nums; margin-left:0.25rem;">'
+                                   + cSign + cAbsD.toFixed(1) + 'pp</span>';
+                    }
 
                     return '<div style="display:grid; grid-template-columns: 160px 1fr auto; gap:0.5rem; align-items:center; font-size:0.72rem; line-height:1.2; margin-bottom:0.28rem;">'
                         +    '<div style="color:#cbd5e1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(e.bucket) + '">' + escapeHtml(e.bucket) + '</div>'
@@ -26719,7 +26746,8 @@ https://www.instagram.com/p/..."></textarea>
 
                 var medianHeader = '';
                 if (cat === 'AGE' && medians.median_age != null) {
-                    var gpAge = gpMedians.median_age;
+                    var gpAge  = gpMedians.median_age;
+                    var cmpAge = cmpMedians.median_age;
                     medianHeader = '<div style="font-size:0.7rem; color:#e2e8f0; margin: 0 0 0.5rem; padding:0.35rem 0.5rem; background: rgba(59,130,246,0.08); border-left: 2px solid #60a5fa; border-radius: 0 3px 3px 0;">'
                                  + '<span style="opacity:0.7;">Median age:</span> '
                                  + '<span style="font-weight:700;">' + window._iiqDemoFmtAge(medians.median_age) + '</span>'
@@ -26727,15 +26755,24 @@ https://www.instagram.com/p/..."></textarea>
                                     ? ' <span style="opacity:0.5;">| Gen Pop ' + window._iiqDemoFmtAge(gpAge) + '</span>'
                                       + window._iiqDemoMedianDelta(medians.median_age, gpAge, 'yrs', function(v){ return v.toFixed(1) + ' yrs'; })
                                     : '')
+                                 + (cmpAge != null
+                                    ? ' <span style="opacity:0.5;">| <span style="color:#fbbf24;">' + escapeHtml(cmpLabel || 'Compare') + '</span> ' + window._iiqDemoFmtAge(cmpAge) + '</span>'
+                                      + window._iiqDemoMedianDelta(medians.median_age, cmpAge, 'yrs', function(v){ return v.toFixed(1) + ' yrs'; })
+                                    : '')
                                  + '</div>';
                 } else if (cat === 'INCOME' && medians.median_income != null) {
-                    var gpInc = gpMedians.median_income;
+                    var gpInc  = gpMedians.median_income;
+                    var cmpInc = cmpMedians.median_income;
                     medianHeader = '<div style="font-size:0.7rem; color:#e2e8f0; margin: 0 0 0.5rem; padding:0.35rem 0.5rem; background: rgba(16,185,129,0.08); border-left: 2px solid #34d399; border-radius: 0 3px 3px 0;">'
                                  + '<span style="opacity:0.7;">Median income:</span> '
                                  + '<span style="font-weight:700;">' + window._iiqDemoFmtIncome(medians.median_income) + '</span>'
                                  + (gpInc != null
                                     ? ' <span style="opacity:0.5;">| Gen Pop ' + window._iiqDemoFmtIncome(gpInc) + '</span>'
                                       + window._iiqDemoMedianDelta(medians.median_income, gpInc, '$', window._iiqDemoFmtIncome)
+                                    : '')
+                                 + (cmpInc != null
+                                    ? ' <span style="opacity:0.5;">| <span style="color:#fbbf24;">' + escapeHtml(cmpLabel || 'Compare') + '</span> ' + window._iiqDemoFmtIncome(cmpInc) + '</span>'
+                                      + window._iiqDemoMedianDelta(medians.median_income, cmpInc, '$', window._iiqDemoFmtIncome)
                                     : '')
                                  + '</div>';
                 }
@@ -26763,6 +26800,13 @@ https://www.instagram.com/p/..."></textarea>
             };
 
             function iiqRenderDemographics(d) {
+                // Kick off the /api/intent/titles fetch (once per session)
+                // so the "Compare vs" dropdown populates. The fetch is
+                // idempotent -- if the cache is already loaded, this is
+                // a no-op and returns immediately.
+                if (typeof window._iiqDemoEnsureTitlesCache === 'function') {
+                    window._iiqDemoEnsureTitlesCache();
+                }
                 if (!d || (d.success === false && !(d.phases && d.phases.length))) {
                     var msg = (d && d.error) || 'Demographics have not been generated for this campaign yet.';
                     var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
@@ -26834,16 +26878,74 @@ https://www.instagram.com/p/..."></textarea>
                 var gpMedians = { median_age: gp.median_age, median_income: gp.median_income };
                 var pickedMedians = { median_age: picked.median_age, median_income: picked.median_income };
 
+                // Compare-vs-other-campaign (Jenna 2026-08-13). Pull the
+                // comparison slug from state; render its all-campaigns
+                // demographics (fallback to first phase) as an amber
+                // overlay tick + delta on each bar, plus a third line
+                // on the AGE / INCOME median headers.
+                var cmpSlug = window._iiqDemoCompareState[slug] || '';
+                var cmpPayload = null;
+                if (cmpSlug && cmpSlug !== slug) {
+                    var cachedCmp = window._iiqDemoCompareCache[cmpSlug];
+                    if (cachedCmp && cachedCmp.success !== false) {
+                        var cmpCut = cachedCmp.all_campaigns
+                                    || ((cachedCmp.phases || [])[0])
+                                    || null;
+                        if (cmpCut) {
+                            cmpPayload = {
+                                slug:    cmpSlug,
+                                label:   cachedCmp._displayLabel || cmpSlug,
+                                dist:    cmpCut.demographics || {},
+                                medians: {
+                                    median_age:    cmpCut.median_age,
+                                    median_income: cmpCut.median_income
+                                }
+                            };
+                        }
+                    }
+                }
+
                 var cards = cats.map(function(cat) {
                     var dist = (picked.demographics || {})[cat] || {};
                     var lbl  = labels[cat] || cat;
+                    var perCatCmp = null;
+                    if (cmpPayload) {
+                        perCatCmp = {
+                            label:   cmpPayload.label,
+                            dist:    (cmpPayload.dist || {})[cat] || {},
+                            medians: cmpPayload.medians
+                        };
+                    }
                     return _iiqDemoRenderCatCard(cat, lbl, dist, picked.view_count,
-                                                  gpDemos[cat] || {}, pickedMedians, gpMedians);
+                                                  gpDemos[cat] || {}, pickedMedians, gpMedians,
+                                                  perCatCmp);
                 }).join('');
+
+                // Compare dropdown (populated once from /api/intent/titles
+                // and cached in window._iiqDemoTitlesCache). Excludes the
+                // current title from the list; adds a "None" reset option.
+                var cmpTitles = (window._iiqDemoTitlesCache || [])
+                    .filter(function(t) { return t && t.title_slug && t.title_slug !== slug; });
+                var cmpOptionsHtml = '<option value="">Off (Gen Pop only)</option>'
+                    + cmpTitles.map(function(t) {
+                        var lbl = t.display_name || t.title_slug;
+                        var sel = (cmpSlug === t.title_slug) ? ' selected' : '';
+                        return '<option value="' + escapeHtml(t.title_slug) + '"' + sel + '>' + escapeHtml(lbl) + '</option>';
+                    }).join('');
+                var cmpLoadingLabel = (cmpSlug && !window._iiqDemoCompareCache[cmpSlug])
+                    ? ' <span style="color:#fbbf24; font-size:0.7rem; margin-left:0.4rem;">loading</span>' : '';
+                var compareUi = ''
+                    + '<div style="display:inline-flex; align-items:center; gap:0.4rem; margin-left:0.75rem; padding:0.3rem 0.55rem; background: rgba(251,191,36,0.06); border:1px solid rgba(251,191,36,0.20); border-radius:6px;">'
+                    +   '<span style="font-size:0.7rem; color:#fbbf24; letter-spacing:0.04em; text-transform:uppercase; font-weight:600;">Compare vs</span>'
+                    +   '<select onchange="window.iiqDemoSetCompare(this.value)" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(251,191,36,0.35); border-radius:4px; padding:0.2rem 0.4rem; font-size:0.72rem;">'
+                    +     cmpOptionsHtml
+                    +   '</select>'
+                    +   cmpLoadingLabel
+                    + '</div>';
 
                 return ''
                     + '<div style="margin-bottom: 0.9rem;">'
-                    +   '<div style="display:flex; align-items:baseline; gap:0.5rem; flex-wrap:wrap;">'
+                    +   '<div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">'
                     +     '<div style="font-size:0.82rem; color:#fff; font-weight:600;">'
                     +       escapeHtml(picked.label)
                     +     '</div>'
@@ -26852,6 +26954,7 @@ https://www.instagram.com/p/..."></textarea>
                     +       fmtCompact(picked.asset_count || 0) + ' assets'
                     +     '</div>'
                     +     methodTag
+                    +     compareUi
                     +   '</div>'
                     +   '<div style="margin-top:0.55rem;">' + pills + '</div>'
                     + '</div>'
@@ -26859,9 +26962,99 @@ https://www.instagram.com/p/..."></textarea>
                     +   cards
                     + '</div>'
                     + '<div style="margin-top:1rem; font-size:0.66rem; color: var(--text-secondary); opacity:0.65; line-height:1.4;">'
-                    +   'Colored bars = campaign audience share. Vertical white tick on each bar = Gen Pop share (Gen_Pop_2026 baseline); green / red pp delta shows over- / under-index vs Gen Pop. Median age + median income are linearly-interpolated from the bucketed distributions.'
+                    +   'Colored bars = current campaign share. White tick on each bar = Gen Pop (Gen_Pop_2026 baseline). '
+                    +   (cmpPayload
+                        ? '<span style="color:#fbbf24;">Amber tick = ' + escapeHtml(cmpPayload.label) + ' share (their All-campaigns cut).</span> Deltas show current vs Gen Pop (uncolored chip) and current vs comparison (amber-bordered chip). '
+                        : 'Pick another campaign in the "Compare vs" dropdown to overlay its audience shape as a second amber tick + delta chip. ')
+                    +   'Median age + median income are linearly-interpolated from the bucketed distributions.'
                     + '</div>';
             }
+
+            // ---------- Compare state + fetchers (Jenna 2026-08-13) ----------
+            // Per-title comparison selection. Persists across phase changes so
+            // toggling a phase inside the current campaign keeps the same
+            // comparison visible.
+            window._iiqDemoCompareState = window._iiqDemoCompareState || {};
+            // Fetched demographics payloads for comparison campaigns, keyed
+            // by their slug. Live-fetched once per session.
+            window._iiqDemoCompareCache = window._iiqDemoCompareCache || {};
+            // /api/intent/titles cache (used to populate the dropdown).
+            window._iiqDemoTitlesCache  = window._iiqDemoTitlesCache  || null;
+
+            window.iiqDemoSetCompare = function(cmpSlug) {
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '_';
+                cmpSlug = cmpSlug || '';
+                window._iiqDemoCompareState[slug] = cmpSlug;
+
+                function rerender() {
+                    var d = IIQ_QDATA.demographics;
+                    if (!d) return;
+                    var body = document.getElementById('iiqQBody');
+                    if (!body) return;
+                    var html = iiqRenderDemographics(d);
+                    IIQ_QCACHE.demographics = html;
+                    body.innerHTML = html;
+                }
+
+                if (!cmpSlug) {
+                    rerender();
+                    return;
+                }
+                // Cache hit -> immediate render.
+                if (window._iiqDemoCompareCache[cmpSlug]) {
+                    rerender();
+                    return;
+                }
+                // Fetch, then render. Show "loading" chip on first render.
+                rerender();
+                fetch('/api/intent/' + encodeURIComponent(cmpSlug) + '/demographics',
+                      { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(payload) {
+                        // Attach the human display label so the render helpers
+                        // don't have to re-query it.
+                        var lbl = cmpSlug;
+                        var titles = window._iiqDemoTitlesCache || [];
+                        for (var i = 0; i < titles.length; i++) {
+                            if (titles[i].title_slug === cmpSlug) {
+                                lbl = titles[i].display_name || cmpSlug;
+                                break;
+                            }
+                        }
+                        payload._displayLabel = lbl;
+                        window._iiqDemoCompareCache[cmpSlug] = payload;
+                        rerender();
+                    })
+                    .catch(function(e) {
+                        window._iiqDemoCompareCache[cmpSlug] = {
+                            success: false, error: String(e && e.message || e),
+                            _displayLabel: cmpSlug
+                        };
+                        rerender();
+                    });
+            };
+
+            // Populate the titles cache on first Demographics render. Runs
+            // once per page-load; subsequent renders read from cache.
+            window._iiqDemoEnsureTitlesCache = function() {
+                if (window._iiqDemoTitlesCache) return;
+                fetch('/api/intent/titles', { credentials: 'same-origin' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(payload) {
+                        window._iiqDemoTitlesCache = (payload && payload.titles) || [];
+                        // Trigger a re-render so the dropdown populates.
+                        var d = IIQ_QDATA.demographics;
+                        if (d) {
+                            var body = document.getElementById('iiqQBody');
+                            if (body) {
+                                var html = iiqRenderDemographics(d);
+                                IIQ_QCACHE.demographics = html;
+                                body.innerHTML = html;
+                            }
+                        }
+                    })
+                    .catch(function() { window._iiqDemoTitlesCache = []; });
+            };
 
             function iiqRenderAudiences(_d) {
                 var _audOv = (window.__intentIQ && window.__intentIQ.overview) || {};
