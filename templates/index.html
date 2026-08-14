@@ -28433,18 +28433,27 @@ https://www.instagram.com/p/..."></textarea>
                     var coDate = new Date(opts.cutoff + 'T23:59:59Z');
                     if (!isNaN(coDate.getTime())) cutoffTs = coDate.getTime();
                 }
-                function pathFor(s, syFn) {
+                function pathFor(s, syFn, strokeOpacity) {
                     var pts = (s.points || []).slice().sort(function(a,b){ return new Date(a.x) - new Date(b.x); });
                     if (!pts.length) return '';
                     function _d(pp) { return pp.map(function(p, i){ return (i === 0 ? 'M' : 'L') + sx(p.x).toFixed(1) + ',' + syFn(p.y).toFixed(1); }).join(' '); }
                     var out = '';
+                    // stroke-opacity attr (only emitted when caller passes
+                    // a value) -- lets the axis-priority renderer draw the
+                    // left-axis "views" line slightly translucent so the
+                    // right-axis funnel lines (info-seek / web-visit)
+                    // bleed through wherever they overlap perfectly in
+                    // screen space. Without this, the two curves are
+                    // colinear (info = views * info%) and whoever paints
+                    // on top completely hides the other.
+                    var soAttr = (typeof strokeOpacity === 'number') ? (' stroke-opacity="' + strokeOpacity + '"') : '';
                     if (s.style === 'area') {
                         var areaD = _d(pts) + ' L ' + sx(pts[pts.length-1].x).toFixed(1) + ',' + (H - P.b) + ' L ' + sx(pts[0].x).toFixed(1) + ',' + (H - P.b) + ' Z';
                         out += '<path d="' + areaD + '" fill="' + s.color + '" fill-opacity="0.10" />';
                     }
                     var dashAttr = s.dash ? ' stroke-dasharray="4,3"' : '';
                     if (cutoffTs == null) {
-                        out += '<path d="' + _d(pts) + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + ' />';
+                        out += '<path d="' + _d(pts) + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + soAttr + ' />';
                         return out;
                     }
                     var solid = [], faded = [];
@@ -28454,18 +28463,36 @@ https://www.instagram.com/p/..."></textarea>
                         else faded.push(p);
                     });
                     if (solid.length && faded.length) faded.unshift(solid[solid.length - 1]);
-                    if (solid.length) out += '<path d="' + _d(solid) + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + ' />';
+                    if (solid.length) out += '<path d="' + _d(solid) + '" fill="none" stroke="' + s.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + soAttr + ' />';
                     if (faded.length) out += '<path d="' + _d(faded) + '" fill="none" stroke="' + s.color + '" stroke-width="1.5" stroke-opacity="0.22" stroke-dasharray="3,3" stroke-linejoin="round" stroke-linecap="round" />';
                     return out;
                 }
 
-                // Draw RIGHT-axis lines first so LEFT-axis lines render on
-                // top. Without this, the purple info-seekers line covers
-                // the green organic-views line wherever the two cross in
-                // screen space (the left "views" series is the primary
-                // signal, so it deserves z-priority).
-                var paths = (rightSeries || []).map(function(s){ return pathFor(s, syR); }).join('')
-                          + (leftSeries  || []).map(function(s){ return pathFor(s, syL); }).join('');
+                // Draw RIGHT-axis lines FIRST (info-seek + website/ticketing)
+                // then LEFT-axis lines LAST (views) so the primary "views"
+                // signal keeps z-priority.  Left-axis lines paint at 0.82
+                // stroke-opacity so the perfectly-colinear right-axis lines
+                // beneath them (info-seek IS just views*info%, so shape is
+                // identical) show through visibly. Without this the daily
+                // funnel line collapses to invisible whenever views has
+                // any curve of its own (Chime bug 2026-08-14).
+                //
+                // Also bump right-axis strokes to width 2.6 (vs left 2.0)
+                // so the funnel line pokes out ~0.3px on either side of
+                // the views line even where they overlap perfectly --
+                // guarantees visibility of purple/yellow along the peaks.
+                function _thickPath(s, syFn) {
+                    var pts = (s.points || []).slice().sort(function(a,b){ return new Date(a.x) - new Date(b.x); });
+                    if (!pts.length) return '';
+                    var d = pts.map(function(p, i){ return (i === 0 ? 'M' : 'L') + sx(p.x).toFixed(1) + ',' + syFn(p.y).toFixed(1); }).join(' ');
+                    var dashAttr = s.dash ? ' stroke-dasharray="4,3"' : '';
+                    if (cutoffTs == null) {
+                        return '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + ' />';
+                    }
+                    return pathFor(s, syFn);
+                }
+                var paths = (rightSeries || []).map(function(s){ return _thickPath(s, syR); }).join('')
+                          + (leftSeries  || []).map(function(s){ return pathFor(s, syL, 0.82); }).join('');
 
                 // Optional event markers (asset-drop dots etc.) -- pass via
                 // opts.events = [{x: <isoDate>, color: '#22d3ee', label: '...'}].
