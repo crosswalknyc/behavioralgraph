@@ -28246,7 +28246,26 @@ https://www.instagram.com/p/..."></textarea>
                 var params = new URLSearchParams();
                 var winEl = document.getElementById('iiqAssetWindow');
                 var win = winEl ? winEl.value : 'ytd';
-                params.set('window', win);
+                // Defensive brand-window override: brand campaigns often
+                // pre-date the current YTD window (e.g. MyPay 2024 viewed
+                // in 2026 -> YTD returns 0 assets). If the current title is
+                // brand AND the WINDOW is still the film-era default 'ytd',
+                // treat it as unset and use Campaign-to-date. Any explicit
+                // user pick (14d/30d/90d/365d/custom/all) is respected.
+                // This runs on EVERY assets load so stale caches, tab-switch
+                // races, or missed reloadIntentIQ paths still self-heal.
+                try {
+                    var _ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                    if (_ov.title_type === 'brand' && win === 'ytd') {
+                        win = 'all';
+                        if (winEl) winEl.value = 'all';
+                        params.set('window', 'all');
+                    } else {
+                        params.set('window', win);
+                    }
+                } catch (_e) {
+                    params.set('window', win);
+                }
                 if (win === 'custom') {
                     var fEl = document.getElementById('iiqAssetFrom');
                     var tEl = document.getElementById('iiqAssetTo');
