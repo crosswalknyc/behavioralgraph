@@ -92,6 +92,13 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
     # digital-health brands + subjects that don't cleanly belong under
     # BRAND (retail) or PLATFORMS (media / digital services).
     "HEALTHCARE": ["HEALTHCARE"],
+    # 2026-08-14 (Jenna). FAST is broken out of PLATFORMS as its own
+    # top-level bucket so free-ad-supported streaming services (Pluto TV,
+    # Tubi, Roku Channel, Freevee, ...) and the individual FAST channels
+    # that live on those services get their own selector tab. The legacy
+    # "VIRTUAL MVPD/FAST" sub-values under PLATFORMS are left in place so
+    # existing hybrid vMVPD+FAST profiles don't move tabs.
+    "FAST": ["FAST PLATFORMS", "FAST CHANNELS"],
     "TRENDS": ["TRENDS", "SHOPPING INTENT"],
 }
 
