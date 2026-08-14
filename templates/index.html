@@ -24883,6 +24883,7 @@ https://www.instagram.com/p/..."></textarea>
                     <div id="iiqAssetCustomRange" style="display:none;"><label>From / To</label><div style="display:flex; gap:0.3rem; align-items:center;"><input type="date" id="iiqAssetFrom" onchange="window.iiqApplyCustomRange()" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); border-radius:4px; padding:0.22rem 0.4rem; font-size:0.72rem;"><span style="color:var(--text-secondary); font-size:0.72rem;">&rarr;</span><input type="date" id="iiqAssetTo" onchange="window.iiqApplyCustomRange()" style="background:#0b132b; color:#e2e8f0; border:1px solid rgba(255,255,255,0.15); border-radius:4px; padding:0.22rem 0.4rem; font-size:0.72rem;"></div></div>
                     <div><label>Phase</label><select id="iiqAssetFilterPhase" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
                     <div><label>Type</label><select id="iiqAssetFilterType" onchange="reloadIntentIQAssets()"><option value="">All</option></select></div>
+                    <div><label title="Content platform (TikTok, Instagram, YouTube, X, etc.). Client-side filter -- drills combine with Phase / Type / Paid instantly.">Platform</label><select id="iiqAssetFilterPlatform" onchange="window._iiqRenderAssetsGrid()"><option value="">All</option></select></div>
                     <div><label>Paid / Organic</label><select id="iiqAssetFilterPaid" onchange="reloadIntentIQAssets()"><option value="">All</option><option value="paid">Paid</option><option value="organic">Organic</option><option value="unknown">Unknown</option></select></div>
                     <div><label title="Engagement = likes + comments + shares per asset">Sort by</label><select id="iiqAssetSort" onchange="reloadIntentIQAssets()"><option value="engagement" selected>Engagement (high → low)</option><option value="views">Views (high → low)</option><option value="date_desc">Date (newest first)</option><option value="date_asc">Date (oldest first)</option></select></div>
                     <div style="flex:1; text-align:right;"><span id="iiqAssetMeta" style="color: var(--text-secondary); font-size: 0.8rem;"></span></div>
@@ -27885,6 +27886,15 @@ https://www.instagram.com/p/..."></textarea>
                     var typesAll = iiqAssetTypesInList(allCards);
                     typeBar.innerHTML = typesAll.length ? iiqAssetFilterBarHtml(typesAll) : '';
                 }
+                // Client-side Platform (channel) filter: narrow allCards
+                // BEFORE type-chip filtering + summary math so every tile
+                // and card in view reflects the picked platform. Server-
+                // side Phase / Type / Paid already ran upstream.
+                var _platSel = document.getElementById('iiqAssetFilterPlatform');
+                var _platPick = _platSel ? (_platSel.value || '') : '';
+                if (_platPick) {
+                    allCards = allCards.filter(function(c) { return c && c.channel === _platPick; });
+                }
                 // Filter and render.
                 var cards = iiqFilterAssets(allCards).slice();
                 cards.sort(function(a, b) {
@@ -28055,6 +28065,19 @@ https://www.instagram.com/p/..."></textarea>
                         types.forEach(function(t) { typeSel.appendChild(new Option(t, t)); });
                         // Preserve the user's current selection when possible
                         if (prevType && types.indexOf(prevType) >= 0) typeSel.value = prevType;
+                        // Same pattern for the Platform (channel) dropdown -- populate
+                        // from whatever the server sent back (already filtered by
+                        // Phase / Type / Paid), preserve the user's prior pick if
+                        // still valid. The platform filter itself runs client-side
+                        // in _iiqRenderAssetsGrid so drilling is instant.
+                        var platSel = document.getElementById('iiqAssetFilterPlatform');
+                        if (platSel) {
+                            var prevPlat = platSel.value || '';
+                            platSel.innerHTML = '<option value="">All</option>';
+                            var plats = Array.from(new Set(cards.map(function(c) { return c.channel; }).filter(Boolean))).sort();
+                            plats.forEach(function(p) { platSel.appendChild(new Option(p, p)); });
+                            if (prevPlat && plats.indexOf(prevPlat) >= 0) platSel.value = prevPlat;
+                        }
                         window.__intentIQAssetsRaw = {
                             slug: slug, cards: cards, winLabel: winLabel,
                             sortBy: sortBy, windowed: !!d.windowed_totals,
