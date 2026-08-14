@@ -46531,8 +46531,12 @@ https://www.instagram.com/p/..."></textarea>
             // Series/rail descriptor line intentionally removed - the
             // card leads directly with the title. Rail context (TOP,
             // Trending Now, FEATURED HERO, etc.) added noise more than
-            // it added signal; we already show Current rank + Best rank
-            // in the metrics grid, which is a cleaner ranking cue.
+            // it added signal; we already show Current rank in the
+            // metrics grid, which is a cleaner ranking cue. Best rank
+            // was previously here too but was removed per user
+            // directive - the "Peak #N (held Xd)" trend line under
+            // the sparkline already surfaces peak position when it's
+            // interesting, without cluttering the metrics grid.
             // Second metric: episode count is the most useful "what
             // does this title contain" signal across every platform, so
             // Peacock now mirrors the competitor tabs and surfaces
@@ -46572,7 +46576,6 @@ https://www.instagram.com/p/..."></textarea>
                     '<div><div class="miq-metric-label">' + pm.label + '</div><div class="miq-metric-value">' + pm.value + '</div></div>' +
                     '<div><div class="miq-metric-label">' + secondaryMetric.label + '</div><div class="miq-metric-value">' + secondaryMetric.value + '</div></div>' +
                     '<div><div class="miq-metric-label">Current rank</div><div class="miq-metric-value">' + _miqCurrentRank(t) + '</div></div>' +
-                    '<div><div class="miq-metric-label">Best rank</div><div class="miq-metric-value">' + _miqBestRank(t) + '</div></div>' +
                 '</div>' +
                 chips +
                 (curveBars ? '<div class="miq-spark-wrap" data-miq-spark="1" role="button" tabindex="0" aria-label="Show daily views" title="' + _miqEscape(_miqSparkTooltip(t, platform)) + ' &#10;&#10;Click to open the daily views breakdown">' + curveBars + '</div>' : '') +
@@ -46773,10 +46776,6 @@ https://www.instagram.com/p/..."></textarea>
         function _miqCurrentRank(t) {
             // Peacock uses `surface_rank_current`, competitors use `current_rank`
             var r = (t.surface_rank_current != null) ? t.surface_rank_current : t.current_rank;
-            return (r == null) ? '-' : '#' + r;
-        }
-        function _miqBestRank(t) {
-            var r = (t.surface_rank_best != null) ? t.surface_rank_best : t.best_rank;
             return (r == null) ? '-' : '#' + r;
         }
 
