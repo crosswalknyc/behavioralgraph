@@ -1358,22 +1358,38 @@ CREDITS_JOURNEY_IQ = 10
 # Pricing settings S3 key
 PRICING_SETTINGS_KEY = 'system/pricing_settings.json'
 
-# Default pricing settings (used if no S3 settings exist)
+# Default pricing settings (used if no S3 settings exist).
+#
+# Pricing keys correspond to Analysis IQ module keys in
+# `_ANALYSIS_IQ_MODULES_FULL` (see top of MAIN ROUTES). Some modules
+# have multiple pricing scenarios: e.g. `talent_fit` splits into
+# `talent_fit_per_talent` (per-talent scoring) and `talent_fit_find`
+# (Find Me Talent search).
+#
+# 2026-08-14 (Jenna): Digital Journey (`journey_iq`) bumped 10 -> 30
+# credits, and previously-missing modules `cross_show` and
+# `intent_ingest` added so the admin Analysis Pricing panel matches
+# the full set of invokable Analysis IQ modules
+# (`_ANALYSIS_IQ_MODULES_FULL`). ROAS IQ and Ecommerce IQ are
+# standalone Products (not Analysis IQ modules) but kept here for
+# backwards compatibility with any historical S3 config.
 DEFAULT_PRICING = {
     'profile_analysis': 5,
-    'ticket_sales': 10,
+    'ticket_sales': 10,          # module: talent_theater
     'ticket_sales_tracker': 10,
-    'svod': 10,
-    'campaign_roi': 5,
+    'svod': 10,                  # Subscriber IQ
+    'campaign_roi': 5,           # module: campaign
     'watch_time': 1,
-    'roas_iq': 8,
-    'talent_fit_per_talent': 5,
-    'talent_fit_find': 15,
+    'roas_iq': 8,                # standalone Product, kept for compat
+    'talent_fit_per_talent': 5,  # module: talent_fit
+    'talent_fit_find': 15,       # module: talent_search (Find Me Talent)
     'sf_lf_conversion': 10,
-    'ecommerce_iq': 5,
+    'ecommerce_iq': 5,           # standalone Product, kept for compat
     'flywheel_conversion': 25,
     'brand_partnership_iq': 15,
-    'journey_iq': 10
+    'journey_iq': 30,            # Digital Journey - 2026-08-14 Jenna: 10 -> 30
+    'cross_show': 5,             # 2026-08-14 new tile
+    'intent_ingest': 10,         # 2026-08-14 new tile (module added 2026-08-12)
 }
 
 _pricing_cache = {'data': None, 'loaded_at': 0}

@@ -6302,6 +6302,15 @@
         }
         
         // Analysis Pricing (Settings)
+        //
+        // Order + key set kept in lock-step with `DEFAULT_PRICING` in app.py
+        // and `_ANALYSIS_IQ_MODULES_FULL` (source of truth for what a user
+        // can actually invoke via Analysis IQ). 2026-08-14 (Jenna): added
+        // Digital Journey (`journey_iq`, 30 credits), Intent Ingest, and
+        // Cross-Show Watching so the admin panel matches every invokable
+        // Analysis IQ module. When adding a new Analysis IQ module in
+        // app.py, add it here too (both the pricing key in DEFAULT_PRICING
+        // and the display tile below).
         const ANALYSIS_PRICING_LABELS = {
             'profile_analysis': { label: 'Profile IQ', icon: '👤' },
             'svod': { label: 'Subscriber IQ', icon: '📺' },
@@ -6309,13 +6318,16 @@
             'ticket_sales_tracker': { label: 'Ticket Sales Tracker', icon: '📊' },
             'campaign_roi': { label: 'Campaign ROI', icon: '📈' },
             'watch_time': { label: 'Watch Time', icon: '⏱️' },
-            'roas_iq': { label: 'ROAS IQ', icon: '💹' },
             'talent_fit_per_talent': { label: 'Talent Fit (per talent)', icon: '🌟' },
             'talent_fit_find': { label: 'Find Me Talent', icon: '🔍' },
             'sf_lf_conversion': { label: 'Short-Form to Long-Form', icon: '🎬' },
-            'ecommerce_iq': { label: 'Ecommerce IQ', icon: '🛒' },
+            'cross_show': { label: 'Cross-Show Watching', icon: '🔀' },
             'flywheel_conversion': { label: 'Flywheel Conversion', icon: '🔄' },
-            'brand_partnership_iq': { label: 'Brand Partnership Valuation', icon: '🤝' }
+            'brand_partnership_iq': { label: 'Brand Partnership Valuation', icon: '🤝' },
+            'journey_iq': { label: 'Digital Journey', icon: '🗺️' },
+            'intent_ingest': { label: 'Intent Ingest', icon: '🎯' },
+            'roas_iq': { label: 'ROAS IQ', icon: '💹' },
+            'ecommerce_iq': { label: 'Ecommerce IQ', icon: '🛒' }
         };
         
         async function loadAnalysisPricingUI() {
