@@ -850,60 +850,39 @@ def _apply_research_profile_to_df(df, research_profile, subject_clean):
 
 
 def _check_distribution_alignment(snowflake_dist, research_dist, category):
-    """Check if Snowflake distribution aligns with research-based persona.
-    
-    Returns True if distributions are reasonably aligned, False if they conflict.
-    
-    Alignment means:
-    - The general SHAPE matches (if research says young audience, Snowflake should show young)
-    - No extreme contradictions (research says 5% X, Snowflake says 60% X)
-    - Allows for natural variation in exact percentages
+    """Check if panel distribution should keep priority over web research.
+
+    Per Jenna 2026-08-14 (iJustine incident, restating a long-standing rule):
+        "I feel like I've been clear that I never want it to trust the panel
+         but always trust external research. always."
+
+    Panel signal is a noisy sample of who happened to cross a hostmap-tracked
+    touchpoint. Its systemic failure modes are:
+      * Hostmap coverage gaps -> wrong subset of audience shows up (e.g.,
+        iJustine 08/14/2026: 3.6K panelists surfaced because only her .com
+        was registered, and those 3.6K were male tech-news readers, not her
+        7M+ subscriber female-forward audience).
+      * Small samples -> demo variance blows up; a few dozen panelists in a
+        bucket produce meaningless "62% male / 15.5% Asian" reads.
+      * Walled-garden platforms (YouTube views, IG follows, TikTok watches)
+        never fire panel cookies at all, so creator profiles are systemically
+        under-sampled.
+
+    External web research (via `_research_brand_demographics` + persona
+    reasoning in `_research_and_build_profile`) uses public sources
+    (Statista, Pew, Nielsen, YouGov, Statista, brand press) that reflect
+    the REAL audience shape, not the panel-visible subset.
+
+    Rule: if we have any usable research distribution for this category,
+    it wins. Panel data is retained only as a fallback when research is
+    missing/empty.
     """
     if not snowflake_dist or not research_dist:
-        return False
-    
-    # Normalize research keys to uppercase for comparison
-    research_upper = {k.upper(): v for k, v in research_dist.items()}
-    
-    total_deviation = 0.0
-    comparisons = 0
-    severe_conflicts = 0
-    
-    for sf_key, sf_val in snowflake_dist.items():
-        # Find matching research key
-        research_val = None
-        for r_key, r_val in research_upper.items():
-            if r_key == sf_key or r_key in sf_key or sf_key in r_key:
-                research_val = r_val
-                break
-        
-        if research_val is not None:
-            deviation = abs(sf_val - research_val)
-            total_deviation += deviation
-            comparisons += 1
-            
-            # Check for severe conflicts
-            # If research says <10% but Snowflake says >50%, that's a severe conflict
-            if research_val < 10 and sf_val > 50:
-                severe_conflicts += 1
-            # If research says >40% but Snowflake says <10%, that's a severe conflict
-            elif research_val > 40 and sf_val < 10:
-                severe_conflicts += 1
-            # If difference is >40 percentage points, that's severe
-            elif deviation > 40:
-                severe_conflicts += 1
-    
-    # Any severe conflict means misalignment
-    if severe_conflicts > 0:
-        return False
-    
-    # Average deviation threshold - if average deviation is >20%, consider misaligned
-    if comparisons > 0:
-        avg_deviation = total_deviation / comparisons
-        if avg_deviation > 20:
-            return False
-    
-    return True
+        # No research -> keep panel (only fallback path).
+        # No panel -> nothing to align against; caller decides.
+        return False if research_dist else True
+    # Research present + panel present -> ALWAYS prefer research.
+    return False
 
 
 def research_first_demographic_review(df, brand_category, project_name, brands):
