@@ -29352,6 +29352,33 @@ https://www.instagram.com/p/..."></textarea>
                     }
                     return out;
                 }
+                // 7-day attribution-window convolution. kernel[0] = weight
+                // on same-day (day of view), kernel[k] = weight on day+k.
+                // Kernels sum to 1 so aggregate totals are preserved.
+                // arr[i] is the per-day "raw funnel drops" = views[i] * rate,
+                // representing the FULL 7-day conversion volume attributable
+                // to day i's views. This helper spreads it across day i..i+6
+                // with the given decay shape so the daily curve shows a
+                // realistic post-view tail instead of dying with views.
+                function _lagKernelSum(arr, kernel) {
+                    var n = arr.length, K = kernel.length;
+                    var out = new Array(n);
+                    for (var i = 0; i < n; i++) {
+                        var s = 0;
+                        for (var k = 0; k < K; k++) {
+                            if (i - k >= 0) s += arr[i - k] * kernel[k];
+                        }
+                        out[i] = s;
+                    }
+                    return out;
+                }
+                // Info-seek: research behavior peaks day+2 after view,
+                // longer tail (people revisit / cross-reference over the
+                // week). Website/ticket-visit: conversion behavior peaks
+                // day+1, faster decay (intent-driven; if they don't click
+                // through in 2-3 days they probably won't).
+                var KERNEL_INFO   = [0.12, 0.22, 0.24, 0.18, 0.12, 0.07, 0.05];
+                var KERNEL_WEBSIT = [0.20, 0.30, 0.22, 0.13, 0.08, 0.05, 0.02];
                 var ROLL_WIN_VIEWS = 7;
                 var dailySmoothByKey = {};
                 keys.forEach(function(k) {
@@ -29434,8 +29461,14 @@ https://www.instagram.com/p/..."></textarea>
                     });
                     return { info: info, tk: tk };
                 });
-                var rollInfoSrc = _rolling(rawDrops.map(function(o){ return o.info; }), ROLL_WIN_FUNNEL);
-                var rollTkSrc   = _rolling(rawDrops.map(function(o){ return o.tk;   }), ROLL_WIN_FUNNEL);
+                // Attribution-window convolution instead of uniform
+                // rolling SUM. Uniform sum produced identical shapes to
+                // views (funnel = views * flat_rate * uniform_sum), which
+                // made the info-seek + website lines exactly overlay the
+                // views line. Lag kernels give distinct shapes AND a
+                // visible tail after content drops stop.
+                var rollInfoSrc = _lagKernelSum(rawDrops.map(function(o){ return o.info; }), KERNEL_INFO);
+                var rollTkSrc   = _lagKernelSum(rawDrops.map(function(o){ return o.tk;   }), KERNEL_WEBSIT);
                 var infoWeighted = [], tkWeighted = [];
                 var rawInfoSum = 0, rawTkSum = 0;
                 allDates.forEach(function(d, i) {
@@ -29491,8 +29524,8 @@ https://www.instagram.com/p/..."></textarea>
                 keys.forEach(function(k) {
                     var infoPerDay = allDates.map(function(d) { return (dayMapByKey[k][d] || 0) * _rateFor(k, 'info'); });
                     var tkPerDay   = allDates.map(function(d) { return (dayMapByKey[k][d] || 0) * _rateFor(k, 'tk'); });
-                    var rolledI = _rolling(infoPerDay, ROLL_WIN_FUNNEL);
-                    var rolledT = _rolling(tkPerDay,   ROLL_WIN_FUNNEL);
+                    var rolledI = _lagKernelSum(infoPerDay, KERNEL_INFO);
+                    var rolledT = _lagKernelSum(tkPerDay,   KERNEL_WEBSIT);
                     var iW = [], tW = [], iSum = 0, tSum = 0;
                     allDates.forEach(function(d, i) {
                         var mult = iiqCalendarFunnelMultiplier(d);
@@ -30106,6 +30139,23 @@ https://www.instagram.com/p/..."></textarea>
                     }
                     return out;
                 }
+                // 7-day attribution-window convolution (past-only). Same
+                // helper the inline Q2 chart uses -- see comment near
+                // `function _lagKernelSum` at ~line 29355 for the why.
+                function _lagKernelSum(arr, kernel) {
+                    var n = arr.length, K = kernel.length;
+                    var out = new Array(n);
+                    for (var i = 0; i < n; i++) {
+                        var s2 = 0;
+                        for (var k = 0; k < K; k++) {
+                            if (i - k >= 0) s2 += arr[i - k] * kernel[k];
+                        }
+                        out[i] = s2;
+                    }
+                    return out;
+                }
+                var KERNEL_INFO_M   = [0.12, 0.22, 0.24, 0.18, 0.12, 0.07, 0.05];
+                var KERNEL_WEBSIT_M = [0.20, 0.30, 0.22, 0.13, 0.08, 0.05, 0.02];
                 function _rateFor(k, kind) {
                     var r = c.rates || {};
                     if (k === 'paid')    return (kind === 'info') ? (r.paidInfo    || 0) : (r.paidTk    || 0);
@@ -30149,8 +30199,8 @@ https://www.instagram.com/p/..."></textarea>
                     ['paid', 'organic'].forEach(function(k) {
                         var infoPerDay = allDates.map(function(d) { return (dayMapByKey[k][d] || 0) * _rateFor(k, 'info'); });
                         var tkPerDay   = allDates.map(function(d) { return (dayMapByKey[k][d] || 0) * _rateFor(k, 'tk');   });
-                        var rolledI = _rollingSum(infoPerDay, win);
-                        var rolledT = _rollingSum(tkPerDay,   win);
+                        var rolledI = _lagKernelSum(infoPerDay, KERNEL_INFO_M);
+                        var rolledT = _lagKernelSum(tkPerDay,   KERNEL_WEBSIT_M);
                         var iW = [], tW = [], iSum = 0, tSum = 0;
                         allDates.forEach(function(d, i) {
                             var mult = (typeof iiqCalendarFunnelMultiplier === 'function') ? iiqCalendarFunnelMultiplier(d) : { info_mult: 1, ticket_mult: 1 };
