@@ -1584,44 +1584,77 @@ def _q3_intent_to_buy(title_slug: str) -> dict:
     The coefficients are deliberately conservative to avoid
     double-counting users who engaged with more than one signal type.
     """
-    ch = _ch_client()
-    if ch is None:
-        return {"success": True, "fallback": True,
-                "subject": None, "comps": [],
-                "note": "ClickHouse unreachable."}
-
     AVG_TICKET_USD = 13.51  # NATO 2024 US weighted avg ticket price
 
+    # Per-title comps override: if the snapshot ships a title.comps
+    # list (studio-provided competitor set), prefer it over the
+    # global CH comp pool. Films with genre-specific competitor
+    # rosters (e.g. horror-only comps for indie horror titles like
+    # The Influencer Project - Hades) use this path so they don't
+    # get compared against unrelated family-animated or action
+    # comps. Added 2026-08-14.
+    snap_local = _load_normalized_snapshot(title_slug)
+    snap_comps = ((snap_local or {}).get("title") or {}).get("comps") or []
     comps: list[dict] = []
-    try:
-        comp_rows = ch.query(
-            "SELECT t.title_slug, t.display_name, t.opening_date, "
-            "sum(if(b.day_offset_from_open BETWEEN 0 AND 3, "
-            "       b.gross_usd, 0))                  AS opening_4day_usd, "
-            "max(b.cumulative_usd)                    AS cumulative_usd "
-            "FROM intent.titles t "
-            "INNER JOIN intent.title_box_office_truth b "
-            "  ON b.title_slug = t.title_slug "
-            "WHERE t.distributor = 'comp_title' "
-            "GROUP BY t.title_slug, t.display_name, t.opening_date "
-            "ORDER BY opening_4day_usd DESC"
-        ).result_rows
-        for r in comp_rows:
-            slug, name, opening_date, opening_usd, cum_usd = r
-            opening_usd = int(opening_usd or 0)
-            cum_usd     = int(cum_usd or 0)
+    if isinstance(snap_comps, list) and snap_comps:
+        for c in snap_comps:
+            opening_usd = int(c.get("opening_4day_usd") or 0)
+            cum_usd     = int(c.get("cumulative_usd")   or 0)
             comps.append({
-                "title_slug": slug,
-                "display_name": name,
-                "opening_date": _safe_iso_date(opening_date),
+                "title_slug":             c.get("title_slug") or "",
+                "display_name":           c.get("display_name") or "",
+                "opening_date":           _safe_iso_date(c.get("opening_date")),
                 "opening_weekend_buyers": int(opening_usd / AVG_TICKET_USD) if opening_usd else 0,
-                "total_buyers":           int(cum_usd / AVG_TICKET_USD)     if cum_usd     else 0,
+                "total_buyers":           int(cum_usd     / AVG_TICKET_USD) if cum_usd     else 0,
                 "opening_4day_usd":       opening_usd,
                 "cumulative_usd":         cum_usd,
-                "source": "Box Office Mojo (opening 4-day gross / $13.51 avg US ticket, NATO 2024)",
+                "source":                 c.get("source") or "Snapshot-provided comp",
             })
-    except Exception as e:
-        logger.info("Attribution IQ Q3 comp ticket buyers unavailable: %s", e)
+        # sort by opening_4day_usd descending to match CH ordering
+        comps.sort(key=lambda x: x.get("opening_4day_usd", 0), reverse=True)
+        logger.info("Attribution IQ Q3: using %d snapshot-provided comps for %s",
+                    len(comps), title_slug)
+
+    ch = _ch_client()
+    if ch is None:
+        # No CH -> return subject=None + whatever snapshot comps we have
+        return {"success": True, "fallback": (not comps),
+                "subject": None, "comps": comps,
+                "avg_ticket_price_usd": AVG_TICKET_USD,
+                "note": ("ClickHouse unreachable; showing snapshot-provided comps only." if comps
+                         else "ClickHouse unreachable.")}
+
+    if not comps:
+        # Fall back to global CH comp pool (default film behavior)
+        try:
+            comp_rows = ch.query(
+                "SELECT t.title_slug, t.display_name, t.opening_date, "
+                "sum(if(b.day_offset_from_open BETWEEN 0 AND 3, "
+                "       b.gross_usd, 0))                  AS opening_4day_usd, "
+                "max(b.cumulative_usd)                    AS cumulative_usd "
+                "FROM intent.titles t "
+                "INNER JOIN intent.title_box_office_truth b "
+                "  ON b.title_slug = t.title_slug "
+                "WHERE t.distributor = 'comp_title' "
+                "GROUP BY t.title_slug, t.display_name, t.opening_date "
+                "ORDER BY opening_4day_usd DESC"
+            ).result_rows
+            for r in comp_rows:
+                slug, name, opening_date, opening_usd, cum_usd = r
+                opening_usd = int(opening_usd or 0)
+                cum_usd     = int(cum_usd or 0)
+                comps.append({
+                    "title_slug": slug,
+                    "display_name": name,
+                    "opening_date": _safe_iso_date(opening_date),
+                    "opening_weekend_buyers": int(opening_usd / AVG_TICKET_USD) if opening_usd else 0,
+                    "total_buyers":           int(cum_usd / AVG_TICKET_USD)     if cum_usd     else 0,
+                    "opening_4day_usd":       opening_usd,
+                    "cumulative_usd":         cum_usd,
+                    "source": "Box Office Mojo (opening 4-day gross / $13.51 avg US ticket, NATO 2024)",
+                })
+        except Exception as e:
+            logger.info("Attribution IQ Q3 comp ticket buyers unavailable: %s", e)
 
     subject = _measure_subject_ticket_intent(ch, title_slug, AVG_TICKET_USD)
 
