@@ -28316,9 +28316,9 @@ https://www.instagram.com/p/..."></textarea>
                 q2: { short: 'Paid vs. Organic', title: 'Paid vs. Organic Performance',                    intro: 'Cumulative view growth by day, paid vs organic. Top-performing in-flight assets at the bottom.' },
                 audiences: { short: '👥 Audiences', title: 'Audiences of interest', intro: 'Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title\'s moviegoing audience. Below: how often each slice of US adults goes to the movies.' },
                 q3: { short: 'Intent to Buy',    title: 'How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date - pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement - scaled by industry conversion rates. Nothing here is a forecast.' },
-                q4: { short: 'Talent Attribution', title: 'How do talent & influencer posts boost other marketing?',     intro: 'Per-cast-member view + engagement totals across the campaign. Identifies which talent are doing disproportionate lift.' },
+                q4: { short: 'Talent Attribution', title: 'How do talent & influencer posts boost other marketing?',     intro: 'Per-talent view + engagement totals across the campaign (cast, creators, athletes, influencers, hosts). Identifies which talent are doing disproportionate lift.' },
                 q5: { short: 'Trailer Performance', title: 'Trailer Performance', intro: 'Daily trailer views with overlaid funnel conversion (% of viewers who became info-seekers or visited a ticketing site within 7 days). Second chart traces the PVOD / SVOD search tail that builds after theatrical, peaking at the 5/15 streaming launch.' },
-                q6: { short: 'Cohort Engagement', title: 'Which content drives info-seek + ticketing for each audience?', intro: 'Per-asset attribution sliced by audience. Pick any cohort from the Audiences tab (Steph Curry fans, cast members, family-animation fans, Disney+ family subs, demographic cuts) plus the four moviegoing-frequency cohorts \u2014 each selected cohort gets its own set of columns showing that cohort\'s views, info-seek %, and ticketing % per asset. Cut by platform (YouTube / TikTok / etc.), Paid vs Organic, and asset type to isolate which specific pieces of content are converting which audiences. Same projection helper as Assets / Q1 / Q2 \u2014 numbers ladder up.' },
+                q6: { short: 'Cohort Engagement', title: 'Which content drives info-seek + ticketing for each audience?', intro: 'Per-asset attribution sliced by audience. Pick any cohort from the Audiences tab plus the frequency cohorts \u2014 each selected cohort gets its own set of columns showing that cohort\'s views, info-seek %, and ticketing % per asset. Cut by platform (YouTube / TikTok / etc.), Paid vs Organic, and asset type to isolate which specific pieces of content are converting which audiences. Same projection helper as Assets / Q1 / Q2 \u2014 numbers ladder up.' },
                 demographics: { short: 'Demographics', title: 'Who engaged with each campaign?', intro: 'Per-campaign demographic breakdown of the actual audience that watched + engaged with each asset.' },
                 journey: { short: 'Digital Journey', title: 'What do people do before and after engaging with each asset?', intro: 'Per-asset BEFORE / AFTER funnel. BEFORE = referrer mix (YouTube Up-Next / TikTok FYP / paid display / etc.) calibrated to the asset\'s channel and paid-vs-organic status. AFTER (7-day window) = downstream destinations split across Google / IMDB / RT / Letterboxd / official site for info-seek, Fandango / AMC / Regal / Cinemark / Atom for ticketing, plus shared-to-social, watched-trailer-next, and "where to stream" search. Tilts by phase: ticketing collapses after theatrical, streaming search ramps. Info-seek % + ticketing % ladder up to Assets / Q1 / Q2.' },
             };
@@ -31197,19 +31197,20 @@ https://www.instagram.com/p/..."></textarea>
                         };
                     });
                 } else {
-                    // Brand campaigns that run entirely on brand-owned social
-                    // channels (e.g. Chime MyPay -- 57 posts across @chime IG/TT/YT
-                    // with no external creator or celebrity) legitimately have no
-                    // talent to attribute. Show a graceful, human-readable state
-                    // instead of leaking an engineering script reference.
+                    // No talent-tagged assets in the roll-up. Brand campaigns
+                    // that legitimately run on brand-owned social channels only
+                    // (no cast / creators / celebrities in any asset) hit this
+                    // branch -- show a graceful state instead of leaking an
+                    // engineering script reference (previous copy directed the
+                    // user to run scripts/backfill_intent_talent_tags.py).
                     var _tt = ((window.__intentIQ && window.__intentIQ.overview) || {}).title_type || 'film';
                     var _brandDisplay = ((window.__intentIQ && window.__intentIQ.overview) || {}).title_display || 'This campaign';
                     if (_tt === 'brand') {
-                        return '<div class="iiq-empty">No talent-driven content in this campaign. ' +
-                               _brandDisplay + ' runs on brand-owned social channels only, ' +
-                               'so there are no external creators or celebrities to attribute lift to. ' +
-                               'For campaigns that use influencers, cast, or public-figure appearances, ' +
-                               'those assets show up here ranked by view + engagement lift.</div>';
+                        return '<div class="iiq-empty">No talent-driven content detected in this campaign. ' +
+                               _brandDisplay + ' appears to run on brand-owned social channels only, ' +
+                               'with no external creators, celebrities, or public-figure appearances. ' +
+                               'When a campaign includes creator collabs or featured talent, those assets ' +
+                               'show up here ranked by view + engagement lift.</div>';
                     }
                     return '<div class="iiq-empty">No talent-tagged assets available for this campaign yet.</div>';
                 }
