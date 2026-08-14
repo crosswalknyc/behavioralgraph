@@ -37392,6 +37392,24 @@ https://www.instagram.com/p/..."></textarea>
                     <div id="jiqMusicInfluenceBody"></div>
                 </div>
 
+
+                <!-- Universal Basic Guys · Hulu — how viewers actually get to
+                     first play on the show. Single-card renderer against
+                     _JIQ_UBG_DATA. Story-mode: ubg_hulu_discovery. -->
+                <div class="card" id="jiqUbgCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(34,197,94,0.24);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqUbgTitle" style="margin: 0;">🏈 Universal Basic Guys · how viewers get to Hulu</h3>
+                        <div id="jiqUbgMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqUbgSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;">
+                        Discovery → Consideration → First play on Hulu. Simple 3-stage funnel with time-to-watch and viewer-continuation numbers.
+                    </div>
+                    <div id="jiqUbgBody"></div>
+                </div>
+
                 <!-- Neurotrophic Drinks — CPG brand category segment card.
                      Rendered by renderJourneyIqNeuroSegment against
                      _JIQ_NEURO_DATA. Story-mode: neurotropic_segment (id kept for stability). -->
@@ -59150,7 +59168,8 @@ https://www.instagram.com/p/..."></textarea>
                             { value: '__demo_amc_migration__',    label: 'AMC+ Audience & Platform Migration' }
                         ],
                         tv: [
-                            { value: '__demo_music_influence__',  label: 'Music-Driven Discovery' }
+                            { value: '__demo_music_influence__',  label: 'Music-Driven Discovery' },
+                            { value: '__demo_ubg_hulu__',         label: 'Universal Basic Guys · Hulu' }
                         ],
                         movie: [
                             { value: '__demo_obsession_caa__',      label: 'Obsession' },
@@ -59308,6 +59327,32 @@ https://www.instagram.com/p/..."></textarea>
                             { label: 'Nobody Wants This', value: '8.4M U.S. viewers on S2. 58.8% had a music-linked touchpoint before their first watch. Matched-control cohort watch-rate lift: +14.3 pp. Audio-adjacent reach: 3.12M viewers.' },
                             { label: 'Heated Rivalry',    value: '17.8M U.S. viewers on S1 - a breakout hockey-romance built on BookTok + t.A.T.u. resurgence. 52.1% had a music touchpoint. Matched-control watch-rate lift: +16.8 pp. Audio-adjacent reach: 5.54M viewers.' },
                             { label: 'Read',    value: 'Clip-only is the marketing-driven segment. Audio-only is the earned-media flywheel. The overlap is where music-licensing decisions pay for themselves.' }
+                        ]
+                    }
+                };
+            }
+            if (key === '__demo_ubg_hulu__') {
+                return {
+                    success: true,
+                    data: {
+                        meta: {
+                            story_mode: 'ubg_hulu_discovery',
+                            target_name: 'Universal Basic Guys',
+                            target_display: 'Universal Basic Guys \u00b7 Hulu',
+                            project_name: 'Universal Basic Guys',
+                            customer_brand: 'Fox / Bento Box / Hulu',
+                            start_date: '2025-11-01',
+                            end_date: '2026-08-14',
+                            target_type: 'series_discovery_read',
+                            category: 'tv_series'
+                        },
+                        ubg_hulu: _JIQ_UBG_DATA,
+                        facts: [
+                            { label: 'Panel',    value: '47.8M matched U.S. Hulu-active viewers, 90-day window ending 2026-08-14. Panel includes both ad-supported and no-ads Hulu tiers, deterministically linked to TikTok / Instagram / Fox Sports touchpoints.' },
+                            { label: 'Reach',    value: '3.85M U.S. HHs watched \u22651 episode of Universal Basic Guys on Hulu in the window - 8.1% of the matched Hulu panel.' },
+                            { label: 'Discovery', value: 'Fox NFL cross-promo (linear + Hulu Live TV) sourced 42.6% of first-play HHs. Instagram / TikTok clips together sourced 24.8%. Hulu\u2019s own recommended-for-you row sourced 18.3%. Peer-share URL clicks 8.4%. Editorial / other 5.9%.' },
+                            { label: 'Time-to-watch', value: 'Median 4 days from first discovery touchpoint to first Hulu play. 34.2% converted same-day; 61.8% within 2 days; 84.6% within a week.' },
+                            { label: 'Retention', value: 'S1 Ep 2 held 85.2% of Ep 1 viewers. S1 completion (all 10 eps) 58.2%. S1 \u2192 S2 carry rate: 48.6% of S1 openers also opened S2 within 30 days of S2 premiere.' }
                         ]
                     }
                 };
@@ -61198,6 +61243,7 @@ https://www.instagram.com/p/..."></textarea>
             _jiqHideCard('jiqObpCompCard');
             _jiqHideCard('jiqObpAppleRankCard');
             _jiqHideCard('jiqMusicInfluenceCard');
+            _jiqHideCard('jiqUbgCard');
             _jiqHideCard('jiqNeuroCard');
 
             var _isObsessionStory        = (_storyMode === 'obsession_caa');
@@ -61205,6 +61251,7 @@ https://www.instagram.com/p/..."></textarea>
             var _isMichaelStory          = (_storyMode === 'michael_lionsgate');
             var _isObsessionPeacockStory = (_storyMode === 'obsession_peacock_diagnostic');
             var _isMusicStory            = (_storyMode === 'music_influence');
+            var _isUbgStory              = (_storyMode === 'ubg_hulu_discovery');
             var _isNeuroStory            = (_storyMode === 'neurotropic_segment');
             var _isAmcStory              = (_storyMode === 'amc_migration_analysis');
             if (_isNetflixStory) {
@@ -61340,6 +61387,16 @@ https://www.instagram.com/p/..."></textarea>
             if (_isMusicStory) {
                 if (typeof renderJourneyIqMusicInfluence === 'function') {
                     renderJourneyIqMusicInfluence(_pickClickstreamBlock('music_influence'));
+                }
+            }
+
+            // Universal Basic Guys (Hulu) - single-card discovery
+            // journey. How Fox / Hulu / Instagram / TikTok touchpoints
+            // deliver viewers to a first play on Hulu, with a
+            // time-to-watch histogram and season-continuation funnel.
+            if (_isUbgStory) {
+                if (typeof renderJourneyIqUbg === 'function') {
+                    renderJourneyIqUbg(_pickClickstreamBlock('ubg_hulu'));
                 }
             }
 
@@ -73397,6 +73454,306 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         // ══════════════════════════════════════════════════════════════
+
+        // ══════════════════════════════════════════════════════════════
+        // UNIVERSAL BASIC GUYS (Hulu) - single-card discovery journey.
+        //
+        // Panel: 47.8M matched U.S. Hulu-active HHs, 90-day window
+        // ending 2026-08-14. Discovery touchpoints observed across
+        // Fox Sports (linear + Hulu Live TV cross-promo), TikTok,
+        // Instagram, YouTube, Hulu on-service surfaces, and peer-share
+        // URL clicks. First-play defined as any UBG episode start on
+        // Hulu with >=2 minutes of watch time.
+        // ══════════════════════════════════════════════════════════════
+        var _JIQ_UBG_DATA = {
+            panel_basis: {
+                label: 'Panel basis',
+                short: '47.8M Hulu-active HHs · 90d window',
+                detail: '47.8M matched U.S. Hulu-active households · window: 2026-05-16 to 2026-08-14 (T-1 read). Discovery touchpoints and first-play are deterministically linked at HH level. UBG audience = HH with a Hulu play of any Universal Basic Guys episode (S1 or S2) in the window.'
+            },
+            show_meta: {
+                title: 'Universal Basic Guys',
+                network: 'Fox (linear) + Hulu (streaming home)',
+                studio: 'Bento Box Entertainment · Fox Alternative Entertainment',
+                genre: 'Adult animation · workplace comedy',
+                s1_premiere: '2024-09-08',
+                s2_premiere: '2025-10-05',
+                episodes_available: '19 (S1: 10 · S2: 9 through 2026-08-14)'
+            },
+            topline: {
+                ubg_viewers_hh_m: 3.85,
+                pct_of_hulu_panel: 8.1,
+                median_days_discovery_to_play: 4,
+                same_day_watch_pct: 34.2,
+                week_1_watch_pct: 84.6,
+                s1_ep2_retention_pct: 85.2,
+                s1_completion_pct: 58.2,
+                s1_to_s2_carry_pct: 48.6
+            },
+            stages: [
+                {
+                    id: 'discovery',
+                    emoji: '🔍',
+                    label: 'Discovery',
+                    sub: 'First touchpoint that put UBG on the viewer\'s radar.',
+                    reach_hh_m: 3.85,
+                    median_days: 3,
+                    touchpoints: [
+                        { host: 'Fox NFL cross-promo', label: 'Fox Sports NFL Sunday promo · linear + Hulu Live TV', pct: 42.6 },
+                        { host: 'TikTok clips',        label: 'Fox / UBG official clips + fan cuts',                pct: 15.4 },
+                        { host: 'Instagram',           label: 'Reels + Fox / Hulu / cast Story posts',              pct:  9.4 },
+                        { host: 'Hulu recommended',    label: 'On-service "Recommended for you" row',               pct: 18.3 },
+                        { host: 'Peer-share URL',      label: 'iMessage / WhatsApp / DM shared Hulu link',          pct:  8.4 },
+                        { host: 'YouTube',             label: 'Trailer + late-night clip embeds',                   pct:  3.4 },
+                        { host: 'Editorial / other',   label: 'AV Club, Variety, Reddit',                           pct:  2.5 }
+                    ]
+                },
+                {
+                    id: 'consider',
+                    emoji: '🧭',
+                    label: 'Consideration',
+                    sub: 'What viewers did between discovery and pressing play.',
+                    reach_hh_m: 2.64,
+                    median_days: 1,
+                    touchpoints: [
+                        { host: 'Hulu title page',    label: 'Read synopsis + episode list on Hulu',             pct: 54.3 },
+                        { host: 'Trailer / preview',  label: 'Auto-preview on Hulu or YouTube trailer view',     pct: 42.8 },
+                        { host: 'Auto-play sample',   label: 'First-frame auto-play on Hulu home / search',      pct: 41.2 },
+                        { host: 'IMDb',               label: 'IMDb series page + parental / rating check',       pct: 14.7 },
+                        { host: 'Rotten Tomatoes',    label: 'Score / critic summary',                            pct:  7.4 }
+                    ]
+                },
+                {
+                    id: 'watch',
+                    emoji: '▶',
+                    label: 'First play on Hulu',
+                    sub: 'Ep 1 (or newer season premiere) start with >=2 min watch time.',
+                    reach_hh_m: 3.85,
+                    median_days: 0,
+                    touchpoints: []
+                }
+            ],
+            time_to_watch: [
+                { bucket: 'Same-day',   pct: 34.2, note: 'Cross-promo -> Hulu, single session.' },
+                { bucket: '1-2 days',   pct: 27.6, note: 'Weekend NFL discovery -> Monday viewing.' },
+                { bucket: '3-7 days',   pct: 22.8, note: 'Considered choice; came back after a trailer / clip.' },
+                { bucket: '8-14 days',  pct:  9.4, note: 'Peer-share and editorial converts land here.' },
+                { bucket: '15+ days',   pct:  6.0, note: 'Long-tail; catalog / recommended-row driven.' }
+            ],
+            watch_funnel: [
+                { label: 'S1 Ep 1 opened',        hh_m: 3.85, pct_of_prior: 100.0, cume_pct: 100.0 },
+                { label: 'S1 Ep 2 opened',        hh_m: 3.28, pct_of_prior:  85.2, cume_pct:  85.2 },
+                { label: 'S1 mid-season (Ep 5)',  hh_m: 2.71, pct_of_prior:  82.6, cume_pct:  70.4 },
+                { label: 'S1 completed (Ep 10)',  hh_m: 2.24, pct_of_prior:  82.7, cume_pct:  58.2 },
+                { label: 'S2 Ep 1 opened',        hh_m: 1.87, pct_of_prior:  83.5, cume_pct:  48.6 },
+                { label: 'S2 latest ep opened',   hh_m: 1.34, pct_of_prior:  71.7, cume_pct:  34.8 }
+            ],
+            read: 'Discovery is dominated by Fox NFL cross-promo (42.6%): the Sunday NFL audience meets UBG through in-broadcast promos and then walks over to Hulu (where the full library lives). TikTok + Instagram clips add another 24.8% - the "clip-first, watch-later" pattern that lags by 1-2 days on the time-to-watch histogram. Hulu\'s own recommended-for-you row (18.3%) does material work as an assist, not a primary spark. Retention is strong: 85.2% of Ep 1 openers return for Ep 2, and 48.6% of S1 openers roll into S2 within 30 days of premiere. The show behaves like an NFL-Sunday flywheel with a healthy on-service catalog tail, not a viral social pop.'
+        };
+
+
+        // ── Universal Basic Guys renderer. Single card, three-stage
+        //    funnel with a time-to-watch histogram and a season-carry
+        //    funnel. Follows the Neurotrophic template but uses "watch"
+        //    as the terminal stage instead of "purchase".
+        function _jiqUbgEsc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+        function _jiqUbgAbbrevM(v) {
+            if (v == null || isNaN(v)) return '-';
+            if (v >= 1) return v.toFixed(2).replace(/\.?0+$/, '') + 'M';
+            return (v * 1000).toFixed(0) + 'K';
+        }
+        function renderJourneyIqUbg(p) {
+            var body = document.getElementById('jiqUbgBody');
+            if (!body) return;
+            var data = (p && p.panel_basis && p.stages) ? p : _JIQ_UBG_DATA;
+            if (!data) { _jiqHideCard('jiqUbgCard'); return; }
+            _jiqShowCard('jiqUbgCard');
+
+            var meta = document.getElementById('jiqUbgMeta');
+            if (meta) {
+                meta.innerHTML = '<span style="padding:2px 8px; border-radius:99px; background:rgba(34,197,94,0.14); color:#86efac; font-weight:800; letter-spacing:0.08em;">TV \u00b7 HULU DISCOVERY</span>'
+                    + ' <span style="margin-left:0.4rem;">' + _jiqUbgEsc(data.panel_basis.short) + '</span>';
+            }
+
+            var t = data.topline || {};
+            var showMeta = data.show_meta || {};
+
+            // ── Topline tiles ─────────────────────────────────────────
+            var tiles = [
+                { label: 'UBG viewers on Hulu', value: _jiqUbgAbbrevM(t.ubg_viewers_hh_m) + ' HHs',
+                  sub: (t.pct_of_hulu_panel != null ? t.pct_of_hulu_panel.toFixed(1) + '% of matched Hulu panel' : ''),
+                  accent: '#22c55e' },
+                { label: 'Median discovery \u2192 first play', value: (t.median_days_discovery_to_play || 0) + ' days',
+                  sub: (t.same_day_watch_pct != null ? t.same_day_watch_pct.toFixed(1) + '% converted same-day' : ''),
+                  accent: '#38bdf8' },
+                { label: 'S1 completion', value: (t.s1_completion_pct != null ? t.s1_completion_pct.toFixed(1) + '%' : '-'),
+                  sub: 'HHs that watched all 10 S1 episodes',
+                  accent: '#a78bfa' },
+                { label: 'S1 \u2192 S2 carry', value: (t.s1_to_s2_carry_pct != null ? t.s1_to_s2_carry_pct.toFixed(1) + '%' : '-'),
+                  sub: 'S1 openers who returned for S2 within 30 days',
+                  accent: '#f59e0b' }
+            ];
+            var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.55rem; margin-bottom:0.85rem;">'
+                + tiles.map(function(x) {
+                    return '<div style="padding:0.65rem 0.8rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:3px solid ' + x.accent + ';">'
+                         +   '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800;">' + _jiqUbgEsc(x.label) + '</div>'
+                         +   '<div style="font-size:1.4rem; font-weight:900; margin-top:0.1rem; color:' + x.accent + ';">' + _jiqUbgEsc(x.value) + '</div>'
+                         +   '<div style="font-size:0.65rem; opacity:0.65; margin-top:0.1rem;">' + _jiqUbgEsc(x.sub) + '</div>'
+                         + '</div>';
+                }).join('')
+                + '</div>';
+
+            // ── Show meta chip strip ──────────────────────────────────
+            var chips = [
+                { label: 'Series',   value: showMeta.title || 'Universal Basic Guys' },
+                { label: 'Network',  value: showMeta.network || '' },
+                { label: 'S1 premiere', value: showMeta.s1_premiere || '' },
+                { label: 'S2 premiere', value: showMeta.s2_premiere || '' },
+                { label: 'Episodes', value: showMeta.episodes_available || '' }
+            ];
+            var chipHtml = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; margin-bottom:0.85rem;">'
+                + chips.filter(function(c) { return c.value; }).map(function(c) {
+                    return '<div style="padding:0.28rem 0.6rem; border-radius:5px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); font-size:0.7rem;">'
+                         +   '<span style="opacity:0.6; font-size:0.6rem; letter-spacing:0.06em; text-transform:uppercase; font-weight:800; margin-right:0.35rem;">' + _jiqUbgEsc(c.label) + '</span>'
+                         +   _jiqUbgEsc(c.value)
+                         + '</div>';
+                }).join('')
+                + '</div>';
+
+            // ── 3-stage funnel ────────────────────────────────────────
+            var stageColors = ['#38bdf8', '#a78bfa', '#22c55e'];
+            var stages = data.stages || [];
+            var stagesHtml = '<h4 style="margin:0.6rem 0 0.4rem; font-size:0.85rem;">Discovery \u2192 Consideration \u2192 First play on Hulu</h4>'
+                + '<div style="display:grid; grid-template-columns:1fr 20px 1fr 20px 1fr; gap:0.4rem; align-items:stretch; margin-bottom:0.9rem;">'
+                + stages.map(function(st, idx) {
+                    var color = stageColors[idx] || '#94a3b8';
+                    var tpHtml = (st.touchpoints || []).map(function(tp) {
+                        var w = Math.min(tp.pct * 1.9, 100);
+                        return '<div style="padding:3px 0; display:grid; grid-template-columns:120px 1fr 46px; gap:6px; align-items:center; font-size:0.7rem;">'
+                             +   '<div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + _jiqUbgEsc(tp.host) + '</div>'
+                             +   '<div style="height:5px; border-radius:3px; background:rgba(255,255,255,0.05);"><div style="height:100%; width:' + w.toFixed(1) + '%; background:' + color + '; border-radius:3px;"></div></div>'
+                             +   '<div style="text-align:right; font-weight:800; color:' + color + ';">' + tp.pct.toFixed(1) + '%</div>'
+                             +   '<div style="grid-column: 1 / span 3; font-size:0.62rem; opacity:0.55; margin-top:-1px; margin-left:2px;">' + _jiqUbgEsc(tp.label) + '</div>'
+                             + '</div>';
+                    }).join('');
+                    var reachChip = (st.reach_hh_m != null)
+                        ? '<div style="display:inline-block; padding:1px 8px; border-radius:99px; background:rgba(34,197,94,0.14); color:#86efac; font-size:0.6rem; font-weight:800; letter-spacing:0.06em; margin-right:4px;">' + _jiqUbgAbbrevM(st.reach_hh_m) + ' HHs</div>'
+                        : '';
+                    var daysChip = (st.median_days != null)
+                        ? '<div style="display:inline-block; padding:1px 8px; border-radius:99px; background:rgba(56,189,248,0.14); color:#7dd3fc; font-size:0.6rem; font-weight:800; letter-spacing:0.06em;">median ' + st.median_days + 'd</div>'
+                        : '';
+                    var placeholder = st.id === 'watch'
+                        ? '<div style="font-size:0.72rem; opacity:0.65; font-style:italic; margin-top:0.3rem; line-height:1.5;">Time-to-watch histogram and season funnel shown below.</div>'
+                        : '';
+                    return '<div style="padding:0.7rem 0.85rem; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid ' + color + '55; min-height:200px;">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.25rem;">'
+                         +     '<div><span style="font-size:1.3rem; margin-right:6px;">' + _jiqUbgEsc(st.emoji) + '</span><span style="font-weight:900; font-size:0.85rem; color:' + color + ';">' + _jiqUbgEsc(st.label) + '</span></div>'
+                         +   '</div>'
+                         +   reachChip + daysChip
+                         +   '<div style="font-size:0.66rem; opacity:0.65; font-style:italic; margin:0.35rem 0;">' + _jiqUbgEsc(st.sub) + '</div>'
+                         +   (tpHtml || placeholder)
+                         + '</div>'
+                         + (idx < stages.length - 1
+                             ? '<div style="display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:' + color + '; opacity:0.55;">\u2192</div>'
+                             : '');
+                }).join('')
+                + '</div>';
+
+            // ── Time-to-watch histogram ───────────────────────────────
+            var ttw = data.time_to_watch || [];
+            var ttwHtml = '';
+            if (ttw.length) {
+                var maxTtw = Math.max.apply(null, ttw.map(function(r) { return r.pct; }));
+                ttwHtml = '<h4 style="margin:0.6rem 0 0.4rem; font-size:0.85rem;">\u23f1\ufe0f Time from discovery to first play</h4>'
+                    + '<div style="padding:0.75rem 0.9rem; border-radius:8px; background:rgba(56,189,248,0.05); border:1px solid rgba(56,189,248,0.28); margin-bottom:0.85rem;">'
+                    + ttw.map(function(r) {
+                        var w = Math.min((r.pct / maxTtw) * 100, 100);
+                        return '<div style="padding:5px 0; display:grid; grid-template-columns:120px 1fr 52px; gap:8px; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05);">'
+                             +   '<div style="font-size:0.78rem; font-weight:800;">' + _jiqUbgEsc(r.bucket) + '</div>'
+                             +   '<div><div style="height:6px; border-radius:3px; background:rgba(255,255,255,0.05);"><div style="height:100%; width:' + w.toFixed(1) + '%; background:#38bdf8; border-radius:3px;"></div></div>'
+                             +     (r.note ? '<div style="font-size:0.62rem; opacity:0.6; margin-top:3px; font-style:italic;">' + _jiqUbgEsc(r.note) + '</div>' : '')
+                             +   '</div>'
+                             +   '<div style="text-align:right; font-weight:900; color:#7dd3fc;">' + r.pct.toFixed(1) + '%</div>'
+                             + '</div>';
+                    }).join('')
+                    + '</div>';
+            }
+
+            // ── Watch funnel (season retention) ───────────────────────
+            var wf = data.watch_funnel || [];
+            var wfHtml = '';
+            if (wf.length) {
+                wfHtml = '<h4 style="margin:0.6rem 0 0.4rem; font-size:0.85rem;">\ud83d\udcfa Continuation funnel \u00b7 S1 \u2192 S2 retention</h4>'
+                    + '<div style="padding:0.75rem 0.9rem; border-radius:8px; background:rgba(167,139,250,0.05); border:1px solid rgba(167,139,250,0.28); margin-bottom:0.85rem;">'
+                    + wf.map(function(r) {
+                        var w = Math.max(6, Math.min(r.cume_pct, 100));
+                        return '<div style="padding:5px 0; display:grid; grid-template-columns:200px 1fr 90px 60px; gap:10px; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05);">'
+                             +   '<div style="font-size:0.78rem; font-weight:800;">' + _jiqUbgEsc(r.label) + '</div>'
+                             +   '<div style="height:6px; border-radius:3px; background:rgba(255,255,255,0.05);"><div style="height:100%; width:' + w.toFixed(1) + '%; background:#a78bfa; border-radius:3px;"></div></div>'
+                             +   '<div style="text-align:right; font-size:0.75rem;"><span style="font-weight:900;">' + _jiqUbgAbbrevM(r.hh_m) + '</span> <span style="opacity:0.55; font-size:0.65rem;">HHs</span></div>'
+                             +   '<div style="text-align:right; font-weight:900; color:#c4b5fd;">' + r.cume_pct.toFixed(1) + '%</div>'
+                             + '</div>';
+                    }).join('')
+                    + '<div style="font-size:0.62rem; opacity:0.55; margin-top:0.35rem; font-style:italic;">Cumulative % = share of S1 Ep 1 openers still active at each step.</div>'
+                    + '</div>';
+            }
+
+            // ── Read line ─────────────────────────────────────────────
+            var readHtml = data.read
+                ? '<div style="margin-top:0.85rem; padding:0.7rem 0.9rem; border-radius:7px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);">'
+                + '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.25rem; color:#86efac;">Read</div>'
+                + '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqUbgEsc(data.read) + '</div>'
+                + '</div>'
+                : '';
+
+            body.innerHTML = tilesHtml + chipHtml + stagesHtml + ttwHtml + wfHtml + readHtml;
+        }
+        function _jiqShowCard(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = '';
+        }
+
+
+        // ══════════════════════════════════════════════════════════════
+        // AMC+ MIGRATION - stub data + no-op renderers.
+        //
+        // Placeholder while the full AMC+ Audience & Platform Migration
+        // analysis is being finalized. Keeps the demo pick from
+        // reference-erroring, and lets the story-mode branch run to
+        // completion (the cards stay hidden because the stub returns
+        // empty objects and the show-card guard in each renderer
+        // fails). Replace this whole block when the full renderer set
+        // is ready.
+        // ══════════════════════════════════════════════════════════════
+        var _JIQ_AMC_DATA = {
+            panel_basis: {
+                short: 'AMC+ migration \u00b7 build in progress',
+                detail: 'Full AMC+ Audience & Platform Migration analysis is under construction. This stub keeps the demo pick functional; cards remain hidden until the render set lands.'
+            },
+            amc_case: null, amc_flow: null, amc_shows: null,
+            amc_overlap: null, amc_signups: null,
+            amc_retention: null, amc_segments: null,
+            amc_read: null
+        };
+        function _jiqAmcNoop() { /* stub - renderer set forthcoming */ }
+        var renderJourneyIqAmcCase      = _jiqAmcNoop;
+        var renderJourneyIqAmcFlow      = _jiqAmcNoop;
+        var renderJourneyIqAmcShows     = _jiqAmcNoop;
+        var renderJourneyIqAmcOverlap   = _jiqAmcNoop;
+        var renderJourneyIqAmcSignups   = _jiqAmcNoop;
+        var renderJourneyIqAmcRetention = _jiqAmcNoop;
+        var renderJourneyIqAmcSegments  = _jiqAmcNoop;
+        var renderJourneyIqAmcRead      = _jiqAmcNoop;
+        function _jiqAmcActivateTab(_id) { /* stub */ }
+        function _jiqAmcHideTabBar() {
+            var bar = document.getElementById('jiqAmcTabBar');
+            if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+        }
+
         // OBSESSION → PEACOCK — Focus/NBCU windowing-evidence data
         //
         // Every figure in this deck is a Crosswalk panel-observed
@@ -80400,7 +80757,7 @@ https://www.instagram.com/p/..."></textarea>
             // Allow-list of story modes that get the "force-hide all
             // templated JIQ cards" treatment. Add more cases here
             // when new pitches get their own purpose-built dashboards.
-            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1 };
+            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1 };
             if (!FORCE_HIDE_MODES[storyMode]) return;
             for (var i = 0; i < _JIQ_STORY_MODE_HIDE_LIST.length; i++) {
                 var el = document.getElementById(_JIQ_STORY_MODE_HIDE_LIST[i]);
@@ -100885,7 +101242,7 @@ https://www.instagram.com/p/..."></textarea>
             });
 
             // Master categories allowed in profile selector (SVOD ACQUISITION, MUSIC, OTHER never shown)
-            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'FAST', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS'];
+            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS'];
             
             // Build HTML with master categories (show all in order, including TRENDS after SPORT, even when empty)
             let html = '';
@@ -126109,9 +126466,8 @@ https://www.instagram.com/p/..."></textarea>
             'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANK', 'BANKS', 'BANKING', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CPG', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FESTIVAL', 'FOOTWEAR', 'FRANCHISE', 'GROCERY', 'INTIMATES', 'JEWELRY', 'LOYALTY PROGRAMS', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'SECURITY', 'SWEEPSTAKES', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
             'CONTENT': ['GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'MOVIE', 'PODCAST', 'VERTICAL SHORTS', 'VERTICAL SHORT', 'VIDEO GAME', 'SERIES - AMAZON / MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - 20TH CENTURY', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - LIONSGATE TELEVISION', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
             'GEN POP': ['GEN POP'],
-            'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING PLATFORM', 'STREAMING VIDEO', 'STREAMING/PLATFORM', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
+            'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'FAST CHANNEL', 'FAST PLATFORM', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING PLATFORM', 'STREAMING VIDEO', 'STREAMING/PLATFORM', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
             'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'SPORTS TEAM', 'WNBA'],
-            'FAST': ['FAST PLATFORM', 'FAST CHANNEL'],
             'TRENDS': ['TRENDS', 'SHOPPING INTENT'],
             'TALENT': ['ACTOR', 'ATHLETE', 'COMEDIAN', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICIAN', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
             'SVOD ACQUISITION': ['SVOD ACQUISITION']  // SVOD files are always in their own master category
@@ -126124,7 +126480,6 @@ https://www.instagram.com/p/..."></textarea>
             'PLATFORMS': '📺',
             'SPORT': '⚽',
             'TALENT': '⭐',
-            'FAST': '📡',
             'TRENDS': '📈',
             'SVOD ACQUISITION': '📺'  // TV icon for SVOD
         };
@@ -126639,7 +126994,7 @@ https://www.instagram.com/p/..."></textarea>
                     const categorySelect = document.getElementById('categoryFilter');
                     if (categorySelect) {
                         let categoryOptions = '<option value="">All Categories</option>';
-                        const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'FAST', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+                        const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
                         const categoriesByMaster = {};
                         allCategories.forEach(cat => {
                             const master = getMasterCategory(cat);
@@ -126720,7 +127075,7 @@ https://www.instagram.com/p/..."></textarea>
                 const categorySelect = document.getElementById('categoryFilter');
                 if (categorySelect) {
                     let categoryOptions = '<option value="">All Categories</option>';
-                    const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'FAST', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+                    const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
                     const categoriesByMaster = {};
                     allCategories.forEach(cat => {
                         const master = getMasterCategory(cat);
@@ -127375,7 +127730,7 @@ https://www.instagram.com/p/..."></textarea>
             `;
 
             // Master categories allowed in profile selector (SVOD ACQUISITION, MUSIC, OTHER never shown)
-            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'FAST', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS'];
+            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS'];
             
             masterOrder.forEach(master => {
                 const subcats = byMasterCategory[master];
