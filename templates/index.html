@@ -100254,7 +100254,7 @@ https://www.instagram.com/p/..."></textarea>
             });
 
             // Master categories allowed in profile selector (SVOD ACQUISITION, MUSIC, OTHER never shown)
-            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS'];
+            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'FAST', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS'];
             
             // Build HTML with master categories (show all in order, including TRENDS after SPORT, even when empty)
             let html = '';
@@ -125480,6 +125480,7 @@ https://www.instagram.com/p/..."></textarea>
             'GEN POP': ['GEN POP'],
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING PLATFORM', 'STREAMING VIDEO', 'STREAMING/PLATFORM', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
             'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'SPORTS TEAM', 'WNBA'],
+            'FAST': ['FAST PLATFORMS', 'FAST CHANNELS'],
             'TRENDS': ['TRENDS', 'SHOPPING INTENT'],
             'TALENT': ['ACTOR', 'ATHLETE', 'COMEDIAN', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICIAN', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
             'SVOD ACQUISITION': ['SVOD ACQUISITION']  // SVOD files are always in their own master category
@@ -125492,6 +125493,7 @@ https://www.instagram.com/p/..."></textarea>
             'PLATFORMS': '📺',
             'SPORT': '⚽',
             'TALENT': '⭐',
+            'FAST': '📡',
             'TRENDS': '📈',
             'SVOD ACQUISITION': '📺'  // TV icon for SVOD
         };
@@ -126006,7 +126008,7 @@ https://www.instagram.com/p/..."></textarea>
                     const categorySelect = document.getElementById('categoryFilter');
                     if (categorySelect) {
                         let categoryOptions = '<option value="">All Categories</option>';
-                        const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+                        const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'FAST', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
                         const categoriesByMaster = {};
                         allCategories.forEach(cat => {
                             const master = getMasterCategory(cat);
@@ -126087,7 +126089,7 @@ https://www.instagram.com/p/..."></textarea>
                 const categorySelect = document.getElementById('categoryFilter');
                 if (categorySelect) {
                     let categoryOptions = '<option value="">All Categories</option>';
-                    const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
+                    const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'FAST', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS', 'SVOD ACQUISITION', 'MUSIC', 'OTHER'];
                     const categoriesByMaster = {};
                     allCategories.forEach(cat => {
                         const master = getMasterCategory(cat);
@@ -126742,7 +126744,7 @@ https://www.instagram.com/p/..."></textarea>
             `;
 
             // Master categories allowed in profile selector (SVOD ACQUISITION, MUSIC, OTHER never shown)
-            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS'];
+            const masterOrder = ['TALENT', 'CONTENT', 'PLATFORMS', 'FAST', 'BRAND', 'GEN POP', 'SPORT', 'TRENDS'];
             
             masterOrder.forEach(master => {
                 const subcats = byMasterCategory[master];
