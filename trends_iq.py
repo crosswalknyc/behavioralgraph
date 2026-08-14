@@ -4979,6 +4979,19 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
                 films = netflix_films[:20]
                 tv    = netflix_tv[:20]
 
+        # ESPN+ is a sports platform. Any item that lexically resembles
+        # a "film" (misclassified documentary, mislabeled 30-for-30
+        # short, etc.) still belongs in the TV rail alongside live
+        # sports and studio shows. Force the film split empty so the
+        # frontend collapses the platform panel to a single TV column
+        # rather than showing an ESPN+ "Film" header at all.
+        if slug == 'espnplus':
+            tv    = films + tv
+            films = []
+            for i, r in enumerate(tv, 1):
+                r['category_display'] = 'TV'
+                r['bucket_rank']      = i
+
         # Enrich Film + TV rows with an `image` field via iTunes Search.
         # Cached at module scope so subsequent renders (same title, same
         # kind) return instantly. First cold render of a new title

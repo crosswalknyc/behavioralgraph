@@ -37116,6 +37116,118 @@ https://www.instagram.com/p/..."></textarea>
                     <div id="jiqMicReadBody"></div>
                 </div>
 
+                <!-- ============================================================
+                     AMC+ AUDIENCE & PLATFORM MIGRATION ANALYSIS
+                     Client question: Are HBO Max viewers migrating to
+                     AMC+ to watch AMC+ originals whose older seasons
+                     were licensed to Max (Interview with the Vampire,
+                     Mayfair Witches, The Vampire Lestat)? Painted only
+                     when meta.story_mode === 'amc_migration_analysis'.
+                     ============================================================ -->
+
+                <div id="jiqAmcTabBar"
+                     style="display: none; margin-top: 1rem; padding: 0.55rem 0.65rem;
+                            background: linear-gradient(135deg, rgba(220,38,38,0.10) 0%, rgba(15,23,42,0.55) 100%);
+                            border: 1px solid rgba(220,38,38,0.32); border-radius: 8px;
+                            position: sticky; top: 0; z-index: 30;
+                            backdrop-filter: blur(6px);"></div>
+
+                <div class="card" id="jiqAmcCaseCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(220,38,38,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(220,38,38,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqAmcCaseCardTitle" style="margin: 0;">🧛 The case — does Max drive AMC+ signups?</h3>
+                        <div id="jiqAmcCaseCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqAmcCaseCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqAmcCaseCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqAmcFlowCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(220,38,38,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(220,38,38,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqAmcFlowCardTitle" style="margin: 0;">🔁 Migration flow — Max discovery → AMC+ signup</h3>
+                        <div id="jiqAmcFlowCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqAmcFlowCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqAmcFlowCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqAmcShowsCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(220,38,38,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(220,38,38,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqAmcShowsCardTitle" style="margin: 0;">🎬 Show-by-show migration — IWTV, Mayfair, Lestat</h3>
+                        <div id="jiqAmcShowsCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqAmcShowsCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqAmcShowsCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqAmcOverlapCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(220,38,38,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(220,38,38,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqAmcOverlapCardTitle" style="margin: 0;">🔮 Audience overlap — HBO Max ∩ AMC+</h3>
+                        <div id="jiqAmcOverlapCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqAmcOverlapCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqAmcOverlapCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqAmcSignupsCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(220,38,38,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(220,38,38,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqAmcSignupsCardTitle" style="margin: 0;">📈 Signup lift — premiere-day AMC+ acquisition spikes</h3>
+                        <div id="jiqAmcSignupsCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqAmcSignupsCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqAmcSignupsCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqAmcRetentionCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(220,38,38,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(220,38,38,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqAmcRetentionCardTitle" style="margin: 0;">🔜 Retention — do migrants stay or churn back?</h3>
+                        <div id="jiqAmcRetentionCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqAmcRetentionCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqAmcRetentionCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqAmcSegmentsCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(220,38,38,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(220,38,38,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqAmcSegmentsCardTitle" style="margin: 0;">👥 Migrant segments — who is actually moving</h3>
+                        <div id="jiqAmcSegmentsCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqAmcSegmentsCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqAmcSegmentsCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqAmcReadCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(220,38,38,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(220,38,38,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqAmcReadCardTitle" style="margin: 0;">🧭 The read — what this means for AMC and IP owners</h3>
+                        <div id="jiqAmcReadCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqAmcReadCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqAmcReadCardBody"></div>
+                </div>
+
                 <!-- ════════════════════════════════════════════════════════
                      OBSESSION → PEACOCK — Focus / NBCU windowing evidence
                      Answers the client submission:
@@ -58998,7 +59110,7 @@ https://www.instagram.com/p/..."></textarea>
                     // known category falls into the trailing "Other"
                     // group so unfamiliar runs are still findable.
                     var CATEGORIES = [
-                        { id: 'platforms',   label: '🏢 Platforms',         keywords: ['fandango', 'paramount', 'moviesphere', 'lionsgate', 'netflix'] },
+                        { id: 'platforms',   label: '🏢 Platforms',         keywords: ['fandango', 'paramount', 'moviesphere', 'lionsgate', 'netflix', 'amc+', 'amc plus', 'amc_plus', 'amc migration'] },
                         { id: 'tv',          label: '📺 TV Shows',          keywords: ['pop culture jeopardy', 'pop_culture_jeopardy', 'landman', 'mark rober', 'mark_rober'] },
                         { id: 'brands',      label: '🛍️ Brands',            keywords: ['abercrombie'] },
                         { id: 'movie',       label: '🎬 Movie',             keywords: ['obsession'] },
@@ -59034,7 +59146,8 @@ https://www.instagram.com/p/..."></textarea>
                     // next to their thematic siblings.
                     var DEMO_CARDS = {
                         platforms: [
-                            { value: '__demo_netflix_ad_sales__', label: 'Netflix' }
+                            { value: '__demo_netflix_ad_sales__', label: 'Netflix' },
+                            { value: '__demo_amc_migration__',    label: 'AMC+ Audience & Platform Migration' }
                         ],
                         tv: [
                             { value: '__demo_music_influence__',  label: 'Music-Driven Discovery' }
@@ -59317,6 +59430,42 @@ https://www.instagram.com/p/..."></textarea>
                             { label: 'Purchase',      value: 'Rent-to-buy ratio: 3.14:1 (biopic norm 2.10:1). Amazon Prime Video captured 41.2% of transactional volume; Apple TV 22.6%; Google Play 14.4%; YouTube 11.8%; other 10.0%.' },
                             { label: 'Timing',        value: 'PVOD sales curve peaked in week 2 at 384K units then dropped 68% by week 6. Comp biopics (Elvis, Bohemian Rhapsody, Rocketman) showed a shallower 41% drop-off. Compressed decay = weak long-tail, not weak launch.' },
                             { label: 'Recommendation', value: 'Three moves: (1) shift TVOD marketing $ to short-form social 10-14d ahead of window open; (2) lead with the $5.99 rent SKU in creative - buy conversion is anchored on rent penetration; (3) hold catalog for a bundled MJ documentary + soundtrack SVOD placement 90d out.' }
+                        ]
+                    }
+                };
+            }
+            if (key === '__demo_amc_migration__') {
+                return {
+                    success: true,
+                    data: {
+                        meta: {
+                            story_mode: 'amc_migration_analysis',
+                            target_name: 'AMC+ Migration',
+                            target_display: 'AMC+ Audience & Platform Migration',
+                            project_name: 'AMC+ Migration',
+                            customer_brand: 'AMC Networks',
+                            agency_lens: false,
+                            start_date: '2025-08-01',
+                            end_date: '2026-08-14',
+                            target_type: 'platform_migration_analysis',
+                            category: 'platforms'
+                        },
+                        amc_case:      _JIQ_AMC_DATA.amc_case,
+                        amc_flow:      _JIQ_AMC_DATA.amc_flow,
+                        amc_shows:     _JIQ_AMC_DATA.amc_shows,
+                        amc_overlap:   _JIQ_AMC_DATA.amc_overlap,
+                        amc_signups:   _JIQ_AMC_DATA.amc_signups,
+                        amc_retention: _JIQ_AMC_DATA.amc_retention,
+                        amc_segments:  _JIQ_AMC_DATA.amc_segments,
+                        amc_read:      _JIQ_AMC_DATA.amc_read,
+                        facts: [
+                            { label: 'Headline',      value: 'AMC\u2019s windowed-release strategy is working. 625K U.S. HHs subscribed to AMC+ within 60 days of first watching an AMC+ original on HBO Max in the Aug 2025 - Aug 2026 observation window. 340K attributable to Interview with the Vampire, 220K to The Vampire Lestat, 185K to Mayfair Witches (with cohort overlap deduped).' },
+                            { label: 'Migration flow',value: 'Panel-observed Max \u2192 AMC+ funnel: 4.20M unique HHs streamed \u22651 AMC+ original on Max in the window \u2192 2.15M finished a season on Max \u2192 1.24M reached an AMC+ paywall / awareness surface within 30d \u2192 625K signed up for AMC+ within 60d. Conversion from finished-Max-season \u2192 signed-up-for-AMC+ = 29.1%.' },
+                            { label: 'Overlap',       value: 'HBO Max: 50.0M US HHs. AMC+: 11.8M US HHs. Both: 4.5M HHs (38.1% of AMC+ base carries a Max sub; 9.0% of Max base carries an AMC+ sub). Of the 4.5M co-sub cohort, 625K (13.9%) added AMC+ after their first Max play of an AMC+ original.' },
+                            { label: 'Signup lift',   value: 'Premiere-week AMC+ signups from Max HHs, indexed to trailing-8-week baseline: IWTV S3 premiere +7.0x (May 26, 2026), Vampire Lestat S1 premiere +5.1x (Feb 9, 2026), Mayfair Witches S2 premiere +3.8x (Oct 20, 2025). IWTV S3 lift is 40% higher than S2 (Jul 2024) - brand awareness is compounding.' },
+                            { label: 'Retention',     value: 'Migrant cohort retention runs below baseline: D30 87.4% vs baseline 90.2%; D90 58.3% vs 66.1%; D180 41.2% vs 51.3%; D365 27.6% vs 33.8%. Migrants churn ~1.6x faster than organic AMC+ subs. Show-driven signups behave promotionally, not permanently.' },
+                            { label: 'Segments',      value: 'Migrant profile skews 25-44 (60.3%), 62.4% female, mid-market income ($50-99K = 47.2%), heavy gothic / vampire / dark-romance content-affinity relative to Max-only base. Anne Rice reader signal (Kindle / Goodreads) present in 34% of migrant HHs vs 8% of Max-only base.' },
+                            { label: 'Recommendation', value: 'Three moves: (1) formalize the Max window as an acquisition channel with per-episode CPA targets ($8-14 per signup); (2) sequence adjacent catalog (additional Anne Rice IP, Immortal Universe deep cuts) into AMC+ post-migration to lift D90/D180 retention; (3) time PR / paid social 10-14d before each premiere to amplify the +5-7x signup spike.' }
                         ]
                     }
                 };
@@ -61030,6 +61179,14 @@ https://www.instagram.com/p/..."></textarea>
             _jiqHideCard('jiqMicAwarenessCard');
             _jiqHideCard('jiqMicPurchaseCard');
             _jiqHideCard('jiqMicReadCard');
+            _jiqHideCard('jiqAmcCaseCard');
+            _jiqHideCard('jiqAmcFlowCard');
+            _jiqHideCard('jiqAmcShowsCard');
+            _jiqHideCard('jiqAmcOverlapCard');
+            _jiqHideCard('jiqAmcSignupsCard');
+            _jiqHideCard('jiqAmcRetentionCard');
+            _jiqHideCard('jiqAmcSegmentsCard');
+            _jiqHideCard('jiqAmcReadCard');
             _jiqHideCard('jiqObpSetupCard');
             _jiqHideCard('jiqObpCaseCard');
             _jiqHideCard('jiqObpWindowCard');
@@ -61049,6 +61206,7 @@ https://www.instagram.com/p/..."></textarea>
             var _isObsessionPeacockStory = (_storyMode === 'obsession_peacock_diagnostic');
             var _isMusicStory            = (_storyMode === 'music_influence');
             var _isNeuroStory            = (_storyMode === 'neurotropic_segment');
+            var _isAmcStory              = (_storyMode === 'amc_migration_analysis');
             if (_isNetflixStory) {
                 if (typeof renderJourneyIqNflxPreSignup === 'function') {
                     renderJourneyIqNflxPreSignup(_pickClickstreamBlock('nflx_pre_signup'));
@@ -61133,6 +61291,25 @@ https://www.instagram.com/p/..."></textarea>
                 }
             } else {
                 if (typeof _jiqMicHideTabBar === 'function') _jiqMicHideTabBar();
+            }
+
+            // AMC+ Audience & Platform Migration branch. Answers the client
+            // question: Are HBO Max viewers migrating to AMC+ to watch AMC+
+            // originals whose earlier seasons were licensed to Max?
+            if (_isAmcStory) {
+                if (typeof renderJourneyIqAmcCase      === 'function') renderJourneyIqAmcCase(_pickClickstreamBlock('amc_case'));
+                if (typeof renderJourneyIqAmcFlow      === 'function') renderJourneyIqAmcFlow(_pickClickstreamBlock('amc_flow'));
+                if (typeof renderJourneyIqAmcShows     === 'function') renderJourneyIqAmcShows(_pickClickstreamBlock('amc_shows'));
+                if (typeof renderJourneyIqAmcOverlap   === 'function') renderJourneyIqAmcOverlap(_pickClickstreamBlock('amc_overlap'));
+                if (typeof renderJourneyIqAmcSignups   === 'function') renderJourneyIqAmcSignups(_pickClickstreamBlock('amc_signups'));
+                if (typeof renderJourneyIqAmcRetention === 'function') renderJourneyIqAmcRetention(_pickClickstreamBlock('amc_retention'));
+                if (typeof renderJourneyIqAmcSegments  === 'function') renderJourneyIqAmcSegments(_pickClickstreamBlock('amc_segments'));
+                if (typeof renderJourneyIqAmcRead      === 'function') renderJourneyIqAmcRead(_pickClickstreamBlock('amc_read'));
+                if (typeof _jiqAmcActivateTab === 'function') {
+                    _jiqAmcActivateTab(_jiqAmcActiveTab || 'case');
+                }
+            } else {
+                if (typeof _jiqAmcHideTabBar === 'function') _jiqAmcHideTabBar();
             }
 
             // Obsession → Peacock windowing-evidence branch. Answers the
@@ -80223,7 +80400,7 @@ https://www.instagram.com/p/..."></textarea>
             // Allow-list of story modes that get the "force-hide all
             // templated JIQ cards" treatment. Add more cases here
             // when new pitches get their own purpose-built dashboards.
-            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1 };
+            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1 };
             if (!FORCE_HIDE_MODES[storyMode]) return;
             for (var i = 0; i < _JIQ_STORY_MODE_HIDE_LIST.length; i++) {
                 var el = document.getElementById(_JIQ_STORY_MODE_HIDE_LIST[i]);
