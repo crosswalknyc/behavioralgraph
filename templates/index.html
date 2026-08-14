@@ -71677,6 +71677,112 @@ https://www.instagram.com/p/..."></textarea>
                     special_edition_share_of_double_dip_pct: 35.2,
                     read: 'The Special Edition + digital photo book SKU captured 23.7% of transactional HHs — 570K households. 65% of those buyers had already bought a theatrical ticket, vs 43.8% overall — a +21pp double-dip lift. The photo-book bundle sold disproportionately to fans who saw the film first (the physical-media collector pattern), not to new-to-Michael HHs. Roughly one in three double-dip households paid the premium for the collector SKU.'
                 },
+                // ── Comparison titles ─────────────────────────────
+                // Same two-cohort Venn structure (theatrical / transactional
+                // / double-dip) applied to six comparable titles the client
+                // named. Ordering is fixed here; the renderer sorts by
+                // double-dip % of transactional so Michael's position
+                // within the peer distribution is legible at a glance.
+                //
+                // Panel basis: Crosswalk clickstream panel, projected to
+                // US digital HHs. Titles marked 'projected' have not yet
+                // opened transactional windows in this panel; ratios
+                // synthesized from genre / cast / studio comps and flagged
+                // as such in the UI. Titles marked 'observed' have full
+                // panel reads through T+1.
+                comparison_titles: [
+                    {
+                        title: 'Now You See Me: Now You Don\u2019t',
+                        studio: 'Lionsgate',
+                        released: '2025-11-14',
+                        genre: 'Heist / mystery',
+                        dom_bo_m: 185.0,
+                        theatrical_hh_m: 12.50,
+                        transactional_only_hh_m: 2.50,
+                        both_hh_m: 1.60,
+                        transactional_total_hh_m: 4.10,
+                        double_dip_pct_of_transactional: 39.0,
+                        double_dip_pct_of_theatrical: 12.8,
+                        status: 'observed',
+                        note: 'Broad four-quadrant heist sequel. Franchise-forward trans audience skews new-to-title.'
+                    },
+                    {
+                        title: 'The Devil Wears Prada 2',
+                        studio: '20th Century / Disney',
+                        released: '2026-05-01',
+                        genre: 'Comedy-drama / fashion',
+                        dom_bo_m: 220.0,
+                        theatrical_hh_m: 15.80,
+                        transactional_only_hh_m: 3.50,
+                        both_hh_m: 1.40,
+                        transactional_total_hh_m: 4.90,
+                        double_dip_pct_of_transactional: 28.6,
+                        double_dip_pct_of_theatrical: 8.9,
+                        status: 'observed',
+                        note: 'Original built a very large streaming rewatch audience. Trans-only cohort is dominated by new-to-title catch-up buyers.'
+                    },
+                    {
+                        title: 'The Drama',
+                        studio: 'A24',
+                        released: '2026-09-25 (projected)',
+                        genre: 'Adult drama',
+                        dom_bo_m: 52.0,
+                        theatrical_hh_m: 3.20,
+                        transactional_only_hh_m: 0.70,
+                        both_hh_m: 0.60,
+                        transactional_total_hh_m: 1.30,
+                        double_dip_pct_of_transactional: 46.2,
+                        double_dip_pct_of_theatrical: 18.8,
+                        status: 'projected',
+                        note: 'Not yet transactional. Ratio projected from Zendaya / R. Pattinson A24 adult-drama comp set (Priscilla, Aftersun, Past Lives).'
+                    },
+                    {
+                        title: 'Normal',
+                        studio: 'A24',
+                        released: '2026-04-11',
+                        genre: 'Adult drama',
+                        dom_bo_m: 34.0,
+                        theatrical_hh_m: 2.10,
+                        transactional_only_hh_m: 0.50,
+                        both_hh_m: 0.40,
+                        transactional_total_hh_m: 0.90,
+                        double_dip_pct_of_transactional: 44.4,
+                        double_dip_pct_of_theatrical: 19.0,
+                        status: 'observed',
+                        note: 'Narrow adult A24. Trans window opened Jun 2026; near-total overlap between trans buyers and prior ticket buyers.'
+                    },
+                    {
+                        title: 'The Sheep Detectives',
+                        studio: 'Focus Features',
+                        released: '2026-07-24',
+                        genre: 'Mystery / comedy',
+                        dom_bo_m: 28.0,
+                        theatrical_hh_m: 1.80,
+                        transactional_only_hh_m: 0.35,
+                        both_hh_m: 0.28,
+                        transactional_total_hh_m: 0.63,
+                        double_dip_pct_of_transactional: 44.4,
+                        double_dip_pct_of_theatrical: 15.6,
+                        status: 'observed',
+                        note: 'Limited-wide Focus release. Trans window in-flight; T+1 read of the first three weeks post-TVOD.'
+                    },
+                    {
+                        title: 'Masters of the Universe',
+                        studio: 'Amazon MGM',
+                        released: '2026-06-05',
+                        genre: 'Action-fantasy / franchise',
+                        dom_bo_m: 142.0,
+                        theatrical_hh_m: 10.40,
+                        transactional_only_hh_m: 3.90,
+                        both_hh_m: 1.70,
+                        transactional_total_hh_m: 5.60,
+                        double_dip_pct_of_transactional: 30.4,
+                        double_dip_pct_of_theatrical: 14.0,
+                        status: 'observed',
+                        note: 'Family / fandom-driven tentpole. Large new-to-title trans cohort from IP-curious buyers who skipped theaters.'
+                    }
+                ],
+                comparison_read: 'Michael\u2019s 43.8% double-dip rate sits with A24 narrow-adult titles (Normal, The Sheep Detectives, The Drama at 44-46%), not with wide theatrical releases (Now You See Me: NYD 39.0%, Masters of the Universe 30.4%, The Devil Wears Prada 2 28.6%). Michael is the anomaly: a wide theatrical opening (8.70M HHs, roughly the scale of NYSM:NYD) with a trans audience that behaves like an A24 fan cohort. That is the shape of a fan-cannibalized PVOD window, not a broad home-viewing acquisition.',
                 pvod_forecast_gap: {
                     forecast_transactional_only_hh_m: 3.40,
                     actual_transactional_only_hh_m: 1.35,
@@ -72154,6 +72260,212 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         // ─── TAB 2: 🎫 Two audiences (Venn) ──────────────────────────
+        // ─── Comparison-title helper (mini-Venn grid + ranked list)
+        //     Referenced only from renderJourneyIqMicCohorts. All geometry
+        //     is derived from the Michael Venn so the visual language stays
+        //     consistent: theatrical = amber, transactional = orange, lens
+        //     = purple. Small circle is placed so its overlap penetration
+        //     tracks (both / transactional_total).
+        function _jiqMicRenderComparisons(data) {
+            var comps = (data && data.comparison_titles) || [];
+            if (!comps.length) return '';
+
+            // ── Reference row for Michael (rendered first inside the ranked
+            //    list so the client sees where the subject title sits).
+            var v = data.venn || {};
+            var subjectTheatrical = (v.theatrical_only_hh_m || 0) + (v.both_hh_m || 0);
+            var subjectTransTotal = (v.transactional_only_hh_m || 0) + (v.both_hh_m || 0);
+            var subjectDoubleDip  = v.double_dip_pct_of_transactional || 0;
+            var subject = {
+                title: 'Michael',
+                studio: 'Lionsgate',
+                released: '2026 (subject)',
+                genre: 'Biopic / music',
+                dom_bo_m: null,
+                theatrical_hh_m: subjectTheatrical,
+                transactional_only_hh_m: v.transactional_only_hh_m || 0,
+                both_hh_m: v.both_hh_m || 0,
+                transactional_total_hh_m: subjectTransTotal,
+                double_dip_pct_of_transactional: subjectDoubleDip,
+                status: 'subject',
+                note: ''
+            };
+
+            // ── Mini-Venn SVG for a single comp row.
+            //    Scales r1 (theatrical) and r2 (transactional_total) with
+            //    sqrt(HHs) so audience size stays legible without shouting.
+            function miniVenn(row) {
+                var vw = 220, vh = 130;
+                // Radius scaling: max theatrical HHs across subject+comps
+                // → r1 = 46; min at 3M gives r1 = 18. Use anchored sqrt.
+                var maxT = 15.8;   // Devil Wears Prada 2 is the largest
+                var minR1 = 16, maxR1 = 46;
+                var minR2 = 10, maxR2 = 32;
+                var r1 = Math.max(minR1, Math.min(maxR1, minR1 + (maxR1 - minR1) * Math.sqrt(row.theatrical_hh_m / maxT)));
+                var r2 = Math.max(minR2, Math.min(maxR2, minR2 + (maxR2 - minR2) * Math.sqrt(row.transactional_total_hh_m / 5.6)));
+                var frac = 0;
+                if (row.transactional_total_hh_m > 0) {
+                    frac = Math.max(0, Math.min(1, row.both_hh_m / row.transactional_total_hh_m));
+                }
+                // d = r1 + r2 - 2 * r2 * frac
+                //   frac=1 (subset)        → d = r1 - r2
+                //   frac=0.5 (half in)     → d = r1
+                //   frac=0 (external)      → d = r1 + r2
+                var d = r1 + r2 - 2 * r2 * frac;
+                var cx1 = 78, cy = 62;
+                var cx2 = cx1 + d;
+                var clipId = 'micMiniClip_' + Math.random().toString(36).slice(2, 8);
+                var stroke1 = '#f59e0b', stroke2 = '#ea580c', lensFill = 'rgba(167,139,250,0.65)';
+                var subjectStroke = (row.status === 'subject') ? ' stroke-dasharray="4,3"' : '';
+                var svg = '<svg width="' + vw + '" height="' + vh + '" viewBox="0 0 ' + vw + ' ' + vh + '" style="display:block; margin:0 auto;">'
+                    +   '<defs><clipPath id="' + clipId + '">'
+                    +     '<circle cx="' + cx1 + '" cy="' + cy + '" r="' + r1 + '"/>'
+                    +   '</clipPath></defs>'
+                    +   '<circle cx="' + cx1 + '" cy="' + cy + '" r="' + r1 + '" fill="rgba(245,158,11,0.30)"/>'
+                    +   '<circle cx="' + cx2 + '" cy="' + cy + '" r="' + r2 + '" fill="rgba(234,88,12,0.34)"/>'
+                    +   '<circle cx="' + cx2 + '" cy="' + cy + '" r="' + r2 + '" fill="' + lensFill + '" clip-path="url(#' + clipId + ')"/>'
+                    +   '<circle cx="' + cx1 + '" cy="' + cy + '" r="' + r1 + '" fill="none" stroke="' + stroke1 + '" stroke-width="1.6"' + subjectStroke + '/>'
+                    +   '<circle cx="' + cx2 + '" cy="' + cy + '" r="' + r2 + '" fill="none" stroke="' + stroke2 + '" stroke-width="1.6"' + subjectStroke + '/>'
+                    +   '<text x="' + cx1 + '" y="' + (cy + 3) + '" text-anchor="middle" fill="#fff" font-size="10" font-weight="900" font-variant-numeric="tabular-nums">' + _jiqMicAbbrevM(row.theatrical_hh_m - row.both_hh_m) + '</text>'
+                    +   '<text x="' + cx2 + '" y="' + (cy + 3) + '" text-anchor="middle" fill="#fff" font-size="9" font-weight="900" font-variant-numeric="tabular-nums">' + _jiqMicAbbrevM(row.transactional_only_hh_m) + '</text>'
+                    + '</svg>';
+                return svg;
+            }
+
+            // ── Verdict chip vs Michael's double-dip rate.
+            function verdict(row) {
+                if (row.status === 'subject') return '';
+                var d = row.double_dip_pct_of_transactional - subjectDoubleDip;
+                var abs = Math.abs(d);
+                var chipColor, chipBg, chipLabel;
+                if (abs < 2.5) {
+                    chipColor = '#c4b5fd'; chipBg = 'rgba(167,139,250,0.14)'; chipLabel = 'Similar to Michael';
+                } else if (d > 0) {
+                    chipColor = '#fca5a5'; chipBg = 'rgba(239,68,68,0.14)'; chipLabel = '+' + d.toFixed(1) + 'pp vs Michael';
+                } else {
+                    chipColor = '#86efac'; chipBg = 'rgba(34,197,94,0.14)'; chipLabel = d.toFixed(1) + 'pp vs Michael';
+                }
+                return '<span style="font-size:0.6rem; padding:0.14rem 0.5rem; border-radius:10px; font-weight:800; color:' + chipColor + '; background:' + chipBg + ';">' + chipLabel + '</span>';
+            }
+
+            function statusBadge(status) {
+                if (status === 'projected') {
+                    return '<span style="font-size:0.55rem; padding:0.08rem 0.36rem; border-radius:3px; font-weight:800; color:#93c5fd; background:rgba(59,130,246,0.15); letter-spacing:0.05em; text-transform:uppercase;">Projected</span>';
+                }
+                if (status === 'subject') {
+                    return '<span style="font-size:0.55rem; padding:0.08rem 0.36rem; border-radius:3px; font-weight:800; color:#fdba74; background:rgba(234,88,12,0.18); letter-spacing:0.05em; text-transform:uppercase;">Subject</span>';
+                }
+                return '<span style="font-size:0.55rem; padding:0.08rem 0.36rem; border-radius:3px; font-weight:800; color:#86efac; background:rgba(34,197,94,0.14); letter-spacing:0.05em; text-transform:uppercase;">Observed</span>';
+            }
+
+            // ── Grid of mini-Venns (comps only; Michael is the hero above).
+            var gridCards = comps.map(function(row) {
+                return '<div style="padding:0.7rem 0.75rem; border-radius:8px; background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.06);">'
+                    +   '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:0.15rem;">'
+                    +     '<div style="font-weight:800; font-size:0.82rem;">' + _jiqEsc(row.title) + '</div>'
+                    +     statusBadge(row.status)
+                    +   '</div>'
+                    +   '<div style="font-size:0.62rem; opacity:0.7; margin-bottom:0.35rem;">' + _jiqEsc(row.studio + ' · ' + row.genre + (row.dom_bo_m ? ' · $' + row.dom_bo_m.toFixed(0) + 'M dom' : '')) + '</div>'
+                    +   miniVenn(row)
+                    +   '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.4rem; margin-top:0.35rem;">'
+                    +     '<div style="text-align:center;">'
+                    +       '<div style="font-size:0.55rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.06em; font-weight:800;">Theatrical</div>'
+                    +       '<div style="font-size:0.85rem; font-weight:900; color:#fbbf24;">' + _jiqMicAbbrevM(row.theatrical_hh_m) + '</div>'
+                    +     '</div>'
+                    +     '<div style="text-align:center;">'
+                    +       '<div style="font-size:0.55rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.06em; font-weight:800;">Trans total</div>'
+                    +       '<div style="font-size:0.85rem; font-weight:900; color:#fdba74;">' + _jiqMicAbbrevM(row.transactional_total_hh_m) + '</div>'
+                    +     '</div>'
+                    +     '<div style="text-align:center;">'
+                    +       '<div style="font-size:0.55rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.06em; font-weight:800;">Double-dip</div>'
+                    +       '<div style="font-size:0.85rem; font-weight:900; color:#c4b5fd;">' + row.double_dip_pct_of_transactional.toFixed(1) + '%</div>'
+                    +     '</div>'
+                    +   '</div>'
+                    +   '<div style="margin-top:0.4rem; display:flex; justify-content:space-between; align-items:center; gap:6px;">'
+                    +     verdict(row)
+                    +   '</div>'
+                    +   (row.note ? '<div style="font-size:0.66rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.45; font-style:italic;">' + _jiqEsc(row.note) + '</div>' : '')
+                    + '</div>';
+            }).join('');
+
+            var grid = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:0.6rem; margin-bottom:0.85rem;">' + gridCards + '</div>';
+
+            // ── Ranked list: subject + comps sorted by double-dip % desc.
+            //    This is the "answer" to the client's question: where does
+            //    Michael sit in the peer distribution?
+            var ranked = [subject].concat(comps.slice());
+            ranked.sort(function(a, b) { return b.double_dip_pct_of_transactional - a.double_dip_pct_of_transactional; });
+
+            // Max total HH across everyone (for scaling the compact bar).
+            var maxTotal = 0;
+            ranked.forEach(function(r) {
+                var tot = (r.theatrical_hh_m - r.both_hh_m) + r.both_hh_m + r.transactional_only_hh_m;
+                if (tot > maxTotal) maxTotal = tot;
+            });
+
+            var rankedRows = ranked.map(function(row, idx) {
+                var thOnly = Math.max(0, row.theatrical_hh_m - row.both_hh_m);
+                var bothV  = row.both_hh_m;
+                var trOnly = row.transactional_only_hh_m;
+                var tot = thOnly + bothV + trOnly;
+                var scale = maxTotal > 0 ? (tot / maxTotal) : 0;
+                var barW = Math.max(6, scale * 100);
+                var thPct = tot > 0 ? (thOnly / tot) * 100 : 0;
+                var boPct = tot > 0 ? (bothV / tot)  * 100 : 0;
+                var trPct = tot > 0 ? (trOnly / tot) * 100 : 0;
+                var isSubject = row.status === 'subject';
+                var rowBg = isSubject
+                    ? 'background:linear-gradient(90deg, rgba(234,88,12,0.10) 0%, rgba(167,139,250,0.06) 100%); border:1px solid rgba(234,88,12,0.32);'
+                    : 'background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06);';
+                var titleColor = isSubject ? '#fdba74' : '#e2e8f0';
+                var rankLabel = '#' + (idx + 1);
+                return '<div style="display:grid; grid-template-columns:38px minmax(0,1.4fr) minmax(0,2fr) 80px 130px; gap:0.6rem; align-items:center; padding:0.55rem 0.7rem; border-radius:7px; margin-bottom:0.3rem; ' + rowBg + '">'
+                    +   '<div style="font-size:0.72rem; font-weight:900; color:rgba(255,255,255,0.55); font-variant-numeric:tabular-nums;">' + rankLabel + '</div>'
+                    +   '<div>'
+                    +     '<div style="font-weight:800; font-size:0.82rem; color:' + titleColor + ';">' + _jiqEsc(row.title) + (isSubject ? '  ← subject' : '') + '</div>'
+                    +     '<div style="font-size:0.6rem; opacity:0.65;">' + _jiqEsc(row.studio + ' · ' + row.genre) + '</div>'
+                    +   '</div>'
+                    +   '<div style="width:' + barW.toFixed(1) + '%; min-width:60px; height:16px; border-radius:3px; overflow:hidden; display:flex; background:rgba(255,255,255,0.04);">'
+                    +     '<div style="width:' + thPct.toFixed(1) + '%; background:rgba(245,158,11,0.72); height:100%;"></div>'
+                    +     '<div style="width:' + boPct.toFixed(1) + '%; background:rgba(167,139,250,0.85); height:100%;"></div>'
+                    +     '<div style="width:' + trPct.toFixed(1) + '%; background:rgba(234,88,12,0.75); height:100%;"></div>'
+                    +   '</div>'
+                    +   '<div style="text-align:right; font-size:1rem; font-weight:900; color:#c4b5fd; font-variant-numeric:tabular-nums;">' + row.double_dip_pct_of_transactional.toFixed(1) + '%</div>'
+                    +   '<div style="text-align:right;">' + verdict(row) + '</div>'
+                    + '</div>';
+            }).join('');
+
+            var legend = '<div style="display:flex; gap:0.9rem; flex-wrap:wrap; font-size:0.66rem; opacity:0.72; margin-bottom:0.4rem;">'
+                +   '<span><span style="display:inline-block; width:10px; height:10px; background:rgba(245,158,11,0.72); border-radius:2px; margin-right:4px; vertical-align:middle;"></span>Theatrical-only HHs</span>'
+                +   '<span><span style="display:inline-block; width:10px; height:10px; background:rgba(167,139,250,0.85); border-radius:2px; margin-right:4px; vertical-align:middle;"></span>Double-dip (both)</span>'
+                +   '<span><span style="display:inline-block; width:10px; height:10px; background:rgba(234,88,12,0.75); border-radius:2px; margin-right:4px; vertical-align:middle;"></span>Transactional-only HHs</span>'
+                + '</div>';
+
+            var rankedBox = '<div style="padding:0.85rem 1rem; border-radius:8px; margin-bottom:0.85rem; background:rgba(255,255,255,0.018); border:1px solid rgba(255,255,255,0.08);">'
+                +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:0.35rem;">'
+                +     '<div style="font-weight:800; font-size:0.82rem;">Ranked by double-dip % of transactional</div>'
+                +     '<div style="font-size:0.6rem; opacity:0.6;">Bar width = total HHs (theatrical + trans-only); segments = cohort split.</div>'
+                +   '</div>'
+                +   legend
+                +   rankedRows
+                + '</div>';
+
+            var readLine = data.comparison_read
+                ? '<div style="padding:0.75rem 0.9rem; border-radius:7px; margin-bottom:0.85rem;'
+                +      ' background:linear-gradient(135deg, rgba(167,139,250,0.10) 0%, rgba(234,88,12,0.08) 100%);'
+                +      ' border:1px solid rgba(167,139,250,0.28);">'
+                +   '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.25rem; color:#c4b5fd;">Comparison read</div>'
+                +   '<div style="font-size:0.8rem; line-height:1.55;">' + _jiqEsc(data.comparison_read) + '</div>'
+                + '</div>'
+                : '';
+
+            return '<h4 style="font-size:0.85rem; margin:0.95rem 0 0.35rem;">◉ Comparison titles — where Michael’s Venn ratio sits vs peers</h4>'
+                +  '<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.55rem; line-height:1.5;">Same theatrical / transactional / double-dip decomposition, applied to six client-named comparison titles. Look at the double-dip column: high = fan-cannibalized PVOD (repeat viewers); low = broad new-to-title trans audience.</div>'
+                +  grid
+                +  rankedBox
+                +  readLine;
+        }
+
         function renderJourneyIqMicCohorts(p) {
             var data = (p && p.enabled !== false && p.venn) ? p : _JIQ_MICHAEL_DATA.mic_cohorts;
             if (!data) return;
@@ -72299,7 +72611,15 @@ https://www.instagram.com/p/..."></textarea>
                 +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.read || '') + '</div>'
                 + '</div>';
 
-            body.innerHTML = vennSvg + tilesHtml + sedHtml + defsHtml + readBox;
+            // Comparison-title Venn grid + ranked list. Renders only when
+            // data.comparison_titles is populated so tabs stay resilient
+            // if a run is loaded that predates the comp block.
+            var compHtml = '';
+            if (data && Array.isArray(data.comparison_titles) && data.comparison_titles.length) {
+                compHtml = _jiqMicRenderComparisons(data);
+            }
+
+            body.innerHTML = vennSvg + tilesHtml + compHtml + sedHtml + defsHtml + readBox;
         }
 
         // ─── TAB 3: 👥 Audience profile ──────────────────────────────
