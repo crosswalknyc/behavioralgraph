@@ -927,35 +927,54 @@ def prewarm_common_views() -> dict:
     click after a scrape is instant. Returns a summary dict for
     logging.
 
-    Common queries:
+    Common queries (all cover the 5 platforms x N days worth of S3
+    snapshot reads, which is the expensive part - warming them up
+    front means every user click is a cached lookup):
     - Peacock default (window_days=7, sort=view_28d, cut=all)
-    - Competitors default (window_days=7, top_n=20, all genres)
-    - Competitors 30-day (window_days=30, top_n=20, all genres)
-    - All-platforms default (the landing tab: window_days=7, top_n=20)
+    - Competitors: 7d, 30d, 60d, 90d, YTD (top_n=20, all genres)
+    - All-platforms: 7d, 30d, 60d, 90d, YTD (top_n=20, all genres)
+
+    YTD is resolved to (Jan 1 -> today) so the same S3 read path used
+    by an actual YTD dashboard request gets primed. Without this, a
+    cold-cache YTD click can walk ~1,000 S3 keys serially and hit
+    Render's gunicorn worker timeout.
     """
-    warmed = {'peacock': False, 'comp_7d': False, 'comp_30d': False,
-              'all_7d': False, 'errors': []}
-    try:
-        compute_view({'sort': 'view_28d', 'window_days': 7,
-                       'audience_cut': 'all'})
-        warmed['peacock'] = True
-    except Exception as e:
-        warmed['errors'].append(f'peacock: {e}')
-    try:
-        compute_competitors_view({'window_days': 7, 'top_n': 20})
-        warmed['comp_7d'] = True
-    except Exception as e:
-        warmed['errors'].append(f'comp_7d: {e}')
-    try:
-        compute_competitors_view({'window_days': 30, 'top_n': 20})
-        warmed['comp_30d'] = True
-    except Exception as e:
-        warmed['errors'].append(f'comp_30d: {e}')
-    try:
-        compute_all_platforms_view({'window_days': 7, 'top_n': 20})
-        warmed['all_7d'] = True
-    except Exception as e:
-        warmed['errors'].append(f'all_7d: {e}')
+    from datetime import date as _d
+    _today = _d.today()
+    _jan1  = _d(_today.year, 1, 1)
+    _ytd_range = {'start_date': _jan1.isoformat(),
+                  'end_date':   _today.isoformat()}
+
+    warmed: dict = {'errors': []}
+
+    def _try(key: str, fn):
+        try:
+            fn()
+            warmed[key] = True
+        except Exception as _e:
+            warmed[key] = False
+            warmed['errors'].append(f'{key}: {_e}')
+
+    # Peacock default (its own tab uses 28d window by design, but the
+    # cross-platform view uses 7d)
+    _try('peacock', lambda: compute_view({
+        'sort': 'view_28d', 'window_days': 7, 'audience_cut': 'all'}))
+
+    # Competitor views at every preset window the dashboard exposes
+    for wd in (7, 14, 30, 60, 90):
+        _try(f'comp_{wd}d', lambda wd=wd:
+             compute_competitors_view({'window_days': wd, 'top_n': 20}))
+    _try('comp_ytd', lambda:
+         compute_competitors_view(dict(_ytd_range, top_n=20)))
+
+    # All-platforms landing tab at every preset. This is the one most
+    # users see first, so warming it up front is highest impact.
+    for wd in (7, 14, 30, 60, 90):
+        _try(f'all_{wd}d', lambda wd=wd:
+             compute_all_platforms_view({'window_days': wd, 'top_n': 20}))
+    _try('all_ytd', lambda:
+         compute_all_platforms_view(dict(_ytd_range, top_n=20)))
+
     return warmed
 
 
