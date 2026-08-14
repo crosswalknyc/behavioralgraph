@@ -1015,43 +1015,68 @@ def _load_gen_pop_demographics() -> dict:
     demos: dict = {}
     source = "gen_pop_2026"
 
-    # Try repo-root Gen_Pop_2026.csv (works locally + on Render if the
-    # file is checked in; the parent repo commits it as canonical).
-    candidates = [
-        Path(__file__).resolve().parent.parent / "Gen_Pop_2026.csv",  # parent-repo root
-        Path(__file__).resolve().parent / "Gen_Pop_2026.csv",         # bg-webapp root
-        Path("/root/finished_codes/Gen_Pop_2026.csv"),                # Hetzner
-        Path("/tmp/Gen_Pop_2026.csv"),                                # last-ditch
-    ]
-    csv_path = next((p for p in candidates if p.exists()), None)
+    # Canonical source of truth is s3://dashboard-inputs/Gen_Pop_2026.csv
+    # -- the same file Profile IQ + the main dashboard read from. Try S3
+    # FIRST so dev, Render, and Hetzner all resolve to the same rows
+    # (per profile-iq-pipeline-rules.mdc sections 3 + 5). Local paths
+    # are kept as a fallback for air-gapped runs.
+    csv_text = None
+    csv_source_label = None
+    try:
+        import boto3  # type: ignore
+        _s3 = boto3.client("s3")
+        obj = _s3.get_object(Bucket="dashboard-inputs", Key="Gen_Pop_2026.csv")
+        csv_text = obj["Body"].read().decode("utf-8", errors="replace")
+        csv_source_label = "s3://dashboard-inputs/Gen_Pop_2026.csv"
+    except Exception as e:
+        logger.info("gen pop S3 fetch failed (falling back to local): %s", e)
 
-    if csv_path:
+    # Local fallbacks (safely wrapped -- Path.exists() can raise
+    # PermissionError on macOS for /root paths, which would otherwise
+    # nuke the whole function).
+    if csv_text is None:
+        candidates = [
+            Path(__file__).resolve().parent.parent / "Gen_Pop_2026.csv",
+            Path(__file__).resolve().parent / "Gen_Pop_2026.csv",
+            Path("/root/finished_codes/Gen_Pop_2026.csv"),
+            Path("/tmp/Gen_Pop_2026.csv"),
+        ]
+        for p in candidates:
+            try:
+                if p.exists():
+                    csv_text = p.read_text(encoding="utf-8", errors="replace")
+                    csv_source_label = str(p)
+                    break
+            except (PermissionError, OSError):
+                continue
+
+    if csv_text:
         try:
             import csv as _csv
+            import io as _io
             raw: dict = {}
-            with open(csv_path, "r", encoding="utf-8", errors="replace") as f:
-                for row in _csv.DictReader(f):
-                    col = (row.get("Column") or "").strip().upper()
-                    val = (row.get("Value") or "").strip().upper()
-                    bp_str = (row.get("Brand Penetration (Row)") or "").strip().rstrip("%")
-                    if col not in _GEN_POP_CANONICAL_BUCKETS or not val:
-                        continue
-                    try:
-                        pct = float(bp_str)
-                    except ValueError:
-                        continue
-                    canonical_bucket = _GEN_POP_CANONICAL_BUCKETS[col].get(val)
-                    if canonical_bucket is None:
-                        continue
-                    raw.setdefault(col, {})[canonical_bucket] = pct
-            # Renormalize each category to 100 (Gen Pop rows are already
-            # ~100 but tiny rounding drift is common in the source CSV).
+            for row in _csv.DictReader(_io.StringIO(csv_text)):
+                col = (row.get("Column") or "").strip().upper()
+                val = (row.get("Value") or "").strip().upper()
+                bp_str = (row.get("Brand Penetration (Row)") or "").strip().rstrip("%")
+                if col not in _GEN_POP_CANONICAL_BUCKETS or not val:
+                    continue
+                try:
+                    pct = float(bp_str)
+                except ValueError:
+                    continue
+                canonical_bucket = _GEN_POP_CANONICAL_BUCKETS[col].get(val)
+                if canonical_bucket is None:
+                    continue
+                raw.setdefault(col, {})[canonical_bucket] = pct
             for cat, buckets in raw.items():
                 s = sum(buckets.values())
                 if s > 0:
                     demos[cat] = {b: v * 100.0 / s for b, v in buckets.items()}
+            if demos:
+                logger.info("gen pop loaded from %s (%d categories)", csv_source_label, len(demos))
         except Exception as e:
-            logger.warning("gen pop demographics load failed for %s: %s", csv_path, e)
+            logger.warning("gen pop demographics parse failed from %s: %s", csv_source_label, e)
             demos = {}
             source = "panel_baseline_fallback"
     else:
