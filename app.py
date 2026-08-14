@@ -22103,7 +22103,66 @@ def rename_file():
                 'new_key': old_key,
                 'message': 'Display name updated successfully'
             })
-        
+
+        # SVOD Acquisition (Subscriber IQ): these files live in a SEPARATE
+        # bucket (SUBSCRIBER_S3_BUCKET), and the Subscriber IQ dashboard derives
+        # the show name from the FILENAME (not from a display_name override), so
+        # a real S3 rename is required. The admin key is prefixed with
+        # "svod-acquisition/"; strip it to get the bare key in the SVOD bucket.
+        # (Previously this fell through to the generic path below, which copied
+        # within the wrong bucket and raised NoSuchKey on CopyObject.)
+        if old_key.startswith('svod-acquisition/'):
+            bare_old = resolve_subscriber_iq_s3_key(old_key)
+            old_filename = bare_old.split('/')[-1]
+            folder = '/'.join(bare_old.split('/')[:-1])
+            extension = ''
+            if '.' in old_filename:
+                extension = '.' + old_filename.rsplit('.', 1)[-1]
+            bare_new = f"{folder}/{new_name}{extension}" if folder else f"{new_name}{extension}"
+
+            # Verify the source object actually exists in the SVOD bucket.
+            try:
+                s3_client.head_object(Bucket=SUBSCRIBER_S3_BUCKET, Key=bare_old)
+            except Exception:
+                return jsonify({'success': False, 'error': f'Source file not found in SVOD bucket: {bare_old}'})
+
+            if bare_old != bare_new:
+                # Guard against clobbering an existing file (allow case-only change).
+                try:
+                    s3_client.head_object(Bucket=SUBSCRIBER_S3_BUCKET, Key=bare_new)
+                    if bare_old.lower() != bare_new.lower():
+                        return jsonify({'success': False, 'error': 'A file with that name already exists'})
+                except Exception:
+                    pass
+                s3_client.copy_object(
+                    Bucket=SUBSCRIBER_S3_BUCKET,
+                    CopySource={'Bucket': SUBSCRIBER_S3_BUCKET, 'Key': bare_old},
+                    Key=bare_new
+                )
+                s3_client.delete_object(Bucket=SUBSCRIBER_S3_BUCKET, Key=bare_old)
+
+            # Migrate metadata (category + optional display_name) to the new key.
+            meta = load_svod_metadata()
+            existing = meta.get(bare_old, {}) or {}
+            if bare_new not in meta:
+                meta[bare_new] = {}
+            if existing.get('category'):
+                meta[bare_new]['category'] = existing['category']
+            if display_name and display_name.strip():
+                meta[bare_new]['display_name'] = display_name.strip()
+            elif existing.get('display_name'):
+                meta[bare_new]['display_name'] = existing['display_name']
+            if bare_old != bare_new and bare_old in meta:
+                del meta[bare_old]
+            save_svod_metadata(meta)
+
+            print(f"📝 Renamed SVOD file: {bare_old} -> {bare_new}")
+            return jsonify({
+                'success': True,
+                'new_key': f'svod-acquisition/{bare_new}',
+                'message': 'File renamed successfully'
+            })
+
         # Get the folder path and extension from old key
         folder = '/'.join(old_key.split('/')[:-1])
         old_filename = old_key.split('/')[-1]
