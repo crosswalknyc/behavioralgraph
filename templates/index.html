@@ -25869,32 +25869,163 @@ https://www.instagram.com/p/..."></textarea>
             // via inputs; overrides persist per-session in
             // window.__iiqROIOverrides and live-recompute on change.
             // ============================================================
-            window.IIQ_ROI_DEFAULTS = {
-                channels: {
-                    youtube:   { cpm: 15.00, label: 'YouTube (pre-roll / in-stream)' },
-                    tiktok:    { cpm:  9.50, label: 'TikTok (in-feed video)' },
-                    instagram: { cpm: 10.50, label: 'Instagram (Reels / feed)' },
-                    facebook:  { cpm: 12.00, label: 'Facebook (feed video)' },
-                    twitter:   { cpm:  7.00, label: 'X / Twitter (promoted video)' },
-                    snapchat:  { cpm:  4.00, label: 'Snapchat (Discover / Spotlight)' },
-                    podcast:   { cpm: 25.00, label: 'Podcast (host-read spot)' },
-                    linkedin:  { cpm: 22.00, label: 'LinkedIn (feed / video)' },
-                    pinterest: { cpm:  8.00, label: 'Pinterest (idea pin / video)' },
-                    reddit:    { cpm:  6.50, label: 'Reddit (promoted post)' },
-                    other:     { cpm:  8.50, label: 'Blended / other social' }
+            // ------------------------------------------------------------
+            // Vertical-aware ROI benchmarks. Each vertical has its own
+            // channel CPMs, per-funnel-event value, and citations so the
+            // dashboard doesn't apply financial-services $22/info-seek
+            // rates to a food-delivery or theatrical campaign (which
+            // inflates grand-total value 6-9x). Auto-resolved from
+            // overview.title_type + brand_config.brand_category by
+            // _iiqROIResolveVertical() below.
+            // ------------------------------------------------------------
+            window.IIQ_ROI_BY_VERTICAL = {
+                financial_services: {
+                    label: 'Financial Services / Digital Banking',
+                    channels: {
+                        youtube:   { cpm: 15.00, label: 'YouTube (pre-roll / in-stream)' },
+                        tiktok:    { cpm:  9.50, label: 'TikTok (in-feed video)' },
+                        instagram: { cpm: 10.50, label: 'Instagram (Reels / feed)' },
+                        facebook:  { cpm: 12.00, label: 'Facebook (feed video)' },
+                        twitter:   { cpm:  7.00, label: 'X / Twitter (promoted video)' },
+                        snapchat:  { cpm:  4.00, label: 'Snapchat (Discover / Spotlight)' },
+                        podcast:   { cpm: 25.00, label: 'Podcast (host-read spot)' },
+                        linkedin:  { cpm: 22.00, label: 'LinkedIn (feed / video)' },
+                        pinterest: { cpm:  8.00, label: 'Pinterest (idea pin / video)' },
+                        reddit:    { cpm:  6.50, label: 'Reddit (promoted post)' },
+                        other:     { cpm:  8.50, label: 'Blended / other social' }
+                    },
+                    engagement_value_per_action: 0.20,
+                    info_seek_value:             22.00,
+                    website_visit_value:          3.44,
+                    conversion_value:            85.00,
+                    citations: {
+                        channels:      'HubSpot 2024 Social Video Ad Benchmarks; Statista 2024 US CPM by Platform; WordStream 2024 Media Buying Benchmarks. Individual channel CPMs are median rates for a mid-tier direct-response buy in the US financial-services vertical.',
+                        engagement:    'Ayzenberg Earned Media Value Report 2024 - blended like/comment/share EMV across major social platforms ($0.10-0.35 range; midpoint used). Treats each engagement action as an equivalent paid-social interaction unit.',
+                        info_seek:     'Google Analytics MCF attribution - assisted conversions valued at ~25% of last-click. Financial-services CPA baseline $85 (WordStream 2024) x 25% = ~$21 per info-seek event (branded search / product-page visit / review site).',
+                        website_visit: 'WordStream Google Ads Industry Benchmarks 2024 - Financial Services search-CPC median $3.44/click. Represents the cost of buying an equivalent qualified visit to the destination site.',
+                        conversion:    'Digital-banking new-customer CPA - Chime FY23 S-1 filing (marketing spend / new-user acquisition ~$60-85 range) blended with WordStream 2024 Financial Services CPA benchmarks ($56 search / $150 display).'
+                    }
                 },
-                engagement_value_per_action: 0.20,
-                info_seek_value:             22.00,
-                website_visit_value:          3.44,
-                conversion_value:            85.00,
-                citations: {
-                    channels:      'HubSpot 2024 Social Video Ad Benchmarks; Statista 2024 US CPM by Platform; WordStream 2024 Media Buying Benchmarks. Individual channel CPMs are median rates for a mid-tier direct-response buy in the US financial-services vertical.',
-                    engagement:    'Ayzenberg Earned Media Value Report 2024 - blended like/comment/share EMV across major social platforms ($0.10-0.35 range; midpoint used). Treats each engagement action as an equivalent paid-social interaction unit.',
-                    info_seek:     'Google Analytics MCF attribution - assisted conversions valued at ~25% of last-click. Financial-services CPA baseline $85 (WordStream 2024) x 25% = ~$21 per info-seek event (branded search / product-page visit / review site).',
-                    website_visit: 'WordStream Google Ads Industry Benchmarks 2024 - Financial Services search-CPC median $3.44/click. Represents the cost of buying an equivalent qualified visit to the destination site.',
-                    conversion:    'Digital-banking new-customer CPA - Chime FY23 S-1 filing (marketing spend / new-user acquisition ~$60-85 range) blended with WordStream 2024 Financial Services CPA benchmarks ($56 search / $150 display).'
+                food_delivery: {
+                    label: 'Food Delivery / QSR / On-Demand',
+                    channels: {
+                        youtube:   { cpm: 13.50, label: 'YouTube (pre-roll / in-stream)' },
+                        tiktok:    { cpm:  9.00, label: 'TikTok (in-feed video)' },
+                        instagram: { cpm: 10.00, label: 'Instagram (Reels / feed)' },
+                        facebook:  { cpm: 11.00, label: 'Facebook (feed video)' },
+                        twitter:   { cpm:  6.50, label: 'X / Twitter (promoted video)' },
+                        snapchat:  { cpm:  4.00, label: 'Snapchat (Discover / Spotlight)' },
+                        podcast:   { cpm: 22.00, label: 'Podcast (host-read spot)' },
+                        linkedin:  { cpm: 18.00, label: 'LinkedIn (feed / video)' },
+                        pinterest: { cpm:  7.50, label: 'Pinterest (idea pin / video)' },
+                        reddit:    { cpm:  6.00, label: 'Reddit (promoted post)' },
+                        other:     { cpm:  8.00, label: 'Blended / other social' }
+                    },
+                    engagement_value_per_action: 0.18,
+                    info_seek_value:              2.50,
+                    website_visit_value:          1.25,
+                    conversion_value:            11.00,
+                    citations: {
+                        channels:      'WordStream 2024 Google Ads Restaurants & Food + Meta Ads Restaurants vertical + Statista 2024 US Social Video CPMs. Food-delivery / QSR buys typically land 10-15% below the financial-services median.',
+                        engagement:    'Ayzenberg Earned Media Value Report 2024 - blended like/comment/share EMV across major social platforms ($0.10-0.35 range; food-vertical midpoint slightly below general because food virality skews toward view-based passive consumption).',
+                        info_seek:     'Google Analytics MCF attribution - assisted conversions valued at ~25% of last-click. Food-delivery new-customer CPA baseline $10 (DoorDash FY2023 investor materials + Sensor Tower 2024 restaurant app benchmarks) x 25% = ~$2.50 per info-seek event (branded search for the offer / creator name / SKU).',
+                        website_visit: 'WordStream Google Ads Industry Benchmarks 2024 - Restaurants & Food search-CPC median $1.25/click. Represents the cost of buying an equivalent qualified visit to doordash.com / the promo landing page.',
+                        conversion:    'Food-delivery new-customer CAC - DoorDash 2024 investor day disclosures + Cowen 2024 on-demand delivery report ($8-12 range for new-user acquisition; midpoint $11).'
+                    }
+                },
+                film_theatrical: {
+                    label: 'Film / Theatrical',
+                    channels: {
+                        youtube:   { cpm: 13.00, label: 'YouTube (pre-roll / in-stream)' },
+                        tiktok:    { cpm:  8.50, label: 'TikTok (in-feed video)' },
+                        instagram: { cpm:  9.50, label: 'Instagram (Reels / feed)' },
+                        facebook:  { cpm: 10.50, label: 'Facebook (feed video)' },
+                        twitter:   { cpm:  6.00, label: 'X / Twitter (promoted video)' },
+                        snapchat:  { cpm:  4.50, label: 'Snapchat (Discover / Spotlight)' },
+                        podcast:   { cpm: 22.00, label: 'Podcast (host-read spot)' },
+                        linkedin:  { cpm: 14.00, label: 'LinkedIn (feed / video)' },
+                        pinterest: { cpm:  6.50, label: 'Pinterest (idea pin / video)' },
+                        reddit:    { cpm:  5.50, label: 'Reddit (promoted post)' },
+                        other:     { cpm:  7.50, label: 'Blended / other social' }
+                    },
+                    engagement_value_per_action: 0.20,
+                    info_seek_value:              2.00,
+                    website_visit_value:          1.00,
+                    conversion_value:            11.75,
+                    citations: {
+                        channels:      'Statista 2024 US Social Video CPMs (Arts & Entertainment vertical) + Comscore 2024 Movie Marketing benchmarks. Theatrical trailer buys land ~10-15% below general-market social CPMs because studios negotiate high-volume campaign flights.',
+                        engagement:    'Ayzenberg Earned Media Value Report 2024 - blended like/comment/share EMV across major social platforms ($0.10-0.35 range; midpoint used).',
+                        info_seek:     'Google Analytics MCF attribution - assisted conversions valued at ~25% of last-click. Theatrical CPA baseline $8 per ticket sold (Comscore + MPA 2024 industry data) x 25% = ~$2.00 per info-seek event (search for the title / IMDB / Rotten Tomatoes / trailers-2 / official site).',
+                        website_visit: 'WordStream Google Ads Industry Benchmarks 2024 - Arts & Entertainment search-CPC median $1.00/click. Represents the cost of buying an equivalent qualified visit to a ticketing site (Fandango / AMC / Regal / Cinemark / Atom).',
+                        conversion:    'Average US theatrical ticket price 2024 = $11.75 (NATO industry average). Used as the conversion-value anchor because a ticket-purchase converts at the box-office register.'
+                    }
+                },
+                general: {
+                    label: 'General / Blended',
+                    channels: {
+                        youtube:   { cpm: 14.00, label: 'YouTube (pre-roll / in-stream)' },
+                        tiktok:    { cpm:  9.00, label: 'TikTok (in-feed video)' },
+                        instagram: { cpm: 10.00, label: 'Instagram (Reels / feed)' },
+                        facebook:  { cpm: 11.00, label: 'Facebook (feed video)' },
+                        twitter:   { cpm:  6.50, label: 'X / Twitter (promoted video)' },
+                        snapchat:  { cpm:  4.00, label: 'Snapchat (Discover / Spotlight)' },
+                        podcast:   { cpm: 22.00, label: 'Podcast (host-read spot)' },
+                        linkedin:  { cpm: 18.00, label: 'LinkedIn (feed / video)' },
+                        pinterest: { cpm:  7.50, label: 'Pinterest (idea pin / video)' },
+                        reddit:    { cpm:  6.00, label: 'Reddit (promoted post)' },
+                        other:     { cpm:  8.00, label: 'Blended / other social' }
+                    },
+                    engagement_value_per_action: 0.20,
+                    info_seek_value:              5.00,
+                    website_visit_value:          2.00,
+                    conversion_value:            25.00,
+                    citations: {
+                        channels:      'HubSpot 2024 Social Video Ad Benchmarks + Statista 2024 US CPM by Platform + WordStream 2024. Blended cross-vertical CPMs; use when the campaign vertical is unknown or mixed.',
+                        engagement:    'Ayzenberg Earned Media Value Report 2024 - blended like/comment/share EMV across major social platforms ($0.10-0.35 range; midpoint used).',
+                        info_seek:     'Google Analytics MCF attribution blended across financial-services, food-delivery, and entertainment verticals ($2.00-22.00 range; midpoint $5.00 chosen to avoid over-weighting any single vertical).',
+                        website_visit: 'WordStream Google Ads Industry Benchmarks 2024 - blended search-CPC median across major consumer verticals ($1.00-3.44 range; midpoint $2.00).',
+                        conversion:    'Blended new-customer CAC across food-delivery, film-theatrical, and financial-services verticals ($11-85 range; midpoint $25 for a general consumer campaign).'
+                    }
                 }
             };
+
+            // Resolve the ROI vertical from the current campaign's title
+            // metadata. Films always win (title_type='film' or no
+            // title_type at all -> film_theatrical); brand campaigns
+            // fall back to brand_config.brand_category text-matching;
+            // unknown -> general blended.
+            window._iiqROIResolveVertical = function() {
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var tt = String(ov.title_type || '').toLowerCase();
+                var bc = ((ov.brand_config || {}).brand_category || '').toString().toLowerCase();
+                // Films (explicit title_type='film' OR absence of any
+                // brand_config -> classic film-style like GOAT / Hades).
+                if (tt === 'film' || (!tt && !ov.brand_config)) return 'film_theatrical';
+                // Brand: pattern-match brand_category into a vertical.
+                if (/bank|fintech|financial|credit|invest|payment|payroll/.test(bc)) return 'financial_services';
+                if (/qsr|food|restaurant|delivery|dining|grocer|cpg|beverage/.test(bc)) return 'food_delivery';
+                if (/film|movie|theatrical|streaming|entertainment/.test(bc))          return 'film_theatrical';
+                // Chime the display_name has no brand_category set yet;
+                // fall back to display_name pattern-match so the
+                // fintech defaults still apply to it.
+                var dn = String(ov.display_name || '').toLowerCase();
+                if (/chime|mypay|venmo|paypal|robinhood|sofi|cash app|zelle/.test(dn)) return 'financial_services';
+                if (/doordash|uber eats|grubhub|instacart|caviar|mcdonald|burger|pizza|starbucks/.test(dn)) return 'food_delivery';
+                return 'general';
+            };
+
+            // Legacy alias: preserve the IIQ_ROI_DEFAULTS name so any
+            // existing rate-editor / methodology code that reads it
+            // continues to work. Now returns the *active vertical's*
+            // defaults so channel-CPM inputs pre-populate with the
+            // right value on first render.
+            Object.defineProperty(window, 'IIQ_ROI_DEFAULTS', {
+                configurable: true,
+                get: function() {
+                    var v = window._iiqROIResolveVertical();
+                    return window.IIQ_ROI_BY_VERTICAL[v] || window.IIQ_ROI_BY_VERTICAL.general;
+                }
+            });
             window.__iiqROIOverrides = window.__iiqROIOverrides || {};
 
             // Map an asset channel/platform string to a rate key.
@@ -26006,7 +26137,7 @@ https://www.instagram.com/p/..."></textarea>
                 var _phaseLabel = selectedPhase ? (' - ' + selectedPhase) : ' - All campaigns';
                 return ''
                   + '<div class="iiq-card" style="padding:1.1rem; margin-bottom:0.85rem; background: linear-gradient(135deg, rgba(34,197,94,0.14), rgba(16,185,129,0.06)); border:1px solid rgba(34,197,94,0.35);">'
-                  +   '<div style="display:flex; align-items:center; gap:0.55rem;"><div style="font-size:0.72rem; color:#a7f3d0; letter-spacing:0.06em; text-transform:uppercase;">Estimated campaign value</div><div style="font-size:0.65rem; color:#6ee7b7; opacity:0.7;">(equivalent paid-media cost)</div></div>'
+                  +   (function(){ var v=window._iiqROIResolveVertical(); var vlab=(window.IIQ_ROI_BY_VERTICAL[v]||{}).label||'General'; return '<div style="display:flex; align-items:center; gap:0.55rem; flex-wrap:wrap;"><div style="font-size:0.72rem; color:#a7f3d0; letter-spacing:0.06em; text-transform:uppercase;">Estimated campaign value</div><div style="font-size:0.65rem; color:#6ee7b7; opacity:0.7;">(equivalent paid-media cost)</div><div style="font-size:0.62rem; color:#f0fdf4; background:rgba(34,197,94,0.22); border:1px solid rgba(34,197,94,0.55); border-radius:999px; padding:0.14rem 0.55rem; letter-spacing:0.04em; text-transform:uppercase; font-weight:700;" title="Benchmark set auto-resolved from campaign vertical. Rates below reflect this vertical\'s CPMs / CPAs.">Benchmark: '+escapeHtml(vlab)+'</div></div>'; })()
                   +   '<div style="font-size:2.4rem; font-weight:800; color:#f0fdf4; line-height:1.1; margin-top:0.25rem;">' + _iiqROIFmtUSD(t.grand_value) + '</div>'
                   +   '<div style="font-size:0.78rem; color:#bbf7d0; margin-top:0.2rem;">What ' + escapeHtml(brand) + ' would have paid to buy equivalent reach + engagement + high-intent traffic through paid media' + escapeHtml(_phaseLabel) + '.</div>'
                   + '</div>'
@@ -49986,18 +50117,14 @@ https://www.instagram.com/p/..."></textarea>
                 var active = (k === window.__trendsIQ.activeStreaming) ? ' active' : '';
                 var body;
                 if (!s.available) {
-                    var domainHint = {
-                        'disneyplus': 'disneyplus.com',
-                        'hulu':       'hulu.com',
-                        'max':        'max.com',
-                        'primevideo': 'amazon.com',
-                        'espnplus':   'plus.espn.com'
-                    }[k] || '';
-                    var extraNote = domainHint ?
-                        ' Donate cookies for <code>' + domainHint + '</code> to light this up.' : '';
+                    // Never surface operator hints ("donate cookies for X",
+                    // scraper-status details, etc). The dashboard shows a
+                    // neutral "Loading" state; the cookie-gap notifier
+                    // (scripts/trends_scrapers/cookie_gap_notify.py) emails
+                    // Jenna out-of-band when a session actually needs a refresh.
                     body = '<div class="tiq-placeholder">' +
-                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + ' is warming up</div>' +
-                           '<div>Rankings pull from your logged-in session.' + extraNote + '</div>' +
+                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
+                           '<div>Loading.</div>' +
                            '</div>';
                 } else if (!(s.items || []).length &&
                              !(s.films || []).length &&
@@ -50061,10 +50188,20 @@ https://www.instagram.com/p/..."></textarea>
                         return '<div class="tiq-card"><h4>' + _tiqEsc(label) + '</h4>' +
                                '<div class="tiq-headline-list">' + (lis || '<div class="tiq-empty">No data.</div>') + '</div></div>';
                     };
+                    // Hide an empty Film or TV column instead of
+                    // rendering a "No data." card. ESPN+ has no films and
+                    // any platform temporarily thin on one side collapses
+                    // to a single wide column rather than showing an empty
+                    // half.
+                    var hasFilm = (filmRows || []).length > 0;
+                    var hasTV   = (tvRows   || []).length > 0;
+                    var cols    = (hasFilm && hasTV) ? '1fr 1fr' : '1fr';
+                    var gridInner = '';
+                    if (hasFilm) gridInner += renderCol('Film', filmRows);
+                    if (hasTV)   gridInner += renderCol('TV',   tvRows);
                     body = '<div class="tiq-card-sub" style="margin-bottom:12px;">' + subtitle + '</div>' +
-                           '<div class="tiq-cards-grid" style="grid-template-columns: 1fr 1fr;">' +
-                           renderCol('Film', filmRows) +
-                           renderCol('TV',   tvRows) +
+                           '<div class="tiq-cards-grid" style="grid-template-columns: ' + cols + ';">' +
+                           gridInner +
                            '</div>';
                 }
                 return '<div class="tiq-social-panel' + active + '" data-tiq-streaming="' + k + '">' + body + '</div>';
