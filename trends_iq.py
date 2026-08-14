@@ -3804,6 +3804,24 @@ _STOPWORDS_UC = {
     'The', 'This', 'That', 'These', 'Those', 'Their', 'These', 'His', 'Her',
     'US', 'USA', 'UK', 'EU', 'UN', 'NATO', 'NASA', 'FBI', 'CIA', 'SEC', 'IRS',
     'Live', 'Breaking', 'Watch',
+    # ADD 2026-08-14 (Jenna feedback): Title-Case prepositions /
+    # conjunctions / determiners / networks that appear MID-headline.
+    # Without these, runs like "Fans React To Nickelodeon's" survive
+    # after "Fans" / "React" are trimmed off the front, because "To"
+    # is Title Case in a Title Case headline and "Nickelodeon" is a
+    # network name.
+    'To', 'For', 'From', 'With', 'By', 'In', 'On', 'At', 'As',
+    'And', 'Or', 'But', 'Nor', 'So', 'Yet', 'Of',
+    'All', 'Any', 'Some', 'Each', 'Every', 'Many', 'Most', 'Much',
+    'A', 'An',
+    # US networks / studios / streamers that dominate entertainment
+    # headlines but are never a person's name
+    'Nickelodeon', 'Netflix', 'Hulu', 'Disney', 'Peacock', 'HBO',
+    'Warner', 'Paramount', 'Universal', 'MGM', 'Lionsgate', 'Fox',
+    'NBC', 'CBS', 'ABC', 'PBS', 'CNN', 'MSNBC', 'ESPN', 'YouTube',
+    'TikTok', 'Instagram', 'Twitter', 'Reddit', 'Facebook', 'Meta',
+    'Amazon', 'Apple', 'Google', 'Microsoft', 'Spotify', 'Threads',
+    'Twitch',
     # NOTE: 'North', 'South', 'East', 'West', 'New', 'Old' intentionally
     # NOT blocked as tokens - they're valid name components (Kanye West,
     # Adam West, Simon East, Oliver North, Cindi Old, etc.). The
@@ -3904,6 +3922,37 @@ _NON_PERSON_TOKENS = {
     'Vegas',
     # music / entertainment brand tokens
     'BTS', 'BLACKPINK', 'Grammys', 'Coachella',
+    # ADD 2026-08-14 (Jenna feedback): YouTube / music-video title
+    # fragments were being extracted as Title Case "people". Troye Sivan's
+    # "She's the Best (Official Music Video)" surfaced "Official Music"
+    # as a trending person; a Nickelodeon comeback headline surfaced
+    # "Fans React" as a trending person. None of these tokens appear
+    # in real US person names.
+    'Official', 'Music', 'Video', 'Videos', 'Audio', 'Playlist',
+    'Playlists', 'Album', 'Albums', 'Song', 'Songs', 'Single',
+    'Singles', 'Track', 'Tracks', 'Mixtape', 'Mixtapes',
+    'Fans', 'React', 'Reacts', 'Reaction', 'Reactions',
+    'Reacted', 'Reacting',
+    'Reboot', 'Reboots', 'Rebooted', 'Rebooting', 'Revival',
+    'Revivals', 'Sequel', 'Sequels', 'Prequel', 'Prequels',
+    'Announcement', 'Announcements', 'Lineup', 'Lineups',
+    'Debut', 'Debuts', 'Release', 'Releases', 'Cameo', 'Cameos',
+    'Cast', 'Casting', 'Roster', 'Rosters', 'Fall', 'Winter',
+    'Spring', 'Summer', 'Autumn',
+    # US city Title Case tokens - never a common first/last name, but
+    # very common as a possessive prefix in team-attribution headlines
+    # ("Chicago's DiJonai Carrington", "Boston's Jaylen Brown"). The
+    # possessive-strip on the first token normalizes "Chicago's" to
+    # "Chicago" which then hits this set and gets trimmed off, leaving
+    # just the actual person name. Cities that are ALSO common names
+    # (Brooklyn, Charlotte, Dallas, Phoenix, Houston, Cleveland) are
+    # intentionally left out to avoid false positives.
+    'Chicago', 'Boston', 'Miami', 'Denver', 'Portland', 'Seattle',
+    'Tampa', 'Baltimore', 'Pittsburgh', 'Cincinnati', 'Milwaukee',
+    'Nashville', 'Atlanta', 'Detroit', 'Sacramento', 'Oakland',
+    'Minneapolis', 'Jacksonville', 'Indianapolis', 'Anaheim',
+    'Toronto', 'Vancouver', 'Montreal', 'Edmonton', 'Calgary',
+    'Philadelphia',
 }
 
 # Curated multi-word phrases that pass the token check but aren't
@@ -3951,7 +4000,40 @@ _NON_PERSON_PHRASES = {
     'oath keepers', 'proud boys', 'antifa',
     'january 6', 'jan 6',
     'leagues cup', 'gold cup', 'copa america',
+    # ADD 2026-08-14 (Jenna feedback): defense-in-depth phrase rejects
+    # in case a token doesn't get caught up top (mixed casing, hyphen
+    # variants, etc.). Belt-and-suspenders alongside the new token
+    # entries above.
+    'official music', 'official video', 'official audio',
+    'music video', 'lyric video', 'live performance',
+    'fans react', 'fans reacts', 'fan reaction', 'fan reactions',
+    'watch party', 'watch parties', 'live stream',
+    'trailer drop', 'trailer drops',
 }
+
+
+# Person alias map (2026-08-14): canonicalize name variants so the same
+# individual is counted once. Keys are lowercase-normalized, values are
+# the canonical display name. Add rows as we spot duplicates in the
+# Trending People card - the source-of-truth is whichever spelling most
+# outlets use today.
+_PERSON_ALIASES = {
+    # Enes Kanter legally changed his name to Enes Kanter Freedom in
+    # 2021 after becoming a US citizen. Some outlets still use the old
+    # name, others use the new one; both variants were surfacing as
+    # separate rows.
+    'enes kanter': 'Enes Kanter Freedom',
+}
+
+
+def _canonical_person_name(name: str) -> str:
+    """Fold known name-change / alias pairs so both variants count as
+    one entry. Callers pass the raw extracted string; we return the
+    canonical display name (or the input unchanged when no alias
+    exists)."""
+    if not name:
+        return name
+    return _PERSON_ALIASES.get(name.strip().lower(), name)
 
 _NAME_RE = re.compile(
     # 2-4 capitalized-word runs. Each word starts with a capital letter
@@ -4072,7 +4154,11 @@ def _fetch_trending_people(headlines: list[dict],
     # Movers card, and lets a click deep-link back to the article.
     context_meta: dict[str, list[dict]] = defaultdict(list)
     for kind, text, source, url in corpus:
-        for name in _extract_person_names(text):
+        for raw_name in _extract_person_names(text):
+            # Fold name-change / alias pairs (e.g. "Enes Kanter" +
+            # "Enes Kanter Freedom") so a single individual doesn't
+            # get two rows in the Trending People card.
+            name = _canonical_person_name(raw_name)
             if kind == 'search' or kind == 'social':
                 counts[name] += 2
             else:
