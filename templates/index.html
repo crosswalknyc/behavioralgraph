@@ -26845,6 +26845,16 @@ https://www.instagram.com/p/..."></textarea>
 
                 var pills = pickOptions.map(function(o) {
                     var active = o.key === picked.key;
+                    // "All campaigns" is the SUM of view counts across every
+                    // phase. Because the same person can engage with more
+                    // than one phase (a Chime member who watched Welcome to
+                    // 30 AND Chime Prime AND Mama I Made It gets counted
+                    // in each), that number is a DUPLICATED audience --
+                    // not a deduped unique-viewer count. Flag it inline
+                    // so the user reads it correctly (Jenna 2026-08-13).
+                    var dupeChip = (o.key === '__all__')
+                        ? ' <span title="Same person may engage with multiple phases; counted once per phase, not deduped across phases." style="color:#fbbf24; opacity:0.85; font-size:0.66rem; margin-left:0.25rem; font-style:italic;">(Duplicated Audience)</span>'
+                        : '';
                     return '<button onclick="iiqDemoSetPhase(' + JSON.stringify(o.key).replace(/"/g, '&quot;') + ')" style="'
                         +    'background:' + (active ? 'rgba(59,130,246,0.22)' : 'rgba(255,255,255,0.04)') + ';'
                         +    'color:' + (active ? '#fff' : '#cbd5e1') + ';'
@@ -26852,6 +26862,7 @@ https://www.instagram.com/p/..."></textarea>
                         +    'padding: 0.4rem 0.75rem; border-radius:6px; cursor:pointer; font-size:0.76rem; margin-right:0.4rem; margin-bottom:0.4rem;">'
                         +    escapeHtml(o.label)
                         +    ' <span style="opacity:0.65; font-size:0.68rem; margin-left:0.2rem;">(' + fmtCompact(o.view_count || 0) + ' views)</span>'
+                        +    dupeChip
                         +  '</button>';
                 }).join('');
 
