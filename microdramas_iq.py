@@ -2279,8 +2279,26 @@ def _sort_titles(titles: list[dict], sort_key: str) -> list[dict]:
         return sorted(titles, key=lambda t: t.get('first_observed_date') or '', reverse=True)
     if sort_key == 'episodes':
         return sorted(titles, key=lambda t: t.get('episodes_count') or 0, reverse=True)
-    # default: view_28d
-    return sorted(titles, key=lambda t: t.get('view_28d_estimate') or 0, reverse=True)
+    # Default sort ("view_28d" key): sort by whatever the FE actually
+    # displays as "Views" so the top card always has the highest
+    # visible number. The FE uses view_window_estimate when the
+    # look-back window is not 28 days, else view_28d_estimate. Using
+    # view_28d as the sort key on a 1d / 7d / custom window puts a
+    # title with a strong 28-day sum ahead of a title that scored
+    # higher IN THE ACTIVE WINDOW, which is what Jenna hit on
+    # 2026-08-14: Mafia Prince ranked #2 (106K in-window) below
+    # Billionaire's Secret Bride at #1 (70K in-window) because 
+    # Billionaire's 28-day sum was slightly higher (1.79M vs 1.75M).
+    # Sorting by the window-scoped estimate resolves the mismatch.
+    return sorted(
+        titles,
+        key=lambda t: (
+            t.get('view_window_estimate')
+            if t.get('view_window_estimate') is not None
+            else (t.get('view_28d_estimate') or 0)
+        ),
+        reverse=True,
+    )
 
 
 def _apply_audience_cut(titles: list[dict], cut: str) -> list[dict]:
