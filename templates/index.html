@@ -26704,7 +26704,7 @@ https://www.instagram.com/p/..."></textarea>
                     var wPct = Math.max(2, Math.round(e.pct / maxPct * 100));
                     var barColor = window._iiqDemoBarColor(i, cat);
                     var absCount = Math.round((e.pct / 100) * (phase_view_count || 0));
-                    var absStr = phase_view_count ? '  \u00b7  ' + fmtCompact(absCount) : '';
+                    var absStr = phase_view_count ? fmtCompact(absCount) : '';
 
                     var gpPct = Number(gpDist[e.bucket]);
                     var tickHtml = '';
@@ -26720,7 +26720,7 @@ https://www.instagram.com/p/..."></textarea>
                         var dColor = (absD < 0.5) ? '#94a3b8'
                                      : (delta > 0) ? '#34d399' : '#f87171';
                         var dSign = delta > 0 ? '+' : (delta < 0 ? '\u2212' : '');
-                        deltaHtml = ' <span title="vs Gen Pop ' + gpPct.toFixed(1) + '%" style="color:' + dColor + '; font-size:0.66rem; font-variant-numeric:tabular-nums; margin-left:0.25rem;">'
+                        deltaHtml = '<span title="vs Gen Pop ' + gpPct.toFixed(1) + '%" style="color:' + dColor + '; font-size:0.66rem; font-variant-numeric:tabular-nums;">'
                                   + dSign + absD.toFixed(1) + 'pp</span>';
                     }
                     // Comparison campaign tick + delta chip (amber).
@@ -26739,21 +26739,24 @@ https://www.instagram.com/p/..."></textarea>
                         var cColor = (cAbsD < 0.5) ? '#94a3b8'
                                     : (cDelta > 0) ? '#34d399' : '#f87171';
                         var cSign  = cDelta > 0 ? '+' : (cDelta < 0 ? '\u2212' : '');
-                        deltaHtml += ' <span title="vs ' + escapeHtml(cmpLabel || 'Compare') + ' ' + cmpPct.toFixed(1) + '%" style="color:' + cColor + '; background: rgba(251,191,36,0.10); border:1px solid rgba(251,191,36,0.35); border-radius:3px; padding:0 0.28rem; font-size:0.62rem; font-variant-numeric:tabular-nums; margin-left:0.25rem;">'
+                        deltaHtml += '<span title="vs ' + escapeHtml(cmpLabel || 'Compare') + ' ' + cmpPct.toFixed(1) + '%" style="color:' + cColor + '; background: rgba(251,191,36,0.10); border:1px solid rgba(251,191,36,0.35); border-radius:3px; padding:0 0.28rem; font-size:0.62rem; font-variant-numeric:tabular-nums; margin-left:0.25rem;">'
                                    + cSign + cAbsD.toFixed(1) + 'pp</span>';
                     }
 
-                    return '<div style="display:grid; grid-template-columns: 160px 1fr auto; gap:0.5rem; align-items:center; font-size:0.72rem; line-height:1.2; margin-bottom:0.28rem;">'
+                    // 5-column grid so Cohort %, vs-Gen-Pop delta, and Viewers
+                    // all align across rows (they were previously in one
+                    // variable-width auto cell). Each numeric column is
+                    // right-aligned and uses tabular-nums so the digits
+                    // stack cleanly.
+                    return '<div style="display:grid; grid-template-columns: 160px 1fr 52px 92px 62px; gap:0.5rem; align-items:center; font-size:0.72rem; line-height:1.2; margin-bottom:0.28rem;">'
                         +    '<div style="color:#cbd5e1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(e.bucket) + '">' + escapeHtml(e.bucket) + '</div>'
                         +    '<div style="position:relative; height:10px; background: rgba(255,255,255,0.05); border-radius:3px; overflow:visible;">'
                         +      '<div style="width:' + wPct + '%; height:100%; background:' + barColor + '; border-radius:3px;"></div>'
                         +      tickHtml
                         +    '</div>'
-                        +    '<div style="min-width:130px; text-align:right; color:#fff; font-variant-numeric:tabular-nums;">'
-                        +      '<span style="font-weight:600;">' + e.pct.toFixed(1) + '%</span>'
-                        +      deltaHtml
-                        +      '<span style="color:var(--text-secondary); opacity:0.7;">' + absStr + '</span>'
-                        +    '</div>'
+                        +    '<div style="text-align:right; color:#fff; font-weight:600; font-variant-numeric:tabular-nums;">' + e.pct.toFixed(1) + '%</div>'
+                        +    '<div style="text-align:right; font-variant-numeric:tabular-nums;">' + deltaHtml + '</div>'
+                        +    '<div style="text-align:right; color:var(--text-secondary); opacity:0.75; font-variant-numeric:tabular-nums;">' + absStr + '</div>'
                         +  '</div>';
                 }).join('');
 
@@ -26790,9 +26793,23 @@ https://www.instagram.com/p/..."></textarea>
                                  + '</div>';
                 }
 
+                // Column headers so users know what each numeric column
+                // represents. Grid columns MUST match the row template
+                // above (160px 1fr 52px 92px 62px). "Cohort" is this
+                // phase's share; "vs Gen Pop" is the pp delta chip
+                // column; "Viewers" is the campaign's projected count
+                // in that bucket (share * phase view total).
+                var colHeader = '<div style="display:grid; grid-template-columns: 160px 1fr 52px 92px 62px; gap:0.5rem; align-items:end; font-size:0.58rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.06em; margin: 0 0 0.4rem; padding-bottom:0.28rem; border-bottom:1px solid rgba(255,255,255,0.06);">'
+                    +  '<div></div>'
+                    +  '<div></div>'
+                    +  '<div style="text-align:right;">Cohort</div>'
+                    +  '<div style="text-align:right;">vs Gen Pop</div>'
+                    +  '<div style="text-align:right;">Viewers</div>'
+                    +  '</div>';
                 return '<div class="iiq-card" style="padding:0.75rem 0.85rem;">'
                     +    '<div style="font-size:0.78rem; font-weight:600; color:#fff; margin-bottom:0.5rem; letter-spacing:0.02em;">' + escapeHtml(label) + '</div>'
                     +    medianHeader
+                    +    colHeader
                     +    rows
                     +  '</div>';
             };
