@@ -98,7 +98,11 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
     # that live on those services get their own selector tab. The legacy
     # "VIRTUAL MVPD/FAST" sub-values under PLATFORMS are left in place so
     # existing hybrid vMVPD+FAST profiles don't move tabs.
-    "FAST": ["FAST PLATFORMS", "FAST CHANNELS"],
+    # 2026-08-14 (Jenna): sub-values are SINGULAR to match the existing
+    # BRAND CATEGORY tags already in the dashboard-inputs bucket. Frontend
+    # MASTER_CATEGORIES in templates/index.html is case-sensitive, so
+    # canonical here must exactly match the data.
+    "FAST": ["FAST PLATFORM", "FAST CHANNEL"],
     "TRENDS": ["TRENDS", "SHOPPING INTENT"],
 }
 
