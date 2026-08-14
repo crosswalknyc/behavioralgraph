@@ -28499,31 +28499,44 @@ https://www.instagram.com/p/..."></textarea>
                     return out;
                 }
 
-                // Draw RIGHT-axis lines FIRST (info-seek + website/ticketing)
-                // then LEFT-axis lines LAST (views) so the primary "views"
-                // signal keeps z-priority.  Left-axis lines paint at 0.82
-                // stroke-opacity so the perfectly-colinear right-axis lines
-                // beneath them (info-seek IS just views*info%, so shape is
-                // identical) show through visibly. Without this the daily
-                // funnel line collapses to invisible whenever views has
-                // any curve of its own (Chime bug 2026-08-14).
+                // Draw LEFT-axis lines FIRST (views) then RIGHT-axis lines
+                // LAST (info-seek + website/ticketing) so the downstream
+                // FUNNEL keeps z-priority. This is the correct call for
+                // the Digital Journey / Paid-vs-Organic charts because
+                // the whole POINT of showing views alongside funnel is
+                // to see the funnel signal -- views is the input, funnel
+                // is the deliverable.
                 //
-                // Also bump right-axis strokes to width 2.6 (vs left 2.0)
-                // so the funnel line pokes out ~0.3px on either side of
-                // the views line even where they overlap perfectly --
-                // guarantees visibility of purple/yellow along the peaks.
+                // The prior "views on top with 0.82 opacity" pass looked
+                // fine on the yellow (web-visit) line because web has
+                // ~40% the magnitude of info -- yellow's peak lands in
+                // the empty lower half of the chart where green never
+                // reaches. But purple (info-seek) has ~2.5x higher
+                // magnitude, so on the right axis its peak lands at the
+                // SAME y-pixel as the green views peak. 0.82 opacity
+                // was not enough to reveal soft lavender (#a5b4fc)
+                // through the semi-transparent green -- the eye read
+                // the blended color as "just green" (Chime bug reported
+                // 2026-08-14, second occurrence).
+                //
+                // Fix: (1) reorder so funnel is drawn LAST, (2) use a
+                // heavier stroke width 3.0 for funnel lines so they
+                // clearly bracket the views line, (3) dim views to
+                // 0.65 stroke-opacity so the funnel colors stay
+                // unambiguously readable at the peaks. Yellow web-visit
+                // is unchanged in position but now equally bold.
                 function _thickPath(s, syFn) {
                     var pts = (s.points || []).slice().sort(function(a,b){ return new Date(a.x) - new Date(b.x); });
                     if (!pts.length) return '';
                     var d = pts.map(function(p, i){ return (i === 0 ? 'M' : 'L') + sx(p.x).toFixed(1) + ',' + syFn(p.y).toFixed(1); }).join(' ');
                     var dashAttr = s.dash ? ' stroke-dasharray="4,3"' : '';
                     if (cutoffTs == null) {
-                        return '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + ' />';
+                        return '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="3.0" stroke-linejoin="round" stroke-linecap="round"' + dashAttr + ' />';
                     }
                     return pathFor(s, syFn);
                 }
-                var paths = (rightSeries || []).map(function(s){ return _thickPath(s, syR); }).join('')
-                          + (leftSeries  || []).map(function(s){ return pathFor(s, syL, 0.82); }).join('');
+                var paths = (leftSeries  || []).map(function(s){ return pathFor(s, syL, 0.65); }).join('')
+                          + (rightSeries || []).map(function(s){ return _thickPath(s, syR); }).join('');
 
                 // Optional event markers (asset-drop dots etc.) -- pass via
                 // opts.events = [{x: <isoDate>, color: '#22d3ee', label: '...'}].
@@ -29446,11 +29459,24 @@ https://www.instagram.com/p/..."></textarea>
                 // lines render on the right Y-axis (downstream funnel
                 // counts) while the paid/organic view-series on the
                 // left axis dominate visually because they're ~20x
-                // larger. Indigo + amber match the info-seek / ticketing
+                // larger. Violet + amber match the info-seek / ticketing
                 // chip colors used on the Assets cards and Q1 rollup so
                 // the eye can ladder up between views.
+                //
+                // NOTE on info-seek line color: the info-seek THEME color
+                // across the dashboard (tables, pills, tiles) is soft
+                // lavender #a5b4fc. On the daily-activity dual-axis line
+                // chart specifically, we override to a bolder violet
+                // #c084fc for the LINE only (the legend chip auto-
+                // matches so users see the connection). Bolder violet
+                // stays visible where the info-seek curve lands at the
+                // SAME y-pixel as the green organic-views peak (both
+                // are proportional to daily_views, so their maxima
+                // coincide on the chart). Soft lavender got lost under
+                // the semi-transparent green -- Chime bug reported
+                // 2026-08-14.
                 var rightSeries = hasFunnelSeries ? [
-                    { name: window._iiqDailySeriesLabel('info'),       color: '#a5b4fc', points: infoDailyPts, total: targetInfo },
+                    { name: window._iiqDailySeriesLabel('info'),       color: '#c084fc', points: infoDailyPts, total: targetInfo },
                     { name: window._iiqDailySeriesLabel('conversion'), color: '#fbbf24', points: tkDailyPts,   total: targetTk   }
                 ] : [];
 
@@ -30152,7 +30178,7 @@ https://www.instagram.com/p/..."></textarea>
                     if (st.showOrganicViews && totByKey.organic > 0) leftS.push({ name: 'Organic views (daily)', color: pal.organic, points: orgPts,  total: totByKey.organic });
                     if (st.showPaidViews    && totByKey.paid    > 0) leftS.push({ name: 'Paid views (daily)',    color: pal.paid,    points: paidPts, total: totByKey.paid    });
                     var hasFunnel = (infoPts.some(function(p){ return p.y > 0; }) || tkPts.some(function(p){ return p.y > 0; }));
-                    if (hasFunnel && st.showInfoSeekers) rightS.push({ name: window._iiqDailySeriesLabel('info'),       color: '#a5b4fc', points: infoPts, total: infoPts.reduce(function(s,p){return s+p.y;}, 0) });
+                    if (hasFunnel && st.showInfoSeekers) rightS.push({ name: window._iiqDailySeriesLabel('info'),       color: '#c084fc', points: infoPts, total: infoPts.reduce(function(s,p){return s+p.y;}, 0) });
                     if (hasFunnel && st.showTicketing)   rightS.push({ name: window._iiqDailySeriesLabel('conversion'), color: '#fbbf24', points: tkPts,   total: tkPts.reduce(function(s,p){return s+p.y;},   0) });
                     var events = [];
                     if (st.showEvents) {
@@ -30218,7 +30244,7 @@ https://www.instagram.com/p/..."></textarea>
                     var seriesRow = ''
                         + _seriesToggle('Organic views', pal.organic, st.showOrganicViews, 'window.iiqQ2ModalToggleSeries(\'showOrganicViews\')')
                         + _seriesToggle('Paid views',    pal.paid,    st.showPaidViews,    'window.iiqQ2ModalToggleSeries(\'showPaidViews\')')
-                        + _seriesToggle('Info-seekers',  '#a5b4fc',   st.showInfoSeekers,  'window.iiqQ2ModalToggleSeries(\'showInfoSeekers\')')
+                        + _seriesToggle('Info-seekers',  '#c084fc',   st.showInfoSeekers,  'window.iiqQ2ModalToggleSeries(\'showInfoSeekers\')')
                         + _seriesToggle(window._iiqBFL(), '#fbbf24',   st.showTicketing,    'window.iiqQ2ModalToggleSeries(\'showTicketing\')')
                         + _seriesToggle('Drop dots',     '#94a3b8',   st.showEvents,       'window.iiqQ2ModalToggleSeries(\'showEvents\')');
 
