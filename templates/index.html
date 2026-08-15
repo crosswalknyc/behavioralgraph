@@ -47470,10 +47470,20 @@ https://www.instagram.com/p/..."></textarea>
                                 + 'New Subs = gross new users in this window. '
                                 + 'Cancellations = gross churn in this window. '
                                 + 'Net Growth is ANNUALIZED (projects the observed daily net-add rate to a full year) so it stays stable across window choices and reconciles with published QoQ/YoY growth.';
+                    // Prefer `active_users` (window-scoped microdrama
+                    // active-user pool) over `total_users` (platform-
+                    // wide MAU / subs snapshot) so the number on the
+                    // rollup card is directly comparable to the window
+                    // view count above it. Falls back to total_users
+                    // for backward compat if the backend didn't send
+                    // active_users on this platform.
+                    var _rollupUsers = (typeof uf.active_users === 'number')
+                                        ? uf.active_users
+                                        : uf.total_users;
                     flowBlock = '<div class="miq-rollup-card-flow" title="' + _miqEscape(flowTip) + '">'
                               +   '<div class="miq-rollup-flow-cell">'
                               +     '<div class="miq-rollup-flow-label">Unique Viewers</div>'
-                              +     '<div class="miq-rollup-flow-value">' + _miqFormatNumber(uf.total_users) + '</div>'
+                              +     '<div class="miq-rollup-flow-value">' + _miqFormatNumber(_rollupUsers) + '</div>'
                               +   '</div>'
                               +   '<div class="miq-rollup-flow-cell">'
                               +     '<div class="miq-rollup-flow-label">New Subs</div>'
