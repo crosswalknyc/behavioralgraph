@@ -47220,6 +47220,12 @@ https://www.instagram.com/p/..."></textarea>
                 var meta = document.getElementById('microdramasIQ' + p + 'Meta');
                 if (meta) meta.textContent = loadingMsg;
             });
+            // Clear the sticky "Loading catalog..." header when a
+            // competitor tab is what the user actually opened.
+            var gmeta = document.getElementById('microdramasIQMeta');
+            if (gmeta && /^Loading catalog/i.test(gmeta.textContent || '')) {
+                gmeta.textContent = '';
+            }
             var f = _miqCurrentFilters();
             var body = {
                 window_days: f.window_days || 7,
@@ -47275,6 +47281,14 @@ https://www.instagram.com/p/..."></textarea>
             var grid = document.getElementById('microdramasIQAllGrid');
             if (meta) meta.textContent = 'Loading aggregated ranker...';
             if (grid) grid.innerHTML = '';
+            // Clear the global catalog meta ("Loading catalog...") so it
+            // doesn't sit stuck above the tabstrip whenever a user lands
+            // on any tab other than Peacock. The header only makes sense
+            // once the Peacock render populates it with catalog stats.
+            var gmeta = document.getElementById('microdramasIQMeta');
+            if (gmeta && /^Loading catalog/i.test(gmeta.textContent || '')) {
+                gmeta.textContent = '';
+            }
             var f = _miqCurrentFilters();
             var body = {
                 window_days: f.window_days || 7,

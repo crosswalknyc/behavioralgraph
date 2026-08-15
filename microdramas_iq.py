@@ -986,6 +986,44 @@ _TODAY_TTL_SECONDS = 60 * 60  # 60 min for today's snapshot
 _VIEW_CACHE: dict[str, tuple] = {}         # cache_key -> (ts_epoch, payload)
 _VIEW_TTL_SECONDS = 15 * 60
 
+# S3-backed epoch sentinel so out-of-band writers (the backfill script,
+# manual snapshot uploads, etc.) can silently invalidate every running
+# worker's in-process caches without needing an authenticated HTTP call.
+#
+# _CACHE_EPOCH_KEY = last-known epoch string from S3
+# _CACHE_EPOCH_CHECKED_AT = when we last polled S3 for the epoch
+# We poll at most once per _CACHE_EPOCH_POLL_S so the extra S3 read is
+# cheap.
+_CACHE_EPOCH_S3_KEY   = 'microdramas_iq/cache_epoch.json'
+_CACHE_EPOCH_POLL_S   = 60
+_CACHE_EPOCH_KEY: Optional[str] = None
+_CACHE_EPOCH_CHECKED_AT: float = 0.0
+
+
+def _maybe_invalidate_from_s3_epoch() -> None:
+    """Check the S3 cache-epoch sentinel and clear both in-process
+    caches if the epoch on disk is newer than the one we last saw.
+    Called once per view-cache read (rate-limited internally)."""
+    global _CACHE_EPOCH_KEY, _CACHE_EPOCH_CHECKED_AT
+    now = time.time()
+    if (now - _CACHE_EPOCH_CHECKED_AT) < _CACHE_EPOCH_POLL_S:
+        return
+    _CACHE_EPOCH_CHECKED_AT = now
+    try:
+        payload = _read_json(_CACHE_EPOCH_S3_KEY) or {}
+    except Exception:
+        return
+    epoch = payload.get('bumped_at') if isinstance(payload, dict) else None
+    if not epoch:
+        return
+    if _CACHE_EPOCH_KEY is None:
+        _CACHE_EPOCH_KEY = epoch
+        return
+    if epoch != _CACHE_EPOCH_KEY:
+        _CACHE_EPOCH_KEY = epoch
+        _VIEW_CACHE.clear()
+        _SNAPSHOT_CACHE.clear()
+
 
 def _today_iso() -> str:
     return date.today().isoformat()
@@ -1035,6 +1073,10 @@ def _view_cache_key(prefix: str, filters: dict) -> str:
 
 
 def _view_cache_get(key: str) -> Optional[dict]:
+    # First: catch any out-of-band cache-epoch bump (backfill runs,
+    # manual snapshot pushes) so stale entries get flushed without
+    # requiring a Flask restart or a dashboard-triggered scrape.
+    _maybe_invalidate_from_s3_epoch()
     hit = _VIEW_CACHE.get(key)
     if hit is None:
         return None
