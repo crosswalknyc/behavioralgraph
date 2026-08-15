@@ -24490,7 +24490,7 @@ https://www.instagram.com/p/..."></textarea>
             #microdramasIQView .miq-rollup-conv-raw-value { font-variant-numeric: tabular-nums; font-weight: 500; opacity: 0.85; }
             #microdramasIQView .miq-rollup-conv-value { font-size: 0.78rem; font-weight: 700; color: #f9a8d4; font-variant-numeric: tabular-nums; }
             #microdramasIQView .miq-rollup-card-conv-na .miq-rollup-conv-value { color: var(--text-secondary); font-weight: 500; }
-            /* User-flow stats: 2x2 grid of Total Users / New Subs /
+            /* User-flow stats: 2x2 grid of Unique Viewers / New Subs /
                Cancellations / Net Growth for each platform card. Dashed
                top border matches the free-to-paid line above so the
                whole card reads as tiered sections. */
@@ -24533,9 +24533,10 @@ https://www.instagram.com/p/..."></textarea>
                (or series completion for Peacock). Sits above the sparkline as an at-a-glance
                engagement-depth signal complementing the rank-trend sparkline. */
             #microdramasIQView .miq-completion-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.15rem 0 0.1rem; }
-            #microdramasIQView .miq-comp-chip { display: inline-flex; align-items: baseline; gap: 0.28rem; padding: 0.15rem 0.42rem; border-radius: 999px; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.02em; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); }
+            #microdramasIQView .miq-comp-chip { display: inline-flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.28rem; row-gap: 0.05rem; padding: 0.15rem 0.42rem; border-radius: 14px; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.02em; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); }
             #microdramasIQView .miq-comp-chip .miq-comp-chip-label { color: var(--text-secondary); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.6rem; }
             #microdramasIQView .miq-comp-chip .miq-comp-chip-value { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+            #microdramasIQView .miq-comp-chip .miq-comp-chip-raw   { flex-basis: 100%; font-size: 0.58rem; font-weight: 500; letter-spacing: 0.02em; text-transform: none; color: var(--text-tertiary, rgba(255,255,255,0.55)); font-variant-numeric: tabular-nums; opacity: 0.9; }
             #microdramasIQView .miq-comp-chip.miq-chip-completion { background: rgba(59,130,246,0.10); border-color: rgba(59,130,246,0.28); }
             #microdramasIQView .miq-comp-chip.miq-chip-completion .miq-comp-chip-value { color: #93c5fd; }
             #microdramasIQView .miq-comp-chip.miq-chip-payer      { background: rgba(236,72,153,0.10); border-color: rgba(236,72,153,0.28); }
@@ -46666,26 +46667,62 @@ https://www.instagram.com/p/..."></textarea>
                          +   '<span class="miq-comp-chip-value">' + _miqFormatNumber(uniqueViewers) + '</span>'
                          + '</span>');
             }
+            // Per-title raw numerator / denominator sub-lines, mirroring
+            // the rollup card's "est. paying / tracked 254K / 2.9M" pattern.
+            // Numbers are derived from the same unique-viewers total the
+            // Unique Viewers chip renders, so all three chips reconcile
+            // arithmetically on the card:
+            //   Payers%          = Payers  / Unique Viewers
+            //   Payer Completion = Finish / Payers
+            //   Series%          = Finish / Unique Viewers   (Peacock)
+            var _uvForRaw = uniqueViewers;
             if (c.source === 'peacock') {
                 if (c.series_completion_pct != null) {
-                    parts.push('<span class="miq-comp-chip miq-chip-series" title="Share of viewers who finish the whole series (' + c.total_episodes + ' eps)">'
+                    var seriesRaw = '';
+                    if (_uvForRaw != null && _uvForRaw > 0) {
+                        var seriesFin = Math.round(_uvForRaw * c.series_completion_pct / 100);
+                        seriesRaw = '<span class="miq-comp-chip-raw">'
+                                  + _miqFormatNumber(seriesFin) + ' / ' + _miqFormatNumber(_uvForRaw)
+                                  + '</span>';
+                    }
+                    parts.push('<span class="miq-comp-chip miq-chip-series" title="Share of viewers who finish the whole series (' + c.total_episodes + ' eps). Raw: finishers / total viewers.">'
                              +   '<span class="miq-comp-chip-label">Series</span>'
                              +   '<span class="miq-comp-chip-value">' + Math.round(c.series_completion_pct) + '%</span>'
+                             +   seriesRaw
                              + '</span>');
                 }
             } else {
+                var _payers = null;
+                if (c.paid_pct != null && _uvForRaw != null && _uvForRaw > 0) {
+                    _payers = Math.round(_uvForRaw * c.paid_pct / 100);
+                }
                 if (c.paid_pct != null) {
-                    var payTip = 'Share of viewers who watch at least one paid (post-paywall) episode';
+                    var payTip = 'Share of viewers who watch at least one paid (post-paywall) episode. Raw: est. payers / total viewers.';
+                    var payersRaw = '';
+                    if (_payers != null && _uvForRaw > 0) {
+                        payersRaw = '<span class="miq-comp-chip-raw">'
+                                  + _miqFormatNumber(_payers) + ' / ' + _miqFormatNumber(_uvForRaw)
+                                  + '</span>';
+                    }
                     parts.push('<span class="miq-comp-chip miq-chip-payer" title="' + _miqEscape(payTip) + '">'
                              +   '<span class="miq-comp-chip-label">Payers</span>'
                              +   '<span class="miq-comp-chip-value">' + Math.round(c.paid_pct) + '%</span>'
+                             +   payersRaw
                              + '</span>');
                 }
                 if (c.payer_completion_pct != null) {
-                    var payerCompTip = 'Of viewers who paid at least one ep, share who finish the whole series';
+                    var payerCompTip = 'Of viewers who paid at least one ep, share who finish the whole series. Raw: est. finishers / payers.';
+                    var pcRaw = '';
+                    if (_payers != null && _payers > 0) {
+                        var _pcFin = Math.round(_payers * c.payer_completion_pct / 100);
+                        pcRaw = '<span class="miq-comp-chip-raw">'
+                              + _miqFormatNumber(_pcFin) + ' / ' + _miqFormatNumber(_payers)
+                              + '</span>';
+                    }
                     parts.push('<span class="miq-comp-chip miq-chip-series" title="' + _miqEscape(payerCompTip) + '">'
                              +   '<span class="miq-comp-chip-label">Payer Completion</span>'
                              +   '<span class="miq-comp-chip-value">' + Math.round(c.payer_completion_pct) + '%</span>'
+                             +   pcRaw
                              + '</span>');
                 }
             }
@@ -47421,7 +47458,7 @@ https://www.instagram.com/p/..."></textarea>
                                 + 'Net Growth is ANNUALIZED (projects the observed daily net-add rate to a full year) so it stays stable across window choices and reconciles with published QoQ/YoY growth.';
                     flowBlock = '<div class="miq-rollup-card-flow" title="' + _miqEscape(flowTip) + '">'
                               +   '<div class="miq-rollup-flow-cell">'
-                              +     '<div class="miq-rollup-flow-label">Total Users</div>'
+                              +     '<div class="miq-rollup-flow-label">Unique Viewers</div>'
                               +     '<div class="miq-rollup-flow-value">' + _miqFormatNumber(uf.total_users) + '</div>'
                               +   '</div>'
                               +   '<div class="miq-rollup-flow-cell">'
