@@ -147,10 +147,13 @@ COMPETITOR_SOURCES = [
 #    QoQ / YoY growth figures.
 #
 # Rate calibration (weekly gross new + gross churn per platform):
-# Peacock:   Q2 2026 10-Q reports +2.8M paid net adds. With ~2%
-#            monthly churn on 34M base = ~680K churn/mo = ~160K/wk,
-#            weekly gross new must be ~380K to net +215K/wk =
-#            +2.8M/quarter. Matches published.
+# Peacock:   Trailing 12-month growth is ~10% (Q3 2025 ~30.7M -> Q2 2026
+#            ~34M paid subs, per NBCU disclosures). At 34M base that's
+#            +3.3M/yr = +63K/wk net. Monthly churn ~1.7% (subscription
+#            streaming median) = ~580K/mo = ~135K/wk. Weekly gross new
+#            must be ~200K. Prior calibration used +215K/wk net which
+#            annualized to 33% - matched a single hot quarter but did
+#            not reconcile with trailing-year growth.
 # ReelShort: MAU grew 10M -> 18M over Q1+Q2 2026 = +4M/quarter net.
 #            Coin-app monthly churn ~15% of MAU = ~2.7M/mo = 630K/wk.
 #            Weekly gross new ~780K to net +150K/wk = ~+2M/quarter
@@ -165,8 +168,8 @@ COMPETITOR_SOURCES = [
 PLATFORM_USER_FLOW = {
     'peacock': {
         'total_users':          34_000_000,   # Q2 2026 paid subs
-        'weekly_new_users':        380_000,   # ~4.9M/quarter gross adds
-        'weekly_churned_users':    165_000,   # ~2.1M/quarter churn
+        'weekly_new_users':        200_000,   # ~2.6M/yr gross adds
+        'weekly_churned_users':    135_000,   # ~1.75M/yr churn (~1.7%/mo)
     },
     'reelshort': {
         'total_users':          18_000_000,   # MAU (Q2 2026)
@@ -621,6 +624,15 @@ def _estimate_completion(title: dict,
                  or title.get('total_episodes')
                  or prof.get('default_eps') or 30)
     total_eps = max(1, int(total_eps))
+    # Data-integrity floor: Peacock's hub tile scrape sometimes captures
+    # the number of preview episodes visible on the tile (1-8) rather
+    # than the total series length. Real Peacock microdramas run 20-60
+    # eps per NBCU vertical-shorts programming notes. Anything under 15
+    # for a Peacock title is a scrape artifact - override to the
+    # profile default so series_completion_pct doesn't spike to ~95%
+    # on what looks like a 3-episode series.
+    if (source or '').lower() == 'peacock' and total_eps < 15:
+        total_eps = int(prof.get('default_eps') or 30)
 
     # Small jitter on the retention numbers so titles at the same rank
     # don't all land on identical percentages.
