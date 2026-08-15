@@ -623,7 +623,8 @@ def _estimate_completion(title: dict,
 
 
 def _derive_daily_reads_by_date(entry: dict, mau_millions: float,
-                                 salt: str = '') -> None:
+                                 salt: str = '',
+                                 platform_dates: Optional[list] = None) -> None:
     """Normalize `reads_by_date` to DAILY UNIQUE VIEWS (per day), in place.
 
     Now that competitor `read_count` is standardized to a rank-derived
@@ -638,14 +639,37 @@ def _derive_daily_reads_by_date(entry: dict, mau_millions: float,
     estimate, just applied per-day, which means peak_daily * ~24-30
     days ≈ lifetime - the two numbers reconcile.
 
+    Gap-filling (`platform_dates`): when the caller passes the full
+    list of snapshot dates for the platform's window, missing days
+    are backfilled with an interpolated rank + view estimate so the
+    card sparkline and daily-views modal have no "no data" gaps on
+    days where the title dropped off the top-N chart (or the scrape
+    briefly missed it). Interpolation rules:
+      - Date exactly matches an observation:  use the observed rank
+      - Date is BEFORE first observation:      leave empty (title
+        genuinely didn't exist on the platform yet)
+      - Date is BETWEEN two observations:     linear-interpolate
+        rank between them
+      - Date is AFTER last observation:        carry forward the
+        last known rank + gentle 1-slot/day decay to model the
+        typical off-chart tail
+
     Preserved: the raw cumulative-delta path (kept behind a legacy
     flag) so we can compare against the platform's own counter if
     needed. Not used by the dashboard.
     """
     ranks = entry.get('ranks_by_date') or {}
     reads = entry.get('reads_by_date') or {}
-    dates = sorted(set(list(ranks.keys()) + list(reads.keys())))
-    if not dates:
+    entry_dates = sorted(set(list(ranks.keys()) + list(reads.keys())))
+    # Fill target: prefer the platform's full window (so the modal
+    # shows a continuous curve); fall back to just the title's own
+    # dates for callers that don't pass platform_dates.
+    if platform_dates:
+        window_dates = sorted(set([d for d in platform_dates if d]
+                                    + entry_dates))
+    else:
+        window_dates = entry_dates
+    if not window_dates:
         return
 
     # Stash the pre-derived reads_by_date as raw_reads_by_date so the
@@ -654,17 +678,71 @@ def _derive_daily_reads_by_date(entry: dict, mau_millions: float,
     if reads and 'raw_reads_by_date' not in entry:
         entry['raw_reads_by_date'] = dict(reads)
 
-    # Rank-derived per-day estimate for every observed date. This
-    # replaces the earlier cumulative-delta path so the daily curve
-    # stays on the same calibration as the lifetime estimate.
-    new_reads: dict = {}
-    for d in dates:
+    # Precompute the sorted list of known rank observations for the
+    # interpolation lookups below. Any date whose rank is None (title
+    # was in the snapshot metadata but no rank field) is not a known
+    # observation for our purposes.
+    known_ranks = [(d, ranks[d]) for d in entry_dates
+                   if isinstance(ranks.get(d), int)]
+
+    def _effective_rank(d: str) -> Optional[int]:
         r = ranks.get(d)
+        if isinstance(r, int):
+            return r
+        if not known_ranks:
+            return None
+        earliest_d, earliest_r = known_ranks[0]
+        latest_d,   latest_r   = known_ranks[-1]
+        if d < earliest_d:
+            # Before the title first appeared on this platform -
+            # don't fabricate a rank. The modal renders "-" here,
+            # which is the truthful signal.
+            return None
+        if d > latest_d:
+            # Carry-forward with a 1-slot/day decay, capped so the
+            # tail estimate doesn't slip below the model's rank
+            # sensitivity (rank >~ 40 all yield tiny numbers).
+            try:
+                days_since = (datetime.fromisoformat(d).date()
+                              - datetime.fromisoformat(latest_d).date()).days
+            except Exception:
+                days_since = 0
+            return max(1, min(latest_r + days_since, 60))
+        # Between two known observations: linear interpolate.
+        prev_d, prev_r = earliest_d, earliest_r
+        next_d, next_r = latest_d, latest_r
+        for od, ok in known_ranks:
+            if od <= d:
+                prev_d, prev_r = od, ok
+            else:
+                next_d, next_r = od, ok
+                break
+        try:
+            span = (datetime.fromisoformat(next_d).date()
+                    - datetime.fromisoformat(prev_d).date()).days
+            if span <= 0:
+                return prev_r
+            frac = ((datetime.fromisoformat(d).date()
+                     - datetime.fromisoformat(prev_d).date()).days) / span
+        except Exception:
+            return prev_r
+        return max(1, int(round(prev_r + (next_r - prev_r) * frac)))
+
+    # Rank-derived per-day estimate for every date in the target
+    # window. This replaces the earlier cumulative-delta path so the
+    # daily curve stays on the same calibration as the lifetime
+    # estimate. Missing days (title dropped off chart, scraper miss)
+    # are filled with the interpolated / carry-forward effective rank.
+    new_reads: dict = {}
+    any_from_rank = False
+    for d in window_dates:
+        r = _effective_rank(d)
         est = _estimate_daily_views_from_rank(
             r, mau_millions, day_key=d, salt=salt)
         if est is not None:
             new_reads[d] = est
-    if new_reads:
+            any_from_rank = True
+    if any_from_rank:
         entry['reads_by_date'] = new_reads
         return
 
@@ -672,6 +750,9 @@ def _derive_daily_reads_by_date(entry: dict, mau_millions: float,
     # is missing on every observed date, which shouldn't happen for
     # any of the four competitor platforms today). Preserved so the
     # module still degrades gracefully in that unlikely case.
+    # Alias so the legacy loops below keep working against the
+    # full window (which was the pre-refactor variable name).
+    dates = window_dates
     numeric = [(d, reads.get(d)) for d in dates
                if isinstance(reads.get(d), (int, float))]
     is_cumulative = False
@@ -1726,9 +1807,17 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
         # After this pass, reads_by_date[d] = views on day d, which
         # lets the sparkline + daily-views modal show real day-to-day
         # variance driven by rank movement.
+        # Pass the platform's full window (arc.observed_dates) so
+        # _derive_daily_reads_by_date fills in every day in the visible
+        # window rather than only days the title was observed. This
+        # closes the "no data for 8/10" gaps the modal + sparkline
+        # were showing when a title dropped off the top-N chart for
+        # a day or two mid-window.
+        platform_dates_for_fill = arc.get('observed_dates') or []
         for t in titles:
             _derive_daily_reads_by_date(
-                t, mau_m, salt=f"{source}|{t.get('key','')}"
+                t, mau_m, salt=f"{source}|{t.get('key','')}",
+                platform_dates=platform_dates_for_fill,
             )
 
         # Attach per-episode retention curve + free/paid summary stats
