@@ -2287,8 +2287,9 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
         _flow_by_source[p.get('source')] = flow
         if flow and flow.get('active_users'):
             cap = int(flow['active_users'] * 0.92)
-            if p.get('total_views', 0) > cap:
-                p['total_views_uncapped'] = p['total_views']
+            uncapped = p.get('total_views', 0)
+            if uncapped > cap:
+                p['total_views_uncapped'] = uncapped
                 p['total_views'] = cap
                 # Rescale each title's contribution proportionally so
                 # top_title_views stays consistent with the new
@@ -2297,6 +2298,20 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
                 # one title than the platform has in total.
                 if p.get('top_title_views', 0) > cap:
                     p['top_title_views'] = cap
+                # Also rescale the paywall / payer-completion running
+                # sums by the same cap ratio. Without this the
+                # `tracked_views_for_paywall` denominator remains the
+                # uncapped 131M-style number while `total_views` on
+                # the same card reads 24.6M. The percentage stays
+                # correct either way (numerator and denominator both
+                # scale linearly), but the raw counts must reconcile
+                # to the capped total or the card contradicts itself.
+                scale = cap / uncapped if uncapped > 0 else 1.0
+                for k in ('_paid_wsum', '_paid_views',
+                          '_payer_wsum', '_payer_views'):
+                    if k in p:
+                        p[k] = int(p[k] * scale) if isinstance(p[k], int) \
+                            else p[k] * scale
 
     # Re-sort + recompute grand total against capped values
     platform_totals.sort(key=lambda x: -x.get('total_views', 0))
