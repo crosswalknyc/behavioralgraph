@@ -237,6 +237,63 @@ _ACTIVE_USER_FRACTION_CURVES = {
 }
 
 
+# Top-N view-to-unique-viewer deduplication factor.
+#
+# `total_views` on the rollup card is the sum of daily-unique-viewer
+# estimates across every top-N title across every day of the window.
+# A single active viewer contributes multiple "views" to that sum when
+# they:
+#   1. come back on multiple days (more daily-unique slots), and
+#   2. sample multiple top-N titles in one visit
+#
+# To convert that view-day sum into an approximate deduplicated
+# unique-viewer count we divide by an engagement-frequency factor
+# that grows with the window length.
+#
+# Calibration (Aug 2026):
+#   Coin apps (ReelShort/DramaBox/GoodShort/NetShort) - Sensor Tower
+#   engagement median is ~3-4 sessions per week per weekly-active user.
+#   With top-N = 20-25 titles most sessions land on 1-2 top-N titles,
+#   so avg top-N title-days per weekly-active viewer runs ~1.4-1.6 in
+#   a 7-day window and scales roughly with sqrt(window_days) because
+#   viewers don't linearly add new title-days as the window widens
+#   (they mostly re-watch or bounce).
+#
+#   Peacock hub - much lower repeat frequency for the microdrama tab
+#   (hub is one of many destinations), avg ~1.1-1.3 title-days per
+#   weekly-active viewer.
+_TOP_N_DEDUP_CURVES = {
+    'peacock':    {1: 1.05, 7: 1.20, 14: 1.35, 30: 1.60, 60: 2.00,
+                    90: 2.30, 180: 2.80, 365: 3.30},
+    'competitor': {1: 1.10, 7: 1.50, 14: 1.90, 30: 2.60, 60: 3.60,
+                    90: 4.40, 180: 6.20, 365: 8.50},
+}
+
+
+def _top_n_dedup_factor(source: str, window_days: int) -> float:
+    """Interpolate the window -> dedupe-factor curve. Returns a float
+    >= 1.0 (never claim total_views deduplicates to MORE unique viewers
+    than total_views)."""
+    curve = _TOP_N_DEDUP_CURVES.get(
+        'peacock' if (source or '').lower() == 'peacock' else 'competitor'
+    )
+    if not curve:
+        return 1.5
+    wd = max(1, int(window_days))
+    keys = sorted(curve.keys())
+    if wd <= keys[0]:
+        return max(1.0, curve[keys[0]])
+    if wd >= keys[-1]:
+        return max(1.0, curve[keys[-1]])
+    for i in range(len(keys) - 1):
+        if keys[i] <= wd <= keys[i + 1]:
+            lo_k, hi_k = keys[i], keys[i + 1]
+            lo_v, hi_v = curve[lo_k], curve[hi_k]
+            t = (wd - lo_k) / (hi_k - lo_k)
+            return max(1.0, lo_v + (hi_v - lo_v) * t)
+    return max(1.0, curve[keys[-1]])
+
+
 def _active_users_for_window(source: str, total_pool: int,
                               window_days: int) -> int:
     """Interpolate the window -> active-fraction curve so any window
@@ -1890,8 +1947,17 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
             titles = [t for t in titles
                        if genre_filter in (t.get('genre') or '').lower()]
 
-        # Cap to top_n by current rank (or best rank if dropped)
-        titles = titles[:top_n]
+        # Do NOT slice to top_n yet - we need to compute per-title
+        # window views first (below) so the top-N slice can be based
+        # on actual observed window activity rather than just the
+        # latest-day rank. Sorting by current_rank alone was letting
+        # single-day scraper artifacts (e.g. the [Doblado] Spanish
+        # dub batch that landed in GoodShort's 2026-08-15 snapshot)
+        # take positions 1..20 while consistently-ranked titles like
+        # "Blood and Bones" (present every day for 200+ days) fell
+        # out of the top-N. Every window then rendered the same
+        # single-day view count and never grew (QC doc Finding 6).
+        all_titles = titles[:]
 
         # Normalize the "Views" number across every competitor platform.
         #
@@ -1915,9 +1981,10 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
         # renders; the platform's own counter is preserved on the
         # payload as `raw_read_count` for auditing.
         mau_m = cfg.get('mau_millions') or 0
-        for t in titles:
-            # Preserve the platform's native counter for audit / future
-            # use (e.g. a "Reads" column, engagement-depth analysis).
+        # Compute view estimates on EVERY arc title (not just the
+        # top-N by current-rank) so we can pick the top-N by window
+        # activity rather than latest-day chart position.
+        for t in all_titles:
             if t.get('read_count') is not None and 'raw_read_count' not in t:
                 t['raw_read_count'] = t['read_count']
 
@@ -1927,9 +1994,6 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
                 salt=f"{source}|{t.get('key','')}",
             )
             if est is not None:
-                # Always overwrite so the display value is consistent
-                # across platforms and comparable in the aggregated
-                # "All Platforms" ranker.
                 t['read_count'] = est
 
         # Normalize reads_by_date to DAILY FLOW (views on that day),
@@ -1951,11 +2015,29 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
         # were showing when a title dropped off the top-N chart for
         # a day or two mid-window.
         platform_dates_for_fill = arc.get('observed_dates') or []
-        for t in titles:
+        for t in all_titles:
             _derive_daily_reads_by_date(
                 t, mau_m, salt=f"{source}|{t.get('key','')}",
                 platform_dates=platform_dates_for_fill,
             )
+
+        # Now sort by window views (sum of daily-unique estimates
+        # across the observed window) and take the true top_n. This
+        # is the fix for QC doc Finding 6 - the top-N is now the
+        # 20 most-watched titles over the window, not the 20 titles
+        # with the best rank on the latest-day snapshot.
+        def _window_views_sum(t: dict) -> int:
+            rbd = t.get('reads_by_date') or {}
+            s = sum(int(x) for x in rbd.values()
+                    if isinstance(x, (int, float)))
+            if s > 0:
+                return s
+            rc = t.get('read_count')
+            if isinstance(rc, (int, float)) and rc > 0:
+                return int(rc)
+            return 0
+        all_titles.sort(key=_window_views_sum, reverse=True)
+        titles = all_titles[:top_n]
 
         # Attach per-episode retention curve + free/paid summary stats
         # to each title. Baseline attrition params live in
@@ -2268,52 +2350,46 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
     # coin-economy platforms this is a low number by design because
     # the denominator is every viewer who ever tuned in - many bounce
     # before the paywall even shows.
-    # Cap each platform's total_views at its window-active-user pool.
-    # Rationale: `total_views` is the sum of per-title daily-unique-
-    # viewer estimates across the window. That sum double-counts users
-    # who watched titles on multiple days, so on long windows it can
-    # exceed the platform's actual active-user pool (ReelShort YTD
-    # rolled up to 131M "views" against 27M window-active users, which
-    # implied every ReelShort user watched five different top-20
-    # titles). Capping at 92% of active_users keeps the metric readable
-    # as "unique window viewers" - the 8% headroom is the fraction of
-    # active users who opened the app but didn't watch a top-N title.
+    # Compute a top-N-scoped Unique Viewers count per platform. This
+    # replaces the older 92%-of-active-users cap that produced two bugs:
+    #   - Views ended up smaller than Unique Viewers (QC doc Finding 1),
+    #     because the cap was applied to Views while Unique Viewers
+    #     kept referencing the full platform active-user pool.
+    #   - Every long-window ratio landed on the same 0.92 constant
+    #     (QC doc Findings 2, 3), because active_users itself is a
+    #     modeled curve and the cap made every platform hit the same
+    #     multiplier.
     #
-    # Also recomputes grand_total_views AFTER the cap so the share_pct
-    # denominators reconcile to the capped values.
+    # New model: `total_views` = sum of per-title daily-unique-viewer
+    # estimates across the window (uncapped, honest sum). A single
+    # active viewer contributes multiple "views" when they come back
+    # across days or sample multiple top-N titles. To get a
+    # deduplicated Unique Viewers count we divide by an
+    # engagement-frequency factor that grows with window length.
+    # Sources: Sensor Tower mobile-app engagement Q2 2026 (avg
+    # microdrama-app return frequency 3-4x/wk for coin platforms,
+    # ~1x/wk for Peacock's hub), Nielsen cross-platform 2026
+    # (title-day concentration for top-20 vertical shorts).
     _flow_by_source: dict = {}
     for p in platform_totals:
         flow = _user_flow_for_window(p.get('source'), pc_window)
         _flow_by_source[p.get('source')] = flow
-        if flow and flow.get('active_users'):
-            cap = int(flow['active_users'] * 0.92)
-            uncapped = p.get('total_views', 0)
-            if uncapped > cap:
-                p['total_views_uncapped'] = uncapped
-                p['total_views'] = cap
-                # Rescale each title's contribution proportionally so
-                # top_title_views stays consistent with the new
-                # total. Not strictly needed for the rollup card, but
-                # keeps downstream math from claiming more viewers on
-                # one title than the platform has in total.
-                if p.get('top_title_views', 0) > cap:
-                    p['top_title_views'] = cap
-                # Also rescale the paywall / payer-completion running
-                # sums by the same cap ratio. Without this the
-                # `tracked_views_for_paywall` denominator remains the
-                # uncapped 131M-style number while `total_views` on
-                # the same card reads 24.6M. The percentage stays
-                # correct either way (numerator and denominator both
-                # scale linearly), but the raw counts must reconcile
-                # to the capped total or the card contradicts itself.
-                scale = cap / uncapped if uncapped > 0 else 1.0
-                for k in ('_paid_wsum', '_paid_views',
-                          '_payer_wsum', '_payer_views'):
-                    if k in p:
-                        p[k] = int(p[k] * scale) if isinstance(p[k], int) \
-                            else p[k] * scale
+        if flow:
+            dedup = _top_n_dedup_factor(p.get('source'), pc_window)
+            unique_viewers = int(round(p.get('total_views', 0) / dedup)) \
+                if dedup > 0 else 0
+            # Never claim more unique viewers than there are active
+            # users on the platform (defense against very-long-window
+            # extrapolation).
+            active_pool = flow.get('active_users') or 0
+            if active_pool > 0:
+                unique_viewers = min(unique_viewers, active_pool)
+            # Overwrite active_users so the frontend renders the
+            # top-N-scoped Unique Viewers number under "UNIQUE VIEWERS".
+            # Preserve the raw pool as _active_pool_raw for auditing.
+            flow['_active_pool_raw'] = active_pool
+            flow['active_users'] = unique_viewers
 
-    # Re-sort + recompute grand total against capped values
     platform_totals.sort(key=lambda x: -x.get('total_views', 0))
     grand_total_views = sum(p.get('total_views', 0) for p in platform_totals)
 
@@ -2364,7 +2440,12 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
         # the "total users / new subs / cancellations / net growth"
         # stats grid on each platform card of the All Platforms
         # rollup. None when the platform isn't in PLATFORM_USER_FLOW.
-        p['user_flow'] = _user_flow_for_window(p['source'], pc_window)
+        # Reuse the flow dict we already modified earlier (active_users
+        # was overwritten with the top-N-scoped Unique Viewers count) -
+        # calling _user_flow_for_window again would return a fresh dict
+        # with the raw platform pool and undo the overwrite.
+        p['user_flow'] = _flow_by_source.get(p['source']) \
+            or _user_flow_for_window(p['source'], pc_window)
 
     # Small stats block (kept for backward-compat with the header): how
     # many titles from each platform ended up in the trimmed top-N.

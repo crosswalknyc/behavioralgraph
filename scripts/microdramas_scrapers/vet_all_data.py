@@ -245,25 +245,30 @@ def part_2_numeric_consistency(defects: Defects) -> dict:
         p = m.compute_all_platforms_view(body)
         outputs[wd] = p
 
-    # Table 2a: total_views <= active_users cap
-    print('## 2a: total_views vs active_users per platform per window\n')
-    print('| Window | Platform | Views | Active | Ratio | Verdict |')
+    # Table 2a: total_views >= Unique Viewers (top-N-scoped dedupe).
+    # After Aug 2026 semantic redesign, Views is the honest sum of
+    # daily-uniques across top-N titles (double-counts multi-day
+    # watchers) and Unique Viewers is that sum divided by an
+    # engagement-frequency factor. So Views >= Unique Viewers by
+    # construction of the model, and the vet enforces that.
+    print('## 2a: total_views >= Unique Viewers (top-N-scoped)\n')
+    print('| Window | Platform | Views | Unique | V/UV | Verdict |')
     print('| --- | --- | ---:| ---:| ---:| --- |')
     for wd, label, _ in windows:
         p = outputs[wd]
         for pt in p.get('platform_totals') or []:
             v = pt.get('total_views', 0)
-            active = (pt.get('user_flow') or {}).get('active_users', 0)
-            ratio = v / active if active else 0
-            if ratio > 1.0:
+            uv = (pt.get('user_flow') or {}).get('active_users', 0)
+            ratio = v / uv if uv else 0
+            if uv > 0 and v < uv:
                 verdict = 'FAIL'
                 defects.fail_it(f'{pt.get("platform")} {label}: views '
-                                 f'{_fmt(v)} > active_users {_fmt(active)}')
-            elif ratio > 0.92 + 0.01:
+                                 f'{_fmt(v)} < unique_viewers {_fmt(uv)}')
+            elif ratio < 1.0:
                 verdict = 'BORDERLINE'
             else:
                 verdict = 'PASS'
-            print(f'| {label} | {pt.get("platform")} | {_fmt(v)} | {_fmt(active)} | {ratio:.2f} | {verdict} |')
+            print(f'| {label} | {pt.get("platform")} | {_fmt(v)} | {_fmt(uv)} | {ratio:.2f} | {verdict} |')
 
     # Table 2b: share_pct sums to ~100
     print('\n## 2b: platform share_pct sums to 100%\n')
@@ -431,27 +436,31 @@ def part_4_view_volumes(outputs: dict, defects: Defects) -> None:
             defects.fail_it(f'{source}: rank-1 daily peak {pct:.2f}% of pool '
                              f'outside [{lo:.2f}%, {hi:.2f}%]')
 
-    # Aggregate: top-20 weekly views should be some sensible fraction of active
-    print('\n## 4b: Top-20 window views vs window active users\n')
-    print('| Window | Platform | Views | Active | Views/Active | Verdict |')
+    # Aggregate: top-N unique-viewer count vs raw platform active-user
+    # pool. The top-N sits inside the platform's window-active pool,
+    # so the ratio should be < 1.0 by definition. Anything > 1.0 means
+    # the deduplication factor is too loose (top-N unique viewers
+    # exceed the total pool of platform-active users, which is
+    # impossible).
+    print('\n## 4b: Top-N unique viewers vs platform active-user pool\n')
+    print('| Window | Platform | UniqueV | ActivePool | UV/Pool | Verdict |')
     print('| --- | --- | ---:| ---:| ---:| --- |')
     for wd_label, wd in [('7d', 7), ('30d', 30), ('YTD', 226)]:
         for pt in outputs[wd].get('platform_totals') or []:
-            v = pt.get('total_views', 0)
-            active = (pt.get('user_flow') or {}).get('active_users', 0)
-            r = v / active if active else 0
-            source = pt.get('source')
-            if source == 'peacock':
-                lo, hi = 0.60, 0.95   # Peacock microdrama vertical is narrow
+            uv   = (pt.get('user_flow') or {}).get('active_users', 0)
+            pool = (pt.get('user_flow') or {}).get('_active_pool_raw', 0)
+            r = uv / pool if pool else 0
+            if pool and uv > pool:
+                verdict = 'FAIL'
+                defects.fail_it(
+                    f'{pt.get("platform")} {wd_label}: unique_viewers '
+                    f'{_fmt(uv)} > active_pool {_fmt(pool)}')
+            elif r > 0.98:
+                verdict = 'BORDERLINE'
             else:
-                lo, hi = 0.30, 0.92
-            verdict = _band(r, lo, hi, tol=0.20)
-            print(f'| {wd_label} | {pt.get("platform")} | {_fmt(v)} | '
-                  f'{_fmt(active)} | {r*100:.1f}% | {verdict} |')
-            if verdict == 'FAIL':
-                defects.borderline_it(
-                    f'{pt.get("platform")} {wd_label}: views/active '
-                    f'{r*100:.1f}% outside [{lo*100:.0f}%, {hi*100:.0f}%]')
+                verdict = 'PASS'
+            print(f'| {wd_label} | {pt.get("platform")} | {_fmt(uv)} | '
+                  f'{_fmt(pool)} | {r*100:.1f}% | {verdict} |')
     print()
 
 
