@@ -95476,7 +95476,11 @@ https://www.instagram.com/p/..."></textarea>
                 { key: 'audienceReach', label: 'Audience Reach', higherBetter: true, format: v => formatNumber(v) },
                 { key: 'conversionRate', label: 'Conversion Rate', higherBetter: true, format: v => (v != null ? v.toFixed(2) + '%' : '-') },
                 { key: 'dormantReactive', label: 'Dormant to Reactive', higherBetter: true, format: v => formatNumber(v) },
-                { key: 'avgDaysToSignup', label: 'Avg Days to Signup', higherBetter: false, format: v => (v != null ? Math.round(v) + ' days' : 'N/A') }
+                { key: 'avgDaysToSignup', label: 'Avg Days to Signup', higherBetter: false, format: v => (v != null ? Math.round(v) + ' days' : 'N/A') },
+                { key: 'completionRate', label: 'Completion Rate', higherBetter: true, format: v => (v ? (String(v).endsWith('%') ? v : v + '%') : '-') },
+                // Second-screen activity isn't inherently good/bad (high for reality/
+                // sports, low for prestige drama), so it gets no winner highlight.
+                { key: 'secondScreen', label: 'Second Screen Activity', noWinner: true, format: v => (v ? (String(v).endsWith('%') ? v : v + '%') : '-') }
             ];
 
             // Build metrics per profile using getSubscriberTabMetrics-style extraction
@@ -95506,7 +95510,9 @@ https://www.instagram.com/p/..."></textarea>
                 const attributedProj = _subProjected(attributed, as.attributed?.gen_pop);
                 const twProjV = _subProjected(tw, twGP);
                 const dormantProj = _subProjected(dormant, as.dormant_reactive?.gen_pop);
-                return { totalPlatformImpact: totalSignupsProj, newSubscriberAcquisition: attributedProj, audienceReach: twProjV, conversionRate: conv, dormantReactive: dormantProj, avgDaysToSignup: avgDays };
+                const completionRate = (km.completion_rate || '').toString().trim();
+                const secondScreen = (km.second_screen_activity || '').toString().trim();
+                return { totalPlatformImpact: totalSignupsProj, newSubscriberAcquisition: attributedProj, audienceReach: twProjV, conversionRate: conv, dormantReactive: dormantProj, avgDaysToSignup: avgDays, completionRate, secondScreen };
             });
 
             // Build table HTML
@@ -95523,10 +95529,13 @@ https://www.instagram.com/p/..."></textarea>
 
             metricRows.forEach(row => {
                 const values = metricsPerProfile.map(m => m[row.key]);
-                const nums = values.map(v => row.key === 'avgDaysToSignup' ? (v != null ? Number(v) : Infinity) : (Number(v) || 0));
+                const nums = values.map(v => {
+                    if (row.key === 'avgDaysToSignup') { const n = parseNumber(v); return n != null ? n : Infinity; }
+                    const n = parseNumber(v); return n != null ? n : 0;
+                });
                 const finite = row.key === 'avgDaysToSignup' ? nums.filter(x => x !== Infinity && !isNaN(x)) : nums;
                 const best = row.higherBetter ? Math.max(...nums) : (finite.length ? Math.min(...finite) : null);
-                const bestIdx = best == null ? -1 : nums.indexOf(best);
+                const bestIdx = (row.noWinner || best == null || (row.higherBetter && best === 0)) ? -1 : nums.indexOf(best);
 
                 html += '<tr>';
                 html += `<td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">${row.label}</td>`;
