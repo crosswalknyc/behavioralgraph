@@ -4281,18 +4281,24 @@ def _fetch_trending_people(headlines: list[dict],
             kept: list[dict] = []
             for p in people:
                 d = descs.get(p['name']) or {}
-                desc = d.get('description') or ''
-                extract = d.get('extract') or ''
-                # If we got no Wikipedia hit at all, keep the row -
-                # the extractor's blocklist + phrase check already
-                # rejected the worst of it, and lots of legit people
-                # (Perez Hilton, brand-new viral figures) have thin
-                # or missing wiki descriptions.
+                desc    = d.get('description') or ''
+                extract = d.get('extract')     or ''
+                thumb   = d.get('thumbnail')   or ''
+                # Stamp the Wikipedia thumbnail URL onto every row we
+                # keep so the frontend can render a headshot next to
+                # the name. The CSS-side purple silhouette fallback
+                # handles rows where Wikipedia has no image (or where
+                # we got no article hit at all).
                 if not desc and not extract:
+                    # No Wikipedia hit - keep the row (benefit of
+                    # doubt) but leave `image` blank; the frontend
+                    # falls back to the silhouette placeholder.
+                    p['image'] = thumb  # usually '' here but pass through
                     kept.append(p)
                     continue
                 if _classify_person_row(desc, extract):
                     p['wikipedia_description'] = desc
+                    p['image']                 = thumb
                     kept.append(p)
                 # else: drop the row (event / org / place / foreign)
             people = kept

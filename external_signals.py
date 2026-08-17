@@ -757,12 +757,19 @@ _WIKI_SUMMARY = ('https://en.wikipedia.org/api/rest_v1/page/summary/'
 def wikipedia_descriptions(titles: list[str],
                             timeout_s: int = 6,
                             max_workers: int = 12) -> dict[str, dict]:
-    """Parallel fetch of `{description, extract}` for each title.
+    """Parallel fetch of `{description, extract, thumbnail}` for each title.
 
-    Returns `{title: {"description": str, "extract": str}}` for every
-    input title. Missing / 404 / timeout responses map to
-    `{"description": "", "extract": ""}` so callers can distinguish
-    "no description" from "not in dict".
+    Returns `{title: {"description": str, "extract": str, "thumbnail": str}}`
+    for every input title. Missing / 404 / timeout responses map to
+    `{"description": "", "extract": "", "thumbnail": ""}` so callers can
+    distinguish "no description" from "not in dict".
+
+    `thumbnail` is the URL of the article's headshot (via the summary
+    endpoint's `thumbnail.source` field). Wikipedia's REST API returns
+    an image on ~85% of top-1000 pages - missing on some events,
+    places, and brand articles but present on virtually every notable
+    person. Downstream callers stamp this URL on Trending People
+    rows so the dashboard can render a face next to the name.
 
     Uses a strict wall-clock timeout (default 6s total) to keep this
     off the critical path for dashboard loads. Any title that takes
@@ -783,16 +790,18 @@ def wikipedia_descriptions(titles: list[str],
                 'Accept': 'application/json',
             }, timeout=4)
         except Exception:
-            return title, {'description': '', 'extract': ''}
+            return title, {'description': '', 'extract': '', 'thumbnail': ''}
         if not r.ok:
-            return title, {'description': '', 'extract': ''}
+            return title, {'description': '', 'extract': '', 'thumbnail': ''}
         try:
             data = r.json() or {}
         except Exception:
-            return title, {'description': '', 'extract': ''}
+            return title, {'description': '', 'extract': '', 'thumbnail': ''}
+        thumb = ((data.get('thumbnail') or {}).get('source') or '').strip()
         return title, {
             'description': (data.get('description') or '').strip(),
             'extract':     (data.get('extract')     or '').strip(),
+            'thumbnail':   thumb,
         }
 
     out: dict[str, dict] = {}

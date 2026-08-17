@@ -24239,7 +24239,10 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-mix-label.tiq-mix-search-primary b { color: #93c5fd; }
             #trendsIQView .tiq-mix-label.tiq-mix-media-primary b  { color: #fcd34d; }
             #trendsIQView .tiq-mix-label.tiq-mix-social-primary b { color: #f9a8d4; }
-            #trendsIQView .tiq-person-card { background: rgba(124, 58, 237, 0.06); border: 1px solid rgba(124, 58, 237, 0.18); border-radius: 8px; padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 0.3rem; }
+            #trendsIQView .tiq-person-card { background: rgba(124, 58, 237, 0.06); border: 1px solid rgba(124, 58, 237, 0.18); border-radius: 8px; padding: 0.7rem 0.85rem; display: flex; flex-direction: row; align-items: flex-start; gap: 0.65rem; }
+            /* Trending People headshot: 44x44 circle, cover-fit, silhouette SVG fallback for the ~15% of Wikipedia pages without a thumbnail. */
+            #trendsIQView .tiq-person-avatar { flex: 0 0 44px; width: 44px; height: 44px; background-size: cover; background-position: center top; border-radius: 50%; background-color: #1e293b; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' preserveAspectRatio='xMidYMid slice'%3E%3Crect width='24' height='24' fill='%231e293b'/%3E%3Cpath d='M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-3.3 0-8 1.7-8 5v3h16v-3c0-3.3-4.7-5-8-5z' fill='%237c3aed'/%3E%3C/svg%3E"); }
+            #trendsIQView .tiq-person-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
             #trendsIQView .tiq-person-name { font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
             #trendsIQView .tiq-person-mentions { font-size: 0.72rem; color: var(--text-secondary); }
             #trendsIQView .tiq-person-context { font-size: 0.7rem; color: var(--text-secondary); line-height: 1.35; opacity: 0.85; }
@@ -50263,7 +50266,18 @@ https://www.instagram.com/p/..."></textarea>
                 // related-headline caption. Deep-links to the source
                 // when we have a URL for the article.
                 var whyHtml = _tiqPersonWhyLine(p);
+                // Avatar: Wikipedia headshot via the article summary
+                // endpoint (p.image). When the summary API doesn't
+                // expose a thumbnail (~15% of pages, mostly events
+                // and places rather than people), the .tiq-person-
+                // avatar CSS class fills in a purple silhouette so
+                // the card layout stays consistent.
+                var avatarStyle = p.image
+                    ? ('background-image: url(\'' + String(p.image).replace(/'/g, "%27") + '\')')
+                    : '';
                 html += '<div class="tiq-person-card">' +
+                        '<div class="tiq-person-avatar" style="' + avatarStyle + '"></div>' +
+                        '<div class="tiq-person-body">' +
                         '<div class="tiq-person-name">' +
                           '<span>' + _tiqEsc(p.name) + '</span>' +
                           trendPill +
@@ -50274,6 +50288,7 @@ https://www.instagram.com/p/..."></textarea>
                         (pageviewsProj ? ' &middot; ' + _tiqNum(pageviewsProj) + ' pageviews' : '') +
                         '</div>' +
                         whyHtml +
+                        '</div>' +
                         '</div>';
             });
             html += '</div></div>';
