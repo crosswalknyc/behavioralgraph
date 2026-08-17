@@ -95221,6 +95221,16 @@ https://www.instagram.com/p/..."></textarea>
             await loadSubscriberProfiles();
         }
         
+        // Prefer the CSV's Gen Pop projection (the number shown on the profile
+        // page's Performance Metrics cards) over the raw panel count, so the
+        // Compare views match the profile pages. Falls back to the panel count
+        // when the row has no projection.
+        function _subProjected(countVal, genPopVal) {
+            const n = parseNumber(genPopVal);
+            const hasGp = genPopVal != null && String(genPopVal).trim() !== '';
+            return (hasGp && n != null) ? n : countVal;
+        }
+
         function getSubscriberTabMetrics(tab) {
             const data = tab.data?.data || {};
             const metrics = data.key_metrics || {};
@@ -95244,12 +95254,17 @@ https://www.instagram.com/p/..."></textarea>
             const avgDaysToSignup = (avgDaysRaw !== undefined && avgDaysRaw !== null && String(avgDaysRaw).trim() && String(avgDaysRaw) !== 'N/A')
                 ? parseFloat(String(avgDaysRaw).replace(/[^0-9.-]/g, '')) : null;
             const performanceScore = totalSignups > 0 ? Math.min(100, Math.round((totalSignups / 10000) * 100)) : 0;
+            // Project up to Gen Pop so the modal matches the profile pages.
+            const totalSignupsProj = _subProjected(totalSignups, (summary.total?.gen_pop || metrics.new_signups?.gen_pop));
+            const attributedProj = _subProjected(attributedSignups, summary.attributed?.gen_pop);
+            const totalWatchersProj = _subProjected(totalWatchers, totalWatchersGenPop);
+            const dormantReactiveProj = _subProjected(dormantReactive, summary.dormant_reactive?.gen_pop);
             return {
-                totalPlatformImpact: totalSignups,
-                newSubscriberAcquisition: attributedSignups,
-                audienceReach: totalWatchers,
+                totalPlatformImpact: totalSignupsProj,
+                newSubscriberAcquisition: attributedProj,
+                audienceReach: totalWatchersProj,
                 conversionRate: conversionPct,
-                dormantReactive,
+                dormantReactive: dormantReactiveProj,
                 avgDaysToSignup: avgDaysToSignup,
                 performanceScore,
                 totalSignups,
@@ -95485,7 +95500,13 @@ https://www.instagram.com/p/..."></textarea>
                 const adRaw = km.avg_days_to_signup;
                 const avgDays = (adRaw != null && String(adRaw).trim() && String(adRaw) !== 'N/A')
                     ? parseFloat(String(adRaw).replace(/[^0-9.-]/g, '')) : null;
-                return { totalPlatformImpact: totalSignups, newSubscriberAcquisition: attributed, audienceReach: tw, conversionRate: conv, dormantReactive: dormant, avgDaysToSignup: avgDays };
+                // Project up to Gen Pop (the numbers shown on the profile pages);
+                // fall back to the raw panel count when no projection exists.
+                const totalSignupsProj = _subProjected(totalSignups, (as.total?.gen_pop || km.new_signups?.gen_pop));
+                const attributedProj = _subProjected(attributed, as.attributed?.gen_pop);
+                const twProjV = _subProjected(tw, twGP);
+                const dormantProj = _subProjected(dormant, as.dormant_reactive?.gen_pop);
+                return { totalPlatformImpact: totalSignupsProj, newSubscriberAcquisition: attributedProj, audienceReach: twProjV, conversionRate: conv, dormantReactive: dormantProj, avgDaysToSignup: avgDays };
             });
 
             // Build table HTML
