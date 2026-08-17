@@ -348,6 +348,74 @@ def _top_n_dedup_factor(source: str, window_days: int) -> float:
     return max(1.0, curve[keys[-1]])
 
 
+def _resolve_window_range(window_days: Optional[int],
+                            start_date: Optional[str],
+                            end_date: Optional[str]) -> dict:
+    """Resolve the effective date range for any window spec.
+
+    Returns a dict with:
+      - start:  ISO YYYY-MM-DD (inclusive)
+      - end:    ISO YYYY-MM-DD (inclusive)
+      - days:   integer count of days in the range
+      - label:  human-readable label ("Last 7 days", "Year to date",
+                "Custom range")
+      - mode:   'preset' | 'ytd' | 'custom'
+
+    Rules:
+      - If both `start_date` and `end_date` are provided, that's a
+        custom range (or YTD if start is Jan 1 of current year).
+      - Otherwise, use `window_days` back from today (inclusive).
+      - Always emits concrete ISO dates so exports and screenshots
+        can be reconstructed later via the custom-date selector.
+
+    Jenna 2026-08-17: "When we pull last 7,28,30,60,90 and year to
+    date (also custom dates) the date range needs to print on DB and
+    on export. So its a permanent record. Can easily recreate in
+    future runs in custom date section."
+    """
+    _today = date.today()
+    if start_date and end_date:
+        try:
+            _s = datetime.fromisoformat(start_date).date()
+            _e = datetime.fromisoformat(end_date).date()
+            if _s > _e:
+                _s, _e = _e, _s
+            _days = (_e - _s).days + 1
+            # Detect YTD (start == Jan 1 of the end year AND
+            # end is within 3 days of today) so the label reads
+            # "Year to date" instead of "Custom range".
+            _jan1 = date(_e.year, 1, 1)
+            if _s == _jan1 and (_today - _e).days <= 3:
+                _mode = 'ytd'
+                _label = 'Year to date'
+            else:
+                _mode = 'custom'
+                _label = 'Custom range'
+            return {
+                'start': _s.isoformat(),
+                'end':   _e.isoformat(),
+                'days':  _days,
+                'label': _label,
+                'mode':  _mode,
+            }
+        except (ValueError, TypeError):
+            pass
+    wd = max(1, int(window_days or 7))
+    _e = _today
+    _s = _e - timedelta(days=wd - 1)
+    if wd == 1:
+        _label = 'Today'
+    else:
+        _label = f'Last {wd} days'
+    return {
+        'start': _s.isoformat(),
+        'end':   _e.isoformat(),
+        'days':  wd,
+        'label': _label,
+        'mode':  'preset',
+    }
+
+
 def _active_users_for_window(source: str, total_pool: int,
                               window_days: int) -> int:
     """Interpolate the window -> active-fraction curve so any window
@@ -2493,6 +2561,8 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
         for p in x['per_platform'].values()
     ))
 
+    _range = _resolve_window_range(window_days, start_date, end_date)
+
     _payload = {
         'success':        True,
         'filters':        {
@@ -2502,6 +2572,11 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
             'start_date':  start_date,
             'end_date':    end_date,
         },
+        'window_start_date': _range['start'],
+        'window_end_date':   _range['end'],
+        'window_days_effective': _range['days'],
+        'window_label':      _range['label'],
+        'window_mode':       _range['mode'],
         'generated_at':   datetime.now(timezone.utc).isoformat(),
         'window_options': _COMPETITOR_WINDOW_OPTIONS,
         'platforms':      platforms,
@@ -2922,6 +2997,16 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
         key=lambda x: -x['count'],
     )
 
+    # Concrete date range so exports and screenshots are self-
+    # documenting. Jenna 2026-08-17: "the date range needs to print
+    # on DB and on export. So its a permanent record. Can easily
+    # recreate in future runs in custom date section."
+    _range = _resolve_window_range(
+        pc_window,
+        filters.get('start_date'),
+        filters.get('end_date'),
+    )
+
     payload = {
         'success':       True,
         'filters': {
@@ -2931,6 +3016,11 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
             'start_date':  filters.get('start_date') or None,
             'end_date':    filters.get('end_date') or None,
         },
+        'window_start_date': _range['start'],
+        'window_end_date':   _range['end'],
+        'window_days_effective': _range['days'],
+        'window_label':      _range['label'],
+        'window_mode':       _range['mode'],
         'generated_at':      datetime.now(timezone.utc).isoformat(),
         'titles':            aggregated,
         'platform_mix':      platform_mix,
@@ -3237,6 +3327,8 @@ def compute_view(filters: Optional[dict] = None,
         except Exception:
             pass
 
+    _range = _resolve_window_range(window_days, start_date_s, end_date_s)
+
     _payload = {
         'success':      True,
         'filters':      {
@@ -3248,6 +3340,11 @@ def compute_view(filters: Optional[dict] = None,
             'start_date':    start_date_s,
             'end_date':      end_date_s,
         },
+        'window_start_date': _range['start'],
+        'window_end_date':   _range['end'],
+        'window_days_effective': _range['days'],
+        'window_label':      _range['label'],
+        'window_mode':       _range['mode'],
         'generated_at': datetime.now(timezone.utc).isoformat(),
         'titles':       display,
         'audience_overall': OVERALL_AUDIENCE,

@@ -24436,6 +24436,18 @@ https://www.instagram.com/p/..."></textarea>
             #microdramasIQView .miq-filter-bar select { background: rgba(0,0,0,0.4); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.85rem; min-width: 180px; }
             #microdramasIQView .miq-apply-btn { background: linear-gradient(135deg, #ec4899, #8b5cf6); color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
             #microdramasIQView .miq-apply-btn:hover { opacity: 0.9; }
+            /* Date-range stamp bar: always-visible reproducibility
+               anchor so screenshots and exports carry the exact
+               dates for the current view. */
+            #microdramasIQView .miq-datestamp { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.55rem 0.85rem; margin: 0.5rem 0 0.6rem 0; background: linear-gradient(135deg, rgba(236, 72, 153, 0.08), rgba(139, 92, 246, 0.08)); border: 1px solid rgba(139, 92, 246, 0.28); border-radius: 8px; flex-wrap: wrap; }
+            #microdramasIQView .miq-datestamp-body { display: flex; align-items: baseline; gap: 0.55rem; flex-wrap: wrap; }
+            #microdramasIQView .miq-datestamp-label { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); }
+            #microdramasIQView .miq-datestamp-value { font-size: 0.92rem; font-weight: 700; color: var(--text-primary); }
+            #microdramasIQView .miq-datestamp-range { font-size: 0.8rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+            #microdramasIQView .miq-datestamp-range::before { content: '\00b7 '; padding-right: 0.25rem; }
+            #microdramasIQView .miq-datestamp-range:empty::before { content: ''; }
+            #microdramasIQView .miq-export-btn { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.78rem; font-weight: 600; cursor: pointer; letter-spacing: 0.02em; }
+            #microdramasIQView .miq-export-btn:hover { border-color: rgba(139, 92, 246, 0.55); color: #fff; }
             #microdramasIQView .miq-meta { font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.75rem; }
             #microdramasIQView .miq-tabstrip { display: flex; gap: 0.25rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.5rem; margin-bottom: 1rem; }
             #microdramasIQView .miq-tab { background: transparent; border: none; color: var(--text-secondary); padding: 0.5rem 0.85rem; font-size: 0.82rem; font-weight: 500; cursor: pointer; border-radius: 6px; }
@@ -24722,6 +24734,24 @@ https://www.instagram.com/p/..."></textarea>
             </div>
             <div class="miq-meta">
                 <span id="microdramasIQMeta">Loading catalog...</span>
+            </div>
+            <!-- Persistent date-range stamp + export button. Visible
+                 on every tab so any screenshot or export always
+                 carries the exact date range for later reproduction
+                 via the custom-date selector. Jenna 2026-08-17. -->
+            <div id="microdramasIQDateStamp" class="miq-datestamp">
+                <div class="miq-datestamp-body">
+                    <span class="miq-datestamp-label">Window</span>
+                    <span id="microdramasIQDateStampLabel" class="miq-datestamp-value">-</span>
+                    <span id="microdramasIQDateStampRange" class="miq-datestamp-range"></span>
+                </div>
+                <div class="miq-datestamp-actions">
+                    <button type="button" class="miq-export-btn has-tooltip"
+                            data-tooltip="Export current view as CSV. Filename + header rows both stamp the exact date range so the export can be reproduced later via the custom-date selector."
+                            onclick="microdramasIQExportCsv()">
+                        Export CSV
+                    </button>
+                </div>
             </div>
             <div class="miq-tabstrip">
                 <button type="button" class="miq-tab active" data-panel="all"       onclick="setMicrodramasIQTab('all')">All Platforms</button>
@@ -46489,6 +46519,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (!d || !d.success) throw new Error(d && d.error ? d.error : 'Failed to load data');
                 window.__microdramasIQ.lastData = d;
                 renderMicrodramasIQ(d);
+                _miqUpdateDateStamp();
             } catch (e) {
                 console.error('Microdramas IQ data error:', e);
                 if (grid) grid.innerHTML = '<div class="miq-empty">Could not load titles: ' + (e.message || e) + '</div>';
@@ -47239,6 +47270,9 @@ https://www.instagram.com/p/..."></textarea>
                 window.__microdramasIQ.compLoaded = true;
                 applyMicrodramasIQCompetitors();
             }
+            // Refresh the persistent date-range stamp so it reflects
+            // the payload most relevant to whichever tab is now active.
+            _miqUpdateDateStamp();
         }
 
         // ===================== MICRODRAMAS COMPETITORS =====================
@@ -47275,6 +47309,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (!d || !d.success) throw new Error(d && d.error ? d.error : 'Failed to load competitors');
                 window.__microdramasIQ.compData = d;
                 renderMicrodramasIQCompetitors(d);
+                _miqUpdateDateStamp();
             } catch (e) {
                 console.error('Microdramas competitors error:', e);
                 ['ReelShort', 'DramaBox', 'GoodShort', 'NetShort'].forEach(function(p) {
@@ -47338,6 +47373,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (!d || !d.success) throw new Error(d && d.error ? d.error : 'Failed to load aggregated ranker');
                 window.__microdramasIQ.allData = d;
                 renderMicrodramasIQAllPlatforms(d);
+                _miqUpdateDateStamp();
             } catch (e) {
                 console.error('Microdramas all-platforms error:', e);
                 if (grid) grid.innerHTML = '<div class="miq-empty-panel">Could not load aggregated ranker: ' + (e.message || e) + '</div>';
@@ -47359,22 +47395,317 @@ https://www.instagram.com/p/..."></textarea>
         // a stacked share bar plus per-platform stat cards, showing window-
         // scoped total unique views. Sits above the by-show ranker on the
         // All Platforms tab.
+        // Format an ISO date (YYYY-MM-DD) as "Aug 10, 2026" for
+        // human-facing labels. Never returns null - empty in, empty
+        // out. Uses UTC so we don't shift the date across TZ boundaries.
+        function _miqFmtDate(iso) {
+            if (!iso) return '';
+            var parts = String(iso).split('-');
+            if (parts.length !== 3) return String(iso);
+            var y = parseInt(parts[0], 10);
+            var m = parseInt(parts[1], 10);
+            var d = parseInt(parts[2], 10);
+            if (!y || !m || !d) return String(iso);
+            var months = ['Jan','Feb','Mar','Apr','May','Jun',
+                          'Jul','Aug','Sep','Oct','Nov','Dec'];
+            return months[m - 1] + ' ' + d + ', ' + y;
+        }
+
+        // Compact "Aug 10 - Aug 16, 2026" range. Drops the year on
+        // the start side if both dates share it.
+        function _miqFmtRange(startIso, endIso) {
+            if (!startIso || !endIso) return '';
+            var sp = String(startIso).split('-');
+            var ep = String(endIso).split('-');
+            if (sp.length !== 3 || ep.length !== 3) {
+                return _miqFmtDate(startIso) + ' - ' + _miqFmtDate(endIso);
+            }
+            var months = ['Jan','Feb','Mar','Apr','May','Jun',
+                          'Jul','Aug','Sep','Oct','Nov','Dec'];
+            var sy = sp[0], sm = months[parseInt(sp[1],10)-1], sd = parseInt(sp[2],10);
+            var ey = ep[0], em = months[parseInt(ep[1],10)-1], ed = parseInt(ep[2],10);
+            if (sy === ey) {
+                return sm + ' ' + sd + ' - ' + em + ' ' + ed + ', ' + ey;
+            }
+            return sm + ' ' + sd + ', ' + sy + ' - ' + em + ' ' + ed + ', ' + ey;
+        }
+
+        // Human-readable window label WITH concrete date range so the
+        // dashboard is self-documenting - any screenshot or export
+        // carries the exact dates for later reconstruction via the
+        // custom-date selector. Jenna 2026-08-17: "the date range
+        // needs to print on DB and on export. So its a permanent
+        // record. Can easily recreate in future runs in custom date
+        // section."
+        //
+        // Backend emits window_start_date + window_end_date +
+        // window_label + window_mode on every payload; this function
+        // prefers those over the older filters-based inference.
         function _miqRollupWindowLabel(d) {
-            // Prefer the user-facing dropdown mode (ytd / custom / N days)
-            // so the header reads correctly regardless of how the range
-            // was expressed on the wire. Falls back to the numeric
-            // window_days from the payload when the mode isn't set.
+            var s = d.window_start_date;
+            var e = d.window_end_date;
+            var label = d.window_label;
+            if (s && e && label) {
+                // "Last 7 days · Aug 11 - Aug 17, 2026"
+                return label + ' \u00b7 ' + _miqFmtRange(s, e);
+            }
+            // Fallback: reconstruct from filters (older payload shape)
             var mode = (window.__microdramasIQ && window.__microdramasIQ.currentWindowMode) || null;
             var f    = d.filters || {};
-            if (mode === 'ytd') return 'year to date';
+            if (mode === 'ytd') return 'Year to date';
             if (mode === 'custom' || (f.start_date && f.end_date && mode !== 'ytd' && !mode)) {
                 if (f.start_date && f.end_date) {
                     return f.start_date + ' to ' + f.end_date;
                 }
             }
             var wd = f.window_days || (window.__microdramasIQ && window.__microdramasIQ.currentWindowDays) || 7;
-            if (wd === 1) return 'today';
-            return 'last ' + wd + ' days';
+            if (wd === 1) return 'Today';
+            return 'Last ' + wd + ' days';
+        }
+
+        // Just the "Aug 11 - Aug 17, 2026" part (no label prefix).
+        // Used in card subtitles + tooltips where the label is
+        // already displayed elsewhere.
+        function _miqRollupWindowDates(d) {
+            if (d && d.window_start_date && d.window_end_date) {
+                return _miqFmtRange(d.window_start_date, d.window_end_date);
+            }
+            return '';
+        }
+
+        // Return the payload most relevant to the currently active
+        // tab (all-platforms > competitors > peacock). Prefers the
+        // freshest fetch on the active tab so the stamp bar tracks
+        // whichever data set the user is looking at.
+        function _miqActivePayload() {
+            var mq = window.__microdramasIQ || {};
+            var panel = mq.activePanel;
+            try {
+                var activeEl = document.querySelector('.miq-panel.active[data-panel]');
+                if (activeEl) panel = activeEl.getAttribute('data-panel');
+            } catch (e) { /* ignore */ }
+            if (panel === 'all')     return mq.allData || mq.compData || mq.lastData || null;
+            if (panel === 'peacock') return mq.lastData || mq.allData || mq.compData || null;
+            return mq.compData || mq.allData || mq.lastData || null;
+        }
+
+        // Refresh the persistent date-range stamp above the tabstrip.
+        // Called after every successful data fetch so screenshots and
+        // exports carry the exact date range for the current view.
+        function _miqUpdateDateStamp() {
+            var payload = _miqActivePayload();
+            var labelEl = document.getElementById('microdramasIQDateStampLabel');
+            var rangeEl = document.getElementById('microdramasIQDateStampRange');
+            if (!labelEl || !rangeEl) return;
+            if (!payload) {
+                labelEl.textContent = '-';
+                rangeEl.textContent = '';
+                return;
+            }
+            var lbl = payload.window_label || '';
+            var s = payload.window_start_date, e = payload.window_end_date;
+            labelEl.textContent = lbl || '-';
+            rangeEl.textContent = (s && e) ? _miqFmtRange(s, e) : '';
+        }
+
+        // Filename-safe YYYYMMDD stamp for exports.
+        function _miqIsoCompact(iso) {
+            if (!iso) return '';
+            return String(iso).replace(/-/g, '');
+        }
+
+        // Escape a value for CSV: quote if it contains a comma, quote,
+        // newline, or leading space; double any embedded quotes.
+        function _miqCsvCell(v) {
+            if (v == null) return '';
+            var s = String(v);
+            if (/[",\n\r]/.test(s) || s !== s.trim()) {
+                return '"' + s.replace(/"/g, '""') + '"';
+            }
+            return s;
+        }
+
+        // Trigger a browser download of a CSV blob.
+        function _miqDownloadCsv(rows, filename) {
+            var csv = rows.map(function(r) {
+                return r.map(_miqCsvCell).join(',');
+            }).join('\r\n') + '\r\n';
+            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+        }
+
+        // Export the currently visible Microdramas IQ view as CSV.
+        // The date range is stamped both in the filename AND in a
+        // 4-row header block at the top of the CSV so a downstream
+        // reader (or a future analyst re-opening the file) can
+        // reproduce the exact view via the custom-date selector.
+        // Jenna 2026-08-17: "The date range needs to print on DB and
+        // on export. So its a permanent record. Can easily recreate
+        // in future runs in custom date section."
+        function microdramasIQExportCsv() {
+            var mq = window.__microdramasIQ || {};
+            var panel = mq.activePanel || 'all';
+            try {
+                var activeEl = document.querySelector('.miq-panel.active[data-panel]');
+                if (activeEl) panel = activeEl.getAttribute('data-panel');
+            } catch (e) { /* ignore */ }
+            var payload = _miqActivePayload();
+            if (!payload) {
+                alert('No data loaded yet. Apply a filter first.');
+                return;
+            }
+            var s = payload.window_start_date || '';
+            var e = payload.window_end_date || '';
+            var lbl = payload.window_label || '';
+            var mode = payload.window_mode || 'preset';
+            var generatedAt = payload.generated_at || new Date().toISOString();
+
+            // Common header block. Every export carries the exact
+            // date range and mode so it can be reproduced later.
+            var header = [
+                ['Microdramas IQ - ' + _miqPanelDisplayLabel(panel)],
+                ['Window',        lbl + ' (' + mode + ')'],
+                ['Date range',    (s && e) ? (s + ' to ' + e) : ''],
+                ['Days in range', payload.window_days_effective != null
+                                   ? String(payload.window_days_effective)
+                                   : ''],
+                ['Generated at',  generatedAt],
+                ['Note',          'To reproduce this view, open the Window filter, '
+                                + 'select "Custom range...", enter the Date range above, '
+                                + 'and click Apply.'],
+                []  // blank separator row
+            ];
+
+            var rows = header.concat(_miqExportRowsForPanel(panel, payload));
+
+            var filenameParts = [
+                'microdramas-iq',
+                panel,
+                (s ? _miqIsoCompact(s) : ''),
+                (e ? _miqIsoCompact(e) : ''),
+            ].filter(Boolean);
+            var filename = filenameParts.join('_') + '.csv';
+            _miqDownloadCsv(rows, filename);
+        }
+
+        function _miqPanelDisplayLabel(panel) {
+            if (panel === 'all')       return 'All Platforms';
+            if (panel === 'peacock')   return 'Peacock';
+            if (panel === 'reelshort') return 'ReelShort';
+            if (panel === 'dramabox')  return 'DramaBox';
+            if (panel === 'goodshort') return 'GoodShort';
+            if (panel === 'netshort')  return 'NetShort';
+            return panel || 'View';
+        }
+
+        // Data rows for the CSV, shaped for the current panel. Titles
+        // (with platform, rank, views, genre, etc.) for individual
+        // platform tabs; platform-total roll-up for the All Platforms
+        // tab.
+        function _miqExportRowsForPanel(panel, payload) {
+            var rows = [];
+            if (panel === 'all') {
+                rows.push(['Platform', 'Total Views', 'Share %', 'Titles',
+                           'Top Title', 'Top Title Views',
+                           'Unique Viewers', 'New / Free Users',
+                           'Lapsed / Cancellations',
+                           'Free-to-Paid %', 'Avg Paid Completion %']);
+                (payload.platform_totals || []).forEach(function(p) {
+                    var uf = p.user_flow || {};
+                    rows.push([
+                        p.platform || p.source || '',
+                        p.total_views || 0,
+                        p.share_pct != null ? p.share_pct : '',
+                        p.title_count || 0,
+                        p.top_title || '',
+                        p.top_title_views || 0,
+                        uf.active_users != null ? uf.active_users : (uf.total_users || ''),
+                        uf.new_users != null ? uf.new_users : '',
+                        uf.churned_users != null ? uf.churned_users : '',
+                        p.free_to_paid_pct != null ? p.free_to_paid_pct : '',
+                        p.avg_paid_completion_pct != null ? p.avg_paid_completion_pct : '',
+                    ]);
+                });
+                rows.push([]);
+                rows.push(['# Top titles across all platforms']);
+                rows.push(['Platform', 'Current Rank', 'Title', 'Genre',
+                           'Total Views', 'Best Rank', 'Episodes']);
+                (payload.titles || []).forEach(function(t) {
+                    rows.push([
+                        t.platform_label || t.platform_source || '',
+                        t.current_rank != null ? t.current_rank : '',
+                        t.title || t.series || '',
+                        t.genre || '',
+                        t.sort_views || t.view_window_estimate
+                              || t.view_28d_estimate || t.read_count || 0,
+                        t.best_rank != null ? t.best_rank : '',
+                        (t.completion && t.completion.total_episodes) || t.episodes_count || '',
+                    ]);
+                });
+            } else if (panel === 'peacock') {
+                rows.push(['Rank', 'Title', 'Genre', 'Surface',
+                           'Window Views', '28-day Views',
+                           'First Observed', 'Episodes', 'Series Completion %']);
+                (payload.titles || []).forEach(function(t) {
+                    var comp = t.completion || {};
+                    rows.push([
+                        t.surface_rank_current != null ? t.surface_rank_current : '',
+                        t.title || t.series || '',
+                        t.genre || '',
+                        t.surface || '',
+                        t.view_window_estimate || 0,
+                        t.view_28d_estimate || 0,
+                        t.first_observed_date || '',
+                        comp.total_episodes || t.episodes_count || '',
+                        comp.series_completion_pct != null
+                              ? comp.series_completion_pct : '',
+                    ]);
+                });
+            } else {
+                // Competitor tab - flatten the matching platform's titles.
+                var plat = (payload.platforms || []).find(function(p) {
+                    return (p.source || '').toLowerCase() === panel;
+                });
+                rows.push(['Current Rank', 'Previous Rank', 'Delta',
+                           'Title', 'Genre', 'Status',
+                           'Window Views', 'Best Rank', 'Episodes',
+                           'Free-to-Paid %', 'Payer Completion %']);
+                if (plat) {
+                    (plat.titles || []).forEach(function(t) {
+                        var comp = t.completion || {};
+                        var rbd = t.reads_by_date || {};
+                        var winViews = 0;
+                        Object.keys(rbd).forEach(function(k) {
+                            var v = Number(rbd[k]);
+                            if (isFinite(v)) winViews += v;
+                        });
+                        rows.push([
+                            t.current_rank != null ? t.current_rank : '',
+                            t.previous_rank != null ? t.previous_rank : '',
+                            t.rank_delta != null ? t.rank_delta : '',
+                            t.title || t.series || '',
+                            t.genre || '',
+                            t.status || '',
+                            winViews,
+                            t.best_rank != null ? t.best_rank : '',
+                            comp.total_episodes || t.episodes_count || '',
+                            comp.paid_pct != null ? comp.paid_pct : '',
+                            comp.payer_completion_pct != null
+                                  ? comp.payer_completion_pct : '',
+                        ]);
+                    });
+                }
+            }
+            return rows;
         }
 
         function renderMicrodramasIQPlatformRollup(d) {
