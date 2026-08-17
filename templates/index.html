@@ -3791,6 +3791,18 @@
             border-color: rgba(255, 100, 100, 0.5);
         }
 
+        /* HELP pill on the Profile IQ tabs bar - same shape as CLOSE ALL but neutral */
+        .profile-tab-close-all.profile-help-pill {
+            background: var(--bg-card);
+            border-color: var(--border-color);
+            color: var(--text-primary);
+        }
+        .profile-tab-close-all.profile-help-pill:hover {
+            background: var(--bg-input);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+
         /* Action Buttons - already defined above with margin-left: auto */
 
         .dash-action-btn {
@@ -18822,6 +18834,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                                     <button type="button" class="user-dropdown-item" id="btnOpenMethodology">Methodology</button>
                                     <button type="button" class="user-dropdown-item" id="btnHowToVideos" aria-expanded="false">How-To Videos<span class="user-dropdown-caret">&#9662;</span></button>
                                     <div class="user-dropdown-submenu" id="howToVideosSubmenu">
+                                        <button type="button" class="user-dropdown-subitem" data-howto-video="{{ url_for('static', filename='videos/profile-iq.mp4') }}" data-howto-title="Profile IQ">Profile IQ</button>
                                         <button type="button" class="user-dropdown-subitem" data-howto-video="{{ url_for('static', filename='videos/subscriber-iq.mp4') }}" data-howto-title="Subscriber IQ">Subscriber IQ</button>
                                     </div>
                                     <div class="user-dropdown-divider"></div>
@@ -106442,9 +106455,12 @@ https://www.instagram.com/p/..."></textarea>
                 `;
             });
             
-            // Add Close All Tabs button at the end
+            // Add HELP + Close All Tabs buttons at the end
             html += `
-                <div class="profile-tab-close-all" onclick="closeAllProfileTabs()" title="Close all open tabs">
+                <div class="profile-tab-close-all profile-help-pill" onclick="openHowToVideo('{{ url_for('static', filename='videos/profile-iq.mp4') }}', 'Profile IQ')" title="Watch the Profile IQ how-to video" style="margin-left:auto;">
+                    <span>HELP</span>
+                </div>
+                <div class="profile-tab-close-all" onclick="closeAllProfileTabs()" title="Close all open tabs" style="margin-left:0.5rem;">
                     <span>CLOSE ALL</span>
                 </div>
             `;
