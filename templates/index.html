@@ -50637,14 +50637,19 @@ https://www.instagram.com/p/..."></textarea>
                                if (typeof it.score === 'number') meta += '<span class="tiq-badge">' + _tiqNum(it.score) + ' upvotes</span>';
                                if (typeof it.comments === 'number') meta += '<span>' + _tiqNum(it.comments) + ' comments</span>';
                                if (it.subreddit) meta += '<span>r/' + _tiqEsc(it.subreddit) + '</span>';
+                               // Views pill - render at most once. A single item
+                               // (e.g. a TikTok video) can carry BOTH a numeric
+                               // `views` and a preformatted `views_display`, which
+                               // previously emitted two identical "N views" pills.
+                               var viewsShown = false;
                                // YouTube view/like counts (strings from API).
-                               if (it.views && typeof it.views === 'string') meta += '<span class="tiq-badge">' + _tiqEsc(it.views) + ' views</span>';
+                               if (it.views && typeof it.views === 'string') { meta += '<span class="tiq-badge">' + _tiqEsc(it.views) + ' views</span>'; viewsShown = true; }
                                // X + TikTok engagement (numeric).
-                               if (typeof it.views === 'number' && it.views) meta += '<span class="tiq-badge">' + _tiqNum(it.views) + ' views</span>';
+                               if (typeof it.views === 'number' && it.views) { meta += '<span class="tiq-badge">' + _tiqNum(it.views) + ' views</span>'; viewsShown = true; }
                                if (typeof it.likes === 'number' && it.likes) meta += '<span>' + _tiqNum(it.likes) + ' likes</span>';
                                if (typeof it.retweets === 'number' && it.retweets) meta += '<span>' + _tiqNum(it.retweets) + ' reposts</span>';
                                if (typeof it.replies === 'number' && it.replies) meta += '<span>' + _tiqNum(it.replies) + ' replies</span>';
-                               if (it.views_display) meta += '<span class="tiq-badge">' + _tiqEsc(it.views_display) + ' views</span>';
+                               if (it.views_display && !viewsShown) meta += '<span class="tiq-badge">' + _tiqEsc(it.views_display) + ' views</span>';
                                return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                                       '<div class="tiq-row-body">' +
                                       '<div class="tiq-row-title"><a href="' + _tiqEsc(it.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(rowLabel) + '</a>' +
