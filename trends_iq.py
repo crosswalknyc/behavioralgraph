@@ -3953,6 +3953,60 @@ _NON_PERSON_TOKENS = {
     'Minneapolis', 'Jacksonville', 'Indianapolis', 'Anaheim',
     'Toronto', 'Vancouver', 'Montreal', 'Edmonton', 'Calgary',
     'Philadelphia',
+    # ADD 2026-08-17 (Jenna feedback): role / title prefixes that
+    # appear before a person's name in headlines. Without these,
+    # "Actress Hayden Panettiere" surfaces as a separate Trending
+    # People row from the standalone "Hayden Panettiere" - same
+    # individual, two counter buckets. Front-trim now normalizes both
+    # to "Hayden Panettiere" so the merge is automatic.
+    #
+    # Roles that could ALSO be real first/last names (Prince, King,
+    # Queen, Duke, Bishop, Cardinal, Sir, Lord, Star) are intentionally
+    # left out to avoid rejecting Prince (the musician), Regina King,
+    # Queen Latifah, etc.
+    #
+    # Entertainment / media
+    'Actor', 'Actress', 'Comedian', 'Comic', 'Comedienne',
+    'Singer', 'Rapper', 'Musician', 'Producer', 'Songwriter',
+    'Composer', 'Conductor', 'Director', 'Author', 'Writer',
+    'Screenwriter', 'Novelist', 'Playwright', 'Poet',
+    'Model', 'Supermodel', 'Chef', 'Baker', 'Host', 'Anchor',
+    'Reporter', 'Journalist', 'Correspondent', 'Columnist',
+    'Editor', 'Photographer', 'Painter', 'Artist', 'Sculptor',
+    'Dancer', 'Choreographer', 'Illustrator',
+    'Filmmaker', 'Cinematographer', 'Broadcaster',
+    'Podcaster', 'Streamer', 'Influencer', 'YouTuber',
+    # Sports
+    'Coach', 'Manager', 'Trainer', 'Athlete', 'Player',
+    'Pitcher', 'Catcher', 'Quarterback', 'Striker', 'Defender',
+    'Goalie', 'Goalkeeper', 'Referee', 'Umpire', 'Rookie',
+    'Veteran', 'Legend', 'Champion', 'Champ', 'Contender',
+    'Boxer', 'Fighter', 'Wrestler', 'Gymnast', 'Skier',
+    'Skater', 'Runner', 'Swimmer', 'Cyclist', 'Golfer',
+    'Jockey',
+    # Politics / government
+    'President', 'Senator', 'Congressman', 'Congresswoman',
+    'Congressperson', 'Governor', 'Mayor', 'Councilman',
+    'Councilwoman', 'Councilperson', 'Judge', 'Justice',
+    'Attorney', 'Lawyer', 'Solicitor', 'Ambassador', 'Diplomat',
+    'Speaker', 'Chancellor', 'Premier', 'Minister', 'Vice',
+    'Former', 'Rep', 'Sen', 'Gov',
+    # Business
+    'Founder', 'Cofounder', 'Executive', 'Entrepreneur',
+    'Investor', 'Billionaire', 'Millionaire', 'Mogul', 'Tycoon',
+    'Owner', 'Chairman', 'Chairwoman', 'Chair', 'Chairperson',
+    'Boss',
+    # Titles / honorifics that head-of-run in headlines
+    'Doctor', 'Reverend', 'Pastor', 'Rabbi', 'Imam',
+    'General', 'Colonel', 'Captain', 'Lieutenant', 'Sergeant',
+    'Officer', 'Detective', 'Sheriff', 'Deputy', 'Constable',
+    'Marshal',
+    # Family-relation prefixes ("Widow of firefighter John Smith",
+    # "Son of former president...")
+    'Widow', 'Widower', 'Wife', 'Husband', 'Son', 'Daughter',
+    'Brother', 'Sister', 'Mother', 'Father', 'Mom', 'Dad',
+    'Grandma', 'Grandpa', 'Grandmother', 'Grandfather',
+    'Auntie', 'Uncle', 'Aunt',
 }
 
 # Curated multi-word phrases that pass the token check but aren't
