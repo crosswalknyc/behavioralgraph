@@ -11,7 +11,7 @@ Structure (12 slides, presentation-ready - one idea per slide):
   6.  Chart 2 - every Universal-family title, side by side
   7.  The paradox - Focus recut theatrical, not TVOD
   8.  Chart 3 - TVOD daily fall-off (with Batch E confounds)
-  9.  What was traded (measurement, $41-58M range)
+  9.  What was traded (measurement, $22-32M range)
  10.  What was received (H6 hypothesis, $43-175M modeled)
  11.  The one-sentence framing + next steps
  12.  Appendix - measurement vs hypothesis vs deferred
@@ -203,7 +203,7 @@ CONFOUND_JULY_4 = 5             # Jul 4
 CONFOUND_HANDOFF = 18           # Jul 17
 CONFOUND_AUG = (33, 42)         # Aug 1-10
 
-DISPLACED_RANGE = "$41-58M"
+DISPLACED_RANGE = "$22-32M"
 DISPLACED_TXN = "~2.68M (2.28-3.07M, 90% CI)"
 ASP_RANGE = "$15-$22"
 
@@ -907,7 +907,7 @@ def slide_setup(prs, page_no, total):
         ("HYPOTHESIS", AMBER,
          "Causal attribution of the TVOD fall-off to the handoff (pending Backrooms / Devil Wears Prada 2 controls). Long-run elevated churn on the Obsession cohort (pending 180-day retention, Jan 2027). H6: value NBCU received, modeled at $43-175M pending retention read."),
         ("DEFERRED", GRAY,
-         "Apple TV Store + Fandango at Home public rank corroboration (Pull 2). Distributor Apple + Amazon statements that would collapse the $41-58M range to a point."),
+         "Apple TV Store + Fandango at Home public rank corroboration (Pull 2). Distributor Apple + Amazon statements that would collapse the $22-32M range to a point."),
     ]
     row_h = Inches(0.72)
     for i, (kind, color, body) in enumerate(mvh):
@@ -1173,7 +1173,7 @@ def slide_framing(prs, page_no, total):
         "2. Compare the transactional-revenue substitution against any intercompany license-fee credit.",
         "3. Request Peacock 180-day retention detail (Jan 2027) to collapse the H6 value-received range.",
         "4. Convene with Focus / UFEG participation office to align on 2024-2026 industry-window benchmarks.",
-        "5. Wait for distributor Apple + Amazon statements to collapse the $41-58M displacement range.",
+        "5. Wait for distributor Apple + Amazon statements to collapse the $22-32M displacement range.",
     ]
     y = Inches(5.6)
     for step in steps:
@@ -1232,7 +1232,7 @@ def slide_appendix(prs, page_no, total):
     _tb(s, Inches(0.6), Inches(5.5), Inches(12), Inches(0.4),
         "WHAT REMAINS DEFERRED EVEN AFTER PULL 2", size=11, bold=True, color=INK_FAINT)
     _tb(s, Inches(0.6), Inches(5.9), Inches(12.13), Inches(1.3),
-        "  ·  Distributor Apple + Amazon statements that would collapse the $41-58M displacement range to a point (90-120 day cadence).\n"
+        "  ·  Distributor Apple + Amazon statements that would collapse the $22-32M displacement range to a point (90-120 day cadence).\n"
         "  ·  Peacock subscriber ARPU + retention detail beyond panel-observed proxies (needed to collapse the H6 $43-175M range).\n"
         "  ·  First-party confirmation from Peacock / NBCUniversal. Every figure in this deck is Crosswalk panel-observed and projected.",
         size=11, color=INK_MUTED)

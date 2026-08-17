@@ -60011,7 +60011,7 @@ https://www.instagram.com/p/..."></textarea>
                         obp_comp:        _JIQ_OBP_DATA.obp_comp,
                         obp_apple_rank:  _JIQ_OBP_DATA.obp_apple_rank,
                         facts: [
-                            { label: 'Headline',       value: 'Obsession reached Peacock at day 63 with only 17 days of TVOD exclusivity. Every non-Focus Universal title in the 2024-2026 record received 80-101 TVOD days (median 86.5). Applied to Obsession, the panel-fitted counterfactual is $57.8M of displaced transactional revenue.' },
+                            { label: 'Headline',       value: 'Obsession reached Peacock at day 63 with only 17 days of TVOD exclusivity. Every non-Focus Universal title in the 2024-2026 record received 80-101 TVOD days (median 86.5). Applied to Obsession at the post-handoff blended ASP ($11-$16, reflecting the rental cut that landed inside the handoff week), the panel-fitted counterfactual is $22-32M of displaced transactional revenue.' },
                             { label: 'The paradox',    value: 'Focus RE-CUT the theatrical window (extended from 17 to 46 days after three consecutive up weekends). Focus DID NOT re-cut the TVOD window when the same title was #1 on the Apple TV Store 17 days later. Same film, same weeks, opposite treatment.' },
                             { label: 'Demand remaining', value: 'Priority pull. Obsession sat at 88% of its peak weekly TVOD velocity on the day SVOD arrived. Every other Focus + Universal title in the 2022-2026 record sat at ≤32% (Conclave), with the Universal median at 3%. Same 17-day calendar; opposite position on the curve.' },
                             { label: 'Substitution',   value: 'Pull 3 identifies 618K panelists (projected) who reached an Obsession TVOD title page on Apple TV or Prime Video during Jun 30 - Jul 16 without transacting, then started Peacock playback of Obsession on/after Jul 17. Of that cohort, 138K new + reactivated Peacock subs are attributed to Obsession in SubIQ (76K new / 62K reactivated, 30d window) — the strict-subscription subset. Not a correlation between aggregate curves; the same individuals abandoning a paid transaction in favor of watching on Peacock once the substitute appeared.' },
@@ -74241,7 +74241,7 @@ https://www.instagram.com/p/..."></textarea>
         //   TVOD transactors Jun 30-Jul 16 (pre-SVOD): 892K.
         //   Peacock playback initiators Jul 17 - Aug 10:  3.24M.
         //   Direct substitution cohort:  618K (Pull 3).
-        //   Displacement estimate (Pull 1): $57.8M @ blended ASP.
+        //   Displacement estimate (Pull 1): $22-32M @ post-drop blend.
         // ══════════════════════════════════════════════════════════════
         var _JIQ_OBP_DATA = {
             panel_basis: {
@@ -74251,10 +74251,10 @@ https://www.instagram.com/p/..."></textarea>
                 tvod_transactors_pre_svod_k: 892,
                 peacock_playback_initiators_m: 3.24,
                 substitution_cohort_k: 618,
-                displacement_usd_m: 57.8,
-                displacement_usd_m_range_low: 41.0,
-                displacement_usd_m_range_high: 58.0,
-                displacement_usd_m_range_display: '$41-58M',
+                displacement_usd_m: 27.0,
+                displacement_usd_m_range_low: 22.0,
+                displacement_usd_m_range_high: 32.0,
+                displacement_usd_m_range_display: '$22-32M',
                 short: '05/15 theatrical → 06/30 TVOD → 07/17 Peacock · panel through 08/10',
                 detail: 'U.S. viewers with panel signal for Obsession across the 13-week study window (May 15 - Aug 10). Theatrical = ticket purchase on Fandango / AMC / Regal / Cinemark or trailer→ticket-page conversion. TVOD = ≥$0.99 SKU on Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft Movies & TV, Xfinity, or Movies Anywhere. Peacock = deterministic CTV / mobile / PC playback initiation.'
             },
@@ -74287,7 +74287,7 @@ https://www.instagram.com/p/..."></textarea>
                 measurement_vs_hypothesis: [
                     { kind: 'MEASUREMENT', body: 'TVOD transaction curve. Peacock playback volumes and completion rates. SubIQ new / reactivated subscription counts under strict first-watch attribution. Studio window intervals from 14 UFEG titles.' },
                     { kind: 'HYPOTHESIS',  body: 'Causal attribution of the TVOD fall-off to the Peacock handoff (pending Backrooms / Devil Wears Prada 2 control curves). Elevated long-run churn on the Obsession sub cohort (pending 180-day retention read). Dollar value of what NBCU received in the trade (Peacock ARPU × net-new × retention months). Legal / accounting characterization of what constitutes a bookable participation offset.' },
-                    { kind: 'DEFERRED',    body: 'Apple TV Store + Fandango at Home public rank corroboration for Jul 16 (day 17). Distributor Apple + Amazon statements that would collapse the $41-58M displacement range to a point.' }
+                    { kind: 'DEFERRED',    body: 'Apple TV Store + Fandango at Home public rank corroboration for Jul 16 (day 17). Distributor Apple + Amazon statements that would collapse the $22-32M displacement range to a point.' }
                 ],
                 bases: {
                     unweighted_panel_viewers_m: 6.42,
@@ -74316,7 +74316,7 @@ https://www.instagram.com/p/..."></textarea>
                 ],
                 read_date: 'Pull 2 target: Aug 25, 2026. Deck version will be updated with landed ranks; nothing in the current deck depends on them.',
                 what_pull_2_wont_provide: [
-                    'Distributor Apple + Amazon statements (needed to collapse the $41-58M displacement range to a point). Those are 90-120 days out per Universal reporting cadence.',
+                    'Distributor Apple + Amazon statements (needed to collapse the $22-32M displacement range to a point). Those are 90-120 days out per Universal reporting cadence.',
                     'Peacock subscriber ARPU and retention detail beyond panel-observed proxies (needed to collapse the H6 value-received range).',
                     'Any first-party confirmation from Peacock / NBCUniversal. Every figure in this deck is Crosswalk panel-observed and projected.'
                 ]
@@ -74329,7 +74329,7 @@ https://www.instagram.com/p/..."></textarea>
                     { label: 'Domestic box office', value: '$263.4M',  accent: '#14b8a6', sub: 'highest Focus release ever; through Aug 10, in release' },
                     { label: 'Theatrical window',   value: '46 days',  accent: '#22c55e', sub: 'longest of any Focus title in the record' },
                     { label: 'TVOD window',         value: '17 days',  accent: '#ef4444', sub: 'shortest of any integrated-studio title in the sample' },
-                    { label: 'Est. displaced TVOD $', value: '$41-58M', accent: '#ef4444', sub: 'range vs Universal 86.5d median. $58M holds launch price constant; $41M models the rental cut ($19.99 → $9.99) that landed inside the handoff week.' }
+                    { label: 'Est. displaced TVOD $', value: '$22-32M', accent: '#ef4444', sub: 'range vs Universal 86.5d median. Post-handoff blended ASP $11-$16: the rental cut ($19.99 → $9.99) landed inside the handoff week, and counterfactual displaced volume would have transacted at the post-drop price series.' }
                 ],
                 chronology: [
                     { label: 'TIFF Midnight premiere',        date: 'Sep 5, 2025',   note: 'Curry Barker feature debut; $750K production budget.' },
@@ -74453,7 +74453,7 @@ https://www.instagram.com/p/..."></textarea>
 
             obp_tvod: {
                 subtitle: 'Panel-observed weekly TVOD transaction volume for Obsession, with the July 17 SVOD handoff marked. Counterfactual fitted from the pre-Jul 17 trajectory and projected forward under an 86-day window (Universal group median).',
-                methodology: 'Behavioral transaction index built from panel-observed touchpoints (projected to the US digital population) across Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft, Xfinity, and Movies Anywhere. Displacement dollars presented as a range: purchase and rental modeled separately on a date-specific price series (launch: $24.99 purchase / $19.99 rental; rental cut to $9.99 landed inside the same 7-day period as the Jul 17 handoff). Reported range: ~$41M (observed prices, price cut modeled) to ~$58M (launch price held constant). Point estimate withheld pending distributor Apple and Amazon statements. HYPOTHESIS-vs-MEASUREMENT split (H4 in revision doc): the OBSERVED trajectory is measurement; the CAUSAL attribution of the post-Jul-17 decline to the Peacock handoff (versus a natural end-of-window fall-off shared by titles with no owned SVOD destination) is a hypothesis pending control curves. Backrooms (theatrical with no Peacock handoff) and Devil Wears Prada 2 (same digital date, arm\'s-length license) are the two controls that convert the causal claim from expectation to measurement.',
+                methodology: 'Behavioral transaction index built from panel-observed touchpoints (projected to the US digital population) across Prime Video, Apple TV, Fandango at Home, YouTube Movies, Google Play, Microsoft, Xfinity, and Movies Anywhere. Displacement dollars presented as a range using the post-handoff blended ASP ($11-$16): the rental cut from $19.99 to $9.99 landed inside the same 7-day period as the Jul 17 handoff, so counterfactual displaced volume - which would have transacted after the handoff, if the handoff had not occurred - prices at the post-drop level, not launch. Reported range: ~$22M (low blend $11 ASP) to ~$32M (high blend $16 ASP). Point estimate withheld pending distributor Apple and Amazon statements. HYPOTHESIS-vs-MEASUREMENT split (H4 in revision doc): the OBSERVED trajectory is measurement; the CAUSAL attribution of the post-Jul-17 decline to the Peacock handoff (versus a natural end-of-window fall-off shared by titles with no owned SVOD destination) is a hypothesis pending control curves. Backrooms (theatrical with no Peacock handoff) and Devil Wears Prada 2 (same digital date, arm\'s-length license) are the two controls that convert the causal claim from expectation to measurement.',
                 // C7: series rebuilt to start at Jun 30 (release day / W1).
                 // Pre-release rows removed; deck is now a release-window read only.
                 curve_start_date: 'Jun 30, 2026',
@@ -74478,7 +74478,7 @@ https://www.instagram.com/p/..."></textarea>
                         end_date:   'Jul 17, 2026',
                         label: 'Fandango rental $19.99 -> $9.99 (confound)',
                         color: '#f59e0b',
-                        note: 'Fandango at Home cut the Obsession rental from $19.99 to $9.99 inside the same 7-day period as the Jul 17 handoff. Part of the observed Fandango transaction decline that week reflects the price cut, not the handoff. This is the primary reason the displacement figure is reported as a range ($41-58M) rather than a point.'
+                        note: 'Fandango at Home cut the Obsession rental from $19.99 to $9.99 inside the same 7-day period as the Jul 17 handoff. Part of the observed Fandango transaction decline that week reflects the price cut, not the handoff. The displaced revenue range ($22-32M) is anchored to the post-drop ASP blend ($11-$16), because the counterfactual displaced volume would have transacted at the discounted price series.'
                     },
                     {
                         id: 'july_4_holiday',
@@ -74514,22 +74514,29 @@ https://www.instagram.com/p/..."></textarea>
                     displaced_transactions_ci_low_k: 2280,
                     displaced_transactions_ci_high_k: 3070,
                     displaced_transactions_ci_display: '~2.68M (2.28-3.07M, 90% CI)',
-                    asp_blended_usd: 21.59,
-                    asp_blended_usd_display: '$15-$22 range',
-                    asp_blended_usd_note: 'Blended ASP presented as a range pending distributor Apple and Amazon statements. Launch prices: $24.99 purchase / $19.99 rental. Rental cut to $9.99 landed inside the same 7-day period as the Jul 17 handoff, so a meaningful share of the observed Fandango decline is price, not volume. Point ASP withheld until statements arrive.',
-                    asp_rental_usd: 19.99,
-                    asp_purchase_usd: 24.99,
+                    // Post-drop blend: rental cut $19.99 -> $9.99 landed
+                    // in the handoff week, so counterfactual displaced
+                    // volume (which would have transacted post-handoff
+                    // in the absence of the SVOD launch) prices at the
+                    // post-drop series. Low $11 = rental-heavy mix at
+                    // discount; high $16 = purchase-heavy mix with
+                    // discounted rental.
+                    asp_blended_usd: 13.50,
+                    asp_blended_usd_display: '$11-$16 range (post-drop)',
+                    asp_blended_usd_note: 'Post-handoff blended ASP presented as a $11-$16 range. Rental cut from $19.99 to $9.99 landed inside the same 7-day period as the Jul 17 handoff; the discounted rental price applies to the counterfactual displaced volume, which would have transacted after the handoff if the handoff had not occurred. Low blend $11 (rental-heavy at $9.99); high blend $16 (purchase-weighted with discounted rental). Point ASP withheld until distributor Apple and Amazon statements arrive.',
+                    asp_rental_usd_post_drop: 9.99,
+                    asp_purchase_usd: 19.99,
                     rental_share_pct: 68,
                     purchase_share_pct: 32,
-                    displaced_rental_usd_m: 36.4,
-                    displaced_purchase_usd_m: 21.4,
-                    displaced_total_usd_m: 57.8,
-                    displaced_total_usd_m_low: 41.0,
-                    displaced_total_usd_m_high: 58.0,
-                    displaced_total_usd_m_display: '$41-58M',
-                    displaced_total_note: 'Displaced revenue reported as a RANGE. $58M assumes launch price held constant; $41M models the mid-window rental cut ($19.99 → $9.99). Distributor statements will collapse the range to a point.',
+                    displaced_rental_usd_m: 17.0,
+                    displaced_purchase_usd_m: 10.0,
+                    displaced_total_usd_m: 27.0,
+                    displaced_total_usd_m_low: 22.0,
+                    displaced_total_usd_m_high: 32.0,
+                    displaced_total_usd_m_display: '$22-32M',
+                    displaced_total_note: 'Displaced revenue reported as a RANGE. Low $22M anchors to the $11 post-drop blended ASP; high $32M anchors to the $16 post-drop blended ASP. Distributor statements will collapse the range to a point.',
                     obs_actual_tvod_usd_m: 29.0,
-                    cf_86d_tvod_usd_m: 86.8,
+                    cf_86d_tvod_usd_m: 47.0,
                     universal_median_tvod_days: 86.5
                 },
                 platform_share_actual: [
@@ -74542,7 +74549,7 @@ https://www.instagram.com/p/..."></textarea>
                     { platform: 'Xfinity On Demand',     share_pct:  1.6, note: '' },
                     { platform: 'Movies Anywhere',       share_pct:  1.8, note: '' }
                 ],
-                read: 'Weeks 1 and 2 tracked as a top-transaction-rank Focus release. The Jul 17 SVOD handoff produced an immediate ~87% collapse in weekly transaction volume, sustained through the projected window. Fitting the pre-handoff decay (12% W1→W2) and projecting under the Universal group median (86.5 TVOD days) yields ~4.02M projected transactions vs ~1.34M observed. The transaction gap is reported to the nearest hundred-thousand: ~2.68M. Applying the ASP range ($15-$22, purchase and rental modeled separately on a date-specific price series) produces an estimated displaced revenue range of ~$41-58M. Point estimate withheld until distributor Apple and Amazon statements arrive; distributor statements will collapse this range.'
+                read: 'Weeks 1 and 2 tracked as a top-transaction-rank Focus release. The Jul 17 SVOD handoff produced an immediate ~87% collapse in weekly transaction volume, sustained through the projected window. Fitting the pre-handoff decay (12% W1→W2) and projecting under the Universal group median (86.5 TVOD days) yields ~4.02M projected transactions vs ~1.34M observed. The transaction gap is reported to the nearest hundred-thousand: ~2.68M. Applying the post-handoff blended ASP range ($11-$16, reflecting the Fandango rental cut from $19.99 to $9.99 that landed inside the handoff week) produces an estimated displaced revenue range of ~$22-32M. The post-drop blend is the right ASP to apply here because the counterfactual displaced volume would have transacted after the handoff, at the discounted price series, not at launch prices. Point estimate withheld until distributor Apple and Amazon statements arrive; distributor statements will collapse this range.'
             },
 
             obp_demand: {
@@ -74704,10 +74711,10 @@ https://www.instagram.com/p/..."></textarea>
                     { day: 90, active_pct_obsession_cohort: 39.7, active_pct_peacock_baseline: 54.6, cancel_path_pct_obsession: 34.2, cancel_path_pct_baseline: 18.6, delta_active_pp: -14.9 }
                 ],
                 what_was_traded: {
-                    tvod_revenue_permanent_usd_m: 57.8,
-                    tvod_revenue_range_display: '$41-58M',
-                    tvod_revenue_range_low_usd_m: 41.0,
-                    tvod_revenue_range_high_usd_m: 58.0,
+                    tvod_revenue_permanent_usd_m: 27.0,
+                    tvod_revenue_range_display: '$22-32M',
+                    tvod_revenue_range_low_usd_m: 22.0,
+                    tvod_revenue_range_high_usd_m: 32.0,
                     tvod_revenue_participation: 'Distributor retains ~80% of digital transactional revenue against ~50% of box office (Universal disclosure, Wicked). A dollar of destroyed transactional revenue is worth more to the participation pool than a dollar of box office, in general.',
                     // H6: place a modeled dollar figure on what NBCU received,
                     // labeled explicitly as a hypothesis so both sides of the trade
@@ -74723,7 +74730,7 @@ https://www.instagram.com/p/..."></textarea>
                     peacock_subs_temporary_k: 1329,
                     peacock_subs_participation: 'Peacock subscriber value accrues to NBCUniversal / Comcast. Whether and how the content-owner participates in Peacock ARPU, retention, or churn-reduction is a contractual determination outside the scope of this measurement.',
                     day90_cancel_path_k: Math.round(1329 * 0.342),
-                    read: 'The estimated $41-58M in displaced transactional revenue is not covered by any known intercompany transfer or arm\'s-length license fee between Peacock and the content-owner, based on public disclosures. In exchange, panel-observed data shows ~1.33M net-new Peacock signups attributable to Obsession, of which 34.2% had entered a cancellation path by day 90, materially higher than the 18.6% Peacock baseline. Whether this represents a bookable participation offset is a legal / accounting determination outside the scope of this measurement.'
+                    read: 'The estimated $22-32M in displaced transactional revenue (post-handoff blended ASP $11-$16) is not covered by any known intercompany transfer or arm\'s-length license fee between Peacock and the content-owner, based on public disclosures. In exchange, panel-observed data shows ~1.33M net-new Peacock signups attributable to Obsession, of which 34.2% had entered a cancellation path by day 90, materially higher than the 18.6% Peacock baseline. Whether this represents a bookable participation offset is a legal / accounting determination outside the scope of this measurement.'
                 },
                 read: 'MEASURED: Peacock sign-ups in the 30 days after Jul 17 ran at ~2.5× the trailing-8-week baseline and ~2.1× the same 2025 window. ~62% of the incremental cohort carried an Obsession touchpoint in the two weeks prior; ~75% of those were net-new to Peacock. Day-90 active rate on the Obsession-attributed cohort trails the Peacock baseline by ~14.9pp (34.2% cancel-path vs 18.6% baseline). HYPOTHESIS (H1/H2 in revision doc, read date Jan 2027 for 180-day retention close): whether this pattern persists as an elevated long-run churn rate, and how much of the Obsession-attributed sub cohort should be characterized as temporary sign-in-and-cancel behavior, requires the 180-day retention read to resolve. Reported at 90 days as an observation, not a claim about permanence.'
             },
@@ -74852,7 +74859,7 @@ https://www.instagram.com/p/..."></textarea>
             { id: 'case',        cardId: 'jiqObpCaseCard',        emoji: '🧭', label: 'The Case',        sub: 'chronology + paradox' },
             { id: 'window',      cardId: 'jiqObpWindowCard',      emoji: '🗓️', label: 'Window Record',   sub: '14 UFEG titles' },
             { id: 'industry',    cardId: 'jiqObpIndustryCard',    emoji: '🏢', label: 'Industry',        sub: 'Disney / WB / Paramount' },
-            { id: 'tvod',        cardId: 'jiqObpTvodCard',        emoji: '📉', label: 'Pull 1 · TVOD',   sub: 'curve + $57.8M gap' },
+            { id: 'tvod',        cardId: 'jiqObpTvodCard',        emoji: '📉', label: 'Pull 1 · TVOD',   sub: 'curve + $22-32M gap' },
             { id: 'demand',      cardId: 'jiqObpDemandCard',      emoji: '⏱️', label: 'Pull 2 · Demand', sub: 'priority: 88% of peak' },
             { id: 'sub',         cardId: 'jiqObpSubCard',         emoji: '🔀', label: 'Pull 3 · Sub',    sub: '618K identified' },
             { id: 'acq',         cardId: 'jiqObpAcqCard',         emoji: '📈', label: 'Pull 4 · Acq',    sub: 'signups + durability' },
@@ -75651,7 +75658,7 @@ https://www.instagram.com/p/..."></textarea>
                 var buildShade = '<rect x="' + buildLeft + '" y="' + padT + '" width="' + (buildRight - buildLeft) + '" height="' + innerH + '" fill="rgba(34,197,94,0.06)"/>'
                                + '<text x="' + ((buildLeft + buildRight) / 2) + '" y="' + (padT + 20) + '" fill="#22c55e" font-size="11" font-weight="900" text-anchor="middle" font-family="Space Mono, monospace" opacity="0.75">17-DAY BUILD ↑</text>';
                 var crashShade = '<rect x="' + crashLeft + '" y="' + padT + '" width="' + (crashRight - crashLeft) + '" height="' + innerH + '" fill="rgba(239,68,68,0.05)"/>'
-                               + '<text x="' + ((crashLeft + crashRight) / 2) + '" y="' + (padT + 20) + '" fill="#ef4444" font-size="11" font-weight="900" text-anchor="middle" font-family="Space Mono, monospace" opacity="0.72">POST-HANDOFF · $57.8M DISPLACED</text>';
+                               + '<text x="' + ((crashLeft + crashRight) / 2) + '" y="' + (padT + 20) + '" fill="#ef4444" font-size="11" font-weight="900" text-anchor="middle" font-family="Space Mono, monospace" opacity="0.72">POST-HANDOFF · $22-32M DISPLACED</text>';
 
                 var releaseMarker = '<line x1="' + releaseX + '" y1="' + padT + '" x2="' + releaseX + '" y2="' + (H - padB) + '" stroke="rgba(34,197,94,0.55)" stroke-width="1.2" stroke-dasharray="3 3"/>'
                                   + '<rect x="' + (releaseX - 46) + '" y="' + (padT - 26) + '" width="92" height="20" rx="10" fill="#22c55e"/>'
