@@ -24476,6 +24476,7 @@ https://www.instagram.com/p/..."></textarea>
             #microdramasIQView .miq-rollup-card-name .miq-rollup-dot.miq-plat-goodshort { background: #10b981; }
             #microdramasIQView .miq-rollup-card-name .miq-rollup-dot.miq-plat-netshort  { background: #f97316; }
             #microdramasIQView .miq-rollup-card-share { font-size: 0.7rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+            #microdramasIQView .miq-rollup-card-views-label { font-size: 0.62rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; }
             #microdramasIQView .miq-rollup-card-views { font-size: 1.05rem; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
             #microdramasIQView .miq-rollup-card-sub { font-size: 0.68rem; color: var(--text-secondary); }
             /* Platform-wide free -> paid conversion, shown as a small
@@ -46495,10 +46496,37 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         function _miqFormatNumber(n) {
+            // 3 significant figures at every magnitude so a 1.22M
+            // number never renders as "1.2M" and collides with
+            // another card's 1.19M rendering as "1.2M" (QC Round 2
+            // v7 R17, INV-11). Prior formatter dropped to 2 sig figs
+            // at the M threshold which is where the collision hit.
             if (n == null) return '0';
             n = Number(n);
-            if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
-            if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+            if (n >= 100_000_000) {
+                // 100M+ : integer M, e.g. "132M". 3 sig figs already.
+                return Math.round(n / 1_000_000) + 'M';
+            }
+            if (n >= 10_000_000) {
+                // 10-99.9M: 1 decimal, e.g. "24.6M"
+                return (n / 1_000_000).toFixed(1) + 'M';
+            }
+            if (n >= 1_000_000) {
+                // 1-9.99M: 2 decimals, e.g. "1.22M" (never "1.2M")
+                return (n / 1_000_000).toFixed(2) + 'M';
+            }
+            if (n >= 100_000) {
+                // 100-999K: integer K, e.g. "437K"
+                return Math.round(n / 1_000) + 'K';
+            }
+            if (n >= 10_000) {
+                // 10-99.9K: 1 decimal, e.g. "24.6K"
+                return (n / 1_000).toFixed(1) + 'K';
+            }
+            if (n >= 1_000) {
+                // 1-9.99K: 2 decimals, e.g. "1.22K"
+                return (n / 1_000).toFixed(2) + 'K';
+            }
             return String(Math.round(n));
         }
 
@@ -47387,28 +47415,40 @@ https://www.instagram.com/p/..."></textarea>
                 var convBlock;
                 if (p.free_to_paid_pct != null) {
                     var paying = p.paying_viewers;
-                    var tracked = p.tracked_views_for_paywall;
-                    var convRawStr = (paying != null && tracked != null)
-                        ? (_miqFormatNumber(paying) + ' / ' + _miqFormatNumber(tracked))
+                    // Denominator is unique viewers (the reach on the
+                    // Unique Viewers cell below), not views. A
+                    // conversion rate must be per-person, not per-
+                    // event. Prior denominator was total_views, which
+                    // was a per-view purchase rate.
+                    var reachDenom = p.unique_viewers_for_paywall
+                                     || p.tracked_views_for_paywall;
+                    var convRawStr = (paying != null && reachDenom != null)
+                        ? (_miqFormatNumber(paying) + ' / ' + _miqFormatNumber(reachDenom))
                         : null;
-                    var convTip = 'Share of ALL viewers on ' + (p.platform || 'platform')
+                    var convTip = 'Share of unique viewers on ' + (p.platform || 'platform')
                                 + ' who cross the paywall into paid episodes. '
-                                + 'Denominator is every tracked viewer, not just free-tier completers - '
-                                + 'so the number reads lower than the per-title Payer Conversion chip.'
-                                + (convRawStr ? ' Raw: ~' + convRawStr + ' paying viewers / tracked views.' : '');
+                                + 'Per-person conversion rate (payers / unique viewers). '
+                                + 'Rises with the look-back window as more of each title\'s '
+                                + 'audience has had time to hit the paywall.'
+                                + (convRawStr ? ' Raw: ' + convRawStr + ' payers / unique viewers.' : '');
                     convBlock = '<div class="miq-rollup-card-conv" title="' + _miqEscape(convTip) + '">'
                               +   '<span class="miq-rollup-conv-label">Free to Paid</span>'
                               +   '<span class="miq-rollup-conv-value">' + p.free_to_paid_pct.toFixed(1) + '%</span>'
                               + '</div>';
                     if (convRawStr) {
-                        convBlock += '<div class="miq-rollup-card-conv-raw" title="Estimated paying viewers / tracked views over the active window.">'
-                                   +   '<span class="miq-rollup-conv-raw-label">est. paying / tracked</span>'
+                        convBlock += '<div class="miq-rollup-card-conv-raw" title="Estimated paying viewers / unique viewers over the active window.">'
+                                   +   '<span class="miq-rollup-conv-raw-label">est. paying / unique viewers</span>'
                                    +   '<span class="miq-rollup-conv-raw-value">' + convRawStr + '</span>'
                                    + '</div>';
                     }
                 } else {
-                    var convNaTip = (p.platform || 'This platform') + ' is subscription-only, '
-                                  + 'so there is no per-title paywall to convert into.';
+                    var convNaTip = (p.platform || 'This platform')
+                                  + ' is a subscription streaming service - every viewer is already '
+                                  + 'a paying subscriber to the whole platform. There is no per-title '
+                                  + 'paywall to convert into, so a per-title Free-to-Paid rate is '
+                                  + 'not applicable. Series completion is the equivalent quality '
+                                  + 'signal for subscription platforms and is reported in the '
+                                  + 'Avg Paid Completion field.';
                     convBlock = '<div class="miq-rollup-card-conv miq-rollup-card-conv-na" title="' + _miqEscape(convNaTip) + '">'
                               +   '<span class="miq-rollup-conv-label">Free to Paid</span>'
                               +   '<span class="miq-rollup-conv-value">N/A</span>'
@@ -47504,6 +47544,7 @@ https://www.instagram.com/p/..."></textarea>
                      +     '<div class="miq-rollup-card-name"><span class="' + dotCls + '"></span>' + _miqEscape(p.platform || 'Unknown') + '</div>'
                      +     '<div class="miq-rollup-card-share">' + (p.share_pct || 0) + '%</div>'
                      +   '</div>'
+                     +   '<div class="miq-rollup-card-views-label">Total Views</div>'
                      +   '<div class="miq-rollup-card-views">' + _miqFormatNumber(p.total_views || 0) + '</div>'
                      +   '<div class="miq-rollup-card-sub">across ' + titleCount + ' ' + (titleCount === 1 ? 'title' : 'titles') + '</div>'
                      +   convBlock
