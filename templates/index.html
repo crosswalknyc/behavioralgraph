@@ -24491,8 +24491,10 @@ https://www.instagram.com/p/..."></textarea>
             #microdramasIQView .miq-rollup-conv-raw-value { font-variant-numeric: tabular-nums; font-weight: 500; opacity: 0.85; }
             #microdramasIQView .miq-rollup-conv-value { font-size: 0.78rem; font-weight: 700; color: #f9a8d4; font-variant-numeric: tabular-nums; }
             #microdramasIQView .miq-rollup-card-conv-na .miq-rollup-conv-value { color: var(--text-secondary); font-weight: 500; }
-            /* User-flow stats: 2x2 grid of Unique Viewers / New Subs /
-               Cancellations / Net Growth for each platform card. Dashed
+            /* User-flow stats: 2x2 grid of Unique Viewers / New (Free
+               Users on coin platforms, Subscribers on Peacock) /
+               (Lapsed Users on coin, Cancellations on Peacock) /
+               Net Growth for each platform card. Dashed
                top border matches the free-to-paid line above so the
                whole card reads as tiered sections. */
             #microdramasIQView .miq-rollup-card-flow { display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem 0.5rem; margin-top: 0.35rem; padding-top: 0.4rem; border-top: 1px dashed rgba(255,255,255,0.08); }
@@ -47506,9 +47508,26 @@ https://www.instagram.com/p/..."></textarea>
                     var netSign    = uf.net_new         > 0 ? '+' : '';
                     var wd         = uf.window_days || 7;
                     var flowWindow = _miqRollupWindowLabel(d);
+                    // Platform-specific flow labels. Peacock is a paid
+                    // subscription service (~34M paid subs) so its
+                    // flow is real subscription events. The coin
+                    // platforms (ReelShort, DramaBox, GoodShort,
+                    // NetShort) report MAU where the vast majority
+                    // never buy coins - the F2P conversion rate above
+                    // shows most are FREE users, not subscribers. So
+                    // calling that flow "New Subs" would misrepresent
+                    // it as paid subscription events when we know
+                    // (from the F2P rate on the same card) they aren't.
+                    var _isSubPlatform = (p.source === 'peacock');
+                    var _newLabel  = _isSubPlatform ? 'New Subscribers' : 'New Free Users';
+                    var _lostLabel = _isSubPlatform ? 'Cancellations'   : 'Lapsed Users';
+                    var _flowKind  = _isSubPlatform ? 'subscription events' : 'MAU signups (free-tier)';
+                    var _lostKind  = _isSubPlatform
+                                     ? 'subscription cancellations in this window'
+                                     : 'users who stopped opening the app in this window (no subscription to cancel on the free tier)';
                     var flowTip = 'User flow on ' + (p.platform || 'this platform') + ' over ' + flowWindow + '. '
-                                + 'New Subs = gross new users in this window. '
-                                + 'Cancellations = gross churn in this window. '
+                                + _newLabel + ' = gross ' + _flowKind + ' in this window. '
+                                + _lostLabel + ' = ' + _lostKind + '. '
                                 + 'Net Growth is ANNUALIZED (projects the observed daily net-add rate to a full year) so it stays stable across window choices and reconciles with published QoQ/YoY growth.';
                     // Prefer `active_users` (window-scoped microdrama
                     // active-user pool) over `total_users` (platform-
@@ -47526,11 +47545,11 @@ https://www.instagram.com/p/..."></textarea>
                               +     '<div class="miq-rollup-flow-value">' + _miqFormatNumber(_rollupUsers) + '</div>'
                               +   '</div>'
                               +   '<div class="miq-rollup-flow-cell">'
-                              +     '<div class="miq-rollup-flow-label">New Subs</div>'
+                              +     '<div class="miq-rollup-flow-label">' + _newLabel + '</div>'
                               +     '<div class="miq-rollup-flow-value miq-rollup-flow-pos">+' + _miqFormatNumber(uf.new_users) + '</div>'
                               +   '</div>'
                               +   '<div class="miq-rollup-flow-cell">'
-                              +     '<div class="miq-rollup-flow-label">Cancellations</div>'
+                              +     '<div class="miq-rollup-flow-label">' + _lostLabel + '</div>'
                               +     '<div class="miq-rollup-flow-value miq-rollup-flow-neg">-' + _miqFormatNumber(uf.churned_users) + '</div>'
                               +   '</div>'
                               +   '<div class="miq-rollup-flow-cell">'
