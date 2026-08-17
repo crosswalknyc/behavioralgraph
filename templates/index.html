@@ -95469,6 +95469,19 @@ https://www.instagram.com/p/..."></textarea>
         function renderSubComparisonTable(profilesData, container) {
             const names = profilesData.map(p => (p.name || 'Unknown').replace(/</g, '&lt;'));
 
+            // Horizontal scroll when comparing 5+ profiles: keep ~4 columns
+            // visible and let the rest scroll sideways. Fixed column widths
+            // keep every table aligned.
+            const _cmpManyCols = names.length > 4;
+            const _cmpMetricW = 190;
+            const _cmpProfileW = 200;
+            const _cmpColgroup = _cmpManyCols
+                ? '<colgroup><col style="width:' + _cmpMetricW + 'px">' + names.map(function(){ return '<col style="width:' + _cmpProfileW + 'px">'; }).join('') + '</colgroup>'
+                : '';
+            const _cmpTableOpen = _cmpManyCols
+                ? '<table class="rankers-table" style="border-collapse: collapse; font-size: 0.85rem; table-layout: fixed; width: ' + (_cmpMetricW + names.length * _cmpProfileW) + 'px;">' + _cmpColgroup
+                : '<table class="rankers-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+
             // Key metrics row definitions
             const metricRows = [
                 { key: 'totalPlatformImpact', label: 'Total Platform Impact', higherBetter: true, format: v => formatNumber(v) },
@@ -95517,7 +95530,7 @@ https://www.instagram.com/p/..."></textarea>
 
             // Build table HTML
             let html = '<h3 style="margin: 0 0 1rem 0; color: var(--accent-cyan);">📊 Key Metrics Comparison</h3>';
-            html += '<table class="rankers-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+            html += _cmpTableOpen;
             html += '<thead><tr><th style="text-align: left; padding: 0.75rem; border-bottom: 2px solid var(--border-color);">Metric</th>';
             profilesData.forEach((p, i) => {
                 const n = names[i];
@@ -95555,9 +95568,9 @@ https://www.instagram.com/p/..."></textarea>
                 const allAgeKeys = new Set();
                 profilesData.forEach(p => { (p.data?.demographics?.age || []).forEach(d => { const k = d.age_range || d.age || ''; if (k && k !== 'GENDER' && k !== 'N/A') allAgeKeys.add(k); }); });
                 const ageKeys = Array.from(allAgeKeys);
-                html += '<table class="rankers-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+                html += _cmpTableOpen;
                 html += '<thead><tr><th style="text-align: left; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">Age Range</th>';
-                names.forEach(n => { html += `<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">${n}</th>`; });
+                names.forEach(n => { html += `<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);"><span style="color: var(--accent-lime); font-weight: 700;">${n}</span></th>`; });
                 html += '</tr></thead><tbody>';
                 ageKeys.forEach(key => {
                     html += '<tr>';
@@ -95586,9 +95599,9 @@ https://www.instagram.com/p/..."></textarea>
                     demos.forEach(d => { const k = (d.gender || d.age_range || d.age || '').toUpperCase(); if (genderKeywords.some(kw => k.includes(kw))) allGenderKeys.add(d.gender || d.age_range || d.age || ''); });
                 });
                 const genderKeys = Array.from(allGenderKeys);
-                html += '<table class="rankers-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+                html += _cmpTableOpen;
                 html += '<thead><tr><th style="text-align: left; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">Gender</th>';
-                names.forEach(n => { html += `<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">${n}</th>`; });
+                names.forEach(n => { html += `<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);"><span style="color: var(--accent-lime); font-weight: 700;">${n}</span></th>`; });
                 html += '</tr></thead><tbody>';
                 genderKeys.forEach(key => {
                     html += '<tr>';
@@ -95611,9 +95624,9 @@ https://www.instagram.com/p/..."></textarea>
                 const allPlats = new Set();
                 profilesData.forEach(p => { (p.data?.platforms || []).forEach(pl => { const n = pl.platform || pl.name || ''; if (n) allPlats.add(n); }); });
                 const platKeys = Array.from(allPlats).sort();
-                html += '<table class="rankers-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+                html += _cmpTableOpen;
                 html += '<thead><tr><th style="text-align: left; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">Platform</th>';
-                names.forEach(n => { html += `<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">${n}</th>`; });
+                names.forEach(n => { html += `<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);"><span style="color: var(--accent-lime); font-weight: 700;">${n}</span></th>`; });
                 html += '</tr></thead><tbody>';
                 platKeys.forEach(key => {
                     html += '<tr>';
@@ -95626,6 +95639,10 @@ https://www.instagram.com/p/..."></textarea>
                     html += '</tr>';
                 });
                 html += '</tbody></table>';
+            }
+
+            if (_cmpManyCols) {
+                html = '<div style="overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.5rem;">' + html + '</div>';
             }
 
             container.innerHTML = html;
