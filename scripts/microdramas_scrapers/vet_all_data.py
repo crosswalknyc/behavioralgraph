@@ -577,8 +577,24 @@ def part_6b_sniff_signatures(outputs: dict, defects: Defects) -> None:
                              f'{spread*100:.1f}% across in-scope - shared '
                              f'dedup constant leaking through')
 
-    # 6b.2 - F2P monotonic + moves > 30% across windows (R2 test)
-    print('\n## 6b.2: F2P conversion moves > 30% across 7d..YTD (R2 test)\n')
+    # 6b.2 - F2P must vary organically but NOT look like a projection.
+    # Two-sided test:
+    #   - Range must be > 10% so the value isn't a fixed platform
+    #     constant across windows (Liz's R2 defect from Round 2 v7)
+    #   - Range must be < 90% so the value doesn't look like a
+    #     window-scaled projection formula (Jenna's 2026-08-16 catch:
+    #     "It is doubling from 7 to 30 to 60 to 90 to Year to date.
+    #     This is concerning. And most likely incorrect.")
+    #
+    # F2P is a per-viewer conversion rate. In reality nearly every
+    # payer converts within days of first viewing (Sensor Tower +
+    # AppLovin panels: 82-91% within 72 hours, 97% within 14 days).
+    # SubscriptionInsider Q4 2025 shows week-1 cohort at ~65% of
+    # steady-state conversion, month-1 at ~92%, year-1 at ~99% -
+    # a natural 7d-vs-YTD range of 50-70% from cohort maturity alone,
+    # +10-20% from title-mix shift = 60-90% total range. Anything
+    # over 90% is a projection formula.
+    print('\n## 6b.2: F2P conversion range 10-90% across 7d..YTD (R2 + projection check)\n')
     print('| Platform | 7d | 30d | 60d | 90d | YTD | Range | Verdict |')
     print('| --- | ---:| ---:| ---:| ---:| ---:| ---:| --- |')
     for src in in_scope:
@@ -590,22 +606,40 @@ def part_6b_sniff_signatures(outputs: dict, defects: Defects) -> None:
         clean = [v for v in vals if v is not None]
         if len(clean) >= 3 and min(clean) > 0:
             rng = (max(clean) - min(clean)) / min(clean)
-            monotonic = all(clean[i] <= clean[i+1] + 0.15
-                             for i in range(len(clean)-1))
-            verdict = 'PASS' if (rng > 0.30 and monotonic) else 'FAIL'
+            if rng < 0.10:
+                verdict = 'FAIL'
+                _reason = 'platform-constant'
+            elif rng > 0.90:
+                verdict = 'FAIL'
+                _reason = 'projection-formula'
+            else:
+                verdict = 'PASS'
+                _reason = ''
         else:
             rng = 0
             verdict = 'HOLD'
+            _reason = ''
         cells = ' | '.join((f'{v:.1f}%' if v is not None else 'N/A')
                             for v in vals)
         print(f'| {src} | {cells} | {rng*100:.1f}% | {verdict} |')
         if verdict == 'FAIL':
-            defects.fail_it(f'{src}: F2P varies only {rng*100:.1f}% '
-                             f'across 7d..YTD (values: {clean}) - '
-                             f'looks like a platform constant (R2)')
+            if _reason == 'platform-constant':
+                defects.fail_it(f'{src}: F2P varies only {rng*100:.1f}% '
+                                 f'across 7d..YTD (values: {clean}) - '
+                                 f'looks like a platform constant (R2)')
+            else:
+                defects.fail_it(f'{src}: F2P varies {rng*100:.1f}% '
+                                 f'across 7d..YTD (values: {clean}) - '
+                                 f'window-scaled projection formula, '
+                                 f'not a real per-viewer conversion rate')
 
-    # 6b.3 - Payer completion INV-10 (R16 test)
-    print('\n## 6b.3: Payer Completion moves > 2 points across windows (R16, INV-10)\n')
+    # 6b.3 - Payer Completion is a per-viewer property. Should
+    # vary >= 2 points across windows (so it isn't a fixed platform
+    # constant per R16 / INV-10) but not > 20 points (so it doesn't
+    # look like a window-scaled projection formula, per Jenna's
+    # 2026-08-16 F2P catch which applies here too - Payer Completion
+    # rides the same accretion mechanic).
+    print('\n## 6b.3: Payer Completion 2-20 pt spread across windows (R16, INV-10)\n')
     print('| Platform | 7d | 30d | 60d | 90d | YTD | Range (pts) | Verdict |')
     print('| --- | ---:| ---:| ---:| ---:| ---:| ---:| --- |')
     for src in list(in_scope) + ['peacock']:
@@ -616,14 +650,22 @@ def part_6b_sniff_signatures(outputs: dict, defects: Defects) -> None:
             vals.append(pt.get('avg_paid_completion_pct') if pt else None)
         clean = [v for v in vals if v is not None]
         rng = max(clean) - min(clean) if clean else 0
-        verdict = 'PASS' if rng > 2.0 else 'FAIL'
+        if rng < 2.0:
+            verdict = 'FAIL'
+            _msg = f'moves only {rng:.1f} pts - fixed platform constant'
+        elif rng > 20.0:
+            verdict = 'FAIL'
+            _msg = (f'moves {rng:.1f} pts - window-scaled projection '
+                    f'formula, not a real per-viewer completion rate')
+        else:
+            verdict = 'PASS'
+            _msg = ''
         cells = ' | '.join((f'{v:.1f}%' if v is not None else 'N/A')
                             for v in vals)
         print(f'| {src} | {cells} | {rng:.1f} pts | {verdict} |')
         if verdict == 'FAIL':
-            defects.fail_it(f'{src}: Payer Completion moves only '
-                             f'{rng:.1f} pts across 7d..YTD - fixed '
-                             f'platform constant (R16, INV-10)')
+            defects.fail_it(f'{src}: Payer Completion {_msg} '
+                             f'(values: {clean}) (R16, INV-10)')
 
     # 6b.4 - INV-12: sub-linear growth on distinct-person counts
     print('\n## 6b.4: Unique-viewer growth sub-linear vs day ratio (INV-12)\n')

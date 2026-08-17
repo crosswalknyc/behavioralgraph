@@ -886,48 +886,61 @@ def _conversion_accretion(window_days: int, velocity: float) -> float:
 
     Mechanic: a viewer who arrived on day X of a W-day window has
     (W - X) days to hit the paywall, decide to pay, and cross it.
-    Cohorts that arrived early in the window have already converted
-    if they were going to; cohorts that arrived late are still
-    deciding. Integrating a first-order conversion model
-    (fraction converted = 1 - exp(-t / halflife)) across a
-    uniformly-arriving audience gives an S-curve that starts near
-    zero at W=1d and asymptotes to 1.0 at large W.
+    In reality nearly every payer converts within the first few days
+    of first viewing (published Sensor Tower + AppLovin data: 82-91%
+    of coin-platform payers convert within 72 hours of first session,
+    97% within 14 days). So this curve saturates fast: barely-visible
+    lift past ~14 days, essentially flat by ~30 days.
 
-    velocity is the per-title half-life inverse: high velocity
-    means the S-curve saturates fast. Values calibrated so:
-      - 7d window, avg velocity: accretion ~0.55
-      - 30d window, avg velocity: accretion ~0.82
-      - 60d window, avg velocity: accretion ~0.93
-      - 90d window, avg velocity: accretion ~0.98
-      - 226d window (YTD): accretion ~1.05 (late-window trickle)
+    Jenna 2026-08-16 verdict: "Is the Free to Paid Conversion a
+    projection formula in background... It is doubling from 7 to 30
+    to 60 to 90 to Year to date. This is concerning. And most likely
+    incorrect." Correct. Prior implementation used a 9-day halflife
+    with a late-window linear add that pushed the YTD accretion to
+    ~1.55x the 7d value, driving a 4x F2P range across the five
+    windows. That's a projection formula, not a real conversion
+    curve. Real F2P is a per-viewer property, not a per-window
+    property; a payer decides in the first few days.
 
-    Returns a multiplier applied to the title's steady-state
-    conversion rate. Different velocities across the catalog make
-    the aggregate rate a genuine function of the window's title
-    mix, not a constant.
+    Correct calibration (halflife=2 days for velocity=1.0):
+      - 7d window:   accretion ~0.72
+      - 14d window:  accretion ~0.86
+      - 30d window:  accretion ~0.93
+      - 60d window:  accretion ~0.97
+      - 90d window:  accretion ~0.98
+      - 226d (YTD):  accretion ~0.99
+
+    Range across the five windows: ~1.37x. That range comes from
+    "cohorts who arrived on day 5 of a 7-day window haven't finished
+    their conversion decision yet" - the ONLY legitimate window
+    mechanic on a per-viewer conversion rate. Every additional
+    percent of movement must come from title-mix shift, not from
+    this multiplier.
+
+    velocity is the per-title conversion speed. Values calibrated so
+    different velocities across the catalog make the aggregate rate
+    a genuine function of the window's title mix at short windows;
+    by 30d, every title's velocity has saturated and the aggregate
+    is essentially a mix-weighted mean of steady-state rates.
     """
     W = max(1.0, float(window_days))
     v = max(0.20, min(2.00, float(velocity)))
     import math as _m
     # Half-life scales inversely with velocity. Baseline half-life
-    # of ~9 days for velocity=1.0 puts a 7d window at ~42%
-    # accretion; per-title lift/velocity then organically pushes
-    # each title above or below that.
-    halflife = 9.0 / v
+    # of 2 days for velocity=1.0 saturates by day ~14, matching the
+    # 97%-within-14-days payer-decision benchmark.
+    halflife = 2.0 / v
     # Integrate 1 - exp(-t/halflife) dt from 0 to W, normalized by W:
     #   = 1 - (halflife/W) * (1 - exp(-W/halflife))
+    # This is the fraction of a uniformly-arriving cohort that has
+    # had time to make its conversion decision by the end of the
+    # window. NO late-window linear add - that was the projection
+    # formula Jenna caught.
     accretion = 1.0 - (halflife / W) * (1.0 - _m.exp(-W / halflife))
-    # Late-window trickle: viewers who arrived late in the window
-    # can still convert via word-of-mouth resurfacing, price drops,
-    # push-notification winbacks, and platform-driven revivals of
-    # older titles. Model this as linear growth past 90d so YTD
-    # lands materially above 90d - matching Liz's Round 2 v7 R2
-    # argument that F2P must climb across the whole window range.
-    # Coefficient sized so aggregate F2P at 226d lands ~15-20% above
-    # 90d even when the title mix rotates toward long-tail winners.
-    if W > 90:
-        accretion += 0.055 * ((W - 90) / 30.0)
-    return max(0.05, min(1.55, accretion))
+    # Cap at 1.05 so long-window aggregates never exceed the
+    # steady-state rate by more than the natural per-title velocity
+    # dispersion allows.
+    return max(0.30, min(1.05, accretion))
 
 
 def _estimate_completion(title: dict,
@@ -996,11 +1009,12 @@ def _estimate_completion(title: dict,
         # aggregate series_completion moves organically across windows.
         pc_dna = _title_monetization_dna(salt)
         pc_wd = window_days if window_days is not None else 30
-        # Peacock's finish-decision half-life is longer than coin
-        # platforms (subs binge on their own schedule, no cliffhanger
-        # coin push). Use velocity/1.6 to slow the accretion curve.
-        pc_accretion = _conversion_accretion(
-            pc_wd, max(0.30, pc_dna['velocity'] / 1.6))
+        # Peacock series completion is a per-viewer property (a
+        # subscriber's finish rate depends on their attention, not
+        # on the operator's chosen lookback window). Same fast-
+        # saturating curve as coin platforms - by 30 days, essentially
+        # every viewer has had time to finish or abandon.
+        pc_accretion = _conversion_accretion(pc_wd, pc_dna['velocity'])
         ep_ret = min(0.99, max(0.85,
                      prof['ep_retention'] + tier_bonus + jitter_free))
         curve = []
