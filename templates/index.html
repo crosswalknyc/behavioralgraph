@@ -95083,6 +95083,13 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
         
+        // Strip a trailing platform tag (e.g. " - Peacock") from a show name
+        // for LEFT-RAIL display only. The full tagged name is kept everywhere
+        // else (title bar, tabs, compare, tooltip) where it's intentional.
+        function _subRailDisplayName(name) {
+            return String(name || '').replace(/\s*[-\u2013\u2014]\s*peacock\s*$/i, '').trim();
+        }
+
         function renderSubscriberProfileTree() {
             const container = document.getElementById('subscriberProfileTree');
             if (!container) return;
@@ -95110,9 +95117,10 @@ https://www.instagram.com/p/..."></textarea>
                 matches.forEach(file => {
                     const idEsc = escKey(file.s3_key);
                     const isActive = activeSubscriberTabId === file.s3_key;
-                    const name = escAttr(file.show_name || 'Unknown');
+                    const fullName = escAttr(file.show_name || 'Unknown');
+                    const name = escAttr(_subRailDisplayName(file.show_name || 'Unknown'));
                     html += `
-                        <div class="profile-select-item subscriber-show-item ${isActive ? 'active' : ''}" onclick="selectSubscriberProfile('${idEsc}')" title="${name}">
+                        <div class="profile-select-item subscriber-show-item ${isActive ? 'active' : ''}" onclick="selectSubscriberProfile('${idEsc}')" title="${fullName}">
                             ${name}
                         </div>
                     `;
@@ -95169,9 +95177,10 @@ https://www.instagram.com/p/..."></textarea>
                     files.forEach(file => {
                         const idEsc = escKey(file.s3_key);
                         const isActive = activeSubscriberTabId === file.s3_key;
-                        const name = escAttr(file.show_name || 'Unknown');
+                        const fullName = escAttr(file.show_name || 'Unknown');
+                        const name = escAttr(_subRailDisplayName(file.show_name || 'Unknown'));
                         html += `
-                            <div class="profile-select-item subscriber-show-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectSubscriberProfile('${idEsc}')" title="${name}">
+                            <div class="profile-select-item subscriber-show-item ${isActive ? 'active' : ''}" onclick="event.stopPropagation(); selectSubscriberProfile('${idEsc}')" title="${fullName}">
                                 ${name}
                             </div>
                         `;
