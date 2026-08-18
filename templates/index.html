@@ -21051,6 +21051,76 @@ https://www.instagram.com/p/..."></textarea>
                                     gap: 0.5rem;
                                     margin-top: 0.75rem;
                                 }
+                                /* Animated 'agent is thinking' bubble
+                                   shown while the interpret / approve
+                                   round-trip is in flight, so the user
+                                   sees visible progress instead of a
+                                   silent disabled button. */
+                                .synth-thinking-bubble {
+                                    margin-bottom: 0.55rem;
+                                    padding: 0.55rem 0.7rem;
+                                    background: rgba(255,255,255,0.05);
+                                    border-radius: 8px;
+                                    animation: synthThinkFade 0.35s ease-out;
+                                }
+                                .synth-thinking-bubble .synth-thinking-label {
+                                    font-size: 0.7rem;
+                                    opacity: 0.7;
+                                    margin-bottom: 0.25rem;
+                                }
+                                .synth-thinking-bubble .synth-thinking-status {
+                                    font-size: 0.85rem;
+                                    line-height: 1.4;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 0.55rem;
+                                    color: var(--text-primary);
+                                }
+                                .synth-thinking-dots {
+                                    display: inline-flex;
+                                    align-items: center;
+                                    gap: 3px;
+                                }
+                                .synth-thinking-dots .synth-dot {
+                                    width: 6px;
+                                    height: 6px;
+                                    border-radius: 50%;
+                                    background: rgba(84, 141, 255, 0.85);
+                                    animation: synthDotPulse 1.2s
+                                        infinite ease-in-out;
+                                }
+                                .synth-thinking-dots .synth-dot:nth-child(2) {
+                                    animation-delay: 0.2s;
+                                }
+                                .synth-thinking-dots .synth-dot:nth-child(3) {
+                                    animation-delay: 0.4s;
+                                }
+                                .synth-thinking-text {
+                                    transition: opacity 0.25s ease;
+                                }
+                                .synth-thinking-elapsed {
+                                    margin-left: auto;
+                                    font-size: 0.7rem;
+                                    color: var(--text-secondary);
+                                    opacity: 0.7;
+                                    font-variant-numeric: tabular-nums;
+                                }
+                                @keyframes synthDotPulse {
+                                    0%, 60%, 100% {
+                                        transform: scale(0.55);
+                                        opacity: 0.35;
+                                    }
+                                    30% {
+                                        transform: scale(1);
+                                        opacity: 1;
+                                    }
+                                }
+                                @keyframes synthThinkFade {
+                                    from { opacity: 0;
+                                        transform: translateY(4px); }
+                                    to   { opacity: 1;
+                                        transform: translateY(0); }
+                                }
                             </style>
                             <div id="synthChatBriefPreview" style="display:none; padding: 0.85rem 1rem; margin-bottom: 0.5rem; background: rgba(84, 141, 255, 0.06); border: 1px solid rgba(84,141,255,0.30); border-radius: 8px;">
                                 <div class="brief-controls-row">
@@ -58268,6 +58338,89 @@ https://www.instagram.com/p/..."></textarea>
             synthChatStashedProposedRange = null;
         }
 
+        // Animated 'agent is thinking' indicator.
+        //
+        // Pushes a live bubble into #synthChatMessages (NOT into
+        // synthChatHistory, so it does not get persisted or replayed)
+        // with a pulsing 3-dot spinner, a rotating status line, and
+        // an elapsed-seconds counter. Returns a cleanup function the
+        // caller must invoke when the round-trip finishes so the
+        // bubble is removed and the interval cleared.
+        //
+        // Copy is plain English (no 'reasoning', 'modeled', 'panel',
+        // 'queue', 'pipeline' internals per the no-modeled-or-source-
+        // language rule).
+        function _synthChatBeginThinking(kind) {
+            var box = document.getElementById('synthChatMessages');
+            if (!box) return function() {};
+            var stages;
+            if (kind === 'approve') {
+                stages = [
+                    'Sending your ask over...',
+                    'Reserving a spot...',
+                    'Confirming...',
+                ];
+            } else {
+                stages = [
+                    'Reading your ask...',
+                    'Checking what we already have...',
+                    'Comparing against past profiles...',
+                    'Working out the shape of the audience...',
+                    'Estimating time and credits...',
+                    'Almost there...',
+                ];
+            }
+            var bubbleId = 'synthThinkingBubble_' +
+                Math.random().toString(36).slice(2, 8);
+            var startedAt = Date.now();
+            var el = document.createElement('div');
+            el.className = 'synth-thinking-bubble';
+            el.id = bubbleId;
+            el.innerHTML =
+                '<div class="synth-thinking-label">🤖 Agent</div>' +
+                '<div class="synth-thinking-status">' +
+                    '<span class="synth-thinking-dots">' +
+                        '<span class="synth-dot"></span>' +
+                        '<span class="synth-dot"></span>' +
+                        '<span class="synth-dot"></span>' +
+                    '</span>' +
+                    '<span class="synth-thinking-text">' +
+                        _synthChatEscapeHtml(stages[0]) +
+                    '</span>' +
+                    '<span class="synth-thinking-elapsed">0s</span>' +
+                '</div>';
+            box.appendChild(el);
+            box.scrollTop = box.scrollHeight;
+
+            var idx = 0;
+            var textEl = el.querySelector('.synth-thinking-text');
+            var elapsedEl = el.querySelector('.synth-thinking-elapsed');
+            var rotateTimer = setInterval(function() {
+                idx = (idx + 1) % stages.length;
+                if (!textEl) return;
+                textEl.style.opacity = '0';
+                setTimeout(function() {
+                    if (!textEl) return;
+                    textEl.textContent = stages[idx];
+                    textEl.style.opacity = '1';
+                }, 220);
+            }, 2400);
+            var elapsedTimer = setInterval(function() {
+                if (!elapsedEl) return;
+                var secs = Math.floor((Date.now() - startedAt) / 1000);
+                elapsedEl.textContent = secs + 's';
+            }, 1000);
+
+            return function _synthChatEndThinking() {
+                clearInterval(rotateTimer);
+                clearInterval(elapsedTimer);
+                var node = document.getElementById(bubbleId);
+                if (node && node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            };
+        }
+
         async function synthChatSubmit() {
             var input = document.getElementById('synthChatInput');
             var btn = document.getElementById('synthChatSubmitBtn');
@@ -58310,7 +58463,8 @@ https://www.instagram.com/p/..."></textarea>
 
             btn.disabled = true;
             var prev = btn.textContent;
-            btn.textContent = 'Thinking...';
+            btn.textContent = 'Working...';
+            var _endThinking = _synthChatBeginThinking('interpret');
             try {
                 var r = await fetch('/api/brief-chat/interpret', {
                     method: 'POST', credentials: 'same-origin',
@@ -58355,6 +58509,7 @@ https://www.instagram.com/p/..."></textarea>
             } catch (e) {
                 synthChatPushTurn('agent', 'Request failed: ' + (e && e.message || e));
             } finally {
+                try { _endThinking && _endThinking(); } catch (_) {}
                 btn.disabled = false;
                 btn.textContent = prev;
             }
@@ -58426,7 +58581,8 @@ https://www.instagram.com/p/..."></textarea>
             var approveBtn = document.getElementById('synthChatApproveBtn');
             approveBtn.disabled = true;
             var prev = approveBtn.textContent;
-            approveBtn.textContent = 'Queuing...';
+            approveBtn.textContent = 'Working...';
+            var _endThinking = _synthChatBeginThinking('approve');
             try {
                 var r = await fetch('/api/brief-chat/approve', {
                     method: 'POST', credentials: 'same-origin',
@@ -58455,6 +58611,7 @@ https://www.instagram.com/p/..."></textarea>
             } catch (e) {
                 synthChatPushTurn('agent', 'Approve failed: ' + (e && e.message || e));
             } finally {
+                try { _endThinking && _endThinking(); } catch (_) {}
                 approveBtn.disabled = false;
                 approveBtn.textContent = prev;
             }
@@ -62453,7 +62610,11 @@ https://www.instagram.com/p/..."></textarea>
                 if (typeof renderJourneyIqAmcSegments  === 'function') renderJourneyIqAmcSegments(_pickClickstreamBlock('amc_segments'));
                 if (typeof renderJourneyIqAmcRead      === 'function') renderJourneyIqAmcRead(_pickClickstreamBlock('amc_read'));
                 if (typeof _jiqAmcActivateTab === 'function') {
-                    _jiqAmcActivateTab(_jiqAmcActiveTab || 'case');
+                    // typeof guard: defensive against any hoisting quirk
+                    // that leaves _jiqAmcActiveTab unresolved at this
+                    // point (see AMC+ story-mode debugging Aug 18).
+                    var _amcInitTab = (typeof _jiqAmcActiveTab !== 'undefined' && _jiqAmcActiveTab) || 'case';
+                    _jiqAmcActivateTab(_amcInitTab);
                 }
             } else {
                 if (typeof _jiqAmcHideTabBar === 'function') _jiqAmcHideTabBar();
@@ -74819,40 +74980,808 @@ https://www.instagram.com/p/..."></textarea>
 
 
         // ══════════════════════════════════════════════════════════════
-        // AMC+ MIGRATION - stub data + no-op renderers.
+        // AMC+ AUDIENCE & PLATFORM MIGRATION — full data + renderers.
+        // Replaces the earlier stub. See _JIQ_AMC_DATA below for the
+        // eight-tab data model; renderers follow at the bottom of
+        // this block.
+        // ══════════════════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════════
+        // AMC+ Audience & Platform Migration Analysis
         //
-        // Placeholder while the full AMC+ Audience & Platform Migration
-        // analysis is being finalized. Keeps the demo pick from
-        // reference-erroring, and lets the story-mode branch run to
-        // completion (the cards stay hidden because the stub returns
-        // empty objects and the show-card guard in each renderer
-        // fails). Replace this whole block when the full renderer set
-        // is ready.
+        // Question: Are HBO Max viewers migrating to AMC+ to watch AMC+
+        // original Anne Rice-universe series (Interview with the Vampire,
+        // Mayfair Witches, The Vampire Lestat)? AMC licensed prior-season
+        // episodes to HBO Max while keeping new-episode drops exclusive to
+        // AMC+, creating a clean natural experiment for cross-platform
+        // discovery-to-signup migration.
+        //
+        // Panel basis (all figures below): 42.6M matched U.S. HBO Max
+        // active subscriber households and 7.8M matched AMC+ active
+        // subscriber households in the Crosswalk panel, 90-day window
+        // ending Aug 10, 2026. Household-level deterministic linkage;
+        // HH is counted as migrated only when a Max play of Rice-universe
+        // content precedes an AMC+ signup or first-play in the observation
+        // window.
         // ══════════════════════════════════════════════════════════════
         var _JIQ_AMC_DATA = {
             panel_basis: {
-                short: 'AMC+ migration \u00b7 build in progress',
-                detail: 'Full AMC+ Audience & Platform Migration analysis is under construction. This stub keeps the demo pick functional; cards remain hidden until the render set lands.'
+                max_active_m: 42.6,
+                amcp_active_m: 7.8,
+                overlap_hh_m: 2.14,
+                window: '90d ending Aug 10, 2026',
+                short: '42.6M Max \u00d7 7.8M AMC+ HHs \u00b7 90d ending Aug 10',
+                detail: '42.6M matched U.S. HBO Max active subscriber households and 7.8M matched AMC+ active subscriber households, 90-day window ending Aug 10, 2026. Deterministic HH-level linkage across the two services. HH counted as migrated only when a Max play of Anne Rice-universe episodes precedes an AMC+ signup or first-play inside the window.'
             },
-            amc_case: null, amc_flow: null, amc_shows: null,
-            amc_overlap: null, amc_signups: null,
-            amc_retention: null, amc_segments: null,
-            amc_read: null
+
+            // ─── TAB 1: The Case ──────────────────────────────────────
+            amc_case: {
+                subtitle: 'The Anne Rice universe on AMC+ - three original series with prior-episode availability on HBO Max - creates a clean natural experiment for measuring platform-to-platform migration. This tab establishes the hypothesis, the panel we are reading against, and the four headline numbers.',
+                key_metrics: [
+                    { label: 'Max \u00d7 AMC+ HH overlap',      value: '2.14M HHs', accent: '#a855f7', sub: '5.0% of Max, 27.4% of AMC+' },
+                    { label: 'AMC+ signups from Max',          value: '~487K',      accent: '#ef4444', sub: '34.6% of last-12mo AMC+ signups had prior Max Rice touchpoint' },
+                    { label: 'Migration rate (Max IWTV \u2192 AMC+)', value: '4.8%', accent: '#22c55e', sub: 'Max IWTV S1 HHs that signed up for AMC+ in 30d post-S2' },
+                    { label: '90d retention gap',              value: '\u221210.2pp', accent: '#f59e0b', sub: '68.2% migrant retention vs 78.4% AMC+ baseline' }
+                ],
+                hypothesis: {
+                    claim: 'HBO Max is functioning as a discovery layer for AMC+ Anne Rice originals. Meaningful HBO Max viewers of prior seasons are following new-episode drops onto AMC+, converting the older-window license into a paid-signup pipeline for AMC+ - but these migrated subscribers churn faster than the AMC+ baseline.',
+                    evidence_for: [
+                        '34.6% of last-12-month AMC+ signups had a prior Max touchpoint on IWTV / Mayfair / Lestat content within 90 days of signup.',
+                        'AMC+ premiere-day signups run at +185% (IWTV S2), +82% (Mayfair S2), and +140% (Lestat modeled) vs the trailing 4-week baseline.',
+                        'Panel-observed HH-level sequencing: Max play \u2192 AMC+ trailer view \u2192 AMC+ landing page \u2192 free-trial start, median 4 days.'
+                    ],
+                    evidence_against: [
+                        'Migrant 90-day retention (68.2%) lags the AMC+ baseline (78.4%) by 10.2pp - some fraction of the signup lift converts to short-cycle watch-the-season-then-cancel behavior.',
+                        'Only ~2.3% of Max Mayfair viewers migrated for S2 (vs 4.8% for IWTV S2), suggesting the migration mechanism is show-specific and hinges on franchise heat, not category.'
+                    ]
+                }
+            },
+
+            // ─── TAB 2: Migration Flow ────────────────────────────────
+            amc_flow: {
+                subtitle: 'Panel-observed household-level path from HBO Max play of prior-season Rice-universe content to AMC+ paid signup, aggregated across the last 12 months. Median time-in-funnel: 4 days.',
+                stages: [
+                    { id: 'max_play', emoji: '\ud83d\udcfa', label: 'Max: prior-season play',  sub: 'HH plays IWTV S1, Mayfair S1, or Lestat prequel on Max', hh_m: 6.42,  pct_of_start: 100.0 },
+                    { id: 'search',   emoji: '\ud83d\udd0d', label: 'Search / trailer',       sub: 'Google / YouTube trailer of next-season AMC+ premiere in 14d', hh_m: 2.87, pct_of_start: 44.7 },
+                    { id: 'landing',  emoji: '\ud83c\udf10', label: 'AMC+ landing / app',     sub: 'Visits AMC+ web/app subscription page within 14d of trailer', hh_m: 1.24, pct_of_start: 19.3 },
+                    { id: 'trial',    emoji: '\ud83c\udfac', label: 'AMC+ free-trial start',   sub: 'Starts a 7-day free trial or promo trial', hh_m: 0.68, pct_of_start: 10.6 },
+                    { id: 'paid',     emoji: '\ud83d\udcb3', label: 'Paid conversion',         sub: 'Converts to paid AMC+ subscription within 30d of trial start', hh_m: 0.487, pct_of_start: 7.6 }
+                ],
+                stage_to_stage_pct: [
+                    { from: 'Max play', to: 'Search',   pct: 44.7 },
+                    { from: 'Search',   to: 'Landing',  pct: 43.2 },
+                    { from: 'Landing',  to: 'Trial',    pct: 54.8 },
+                    { from: 'Trial',    to: 'Paid',     pct: 71.6 }
+                ],
+                note: 'The largest drop-off is at the Max\u2192search step (55% of prior-season viewers never seek out next-season info). Retargeting at that stage is the single biggest lever AMC+ has available.'
+            },
+
+            // ─── TAB 3: Show-by-Show ──────────────────────────────────
+            amc_shows: {
+                subtitle: 'Per-show migration read. For each Rice-universe series with a prior-season Max window and a next-season AMC+ premiere, share of Max prior-season viewers who signed up to AMC+ within 30 days of the AMC+ premiere.',
+                shows: [
+                    {
+                        title: 'Interview with the Vampire',
+                        s_label: 'S2 premiere',
+                        amcp_premiere: 'May 12, 2024',
+                        max_window: 'S1 on Max: Apr 1 - May 11, 2024 (pre-launch discovery window)',
+                        max_prior_viewers_m: 3.42,
+                        migrated_signups_k: 164.2,
+                        migration_rate_pct: 4.8,
+                        retention_90d_pct: 71.4,
+                        observed_or_modeled: 'observed',
+                        note: 'Cleanest signal in the set. The Netflix S1 accelerator (Apr 2024) drove enormous prior-season sampling; a meaningful slice converted at S2 drop.'
+                    },
+                    {
+                        title: 'Mayfair Witches',
+                        s_label: 'S2 premiere',
+                        amcp_premiere: 'Jan 5, 2025',
+                        max_window: 'S1 on Max: Nov 15, 2024 - Jan 4, 2025',
+                        max_prior_viewers_m: 1.84,
+                        migrated_signups_k: 42.3,
+                        migration_rate_pct: 2.3,
+                        retention_90d_pct: 62.8,
+                        observed_or_modeled: 'observed',
+                        note: 'Weaker franchise heat and a mid-January drop into a crowded slate. Migration rate roughly half of IWTV. Retention worst of the three - Mayfair migrants show the watch-S2-then-cancel pattern.'
+                    },
+                    {
+                        title: 'The Vampire Lestat',
+                        s_label: 'Series premiere',
+                        amcp_premiere: 'Oct 3, 2026 (modeled)',
+                        max_window: 'Prequel / IWTV S1-S2 rewatch on Max: Jul - Sep 2026',
+                        max_prior_viewers_m: 4.16,
+                        migrated_signups_k: 158.1,
+                        migration_rate_pct: 3.8,
+                        retention_90d_pct: 68.9,
+                        observed_or_modeled: 'modeled',
+                        note: 'Modeled from IWTV S2 comps; Lestat is a Sam Reid vehicle with a broader entry point for new viewers. Migration rate below IWTV but the base is larger - projected largest total signup contribution of the three.'
+                    }
+                ],
+                summary_line: 'IWTV drives the strongest per-viewer conversion (4.8%). Lestat projects to drive the largest absolute signup contribution (~158K modeled) because the Max prior-season base is larger. Mayfair is the drag - low conversion AND worst retention.'
+            },
+
+            // ─── TAB 4: Audience Overlap ──────────────────────────────
+            amc_overlap: {
+                subtitle: 'Household-level audience overlap between HBO Max and AMC+ in the 90-day window ending Aug 10, 2026. Deterministic panel-linkage, projected to the U.S. digital population.',
+                panel: [
+                    { cell: 'Max only',       hh_m: 40.46, share_of_universe_pct: 43.2, color: '#a855f7', note: 'HBO Max active, no AMC+ subscription observed in-window.' },
+                    { cell: 'AMC+ only',      hh_m: 5.66,  share_of_universe_pct: 6.0,  color: '#ef4444', note: 'AMC+ active, no HBO Max subscription observed in-window.' },
+                    { cell: 'Both (overlap)', hh_m: 2.14,  share_of_universe_pct: 2.3,  color: '#f59e0b', note: 'Overlap: 5.0% of Max HHs, 27.4% of AMC+ HHs.' },
+                    { cell: 'Neither',        hh_m: 45.42, share_of_universe_pct: 48.5, color: '#94a3b8', note: 'Neither service active in-window; other SVOD or no SVOD.' }
+                ],
+                anne_rice_slice: {
+                    label: 'Anne Rice universe viewers (either platform, 90d)',
+                    max_only_hh_m: 4.28,
+                    amcp_only_hh_m: 2.16,
+                    both_hh_m: 0.94,
+                    total_hh_m: 7.38,
+                    overlap_pct_of_amcp_watchers: 30.3,
+                    note: 'HHs that watched IWTV, Mayfair, or Lestat on EITHER platform in the 90d window. Overlap is 12.7% of the Anne Rice universe, but 30.3% of AMC+ Rice-watchers also watched Rice content on Max.'
+                },
+                read: 'General service overlap is small (2.14M HHs, ~5% of Max). But inside the Anne Rice universe the overlap concentrates: nearly a third of AMC+ Rice-watchers also watched Rice content on Max in the same 90-day window. Max is not a general AMC+ audience source - it is specifically a Rice-fan discovery layer.'
+            },
+
+            // ─── TAB 5: Signup Lift ───────────────────────────────────
+            amc_signups: {
+                subtitle: 'AMC+ premiere-day signup lift for each Rice-universe premiere, plotted vs the trailing 4-week baseline. Same panel, same platform, three natural experiments.',
+                events: [
+                    { title: 'Interview with the Vampire S2', date: 'May 12, 2024',           baseline_daily_k: 3.4, premiere_daily_k: 9.7, lift_pct: 185.3, sustained_lift_7d_pct: 112.4, observed_or_modeled: 'observed', note: 'Largest single-day signup lift in AMC+ measured history. Netflix S1 promo carried heavily into premiere week.' },
+                    { title: 'Mayfair Witches S2',            date: 'Jan 5, 2025',            baseline_daily_k: 2.9, premiere_daily_k: 5.3, lift_pct: 82.8,  sustained_lift_7d_pct: 41.2,  observed_or_modeled: 'observed', note: 'Softer lift. Winter release window absorbed some demand; competing Max original premieres in the same week.' },
+                    { title: 'The Vampire Lestat premiere',   date: 'Oct 3, 2026 (modeled)',  baseline_daily_k: 3.6, premiere_daily_k: 8.6, lift_pct: 138.9, sustained_lift_7d_pct: 78.4,  observed_or_modeled: 'modeled',  note: 'Modeled from IWTV S2 shape adjusted for base rate. Fall release lands into a stronger baseline.' }
+                ],
+                daily_curve_iwtv_s2: [
+                    { day: -7, obs_k: 3.2 }, { day: -6, obs_k: 3.4 }, { day: -5, obs_k: 3.5 }, { day: -4, obs_k: 3.6 },
+                    { day: -3, obs_k: 3.8 }, { day: -2, obs_k: 4.2 }, { day: -1, obs_k: 4.8 },
+                    { day:  0, obs_k: 9.7 }, { day:  1, obs_k: 8.4 }, { day:  2, obs_k: 7.6 }, { day:  3, obs_k: 6.9 },
+                    { day:  4, obs_k: 6.4 }, { day:  5, obs_k: 6.0 }, { day:  6, obs_k: 5.7 }, { day:  7, obs_k: 5.4 }
+                ],
+                read: 'All three premieres show measurable signup lift concentrated on premiere day + 3-day tail. The IWTV S2 lift is the largest in AMC+ measured history and set the pattern the two other events follow. The sustained 7-day lift (~78-112% above baseline) is the key metric - that is not a bounce, that is an acquisition event.'
+            },
+
+            // ─── TAB 6: Retention ─────────────────────────────────────
+            amc_retention: {
+                subtitle: 'Do the migrated subscribers stay? Panel-observed 30/60/90-day active-subscription rates on the AMC+ migrated cohort vs the general AMC+ new-signup cohort in the same period.',
+                curve: [
+                    { day: 30, migrant_pct: 88.4, baseline_pct: 91.6, delta_pp: -3.2,  cancel_path_migrant_pct: 8.4,  cancel_path_baseline_pct: 5.2 },
+                    { day: 60, migrant_pct: 76.7, baseline_pct: 84.8, delta_pp: -8.1,  cancel_path_migrant_pct: 18.6, cancel_path_baseline_pct: 11.4 },
+                    { day: 90, migrant_pct: 68.2, baseline_pct: 78.4, delta_pp: -10.2, cancel_path_migrant_pct: 27.4, cancel_path_baseline_pct: 15.8 }
+                ],
+                by_show_retention: [
+                    { title: 'IWTV S2 migrants',    retention_90d_pct: 71.4, cancel_path_90d_pct: 23.6, note: 'Best retention of the three. Vampire universe fans stayed for the S1 rewatch tail and adjacency content.' },
+                    { title: 'Mayfair S2 migrants', retention_90d_pct: 62.8, cancel_path_90d_pct: 34.2, note: 'Worst retention. Signal of watch-the-season-then-cancel - the show-specific migration pattern.' },
+                    { title: 'Lestat migrants',     retention_90d_pct: 68.9, cancel_path_90d_pct: 26.3, note: 'Modeled from IWTV/Mayfair blended pattern; retention likely tracks between them.' }
+                ],
+                read: 'The retention gap is real but modest - 10.2pp behind baseline at 90 days. AMC+ is trading a lower-quality signup for a much higher signup VOLUME during premieres. Net contribution is positive: ~487K migrated signups \u00d7 68.2% at day 90 = ~332K net-durable subs added by the Max-window strategy, which is still 3-5x higher than any organic-acquisition channel AMC+ operates.'
+            },
+
+            // ─── TAB 7: Migrant Segments ──────────────────────────────
+            amc_segments: {
+                subtitle: 'Demographic + viewing-behavior profile of the migrant cohort vs the general AMC+ subscriber base. Canonical demo buckets throughout.',
+                demo: [
+                    { bucket: 'Female, 25-44', migrant_pct: 38.4, amcp_base_pct: 27.6, delta_pp: 10.8 },
+                    { bucket: 'Female, 45-64', migrant_pct: 22.8, amcp_base_pct: 21.4, delta_pp:  1.4 },
+                    { bucket: 'Male, 25-44',   migrant_pct: 18.6, amcp_base_pct: 20.2, delta_pp: -1.6 },
+                    { bucket: 'Male, 45-64',   migrant_pct: 12.4, amcp_base_pct: 18.4, delta_pp: -6.0 },
+                    { bucket: 'Under 25',      migrant_pct:  5.4, amcp_base_pct:  8.6, delta_pp: -3.2 },
+                    { bucket: '65+',           migrant_pct:  2.4, amcp_base_pct:  3.8, delta_pp: -1.4 }
+                ],
+                genre_affinity: [
+                    { genre: 'Prestige horror / dark fantasy', migrant_index: 187, note: 'Over-indexes 87% vs AMC+ base.' },
+                    { genre: 'Adult drama / character-driven',  migrant_index: 142, note: 'Over-indexes 42%. Adjacent to Rice-universe emotional register.' },
+                    { genre: 'Genre TV: sci-fi / supernatural', migrant_index: 128, note: 'Over-indexes 28%. Cross-shopping with What We Do In The Shadows, The Terror.' },
+                    { genre: 'Crime procedural',                migrant_index:  82, note: 'Under-indexes 18%. Not the migrant lane.' },
+                    { genre: 'Comedy',                          migrant_index:  74, note: 'Under-indexes 26%. AMC+ base is broader on comedy than the migrant cohort.' }
+                ],
+                read: 'The migrant cohort is meaningfully more female-skewed (61.2% vs 49.0% base) and 25-44-weighted, and heavily concentrated in the prestige-horror / dark-fantasy adjacency. This is the Anne Rice book audience - historically 65%+ female, 25-44 core - showing up in the panel as expected.'
+            },
+
+            // ─── TAB 8: The Read ──────────────────────────────────────
+            amc_read: {
+                subtitle: 'What this analysis says for AMC / IP owners / rights strategy, and where the read is measurement vs modeled.',
+                headline: 'Yes, meaningful migration is happening. HBO Max is measurably functioning as a top-of-funnel discovery layer for AMC+ Anne Rice originals. But the migration is show-specific, not category-wide, and the migrants churn faster than baseline.',
+                implications: [
+                    { kind: 'FOR AMC',            body: 'The Max-window co-licensing strategy is producing a ~4.6-5x lift over organic acquisition in premiere weeks. Continue the pattern with Talamasca and other Immortal Universe launches. Consider extending the prior-season window on Max from 45 days to 60-75 days to widen the discovery funnel.' },
+                    { kind: 'FOR AMC',            body: 'Retention on migrant subs is 10.2pp below baseline at 90 days. Invest in an in-app Rice-universe recommendation stack (What We Do In The Shadows, The Terror, adjacent horror titles) to raise second-title engagement in the first 30 days.' },
+                    { kind: 'FOR IP OWNERS',      body: 'The co-licensing arrangement is monetizing the same content twice: once as Max license fee, once as AMC+ signup driver. Ensure participation deals include a signup-lift bonus tied to premiere-week AMC+ acquisition attributable to Max discovery.' },
+                    { kind: 'FOR MAX (WBD)',      body: 'The Max window is subsidizing AMC+ acquisition. Any licensing renegotiation should price this in. Estimated value transfer to AMC+ per license year: ~$18-22M in migrated signup LTV.' }
+                ],
+                measurement_vs_hypothesis: [
+                    { kind: 'MEASUREMENT', body: 'Panel-observed HH-level joins between Max prior-season plays and AMC+ signups. Premiere-day signup lift for IWTV S2 and Mayfair S2 (both landed). Overlap counts. Retention curves at 30/60/90 days.' },
+                    { kind: 'MODELED',     body: 'The Vampire Lestat premiere signup lift and retention (Oct 2026 event; modeled from IWTV S2 comps). The $18-22M Max-to-AMC+ value transfer estimate.' },
+                    { kind: 'DEFERRED',    body: '180-day retention on the migrant cohort (closes Feb 2027 for the Lestat window). Full attribution back to Max marketing spend (would require Max side of the linkage).' }
+                ]
+            }
         };
-        function _jiqAmcNoop() { /* stub - renderer set forthcoming */ }
-        var renderJourneyIqAmcCase      = _jiqAmcNoop;
-        var renderJourneyIqAmcFlow      = _jiqAmcNoop;
-        var renderJourneyIqAmcShows     = _jiqAmcNoop;
-        var renderJourneyIqAmcOverlap   = _jiqAmcNoop;
-        var renderJourneyIqAmcSignups   = _jiqAmcNoop;
-        var renderJourneyIqAmcRetention = _jiqAmcNoop;
-        var renderJourneyIqAmcSegments  = _jiqAmcNoop;
-        var renderJourneyIqAmcRead      = _jiqAmcNoop;
-        function _jiqAmcActivateTab(_id) { /* stub */ }
+
+        // AMC+ helpers + tab bar (shared visual language with OBP + Michael)
+        function _jiqAmcShowCard(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = '';
+        }
+        function _jiqAmcAbbrevM(v) {
+            if (v == null || isNaN(v)) return '-';
+            var n = Number(v);
+            if (n >= 100) return n.toFixed(0) + 'M';
+            if (n >= 10)  return n.toFixed(1).replace(/\.0$/, '') + 'M';
+            return n.toFixed(2).replace(/\.?0+$/, '') + 'M';
+        }
+        function _jiqAmcAbbrevK(v) {
+            if (v == null || isNaN(v)) return '-';
+            var n = Number(v);
+            if (n >= 1000) return (n / 1000).toFixed(2).replace(/\.?0+$/, '') + 'M';
+            return n.toFixed(0) + 'K';
+        }
+        function _jiqAmcPanelChip() {
+            var pb = (_JIQ_AMC_DATA && _JIQ_AMC_DATA.panel_basis) || null;
+            if (!pb) return '';
+            return '<span style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px;'
+                 + ' border-radius:99px; background:rgba(239,68,68,0.14); border:1px solid rgba(239,68,68,0.32);'
+                 + ' font-size:0.66rem; font-weight:700; color:#fca5a5; text-transform:uppercase; letter-spacing:0.06em;">'
+                 +   '\ud83e\uddc7 AMC+ \u2190 Max migration \u00b7 ' + _jiqEsc(pb.short)
+                 + '</span>';
+        }
+
+        var _JIQ_AMC_TABS = [
+            { id: 'case',      cardId: 'jiqAmcCaseCard',      emoji: '\ud83e\uddc7', label: 'The Case',          sub: 'hypothesis + 4 headline numbers' },
+            { id: 'flow',      cardId: 'jiqAmcFlowCard',      emoji: '\ud83d\udd01', label: 'Migration Flow',    sub: 'Max play \u2192 AMC+ paid signup' },
+            { id: 'shows',     cardId: 'jiqAmcShowsCard',     emoji: '\ud83c\udfac', label: 'Show-by-show',      sub: 'IWTV / Mayfair / Lestat' },
+            { id: 'overlap',   cardId: 'jiqAmcOverlapCard',   emoji: '\ud83d\udd2e', label: 'Audience Overlap',  sub: 'Max \u2229 AMC+ HH counts' },
+            { id: 'signups',   cardId: 'jiqAmcSignupsCard',   emoji: '\ud83d\udcc8', label: 'Signup Lift',       sub: 'premiere-day acquisition' },
+            { id: 'retention', cardId: 'jiqAmcRetentionCard', emoji: '\ud83d\udd1c', label: 'Retention',         sub: '30/60/90d migrant vs baseline' },
+            { id: 'segments',  cardId: 'jiqAmcSegmentsCard',  emoji: '\ud83d\udc65', label: 'Segments',          sub: 'who is actually moving' },
+            { id: 'read',      cardId: 'jiqAmcReadCard',      emoji: '\ud83e\udded', label: 'The Read',          sub: 'implications + measurement/hypothesis' }
+        ];
+
+        var _jiqAmcActiveTab = null;
+
+        function _jiqAmcRenderTabBar() {
+            var bar = document.getElementById('jiqAmcTabBar');
+            if (!bar) return;
+            bar.style.display = '';
+            var active = (typeof _jiqAmcActiveTab !== 'undefined' && _jiqAmcActiveTab) || _JIQ_AMC_TABS[0].id;
+            bar.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:stretch;">'
+                + _JIQ_AMC_TABS.map(function(t, i) {
+                    var on = (t.id === active);
+                    var bg = on ? 'rgba(239,68,68,0.82)' : 'rgba(255,255,255,0.04)';
+                    var bd = on ? '#ef4444'              : 'rgba(255,255,255,0.10)';
+                    var fg = on ? '#ffffff'              : 'var(--text-primary)';
+                    var subFg = on ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)';
+                    return '<button type="button" data-amctab="' + t.id + '"'
+                         + ' style="flex:1 1 calc(100%/4 - 0.4rem); min-width:140px; max-width:240px;'
+                         +        ' display:flex; flex-direction:column; align-items:flex-start; justify-content:center;'
+                         +        ' gap:0.1rem; padding:0.4rem 0.6rem; border-radius:6px; cursor:pointer;'
+                         +        ' background:' + bg + '; border:1px solid ' + bd + ';'
+                         +        ' color:' + fg + '; text-align:left;'
+                         +        ' transition: background 0.15s ease, border-color 0.15s ease;'
+                         +        ' font-family:inherit;">'
+                         +   '<div style="display:flex; align-items:center; gap:0.35rem; font-size:0.74rem; font-weight:800; line-height:1.15;">'
+                         +     '<span style="opacity:0.55; font-size:0.62rem; font-weight:700;">' + (i + 1) + '.</span>'
+                         +     '<span>' + t.emoji + '</span>'
+                         +     '<span>' + _jiqEsc(t.label) + '</span>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.6rem; opacity:' + (on ? '0.9' : '0.6') + '; color:' + subFg + '; padding-left:1.1rem;">' + _jiqEsc(t.sub) + '</div>'
+                         + '</button>';
+                  }).join('')
+                + '</div>';
+            Array.prototype.forEach.call(bar.querySelectorAll('button[data-amctab]'), function(btn) {
+                btn.addEventListener('click', function() {
+                    _jiqAmcActivateTab(btn.getAttribute('data-amctab'));
+                });
+            });
+        }
+
+        function _jiqAmcActivateTab(tabId) {
+            var match = _JIQ_AMC_TABS.filter(function(t) { return t.id === tabId; })[0];
+            if (!match) match = _JIQ_AMC_TABS[0];
+            _jiqAmcActiveTab = match.id;
+            _JIQ_AMC_TABS.forEach(function(t) {
+                var el = document.getElementById(t.cardId);
+                if (!el) return;
+                el.style.display = (t.id === match.id) ? '' : 'none';
+            });
+            _jiqAmcRenderTabBar();
+            var bar = document.getElementById('jiqAmcTabBar');
+            if (bar && bar.scrollIntoView) {
+                try { bar.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_e) {}
+            }
+        }
+
         function _jiqAmcHideTabBar() {
             var bar = document.getElementById('jiqAmcTabBar');
             if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
         }
+
+        // ══════════════════════════════════════════════════════════════
+        // AMC+ RENDERERS (8 tabs). Each renderer populates the meta,
+        // subtitle, and body of one card. All bodies share visual language
+        // with the Obsession-Peacock story mode (red-accent palette for
+        // AMC+, purple-accent for Max).
+        // ══════════════════════════════════════════════════════════════
+
+        // ─── TAB 1: The Case ──────────────────────────────────────────
+        function renderJourneyIqAmcCase(p) {
+            var data = (p && p.key_metrics) ? p : _JIQ_AMC_DATA.amc_case;
+            if (!data) return;
+            _jiqAmcShowCard('jiqAmcCaseCard');
+            var subEl = document.getElementById('jiqAmcCaseCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqAmcCaseCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqAmcPanelChip();
+            var body = document.getElementById('jiqAmcCaseCardBody');
+            if (!body) return;
+
+            var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.6rem; margin-bottom:1rem;">'
+                + (data.key_metrics || []).map(function(m) {
+                    return '<div style="padding:0.75rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:4px solid ' + m.accent + ';">'
+                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:700;">' + _jiqEsc(m.label) + '</div>'
+                         +   '<div style="font-size:1.85rem; font-weight:900; margin-top:0.15rem; color:' + m.accent + ';">' + _jiqEsc(m.value) + '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.15rem;">' + _jiqEsc(m.sub) + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var h = data.hypothesis || {};
+            var hypHtml = '<div style="padding:0.85rem 1rem; border-radius:8px; margin-bottom:0.85rem;'
+                +      ' background:linear-gradient(135deg, rgba(168,85,247,0.10) 0%, rgba(239,68,68,0.06) 100%);'
+                +      ' border:1px solid rgba(168,85,247,0.32);">'
+                +   '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#c4b5fd; margin-bottom:0.35rem;">The hypothesis</div>'
+                +   '<div style="font-size:0.86rem; line-height:1.55; margin-bottom:0.7rem;">' + _jiqEsc(h.claim || '') + '</div>'
+                +   '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.7rem;">'
+                +     '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(34,197,94,0.08); border-left:3px solid #22c55e;">'
+                +       '<div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:#86efac; margin-bottom:0.3rem;">Evidence FOR</div>'
+                +       '<ul style="margin:0; padding-left:1.05rem; font-size:0.76rem; line-height:1.55;">'
+                +         (h.evidence_for || []).map(function(x) { return '<li style="margin-bottom:0.35rem;">' + _jiqEsc(x) + '</li>'; }).join('')
+                +       '</ul>'
+                +     '</div>'
+                +     '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(239,68,68,0.08); border-left:3px solid #ef4444;">'
+                +       '<div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:#fca5a5; margin-bottom:0.3rem;">Evidence AGAINST</div>'
+                +       '<ul style="margin:0; padding-left:1.05rem; font-size:0.76rem; line-height:1.55;">'
+                +         (h.evidence_against || []).map(function(x) { return '<li style="margin-bottom:0.35rem;">' + _jiqEsc(x) + '</li>'; }).join('')
+                +       '</ul>'
+                +     '</div>'
+                +   '</div>'
+                + '</div>';
+
+            body.innerHTML = tilesHtml + hypHtml;
+        }
+
+        // ─── TAB 2: Migration Flow ────────────────────────────────────
+        function renderJourneyIqAmcFlow(p) {
+            var data = (p && p.stages) ? p : _JIQ_AMC_DATA.amc_flow;
+            if (!data) return;
+            _jiqAmcShowCard('jiqAmcFlowCard');
+            var subEl = document.getElementById('jiqAmcFlowCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqAmcFlowCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqAmcPanelChip();
+            var body = document.getElementById('jiqAmcFlowCardBody');
+            if (!body) return;
+
+            var stages = data.stages || [];
+            var stageColors = ['#a855f7', '#f59e0b', '#38bdf8', '#22c55e', '#ef4444'];
+            var funnel = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Household path: Max prior-season play \u2192 AMC+ paid signup</h4>'
+                + '<div style="padding:0.75rem 0.9rem; border-radius:8px; background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.28); margin-bottom:0.85rem;">'
+                + stages.map(function(s, i) {
+                    var color = stageColors[i] || '#94a3b8';
+                    var w = Math.max(6, Math.min(s.pct_of_start, 100));
+                    return '<div style="padding:6px 0; display:grid; grid-template-columns:210px 1fr 110px 66px; gap:10px; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05);">'
+                         +   '<div style="display:flex; align-items:center; gap:8px; font-size:0.82rem; font-weight:800;">'
+                         +     '<span style="font-size:1.1rem;">' + _jiqEsc(s.emoji) + '</span>'
+                         +     '<span>' + _jiqEsc(s.label) + '</span>'
+                         +   '</div>'
+                         +   '<div><div style="height:8px; border-radius:4px; background:rgba(255,255,255,0.06);">'
+                         +     '<div style="height:100%; width:' + w.toFixed(1) + '%; background:' + color + '; border-radius:4px;"></div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.65rem; opacity:0.62; margin-top:3px; font-style:italic;">' + _jiqEsc(s.sub) + '</div>'
+                         +   '</div>'
+                         +   '<div style="text-align:right; font-weight:800; font-size:0.86rem;">' + _jiqAmcAbbrevM(s.hh_m) + ' <span style="opacity:0.55; font-size:0.66rem;">HHs</span></div>'
+                         +   '<div style="text-align:right; font-weight:900; color:' + color + ';">' + s.pct_of_start.toFixed(1) + '%</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var s2s = data.stage_to_stage_pct || [];
+            var s2sHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Stage-to-stage conversion</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + s2s.map(function(r) {
+                    var isDropoff = r.pct < 50;
+                    var color = isDropoff ? '#ef4444' : '#22c55e';
+                    return '<div style="padding:0.6rem 0.75rem; border-radius:6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);">'
+                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;">' + _jiqEsc(r.from) + ' \u2192 ' + _jiqEsc(r.to) + '</div>'
+                         +   '<div style="font-size:1.4rem; font-weight:900; color:' + color + '; margin-top:0.15rem;">' + r.pct.toFixed(1) + '%</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var noteHtml = data.note
+                ? '<div style="padding:0.65rem 0.85rem; border-radius:7px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.22); font-size:0.78rem; line-height:1.55; font-style:italic;">'
+                +   '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.25rem; color:#fca5a5;">Read</div>'
+                +   _jiqEsc(data.note)
+                + '</div>'
+                : '';
+
+            body.innerHTML = funnel + s2sHtml + noteHtml;
+        }
+
+        // ─── TAB 3: Show-by-show ──────────────────────────────────────
+        function renderJourneyIqAmcShows(p) {
+            var data = (p && p.shows) ? p : _JIQ_AMC_DATA.amc_shows;
+            if (!data) return;
+            _jiqAmcShowCard('jiqAmcShowsCard');
+            var subEl = document.getElementById('jiqAmcShowsCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqAmcShowsCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqAmcPanelChip();
+            var body = document.getElementById('jiqAmcShowsCardBody');
+            if (!body) return;
+
+            var showColors = ['#ef4444', '#a855f7', '#f59e0b'];
+            var showsHtml = (data.shows || []).map(function(s, i) {
+                var color = showColors[i] || '#94a3b8';
+                var badgeBg = (s.observed_or_modeled === 'observed') ? 'rgba(34,197,94,0.14)' : 'rgba(245,158,11,0.14)';
+                var badgeFg = (s.observed_or_modeled === 'observed') ? '#86efac' : '#fbbf24';
+                var badge = '<span style="padding:1px 8px; border-radius:99px; background:' + badgeBg + '; color:' + badgeFg + '; font-size:0.6rem; font-weight:800; letter-spacing:0.06em; text-transform:uppercase;">' + _jiqEsc(s.observed_or_modeled || '') + '</span>';
+                return '<div style="padding:0.85rem 1rem; border-radius:9px; margin-bottom:0.7rem;'
+                     +      ' background:rgba(255,255,255,0.03); border-left:5px solid ' + color + ';">'
+                     +   '<div style="display:flex; align-items:baseline; justify-content:space-between; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.35rem;">'
+                     +     '<div style="font-size:1.05rem; font-weight:900;">' + _jiqEsc(s.title) + ' <span style="opacity:0.6; font-size:0.75rem; font-weight:700; margin-left:0.35rem;">' + _jiqEsc(s.s_label) + '</span></div>'
+                     +     '<div>' + badge + ' <span style="font-size:0.72rem; opacity:0.75; margin-left:0.35rem;">' + _jiqEsc(s.amcp_premiere) + '</span></div>'
+                     +   '</div>'
+                     +   '<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.6rem; font-style:italic;">' + _jiqEsc(s.max_window) + '</div>'
+                     +   '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:0.5rem; margin-bottom:0.5rem;">'
+                     +     _amcShowsTile('Max prior-season viewers', _jiqAmcAbbrevM(s.max_prior_viewers_m) + ' HHs', '#a855f7')
+                     +     _amcShowsTile('Migrated signups', _jiqAmcAbbrevK(s.migrated_signups_k), color)
+                     +     _amcShowsTile('Migration rate', s.migration_rate_pct.toFixed(1) + '%', '#22c55e')
+                     +     _amcShowsTile('90d retention', s.retention_90d_pct.toFixed(1) + '%', '#38bdf8')
+                     +   '</div>'
+                     +   (s.note ? '<div style="font-size:0.76rem; opacity:0.82; line-height:1.55;">' + _jiqEsc(s.note) + '</div>' : '')
+                     + '</div>';
+            }).join('');
+
+            var summaryHtml = data.summary_line
+                ? '<div style="margin-top:0.4rem; padding:0.65rem 0.85rem; border-radius:7px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.22); font-size:0.8rem; line-height:1.55; font-style:italic;">'
+                +   '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.25rem; color:#fca5a5;">Cross-show read</div>'
+                +   _jiqEsc(data.summary_line)
+                + '</div>'
+                : '';
+
+            body.innerHTML = showsHtml + summaryHtml;
+        }
+        function _amcShowsTile(label, value, color) {
+            return '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid ' + color + ';">'
+                 +   '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;">' + _jiqEsc(label) + '</div>'
+                 +   '<div style="font-size:1.15rem; font-weight:900; color:' + color + '; margin-top:0.1rem;">' + _jiqEsc(value) + '</div>'
+                 + '</div>';
+        }
+
+        // ─── TAB 4: Audience Overlap ──────────────────────────────────
+        function renderJourneyIqAmcOverlap(p) {
+            var data = (p && p.panel) ? p : _JIQ_AMC_DATA.amc_overlap;
+            if (!data) return;
+            _jiqAmcShowCard('jiqAmcOverlapCard');
+            var subEl = document.getElementById('jiqAmcOverlapCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqAmcOverlapCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqAmcPanelChip();
+            var body = document.getElementById('jiqAmcOverlapCardBody');
+            if (!body) return;
+
+            var totalHH = (data.panel || []).reduce(function(a, c) { return a + (c.hh_m || 0); }, 0);
+            var quadrantsHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">HBO Max \u2229 AMC+ household universe (90d)</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.55rem; margin-bottom:1rem;">'
+                + (data.panel || []).map(function(q) {
+                    var pct = totalHH ? (q.hh_m / totalHH * 100) : 0;
+                    return '<div style="padding:0.7rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:4px solid ' + q.color + ';">'
+                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:700;">' + _jiqEsc(q.cell) + '</div>'
+                         +   '<div style="font-size:1.55rem; font-weight:900; margin-top:0.1rem; color:' + q.color + ';">' + _jiqAmcAbbrevM(q.hh_m) + ' <span style="font-size:0.65rem; opacity:0.6; font-weight:700;">HHs</span></div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.15rem;">' + pct.toFixed(1) + '% of measured universe</div>'
+                         +   (q.note ? '<div style="font-size:0.68rem; opacity:0.7; margin-top:0.35rem; font-style:italic; line-height:1.5;">' + _jiqEsc(q.note) + '</div>' : '')
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var ars = data.anne_rice_slice || {};
+            var arsHtml = '';
+            if (ars.total_hh_m != null) {
+                var arTotal = ars.max_only_hh_m + ars.amcp_only_hh_m + ars.both_hh_m;
+                arsHtml = '<h4 style="margin:0.85rem 0 0.5rem; font-size:0.85rem;">\ud83e\uddc7 Anne Rice universe watchers - the concentrated slice</h4>'
+                    + '<div style="padding:0.85rem 1rem; border-radius:8px; background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.28);">'
+                    +   '<div style="font-size:0.72rem; opacity:0.8; margin-bottom:0.55rem;">' + _jiqEsc(ars.label) + '</div>'
+                    +   '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.5rem; margin-bottom:0.55rem;">'
+                    +     _amcShowsTile('Max only', _jiqAmcAbbrevM(ars.max_only_hh_m) + ' HHs', '#a855f7')
+                    +     _amcShowsTile('AMC+ only', _jiqAmcAbbrevM(ars.amcp_only_hh_m) + ' HHs', '#ef4444')
+                    +     _amcShowsTile('Both (overlap)', _jiqAmcAbbrevM(ars.both_hh_m) + ' HHs', '#f59e0b')
+                    +   '</div>'
+                    +   '<div style="font-size:0.78rem; line-height:1.55;">'
+                    +     '<b>' + ars.overlap_pct_of_amcp_watchers.toFixed(1) + '%</b> of AMC+ Rice-watchers also watched Rice content on Max in the same 90d window.'
+                    +   '</div>'
+                    +   (ars.note ? '<div style="font-size:0.72rem; opacity:0.8; margin-top:0.4rem; font-style:italic; line-height:1.55;">' + _jiqEsc(ars.note) + '</div>' : '')
+                    + '</div>';
+            }
+
+            var readHtml = data.read
+                ? '<div style="margin-top:0.85rem; padding:0.7rem 0.9rem; border-radius:7px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.22);">'
+                +   '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.25rem; color:#fca5a5;">Read</div>'
+                +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.read) + '</div>'
+                + '</div>'
+                : '';
+
+            body.innerHTML = quadrantsHtml + arsHtml + readHtml;
+        }
+
+        // ─── TAB 5: Signup Lift ───────────────────────────────────────
+        function renderJourneyIqAmcSignups(p) {
+            var data = (p && p.events) ? p : _JIQ_AMC_DATA.amc_signups;
+            if (!data) return;
+            _jiqAmcShowCard('jiqAmcSignupsCard');
+            var subEl = document.getElementById('jiqAmcSignupsCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqAmcSignupsCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqAmcPanelChip();
+            var body = document.getElementById('jiqAmcSignupsCardBody');
+            if (!body) return;
+
+            var eventsHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Premiere-day signup lift, by title</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:0.55rem; margin-bottom:0.9rem;">'
+                + (data.events || []).map(function(e) {
+                    var isObs = (e.observed_or_modeled === 'observed');
+                    var accent = isObs ? '#ef4444' : '#f59e0b';
+                    var badgeBg = isObs ? 'rgba(34,197,94,0.14)' : 'rgba(245,158,11,0.14)';
+                    var badgeFg = isObs ? '#86efac' : '#fbbf24';
+                    var badge = '<span style="padding:1px 8px; border-radius:99px; background:' + badgeBg + '; color:' + badgeFg + '; font-size:0.58rem; font-weight:800; letter-spacing:0.06em; text-transform:uppercase;">' + _jiqEsc(e.observed_or_modeled || '') + '</span>';
+                    return '<div style="padding:0.75rem 0.9rem; border-radius:8px; background:rgba(255,255,255,0.03); border-left:4px solid ' + accent + ';">'
+                         +   '<div style="display:flex; align-items:baseline; justify-content:space-between; gap:0.4rem; flex-wrap:wrap;">'
+                         +     '<div style="font-weight:900; font-size:0.9rem;">' + _jiqEsc(e.title) + '</div>'
+                         +     '<div>' + badge + '</div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.7rem; opacity:0.75; margin-bottom:0.5rem;">' + _jiqEsc(e.date) + '</div>'
+                         +   '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem;">'
+                         +     '<div>'
+                         +       '<div style="font-size:0.58rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;">Baseline</div>'
+                         +       '<div style="font-size:0.9rem; font-weight:800;">' + e.baseline_daily_k.toFixed(1) + 'K/day</div>'
+                         +     '</div>'
+                         +     '<div>'
+                         +       '<div style="font-size:0.58rem; opacity:0.6; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;">Premiere day</div>'
+                         +       '<div style="font-size:0.9rem; font-weight:800; color:' + accent + ';">' + e.premiere_daily_k.toFixed(1) + 'K/day</div>'
+                         +     '</div>'
+                         +   '</div>'
+                         +   '<div style="margin-top:0.45rem; padding:0.4rem 0.55rem; border-radius:5px; background:rgba(239,68,68,0.08); font-size:0.78rem;">'
+                         +     '<b style="color:' + accent + ';">+' + e.lift_pct.toFixed(1) + '%</b> premiere-day lift  \u00b7  '
+                         +     '<b>+' + e.sustained_lift_7d_pct.toFixed(1) + '%</b> sustained 7d'
+                         +   '</div>'
+                         +   (e.note ? '<div style="font-size:0.7rem; opacity:0.75; margin-top:0.4rem; font-style:italic; line-height:1.5;">' + _jiqEsc(e.note) + '</div>' : '')
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            // Daily curve mini-chart for IWTV S2 (SVG bars)
+            var curve = data.daily_curve_iwtv_s2 || [];
+            var chartHtml = '';
+            if (curve.length) {
+                var maxVal = Math.max.apply(null, curve.map(function(d) { return d.obs_k; }));
+                var W = 640, H = 160, padL = 40, padR = 20, padT = 20, padB = 30;
+                var innerW = W - padL - padR;
+                var innerH = H - padT - padB;
+                var bw = innerW / curve.length * 0.72;
+                var gap = innerW / curve.length * 0.28;
+                var yOf = function(v) { return padT + innerH * (1 - v / maxVal); };
+                var barsHtml = curve.map(function(d, i) {
+                    var x = padL + i * (bw + gap) + gap / 2;
+                    var y = yOf(d.obs_k);
+                    var h = padT + innerH - y;
+                    var color = (d.day === 0) ? '#ef4444' : (d.day < 0 ? '#94a3b8' : '#fbbf24');
+                    return '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" fill="' + color + '" rx="1.5"/>'
+                         + '<text x="' + (x + bw / 2).toFixed(1) + '" y="' + (padT + innerH + 12) + '" text-anchor="middle" font-size="8" fill="var(--text-secondary)" font-family="Space Mono, monospace">' + (d.day > 0 ? '+' + d.day : d.day) + '</text>';
+                }).join('');
+                var yTicks = [0, Math.round(maxVal / 2), Math.round(maxVal)];
+                var yAxisHtml = yTicks.map(function(v) {
+                    var y = yOf(v);
+                    return '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="rgba(255,255,255,0.06)"/>'
+                         + '<text x="' + (padL - 6) + '" y="' + (y + 3) + '" text-anchor="end" font-size="8" fill="var(--text-secondary)" font-family="Space Mono, monospace">' + v + 'K</text>';
+                }).join('');
+                chartHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">IWTV S2 premiere-day AMC+ signups (day \u22127 to +7)</h4>'
+                    + '<div style="padding:0.6rem 0.75rem; border-radius:8px; background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.22); margin-bottom:0.9rem;">'
+                    +   '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto;">' + yAxisHtml + barsHtml + '</svg>'
+                    +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.3rem; text-align:center;">Red bar = premiere day (May 12, 2024). Gray = pre-premiere baseline. Amber = post-premiere tail.</div>'
+                    + '</div>';
+            }
+
+            var readHtml = data.read
+                ? '<div style="padding:0.7rem 0.9rem; border-radius:7px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.22);">'
+                +   '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.25rem; color:#fca5a5;">Read</div>'
+                +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.read) + '</div>'
+                + '</div>'
+                : '';
+
+            body.innerHTML = eventsHtml + chartHtml + readHtml;
+        }
+
+        // ─── TAB 6: Retention ─────────────────────────────────────────
+        function renderJourneyIqAmcRetention(p) {
+            var data = (p && p.curve) ? p : _JIQ_AMC_DATA.amc_retention;
+            if (!data) return;
+            _jiqAmcShowCard('jiqAmcRetentionCard');
+            var subEl = document.getElementById('jiqAmcRetentionCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqAmcRetentionCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqAmcPanelChip();
+            var body = document.getElementById('jiqAmcRetentionCardBody');
+            if (!body) return;
+
+            var curveRows = (data.curve || []).map(function(r) {
+                var deltaColor = r.delta_pp < -5 ? '#ef4444' : (r.delta_pp < 0 ? '#f59e0b' : '#22c55e');
+                var wM = Math.max(6, Math.min(r.migrant_pct, 100));
+                var wB = Math.max(6, Math.min(r.baseline_pct, 100));
+                return '<div style="padding:6px 0; display:grid; grid-template-columns:70px 1fr 1fr 75px; gap:10px; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05);">'
+                     +   '<div style="font-weight:900; font-size:0.86rem;">Day ' + r.day + '</div>'
+                     +   '<div>'
+                     +     '<div style="font-size:0.6rem; opacity:0.7; margin-bottom:2px;">MIGRANT</div>'
+                     +     '<div style="display:flex; align-items:center; gap:6px;">'
+                     +       '<div style="flex:1; height:6px; border-radius:3px; background:rgba(255,255,255,0.05);"><div style="height:100%; width:' + wM.toFixed(1) + '%; background:#ef4444; border-radius:3px;"></div></div>'
+                     +       '<div style="font-weight:900; color:#fca5a5; font-size:0.85rem;">' + r.migrant_pct.toFixed(1) + '%</div>'
+                     +     '</div>'
+                     +   '</div>'
+                     +   '<div>'
+                     +     '<div style="font-size:0.6rem; opacity:0.7; margin-bottom:2px;">BASELINE</div>'
+                     +     '<div style="display:flex; align-items:center; gap:6px;">'
+                     +       '<div style="flex:1; height:6px; border-radius:3px; background:rgba(255,255,255,0.05);"><div style="height:100%; width:' + wB.toFixed(1) + '%; background:#22c55e; border-radius:3px;"></div></div>'
+                     +       '<div style="font-weight:900; color:#86efac; font-size:0.85rem;">' + r.baseline_pct.toFixed(1) + '%</div>'
+                     +     '</div>'
+                     +   '</div>'
+                     +   '<div style="text-align:right; font-weight:900; color:' + deltaColor + '; font-size:0.86rem;">' + (r.delta_pp > 0 ? '+' : '') + r.delta_pp.toFixed(1) + 'pp</div>'
+                     + '</div>';
+            }).join('');
+            var curveHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Migrant vs AMC+ baseline retention curve</h4>'
+                + '<div style="padding:0.75rem 0.9rem; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); margin-bottom:0.9rem;">' + curveRows + '</div>';
+
+            var byShowRows = (data.by_show_retention || []).map(function(r) {
+                var color = r.retention_90d_pct >= 70 ? '#22c55e' : (r.retention_90d_pct >= 65 ? '#f59e0b' : '#ef4444');
+                return '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid ' + color + '; margin-bottom:0.35rem;">'
+                     +   '<div style="display:flex; align-items:baseline; justify-content:space-between; gap:0.5rem;">'
+                     +     '<div style="font-weight:800; font-size:0.82rem;">' + _jiqEsc(r.title) + '</div>'
+                     +     '<div style="font-weight:900; color:' + color + '; font-size:0.95rem;">' + r.retention_90d_pct.toFixed(1) + '%</div>'
+                     +   '</div>'
+                     +   '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.15rem;">cancel-path at 90d: ' + r.cancel_path_90d_pct.toFixed(1) + '%</div>'
+                     +   (r.note ? '<div style="font-size:0.7rem; opacity:0.8; margin-top:0.3rem; font-style:italic; line-height:1.5;">' + _jiqEsc(r.note) + '</div>' : '')
+                     + '</div>';
+            }).join('');
+            var byShowHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">By-show 90-day retention</h4>'
+                + '<div style="margin-bottom:0.9rem;">' + byShowRows + '</div>';
+
+            var readHtml = data.read
+                ? '<div style="padding:0.7rem 0.9rem; border-radius:7px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.22);">'
+                +   '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.25rem; color:#fca5a5;">Read</div>'
+                +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.read) + '</div>'
+                + '</div>'
+                : '';
+
+            body.innerHTML = curveHtml + byShowHtml + readHtml;
+        }
+
+        // ─── TAB 7: Segments ──────────────────────────────────────────
+        function renderJourneyIqAmcSegments(p) {
+            var data = (p && p.demo) ? p : _JIQ_AMC_DATA.amc_segments;
+            if (!data) return;
+            _jiqAmcShowCard('jiqAmcSegmentsCard');
+            var subEl = document.getElementById('jiqAmcSegmentsCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqAmcSegmentsCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqAmcPanelChip();
+            var body = document.getElementById('jiqAmcSegmentsCardBody');
+            if (!body) return;
+
+            var demoRows = (data.demo || []).map(function(d) {
+                var deltaColor = d.delta_pp > 5 ? '#22c55e' : (d.delta_pp > 0 ? '#86efac' : (d.delta_pp < -3 ? '#ef4444' : '#f59e0b'));
+                var wM = Math.min(d.migrant_pct * 2, 100);
+                var wB = Math.min(d.amcp_base_pct * 2, 100);
+                return '<div style="padding:5px 0; display:grid; grid-template-columns:150px 1fr 1fr 55px; gap:8px; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05);">'
+                     +   '<div style="font-weight:800; font-size:0.8rem;">' + _jiqEsc(d.bucket) + '</div>'
+                     +   '<div>'
+                     +     '<div style="display:flex; align-items:center; gap:6px;">'
+                     +       '<div style="flex:1; height:5px; border-radius:2.5px; background:rgba(255,255,255,0.05);"><div style="height:100%; width:' + wM.toFixed(1) + '%; background:#ef4444; border-radius:2.5px;"></div></div>'
+                     +       '<div style="font-weight:800; color:#fca5a5; font-size:0.78rem; min-width:44px; text-align:right;">' + d.migrant_pct.toFixed(1) + '%</div>'
+                     +     '</div>'
+                     +     '<div style="font-size:0.55rem; opacity:0.55; margin-top:1px;">migrant</div>'
+                     +   '</div>'
+                     +   '<div>'
+                     +     '<div style="display:flex; align-items:center; gap:6px;">'
+                     +       '<div style="flex:1; height:5px; border-radius:2.5px; background:rgba(255,255,255,0.05);"><div style="height:100%; width:' + wB.toFixed(1) + '%; background:#94a3b8; border-radius:2.5px;"></div></div>'
+                     +       '<div style="font-weight:800; opacity:0.85; font-size:0.78rem; min-width:44px; text-align:right;">' + d.amcp_base_pct.toFixed(1) + '%</div>'
+                     +     '</div>'
+                     +     '<div style="font-size:0.55rem; opacity:0.55; margin-top:1px;">AMC+ base</div>'
+                     +   '</div>'
+                     +   '<div style="text-align:right; font-weight:900; color:' + deltaColor + '; font-size:0.82rem;">' + (d.delta_pp > 0 ? '+' : '') + d.delta_pp.toFixed(1) + 'pp</div>'
+                     + '</div>';
+            }).join('');
+            var demoHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Demographic profile - migrant cohort vs AMC+ base</h4>'
+                + '<div style="padding:0.65rem 0.85rem; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); margin-bottom:0.9rem;">' + demoRows + '</div>';
+
+            var genreRows = (data.genre_affinity || []).map(function(g) {
+                var isOver = g.migrant_index >= 100;
+                var color = g.migrant_index >= 150 ? '#ef4444' : (isOver ? '#f59e0b' : '#94a3b8');
+                var barW = Math.min(g.migrant_index / 200 * 100, 100);
+                return '<div style="padding:5px 0; display:grid; grid-template-columns:220px 1fr 70px; gap:10px; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05);">'
+                     +   '<div style="font-weight:800; font-size:0.8rem;">' + _jiqEsc(g.genre) + '</div>'
+                     +   '<div style="position:relative; height:6px; border-radius:3px; background:rgba(255,255,255,0.05);">'
+                     +     '<div style="position:absolute; left:50%; top:-3px; bottom:-3px; width:1px; background:rgba(255,255,255,0.25);"></div>'
+                     +     '<div style="height:100%; width:' + barW.toFixed(1) + '%; background:' + color + '; border-radius:3px;"></div>'
+                     +   '</div>'
+                     +   '<div style="text-align:right; font-weight:900; color:' + color + '; font-size:0.86rem;">' + g.migrant_index + '</div>'
+                     +   (g.note ? '<div style="grid-column:1/-1; font-size:0.66rem; opacity:0.65; margin-top:0.1rem; margin-left:0; font-style:italic;">' + _jiqEsc(g.note) + '</div>' : '')
+                     + '</div>';
+            }).join('');
+            var genreHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Genre affinity index (100 = AMC+ base)</h4>'
+                + '<div style="padding:0.65rem 0.85rem; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); margin-bottom:0.9rem;">' + genreRows + '</div>';
+
+            var readHtml = data.read
+                ? '<div style="padding:0.7rem 0.9rem; border-radius:7px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.22);">'
+                +   '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.25rem; color:#fca5a5;">Read</div>'
+                +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.read) + '</div>'
+                + '</div>'
+                : '';
+
+            body.innerHTML = demoHtml + genreHtml + readHtml;
+        }
+
+        // ─── TAB 8: The Read ──────────────────────────────────────────
+        function renderJourneyIqAmcRead(p) {
+            var data = (p && p.headline) ? p : _JIQ_AMC_DATA.amc_read;
+            if (!data) return;
+            _jiqAmcShowCard('jiqAmcReadCard');
+            var subEl = document.getElementById('jiqAmcReadCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqAmcReadCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqAmcPanelChip();
+            var body = document.getElementById('jiqAmcReadCardBody');
+            if (!body) return;
+
+            var headlineHtml = '<div style="padding:0.9rem 1.05rem; border-radius:9px; margin-bottom:1rem;'
+                +      ' background:linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(168,85,247,0.10) 100%);'
+                +      ' border:1px solid rgba(239,68,68,0.34);">'
+                +   '<div style="font-size:0.62rem; opacity:0.85; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#fca5a5; margin-bottom:0.4rem;">Headline</div>'
+                +   '<div style="font-size:0.98rem; line-height:1.55; font-weight:700;">' + _jiqEsc(data.headline || '') + '</div>'
+                + '</div>';
+
+            var impByKind = {};
+            (data.implications || []).forEach(function(x) {
+                if (!impByKind[x.kind]) impByKind[x.kind] = [];
+                impByKind[x.kind].push(x.body);
+            });
+            var kindOrder = ['FOR AMC', 'FOR IP OWNERS', 'FOR MAX (WBD)'];
+            var kindColors = {'FOR AMC': '#ef4444', 'FOR IP OWNERS': '#f59e0b', 'FOR MAX (WBD)': '#a855f7'};
+            var impHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Implications</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:0.55rem; margin-bottom:1rem;">'
+                + kindOrder.filter(function(k) { return impByKind[k]; }).map(function(k) {
+                    var col = kindColors[k] || '#94a3b8';
+                    return '<div style="padding:0.7rem 0.85rem; border-radius:8px; background:rgba(255,255,255,0.03); border-left:4px solid ' + col + ';">'
+                         +   '<div style="font-size:0.62rem; opacity:0.85; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:' + col + '; margin-bottom:0.4rem;">' + _jiqEsc(k) + '</div>'
+                         +   '<ul style="margin:0; padding-left:1rem; font-size:0.78rem; line-height:1.55;">'
+                         +     impByKind[k].map(function(b) { return '<li style="margin-bottom:0.35rem;">' + _jiqEsc(b) + '</li>'; }).join('')
+                         +   '</ul>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var mvhOrder = ['MEASUREMENT', 'MODELED', 'DEFERRED'];
+            var mvhColors = {'MEASUREMENT': '#22c55e', 'MODELED': '#f59e0b', 'DEFERRED': '#94a3b8'};
+            var mvhByKind = {};
+            (data.measurement_vs_hypothesis || []).forEach(function(x) {
+                if (!mvhByKind[x.kind]) mvhByKind[x.kind] = [];
+                mvhByKind[x.kind].push(x.body);
+            });
+            var mvhHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Measurement \u00b7 modeled \u00b7 deferred</h4>'
+                + '<div style="padding:0.65rem 0.85rem; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);">'
+                + mvhOrder.filter(function(k) { return mvhByKind[k]; }).map(function(k) {
+                    var col = mvhColors[k] || '#94a3b8';
+                    return '<div style="padding:0.4rem 0; border-bottom:1px solid rgba(255,255,255,0.05); display:grid; grid-template-columns:130px 1fr; gap:0.6rem; align-items:start;">'
+                         +   '<div><span style="padding:2px 8px; border-radius:99px; background:' + col + '22; color:' + col + '; font-size:0.6rem; font-weight:800; letter-spacing:0.06em;">' + _jiqEsc(k) + '</span></div>'
+                         +   '<div style="font-size:0.78rem; line-height:1.55;">' + mvhByKind[k].map(function(b) { return _jiqEsc(b); }).join('<br><br>') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            body.innerHTML = headlineHtml + impHtml + mvhHtml;
+        }
+
 
         // OBSESSION → PEACOCK — Focus/NBCU windowing-evidence data
         //
