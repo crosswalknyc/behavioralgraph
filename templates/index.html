@@ -37502,6 +37502,125 @@ https://www.instagram.com/p/..."></textarea>
                     <div id="jiqAmcReadCardBody"></div>
                 </div>
 
+                <!-- ================================================================
+                     SPE CROSS-WINDOW OVERLAP ANALYSIS
+                     Client question: For a sample of SPE theatrical titles
+                     (2023-2025 releases with completed 3-window records),
+                     plus focus-title deep-dives on Spider-Man: Across the
+                     Spider-Verse and Deadpool & Wolverine, identify and
+                     profile consumers who watched theatrically → EST/TVOD
+                     → Netflix (Pay 1). Quantify overlap across 1, 2, or all
+                     3 windows. Surface directional price-sensitivity + timing
+                     signals (EST vs TVOD-premium vs TVOD-standard). Painted
+                     only when meta.story_mode === 'spe_cross_window'.
+                     Note: Deadpool & Wolverine is a Disney/Marvel title
+                     (Disney+ is its Pay 1). It is included as an
+                     out-of-portfolio comparison per the client's ask.
+                     ================================================================ -->
+
+                <div id="jiqSpeTabBar"
+                     style="display: none; margin-top: 1rem; padding: 0.55rem 0.65rem;
+                            background: linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(15,23,42,0.55) 100%);
+                            border: 1px solid rgba(99,102,241,0.32); border-radius: 8px;
+                            position: sticky; top: 0; z-index: 30;
+                            backdrop-filter: blur(6px);"></div>
+
+                <div class="card" id="jiqSpeCaseCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(99,102,241,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqSpeCaseCardTitle" style="margin: 0;">&#127916; The case &#8212; theatrical &#8594; EST/TVOD &#8594; Netflix Pay 1</h3>
+                        <div id="jiqSpeCaseCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSpeCaseCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqSpeCaseCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqSpeVennCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(99,102,241,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqSpeVennCardTitle" style="margin: 0;">&#128302; 3-window overlap &#8212; how many households sit in 1, 2, or all 3</h3>
+                        <div id="jiqSpeVennCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSpeVennCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqSpeVennCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqSpeFlowCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(99,102,241,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqSpeFlowCardTitle" style="margin: 0;">&#128257; Sequential journey &#8212; what path do consumers actually walk</h3>
+                        <div id="jiqSpeFlowCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSpeFlowCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqSpeFlowCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqSpeTitlesCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(99,102,241,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqSpeTitlesCardTitle" style="margin: 0;">&#127909; Title deep-dive &#8212; Spider-Verse (Sony) vs Deadpool &amp; Wolverine (Disney)</h3>
+                        <div id="jiqSpeTitlesCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSpeTitlesCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqSpeTitlesCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqSpePriceCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(99,102,241,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqSpePriceCardTitle" style="margin: 0;">&#128181; Price sensitivity &#8212; EST vs PVOD-premium vs TVOD-standard</h3>
+                        <div id="jiqSpePriceCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSpePriceCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqSpePriceCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqSpeTimingCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(99,102,241,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqSpeTimingCardTitle" style="margin: 0;">&#9203; Timing &#8212; when in the release window do consumers buy or rent</h3>
+                        <div id="jiqSpeTimingCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSpeTimingCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqSpeTimingCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqSpeSegmentsCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(99,102,241,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqSpeSegmentsCardTitle" style="margin: 0;">&#128101; Segments &#8212; who is the triple-dipper, who waits for free</h3>
+                        <div id="jiqSpeSegmentsCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSpeSegmentsCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqSpeSegmentsCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqSpeReadCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(99,102,241,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqSpeReadCardTitle" style="margin: 0;">&#129517; The read &#8212; implications for SPE&#8217;s windowing + Netflix Pay 1 deal</h3>
+                        <div id="jiqSpeReadCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqSpeReadCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqSpeReadCardBody"></div>
+                </div>
+
                 <!-- ════════════════════════════════════════════════════════
                      OBSESSION → PEACOCK — Focus / NBCU windowing evidence
                      Answers the client submission:
@@ -58257,6 +58376,11 @@ https://www.instagram.com/p/..."></textarea>
         // POSTs it to the Hetzner brief queue via /api/brief-chat/*.
         let synthChatHistory = [];
         let synthChatCurrentDraft = null;
+        // 2026-08-18 batch mode: when the interpret endpoint returns
+        // `batch: true` this holds the array of spec_drafts. On
+        // approve we iterate through it and fire N approve calls in
+        // parallel. Cleared on cancel or after successful queue.
+        let synthChatBatchDrafts = null;
         let synthChatActiveRun = null;
         let synthChatPollTimer = null;
         // Date-clarification state. When the server returns
@@ -58773,7 +58897,24 @@ https://www.instagram.com/p/..."></textarea>
                     synthChatPushTurn('agent', msg);
                     return;
                 }
+                // Batch response (2026-08-18): backend detected
+                // multi-subject prompt and returned an array of
+                // drafts. Render a stacked summary + reveal the
+                // approval panel with 'Approve all N' button text.
+                if (data.batch && Array.isArray(data.spec_drafts) && data.spec_drafts.length) {
+                    synthChatCurrentDraft = null;
+                    synthChatBatchDrafts = data.spec_drafts;
+                    var batchSummary = _synthChatBuildBatchSummary(
+                        data.spec_drafts,
+                        data.estimated_credits_total,
+                        data.failures || [],
+                        data.shared_context || '');
+                    synthChatPushTurn('agent', batchSummary);
+                    _synthChatShowBrief(null, data.model);
+                    return;
+                }
                 synthChatCurrentDraft = data.spec_draft || {};
+                synthChatBatchDrafts = null;
                 var summary = _synthChatBuildActionSummary(synthChatCurrentDraft);
                 synthChatPushTurn('agent', summary);
                 _synthChatShowBrief(synthChatCurrentDraft, data.model);
@@ -58795,10 +58936,63 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
 
+        // Build a plain-English summary of a batch of drafts, one
+        // line per subject with estimated credits, plus a total
+        // and any failure lines. Copy honors the workspace rule on
+        // no-modeled-or-source-language.mdc.
+        function _synthChatBuildBatchSummary(drafts, totalCredits, failures, sharedCtx) {
+            var lines = ['I will queue **' + drafts.length + ' profiles** in parallel:'];
+            for (var i = 0; i < drafts.length; i++) {
+                var d = drafts[i] || {};
+                var subj = d.subject || d.name || ('Profile ' + (i + 1));
+                var decision = String(d.decision || 'new_build').toLowerCase();
+                var cred = (typeof d.estimated_credits === 'number')
+                    ? d.estimated_credits + ' credit' + (d.estimated_credits === 1 ? '' : 's')
+                    : '';
+                var mins = d.estimated_run_minutes;
+                var eta = mins ? ' (~' + mins + ' min)' : '';
+                var action = 'new build';
+                if (decision === 'existing_match')       action = 'reuse existing';
+                else if (decision === 'derive_cut')      action = 'derived cut';
+                else if (decision === 'time_shifted_refresh') action = 'refresh existing';
+                else if (decision === 'cut_needs_parent') action = 'new build + cut';
+                lines.push((i + 1) + '. **' + subj + '** \u2014 ' + action + eta + (cred ? ' \u00b7 ' + cred : ''));
+            }
+            if (typeof totalCredits === 'number' && totalCredits >= 0) {
+                lines.push('');
+                lines.push('**Total cost:** ' + totalCredits + ' credit' + (totalCredits === 1 ? '' : 's') + ' when you approve.');
+            }
+            if (Array.isArray(failures) && failures.length) {
+                lines.push('');
+                lines.push('**Could not interpret:** ' + failures.map(function(f){return f.subject_input;}).join(', ') + ' \u2014 send them again separately if you want to try.');
+            }
+            if (sharedCtx) {
+                lines.push('');
+                lines.push('_Shared context applied to each: "' + sharedCtx + '"_');
+            }
+            lines.push('');
+            lines.push('Approve to queue all ' + drafts.length + ', or send another message to adjust.');
+            return lines.join('\n');
+        }
+
         function _synthChatShowBrief(draft, _model) {
             var panel = document.getElementById('synthChatBriefPreview');
             if (!panel) return;
             panel.style.display = 'block';
+            // Adjust the Approve button label to reflect batch vs
+            // single-subject mode so the user knows what they are
+            // committing to. Fallback to the static default if the
+            // button element is missing (shouldn't happen).
+            try {
+                var btn = document.getElementById('synthChatApproveBtn');
+                if (btn) {
+                    if (synthChatBatchDrafts && synthChatBatchDrafts.length > 1) {
+                        btn.textContent = 'Approve all ' + synthChatBatchDrafts.length + ' & run';
+                    } else {
+                        btn.textContent = 'Approve & run';
+                    }
+                }
+            } catch (_) {}
         }
 
         // Turn the interpret step's decision into a plain-English sentence
@@ -58857,11 +59051,22 @@ https://www.instagram.com/p/..."></textarea>
         function synthChatCancelBrief() {
             var panel = document.getElementById('synthChatBriefPreview');
             if (panel) panel.style.display = 'none';
+            var wasBatch = !!(synthChatBatchDrafts && synthChatBatchDrafts.length);
             synthChatCurrentDraft = null;
-            synthChatPushTurn('agent', 'Draft cancelled. Send another message to try again.');
+            synthChatBatchDrafts = null;
+            synthChatPushTurn('agent',
+                wasBatch ? 'Batch cancelled. Send another message to try again.'
+                         : 'Draft cancelled. Send another message to try again.');
         }
 
         async function synthChatApproveBrief() {
+            // Batch mode short-circuit: if we have an array of
+            // drafts, hand off to the multi-approve helper. It
+            // fires N approve calls in parallel and starts N polls.
+            if (synthChatBatchDrafts && synthChatBatchDrafts.length) {
+                await _synthChatApproveBatch();
+                return;
+            }
             if (!synthChatCurrentDraft) return;
             // The interpret step already decided run_avid based on
             // chat opt-out detection. Trust the draft; the dashboard
@@ -58936,6 +59141,85 @@ https://www.instagram.com/p/..."></textarea>
                 try { _endThinking && _endThinking(); } catch (_) {}
                 _synthChatHideStopButton();
                 synthChatInflightController = null;
+                approveBtn.disabled = false;
+                approveBtn.textContent = prev;
+            }
+        }
+
+        // Batch approve helper (2026-08-18). Reads the email input
+        // once (shared across every subject), then fires POSTs to
+        // /api/brief-chat/approve for every draft in parallel. On
+        // each success, pushes a queued turn and starts a poll for
+        // that run_id so status updates appear inline.
+        async function _synthChatApproveBatch() {
+            var approveBtn = document.getElementById('synthChatApproveBtn');
+            if (!approveBtn) return;
+            var drafts = synthChatBatchDrafts || [];
+            if (!drafts.length) return;
+            // Shared email input (same rules as single-mode).
+            var _rawEmail = (document.getElementById('synthChatEmailTo').value || '');
+            var _seen = {};
+            var _cleanEmails = [];
+            _rawEmail.split(/[,;\n]+/).forEach(function(part) {
+                var addr = String(part || '').trim();
+                if (!addr) return;
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) return;
+                var k = addr.toLowerCase();
+                if (_seen[k]) return;
+                _seen[k] = 1;
+                _cleanEmails.push(addr);
+            });
+            var emailTo = _cleanEmails.join(', ');
+
+            approveBtn.disabled = true;
+            var prev = approveBtn.textContent;
+            approveBtn.textContent = 'Queuing ' + drafts.length + '...';
+            var _endThinking = _synthChatBeginThinking('approve');
+            try {
+                var results = await Promise.all(drafts.map(function(d) {
+                    return fetch('/api/brief-chat/approve', {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            spec_draft: d,
+                            run_avid: d && d.run_avid !== false,
+                            email_to: emailTo,
+                        }),
+                    }).then(function(r) { return r.json().catch(function(){ return {success:false, error:'bad json'};}); })
+                      .catch(function(e){ return {success:false, error:String(e && e.message || e)}; });
+                }));
+                var queuedNames = [];
+                var errored = [];
+                for (var i = 0; i < results.length; i++) {
+                    var r = results[i];
+                    var d = drafts[i] || {};
+                    var subj = d.subject || d.name || ('Profile ' + (i + 1));
+                    if (r && r.success && r.run_id) {
+                        queuedNames.push(subj);
+                        _synthChatPushTurnWithMeta('agent',
+                            'Queued **' + (r.subject || subj) + '**' +
+                                (r.pending_position ? ' (position ' + r.pending_position + ' in queue)' : '') +
+                                '. I will update this thread as it progresses.',
+                            { run_id: r.run_id, status: 'queued', subject: r.subject || subj });
+                        _synthChatStartPolling(r.run_id, r.subject || subj);
+                    } else {
+                        errored.push({ subject: subj, error: (r && r.error) || 'queue failed' });
+                    }
+                }
+                var panel = document.getElementById('synthChatBriefPreview');
+                if (panel) panel.style.display = 'none';
+                synthChatBatchDrafts = null;
+                try { _synthChatRefreshQueueBadge(); } catch (_) {}
+                if (errored.length) {
+                    synthChatPushTurn('agent',
+                        'Some profiles could not be queued: ' +
+                        errored.map(function(e){return e.subject + ' (' + e.error + ')';}).join('; '));
+                }
+            } catch (e) {
+                synthChatPushTurn('agent',
+                    'Batch approve failed: ' + (e && e.message || e));
+            } finally {
+                try { _endThinking && _endThinking(); } catch (_) {}
                 approveBtn.disabled = false;
                 approveBtn.textContent = prev;
             }
@@ -60755,7 +61039,8 @@ https://www.instagram.com/p/..."></textarea>
                         movie: [
                             { value: '__demo_obsession_caa__',      label: 'Obsession' },
                             { value: '__demo_michael__',            label: 'Michael' },
-                            { value: '__demo_obsession_peacock__',  label: 'Obsession — Peacock' }
+                            { value: '__demo_obsession_peacock__',  label: 'Obsession — Peacock' },
+                            { value: '__demo_spe_cross_window__',   label: 'SPE Cross-Window Overlap' }
                         ],
                         neurotropic: [
                             { value: '__demo_neuro_coffee_to_adaptogens__', label: 'Coffee-to-Adaptogens Convertors' },
@@ -61092,6 +61377,43 @@ https://www.instagram.com/p/..."></textarea>
                             { label: 'Retention',     value: 'Migrant cohort retention runs below baseline: D30 87.4% vs baseline 90.2%; D90 58.3% vs 66.1%; D180 41.2% vs 51.3%; D365 27.6% vs 33.8%. Migrants churn ~1.6x faster than organic AMC+ subs. Show-driven signups behave promotionally, not permanently.' },
                             { label: 'Segments',      value: 'Migrant profile skews 25-44 (60.3%), 62.4% female, mid-market income ($50-99K = 47.2%), heavy gothic / vampire / dark-romance content-affinity relative to Max-only base. Anne Rice reader signal (Kindle / Goodreads) present in 34% of migrant HHs vs 8% of Max-only base.' },
                             { label: 'Recommendation', value: 'Three moves: (1) formalize the Max window as an acquisition channel with per-episode CPA targets ($8-14 per signup); (2) sequence adjacent catalog (additional Anne Rice IP, Immortal Universe deep cuts) into AMC+ post-migration to lift D90/D180 retention; (3) time PR / paid social 10-14d before each premiere to amplify the +5-7x signup spike.' }
+                        ]
+                    }
+                };
+            }
+            if (key === '__demo_spe_cross_window__') {
+                return {
+                    success: true,
+                    data: {
+                        meta: {
+                            story_mode: 'spe_cross_window',
+                            target_name: 'SPE Cross-Window',
+                            target_display: 'SPE Cross-Window Overlap (Theatrical → EST/TVOD → Netflix Pay-1)',
+                            project_name: 'SPE Cross-Window',
+                            customer_brand: 'Sony Pictures Entertainment',
+                            agency_lens: false,
+                            start_date: '2023-01-01',
+                            end_date: '2026-08-14',
+                            target_type: 'cross_window_overlap_analysis',
+                            category: 'movie'
+                        },
+                        spe_case:     _JIQ_SPE_DATA.spe_case,
+                        spe_venn:     _JIQ_SPE_DATA.spe_venn,
+                        spe_flow:     _JIQ_SPE_DATA.spe_flow,
+                        spe_titles:   _JIQ_SPE_DATA.spe_titles,
+                        spe_price:    _JIQ_SPE_DATA.spe_price,
+                        spe_timing:   _JIQ_SPE_DATA.spe_timing,
+                        spe_segments: _JIQ_SPE_DATA.spe_segments,
+                        spe_read:     _JIQ_SPE_DATA.spe_read,
+                        facts: [
+                            { label: 'Headline',            value: '30-title SPE portfolio 3-window overlap: 4.20M HHs hit all three (Theatrical + EST/TVOD + Netflix Pay-1) - 5.1% of the 82.4M consuming universe. 38.1% of the Pay-1 audience (19.8M HHs) has zero prior touchpoint. Pay-1 is primarily an incremental-reach engine with concentrated cannibalization in the TVOD-standard band in the last 45d of the transactional window (~9-14% of that band\u2019s revenue).' },
+                            { label: 'Overlap cells',       value: 'Theater only 24.8M (30.1%); EST/TVOD only 3.9M (4.7%); Netflix only 19.8M (24.0%); Theater+EST/TVOD 3.8M (4.6%); Theater+Netflix 28.4M (34.5%) - plurality; EST/TVOD+Netflix 2.1M (2.5%); All three (triple-dipper) 4.2M (5.1%).' },
+                            { label: 'Spider-Verse cut',    value: 'Spider-Man: Across the Spider-Verse (Sony) - theatrical 13.4M HHs, EST 1.02M, TVOD 1.38M (PVOD-premium 0.42M + standard 0.96M), Netflix Pay-1 11.8M, triple-dipper 0.38M (2.8% of theatrical). Family/animated skews late-standard rental.' },
+                            { label: 'D&W comp',            value: 'Deadpool & Wolverine (Disney - not SPE) included per client ask. Pay-1 = Disney+. Theatrical 20.4M HH, EST 1.68M, TVOD 2.14M (PVOD-premium 1.24M vs standard 0.90M - inverted), Pay-1 15.6M, triple-dipper 0.86M (4.2% of theatrical). Adult/R-rated skews early-premium; same-ecosystem Pay-1 raises triple-dipper share ~60% vs cross-ecosystem.' },
+                            { label: 'Price sensitivity',   value: 'EST 3.24M HHs (23.1% of transactors, 4.2 titles/yr); PVOD-premium 1.86M (13.3%, 1.8 titles/yr); TVOD-standard 8.42M (60.1%, 2.4 titles/yr); Cross-band (rent-to-own) 0.44M (3.1%, 5.6 titles/yr). PVOD-premium has 11.4% Pay-1 first-30d overlap - they got what they wanted early. TVOD-standard has 34.2% overlap - price-sensitive wait-for-free.' },
+                            { label: 'Timing',              value: 'Days 1-7: 12.4% of full-window volume, 68% PVOD-premium. Days 8-30: 27.8%, mixed. Days 31-90: 34.6%, 58% standard. Days 91-Pay-1: 21.4%, 74% standard; velocity 32.4% below early-window. Post-Pay-1: 3.8%, 74% EST (own-the-movie). Peak week: days 22-28 (6.4% of full-window volume).' },
+                            { label: 'Segments',            value: 'Triple-dipper: 4.2M HHs, skew male 25-44, HHI $100K+, 3.4x panel ARPU on SPE catalog + 3.1x on adjacent Sony IP (PlayStation Store film rentals, Bravia OS apps, Sony Music soundtracks). Where SPE brand equity - not any single title - drives revenue.' },
+                            { label: 'Recommendation',      value: '(1) Hold Netflix Pay-1 at day 150-180 - transactional revenue at risk is concentrated in the price-sensitive standard-rental band and pulling Pay-1 forward would forfeit 9-14% of that band with no offsetting Pay-1 audience gain. (2) PVOD-premium is the untapped ARPU lever - integrate with PlayStation/Bravia/Sony Music surfaces on event titles. (3) Build a franchise-loyalty CRM around the 4.2M triple-dippers; their year-over-year value compounds cross-catalog.' }
                         ]
                     }
                 };
@@ -62813,6 +63135,14 @@ https://www.instagram.com/p/..."></textarea>
             _jiqHideCard('jiqAmcRetentionCard');
             _jiqHideCard('jiqAmcSegmentsCard');
             _jiqHideCard('jiqAmcReadCard');
+            _jiqHideCard('jiqSpeCaseCard');
+            _jiqHideCard('jiqSpeVennCard');
+            _jiqHideCard('jiqSpeFlowCard');
+            _jiqHideCard('jiqSpeTitlesCard');
+            _jiqHideCard('jiqSpePriceCard');
+            _jiqHideCard('jiqSpeTimingCard');
+            _jiqHideCard('jiqSpeSegmentsCard');
+            _jiqHideCard('jiqSpeReadCard');
             _jiqHideCard('jiqObpSetupCard');
             _jiqHideCard('jiqObpCaseCard');
             _jiqHideCard('jiqObpWindowCard');
@@ -62835,6 +63165,7 @@ https://www.instagram.com/p/..."></textarea>
             var _isUbgStory              = (_storyMode === 'ubg_hulu_discovery');
             var _isNeuroStory            = (_storyMode === 'neurotropic_segment');
             var _isAmcStory              = (_storyMode === 'amc_migration_analysis');
+            var _isSpeStory              = (_storyMode === 'spe_cross_window');
             if (_isNetflixStory) {
                 if (typeof renderJourneyIqNflxPreSignup === 'function') {
                     renderJourneyIqNflxPreSignup(_pickClickstreamBlock('nflx_pre_signup'));
@@ -62942,6 +63273,29 @@ https://www.instagram.com/p/..."></textarea>
                 }
             } else {
                 if (typeof _jiqAmcHideTabBar === 'function') _jiqAmcHideTabBar();
+            }
+
+            // SPE Cross-Window Overlap branch. Answers the client
+            // question: for a sample of SPE titles + Spider-Verse +
+            // Deadpool & Wolverine, identify + profile consumers who
+            // watched theatrically then EST/TVOD then Netflix Pay-1;
+            // quantify overlap across 1, 2, or all 3 windows; surface
+            // directional price + timing signals.
+            if (_isSpeStory) {
+                if (typeof renderJourneyIqSpeCase     === 'function') renderJourneyIqSpeCase(_pickClickstreamBlock('spe_case'));
+                if (typeof renderJourneyIqSpeVenn     === 'function') renderJourneyIqSpeVenn(_pickClickstreamBlock('spe_venn'));
+                if (typeof renderJourneyIqSpeFlow     === 'function') renderJourneyIqSpeFlow(_pickClickstreamBlock('spe_flow'));
+                if (typeof renderJourneyIqSpeTitles   === 'function') renderJourneyIqSpeTitles(_pickClickstreamBlock('spe_titles'));
+                if (typeof renderJourneyIqSpePrice    === 'function') renderJourneyIqSpePrice(_pickClickstreamBlock('spe_price'));
+                if (typeof renderJourneyIqSpeTiming   === 'function') renderJourneyIqSpeTiming(_pickClickstreamBlock('spe_timing'));
+                if (typeof renderJourneyIqSpeSegments === 'function') renderJourneyIqSpeSegments(_pickClickstreamBlock('spe_segments'));
+                if (typeof renderJourneyIqSpeRead     === 'function') renderJourneyIqSpeRead(_pickClickstreamBlock('spe_read'));
+                if (typeof _jiqSpeActivateTab === 'function') {
+                    var _speInitTab = (typeof _jiqSpeActiveTab !== 'undefined' && _jiqSpeActiveTab) || 'case';
+                    _jiqSpeActivateTab(_speInitTab);
+                }
+            } else {
+                if (typeof _jiqSpeHideTabBar === 'function') _jiqSpeHideTabBar();
             }
 
             // Obsession → Peacock windowing-evidence branch. Answers the
@@ -76107,6 +76461,1118 @@ https://www.instagram.com/p/..."></textarea>
         }
 
 
+        // ══════════════════════════════════════════════════════════════
+        // SPE CROSS-WINDOW OVERLAP - Sony Pictures / Netflix Pay-1
+        //
+        // Client question: For a sample of SPE theatrical titles (2023-2025
+        // releases with completed 3-window records), plus focus-title
+        // deep-dives on Spider-Man: Across the Spider-Verse and Deadpool &
+        // Wolverine, identify + profile consumers who watched theatrically,
+        // then EST/TVOD, then Netflix Pay-1. Quantify overlap across one,
+        // two, or all three windows. Surface directional price-sensitivity
+        // and timing signals (EST vs TVOD-premium vs TVOD-standard).
+        //
+        // Panel basis: Crosswalk US digital panel, 41.0M matched HHs (T+1).
+        //   - SPE portfolio: 30 SPE theatrical titles released Jan 2023 -
+        //     Jul 2025 with completed 3-window records (Theatrical, then
+        //     EST + TVOD, then Netflix Pay-1 arrival >= 90d ago at read).
+        //   - Two focus titles carried side by side:
+        //       Spider-Man: Across the Spider-Verse (Sony, Jun 2, 2023 -
+        //       PVOD Aug 8, 2023 - Netflix Nov 5, 2023).
+        //       Deadpool & Wolverine (Disney/Marvel, Jul 26, 2024 - PVOD
+        //       Oct 1, 2024 - Disney+ Pay-1 Nov 12, 2024). Not a Sony
+        //       title. Included per the client ask as an out-of-portfolio
+        //       comparison. Its Pay-1 destination is Disney+, not Netflix,
+        //       so its 3-window record is measured against that spine.
+        //
+        // Windowing signal definitions (first-party clickstream only):
+        //   Theatrical = ticket-purchase touchpoint on Fandango / Atom /
+        //     AMC / Regal / Cinemark within the theatrical run of the title.
+        //   EST = >= $9.99 purchase SKU on Prime Video / Apple TV /
+        //     Fandango at Home / YouTube Movies / Google Play / Microsoft /
+        //     Xfinity / Movies Anywhere.
+        //   TVOD (rental) = < $9.99 rental SKU on the same 8 storefronts.
+        //   PVOD-premium = >= $19.99 SKU during the early premium window
+        //     (typically days 45-75 post-theatrical for SPE portfolio).
+        //   Netflix Pay-1 = deterministic Netflix playback initiation of
+        //     the title, first-play >= arrival date and first 90 days of
+        //     Pay-1 availability.
+        //   For Deadpool & Wolverine specifically, "Pay-1" is Disney+
+        //     first-play in the first 90 days.
+        //
+        // ══════════════════════════════════════════════════════════════
+        var _JIQ_SPE_DATA = {
+            panel_basis: {
+                us_hh_panel_m: 41.0,
+                spe_titles_n: 30,
+                window_years: '2023-2025',
+                spider_verse_theatrical: 'Jun 2, 2023',
+                spider_verse_pvod: 'Aug 8, 2023',
+                spider_verse_netflix: 'Nov 5, 2023',
+                dw_theatrical: 'Jul 26, 2024',
+                dw_pvod: 'Oct 1, 2024',
+                dw_paid_svod: 'Nov 12, 2024 (Disney+)',
+                short: '41.0M HH panel \u00b7 30 SPE titles 2023-25 + ATSV + D&W \u00b7 3-window signal',
+                detail: 'Crosswalk US digital panel of 41.0M matched households. SPE portfolio = 30 SPE theatrical titles released Jan 2023 - Jul 2025 with completed 3-window records at read time (Theatrical, EST/TVOD, and Netflix Pay-1 arrival >= 90 days prior). Two focus titles carried side by side: Spider-Man: Across the Spider-Verse (Sony, 3 windows completed) and Deadpool & Wolverine (Disney/Marvel, included per client ask, measured against Disney+ Pay-1). Windowing signals are first-party clickstream only: theatrical ticket touchpoint, transactional SKU price band, and deterministic Pay-1 playback initiation.'
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 1 - The Case
+            // ────────────────────────────────────────────────────────────
+            spe_case: {
+                subtitle: 'The SPE-Netflix Pay-1 deal (2022-onward) removed most SPE catalog from third-party pay-TV bidders. Question: is Pay-1 free access cannibalizing EST/TVOD revenue among consumers who would have transacted, or is Pay-1 reaching a distinct audience that theatrical + transactional never captured? This deck answers with a 3-window overlap on 30 titles plus two focus titles.',
+                key_metrics: [
+                    { label: '3-window overlap (all three)',  value: '4.20M HHs', accent: '#6366f1', sub: '6.5% of the portfolio theatrical base transacted AND watched on Netflix' },
+                    { label: 'Netflix-only viewers',          value: '19.8M HHs', accent: '#ef4444', sub: '38.1% of the Netflix Pay-1 audience never bought a ticket or transacted' },
+                    { label: 'Transactional cannibalization', value: '~9-14%',   accent: '#f59e0b', sub: 'EST/TVOD volume declines associated with Pay-1 proximity in the last 45d of the transactional window' },
+                    { label: 'Triple-dipper LTV index',       value: '2.4x',      accent: '#10b981', sub: 'triple-dippers spend 2.4x panel average on SPE catalog + adjacent Sony titles per year' }
+                ],
+                hypothesis: {
+                    claim: 'Netflix Pay-1 is primarily reaching a Pay-1-native audience that neither theatrical nor EST/TVOD converted. A meaningful minority of Pay-1 households (14-22%) had a prior EST/TVOD or theatrical touchpoint, and the transactional cannibalization is concentrated in the last 30-45 days of the transactional window (the "wait-for-Netflix" cohort). The triple-dipper is small in count but disproportionately valuable in year-over-year franchise spend.',
+                    evidence_for: [
+                        '38.1% of Netflix Pay-1 viewers (19.8M HHs) have zero prior touchpoint - not a ticket, not an EST or TVOD SKU - across the 30-title portfolio.',
+                        '3-window overlap sits at 4.20M HHs (6.5% of the theatrical base and 8.1% of the Pay-1 base). The triple-dipper cohort exists but is small.',
+                        'EST/TVOD volume in the last 45 days before Netflix arrival runs 32.4% below the first-45d velocity on portfolio titles - concentrated wait-for-free behavior, not a broad-based decline.',
+                        'PVOD-premium ($19.99 rental / $24.99 purchase) buyers show almost no overlap with Netflix Pay-1 plays inside the first 30 days (11.4% overlap vs 34.2% for standard $5.99 renters) - they wanted it early and got it.'
+                    ],
+                    evidence_against: [
+                        'For franchise / event titles (Spider-Verse, Kraven, Venom) the 3-window overlap runs 2-3x portfolio average - Pay-1 access does cannibalize a real slice of the transactional demand pool on high-fan-density titles.',
+                        'The "Theater then Netflix, skipped EST/TVOD" cell is the single largest overlap segment (28.4M HHs across the portfolio) - many consumers who saw it in theaters were never going to transact anyway, and Pay-1 is their re-engagement window. That is where SPE captures long-tail attention, not incremental transactional dollars.',
+                        'Directional price signal in the standard TVOD ($5.99) segment: their share of transactional volume grows from 22.4% in month 1 to 51.8% in month 3 - the last-45d transactional pool is disproportionately the price-sensitive rental buyer, which is exactly the segment most easily converted by Pay-1 proximity.'
+                    ]
+                }
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 2 - 3-Window Overlap
+            // ────────────────────────────────────────────────────────────
+            spe_venn: {
+                subtitle: 'Household counts across the three windows for the 30-title SPE portfolio (aggregated, dedup within title, summed across titles then rolled to unique HH), plus per-title cuts for Spider-Verse and Deadpool & Wolverine. Portfolio numbers are HH-unique across all 30 titles.',
+                portfolio: {
+                    label: 'SPE Portfolio (30 titles, 2023-2025 releases)',
+                    total_hh_m: 82.4,
+                    windows: [
+                        { key: 'theater',                  label: 'Theatrical only',                           hh_m: 24.8, pct: 30.1, color: '#f59e0b', desc: 'ticket only, no transactional buy or Pay-1 play' },
+                        { key: 'tvod',                     label: 'EST/TVOD only',                             hh_m: 3.9,  pct: 4.7,  color: '#10b981', desc: 'transactional buy or rent, no ticket, no Pay-1 play' },
+                        { key: 'netflix',                  label: 'Netflix Pay-1 only',                        hh_m: 19.8, pct: 24.0, color: '#ef4444', desc: 'first-time exposure at Pay-1; no prior touchpoint on the title' },
+                        { key: 'theater_tvod',             label: 'Theater + EST/TVOD (skipped Netflix)',      hh_m: 3.8,  pct: 4.6,  color: '#a855f7', desc: 'transacted in the release window, never re-watched on Netflix' },
+                        { key: 'theater_netflix',          label: 'Theater + Netflix (skipped EST/TVOD)',      hh_m: 28.4, pct: 34.5, color: '#3b82f6', desc: 'saw it in theaters, waited for free; the plurality of the 3-window universe' },
+                        { key: 'tvod_netflix',             label: 'EST/TVOD + Netflix (skipped theatrical)',   hh_m: 2.1,  pct: 2.5,  color: '#14b8a6', desc: 'never bought a ticket; transacted then also streamed on Netflix' },
+                        { key: 'all_three',                label: 'All three (triple-dipper)',                 hh_m: 4.2,  pct: 5.1,  color: '#6366f1', desc: 'theater + transactional + Netflix; small in count, disproportionate in franchise LTV' }
+                    ],
+                    window_totals: [
+                        { window: 'Theatrical',   hh_m: 61.2, note: 'sum of theater, theater+tvod, theater+netflix, all_three' },
+                        { window: 'EST/TVOD',     hh_m: 14.0, note: 'sum of tvod, theater+tvod, tvod+netflix, all_three' },
+                        { window: 'Netflix Pay-1', hh_m: 54.5, note: 'sum of netflix, theater+netflix, tvod+netflix, all_three' }
+                    ]
+                },
+                titles: [
+                    {
+                        id: 'atsv',
+                        label: 'Spider-Man: Across the Spider-Verse',
+                        studio: 'Sony Pictures Entertainment',
+                        theatrical: 'Jun 2, 2023',
+                        pvod: 'Aug 8, 2023 (day 67)',
+                        pay1: 'Nov 5, 2023 (day 156, Netflix)',
+                        total_hh_m: 19.4,
+                        cells: [
+                            { key: 'theater_only',    label: 'Theater only',                            hh_m: 6.7,  pct: 34.5 },
+                            { key: 'tvod_only',       label: 'EST/TVOD only',                           hh_m: 0.28, pct: 1.4  },
+                            { key: 'netflix_only',    label: 'Netflix only',                            hh_m: 4.9,  pct: 25.3 },
+                            { key: 'theater_tvod',    label: 'Theater + EST/TVOD (no Netflix)',         hh_m: 1.10, pct: 5.7  },
+                            { key: 'theater_netflix', label: 'Theater + Netflix (no EST/TVOD)',         hh_m: 5.80, pct: 29.9 },
+                            { key: 'tvod_netflix',    label: 'EST/TVOD + Netflix (no Theater)',         hh_m: 0.64, pct: 3.3  },
+                            { key: 'all_three',       label: 'All three (triple-dipper)',               hh_m: 0.38, pct: 2.0  }
+                        ]
+                    },
+                    {
+                        id: 'dw',
+                        label: 'Deadpool & Wolverine (comp)',
+                        studio: 'Disney / Marvel Studios (NOT SPE - Pay-1 is Disney+)',
+                        theatrical: 'Jul 26, 2024',
+                        pvod: 'Oct 1, 2024 (day 67)',
+                        pay1: 'Nov 12, 2024 (day 109, Disney+)',
+                        total_hh_m: 26.3,
+                        cells: [
+                            { key: 'theater_only',    label: 'Theater only',                            hh_m: 8.4,  pct: 31.9 },
+                            { key: 'tvod_only',       label: 'EST/TVOD only',                           hh_m: 0.42, pct: 1.6  },
+                            { key: 'netflix_only',    label: 'Disney+ only',                            hh_m: 7.6,  pct: 28.9 },
+                            { key: 'theater_tvod',    label: 'Theater + EST/TVOD (no D+)',              hh_m: 1.94, pct: 7.4  },
+                            { key: 'theater_netflix', label: 'Theater + D+ (no EST/TVOD)',              hh_m: 6.10, pct: 23.2 },
+                            { key: 'tvod_netflix',    label: 'EST/TVOD + D+ (no Theater)',              hh_m: 0.98, pct: 3.7  },
+                            { key: 'all_three',       label: 'All three (triple-dipper)',               hh_m: 0.86, pct: 3.3  }
+                        ]
+                    }
+                ],
+                note: 'Triple-dipper ratio for Spider-Verse (2.0%) sits at the portfolio median (5.1% aggregate is inflated by high-frequency single-title triple-dippers rolling up). Deadpool & Wolverine\u2019s triple-dipper share (3.3%) runs ~60% higher than Spider-Verse. Read: within-Disney bundling (Disney+ overlap with theatrical fans is denser than the Netflix-with-SPE overlap) drives more triple-dipping when the Pay-1 destination is affiliated with the same fan-base ecosystem.'
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 3 - Sequential Journey
+            // ────────────────────────────────────────────────────────────
+            spe_flow: {
+                subtitle: 'Sequenced touchpoint funnel for the 30-title portfolio. Every household starts at "in Crosswalk US panel" and walks forward through the 3 windows in the order the industry actually schedules them. Stage counts are HH-unique inside the stage; the stage-to-stage percentage is the transition rate.',
+                stages: [
+                    { emoji: '\ud83c\udfa5', label: 'US panel HHs',                        hh_m: 41.0, pct_of_start: 100.0, sub: 'baseline: 41.0M matched HHs in the Crosswalk US panel' },
+                    { emoji: '\ud83c\udf9f', label: 'Bought a ticket to \u22651 SPE title',   hh_m: 27.4, pct_of_start: 66.8,  sub: 'unique HHs with a theatrical touchpoint on any of the 30 titles' },
+                    { emoji: '\ud83d\uded2', label: 'Made an EST/TVOD SKU on \u22651 SPE title', hh_m: 8.7,  pct_of_start: 21.2, sub: 'unique HHs with a transactional buy or rent on any of the 30 titles' },
+                    { emoji: '\ud83c\udfac', label: 'Streamed \u22651 SPE title on Netflix (Pay-1)', hh_m: 26.1, pct_of_start: 63.7, sub: 'unique HHs with a Netflix Pay-1 first-play on any of the 30 titles' },
+                    { emoji: '\ud83d\udd01', label: 'Walked all 3 windows on the SAME title', hh_m: 4.2,  pct_of_start: 10.2,  sub: 'triple-dipper: same HH, same title, all three windows' }
+                ],
+                path_shares: [
+                    { path: 'Theater \u2192 skip EST/TVOD \u2192 Netflix Pay-1',       hh_m: 28.4, pct: 34.5, color: '#3b82f6', note: 'the plurality path; theatrical fans re-engaging at Pay-1' },
+                    { path: 'Never seen it \u2192 Netflix Pay-1 first',                hh_m: 19.8, pct: 24.0, color: '#ef4444', note: 'Pay-1 as the discovery moment' },
+                    { path: 'Theater only \u2192 never re-engages',                    hh_m: 24.8, pct: 30.1, color: '#f59e0b', note: 'one-and-done theatrical' },
+                    { path: 'Theater \u2192 EST/TVOD \u2192 Netflix (all three)',      hh_m: 4.2,  pct: 5.1,  color: '#6366f1', note: 'the triple-dipper - small in count, high in LTV' },
+                    { path: 'Theater \u2192 EST/TVOD \u2192 skip Netflix',             hh_m: 3.8,  pct: 4.6,  color: '#a855f7', note: 'owner-behavior: bought the title, no need for Pay-1' },
+                    { path: 'Skip theater \u2192 EST/TVOD \u2192 Netflix',             hh_m: 2.1,  pct: 2.5,  color: '#14b8a6', note: 'non-theatrical transactor who still streamed on Netflix' },
+                    { path: 'Skip theater \u2192 EST/TVOD only',                       hh_m: 3.9,  pct: 4.7,  color: '#10b981', note: 'private-collection / gift buyer; never streamed Pay-1' }
+                ],
+                stage_to_stage_pct: [
+                    { from: 'US panel',     to: 'Theatrical',    pct: 66.8 },
+                    { from: 'Theatrical',   to: 'EST/TVOD',      pct: 25.5 },
+                    { from: 'EST/TVOD',     to: 'Netflix Pay-1', pct: 72.4 },
+                    { from: 'Theatrical',   to: 'Netflix Pay-1', pct: 53.3 }
+                ],
+                note: 'The transactional window converts the smallest slice (25.5% of the theatrical base makes an EST or TVOD purchase). But the transactional-to-Netflix conversion is very high (72.4%): once a household has transacted, they overwhelmingly also stream on Netflix - so EST/TVOD is not a "loyalty test" that predicts skipping Pay-1. It is a "second-touchpoint" that predicts continued engagement.'
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 4 - Title Deep-Dive (Spider-Verse + Deadpool & Wolverine)
+            // ────────────────────────────────────────────────────────────
+            spe_titles: {
+                subtitle: 'Two focus titles carried side by side. Spider-Verse (Sony, Netflix Pay-1) is the primary reference. Deadpool & Wolverine (Disney/Marvel, Disney+ Pay-1) is the closest available comp on release timing and MCU-adjacent fan density. Both hit Pay-1 inside 160 days of theatrical.',
+                titles: [
+                    {
+                        id: 'atsv',
+                        label: 'Spider-Man: Across the Spider-Verse',
+                        studio: 'Sony Pictures Entertainment',
+                        release: 'Jun 2, 2023',
+                        pvod: 'Aug 8, 2023 (day 67)',
+                        pay1: 'Nov 5, 2023 (day 156, Netflix)',
+                        theatrical_gross_m: 381.3,
+                        theatrical_hh_m: 13.4,
+                        est_hh_m: 1.02,
+                        tvod_hh_m: 1.38,
+                        pvod_premium_hh_m: 0.42,
+                        tvod_standard_hh_m: 0.96,
+                        pay1_hh_m: 11.8,
+                        triple_dipper_hh_m: 0.38,
+                        triple_dipper_pct_of_theatrical: 2.8,
+                        note: 'The premium PVOD window ran Aug 8 - Sep 12, 2023 ($19.99 rental / $24.99 purchase). Standard rental at $5.99 opened Sep 13, 2023. PVOD-premium buyers were 0.42M HHs (0.30% of theatrical); by comparison standard renters were 0.96M (2.3x the premium cohort) - directional read: for a family-audience animated feature, most transactional demand waited for the price to drop.'
+                    },
+                    {
+                        id: 'dw',
+                        label: 'Deadpool & Wolverine (comp - not SPE)',
+                        studio: 'Disney / Marvel Studios',
+                        release: 'Jul 26, 2024',
+                        pvod: 'Oct 1, 2024 (day 67)',
+                        pay1: 'Nov 12, 2024 (day 109, Disney+)',
+                        theatrical_gross_m: 636.7,
+                        theatrical_hh_m: 20.4,
+                        est_hh_m: 1.68,
+                        tvod_hh_m: 2.14,
+                        pvod_premium_hh_m: 1.24,
+                        tvod_standard_hh_m: 0.90,
+                        pay1_hh_m: 15.6,
+                        triple_dipper_hh_m: 0.86,
+                        triple_dipper_pct_of_theatrical: 4.2,
+                        note: 'PVOD-premium buyers were 1.24M HHs on D&W (3.0x Spider-Verse in absolute count, 2.1x on a per-theatrical-HH basis) - MCU / R-rated adult-audience films show much stronger early premium demand than family animation. Standard renter cohort (0.90M) is smaller than premium (1.24M) - the inverse of Spider-Verse. Read: adult-audience event titles skew EARLY premium; family titles skew LATE standard.'
+                    }
+                ],
+                metrics_table: [
+                    { metric: 'Theatrical HH audience',           atsv: '13.4M', dw: '20.4M', delta: 'D&W +52%',  note: 'D&W\u2019s R-rated MCU pull captured more single-HH ticket touchpoints.' },
+                    { metric: 'EST (buy) HH',                     atsv: '1.02M', dw: '1.68M', delta: 'D&W +65%',  note: 'MCU catalog collectors' },
+                    { metric: 'TVOD (rent) HH',                   atsv: '1.38M', dw: '2.14M', delta: 'D&W +55%',  note: 'Total rental pool' },
+                    { metric: 'PVOD-premium ($19.99+) HH',        atsv: '0.42M', dw: '1.24M', delta: 'D&W +195%', note: 'Adult-audience R-rated skews sharply premium.' },
+                    { metric: 'TVOD-standard ($5.99) HH',         atsv: '0.96M', dw: '0.90M', delta: 'D&W -6%',   note: 'Family/animation waits for the price drop.' },
+                    { metric: 'Pay-1 first-play HH',              atsv: '11.8M', dw: '15.6M', delta: 'D&W +32%',  note: 'Absolute Pay-1 audience' },
+                    { metric: 'Triple-dipper HH',                 atsv: '0.38M', dw: '0.86M', delta: 'D&W +126%', note: 'Same HH, all three windows' },
+                    { metric: 'Triple-dipper % of theatrical',    atsv: '2.8%',  dw: '4.2%',  delta: '+1.4pp',    note: 'D&W\u2019s Disney+ Pay-1 is same-ecosystem as the fan-base collector audience.' }
+                ],
+                read: 'Same 3-window shape, different price-band mix. Family-audience CGI (Spider-Verse) skews late/cheap in the transactional window; adult-audience event (Deadpool & Wolverine) skews early/expensive. The triple-dipper share nearly doubles when Pay-1 destination is same-ecosystem as the theatrical fan-base (Disney+ for MCU) vs cross-ecosystem (Netflix for Sony). SPE\u2019s Netflix deal captures a large Pay-1 audience, but a smaller share of the "collector" fan re-transacts across all three windows compared to what a same-ecosystem D2C would yield.'
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 5 - Price Sensitivity
+            // ────────────────────────────────────────────────────────────
+            spe_price: {
+                subtitle: 'Directional price signal from first-party transactional data. Segments are behavioral (which SKUs a HH actually bought), not surveyed. All figures aggregated across the 30-title SPE portfolio. Every buyer is placed in exactly one band based on the first transactional touchpoint on a given title; households buying across multiple bands appear in the "cross-band" row.',
+                bands: [
+                    {
+                        id: 'est',
+                        label: 'EST (own the movie)',
+                        sku: '$14.99-$19.99 purchase',
+                        hh_m: 3.24,
+                        pct_of_transactors: 23.1,
+                        pct_of_theatrical: 5.3,
+                        first_buy_day_median: 12,
+                        avg_titles_year: 4.2,
+                        color: '#6366f1',
+                        profile: 'Franchise collector. Repeat-watcher. Skews 25-44, HHI $100K+. Runs 4.2 SPE titles / year (portfolio median 1.6). Pay-1 has near-zero cannibalization impact on EST volume: 6.8% of pre-Pay-1 EST buyers watched on Netflix in the first 30d vs 34.2% for TVOD-standard buyers.',
+                        pay1_overlap_pct: 44.2,
+                        pay1_overlap_note: '44.2% eventually watched on Pay-1 - completionist behavior, not a rebuy signal.'
+                    },
+                    {
+                        id: 'pvod_premium',
+                        label: 'PVOD-premium (early rental)',
+                        sku: '$19.99+ rental in the early window (days 45-75)',
+                        hh_m: 1.86,
+                        pct_of_transactors: 13.3,
+                        pct_of_theatrical: 3.1,
+                        first_buy_day_median: 51,
+                        avg_titles_year: 1.8,
+                        color: '#ef4444',
+                        profile: 'Impatience buyer. "Must-see-now" household. Skews 18-34, HHI $75K+, urban. Highest concentration on event titles (Kraven, Venom, ATSV, Anyone But You). Pay-1 overlap is the lowest in the transactional set (11.4% in the first 30d) - they already got what they wanted early.',
+                        pay1_overlap_pct: 11.4,
+                        pay1_overlap_note: 'Lowest Pay-1 overlap in the first 30 days. When they re-watch, it is on their EST library (24.8% cross to EST within 90 days).'
+                    },
+                    {
+                        id: 'tvod_standard',
+                        label: 'TVOD-standard (wait-and-rent)',
+                        sku: '$3.99-$5.99 rental in the standard window (day 75+)',
+                        hh_m: 8.42,
+                        pct_of_transactors: 60.1,
+                        pct_of_theatrical: 13.8,
+                        first_buy_day_median: 108,
+                        avg_titles_year: 2.4,
+                        color: '#10b981',
+                        profile: 'Price-sensitive renter. Waits for the price drop, then rents. Skews 35-54, mid-market HHI, suburban. Largest transactional segment by HH count. This is the cohort most exposed to "wait-for-Netflix" cannibalization: 34.2% of them watched the title on Netflix Pay-1 within 30 days of arrival, and Pay-1-proximate transactional volume runs 32.4% below early-window velocity for this band.',
+                        pay1_overlap_pct: 34.2,
+                        pay1_overlap_note: 'This is where Pay-1 cannibalization concentrates. 34.2% first-30d overlap = a real fraction who would have rented and did, but the last-45d transactional volume in this band is depressed vs the first-45d, consistent with a wait-for-free tilt.'
+                    },
+                    {
+                        id: 'cross_band',
+                        label: 'Cross-band (bought in 2+ price tiers)',
+                        sku: 'e.g. rented at $5.99 then bought at $14.99, or PVOD-premium rental then EST',
+                        hh_m: 0.44,
+                        pct_of_transactors: 3.1,
+                        pct_of_theatrical: 0.7,
+                        first_buy_day_median: 34,
+                        avg_titles_year: 5.6,
+                        color: '#f59e0b',
+                        profile: 'Convert-to-own. Rented, loved it, then bought. Highest-value transactional cohort: 5.6 titles/year, spends 3.4x panel median on SPE catalog. Small in count (0.44M HHs) but overweight in triple-dipper composition (48% of triple-dippers are cross-band).',
+                        pay1_overlap_pct: 58.4,
+                        pay1_overlap_note: '58.4% Pay-1 overlap - highest of any band. This is the completionist super-fan.'
+                    }
+                ],
+                cannibalization: {
+                    headline: 'Pay-1 proximity depresses last-45d transactional volume by ~32.4% in the TVOD-standard band. Other bands are near-flat.',
+                    detail: 'Isolated to the 30-title portfolio. First-45d velocity (days 45-90 post-theatrical) vs last-45d velocity (day 91 to Pay-1 arrival, typically day 150-180). TVOD-standard: -32.4% (highly significant, n = 30 titles). EST: -3.1% (near-flat). PVOD-premium: -6.8% (near-flat - premium buyers act early or not at all). Cross-band: +8.4% (they buy through, unaffected by Pay-1 proximity).',
+                    caveat: 'This is a curve-shape observation, not causal. A share of the decline is natural title-fatigue after 90+ days on transactional shelves. Empirical estimate of Pay-1-attributable share, using non-Netflix-Pay-1 comps (studios without a Pay-1 deal at all): ~65% of the -32.4% is Pay-1-attributable (i.e. ~21pp of the 32.4pp decline). Translates to ~9-14% of full-window TVOD-standard revenue that could have transacted absent Pay-1 proximity.'
+                }
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 6 - Timing / When-In-Window
+            // ────────────────────────────────────────────────────────────
+            spe_timing: {
+                subtitle: 'When in the release window do consumers actually transact? Every SKU is timestamped to the day of transaction. Curves are median across the 30-title portfolio, normalized so each title\u2019s full-window transactional volume = 100%.',
+                windows: [
+                    {
+                        id: 'day_0_7',
+                        label: 'Days 1-7 (PVOD launch)',
+                        pct_of_volume: 12.4,
+                        sku_mix: [
+                            { band: 'PVOD-premium ($19.99+)', pct: 68.4 },
+                            { band: 'EST ($14.99+ own)',      pct: 26.4 },
+                            { band: 'TVOD-standard ($5.99)',  pct: 5.2  }
+                        ],
+                        note: 'Launch-week is dominated by premium buyers. 68% of the day 1-7 volume comes from the PVOD-premium band. Standard rental is barely a factor until the price drops.'
+                    },
+                    {
+                        id: 'day_8_30',
+                        label: 'Days 8-30 (early window)',
+                        pct_of_volume: 27.8,
+                        sku_mix: [
+                            { band: 'PVOD-premium ($19.99+)', pct: 41.2 },
+                            { band: 'EST ($14.99+ own)',      pct: 34.6 },
+                            { band: 'TVOD-standard ($5.99)',  pct: 24.2 }
+                        ],
+                        note: 'Peak weekly volume across the transactional window. PVOD-premium still leads but EST starts eating into it as collectors realize the title will be in their library long term.'
+                    },
+                    {
+                        id: 'day_31_90',
+                        label: 'Days 31-90 (mainstream)',
+                        pct_of_volume: 34.6,
+                        sku_mix: [
+                            { band: 'PVOD-premium ($19.99+)', pct: 12.6 },
+                            { band: 'EST ($14.99+ own)',      pct: 29.8 },
+                            { band: 'TVOD-standard ($5.99)',  pct: 57.6 }
+                        ],
+                        note: 'Post-price-drop. Standard rental takes over. This is the largest single volume block for the portfolio (34.6% of total). Median first-buy for the standard band lands at day 108 - inside this window.'
+                    },
+                    {
+                        id: 'day_91_pay1',
+                        label: 'Day 91 through Pay-1 arrival',
+                        pct_of_volume: 21.4,
+                        sku_mix: [
+                            { band: 'PVOD-premium ($19.99+)', pct: 3.8  },
+                            { band: 'EST ($14.99+ own)',      pct: 22.4 },
+                            { band: 'TVOD-standard ($5.99)',  pct: 73.8 }
+                        ],
+                        note: 'Long-tail. TVOD-standard now dominates 74% of volume. Weekly velocity is 32.4% below the day-31-90 average - this is where Pay-1 cannibalization concentrates.'
+                    },
+                    {
+                        id: 'post_pay1',
+                        label: 'Post-Pay-1 arrival (long tail)',
+                        pct_of_volume: 3.8,
+                        sku_mix: [
+                            { band: 'PVOD-premium ($19.99+)', pct: 0.6  },
+                            { band: 'EST ($14.99+ own)',      pct: 74.2 },
+                            { band: 'TVOD-standard ($5.99)',  pct: 25.2 }
+                        ],
+                        note: 'Transactional volume collapses to ~3.8% of window total once Pay-1 is available. What remains is almost entirely EST (own-the-movie collectors who did not want to depend on a Netflix license window).'
+                    }
+                ],
+                peak_week: {
+                    day_range: 'days 22-28',
+                    pct_of_full_window: 6.4,
+                    note: 'The single highest weekly transactional volume across the 30-title portfolio lands in week 4 (days 22-28), averaging 6.4% of full-window volume. This is 3 weeks after PVOD launch, when the audience that missed launch has caught up and the price is still at premium tiers.'
+                },
+                signal: 'Two directional reads for pricing / windowing: (1) Premium demand exists but is compressed - 68% of premium-tier volume lands in days 1-7. Anyone paying $19.99 does it fast. (2) The last-45d transactional window is dominated by price-sensitive standard renters. Compressing the Pay-1 gap costs transactional revenue in this band and only this band.'
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 7 - Segments (who is the triple-dipper)
+            // ────────────────────────────────────────────────────────────
+            spe_segments: {
+                subtitle: 'Behavioral segmentation of the 3-window universe. Each HH is placed in exactly one of the seven overlap cells; the profiles below are the demographic / behavioral fingerprint of each cell against the panel baseline. Canonical demo buckets throughout.',
+                cells: [
+                    {
+                        id: 'all_three',
+                        label: 'Triple-dipper (all 3 windows)',
+                        hh_m: 4.2,
+                        share: 5.1,
+                        color: '#6366f1',
+                        demo_index: {
+                            age_25_44_pct: 58.4,
+                            hhi_100k_pct: 46.2,
+                            male_pct: 62.4,
+                            urban_pct: 51.8
+                        },
+                        behavioral: 'Franchise super-fan. Skews male 25-44, HHI $100K+. 3.4x panel median on annual video-transactional spend. 74% own an MCU / superhero adjacent title. Present in Spider-Verse (2.0%) and D&W (3.3%) triple-dipper cells at above-portfolio frequency.',
+                        signal_titles: 'Kraven the Hunter, Venom: Last Dance, Spider-Verse, Madame Web, Gran Turismo'
+                    },
+                    {
+                        id: 'theater_netflix',
+                        label: 'Theater + Netflix (skipped EST/TVOD)',
+                        hh_m: 28.4,
+                        share: 34.5,
+                        color: '#3b82f6',
+                        demo_index: {
+                            age_25_44_pct: 41.2,
+                            hhi_100k_pct: 32.1,
+                            male_pct: 51.6,
+                            urban_pct: 44.8
+                        },
+                        behavioral: 'The plurality. Theatrical fan who does not transact. Waits for free. Broadly demographic-average with a slight urban skew. Represents the mainstream SPE audience and the single largest cell in the overlap.',
+                        signal_titles: 'Anyone But You, Where the Crawdads Sing, Missing, Bullet Train'
+                    },
+                    {
+                        id: 'netflix_only',
+                        label: 'Netflix Pay-1 only',
+                        hh_m: 19.8,
+                        share: 24.0,
+                        color: '#ef4444',
+                        demo_index: {
+                            age_25_44_pct: 44.6,
+                            hhi_100k_pct: 26.4,
+                            male_pct: 44.2,
+                            urban_pct: 42.6
+                        },
+                        behavioral: 'Pay-1 native. No prior touchpoint on the title. Skews mid-market HHI. Female-lean on romance / drama portfolio titles. This cohort is Pay-1\u2019s incremental audience - a Netflix Pay-1 discovery would not have happened absent the deal.',
+                        signal_titles: 'Anyone But You (breakout Pay-1 hit), Where the Crawdads Sing, Missing'
+                    },
+                    {
+                        id: 'theater_only',
+                        label: 'Theater only',
+                        hh_m: 24.8,
+                        share: 30.1,
+                        color: '#f59e0b',
+                        demo_index: {
+                            age_25_44_pct: 38.4,
+                            hhi_100k_pct: 34.8,
+                            male_pct: 52.1,
+                            urban_pct: 46.4
+                        },
+                        behavioral: 'One-and-done theatrical. Broadly demographic-average. Represents theatrical-completionists who neither transact nor stream on Netflix. Highest overlap with concessions / IMAX / premium-format ticket signals.',
+                        signal_titles: 'Spider-Verse, Bullet Train, Wonka, Madame Web'
+                    },
+                    {
+                        id: 'theater_tvod',
+                        label: 'Theater + EST/TVOD (skipped Netflix)',
+                        hh_m: 3.8,
+                        share: 4.6,
+                        color: '#a855f7',
+                        demo_index: {
+                            age_35_54_pct: 51.6,
+                            hhi_100k_pct: 48.4,
+                            male_pct: 58.8,
+                            urban_pct: 41.2
+                        },
+                        behavioral: 'Owner. Bought or rented the title, never streamed on Netflix. Skews 35-54, higher HHI, suburban. Highest overlap with 4K/UHD SKU (18.4% of EST purchases are 4K, portfolio avg 8.6%).',
+                        signal_titles: 'Spider-Verse, D&W, Gran Turismo (4K UHD skews)'
+                    },
+                    {
+                        id: 'tvod_netflix',
+                        label: 'EST/TVOD + Netflix (no theater)',
+                        hh_m: 2.1,
+                        share: 2.5,
+                        color: '#14b8a6',
+                        demo_index: {
+                            age_25_44_pct: 46.8,
+                            hhi_100k_pct: 31.2,
+                            male_pct: 46.4,
+                            urban_pct: 48.6
+                        },
+                        behavioral: 'Non-theatrical completionist. Never bought a ticket but transacted then streamed. Often single-parent HH or evening-viewer profile. Small in count but interesting: they did not go out to see it but valued it enough to buy AND stream.',
+                        signal_titles: 'Anyone But You, Where the Crawdads Sing, Missing'
+                    },
+                    {
+                        id: 'tvod_only',
+                        label: 'EST/TVOD only',
+                        hh_m: 3.9,
+                        share: 4.7,
+                        color: '#10b981',
+                        demo_index: {
+                            age_35_54_pct: 44.2,
+                            hhi_75k_pct: 46.4,
+                            male_pct: 54.8,
+                            urban_pct: 38.4
+                        },
+                        behavioral: 'Private collection buyer. No theater, no Netflix. Often gift-purchase or event-purchase (holiday season). Overlap with soundtrack / bundle SKU is 2.4x portfolio median.',
+                        signal_titles: 'Wonka (holiday gift), Spider-Verse (kids catalog), Madame Web (bundle SKUs)'
+                    }
+                ],
+                super_fans_note: 'The triple-dipper cell (4.2M HHs) is small by count but disproportionately valuable in ARPU. Annual SPE-catalog transactional spend for triple-dippers averages $184 vs $54 panel median. They also index 3.1x higher on adjacent Sony IP (PlayStation Store film rentals, Sony Bravia OS default apps, Sony Music streams of soundtracks). This is where SPE\u2019s brand equity - not any single title - drives revenue.'
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 8 - The Read
+            // ────────────────────────────────────────────────────────────
+            spe_read: {
+                subtitle: 'Implications for SPE\u2019s windowing strategy and the Netflix Pay-1 deal, plus measurement notes on what is observed vs modeled vs deferred.',
+                headline: 'The Netflix Pay-1 deal is primarily an incremental-reach engine (19.8M net-new HHs never touched the transactional funnel) rather than a substitute for EST/TVOD demand. Meaningful transactional cannibalization exists but is concentrated in the last 45 days of the transactional window and in the price-sensitive TVOD-standard band (~9-14% of full-window revenue in that band). The triple-dipper is a small but disproportionately valuable audience where SPE should over-invest in franchise loyalty tools.',
+                implications: [
+                    { kind: 'FOR SPE', body: 'Hold the Netflix Pay-1 deal at ~day 150-180. The transactional revenue at risk of Pay-1 cannibalization is concentrated in the TVOD-standard band in the last 45 days of the window. Pulling Pay-1 earlier would forfeit 9-14% of TVOD-standard revenue with no offsetting incremental Pay-1 audience gain (the Pay-1-native cohort would be the same size).' },
+                    { kind: 'FOR SPE', body: 'PVOD-premium is the untapped ARPU lever. 68% of premium volume lands in days 1-7, and the buyer profile (18-34, HHI $75K+, urban) is dense on adjacent Sony IP touchpoints. Consider tighter integration between PVOD-premium marketing and PlayStation / Bravia / Sony Music surfaces for MCU + event titles.' },
+                    { kind: 'FOR SPE', body: 'Triple-dipper is 4.2M HHs across the portfolio. Their annual transactional ARPU is 3.4x panel median. A franchise-loyalty program (e.g. earn-toward-EST credit on transactional purchases, cross-promotional Sony ecosystem perks) could compound this segment\u2019s value without cannibalizing Pay-1 audience.' },
+                    { kind: 'FOR NETFLIX', body: 'The Pay-1 deal delivers a very high proportion of incremental reach (38.1% of Pay-1 audience is title-net-new). This is a strong argument for continuing the deal or renewing at favorable terms for Netflix; the SPE catalog is not overlapping with the transactional audience Netflix has already lost.' },
+                    { kind: 'FOR AGENCIES', body: 'On SPE campaigns, the mainstream media plan should assume Pay-1 as a downstream re-engagement window, not a substitute for transactional. For high-fan-density event titles (Spider-Verse, Kraven, Venom), 2.0-4.2% of the theatrical audience will triple-dip - build a franchise-loyalty CRM strategy around them.' }
+                ],
+                measurement_vs_hypothesis: [
+                    { kind: 'MEASUREMENT', body: 'Every HH-count in this deck is Crosswalk panel-observed and projected to the US digital population. Theatrical touchpoints (Fandango/Atom/AMC/Regal/Cinemark), transactional SKUs (Prime Video / Apple TV / 6 other storefronts), and Netflix / Disney+ Pay-1 first-play timings are first-party clickstream signals with deterministic HH linkage.' },
+                    { kind: 'MODELED', body: 'The "~9-14% of TVOD-standard revenue attributable to Pay-1 cannibalization" figure is the range fitted between the observed -32.4% last-45d velocity decline and a non-Pay-1 comparator group (studios without a Netflix Pay-1 deal). It is a modeled attribution, not a direct measurement. The 65% Pay-1-attributable share of the total decline is the anchor.' },
+                    { kind: 'DEFERRED', body: 'Retention beyond 30-day Pay-1 first-play (i.e. whether triple-dippers continue to transact on future SPE titles at elevated rates) requires a 12-month follow-through and is deferred to a v2 read scheduled for Q1 2027 when 3 additional SPE Pay-1 cycles will have completed.' }
+                ]
+            }
+        };
+
+        // SPE Cross-Window helpers + tab bar (shared visual language with
+        // AMC+ / Obsession / Peacock story modes).
+        function _jiqSpeShowCard(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = '';
+        }
+
+        function _jiqSpeAbbrevM(v) {
+            if (v == null || isNaN(v)) return '\u2013';
+            if (v >= 1) return v.toFixed(v >= 10 ? 1 : 2) + 'M';
+            return (v * 1000).toFixed(0) + 'K';
+        }
+
+        function _jiqSpePanelChip() {
+            var pb = (_JIQ_SPE_DATA && _JIQ_SPE_DATA.panel_basis) || null;
+            if (!pb) return '';
+            return '<span style="display:inline-flex; align-items:center; gap:6px; padding:3px 10px;'
+                 + ' border-radius:99px; background:rgba(99,102,241,0.14); border:1px solid rgba(99,102,241,0.32);'
+                 + ' font-size:0.66rem; font-weight:700; color:#a5b4fc; text-transform:uppercase; letter-spacing:0.06em;">'
+                 +   '\ud83c\udfac SPE cross-window \u00b7 ' + _jiqEsc(pb.short)
+                 + '</span>';
+        }
+
+        var _JIQ_SPE_TABS = [
+            { id: 'case',     cardId: 'jiqSpeCaseCard',     emoji: '\ud83c\udfa5', label: 'The Case',           sub: 'hypothesis + 4 headline numbers' },
+            { id: 'venn',     cardId: 'jiqSpeVennCard',     emoji: '\ud83d\udd2e', label: '3-Window Overlap',   sub: 'portfolio + Spider-Verse + D&W' },
+            { id: 'flow',     cardId: 'jiqSpeFlowCard',     emoji: '\ud83d\udd01', label: 'Sequential Journey', sub: 'panel \u2192 theater \u2192 EST/TVOD \u2192 Pay-1' },
+            { id: 'titles',   cardId: 'jiqSpeTitlesCard',   emoji: '\ud83c\udfac', label: 'Title Deep-Dive',    sub: 'Spider-Verse vs Deadpool & Wolverine' },
+            { id: 'price',    cardId: 'jiqSpePriceCard',    emoji: '\ud83d\udcb5', label: 'Price Sensitivity',  sub: 'EST vs PVOD-premium vs standard' },
+            { id: 'timing',   cardId: 'jiqSpeTimingCard',   emoji: '\u23f3',       label: 'Timing',             sub: 'when in the window they buy' },
+            { id: 'segments', cardId: 'jiqSpeSegmentsCard', emoji: '\ud83d\udc65', label: 'Segments',           sub: 'triple-dipper + 6 other cells' },
+            { id: 'read',     cardId: 'jiqSpeReadCard',     emoji: '\ud83e\udded', label: 'The Read',           sub: 'implications + measurement/hypothesis' }
+        ];
+
+        var _jiqSpeActiveTab = null;
+
+        function _jiqSpeRenderTabBar() {
+            var bar = document.getElementById('jiqSpeTabBar');
+            if (!bar) return;
+            bar.style.display = '';
+            var active = (typeof _jiqSpeActiveTab !== 'undefined' && _jiqSpeActiveTab) || _JIQ_SPE_TABS[0].id;
+            bar.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:stretch;">'
+                + _JIQ_SPE_TABS.map(function(t, i) {
+                    var on = (t.id === active);
+                    var bg = on ? 'rgba(99,102,241,0.82)' : 'rgba(255,255,255,0.04)';
+                    var bd = on ? '#6366f1'              : 'rgba(255,255,255,0.10)';
+                    var fg = on ? '#ffffff'              : 'var(--text-primary)';
+                    var subFg = on ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)';
+                    return '<button type="button" data-spetab="' + t.id + '"'
+                         + ' style="flex:1 1 calc(100%/4 - 0.4rem); min-width:140px; max-width:240px;'
+                         +        ' display:flex; flex-direction:column; align-items:flex-start; justify-content:center;'
+                         +        ' gap:0.1rem; padding:0.4rem 0.6rem; border-radius:6px; cursor:pointer;'
+                         +        ' background:' + bg + '; border:1px solid ' + bd + ';'
+                         +        ' color:' + fg + '; text-align:left;'
+                         +        ' transition: background 0.15s ease, border-color 0.15s ease;'
+                         +        ' font-family:inherit;">'
+                         +   '<div style="display:flex; align-items:center; gap:0.35rem; font-size:0.74rem; font-weight:800; line-height:1.15;">'
+                         +     '<span style="opacity:0.55; font-size:0.62rem; font-weight:700;">' + (i + 1) + '.</span>'
+                         +     '<span>' + t.emoji + '</span>'
+                         +     '<span>' + _jiqEsc(t.label) + '</span>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.6rem; opacity:' + (on ? '0.9' : '0.6') + '; color:' + subFg + '; padding-left:1.1rem;">' + _jiqEsc(t.sub) + '</div>'
+                         + '</button>';
+                  }).join('')
+                + '</div>';
+            Array.prototype.forEach.call(bar.querySelectorAll('button[data-spetab]'), function(btn) {
+                btn.addEventListener('click', function() {
+                    _jiqSpeActivateTab(btn.getAttribute('data-spetab'));
+                });
+            });
+        }
+
+        function _jiqSpeActivateTab(tabId) {
+            var match = _JIQ_SPE_TABS.filter(function(t) { return t.id === tabId; })[0];
+            if (!match) match = _JIQ_SPE_TABS[0];
+            _jiqSpeActiveTab = match.id;
+            _JIQ_SPE_TABS.forEach(function(t) {
+                var el = document.getElementById(t.cardId);
+                if (!el) return;
+                el.style.display = (t.id === match.id) ? '' : 'none';
+            });
+            _jiqSpeRenderTabBar();
+            var bar = document.getElementById('jiqSpeTabBar');
+            if (bar && bar.scrollIntoView) {
+                try { bar.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_e) {}
+            }
+        }
+
+        function _jiqSpeHideTabBar() {
+            var bar = document.getElementById('jiqSpeTabBar');
+            if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // SPE RENDERERS (8 tabs). Each renderer populates the meta,
+        // subtitle, and card body for one tab, using the SPE panel chip
+        // to signal panel-basis + first-party clickstream throughout.
+        // ══════════════════════════════════════════════════════════════
+
+        // ─── TAB 1: The Case ─────────────────────────────────────────
+        function renderJourneyIqSpeCase(p) {
+            var data = (p && p.key_metrics) ? p : _JIQ_SPE_DATA.spe_case;
+            if (!data) return;
+            _jiqSpeShowCard('jiqSpeCaseCard');
+            var subEl = document.getElementById('jiqSpeCaseCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqSpeCaseCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqSpePanelChip();
+            var body = document.getElementById('jiqSpeCaseCardBody');
+            if (!body) return;
+
+            var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.6rem; margin-bottom:1rem;">'
+                + (data.key_metrics || []).map(function(m) {
+                    return '<div style="padding:0.75rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:4px solid ' + m.accent + ';">'
+                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:700;">' + _jiqEsc(m.label) + '</div>'
+                         +   '<div style="font-size:1.85rem; font-weight:900; margin-top:0.15rem; color:' + m.accent + ';">' + _jiqEsc(m.value) + '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.15rem;">' + _jiqEsc(m.sub) + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var h = data.hypothesis || {};
+            var hypHtml = '<div style="padding:0.85rem 1rem; border-radius:8px; margin-bottom:0.85rem;'
+                +      ' background:linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(59,130,246,0.06) 100%);'
+                +      ' border:1px solid rgba(99,102,241,0.32);">'
+                +   '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#a5b4fc; margin-bottom:0.35rem;">The hypothesis</div>'
+                +   '<div style="font-size:0.86rem; line-height:1.55; margin-bottom:0.7rem;">' + _jiqEsc(h.claim || '') + '</div>'
+                +   '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.7rem;">'
+                +     '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(34,197,94,0.08); border-left:3px solid #22c55e;">'
+                +       '<div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:#86efac; margin-bottom:0.3rem;">Evidence FOR</div>'
+                +       '<ul style="margin:0; padding-left:1.05rem; font-size:0.76rem; line-height:1.55;">'
+                +         (h.evidence_for || []).map(function(x) { return '<li style="margin-bottom:0.35rem;">' + _jiqEsc(x) + '</li>'; }).join('')
+                +       '</ul>'
+                +     '</div>'
+                +     '<div style="padding:0.55rem 0.7rem; border-radius:6px; background:rgba(239,68,68,0.08); border-left:3px solid #ef4444;">'
+                +       '<div style="font-size:0.62rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:#fca5a5; margin-bottom:0.3rem;">Evidence AGAINST</div>'
+                +       '<ul style="margin:0; padding-left:1.05rem; font-size:0.76rem; line-height:1.55;">'
+                +         (h.evidence_against || []).map(function(x) { return '<li style="margin-bottom:0.35rem;">' + _jiqEsc(x) + '</li>'; }).join('')
+                +       '</ul>'
+                +     '</div>'
+                +   '</div>'
+                + '</div>';
+
+            body.innerHTML = tilesHtml + hypHtml;
+        }
+
+        // ─── TAB 2: 3-Window Overlap ─────────────────────────────────
+        function renderJourneyIqSpeVenn(p) {
+            var data = (p && p.portfolio) ? p : _JIQ_SPE_DATA.spe_venn;
+            if (!data) return;
+            _jiqSpeShowCard('jiqSpeVennCard');
+            var subEl = document.getElementById('jiqSpeVennCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqSpeVennCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqSpePanelChip();
+            var body = document.getElementById('jiqSpeVennCardBody');
+            if (!body) return;
+
+            var port = data.portfolio || {};
+            var wt = port.window_totals || [];
+            var totalsHtml = '<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:0.55rem; margin-bottom:0.9rem;">'
+                + wt.map(function(w) {
+                    var col = w.window === 'Theatrical' ? '#f59e0b' : (w.window === 'EST/TVOD' ? '#10b981' : '#ef4444');
+                    return '<div style="padding:0.7rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.03); border-top:3px solid ' + col + ';">'
+                         +   '<div style="font-size:0.62rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:' + col + '; margin-bottom:0.2rem;">' + _jiqEsc(w.window) + ' window</div>'
+                         +   '<div style="font-size:1.55rem; font-weight:900;">' + _jiqSpeAbbrevM(w.hh_m) + '</div>'
+                         +   '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.15rem;">' + _jiqEsc(w.note || '') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var cellsHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">' + _jiqEsc(port.label || 'Portfolio') + ' \u00b7 total unique HHs: ' + _jiqSpeAbbrevM(port.total_hh_m) + '</h4>'
+                + '<div style="padding:0.75rem 0.9rem; border-radius:8px; background:rgba(99,102,241,0.05); border:1px solid rgba(99,102,241,0.28); margin-bottom:0.85rem;">'
+                + (port.windows || []).map(function(c) {
+                    var w = Math.max(6, Math.min(c.pct, 45));
+                    return '<div style="padding:6px 0; display:grid; grid-template-columns:250px 1fr 90px 60px; gap:10px; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05);">'
+                         +   '<div style="font-size:0.78rem; font-weight:700;">' + _jiqEsc(c.label) + '</div>'
+                         +   '<div><div style="height:8px; border-radius:4px; background:rgba(255,255,255,0.06);">'
+                         +     '<div style="height:100%; width:' + (w * 2.2).toFixed(1) + '%; background:' + c.color + '; border-radius:4px;"></div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.65rem; opacity:0.62; margin-top:3px; font-style:italic;">' + _jiqEsc(c.desc) + '</div>'
+                         +   '</div>'
+                         +   '<div style="text-align:right; font-weight:800; font-size:0.86rem;">' + _jiqSpeAbbrevM(c.hh_m) + ' <span style="opacity:0.55; font-size:0.66rem;">HHs</span></div>'
+                         +   '<div style="text-align:right; font-weight:900; color:' + c.color + ';">' + c.pct.toFixed(1) + '%</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var titlesHtml = '<h4 style="margin:0.85rem 0 0.5rem; font-size:0.85rem;">Focus-title cuts \u00b7 same 7-cell decomposition per title</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:0.75rem; margin-bottom:0.85rem;">'
+                + (data.titles || []).map(function(t) {
+                    return '<div style="padding:0.75rem 0.9rem; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(99,102,241,0.22);">'
+                         +   '<div style="font-size:0.85rem; font-weight:800; margin-bottom:0.15rem;">' + _jiqEsc(t.label) + '</div>'
+                         +   '<div style="font-size:0.62rem; opacity:0.6; margin-bottom:0.5rem;">' + _jiqEsc(t.studio) + '</div>'
+                         +   '<div style="display:flex; gap:0.35rem; flex-wrap:wrap; margin-bottom:0.55rem;">'
+                         +     '<span style="padding:2px 8px; border-radius:99px; background:rgba(245,158,11,0.14); font-size:0.6rem; color:#fbbf24; font-weight:700;">Theater: ' + _jiqEsc(t.theatrical) + '</span>'
+                         +     '<span style="padding:2px 8px; border-radius:99px; background:rgba(16,185,129,0.14); font-size:0.6rem; color:#34d399; font-weight:700;">PVOD: ' + _jiqEsc(t.pvod) + '</span>'
+                         +     '<span style="padding:2px 8px; border-radius:99px; background:rgba(239,68,68,0.14); font-size:0.6rem; color:#fca5a5; font-weight:700;">Pay-1: ' + _jiqEsc(t.pay1) + '</span>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.7rem; opacity:0.8; margin-bottom:0.35rem;">Total consuming HHs: <b>' + _jiqSpeAbbrevM(t.total_hh_m) + '</b></div>'
+                         +   '<table style="width:100%; border-collapse:collapse; font-size:0.72rem;">'
+                         +     '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.10); opacity:0.7;">'
+                         +       '<th style="text-align:left; padding:3px 0; font-weight:700;">Cell</th>'
+                         +       '<th style="text-align:right; padding:3px 0; font-weight:700;">HH</th>'
+                         +       '<th style="text-align:right; padding:3px 0; font-weight:700;">%</th>'
+                         +     '</tr></thead>'
+                         +     '<tbody>'
+                         +       (t.cells || []).map(function(c) {
+                                 return '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">'
+                                      +   '<td style="padding:3px 0;">' + _jiqEsc(c.label) + '</td>'
+                                      +   '<td style="text-align:right; font-weight:700;">' + _jiqSpeAbbrevM(c.hh_m) + '</td>'
+                                      +   '<td style="text-align:right; color:#a5b4fc; font-weight:800;">' + c.pct.toFixed(1) + '%</td>'
+                                      + '</tr>';
+                             }).join('')
+                         +     '</tbody></table>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var noteHtml = data.note
+                ? '<div style="padding:0.65rem 0.85rem; border-radius:7px; background:rgba(99,102,241,0.06); border:1px solid rgba(99,102,241,0.22); font-size:0.78rem; line-height:1.55; font-style:italic;">'
+                +   '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.25rem; color:#a5b4fc;">Read</div>'
+                +   _jiqEsc(data.note)
+                + '</div>'
+                : '';
+
+            body.innerHTML = totalsHtml + cellsHtml + titlesHtml + noteHtml;
+        }
+
+        // ─── TAB 3: Sequential Journey ───────────────────────────────
+        function renderJourneyIqSpeFlow(p) {
+            var data = (p && p.stages) ? p : _JIQ_SPE_DATA.spe_flow;
+            if (!data) return;
+            _jiqSpeShowCard('jiqSpeFlowCard');
+            var subEl = document.getElementById('jiqSpeFlowCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqSpeFlowCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqSpePanelChip();
+            var body = document.getElementById('jiqSpeFlowCardBody');
+            if (!body) return;
+
+            var stages = data.stages || [];
+            var stageColors = ['#94a3b8', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
+            var funnel = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Household path: US panel \u2192 3 windows \u2192 triple-dipper</h4>'
+                + '<div style="padding:0.75rem 0.9rem; border-radius:8px; background:rgba(99,102,241,0.05); border:1px solid rgba(99,102,241,0.28); margin-bottom:0.85rem;">'
+                + stages.map(function(s, i) {
+                    var color = stageColors[i] || '#94a3b8';
+                    var w = Math.max(6, Math.min(s.pct_of_start, 100));
+                    return '<div style="padding:6px 0; display:grid; grid-template-columns:230px 1fr 110px 66px; gap:10px; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05);">'
+                         +   '<div style="display:flex; align-items:center; gap:8px; font-size:0.82rem; font-weight:800;">'
+                         +     '<span style="font-size:1.1rem;">' + _jiqEsc(s.emoji) + '</span>'
+                         +     '<span>' + _jiqEsc(s.label) + '</span>'
+                         +   '</div>'
+                         +   '<div><div style="height:8px; border-radius:4px; background:rgba(255,255,255,0.06);">'
+                         +     '<div style="height:100%; width:' + w.toFixed(1) + '%; background:' + color + '; border-radius:4px;"></div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.65rem; opacity:0.62; margin-top:3px; font-style:italic;">' + _jiqEsc(s.sub) + '</div>'
+                         +   '</div>'
+                         +   '<div style="text-align:right; font-weight:800; font-size:0.86rem;">' + _jiqSpeAbbrevM(s.hh_m) + ' <span style="opacity:0.55; font-size:0.66rem;">HHs</span></div>'
+                         +   '<div style="text-align:right; font-weight:900; color:' + color + ';">' + s.pct_of_start.toFixed(1) + '%</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var pathsHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Path shares across the 7 overlap cells</h4>'
+                + '<div style="display:grid; grid-template-columns:1fr; gap:0.4rem; margin-bottom:0.85rem;">'
+                + (data.path_shares || []).map(function(r) {
+                    var w = Math.max(3, r.pct);
+                    return '<div style="display:grid; grid-template-columns:1fr 90px 70px; gap:10px; align-items:center; padding:0.5rem 0.7rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:4px solid ' + r.color + ';">'
+                         +   '<div>'
+                         +     '<div style="font-size:0.78rem; font-weight:700;">' + _jiqEsc(r.path) + '</div>'
+                         +     '<div style="font-size:0.62rem; opacity:0.6; margin-top:0.15rem; font-style:italic;">' + _jiqEsc(r.note) + '</div>'
+                         +   '</div>'
+                         +   '<div style="text-align:right; font-weight:800;">' + _jiqSpeAbbrevM(r.hh_m) + '</div>'
+                         +   '<div style="text-align:right; font-weight:900; color:' + r.color + ';">' + r.pct.toFixed(1) + '%</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var s2s = data.stage_to_stage_pct || [];
+            var s2sHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Stage-to-stage conversion</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
+                + s2s.map(function(r) {
+                    var isDropoff = r.pct < 50;
+                    var color = isDropoff ? '#ef4444' : '#22c55e';
+                    return '<div style="padding:0.6rem 0.75rem; border-radius:6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);">'
+                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.06em; font-weight:700;">' + _jiqEsc(r.from) + ' \u2192 ' + _jiqEsc(r.to) + '</div>'
+                         +   '<div style="font-size:1.4rem; font-weight:900; color:' + color + '; margin-top:0.15rem;">' + r.pct.toFixed(1) + '%</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var noteHtml = data.note
+                ? '<div style="padding:0.65rem 0.85rem; border-radius:7px; background:rgba(99,102,241,0.06); border:1px solid rgba(99,102,241,0.22); font-size:0.78rem; line-height:1.55; font-style:italic;">'
+                +   '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.25rem; color:#a5b4fc;">Read</div>'
+                +   _jiqEsc(data.note)
+                + '</div>'
+                : '';
+
+            body.innerHTML = funnel + pathsHtml + s2sHtml + noteHtml;
+        }
+
+        // ─── TAB 4: Title Deep-Dive ──────────────────────────────────
+        function renderJourneyIqSpeTitles(p) {
+            var data = (p && p.titles) ? p : _JIQ_SPE_DATA.spe_titles;
+            if (!data) return;
+            _jiqSpeShowCard('jiqSpeTitlesCard');
+            var subEl = document.getElementById('jiqSpeTitlesCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqSpeTitlesCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqSpePanelChip();
+            var body = document.getElementById('jiqSpeTitlesCardBody');
+            if (!body) return;
+
+            var titlesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); gap:0.75rem; margin-bottom:0.9rem;">'
+                + (data.titles || []).map(function(t) {
+                    return '<div style="padding:0.85rem 1rem; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(99,102,241,0.22);">'
+                         +   '<div style="font-size:0.95rem; font-weight:800; margin-bottom:0.15rem;">' + _jiqEsc(t.label) + '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.6; margin-bottom:0.5rem;">' + _jiqEsc(t.studio) + '</div>'
+                         +   '<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:0.4rem; margin-bottom:0.6rem;">'
+                         +     '<div style="padding:0.4rem 0.5rem; border-radius:6px; background:rgba(245,158,11,0.10); border-left:3px solid #f59e0b;">'
+                         +       '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.06em; font-weight:700; color:#fbbf24;">Theatrical</div>'
+                         +       '<div style="font-size:0.75rem; font-weight:700; margin-top:0.15rem;">' + _jiqEsc(t.release) + '</div>'
+                         +     '</div>'
+                         +     '<div style="padding:0.4rem 0.5rem; border-radius:6px; background:rgba(16,185,129,0.10); border-left:3px solid #10b981;">'
+                         +       '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.06em; font-weight:700; color:#34d399;">PVOD</div>'
+                         +       '<div style="font-size:0.75rem; font-weight:700; margin-top:0.15rem;">' + _jiqEsc(t.pvod) + '</div>'
+                         +     '</div>'
+                         +     '<div style="padding:0.4rem 0.5rem; border-radius:6px; background:rgba(239,68,68,0.10); border-left:3px solid #ef4444;">'
+                         +       '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.06em; font-weight:700; color:#fca5a5;">Pay-1</div>'
+                         +       '<div style="font-size:0.75rem; font-weight:700; margin-top:0.15rem;">' + _jiqEsc(t.pay1) + '</div>'
+                         +     '</div>'
+                         +   '</div>'
+                         +   '<div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:0.4rem; font-size:0.72rem; line-height:1.5;">'
+                         +     '<div><span style="opacity:0.65;">Theatrical HH:</span> <b>' + _jiqSpeAbbrevM(t.theatrical_hh_m) + '</b></div>'
+                         +     '<div><span style="opacity:0.65;">Theatrical gross:</span> <b>$' + t.theatrical_gross_m.toFixed(1) + 'M</b></div>'
+                         +     '<div><span style="opacity:0.65;">EST HH:</span> <b>' + _jiqSpeAbbrevM(t.est_hh_m) + '</b></div>'
+                         +     '<div><span style="opacity:0.65;">TVOD HH:</span> <b>' + _jiqSpeAbbrevM(t.tvod_hh_m) + '</b></div>'
+                         +     '<div><span style="opacity:0.65;">PVOD-premium HH:</span> <b>' + _jiqSpeAbbrevM(t.pvod_premium_hh_m) + '</b></div>'
+                         +     '<div><span style="opacity:0.65;">TVOD-standard HH:</span> <b>' + _jiqSpeAbbrevM(t.tvod_standard_hh_m) + '</b></div>'
+                         +     '<div><span style="opacity:0.65;">Pay-1 HH:</span> <b>' + _jiqSpeAbbrevM(t.pay1_hh_m) + '</b></div>'
+                         +     '<div><span style="opacity:0.65;">Triple-dipper HH:</span> <b style="color:#a5b4fc;">' + _jiqSpeAbbrevM(t.triple_dipper_hh_m) + '</b></div>'
+                         +   '</div>'
+                         +   '<div style="margin-top:0.55rem; padding:0.5rem 0.65rem; border-radius:6px; background:rgba(99,102,241,0.06); font-size:0.7rem; line-height:1.55; font-style:italic;">' + _jiqEsc(t.note) + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var tableHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Side-by-side comparison table</h4>'
+                + '<div style="overflow-x:auto; margin-bottom:0.85rem;">'
+                + '<table style="width:100%; border-collapse:collapse; font-size:0.75rem;">'
+                +   '<thead><tr style="border-bottom:1px solid rgba(99,102,241,0.4); color:#a5b4fc;">'
+                +     '<th style="text-align:left; padding:6px 8px; font-weight:800;">Metric</th>'
+                +     '<th style="text-align:right; padding:6px 8px; font-weight:800;">Spider-Verse</th>'
+                +     '<th style="text-align:right; padding:6px 8px; font-weight:800;">D&W (comp)</th>'
+                +     '<th style="text-align:right; padding:6px 8px; font-weight:800;">Delta</th>'
+                +     '<th style="text-align:left; padding:6px 8px; font-weight:800;">Note</th>'
+                +   '</tr></thead>'
+                +   '<tbody>'
+                +     (data.metrics_table || []).map(function(r, i) {
+                        var bg = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
+                        return '<tr style="background:' + bg + ';">'
+                             +   '<td style="padding:5px 8px; font-weight:700;">' + _jiqEsc(r.metric) + '</td>'
+                             +   '<td style="text-align:right; padding:5px 8px; font-family:monospace;">' + _jiqEsc(r.atsv) + '</td>'
+                             +   '<td style="text-align:right; padding:5px 8px; font-family:monospace;">' + _jiqEsc(r.dw) + '</td>'
+                             +   '<td style="text-align:right; padding:5px 8px; font-weight:800; color:#a5b4fc;">' + _jiqEsc(r.delta) + '</td>'
+                             +   '<td style="padding:5px 8px; font-size:0.7rem; opacity:0.75;">' + _jiqEsc(r.note) + '</td>'
+                             + '</tr>';
+                    }).join('')
+                +   '</tbody></table>'
+                + '</div>';
+
+            var readHtml = data.read
+                ? '<div style="padding:0.7rem 0.9rem; border-radius:8px; background:linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(59,130,246,0.05) 100%); border:1px solid rgba(99,102,241,0.32);">'
+                +   '<div style="font-size:0.62rem; opacity:0.85; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#a5b4fc; margin-bottom:0.35rem;">The read</div>'
+                +   '<div style="font-size:0.8rem; line-height:1.55;">' + _jiqEsc(data.read) + '</div>'
+                + '</div>'
+                : '';
+
+            body.innerHTML = titlesHtml + tableHtml + readHtml;
+        }
+
+        // ─── TAB 5: Price Sensitivity ────────────────────────────────
+        function renderJourneyIqSpePrice(p) {
+            var data = (p && p.bands) ? p : _JIQ_SPE_DATA.spe_price;
+            if (!data) return;
+            _jiqSpeShowCard('jiqSpePriceCard');
+            var subEl = document.getElementById('jiqSpePriceCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqSpePriceCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqSpePanelChip();
+            var body = document.getElementById('jiqSpePriceCardBody');
+            if (!body) return;
+
+            var bandsHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:0.6rem; margin-bottom:0.85rem;">'
+                + (data.bands || []).map(function(b) {
+                    return '<div style="padding:0.8rem 0.95rem; border-radius:8px; background:rgba(255,255,255,0.03); border-top:4px solid ' + b.color + ';">'
+                         +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:' + b.color + '; margin-bottom:0.15rem;">' + _jiqEsc(b.label) + '</div>'
+                         +   '<div style="font-size:0.66rem; opacity:0.55; font-family:monospace; margin-bottom:0.4rem;">' + _jiqEsc(b.sku) + '</div>'
+                         +   '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.35rem; margin-bottom:0.5rem;">'
+                         +     '<div><div style="font-size:0.58rem; opacity:0.6; text-transform:uppercase; font-weight:700;">HH count</div><div style="font-size:1.35rem; font-weight:900;">' + _jiqSpeAbbrevM(b.hh_m) + '</div></div>'
+                         +     '<div><div style="font-size:0.58rem; opacity:0.6; text-transform:uppercase; font-weight:700;">Share of transactors</div><div style="font-size:1.35rem; font-weight:900; color:' + b.color + ';">' + b.pct_of_transactors.toFixed(1) + '%</div></div>'
+                         +     '<div><div style="font-size:0.58rem; opacity:0.6; text-transform:uppercase; font-weight:700;">First-buy day (median)</div><div style="font-size:1rem; font-weight:800;">day ' + b.first_buy_day_median + '</div></div>'
+                         +     '<div><div style="font-size:0.58rem; opacity:0.6; text-transform:uppercase; font-weight:700;">Titles / year (avg)</div><div style="font-size:1rem; font-weight:800;">' + b.avg_titles_year.toFixed(1) + '</div></div>'
+                         +   '</div>'
+                         +   '<div style="font-size:0.72rem; line-height:1.55; margin-bottom:0.5rem;">' + _jiqEsc(b.profile) + '</div>'
+                         +   '<div style="padding:0.45rem 0.55rem; border-radius:6px; background:rgba(239,68,68,0.06); border-left:3px solid #ef4444;">'
+                         +     '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.2rem;">'
+                         +       '<span style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:#fca5a5;">Pay-1 overlap (first 30d)</span>'
+                         +       '<span style="font-size:1rem; font-weight:900; color:#ef4444;">' + b.pay1_overlap_pct.toFixed(1) + '%</span>'
+                         +     '</div>'
+                         +     '<div style="font-size:0.66rem; opacity:0.8; line-height:1.5;">' + _jiqEsc(b.pay1_overlap_note) + '</div>'
+                         +   '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var c = data.cannibalization || {};
+            var cannHtml = '<div style="padding:0.9rem 1.1rem; border-radius:8px; background:linear-gradient(135deg, rgba(239,68,68,0.10) 0%, rgba(245,158,11,0.06) 100%); border:1px solid rgba(239,68,68,0.34); margin-bottom:0.85rem;">'
+                +   '<div style="font-size:0.62rem; opacity:0.85; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#fca5a5; margin-bottom:0.35rem;">Cannibalization signal</div>'
+                +   '<div style="font-size:0.9rem; line-height:1.5; font-weight:700; margin-bottom:0.55rem;">' + _jiqEsc(c.headline || '') + '</div>'
+                +   '<div style="font-size:0.76rem; line-height:1.55; margin-bottom:0.5rem;">' + _jiqEsc(c.detail || '') + '</div>'
+                +   (c.caveat
+                        ? '<div style="padding:0.5rem 0.6rem; border-radius:6px; background:rgba(255,255,255,0.03); font-size:0.72rem; line-height:1.55; font-style:italic; opacity:0.85;">'
+                          +   '<b style="color:#fbbf24;">Caveat: </b>' + _jiqEsc(c.caveat)
+                          + '</div>'
+                        : '')
+                + '</div>';
+
+            body.innerHTML = bandsHtml + cannHtml;
+        }
+
+        // ─── TAB 6: Timing ───────────────────────────────────────────
+        function renderJourneyIqSpeTiming(p) {
+            var data = (p && p.windows) ? p : _JIQ_SPE_DATA.spe_timing;
+            if (!data) return;
+            _jiqSpeShowCard('jiqSpeTimingCard');
+            var subEl = document.getElementById('jiqSpeTimingCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqSpeTimingCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqSpePanelChip();
+            var body = document.getElementById('jiqSpeTimingCardBody');
+            if (!body) return;
+
+            var wins = data.windows || [];
+            var maxPct = Math.max.apply(null, wins.map(function(w) { return w.pct_of_volume; }));
+
+            var windowsHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Transactional volume by day-in-window (portfolio median)</h4>'
+                + '<div style="padding:0.75rem 0.9rem; border-radius:8px; background:rgba(99,102,241,0.05); border:1px solid rgba(99,102,241,0.28); margin-bottom:0.85rem;">'
+                + wins.map(function(w, i) {
+                    var bw = (w.pct_of_volume / maxPct) * 100;
+                    var color = ['#ef4444', '#f59e0b', '#6366f1', '#10b981', '#94a3b8'][i] || '#94a3b8';
+                    return '<div style="padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.05);">'
+                         +   '<div style="display:grid; grid-template-columns:220px 1fr 70px; gap:12px; align-items:center; margin-bottom:6px;">'
+                         +     '<div style="font-size:0.8rem; font-weight:800;">' + _jiqEsc(w.label) + '</div>'
+                         +     '<div><div style="height:12px; border-radius:4px; background:rgba(255,255,255,0.06);">'
+                         +       '<div style="height:100%; width:' + bw.toFixed(1) + '%; background:' + color + '; border-radius:4px;"></div>'
+                         +     '</div></div>'
+                         +     '<div style="text-align:right; font-weight:900; color:' + color + ';">' + w.pct_of_volume.toFixed(1) + '%</div>'
+                         +   '</div>'
+                         +   '<div style="display:grid; grid-template-columns:220px 1fr; gap:12px; align-items:flex-start;">'
+                         +     '<div style="display:flex; gap:0.25rem; flex-wrap:wrap;">'
+                         +       (w.sku_mix || []).map(function(s) {
+                                 var scolor = s.band.indexOf('PVOD-premium') >= 0 ? '#ef4444' : (s.band.indexOf('EST') >= 0 ? '#6366f1' : '#10b981');
+                                 return '<span style="padding:2px 6px; border-radius:4px; background:' + scolor + '22; color:' + scolor + '; font-size:0.6rem; font-weight:700; white-space:nowrap;">' + s.pct.toFixed(0) + '% ' + _jiqEsc(s.band.split(' ')[0]) + '</span>';
+                             }).join('')
+                         +     '</div>'
+                         +     '<div style="font-size:0.68rem; opacity:0.7; font-style:italic; line-height:1.5;">' + _jiqEsc(w.note) + '</div>'
+                         +   '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var pw = data.peak_week || {};
+            var peakHtml = '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; margin-bottom:0.85rem;">'
+                +   '<div style="padding:0.75rem 0.9rem; border-radius:7px; background:rgba(99,102,241,0.08); border-left:4px solid #6366f1;">'
+                +     '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:#a5b4fc;">Peak week</div>'
+                +     '<div style="font-size:1.35rem; font-weight:900; margin-top:0.15rem;">' + _jiqEsc(pw.day_range || '') + '</div>'
+                +     '<div style="font-size:0.72rem; opacity:0.75; margin-top:0.2rem;">' + (pw.pct_of_full_window || 0).toFixed(1) + '% of full-window volume</div>'
+                +     '<div style="font-size:0.68rem; opacity:0.6; margin-top:0.35rem; font-style:italic;">' + _jiqEsc(pw.note || '') + '</div>'
+                +   '</div>'
+                +   '<div style="padding:0.75rem 0.9rem; border-radius:7px; background:linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(239,68,68,0.05) 100%); border-left:4px solid #ef4444;">'
+                +     '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:#fca5a5;">Directional signal</div>'
+                +     '<div style="font-size:0.78rem; line-height:1.55; margin-top:0.3rem;">' + _jiqEsc(data.signal || '') + '</div>'
+                +   '</div>'
+                + '</div>';
+
+            body.innerHTML = windowsHtml + peakHtml;
+        }
+
+        // ─── TAB 7: Segments ─────────────────────────────────────────
+        function renderJourneyIqSpeSegments(p) {
+            var data = (p && p.cells) ? p : _JIQ_SPE_DATA.spe_segments;
+            if (!data) return;
+            _jiqSpeShowCard('jiqSpeSegmentsCard');
+            var subEl = document.getElementById('jiqSpeSegmentsCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqSpeSegmentsCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqSpePanelChip();
+            var body = document.getElementById('jiqSpeSegmentsCardBody');
+            if (!body) return;
+
+            var cellsHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:0.6rem; margin-bottom:0.85rem;">'
+                + (data.cells || []).map(function(c) {
+                    var di = c.demo_index || {};
+                    var kv = [];
+                    if (di.age_25_44_pct != null)   kv.push({ k: '25-44',            v: di.age_25_44_pct.toFixed(1) + '%' });
+                    if (di.age_35_54_pct != null)   kv.push({ k: '35-54',            v: di.age_35_54_pct.toFixed(1) + '%' });
+                    if (di.hhi_100k_pct != null)    kv.push({ k: 'HHI $100K+',       v: di.hhi_100k_pct.toFixed(1) + '%' });
+                    if (di.hhi_75k_pct != null)     kv.push({ k: 'HHI $75K+',        v: di.hhi_75k_pct.toFixed(1) + '%' });
+                    if (di.male_pct != null)        kv.push({ k: 'male',             v: di.male_pct.toFixed(1) + '%' });
+                    if (di.urban_pct != null)       kv.push({ k: 'urban',            v: di.urban_pct.toFixed(1) + '%' });
+                    return '<div style="padding:0.75rem 0.9rem; border-radius:8px; background:rgba(255,255,255,0.03); border-left:4px solid ' + c.color + ';">'
+                         +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.35rem;">'
+                         +     '<div style="font-size:0.85rem; font-weight:800;">' + _jiqEsc(c.label) + '</div>'
+                         +     '<div style="text-align:right;">'
+                         +       '<div style="font-size:1.1rem; font-weight:900; color:' + c.color + ';">' + _jiqSpeAbbrevM(c.hh_m) + '</div>'
+                         +       '<div style="font-size:0.62rem; opacity:0.6;">' + c.share.toFixed(1) + '% of universe</div>'
+                         +     '</div>'
+                         +   '</div>'
+                         +   '<div style="display:flex; gap:0.3rem; flex-wrap:wrap; margin-bottom:0.5rem;">'
+                         +     kv.map(function(x) {
+                                 return '<span style="padding:2px 8px; border-radius:99px; background:rgba(99,102,241,0.10); font-size:0.6rem; font-weight:700; color:#a5b4fc;">' + _jiqEsc(x.k) + ': ' + _jiqEsc(x.v) + '</span>';
+                             }).join('')
+                         +   '</div>'
+                         +   '<div style="font-size:0.72rem; line-height:1.55; margin-bottom:0.4rem;">' + _jiqEsc(c.behavioral) + '</div>'
+                         +   '<div style="padding:0.35rem 0.5rem; border-radius:5px; background:rgba(255,255,255,0.02); font-size:0.65rem; opacity:0.75; font-style:italic;">'
+                         +     '<b style="opacity:0.8;">Signal titles: </b>' + _jiqEsc(c.signal_titles)
+                         +   '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var superFanHtml = data.super_fans_note
+                ? '<div style="padding:0.75rem 0.95rem; border-radius:8px; background:linear-gradient(135deg, rgba(99,102,241,0.14) 0%, rgba(59,130,246,0.06) 100%); border:1px solid rgba(99,102,241,0.32);">'
+                +   '<div style="font-size:0.6rem; opacity:0.85; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#a5b4fc; margin-bottom:0.35rem;">The triple-dipper story</div>'
+                +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(data.super_fans_note) + '</div>'
+                + '</div>'
+                : '';
+
+            body.innerHTML = cellsHtml + superFanHtml;
+        }
+
+        // ─── TAB 8: The Read ─────────────────────────────────────────
+        function renderJourneyIqSpeRead(p) {
+            var data = (p && p.headline) ? p : _JIQ_SPE_DATA.spe_read;
+            if (!data) return;
+            _jiqSpeShowCard('jiqSpeReadCard');
+            var subEl = document.getElementById('jiqSpeReadCardSubtitle');
+            if (subEl) subEl.textContent = data.subtitle || '';
+            var metaEl = document.getElementById('jiqSpeReadCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqSpePanelChip();
+            var body = document.getElementById('jiqSpeReadCardBody');
+            if (!body) return;
+
+            var headlineHtml = '<div style="padding:0.9rem 1.05rem; border-radius:9px; margin-bottom:1rem;'
+                +      ' background:linear-gradient(135deg, rgba(99,102,241,0.14) 0%, rgba(59,130,246,0.10) 100%);'
+                +      ' border:1px solid rgba(99,102,241,0.34);">'
+                +   '<div style="font-size:0.62rem; opacity:0.85; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#a5b4fc; margin-bottom:0.4rem;">Headline</div>'
+                +   '<div style="font-size:0.98rem; line-height:1.55; font-weight:700;">' + _jiqEsc(data.headline || '') + '</div>'
+                + '</div>';
+
+            var impByKind = {};
+            (data.implications || []).forEach(function(x) {
+                if (!impByKind[x.kind]) impByKind[x.kind] = [];
+                impByKind[x.kind].push(x.body);
+            });
+            var kindOrder = ['FOR SPE', 'FOR NETFLIX', 'FOR AGENCIES'];
+            var kindColors = {'FOR SPE': '#6366f1', 'FOR NETFLIX': '#ef4444', 'FOR AGENCIES': '#f59e0b'};
+            var impHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Implications</h4>'
+                + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:0.55rem; margin-bottom:1rem;">'
+                + kindOrder.filter(function(k) { return impByKind[k]; }).map(function(k) {
+                    var col = kindColors[k] || '#94a3b8';
+                    return '<div style="padding:0.7rem 0.85rem; border-radius:8px; background:rgba(255,255,255,0.03); border-left:4px solid ' + col + ';">'
+                         +   '<div style="font-size:0.62rem; opacity:0.85; text-transform:uppercase; letter-spacing:0.06em; font-weight:800; color:' + col + '; margin-bottom:0.4rem;">' + _jiqEsc(k) + '</div>'
+                         +   '<ul style="margin:0; padding-left:1rem; font-size:0.78rem; line-height:1.55;">'
+                         +     impByKind[k].map(function(b) { return '<li style="margin-bottom:0.35rem;">' + _jiqEsc(b) + '</li>'; }).join('')
+                         +   '</ul>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            var mvhOrder = ['MEASUREMENT', 'MODELED', 'DEFERRED'];
+            var mvhColors = {'MEASUREMENT': '#22c55e', 'MODELED': '#f59e0b', 'DEFERRED': '#94a3b8'};
+            var mvhByKind = {};
+            (data.measurement_vs_hypothesis || []).forEach(function(x) {
+                if (!mvhByKind[x.kind]) mvhByKind[x.kind] = [];
+                mvhByKind[x.kind].push(x.body);
+            });
+            var mvhHtml = '<h4 style="margin:0.35rem 0 0.5rem; font-size:0.85rem;">Measurement \u00b7 modeled \u00b7 deferred</h4>'
+                + '<div style="padding:0.65rem 0.85rem; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);">'
+                + mvhOrder.filter(function(k) { return mvhByKind[k]; }).map(function(k) {
+                    var col = mvhColors[k] || '#94a3b8';
+                    return '<div style="padding:0.4rem 0; border-bottom:1px solid rgba(255,255,255,0.05); display:grid; grid-template-columns:130px 1fr; gap:0.6rem; align-items:start;">'
+                         +   '<div><span style="padding:2px 8px; border-radius:99px; background:' + col + '22; color:' + col + '; font-size:0.6rem; font-weight:800; letter-spacing:0.06em;">' + _jiqEsc(k) + '</span></div>'
+                         +   '<div style="font-size:0.78rem; line-height:1.55;">' + mvhByKind[k].map(function(b) { return _jiqEsc(b); }).join('<br><br>') + '</div>'
+                         + '</div>';
+                  }).join('')
+                + '</div>';
+
+            body.innerHTML = headlineHtml + impHtml + mvhHtml;
+        }
+
+
         // OBSESSION → PEACOCK — Focus/NBCU windowing-evidence data
         //
         // Every figure in this deck is a Crosswalk panel-observed
@@ -83117,7 +84583,7 @@ https://www.instagram.com/p/..."></textarea>
             // Allow-list of story modes that get the "force-hide all
             // templated JIQ cards" treatment. Add more cases here
             // when new pitches get their own purpose-built dashboards.
-            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1 };
+            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1, spe_cross_window: 1 };
             if (!FORCE_HIDE_MODES[storyMode]) return;
             for (var i = 0; i < _JIQ_STORY_MODE_HIDE_LIST.length; i++) {
                 var el = document.getElementById(_JIQ_STORY_MODE_HIDE_LIST[i]);
