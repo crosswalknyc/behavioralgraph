@@ -58127,15 +58127,45 @@ https://www.instagram.com/p/..."></textarea>
                     _synthChatResumeIfInFlight();
                 })
                 .catch(function(){});
+            _synthChatRefreshQueueBadge();
+            // Poll queue depth every 5s while the tab is alive.
+            // Cleared on visibility hidden and restarted when the
+            // tab regains focus so we don't run the fetch when the
+            // page is backgrounded.
+            if (window.__synthChatQueueTimer) {
+                clearInterval(window.__synthChatQueueTimer);
+            }
+            window.__synthChatQueueTimer = setInterval(
+                _synthChatRefreshQueueBadge, 5000);
+            document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'visible') {
+                    _synthChatRefreshQueueBadge();
+                    if (!window.__synthChatQueueTimer) {
+                        window.__synthChatQueueTimer = setInterval(
+                            _synthChatRefreshQueueBadge, 5000);
+                    }
+                } else if (window.__synthChatQueueTimer) {
+                    clearInterval(window.__synthChatQueueTimer);
+                    window.__synthChatQueueTimer = null;
+                }
+            });
+        }
+
+        // Refresh the 'queue: X pending, Y running, Z completed'
+        // badge next to the chat header. Called once on boot,
+        // every 5s while the tab is visible, and immediately
+        // after synthChatApproveBrief so the pending count jumps
+        // as soon as a job is queued rather than waiting for the
+        // next tick.
+        function _synthChatRefreshQueueBadge() {
             fetch('/api/brief-chat/health', { credentials: 'same-origin' })
                 .then(function(r) { return r.ok ? r.json() : null; })
                 .then(function(d) {
                     var badge = document.getElementById('synthChatQueueBadge');
-                    if (badge && d && d.queue && d.queue.queue) {
-                        var q = d.queue.queue;
-                        badge.textContent =
-                            'queue: ' + q.pending + ' pending, ' + q.running + ' running, ' + q.completed + ' completed';
-                    }
+                    if (!badge || !d || !d.queue || !d.queue.queue) return;
+                    var q = d.queue.queue;
+                    badge.textContent =
+                        'queue: ' + q.pending + ' pending, ' + q.running + ' running, ' + q.completed + ' completed';
                 })
                 .catch(function(){});
         }
@@ -58724,6 +58754,10 @@ https://www.instagram.com/p/..."></textarea>
                     return;
                 }
                 synthChatActiveRun = data.run_id;
+                // Kick the queue badge immediately so the user
+                // sees the new pending/running counts jump right
+                // away instead of waiting up to 5s for the tick.
+                try { _synthChatRefreshQueueBadge(); } catch (_) {}
                 var panel = document.getElementById('synthChatBriefPreview');
                 if (panel) panel.style.display = 'none';
                 synthChatCurrentDraft = null;
