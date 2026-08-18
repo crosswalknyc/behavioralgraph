@@ -21086,9 +21086,9 @@ https://www.instagram.com/p/..."></textarea>
                             </div>
 
                             <div style="display:flex; flex-direction: column; gap: 0.4rem;">
-                                <textarea id="synthChatInput" placeholder="What profile do you want? (audience, cohort, brand, talent, or segment)" rows="3" style="width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; resize: vertical; min-height: 72px; font-family: inherit;" onkeydown="if(event.key==='Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); synthChatSubmit(); }"></textarea>
+                                <textarea id="synthChatInput" placeholder="What profile do you want? (audience, cohort, brand, talent, or segment)" rows="3" style="width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; resize: vertical; min-height: 72px; font-family: inherit;" onkeydown="if(event.key==='Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); synthChatSubmit(); }"></textarea>
                                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
-                                    <span style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.7;">⌘ Enter to send</span>
+                                    <span style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.7;">Enter to send &middot; Shift + Enter for new line</span>
                                     <button class="btn btn-primary" onclick="synthChatSubmit()" id="synthChatSubmitBtn" style="width: auto !important; min-width: 140px; max-width: 200px; padding: 0.55rem 1.25rem; font-size: 0.85rem;">Send</button>
                                 </div>
                             </div>
