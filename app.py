@@ -41829,6 +41829,134 @@ _CUT_SUFFIX_TOKENS = {
     'spotify', 'youtube', 'tiktok', 'facebook', 'instagram', 'apple',
     'happys', 'happy', 'place', 'reba', 'show',
 }
+# Words that carry no cut-signal on their own after " - ". We drop these
+# when checking whether a candidate's suffix was actually requested by
+# the prompt, so "Reba McEntire - Total Universe" is recognized as a
+# BASE profile (not a cut) even though it has a suffix.
+_SUFFIX_STOPWORDS = {
+    'fan', 'fans', 'audience', 'audiences', 'universe', 'total',
+    'the', 'cohort', 'base', 'og', 'cut', 'profile', 'skin', 'cohorts',
+}
+# Explicit base-marker suffixes. A display_name of the form
+# "<subject> - <base-marker>" (case-insensitive, year stripped) is
+# treated as the base profile - not a cut.
+_BASE_SUFFIX_MARKERS = {
+    'total universe', 'tu', 'og', 'total universe cohort',
+    'total universe base', 'base', 'total',
+}
+
+
+def _suffix_signal_tokens(display_name):
+    """Return the set of >=3-char, non-stopword tokens after ' - ' in a
+    display_name. Empty set means the suffix carries no cut-signal
+    (either no suffix at all, or a pure base marker like 'Total
+    Universe'). Used to test whether the prompt actually asked for the
+    picked candidate's cut."""
+    dn = str(display_name or '')
+    if ' - ' not in dn:
+        return set()
+    suffix = dn.split(' - ', 1)[1]
+    tokens = _normalize_for_match(suffix).split()
+    return set(t for t in tokens
+               if len(t) >= 3 and t not in _SUFFIX_STOPWORDS)
+
+
+def _is_base_profile_candidate(candidate, current_year_str):
+    """True if this catalog entry is the current-year Total Universe
+    base for its subject. Bare subject name (no suffix), or a suffix
+    that is only a base marker ('Total Universe', 'TU', 'OG'), qualifies.
+    A year suffix disqualifies unless the year is the current one."""
+    dn = str(candidate.get('display_name') or '')
+    display_years = set(_HISTORICAL_YEAR_RE.findall(dn))
+    if display_years and current_year_str not in display_years:
+        return False
+    if ' - ' not in dn:
+        return True
+    suffix_lower = dn.split(' - ', 1)[1].strip().lower()
+    # Strip a leading year (e.g. "2025 Total Universe" -> "total universe")
+    suffix_lower = re.sub(r'^\d{4}\s+', '', suffix_lower)
+    return suffix_lower in _BASE_SUFFIX_MARKERS
+
+
+def _enforce_base_parent_pick(spec_draft, candidates, prompt):
+    """Server-side guardrail that corrects Claude's parent selection
+    when it picks a historical-year or cut skin that the user's prompt
+    did not actually name.
+
+    Established 2026-08-18 after "Reba trailing 60 days" was routed at
+    "Reba McEntire - 2024 Total Universe" instead of the base
+    "Reba McEntire" (current year). The scoring in
+    _shortlist_profile_matches ranks the base first, but Claude was
+    ignoring the ranking and picking the year-suffixed entry.
+    Belt-and-suspenders: we accept Claude's decision (existing_match /
+    time_shifted_refresh / derive_cut / cut_needs_parent) but rewrite
+    existing_match_s3_key to the base profile whenever:
+      * the picked candidate's display_name contains a year that is
+        NOT the current year AND NOT in the prompt, OR
+      * the picked candidate's suffix tokens (excluding stopwords like
+        'fan', 'total', 'universe') do not appear in the prompt (i.e.
+        Claude picked a cut the user didn't ask for).
+
+    Mutates spec_draft in place. Returns (swapped: bool, note: str).
+    """
+    from datetime import date as _date
+    picked_key = (spec_draft.get('existing_match_s3_key') or '').strip()
+    if not picked_key:
+        return False, ''
+    picked = None
+    for c in (candidates or []):
+        if str(c.get('s3_key') or '') == picked_key:
+            picked = c
+            break
+    if not picked:
+        return False, ''
+    picked_dn = str(picked.get('display_name') or '')
+    current_year_str = str(_date.today().year)
+    if _is_base_profile_candidate(picked, current_year_str):
+        return False, ''
+
+    prompt_years = set(_HISTORICAL_YEAR_RE.findall(prompt or ''))
+    picked_years = set(_HISTORICAL_YEAR_RE.findall(picked_dn))
+    picked_historical = (
+        bool(picked_years)
+        and not (picked_years & prompt_years)
+        and current_year_str not in picked_years
+    )
+
+    p_norm = _normalize_for_match(prompt or '')
+    p_tokens = set(p_norm.split())
+    suffix_tokens = _suffix_signal_tokens(picked_dn)
+    picked_wrong_cut = (
+        bool(suffix_tokens)
+        and not (suffix_tokens & p_tokens)
+        and not picked_historical
+    )
+
+    if not (picked_historical or picked_wrong_cut):
+        return False, ''
+
+    picked_subj = _normalize_for_match(picked.get('subject') or '')
+    for c in (candidates or []):
+        if _normalize_for_match(c.get('subject') or '') != picked_subj:
+            continue
+        if not _is_base_profile_candidate(c, current_year_str):
+            continue
+        spec_draft['existing_match_s3_key'] = c.get('s3_key')
+        spec_draft['existing_match_display_name'] = c.get('display_name')
+        spec_draft['existing_match_days_old'] = c.get('days_old')
+        parts = []
+        if picked_historical:
+            parts.append(
+                f"historical years {sorted(picked_years)} not in prompt")
+        if picked_wrong_cut:
+            parts.append(
+                f"suffix tokens {sorted(suffix_tokens)} not in prompt")
+        return True, (
+            f"Parent-swap guardrail: Claude picked "
+            f"{picked_dn!r} but ({'; '.join(parts)}); "
+            f"swapped to base {c.get('display_name')!r}."
+        )
+    return False, ''
 
 
 def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CANDIDATES):
@@ -42618,6 +42746,21 @@ def api_synth_chat_interpret():
 
         spec_draft = result.get('data') or {}
 
+        # Parent-selection guardrail (2026-08-18 Reba-2024 regression).
+        # Deterministically swap Claude's existing_match away from any
+        # historical-year or cut skin the user did not name. See
+        # _enforce_base_parent_pick docstring for full logic.
+        try:
+            swapped, swap_note = _enforce_base_parent_pick(
+                spec_draft, candidates, text)
+            if swapped:
+                print(f"[synth-chat interpret] {swap_note}")
+                # Surface the correction so the frontend renders the
+                # right file name in the approval card.
+                spec_draft['_parent_guardrail_note'] = swap_note
+        except Exception as _guard_err:
+            print(f"[synth-chat interpret] guardrail error: {_guard_err}")
+
         # Run-Avid default enforcement (2026-08-17 Jenna directive).
         # Default is TRUE for every fresh-build decision (new_build /
         # time_shifted_refresh / cut_needs_parent). We only honor a
@@ -43057,6 +43200,19 @@ def _v1_interpret(prompt):
     if not interp.get('success'):
         return None, candidates, interp
     draft = interp.get('data') or {}
+
+    # Parent-selection guardrail (2026-08-18). Deterministically swap
+    # Claude's existing_match away from any historical-year or cut skin
+    # the caller did not name. Mirrors the same guardrail applied in
+    # /api/synth-chat/interpret. See _enforce_base_parent_pick.
+    try:
+        swapped, swap_note = _enforce_base_parent_pick(draft, candidates, prompt)
+        if swapped:
+            print(f"[v1_interpret] {swap_note}")
+            draft['_parent_guardrail_note'] = swap_note
+    except Exception as _guard_err:
+        print(f"[v1_interpret] guardrail error: {_guard_err}")
+
     # Apply the same run_avid default enforcement the chatbot uses so
     # the Partner API can't be tricked into skipping the Avid cut by
     # a Claude misclassification. Directive 2026-08-17: Avid on by
