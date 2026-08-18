@@ -109,6 +109,12 @@ _MAX_PODCAST_ITEMS   = 150
 _MAX_SONG_ITEMS      = 100
 _MAX_STREAMING_ITEMS = 200
 _MAX_BOOK_ITEMS      = 220
+# FAST-channels: 4 platforms x top 100 = 400 gross, ~250-300 after
+# cross-platform dedup (Alone / Everybody Loves Raymond / etc. appear
+# on 2-3 platforms). Cap at 350 for safety headroom on days there is
+# little cross-platform overlap. ~$6-7/day added to the daily Claude
+# spend at full 100-row coverage.
+_MAX_FAST_ITEMS      = 350
 
 _WEBSEARCH_MODEL      = (os.environ.get('STREAM_ESTIMATES_MODEL')
                           or 'claude-sonnet-4-5')
@@ -256,6 +262,19 @@ _STREAMING_SLUGS = (
 )
 
 
+# FAST-channel platforms. The 4 platforms live inside a SINGLE
+# `fast_channels` snapshot under `sources[<slug>].items[]` (mirrors
+# music's shape, not streaming's one-file-per-platform shape). Chart
+# labels feed the `_CHART_LABEL_TO_PLATFORM` matcher so Claude knows
+# which FAST platform an item charts on.
+_FAST_SLUGS = (
+    ('roku',   'Roku Channel'),
+    ('tubi',   'Tubi'),
+    ('pluto',  'Pluto TV'),
+    ('amazon', 'Amazon Live TV'),
+)
+
+
 def _collect_streaming(max_items: int = _MAX_STREAMING_ITEMS) -> list[dict]:
     """Union top titles across the 6 streaming platform snapshots,
     keyed by normalized title. Preserves film/tv distinction (from
@@ -298,6 +317,54 @@ def _collect_streaming(max_items: int = _MAX_STREAMING_ITEMS) -> list[dict]:
                 e['chart_labels'].append(f'{label} #{rank}')
                 if rank < e['best_rank']:
                     e['best_rank'] = rank
+    return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
+
+
+def _collect_fast(max_items: int = _MAX_FAST_ITEMS) -> list[dict]:
+    """Union top titles across the 4 FAST-channel snapshots (Roku
+    Channel, Tubi, Pluto TV, Amazon Live TV), keyed by
+    `fast_film:<norm>` or `fast_tv:<norm>` so estimates don't collide
+    with paid-SVOD estimates for the same title (e.g. Interview with
+    the Vampire runs on both HBO Max and Amazon Live TV, but the
+    ad-supported weekly audience is a totally different number).
+
+    Unlike streaming, all 4 FAST platforms sit inside ONE snapshot
+    file (`fast_channels.json`) under `sources[<slug>].items` because
+    the scraper hits a single JustWatch GraphQL endpoint."""
+    snap = _read_snapshot('fast_channels')
+    if not snap:
+        return []
+    per: dict[str, dict] = {}
+    sources = (snap.get('sources') or {})
+    for slug, label in _FAST_SLUGS:
+        platform_block = sources.get(slug) or {}
+        items = platform_block.get('items') or []
+        # Top-100 per platform: the FAST tab renders the full 100-row
+        # top-list per platform, so we research every row to guarantee
+        # every visible chip has a number. Cross-platform dedup
+        # collapses the 400 gross to ~250-300 unique after the incremental
+        # `as_of_date == today` gate in `fetch()` skips items already
+        # covered by an earlier intra-day run.
+        for i, it in enumerate(items[:100]):
+            title = (it.get('title') or '').strip()
+            if not _cp_normalize(title):
+                continue
+            cat = (it.get('category_display') or '').lower()
+            item_kind = 'fast_film' if cat == 'film' else 'fast_tv'
+            key = f'{item_kind}:{_cp_normalize(title)}'
+            rank = int(it.get('rank') or (i + 1))
+            e = per.setdefault(key, {
+                'kind':          item_kind,
+                'display_title': title,
+                'artist':        '',
+                'best_rank':     rank,
+                'chart_labels':  [],
+                'image':         it.get('image'),
+                'url':           it.get('url'),
+            })
+            e['chart_labels'].append(f'{label} #{rank}')
+            if rank < e['best_rank']:
+                e['best_rank'] = rank
     return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
 
 
@@ -794,6 +861,68 @@ _STREAMING_PLATFORMS_META = [
 ]
 
 
+# FAST (Free Ad-Supported Streaming TV) platform anchors. FAST
+# audiences are AD-SUPPORTED and free, so the frame is "who watched
+# for free on this platform this week" not "who paid for a
+# subscription and watched". Ceilings are per-platform per-title
+# weekly. Anchor language points Claude at Nielsen FAST monthly
+# reports, TVREV, S&P Global Ampere Analysis, Antenna FAST reports,
+# and platform-owned press releases (Fox for Tubi, Paramount for
+# Pluto, Roku Inc. earnings for Roku Channel, Amazon Fire TV
+# reports for Amazon Live TV).
+_FAST_PLATFORMS_META = [
+    {'key': 'roku',
+     'label': 'Roku Channel',
+     'ceiling': 6_000_000,
+     'anchors': (
+         'Nielsen FAST Gauge: Roku Channel = ~2.5-3.5% of total US TV '
+         'usage (top-3 FAST platform). Top titles (Everybody Loves '
+         'Raymond, Interview with the Vampire seasons, Roku Originals '
+         'like Weird Al biopic) reach 2-5M US households/week. Middle '
+         'of top-100 typically 300K-1M weekly. Anchor: Roku Inc. Q2 '
+         '2026 earnings + TVREV monthly FAST rankings.'
+     )},
+    {'key': 'tubi',
+     'label': 'Tubi',
+     'ceiling': 6_000_000,
+     'anchors': (
+         'Fox Corp. reports Tubi ~97M MAU (Q1 2026). Nielsen FAST '
+         'Gauge: Tubi = ~2.0-2.4% of total US TV usage. Top licensed '
+         'catalog (Sons of Anarchy, The Bear reruns, WWE Speed) hits '
+         '3-5M weekly viewers. Tubi Originals reach 1-3M. Middle of '
+         'top-100 typically 200K-800K. Anchor: Fox Q2 2026 earnings '
+         'call + Antenna FAST engagement reports.'
+     )},
+    {'key': 'pluto',
+     'label': 'Pluto TV',
+     'ceiling': 5_000_000,
+     'anchors': (
+         'Paramount Global reports Pluto ~80M MAU globally (~50M US). '
+         'Nielsen FAST Gauge: Pluto = ~1.4-1.8% of total US TV usage. '
+         'Top titles (CSI reruns, MTV catalog, Star Trek channels) '
+         '1.5-3M weekly viewers. The X-Files-tier IP: 2-4M weekly. '
+         'Middle of top-100 typically 150K-600K. Anchor: Paramount Q2 '
+         '2026 earnings + S&P Global Ampere Analysis FAST reports.'
+     )},
+    {'key': 'amazon',
+     'label': 'Amazon Live TV',
+     'ceiling': 4_000_000,
+     'anchors': (
+         "Amazon's dedicated FAST/live-TV UI (formerly Freevee-branded "
+         'channels, absorbed into Prime Video ad-tier navigation in '
+         "2024). Nielsen FAST Gauge: Amazon FAST = ~0.6-1.0% of total "
+         'US TV usage (smaller than Roku/Tubi/Pluto because most Prime '
+         'audience defaults to on-demand). Top FAST-only titles 1-2.5M '
+         'weekly viewers. Middle of top-100 typically 100K-400K. '
+         'Anchor: Amazon Q2 2026 shareholder letter + TVREV monthly '
+         'FAST rankings. IMPORTANT: this is Amazon Live TV / FAST '
+         'channels ONLY - do NOT reason from Prime Video paid catalog '
+         'numbers (Ted Lasso, Reacher) even if the title has a free '
+         'pilot on Prime.'
+     )},
+]
+
+
 def _platforms_for_kind(kind: str) -> list[dict]:
     if kind == 'song':
         return _SONG_PLATFORMS
@@ -801,6 +930,8 @@ def _platforms_for_kind(kind: str) -> list[dict]:
         return _PODCAST_PLATFORMS
     if kind in ('film', 'tv', 'title'):
         return _STREAMING_PLATFORMS_META
+    if kind in ('fast_film', 'fast_tv'):
+        return _FAST_PLATFORMS_META
     if kind == 'book':
         return _BOOK_PLATFORMS
     return []
@@ -849,6 +980,7 @@ _CHART_LABEL_TO_PLATFORM = (
     ('youtube',          'youtube'),
     ('amazon music podcasts', 'amazon'),
     ('amazon music',     'amazon'),
+    ('amazon live tv',   'amazon'),   # FAST channel; must come before bare 'amazon'
     ('amazon',           'amazon'),
     ('audible',          'audible'),
     ('netflix',          'netflix'),
@@ -860,6 +992,14 @@ _CHART_LABEL_TO_PLATFORM = (
     ('prime',            'primevideo'),
     ('espn+',            'espnplus'),
     ('espn',             'espnplus'),
+    # FAST-channel platforms (chart-label prefixes from `_FAST_SLUGS`).
+    # `amazon live tv` is handled up above alongside `amazon music` to
+    # win the match before the bare `amazon` catch-all.
+    ('roku channel',     'roku'),
+    ('roku',             'roku'),
+    ('tubi',             'tubi'),
+    ('pluto tv',         'pluto'),
+    ('pluto',            'pluto'),
     ('shazam',           'shazam'),
     ('tiktok',           'tiktok'),
 )
@@ -931,6 +1071,22 @@ def _build_prompt(item: dict) -> str:
         query = (f'"{display_title}" Nielsen streaming top 10 US TV '
                  f'series weekly 2026')
         item_line = f'TV SERIES TITLE: {display_title}'
+    elif kind in ('fast_film', 'fast_tv'):
+        # FAST = Free Ad-Supported Streaming TV. Frame the ask around
+        # "who watched for free this week on an ad-supported linear-
+        # style channel" -- NOT paid SVOD weekly views, and NOT
+        # aggregate MAU. Anchor Claude to Nielsen FAST Gauge / TVREV /
+        # Antenna FAST reports and per-platform earnings disclosures.
+        # For Amazon specifically, reinforce that the number must
+        # reflect the Amazon Live TV UI only (not Prime paid catalog),
+        # because JustWatch's `amp` package occasionally surfaces
+        # titles that also exist on paid Prime.
+        unit  = 'weekly US views'
+        noun  = 'FILM' if kind == 'fast_film' else 'TV SERIES'
+        query = (f'"{display_title}" Tubi Pluto Roku Channel FAST '
+                 f'Nielsen Gauge TVREV weekly US ad-supported viewers 2026')
+        item_line = (f'{noun} TITLE (FAST / ad-supported free tier): '
+                     f'{display_title}')
     elif kind == 'book':
         unit  = ('weekly US audience (readers/listeners/borrowers per '
                  'platform - amazon+apple = readers, audible = '
@@ -1024,6 +1180,13 @@ _MAX_ESTIMATE_BY_KIND = {
     # down to 500K. A weekly release-week best-seller might hit this;
     # steady-state top-10 books read far below.
     'book':    500_000,
+    # FAST aggregate: sum of Roku 6M + Tubi 6M + Pluto 5M + Amazon 4M
+    # = 21M weekly. Biased conservative to 18M; even the biggest
+    # cross-platform FAST hit (Everybody Loves Raymond simultaneously
+    # on Roku Channel + Pluto + Tubi) wouldn't peg every ceiling
+    # simultaneously.
+    'fast_film': 18_000_000,
+    'fast_tv':   18_000_000,
 }
 _CLAMP_TO_FRACTION = 0.4         # Bias clamped values conservative (was 0.5)
 
@@ -1404,10 +1567,10 @@ def _humanize(n: int) -> str:
 # Fetch entry point
 # -------------------------------------------------------------------------
 def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
-    """Read podcast / music / streaming / book snapshots, research
-    each unique top item's US audience via Claude + web_search, and
-    return the combined snapshot dict."""
-    wanted = only or {'podcast', 'song', 'streaming', 'book'}
+    """Read podcast / music / streaming / book / fast snapshots,
+    research each unique top item's US audience via Claude +
+    web_search, and return the combined snapshot dict."""
+    wanted = only or {'podcast', 'song', 'streaming', 'book', 'fast'}
 
     items: list[dict] = []
     if 'podcast' in wanted:
@@ -1418,6 +1581,8 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
         items.extend(_collect_streaming())
     if 'book' in wanted:
         items.extend(_collect_books())
+    if 'fast' in wanted:
+        items.extend(_collect_fast())
 
     if not items:
         return {
@@ -1428,19 +1593,64 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
         }
 
     logger.info("stream_estimates: total unique items = %d "
-                "(podcast=%d, song=%d, streaming=%d, book=%d)",
+                "(podcast=%d, song=%d, streaming=%d, book=%d, fast=%d)",
                 len(items),
                 sum(1 for it in items if it['kind'] == 'podcast'),
                 sum(1 for it in items if it['kind'] == 'song'),
                 sum(1 for it in items if it['kind'] in ('film', 'tv', 'title')),
-                sum(1 for it in items if it['kind'] == 'book'))
+                sum(1 for it in items if it['kind'] == 'book'),
+                sum(1 for it in items if it['kind'] in ('fast_film', 'fast_tv')))
 
-    researched = _research_all(items)
+    # Incremental behavior (two goals):
+    #
+    #   1. Preserve items from OTHER kinds when running with --only.
+    #      If today is Wed and this run is `--only fast`, the podcast /
+    #      song / streaming / book items from earlier today's daily
+    #      cron must stay in the snapshot (this was regressing before
+    #      when --only fast rewrote the whole snapshot as FAST-only).
+    #
+    #   2. Avoid re-researching items already covered today. If the
+    #      daily cron ran at 12 UTC and we run `--only fast` again at
+    #      20 UTC for expanded coverage, the 12 UTC FAST items don't
+    #      need to be paid for a second time - Claude reasoning
+    #      already sits in today's snapshot.
+    #
+    # Rule: an item is "already covered today" iff its as_of_date
+    # matches today AND it has a non-zero us_estimate. Everything else
+    # (yesterday's data, empty estimates, missing as_of_date) is fair
+    # game to re-research.
+    today_iso = date.today().isoformat()
+    prior_snap = _read_snapshot('stream_estimates') or {}
+    prior_items = prior_snap.get('items') or {}
+    already_today = {
+        k for k, v in prior_items.items()
+        if v.get('as_of_date') == today_iso and v.get('us_estimate')
+    }
+    items_to_research = [
+        it for it in items
+        if _lookup_key(it['kind'], it['display_title'],
+                        it.get('artist') or '') not in already_today
+    ]
+    if len(items_to_research) < len(items):
+        logger.info("stream_estimates: skipping %d items already researched today "
+                    "(intra-day rerun); researching %d new items",
+                    len(items) - len(items_to_research), len(items_to_research))
+
+    researched_new = _research_all(items_to_research)
+
+    # Compose the final `researched` dict as the union of:
+    #   - Everything from prior_snap (preserves items whose kind is
+    #     not covered by this run's --only filter, and items already
+    #     covered today at a stale-but-still-good confidence level).
+    #   - Newly researched items from this run (win over prior on
+    #     collision, so a fresh Claude call always overwrites a stale
+    #     one for the same key).
+    researched = dict(prior_items)
+    researched.update(researched_new)
 
     # Attach day-over-day trend from yesterday's dated snapshot.
     # Track which prior snapshot actually resolved so the tooltip
     # can render an exact date range (days_back may be 1 or 2).
-    today_iso = date.today().isoformat()
     prev_date_iso = (date.today() - timedelta(days=1)).isoformat()
     yesterday = _read_dated_snapshot('stream_estimates', days_back=1)
     if not yesterday:
@@ -1470,7 +1680,7 @@ if __name__ == '__main__':
                          format='%(asctime)s %(levelname)s %(name)s %(message)s')
     parser = argparse.ArgumentParser()
     parser.add_argument('--only', default='',
-                        help='Comma-separated: podcast,song,streaming')
+                        help='Comma-separated: podcast,song,streaming,book,fast')
     args = parser.parse_args()
     only = set()
     for tok in args.only.split(','):

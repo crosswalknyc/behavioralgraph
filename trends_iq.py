@@ -2768,6 +2768,12 @@ _DEFAULT_UNIT_BY_KIND = {
     # vs library borrows). The aggregate fallback below is generic; the
     # per-platform stamp prefers `_PLATFORM_UNIT_LABEL` when set.
     'book':    'weekly US audience',
+    # FAST channels: ad-supported free viewers. Same "views" noun as
+    # paid streaming (Nielsen's household definition), but the daily
+    # Claude research is calibrated separately against FAST Gauge /
+    # TVREV data - see stream_estimates._FAST_PLATFORMS_META.
+    'fast_film': 'weekly US views',
+    'fast_tv':   'weekly US views',
 }
 
 # Per (kind, platform) unit label. Wins over Claude's aggregate
@@ -2874,6 +2880,17 @@ _STREAMING_PANEL_TO_PLATFORM = {
     'max':        'max',
     'primevideo': 'primevideo',
     'espnplus':   'espnplus',
+}
+# FAST-channel panel slug -> platform key inside
+# `stream_estimates.items[<kind_prefix>:<norm>].by_platform`. See
+# `stream_estimates._FAST_PLATFORMS_META` - the `key` value there must
+# match. All 4 FAST panels have per-platform anchors so every FAST
+# row surfaces a platform-specific weekly-views number.
+_FAST_PANEL_TO_PLATFORM = {
+    'roku':   'roku',
+    'tubi':   'tubi',
+    'pluto':  'pluto',
+    'amazon': 'amazon',
 }
 # book_charts panels -> per-platform key. Libby panels come from a
 # separate snapshot (`libby_trends`) but plug into the same book
@@ -3047,6 +3064,50 @@ def _annotate_streaming_with_streams(streaming_trending: dict,
                     if entry:
                         # First key that resolved wins; use its kind
                         # (drop the `<kind>:` prefix).
+                        kind_hint = k.split(':', 1)[0]
+                        break
+                _stamp_stream_estimate(row, entry,
+                                         platform_key=platform_key,
+                                         kind_hint=kind_hint)
+
+
+def _annotate_fast_with_streams(fast_trending: dict,
+                                  estimates: dict) -> None:
+    """Attach per-platform `us_streams` to every FAST-channel row: a
+    row on the Roku Channel panel gets the Roku-only US weekly views;
+    a row on the Tubi panel gets Tubi-only; etc.
+
+    FAST estimate keys are `fast_film:<norm>` / `fast_tv:<norm>` to
+    keep them separate from paid-SVOD estimates for the same title
+    (see stream_estimates._collect_fast). We resolve using
+    `category_display` first, then fall back the other way in case a
+    title's category flipped between snapshots."""
+    if not fast_trending or not estimates:
+        return
+    items_lookup = estimates.get('items') or {}
+    for panel_slug, panel in (fast_trending or {}).items():
+        if not panel:
+            continue
+        platform_key = _FAST_PANEL_TO_PLATFORM.get(panel_slug, '')
+        # `items` is authoritative; `films`/`tv` may or may not be
+        # populated depending on how the frontend renderer splits.
+        for bucket_key in ('items', 'films', 'tv'):
+            for row in panel.get(bucket_key) or []:
+                title = (row.get('title') or '').strip()
+                cat   = (row.get('category_display') or '').lower()
+                norm  = _cp_normalize(title)
+                if not norm:
+                    continue
+                if cat == 'film':
+                    order = [f'fast_film:{norm}', f'fast_tv:{norm}']
+                    kind_hint = 'fast_film'
+                else:
+                    order = [f'fast_tv:{norm}', f'fast_film:{norm}']
+                    kind_hint = 'fast_tv'
+                entry = None
+                for k in order:
+                    entry = items_lookup.get(k)
+                    if entry:
                         kind_hint = k.split(':', 1)[0]
                         break
                 _stamp_stream_estimate(row, entry,
@@ -5717,6 +5778,11 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     _annotate_music_with_streams(music_charts,       stream_estimates_snap)
     _annotate_podcasts_with_streams(podcast_charts,  stream_estimates_snap)
     _annotate_streaming_with_streams(streaming_trending, stream_estimates_snap)
+    # FAST channels: same annotator pattern as streaming but keyed by
+    # `fast_film:` / `fast_tv:` so estimates don't collide with paid-
+    # SVOD estimates for the same title (see stream_estimates
+    # ._collect_fast for the split rationale).
+    _annotate_fast_with_streams(fast_trending, stream_estimates_snap)
     # Books: pass BOTH the book_charts sub-dict (amazon/apple/audible)
     # AND the libby_trends sub-dict (ebook/audiobook) - a single item
     # can appear on both, and both share the same `book:<title

@@ -24520,6 +24520,11 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-fast-kind.tv   { background: rgba(168,85,247,0.18); color: #c4b5fd; }
             #trendsIQView .tiq-fast-year { font-size: 0.75rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.3rem; }
             #trendsIQView .tiq-fast-genres { margin-top: 0.15rem; font-size: 0.7rem; color: var(--text-secondary); opacity: 0.75; }
+            #trendsIQView .tiq-audience-chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.68rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: rgba(129, 140, 248, 0.14); color: #c7d2fe; border: 1px solid rgba(129, 140, 248, 0.22); font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; }
+            #trendsIQView .tiq-audience-delta { font-weight: 700; margin-left: 0.15rem; }
+            #trendsIQView .tiq-audience-delta.up   { color: #86efac; }
+            #trendsIQView .tiq-audience-delta.down { color: #fca5a5; }
+            #trendsIQView .tiq-audience-delta.flat { color: var(--text-secondary); }
             #trendsIQView .tiq-retailer-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
             #trendsIQView .tiq-retailer-tab { padding: 0.4rem 0.85rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; font-size: 0.8rem; cursor: pointer; color: var(--text-secondary); user-select: none; display: inline-flex; align-items: center; gap: 0.35rem; }
             #trendsIQView .tiq-retailer-tab.active { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: #fff; border-color: transparent; }
@@ -49020,6 +49025,55 @@ https://www.instagram.com/p/..."></textarea>
 
         function _tiqEsc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+        // Compact number formatter for audience/views chips
+        // (12_500_000 -> "12.5M", 45_000 -> "45K"). Kept separate from
+        // any i18n formatter so we can tune rounding independently.
+        function _tiqCompactNum(n) {
+            var v = Number(n);
+            if (!isFinite(v) || v <= 0) return '';
+            if (v >= 1e9) return (v / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+            if (v >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+            if (v >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+            return String(Math.round(v));
+        }
+
+        // Render the projected-views chip for a row. Reads
+        // `row.us_streams` populated by the backend annotator (see
+        // trends_iq._annotate_fast_with_streams). Returns '' when the
+        // row has no estimate, so rows render cleanly without a
+        // placeholder.
+        //
+        // Rule (no-modeled-or-source-language.mdc): never surface the
+        // word 'estimated' / 'projected' / 'modeled' in the visible
+        // chip. The number stands on its own as a first-party audience
+        // metric. Tooltip carries the reasoning note.
+        function _tiqAudienceChip(us) {
+            if (!us || !us.us_estimate || us.us_estimate <= 0) return '';
+            var num  = _tiqCompactNum(us.us_estimate);
+            var unit = us.unit_label || 'weekly US views';
+            var arrow = '';
+            if (typeof us.delta_pct === 'number' && us.delta_pct !== 0 && us.direction) {
+                var pct = Math.round(Math.abs(us.delta_pct) * 100);
+                if (pct >= 1) {
+                    var glyph = (us.direction === 'up')   ? '\u2191'
+                             : (us.direction === 'down') ? '\u2193'
+                             : '\u00B7';
+                    var cls   = (us.direction === 'up')   ? 'up'
+                             : (us.direction === 'down') ? 'down'
+                             : 'flat';
+                    arrow = ' <span class="tiq-audience-delta ' + cls + '">' +
+                            glyph + ' ' + pct + '%</span>';
+                }
+            }
+            var tipParts = [num + ' ' + unit];
+            if (us.method)     tipParts.push(String(us.method));
+            if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
+            var tip = _tiqEsc(tipParts.join(' \u2014 '));
+            return '<span class="tiq-audience-chip" title="' + tip + '">' +
+                   '\uD83D\uDC65 ' + _tiqEsc(num) + ' ' + _tiqEsc(unit) +
+                   arrow + '</span>';
+        }
+
         // ------------------------------------------------------------------
         // Persona-lens filter helpers (populated from cards.lens_config /
         // cards.lens_scores in the daily lens_relevance snapshot).
@@ -51250,11 +51304,13 @@ https://www.instagram.com/p/..."></textarea>
                         var genres = (it.genres && it.genres.length)
                             ? '<div class="tiq-fast-genres">' + _tiqEsc(it.genres.slice(0, 3).join(' · ')) + '</div>'
                             : '';
+                        var views = _tiqAudienceChip(it.us_streams);
                         return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
                                img +
                                '<div class="tiq-row-body">' +
                                '<div class="tiq-row-title">' + _tiqEsc(it.title) + ' ' + year + ' ' + kindChip +
                                _tiqActions('fast', k, streamKey, streamKey, 'National') + '</div>' +
+                               (views ? '<div class="tiq-row-meta">' + views + '</div>' : '') +
                                genres +
                                '</div></div>';
                     }).join('');
