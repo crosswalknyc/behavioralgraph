@@ -7,12 +7,24 @@ platforms in one daily snapshot:
     - The Roku Channel  (JustWatch package: rkc)
     - Tubi              (JustWatch package: tbv)
     - Pluto TV          (JustWatch package: ptv)
-    - Amazon            (JustWatch package: amp - Prime Video ad-tier,
-                         the surface that absorbed Amazon Freevee when
-                         it was folded into Prime Video with ads in
-                         November 2024. Closest 1:1 match on JustWatch
-                         to the phrase "Amazon Live TV" for the
-                         free/ad-supported side of Amazon's catalog.)
+    - Amazon            (JustWatch package: amp with monetization
+                         filter [FREE] and post-filter to drop any
+                         title that ALSO has FLATRATE on Amazon)
+
+For the first three platforms the whole catalog is FAST by
+definition, so a single `popularTitles(packages: [<pkg>])` call
+returns exactly what we want.
+
+Amazon needs extra work: the `amp` package covers Prime Video's
+entire catalog including premium subscription-only titles
+(Ted Lasso, Reacher, Lioness, etc). To isolate the actual "Amazon
+Live TV" / ex-Freevee FAST surface we filter to
+`monetizationTypes: [FREE]` at the GraphQL layer AND then drop any
+result whose offers still include `FLATRATE` on the Amazon package
+- those are premium subscription titles that happen to have a free
+pilot episode and would otherwise pollute the FAST feed. What
+survives is the pure-FAST catalog: The Westies, Black Sails,
+Yellowjackets, Killing Eve, Interview with the Vampire, etc.
 
 Data source: JustWatch's public GraphQL (`apis.justwatch.com/graphql`).
 Same endpoint their web app hits for provider pages - no auth, no
@@ -50,7 +62,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from typing import Any
+from typing import Any, Optional
 from urllib import request as _urllib_request
 
 from ._base import run_scraper
@@ -71,24 +83,38 @@ _JW_TITLE_HOST  = 'https://www.justwatch.com'
 _POSTER_PROFILE = 's276'
 _POSTER_FORMAT  = 'jpg'
 
-# Per-platform: (sub-source slug, dashboard label, JustWatch package code).
-# The slug becomes the key in the snapshot's `sources` dict AND the
-# sub-tab key in the frontend.
-FAST_PLATFORMS: list[tuple[str, str, str]] = [
-    ('roku',    'The Roku Channel', 'rkc'),
-    ('tubi',    'Tubi',             'tbv'),
-    ('pluto',   'Pluto TV',         'ptv'),
-    # 'amp' = Prime Video with ads (the default Prime tier as of Nov
-    # 2024, which absorbed Freevee's catalog). Best JustWatch proxy
-    # for "Amazon's free / ad-supported streaming surface".
-    ('amazon',  'Amazon',           'amp'),
+# Per-platform: (sub-source slug, dashboard label, JustWatch package code,
+#                fast_only mode). fast_only=True means the whole catalog on
+# that provider is FAST content, so no monetization filter is needed. For
+# Amazon we set fast_only=False so the fetcher applies FREE-only +
+# FLATRATE-exclusion logic to isolate Amazon Live TV / ex-Freevee content.
+FAST_PLATFORMS: list[tuple[str, str, str, bool]] = [
+    ('roku',    'The Roku Channel', 'rkc', True),
+    ('tubi',    'Tubi',             'tbv', True),
+    ('pluto',   'Pluto TV',         'ptv', True),
+    # 'amp' = Prime Video. Filter down to Amazon's FAST content via
+    # monetizationTypes + FLATRATE exclusion. See _fetch_amazon_fast.
+    ('amazon',  'Amazon',           'amp', False),
 ]
 
-# 100 titles per platform. JustWatch's GraphQL happily returns 100
-# in a single request; beyond that they enforce cursor pagination.
+# 100 titles per platform after any filtering. JustWatch's GraphQL
+# caps `first` at 100; beyond that we use cursor pagination.
 _PER_PLATFORM_LIMIT = 100
 
+# How many Amazon FREE-tier titles to page through before giving up on
+# hitting `_PER_PLATFORM_LIMIT` pure-FAST results. 4 pages (400 titles)
+# is plenty - the FREE monetization pool on Amazon is ~356 titles as
+# of Aug 2026, and roughly 60% survive the FLATRATE-exclusion filter,
+# so we typically finish inside 2-3 pages.
+_AMAZON_MAX_PAGES = 4
 
+# JustWatch package clear-name prefix used to identify Amazon offers
+# when post-filtering the FREE pool. Matches "Amazon Prime Video",
+# "Amazon Video", and "Amazon Freevee" - anything Amazon-owned.
+_AMAZON_OFFER_PREFIX = 'amazon'
+
+
+# Standard query (Roku / Tubi / Pluto): whole-catalog popularity.
 _JW_QUERY = """
 query FASTPopular($country: Country!, $providers: [String!], $first: Int!) {
   popularTitles(country: $country, first: $first,
@@ -108,6 +134,41 @@ query FASTPopular($country: Country!, $providers: [String!], $first: Int!) {
         }
       }
     }
+    totalCount
+  }
+}
+""".strip()
+
+
+# Amazon-specific query: adds monetization filter + returns offers so
+# we can post-filter out subscription-only content. Uses `offset` for
+# pagination since we need more than 100 candidates to hit our target
+# after filtering.
+_JW_QUERY_AMAZON_FAST = """
+query FASTAmazonFree($country: Country!, $providers: [String!], $first: Int!, $offset: Int) {
+  popularTitles(country: $country, first: $first, offset: $offset,
+                filter: {packages: $providers, objectTypes: [SHOW, MOVIE],
+                          monetizationTypes: [FREE]},
+                sortBy: POPULAR, sortRandomSeed: 0) {
+    edges {
+      node {
+        objectId
+        objectType
+        content(country: $country, language: "en") {
+          title
+          shortDescription
+          fullPath
+          posterUrl
+          originalReleaseYear
+          genres { translation(language: "en") }
+        }
+        offers(country: $country, platform: WEB) {
+          package { clearName }
+          monetizationType
+        }
+      }
+    }
+    pageInfo { hasNextPage }
     totalCount
   }
 }
@@ -136,85 +197,177 @@ def _classify_kind(object_type: str) -> str:
     return ''
 
 
-def _fetch_platform(pkg: str, label: str, limit: int) -> list[dict]:
-    """Call JustWatch GraphQL for one FAST provider. Returns a list of
-    normalized item dicts, ranked in popularity order. Empty list on
-    any error so the daily run still gets partial snapshots for the
-    platforms that did succeed."""
+_JW_HEADERS = {
+    'Content-Type':   'application/json',
+    'Accept':         'application/json',
+    'User-Agent':     ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                       'AppleWebKit/537.36 (KHTML, like Gecko) '
+                       'Chrome/126.0.0.0 Safari/537.36'),
+    'Origin':         _JW_TITLE_HOST,
+    'Referer':        _JW_TITLE_HOST + '/',
+}
+
+
+def _post_graphql(query: str, variables: dict, op_name: str) -> Optional[dict]:
+    """POST to JustWatch's GraphQL. Returns the `data` dict, or None on
+    request/parse failure. Callers must still check for `errors` in the
+    original payload if that matters."""
     body = json.dumps({
-        'query':         _JW_QUERY,
-        'variables':     {'country': 'US', 'providers': [pkg], 'first': limit},
-        'operationName': 'FASTPopular',
+        'query':         query,
+        'variables':     variables,
+        'operationName': op_name,
     }).encode('utf-8')
-    req = _urllib_request.Request(
-        _JW_GRAPHQL_URL,
-        data=body,
-        headers={
-            'Content-Type':   'application/json',
-            'Accept':         'application/json',
-            'User-Agent':     ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
-                                'AppleWebKit/537.36 (KHTML, like Gecko) '
-                                'Chrome/126.0.0.0 Safari/537.36'),
-            'Origin':         _JW_TITLE_HOST,
-            'Referer':        _JW_TITLE_HOST + '/',
-        },
-    )
+    req = _urllib_request.Request(_JW_GRAPHQL_URL, data=body,
+                                    headers=_JW_HEADERS)
     try:
         with _urllib_request.urlopen(req, timeout=25) as r:
-            raw = r.read().decode('utf-8', 'replace')
-        data = json.loads(raw)
+            return json.loads(r.read().decode('utf-8', 'replace'))
     except Exception as e:
-        logger.warning("fast_channels %s (%s): request failed: %s",
-                        label, pkg, e)
-        return []
+        logger.warning("fast_channels: graphql request failed: %s", e)
+        return None
 
+
+def _normalize_node(node: dict) -> Optional[dict]:
+    """Turn a JustWatch popularTitles edge node into our dashboard row
+    shape. Returns None for empty/malformed nodes."""
+    content = node.get('content') or {}
+    title   = (content.get('title') or '').strip()
+    if not title:
+        return None
+
+    genres = []
+    for g in content.get('genres') or []:
+        t = (g or {}).get('translation')
+        if t:
+            genres.append(t)
+
+    full_path = content.get('fullPath') or ''
+    url = _JW_TITLE_HOST + full_path if full_path else ''
+
+    return {
+        'title':            title,
+        'category_display': _classify_kind(node.get('objectType')),
+        'year':             content.get('originalReleaseYear'),
+        'genres':           genres[:4],
+        'description':      content.get('shortDescription') or '',
+        'url':              url,
+        'image':            _poster_url(content.get('posterUrl') or ''),
+        'justwatch_id':     node.get('objectId'),
+    }
+
+
+def _fetch_platform_whole_catalog(pkg: str, label: str, limit: int) -> list[dict]:
+    """Roku Channel / Tubi / Pluto TV: whole catalog is FAST by
+    definition, so a single popularity query is sufficient."""
+    data = _post_graphql(_JW_QUERY,
+                          {'country': 'US', 'providers': [pkg], 'first': limit},
+                          'FASTPopular')
+    if not data:
+        return []
     if data.get('errors'):
         logger.warning("fast_channels %s (%s): GraphQL errors: %s",
                         label, pkg, json.dumps(data['errors'])[:200])
         return []
-
     pop   = ((data.get('data') or {}).get('popularTitles') or {})
     edges = pop.get('edges') or []
     out: list[dict] = []
-    seen_titles: set[str] = set()
+    seen: set[str] = set()
     for e in edges:
-        node    = e.get('node') or {}
-        content = node.get('content') or {}
-        title   = (content.get('title') or '').strip()
-        if not title:
+        row = _normalize_node(e.get('node') or {})
+        if not row:
             continue
-        # Guard against dupes coming out of JustWatch (rare, but
-        # a network reissue during their cache warm can double-tap).
-        key = title.lower()
-        if key in seen_titles:
+        key = row['title'].lower()
+        if key in seen:
             continue
-        seen_titles.add(key)
-
-        genres = []
-        for g in content.get('genres') or []:
-            t = (g or {}).get('translation')
-            if t:
-                genres.append(t)
-
-        full_path = content.get('fullPath') or ''
-        url = _JW_TITLE_HOST + full_path if full_path else ''
-
-        out.append({
-            'rank':               len(out) + 1,
-            'title':              title,
-            'category_display':   _classify_kind(node.get('objectType')),
-            'year':               content.get('originalReleaseYear'),
-            'genres':             genres[:4],
-            'description':        content.get('shortDescription') or '',
-            'url':                url,
-            'image':              _poster_url(content.get('posterUrl') or ''),
-            'justwatch_id':       node.get('objectId'),
-        })
+        seen.add(key)
+        row['rank'] = len(out) + 1
+        out.append(row)
         if len(out) >= limit:
             break
     logger.info("fast_channels %s (%s): parsed %d items (total pool=%s)",
                  label, pkg, len(out), pop.get('totalCount'))
     return out
+
+
+def _fetch_platform_amazon_fast(pkg: str, label: str, limit: int) -> list[dict]:
+    """Amazon: filter `amp` popularity to FREE monetization AND drop
+    any title whose Amazon offers still include FLATRATE (those are
+    premium Prime originals with a free pilot episode, e.g., Ted Lasso
+    - the exact "premium content" we want out of the FAST feed).
+
+    Paginates with `offset` because the raw FREE pool includes enough
+    subscription-with-free-pilot titles that the first 100 filter down
+    to ~60. `_AMAZON_MAX_PAGES` caps the fetcher at 4 pages so a
+    catalog change on JustWatch's end can never turn this into an
+    unbounded loop."""
+    out: list[dict] = []
+    seen: set[str] = set()
+    offset = 0
+    pages = 0
+    total_examined = 0
+    while len(out) < limit and pages < _AMAZON_MAX_PAGES:
+        data = _post_graphql(
+            _JW_QUERY_AMAZON_FAST,
+            {'country': 'US', 'providers': [pkg], 'first': 100, 'offset': offset},
+            'FASTAmazonFree',
+        )
+        pages += 1
+        if not data:
+            break
+        if data.get('errors'):
+            logger.warning("fast_channels %s (%s): GraphQL errors: %s",
+                            label, pkg, json.dumps(data['errors'])[:200])
+            break
+        pop   = ((data.get('data') or {}).get('popularTitles') or {})
+        edges = pop.get('edges') or []
+        if not edges:
+            break
+        for e in edges:
+            total_examined += 1
+            node = e.get('node') or {}
+            # Post-filter: keep the title only if Amazon offers FREE
+            # and NOT FLATRATE. This is the whole point of the Amazon
+            # path - it isolates the FAST catalog from premium
+            # subscription content.
+            amazon_mtypes: set[str] = set()
+            for o in node.get('offers') or []:
+                pkg_name = ((o.get('package') or {}).get('clearName') or '').lower()
+                if pkg_name.startswith(_AMAZON_OFFER_PREFIX):
+                    mt = o.get('monetizationType')
+                    if mt:
+                        amazon_mtypes.add(mt)
+            if 'FREE' not in amazon_mtypes or 'FLATRATE' in amazon_mtypes:
+                continue
+
+            row = _normalize_node(node)
+            if not row:
+                continue
+            key = row['title'].lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            row['rank'] = len(out) + 1
+            out.append(row)
+            if len(out) >= limit:
+                break
+
+        if not (pop.get('pageInfo') or {}).get('hasNextPage'):
+            break
+        offset += 100
+
+    logger.info("fast_channels %s (%s): amazon FAST filter kept %d/%d "
+                 "titles across %d page(s)",
+                 label, pkg, len(out), total_examined, pages)
+    return out
+
+
+def _fetch_platform(pkg: str, label: str, limit: int,
+                      fast_only: bool = True) -> list[dict]:
+    """Dispatcher. Roku / Tubi / Pluto use the whole-catalog path;
+    Amazon uses the FREE-monetization + FLATRATE-exclusion path."""
+    if fast_only:
+        return _fetch_platform_whole_catalog(pkg, label, limit)
+    return _fetch_platform_amazon_fast(pkg, label, limit)
 
 
 def fetch() -> dict[str, Any]:
@@ -227,8 +380,9 @@ def fetch() -> dict[str, Any]:
     sources: dict[str, dict] = {}
     national_pool: list[dict] = []
 
-    for slug, label, pkg in FAST_PLATFORMS:
-        items = _fetch_platform(pkg, label, _PER_PLATFORM_LIMIT)
+    for slug, label, pkg, fast_only in FAST_PLATFORMS:
+        items = _fetch_platform(pkg, label, _PER_PLATFORM_LIMIT,
+                                  fast_only=fast_only)
         # Attach the platform slug on each item so the flat `national`
         # list stays traceable back to its FAST provider (useful for
         # cross-source dedupe upstream).
