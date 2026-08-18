@@ -41470,6 +41470,150 @@ SYNTH_QUEUE_URL = os.environ.get('SYNTH_QUEUE_URL',
                                    'http://168.119.215.48:8765').rstrip('/')
 SYNTH_QUEUE_SECRET = os.environ.get('SYNTH_QUEUE_SECRET', '')
 
+# Freshness threshold for reusing an existing profile without asking the
+# user to refresh. If a profile is older than this, we still surface it
+# as a match but the default decision shifts to "offer refresh".
+SYNTH_CHAT_FRESH_DAYS = 120
+
+# How many candidate matches from s3_cache we surface to Claude's
+# interpret prompt. Keep this tight (prompt size + Claude focus).
+SYNTH_CHAT_MAX_CANDIDATES = 12
+
+
+def _profile_catalog_for_chat():
+    """Return a compact list of every profile in the dashboard catalog:
+    [{s3_key, display_name, subject, category, last_modified, days_old}, ...]
+
+    Reads from the in-memory `s3_cache['jobs']` (kept fresh by the
+    existing persisted-cache refresh loop). This is the same source of
+    truth the Select Profile dropdown uses, so if it's in the dropdown
+    it's in this list. Lightweight - no S3 round trip.
+    """
+    from datetime import timezone as _tz
+    now = datetime.now(_tz.utc)
+    jobs = []
+    try:
+        jobs = list((s3_cache or {}).get('jobs') or [])
+    except Exception:
+        jobs = []
+    out = []
+    for j in jobs:
+        if not isinstance(j, dict):
+            continue
+        s3_key = j.get('s3_key') or j.get('key')
+        if not s3_key:
+            continue
+        display = (j.get('display_name') or j.get('project_name')
+                    or j.get('profile_subject') or s3_key).strip()
+        subject = (j.get('profile_subject') or j.get('subject') or display).strip()
+        cat = (j.get('category') or '').strip()
+        lm_iso = j.get('last_modified') or j.get('created_at')
+        days_old = None
+        try:
+            if lm_iso:
+                lm_iso_s = lm_iso.replace('Z', '+00:00') if isinstance(lm_iso, str) else lm_iso
+                lm_dt = datetime.fromisoformat(lm_iso_s) if isinstance(lm_iso_s, str) else lm_iso_s
+                if lm_dt.tzinfo is None:
+                    from datetime import timezone as _tz2
+                    lm_dt = lm_dt.replace(tzinfo=_tz2.utc)
+                days_old = int((now - lm_dt).total_seconds() // 86400)
+        except Exception:
+            days_old = None
+        out.append({
+            's3_key': s3_key,
+            'display_name': display,
+            'subject': subject,
+            'category': cat,
+            'last_modified': lm_iso,
+            'days_old': days_old,
+        })
+    return out
+
+
+_CUT_KEYWORDS = {
+    'avid': ('avid', 'avid_fan', 'avid fan'),
+    'casual': ('casual', 'casual fan', 'total universe', 'tu'),
+    'female': ('female', 'women', 'woman', 'girl', 'girls', 'ladies', 'ladys'),
+    'male': ('male', 'men', 'man', 'guy', 'guys', 'boys', 'boy'),
+    'gen_z': ('gen z', 'gen-z', 'genz'),
+    'millennial': ('millennial', 'millennials'),
+    'gen_x': ('gen x', 'gen-x'),
+    'boomer': ('boomer', 'boomers'),
+}
+
+
+def _normalize_for_match(s):
+    """Lowercase, strip punctuation, collapse spaces."""
+    if not s:
+        return ''
+    import re as _re
+    s = str(s).lower()
+    s = _re.sub(r"[^a-z0-9\s]+", " ", s)
+    s = _re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def _prompt_extract_cut_hints(prompt_norm):
+    """Return a set of cut-type strings found in the prompt (e.g.
+    {'avid', 'female'} means the user asked for the female avid cut of
+    something). Empty set means no explicit cut modifier - treat as
+    Total Universe by default."""
+    hits = set()
+    for label, keywords in _CUT_KEYWORDS.items():
+        for kw in keywords:
+            # word-boundary match on the normalized (spaces-only) prompt
+            if f" {kw} " in f" {prompt_norm} ":
+                hits.add(label)
+                break
+    return hits
+
+
+def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CANDIDATES):
+    """Return the top-N profile candidates most likely to match the user's
+    prompt. Uses token-overlap scoring against each candidate's subject
+    and display_name. Cheap - runs in-memory over ~200-1000 records.
+
+    Returns a list ordered best-first, each entry with the catalog
+    fields plus `_score` (float, 0..1) so Claude can see how strong
+    each candidate match is.
+    """
+    if not prompt or not catalog:
+        return []
+    p_norm = _normalize_for_match(prompt)
+    p_tokens = set(t for t in p_norm.split() if len(t) >= 3)
+    if not p_tokens:
+        return []
+    scored = []
+    for c in catalog:
+        subject_norm = _normalize_for_match(c.get('subject') or '')
+        display_norm = _normalize_for_match(c.get('display_name') or '')
+        combined = f"{subject_norm} {display_norm}"
+        c_tokens = set(t for t in combined.split() if len(t) >= 3)
+        if not c_tokens:
+            continue
+        # Jaccard-ish: overlap / prompt_tokens (weighted toward prompt
+        # coverage - user says "taylor swift" and profile display is
+        # "Taylor Swift - Avid Fan"; both tokens covered = strong).
+        overlap = p_tokens & c_tokens
+        if not overlap:
+            # Substring fallback: catches "Fast and the Furious" vs
+            # "Fast_and_the_Furious" tokenization edge cases.
+            for pt in p_tokens:
+                if len(pt) >= 5 and pt in combined:
+                    overlap = overlap | {pt}
+        if not overlap:
+            continue
+        prompt_coverage = len(overlap) / max(len(p_tokens), 1)
+        subject_hit = 1.0 if any(t in subject_norm.split() for t in overlap) else 0.5
+        score = round(prompt_coverage * subject_hit, 4)
+        if score < 0.15:
+            continue
+        c2 = dict(c)
+        c2['_score'] = score
+        scored.append(c2)
+    scored.sort(key=lambda x: x['_score'], reverse=True)
+    return scored[:max_candidates]
+
 
 def _lookup_user_by_api_key(raw_key):
     """Resolve an external X-Crosswalk-API-Key value to a user record.
@@ -41548,7 +41692,8 @@ def _synth_chat_gate():
     return user, None
 
 
-def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categories=None):
+def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categories=None,
+                                    candidate_matches=None):
     """Build the (system, user) prompts that turn free-form user text into a
     structured draft spec dict compatible with synthesize_from_spec on Hetzner.
 
@@ -41558,6 +41703,9 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
       - The workspace "always present as owned first-party data" rule
       - Sample-size heuristics for talent / brand / concept / niche cohorts
       - Demographic canonical buckets (from demos.csv / PIPELINE_DEMO_SCHEMA)
+      - The candidate list of existing profiles that MIGHT match, so
+        Claude can decide reuse / refresh / derive / new (avoids
+        double-pulls, keeps outputs jiving with the catalog).
     The user prompt is the free-form request + prior chat turns for context.
     """
     cats = master_categories or {}
@@ -41576,6 +41724,19 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
             if role and text:
                 history_lines.append(f"[{role}] {text[:600]}")
         history_block = "\n".join(history_lines)
+
+    cand_lines = []
+    for c in (candidate_matches or []):
+        age = c.get('days_old')
+        age_txt = f"{age}d old" if isinstance(age, int) else "age unknown"
+        score = c.get('_score')
+        score_txt = f"score={score:.2f}" if isinstance(score, (int, float)) else ""
+        cand_lines.append(
+            f"  - s3_key='{c.get('s3_key')}'  display='{c.get('display_name')}'  "
+            f"subject='{c.get('subject')}'  category='{c.get('category')}'  "
+            f"{age_txt}  {score_txt}"
+        )
+    candidates_block = "\n".join(cand_lines) if cand_lines else "  (no candidate matches - treat as new_build)"
 
     system_prompt = (
         "You are the Profile Brief Architect for BehavioralGraph's Profile "
@@ -41667,7 +41828,14 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"persona_notes\": \"200-500 words of researched persona shape\",\n"
         "  \"assumptions\": [\"list of assumptions the user should verify\"],\n"
         "  \"estimated_run_minutes\": <int>,\n"
-        "  \"date_range\": { \"start\": \"2025-07-01\", \"end\": \"2026-06-30\" }\n"
+        "  \"date_range\": { \"start\": \"2025-07-01\", \"end\": \"2026-06-30\" },\n"
+        "  \"decision\": \"new_build|existing_match|time_shifted_refresh|derive_cut|cut_needs_parent\",\n"
+        "  \"decision_reason\": \"1-2 sentences explaining the decision\",\n"
+        "  \"existing_match_s3_key\": \"<if matches an existing catalog entry>\",\n"
+        "  \"existing_match_display_name\": \"<display name of the match>\",\n"
+        "  \"existing_match_days_old\": <int or null>,\n"
+        "  \"derive_type\": \"<if derive_cut: avid|casual|avid_F|avid_M|casual_F|casual_M|gender_F|gender_M|generation_millennials|generation_gen_z|generation_gen_x|generation_boomer|other>\",\n"
+        "  \"refresh_row_hypothesis\": \"<if time_shifted_refresh: 3-6 sentences on what would have realistically changed for each behavioral surface (brands, talent, platforms, retail, QSR, etc.) between the parent's last_modified date and today. Cite specific events, tour dates, product launches, controversies, macro trends. NOT a generic 'things change over time' - be concrete.>\"\n"
         "}\n\n"
 
         "DEFAULT DATE RANGE - use these unless the user's request "
@@ -41680,6 +41848,53 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "year, use their window instead and echo it back in `date_range` and "
         "in `persona_notes`. If ambiguous, keep the default and note it in "
         "`assumptions`.\n\n"
+
+        "CANDIDATES FROM EXISTING CATALOG (may be empty). These are the "
+        "closest matches to the user's ask that already exist. They are "
+        "ordered best-first with a score in [0,1]. NEVER invent an "
+        "existing_match_s3_key that isn't in this list.\n"
+        f"{candidates_block}\n\n"
+
+        "DECISION LOGIC (mandatory - set the `decision` field to exactly "
+        "one of these values):\n"
+        "  * existing_match: the user's ask is essentially the same subject "
+        "and cut as one of the candidates above, AND that candidate is less "
+        f"than {SYNTH_CHAT_FRESH_DAYS} days old. Fill existing_match_s3_key "
+        "and existing_match_display_name. The dashboard will offer to reuse "
+        "the file (0 credits) OR refresh it (5 credits). Do not build.\n"
+        "  * time_shifted_refresh: the user's ask matches a candidate but "
+        f"the candidate is > {SYNTH_CHAT_FRESH_DAYS} days old, OR the user "
+        "explicitly asked for an updated / refreshed / current version. Fill "
+        "existing_match_s3_key AND refresh_row_hypothesis with concrete "
+        "row-by-row reasoning about what would have realistically changed "
+        "for this audience between the parent's date and today (specific "
+        "tour dates, product launches, controversies, macro trends). The "
+        "resulting profile MUST NOT swing sample size dramatically vs the "
+        "parent - state a sample_size that is within +/-15%% of the "
+        "parent's unless there is a documented reason for a bigger shift "
+        "(name that reason in refresh_row_hypothesis).\n"
+        "  * derive_cut: the user's ask is a CUT of an existing candidate "
+        "(e.g. 'avid Taylor Swift' when Taylor Swift TU exists; 'female "
+        "cut of the Dune audience' when Dune TU exists). Fill "
+        "existing_match_s3_key with the parent (the TU / OG file), and "
+        "derive_type with the cut. Do NOT build a fresh TU. The engine "
+        "will derive the cut from the parent so the two files jive by "
+        "construction (per the workspace rule: skins do not re-run "
+        "pipelines). If the parent is > 120 days old, still choose "
+        "derive_cut but note in decision_reason that the parent is stale.\n"
+        "  * cut_needs_parent: the user's ask is a cut (avid, gender, "
+        "generation, etc.) but there is NO parent in the candidates. Fill "
+        "derive_type but leave existing_match_s3_key empty. The engine "
+        "will build the TU parent first, then derive the cut off it.\n"
+        "  * new_build: the user's ask is a genuinely new subject that "
+        "doesn't match any candidate. Leave the existing_match_* and "
+        "derive_type fields empty.\n\n"
+
+        "IMPORTANT: an ask like 'Taylor Swift' with no cut modifiers is "
+        "the Total Universe (TU / casual fan) cut, so it matches an "
+        "existing 'Taylor Swift' TU entry directly (existing_match or "
+        "time_shifted_refresh). An ask like 'avid Taylor Swift' is a cut "
+        "and should map to derive_cut with derive_type='avid'.\n\n"
 
         "RULES:\n"
         "  1. STRICT VOCABULARY (see top). NEVER surface methodology "
@@ -41766,8 +41981,11 @@ def api_synth_chat_interpret():
             from iq_rankers import MASTER_CATEGORIES
         except Exception:
             MASTER_CATEGORIES = {}
+        catalog = _profile_catalog_for_chat()
+        candidates = _shortlist_profile_matches(text, catalog)
         system_prompt, user_prompt = _synth_chat_interpret_prompts(
             text, chat_history=history, master_categories=MASTER_CATEGORIES,
+            candidate_matches=candidates,
         )
         result = _run_nflx_claude_agent(
             system_prompt=system_prompt,
@@ -41785,6 +42003,10 @@ def api_synth_chat_interpret():
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
+            'candidates': [
+                {k: v for k, v in c.items() if not k.startswith('_') or k == '_score'}
+                for c in candidates
+            ],
             'model': result.get('model'),
         })
     except Exception as e:
@@ -41854,13 +42076,46 @@ def api_synth_chat_approve():
     spec = _spec_from_draft(draft)
     run_avid = bool(body.get('run_avid', True))
     email_to = (body.get('email_to') or '').strip()
+    # Explicit user override on the approval step. The interactive UI
+    # can pass mode='refresh' when the user picked "refresh this stale
+    # profile", or mode='new' when they clicked "build fresh anyway".
+    approval_mode = (body.get('mode') or 'auto').strip().lower()
+    force_new = (approval_mode == 'new') or bool(body.get('force_new'))
+    force_refresh = (approval_mode == 'refresh')
+
+    decision, ex_key, d_type = _normalize_v1_decision(
+        draft, force_new=force_new, force_refresh=force_refresh,
+    )
+
+    # existing_match: no queue, no build, no credit charge. Return the
+    # pre-signed URL right here so the dashboard can offer a download.
+    if decision == 'existing_match':
+        url = _generate_presigned_profile_url(ex_key, expires_seconds=86400)
+        return jsonify({
+            'success': True,
+            'decision': 'existing_match',
+            'reused_existing': True,
+            'subject': draft.get('existing_match_display_name') or spec['name'],
+            's3_key': ex_key,
+            'profile_name': ex_key.rsplit('/', 1)[-1] if ex_key else None,
+            'download_url': url,
+            'download_expires_seconds': 86400 if url else None,
+            'run_id': None,
+        })
 
     payload = {
         'user_email': user.get('email') or user.get('username') or 'unknown',
         'run_avid': run_avid,
         'email_to': email_to,
         'spec': spec,
+        'decision': decision,
     }
+    if decision in ('derive_cut', 'time_shifted_refresh', 'cut_needs_parent'):
+        payload['parent_s3_key'] = ex_key or ''
+    if decision in ('derive_cut', 'cut_needs_parent'):
+        payload['derive_type'] = d_type or ''
+    if decision == 'time_shifted_refresh':
+        payload['refresh_row_hypothesis'] = draft.get('refresh_row_hypothesis') or ''
 
     try:
         import requests as _requests
@@ -41884,11 +42139,14 @@ def api_synth_chat_approve():
 
     return jsonify({
         'success': True,
+        'decision': decision,
         'run_id': queue_resp.get('run_id'),
         'pending_position': queue_resp.get('pending_position'),
         'subject': spec['name'],
         'brand_category': spec['brand_category'],
         'run_avid': run_avid,
+        'parent_s3_key': ex_key or None,
+        'derive_type': d_type or None,
         'email_to': email_to,
     })
 
@@ -42058,32 +42316,159 @@ def api_v1_health():
     }), (200 if queue_ok else 503)
 
 
+# Credit tiers for the v1 API. new/refresh cost the same as the dashboard
+# chatbot; derive costs less because it's a cheap parent-anchored skin
+# derivation; cut_needs_parent charges both (parent build + cut).
+_V1_CREDITS = {
+    'existing_match':       0,
+    'derive_cut':           3,
+    'time_shifted_refresh': CREDITS_PROFILE_ANALYSIS,       # 5
+    'new_build':            CREDITS_PROFILE_ANALYSIS,       # 5
+    'cut_needs_parent':     CREDITS_PROFILE_ANALYSIS + 3,   # 8
+}
+
+
+def _v1_interpret(prompt):
+    """Shared interpret helper used by /check and /run. Runs the Claude
+    interpret step against the current profile catalog and returns
+    (draft_dict, candidates_list) or raises with a jsonify error."""
+    try:
+        from iq_rankers import MASTER_CATEGORIES
+    except Exception:
+        MASTER_CATEGORIES = {}
+    catalog = _profile_catalog_for_chat()
+    candidates = _shortlist_profile_matches(prompt, catalog)
+    system_prompt, user_prompt = _synth_chat_interpret_prompts(
+        prompt, chat_history=[], master_categories=MASTER_CATEGORIES,
+        candidate_matches=candidates,
+    )
+    interp = _run_nflx_claude_agent(
+        system_prompt=system_prompt, user_prompt=user_prompt,
+        max_tokens=8192, temperature=0.4,
+    )
+    if not interp.get('success'):
+        return None, candidates, interp
+    draft = interp.get('data') or {}
+    return draft, candidates, interp
+
+
+def _normalize_v1_decision(draft, force_new=False, force_refresh=False):
+    """Return (decision, existing_match_s3_key, derive_type) after
+    respecting caller overrides:
+      * force_new=True → always new_build
+      * force_refresh=True → upgrade existing_match to time_shifted_refresh
+    """
+    decision = (draft.get('decision') or 'new_build').strip()
+    ex_key = (draft.get('existing_match_s3_key') or '').strip()
+    d_type = (draft.get('derive_type') or '').strip()
+    if force_new:
+        return 'new_build', '', ''
+    if force_refresh and decision == 'existing_match':
+        decision = 'time_shifted_refresh'
+    valid = set(_V1_CREDITS.keys())
+    if decision not in valid:
+        decision = 'new_build'
+        ex_key = ''
+        d_type = ''
+    if decision in ('existing_match', 'time_shifted_refresh', 'derive_cut') and not ex_key:
+        decision = 'new_build' if decision != 'derive_cut' else 'cut_needs_parent'
+    return decision, ex_key, d_type
+
+
+@app.route('/api/v1/profiles/check', methods=['POST'])
+def api_v1_profiles_check():
+    """Preview what a run would do without charging credits or enqueuing.
+
+    Response includes:
+      * decision (see /run for the five values)
+      * existing_match_* fields (when applicable)
+      * credits_would_charge (0 for existing_match, 3 for derive_cut,
+        5 for time_shifted_refresh / new_build, 8 for cut_needs_parent)
+      * download_url if existing_match (24h S3 pre-signed URL) - the
+        partner can just fetch and save without ever calling /run
+    """
+    user, err = _synth_chat_gate()
+    if err:
+        return err
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+    prompt = (body.get('prompt') or body.get('text') or '').strip()
+    if not prompt:
+        return jsonify({'success': False, 'error': 'required field: "prompt"'}), 400
+    if len(prompt) > 4000:
+        return jsonify({'success': False, 'error': 'prompt exceeds 4000 chars'}), 400
+
+    try:
+        draft, candidates, interp = _v1_interpret(prompt)
+        if draft is None:
+            return jsonify({
+                'success': False,
+                'error': interp.get('error', 'brief-interpret failed'),
+            }), interp.get('status', 502)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False,
+                         'error': f'interpret failed: {e}'}), 500
+
+    decision, ex_key, d_type = _normalize_v1_decision(draft)
+    price = _V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
+    resp = {
+        'success': True,
+        'decision': decision,
+        'decision_reason': draft.get('decision_reason') or '',
+        'subject': draft.get('subject'),
+        'brand_category': draft.get('brand_category'),
+        'derive_type': d_type or None,
+        'existing_match_s3_key': ex_key or None,
+        'existing_match_display_name': draft.get('existing_match_display_name') or None,
+        'existing_match_days_old': draft.get('existing_match_days_old'),
+        'credits_would_charge': price,
+        'refresh_row_hypothesis': draft.get('refresh_row_hypothesis') or None,
+    }
+    if decision == 'existing_match' and ex_key:
+        url = _generate_presigned_profile_url(ex_key, expires_seconds=86400)
+        if url:
+            resp['download_url'] = url
+            resp['download_expires_seconds'] = 86400
+    return jsonify(resp)
+
+
 @app.route('/api/v1/profiles/run', methods=['POST'])
 def api_v1_profiles_run():
-    """One-shot: interpret a natural-language prompt, auto-approve the
-    resulting brief, enqueue the build, deduct 5 credits.
+    """One-shot: interpret a natural-language prompt and either (a) return
+    the existing matching profile if we already have it, (b) derive a
+    cut from an existing parent, (c) run a time-shifted refresh anchored
+    to an older parent, (d) build the parent + cut in sequence, or
+    (e) build a fresh profile. Credits are charged by decision tier.
 
     Request:
       Headers: X-Crosswalk-API-Key: <raw_key>
                Content-Type: application/json
-      Body: {"prompt": "audience of ...", "run_avid": true (optional, default true)}
+      Body:
+        {
+          "prompt": "audience of ...",     # required
+          "run_avid": true,                 # optional, default true
+          "force_new": false,               # optional, ignore any existing match
+          "mode": "auto|reuse|refresh|new"  # optional. auto=default,
+                                             # reuse=only accept existing_match,
+                                             # refresh=force time_shifted_refresh
+                                             #         if a match exists,
+                                             # new=alias for force_new
+        }
 
-    Response 200:
-      {
-        "run_id": "...",
-        "subject": "...",
-        "brand_category": "...",
-        "run_avid": true,
-        "credits_charged": 5,
-        "credits_remaining": <int or -1>,
-        "estimated_run_minutes": <int>,
-        "status_url": "https://<host>/api/v1/profiles/<run_id>",
-        "brief_summary": "<300 chars of the audience shape>"
-      }
+    Credit tiers by decision:
+      * existing_match       0 credits (returns download_url immediately)
+      * derive_cut           3 credits (skin off an existing parent)
+      * time_shifted_refresh 5 credits (rebuild anchored to older parent)
+      * new_build            5 credits (fresh build from scratch)
+      * cut_needs_parent     8 credits (parent build + cut derivation)
 
-    Response 402 if the partner doesn't have enough credits.
-    Response 401 / 403 for auth failures.
-    Response 502 if the queue is unreachable.
+    Response fields depend on decision. On existing_match, the response
+    includes `download_url` and `credits_charged: 0` - no run_id needed.
+    On every other decision, `run_id` + `status_url` are returned for
+    polling GET /api/v1/profiles/<run_id>.
     """
     user, err = _synth_chat_gate()
     if err:
@@ -42108,42 +42493,73 @@ def api_v1_profiles_run():
                          'error': 'prompt exceeds 4000 characters'}), 400
 
     run_avid = bool(body.get('run_avid', True))
+    force_new = bool(body.get('force_new'))
+    mode = (body.get('mode') or 'auto').strip().lower()
+    if mode == 'new':
+        force_new = True
+    force_refresh = (mode == 'refresh')
+    reuse_only = (mode == 'reuse')
 
     username = user.get('username') or 'partner_api'
-    price = CREDITS_PROFILE_ANALYSIS  # 5
-    if not has_credits_for(username, price):
-        _, credits_left = check_user_credits(username)
-        return jsonify({
-            'success': False,
-            'error': (f'insufficient credits: this run costs {price} '
-                      f'credits and this key has {credits_left} remaining'),
-            'credits_required': price,
-            'credits_remaining': credits_left,
-        }), 402
 
     try:
-        try:
-            from iq_rankers import MASTER_CATEGORIES
-        except Exception:
-            MASTER_CATEGORIES = {}
-        system_prompt, user_prompt = _synth_chat_interpret_prompts(
-            prompt, chat_history=[], master_categories=MASTER_CATEGORIES,
-        )
-        interp = _run_nflx_claude_agent(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            max_tokens=8192, temperature=0.4,
-        )
-        if not interp.get('success'):
+        draft, _candidates, interp = _v1_interpret(prompt)
+        if draft is None:
             return jsonify({
                 'success': False,
                 'error': interp.get('error', 'brief-interpret failed'),
             }), interp.get('status', 502)
-        draft = interp.get('data') or {}
     except Exception as e:
         traceback.print_exc()
         return jsonify({'success': False,
                          'error': f'interpret failed: {e}'}), 500
+
+    decision, ex_key, d_type = _normalize_v1_decision(
+        draft, force_new=force_new, force_refresh=force_refresh,
+    )
+    if reuse_only and decision != 'existing_match':
+        return jsonify({
+            'success': False,
+            'error': ("mode=reuse requested but no existing profile matches "
+                       "this ask closely enough; got decision="
+                       f"{decision}. Rerun with mode='auto' to proceed."),
+            'decision': decision,
+        }), 409
+
+    price = _V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
+
+    if price > 0 and not has_credits_for(username, price):
+        _, credits_left = check_user_credits(username)
+        return jsonify({
+            'success': False,
+            'error': (f'insufficient credits: this decision ({decision}) '
+                      f'costs {price} and this key has {credits_left} '
+                      'remaining'),
+            'decision': decision,
+            'credits_required': price,
+            'credits_remaining': credits_left,
+        }), 402
+
+    # -------- existing_match: no queue, no credits, immediate return --------
+    if decision == 'existing_match':
+        url = _generate_presigned_profile_url(ex_key, expires_seconds=86400)
+        _, credits_left = check_user_credits(username)
+        return jsonify({
+            'success': True,
+            'decision': 'existing_match',
+            'decision_reason': draft.get('decision_reason') or '',
+            'reused_existing': True,
+            'subject': draft.get('existing_match_display_name') or draft.get('subject'),
+            's3_key': ex_key,
+            'profile_name': ex_key.rsplit('/', 1)[-1],
+            'download_url': url,
+            'download_expires_seconds': 86400 if url else None,
+            'credits_charged': 0,
+            'credits_remaining': credits_left,
+            'hint': ("If you want a fresh version of this profile, resend with "
+                     "mode='refresh' (5 credits) - we'll rebuild it anchored "
+                     "to this file so the audience shape stays consistent."),
+        })
 
     spec = _spec_from_draft(draft)
 
@@ -42154,7 +42570,18 @@ def api_v1_profiles_run():
         'spec': spec,
         'source': 'partner_api_v1',
         'partner_username': username,
+        'decision': decision,
     }
+    # Attach decision-specific derivation metadata that the Hetzner
+    # worker will honor to actually derive/refresh from the parent
+    # rather than build fresh (per workspace rule: skins do not re-run
+    # pipelines; refreshes preserve sample-size continuity).
+    if decision in ('derive_cut', 'time_shifted_refresh', 'cut_needs_parent'):
+        payload['parent_s3_key'] = ex_key or ''
+    if decision in ('derive_cut', 'cut_needs_parent'):
+        payload['derive_type'] = d_type or ''
+    if decision == 'time_shifted_refresh':
+        payload['refresh_row_hypothesis'] = draft.get('refresh_row_hypothesis') or ''
 
     try:
         import requests as _requests
@@ -42179,9 +42606,9 @@ def api_v1_profiles_run():
     try:
         consume_credit(
             username,
-            description=f"Chatbot Profile IQ - {spec.get('name', 'profile')}",
+            description=f"Chatbot Profile IQ [{decision}] - {spec.get('name', 'profile')}",
             job_id=run_id or '',
-            pull_type='Chatbot Profile IQ (API v1)',
+            pull_type=f'Chatbot Profile IQ v1 ({decision})',
             credits_used=price,
         )
     except Exception:
@@ -42197,10 +42624,14 @@ def api_v1_profiles_run():
 
     return jsonify({
         'success': True,
+        'decision': decision,
+        'decision_reason': draft.get('decision_reason') or '',
         'run_id': run_id,
         'subject': spec.get('name'),
         'brand_category': spec.get('brand_category'),
         'run_avid': run_avid,
+        'parent_s3_key': ex_key or None,
+        'derive_type': d_type or None,
         'credits_charged': price,
         'credits_remaining': credits_left,
         'estimated_run_minutes': int(draft.get('estimated_run_minutes') or 15),
