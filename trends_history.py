@@ -311,6 +311,15 @@ _SCRAPER_KIND_MAP = {
     'max':        'streaming',
     'primevideo': 'streaming',
     'espnplus':   'streaming',
+    # FAST channels - kept here so the dispatcher's `unknown` fallback
+    # never hits, but the actual routing gates on `kind=='fast'` above
+    # (needed to disambiguate `amazon` from the retailer scraper).
+    'roku':       'fast',
+    'tubi':       'fast',
+    'pluto':      'fast',
+    # 'amazon' NOT listed here (would collide with the retailer entry
+    # above). The `kind_l == 'fast'` gate in history_for_item handles
+    # Amazon's FAST case before this map is consulted.
     # GDELT-derived cards: headlines and trending people. Both share the
     # source name `gdelt` in the frontend (`_tiqActions('headline',
     # 'gdelt', ...)` and `_tiqActions('person', 'gdelt', ...)`); the
@@ -348,6 +357,14 @@ _SOURCE_SNAPSHOT_ALIAS = {
 # of the same name, so the dispatcher gates on `kind=='music'` before
 # it looks at the source id (see history_for_item).
 _MUSIC_SUB_SOURCES = {'spotify', 'shazam', 'apple', 'tiktok'}
+
+
+# FAST-channel sub-source ids. All four sit inside the single daily
+# `fast_channels` snapshot under `sources[sub].items` (same pattern as
+# music). `amazon` here collides with the retailer scraper of the same
+# name, so the dispatcher MUST gate on `kind=='fast'` before it looks
+# at the source id.
+_FAST_SUB_SOURCES = {'roku', 'tubi', 'pluto', 'amazon'}
 
 
 def _gdelt_source_for_kind(kind: str) -> str:
@@ -519,6 +536,49 @@ def history_for_music(sub: str, key: str, *,
                            key=key, geo=geo)
 
 
+def history_for_fast(sub: str, key: str, *,
+                      days: int = DEFAULT_DAYS,
+                      geo: str = 'National') -> dict:
+    """Reconstruct the arc for a FAST-channel item. `sub` is one of
+    `roku` / `tubi` / `pluto` / `amazon` and identifies which
+    per-platform block inside `fast_channels.json` to read.
+
+    FAST rows are keyed by `title` (no `artist`), and the scraper
+    guarantees `rank` is stamped on every row (1..100), so title-only
+    matching with fuzzy fallback is enough."""
+    slug = _slug(key)
+    if not slug:
+        return _empty_arc('fast', sub, key, geo)
+    day_list = _iter_recent_days(days)
+    arc_days: list[dict] = []
+    for day_iso in day_list:
+        payload = _fetch_day(f"{_SCRAPER_DATED_PREFIX}", day_iso,
+                             suffix='fast_channels')
+        rows: list = []
+        if isinstance(payload, dict):
+            sub_block = (payload.get('sources') or {}).get(sub) or {}
+            rows = sub_block.get('items') or []
+        hit = _find_row_for_scraper_key(sub, rows, slug)
+        if hit is not None:
+            rank, r = hit
+            arc_days.append({
+                'date':        day_iso,
+                'rank':        rank,
+                'score':       None,
+                'matched_key': (r.get('title') or '').strip(),
+                'present':     True,
+                'url':         r.get('url'),
+                'image':       r.get('image'),
+                'category':    r.get('category_display'),
+                'year':        r.get('year'),
+            })
+        else:
+            arc_days.append({'date': day_iso, 'rank': None,
+                             'score': None, 'present': False})
+    return _summarize_arc(arc_days, kind='fast', source=sub,
+                           key=key, geo=geo)
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Dispatcher
 # ────────────────────────────────────────────────────────────────────────────
@@ -543,6 +603,12 @@ def history_for_item(kind: str, source: str, key: str, *,
     # matches a social scraper snapshot; kind='music' disambiguates.
     if kind_l == 'music' and source in _MUSIC_SUB_SOURCES:
         arc = history_for_music(source, key, days=days, geo=geo)
+    # FAST also has to short-circuit before the generic branch because
+    # `amazon` collides with the retailer scraper of the same name. All
+    # four FAST platforms live inside a single `fast_channels.json`
+    # daily snapshot under sources[sub].items (mirroring music).
+    elif kind_l == 'fast' and source in _FAST_SUB_SOURCES:
+        arc = history_for_fast(source, key, days=days, geo=geo)
     elif source == 'google' or kind_l == 'search':
         arc = history_for_search(key, geo=geo, days=days)
     elif source == 'gdelt':
