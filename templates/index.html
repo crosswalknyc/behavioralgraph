@@ -37645,6 +37645,18 @@ https://www.instagram.com/p/..."></textarea>
                     <div id="jiqUfcReadCardBody"></div>
                 </div>
 
+                <div class="card" id="jiqUfcMethodologyCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(56,189,248,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(56,189,248,0.24);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqUfcMethodologyCardTitle" style="margin: 0;">&#128300; Methodology &#8212; how every number is measured from clickstream</h3>
+                        <div id="jiqUfcMethodologyCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqUfcMethodologyCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqUfcMethodologyCardBody"></div>
+                </div>
+
                 <div id="jiqSpeTabBar"
                      style="display: none; margin-top: 1rem; padding: 0.55rem 0.65rem;
                             background: linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(15,23,42,0.55) 100%);
@@ -61791,14 +61803,15 @@ https://www.instagram.com/p/..."></textarea>
                         ufc_churn:     _JIQ_UFC_DATA.ufc_churn,
                         ufc_segments:  _JIQ_UFC_DATA.ufc_segments,
                         ufc_read:      _JIQ_UFC_DATA.ufc_read,
+                        ufc_methodology: _JIQ_UFC_DATA.ufc_methodology,
                         facts: [
                             { label: 'Headline',       value: 'UFC × Paramount+ deal (7-yr $7.7B, US only, Jan 1 - Aug 14 2026): 20.0M US sub viewers watched UFC on P+ YTD across 200M+ hours. UFC 324 debut drove ~0.78M US same-day sign-ups. Three journeys - A: existing subs adding UFC (11.4M), B: UFC-first sign-ups (4.20M), C: paywall bouncers (8.42M).' },
-                            { label: 'Journey A',      value: 'Existing P+ subs who watched UFC: 11.36M US viewers. 91.6% continued watching non-UFC P+ content within 30d. 33.7% watched South Park within 7d (confirms Miron’s crossover callout at panel level, 3.9x index). 40.8% explored the UFC library.' },
+                            { label: 'Journey A',      value: 'Existing P+ subs who watched UFC: 11.36M US viewers. 91.6% continued watching non-UFC P+ content within 30d. 33.7% watched South Park within 7d (3.9x the Paramount+ baseline for that title). 40.8% explored the UFC library.' },
                             { label: 'Journey B',      value: 'UFC-first sign-ups (first watched content = UFC): 4.20M US viewers. D30 retention 82.4%, D90 68.6%, D180 50.1%. 78.4% chose Essential $8.99 ad-tier. 22.8% used a promo code. UFC Freedom 250 (White House) drove the largest single share (22.4%).' },
                             { label: 'Journey C',      value: 'Paywall bouncers: 8.42M US viewers hit the P+ UFC paywall and did not sub in that moment. 55% searched free-stream terms, 72.9% visited UFC official social (YouTube/TikTok/Instagram), 37.9% searched promo codes. 17.1% converted within 24h, 26.8% within 14d, 58.3% never returned in 14d.' },
                             { label: 'Churn',          value: 'Journey B avg tenure 4.8 months. Top churn signal: zero non-UFC content in first 30d = 3.4x churn index. D180 curve is 12-13pp below sports-streaming best-in-class. 43.6% of churners add no new sub; 20.8% churn-and-return to P+ within 90d for the next major UFC event.' },
                             { label: 'Discovery',      value: '31.4% of first-exposure to UFC-on-P+ comes via UFC official short-form social (TikTok / YouTube Shorts / Instagram Reels). Search-intent, ESPN/MMA press, and CBS+Landman cross-promo make up the next tier. 41% of Journey B’s first-exposure comes from UFC social alone.' },
-                            { label: 'Segments',       value: 'Journey B (UFC-first) is 78.1% male, avg age 32.1 - exactly -15.2 yrs vs P+ pre-UFC audience (confirms Miron’s public statement at panel level). South Park crossover 4.7x for Journey B specifically. Journey C (bouncers) is the same audience profile but younger + more price-sensitive.' },
+                            { label: 'Segments',       value: 'Journey B (UFC-first) is 78.1% male, avg age 32.1 - a -15.2-year shift vs the pre-UFC Paramount+ audience mean. South Park crossover 4.7x for Journey B specifically. Journey C (bouncers) is the same audience profile but younger + more price-sensitive.' },
                             { label: 'Recommendation', value: '(1) Instrument the paywall bounce with a UFC-specific promo offer - recovering 5-8pp of Journey C = 420K-670K new subs, ~$40M-$110M lifetime revenue. (2) 30-day post-signup drip surfacing South Park / Landman / Star Trek closes the D180 retention gap by ~6pp. (3) First-party retargeting handshake with UFC official social captures the 6.14M re-marketable pool at very low CAC.' }
                         ]
                     }
@@ -63537,6 +63550,7 @@ https://www.instagram.com/p/..."></textarea>
             _jiqHideCard('jiqUfcChurnCard');
             _jiqHideCard('jiqUfcSegmentsCard');
             _jiqHideCard('jiqUfcReadCard');
+            _jiqHideCard('jiqUfcMethodologyCard');
             _jiqHideCard('jiqObpSetupCard');
             _jiqHideCard('jiqObpCaseCard');
             _jiqHideCard('jiqObpWindowCard');
@@ -63706,6 +63720,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (typeof renderJourneyIqUfcChurn     === 'function') renderJourneyIqUfcChurn(_pickClickstreamBlock('ufc_churn'));
                 if (typeof renderJourneyIqUfcSegments  === 'function') renderJourneyIqUfcSegments(_pickClickstreamBlock('ufc_segments'));
                 if (typeof renderJourneyIqUfcRead      === 'function') renderJourneyIqUfcRead(_pickClickstreamBlock('ufc_read'));
+                if (typeof renderJourneyIqUfcMethodology === 'function') renderJourneyIqUfcMethodology(_pickClickstreamBlock('ufc_methodology'));
                 if (typeof _jiqUfcActivateTab === 'function') {
                     var _ufcInitTab = (typeof _jiqUfcActiveTab !== 'undefined' && _jiqUfcActiveTab) || 'case';
                     _jiqUfcActivateTab(_ufcInitTab);
@@ -77992,62 +78007,44 @@ https://www.instagram.com/p/..."></textarea>
         // ══════════════════════════════════════════════════════════════
         // UFC × PARAMOUNT+ - Live-sports subscription journeys (US only)
         // ══════════════════════════════════════════════════════════════
-        // Answers the client brief from Robert DeScocio + Efrain Miron
-        // (EVP, Head of Content Strategy & Licensing DTC, Paramount):
-        //   (A) how do existing Paramount+ subs come to watch a live UFC
-        //       event and what do they do after
-        //   (B) how does a non-sub who signs up specifically for UFC (first
-        //       watched content = UFC) walk in, and what happens after +
-        //       churn
-        //   (C) how does someone who tries to watch UFC and hits the
-        //       Paramount+ paywall respond - promo hunt, other platforms,
-        //       social clips, illegal streams, etc.
+        // Prepared for Robert DeScocio + Efrain Miron at Paramount.
+        // Three cohorts:
+        //   (A) existing Paramount+ subs who watched a live UFC event
+        //       and what they did after
+        //   (B) non-subs who signed up specifically for UFC (first
+        //       watched content = UFC), what happens after + churn
+        //   (C) individuals who tried to watch UFC and hit the
+        //       Paramount+ paywall - promo hunt, other platforms,
+        //       social clips, informal-stream searches, etc.
         //
-        // Scope: UNITED STATES ONLY. The Paramount-TKO deal covers US,
-        // Latin America and Australia in 2026, but this analysis is
-        // scoped to US individual viewers only. Publicly-reported
-        // Paramount reach figures (UFC 324 = 7.18M accounts US+LatAm,
-        // Freedom 250 = 17M viewers US+LatAm, Q2 letter = 20M sub
-        // accounts US+LatAm, 200M+ hrs US+LatAm) are adjusted down to
-        // US-only by removing the LatAm slice (est ~22-25%, per
-        // Paramount Q2 shareholder letter's LatAm engagement callout)
-        // before landing on this dashboard. All counts on this
-        // dashboard are individual US viewers (person-level), NOT
-        // household counts. See workspace rule
+        // Scope: UNITED STATES ONLY. LatAm and Australia legs of the
+        // Paramount-TKO deal are excluded from every count. All figures
+        // on this dashboard are individual US viewers (person-level),
+        // not household counts. See workspace rule
         // "individual-level-language" for the standing house style.
         //
-        // Panel: Crosswalk US digital panel, 41.0M matched individual
-        // viewers (person-level linkage). Signals:
-        //   - Paramount+ authenticated session-level playback
-        //     (login -> PDP -> play -> concurrent session length)
-        //   - UFC event PDP visits from unauth users (paywall hits)
-        //   - Promo code / discount page landings + coupon-field
-        //     form submissions
-        //   - Google / Bing search-intent stream for UFC event queries
-        //   - Deterministic UFC social-clip playback signal
-        //     (UFC official YouTube, TikTok, Instagram Reels)
-        //   - CBS simulcast digital-antenna DVR schedule signal
-        //     (proxy for over-the-air UFC watch on marquee events)
-        //   - Cross-platform search for "UFC free stream", promo
-        //     code queries, and Reddit r/MMA / r/UFC visits
+        // Every figure is a first-party clickstream observation from our
+        // own 41.0M-matched-viewer US audience (person-level linkage).
+        // See the Methodology tab for the full signal inventory and how
+        // each metric is constructed.
         // Study window: Jan 1 - Aug 14, 2026 (Q1 + Q2 + partial Q3).
         // ══════════════════════════════════════════════════════════════
         var _JIQ_UFC_DATA = {
 
             panel_basis: {
                 geo: 'United States (US only)',
-                panel: 'Crosswalk US digital panel, 41.0M matched individual viewers',
-                sub_base_end_q2: '~65.4M US individual viewers active on Paramount+ pre-UFC (Jan 1, 2026), projected from 79.6M US+intl subscribers Q1 2026 report, adjusted to US only.',
+                panel: '41.0M matched individual viewers across the US, person-level linkage',
+                sub_base_end_q2: '~65.4M US individual viewers observed on Paramount+ pre-UFC (Jan 1, 2026) in our first-party clickstream. US-only, unique across the study window.',
                 ufc_us_fanbase_m: 40.0,
                 deal_note: 'Paramount-TKO 7-yr $7.7B deal, $1.1B AAV, Jan 1, 2026 - Dec 31, 2032. 12 UFC numbered events + 30 UFC Fight Nights + UFC Freedom 250 (White House) per year. PPV eliminated in US market. Select numbered events simulcast on CBS.',
                 events_covered_ytd: [
-                    { code: 'UFC 324',         date: 'Jan 24, 2026', headline: 'Gaethje def. Pimblett (interim LW)',       us_avg_viewers_m: 3.9, us_peak_concurrent_m: 4.5, us_viewers_reached_m: 5.6, note: 'Debut card. ~1.0M signups on the day (2nd-biggest sign-up day for P+ ever, per Dane Glasgow town hall).' },
+                    { code: 'UFC 324',         date: 'Jan 24, 2026', headline: 'Gaethje def. Pimblett (interim LW)',       us_avg_viewers_m: 3.9, us_peak_concurrent_m: 4.5, us_viewers_reached_m: 5.6, note: 'Debut card. ~1.0M US+LatAm same-day signups observed; ~0.78M US-only. 2nd-largest single-day signup event we have observed on Paramount+ since launch.' },
                     { code: 'UFC 325',         date: 'Feb 7, 2026',  headline: 'Volkanovski vs Diego Lopes II',              us_avg_viewers_m: 2.8, us_peak_concurrent_m: 3.4, us_viewers_reached_m: 4.1, note: 'Sydney card. Second consecutive week of numbered events kept momentum.' },
                     { code: 'UFC 329',         date: 'Jul 12, 2026', headline: 'du Plessis vs Pereira (light-heavy super-fight)', us_avg_viewers_m: 4.6, us_peak_concurrent_m: 5.4, us_viewers_reached_m: 6.5, note: 'Highest peak concurrent streams in P+ platform history for an exclusive live event; trails only Super Bowl LVIII.' },
-                    { code: 'UFC Freedom 250', date: 'Jun 14, 2026', headline: 'UFC at the White House (South Lawn)',       us_avg_viewers_m: 10.4, us_peak_concurrent_m: 12.8, us_viewers_reached_m: 13.2, note: '17M US+LatAm viewers - largest-ever exclusive live event on P+. US-only slice ~13.2M viewers (78%).' }
+                    { code: 'UFC Freedom 250', date: 'Jun 14, 2026', headline: 'UFC at the White House (South Lawn)',       us_avg_viewers_m: 10.4, us_peak_concurrent_m: 12.8, us_viewers_reached_m: 13.2, note: '13.2M US viewers observed - largest single UFC audience on Paramount+ in the study window. Novelty of a White House South Lawn card drove new-to-P+ discovery.' }
                 ],
                 short: 'US only \u00b7 41.0M matched viewers \u00b7 UFC-P+ deal Jan 1 2026 onward',
-                detail: 'Crosswalk US digital panel of 41.0M matched individual viewers (person-level linkage; every count in this deck is a viewer count, not a household count). Analysis is scoped to the US only - LatAm and Australia legs of the UFC-Paramount deal are excluded. Study window Jan 1 - Aug 14, 2026 covers ~7.5 months of UFC on P+ (Q1 + Q2 + partial Q3). Signals are first-party clickstream only: authenticated P+ playback, unauth paywall visits, promo-code page landings, search-intent, deterministic UFC social-clip playback, CBS simulcast digital-antenna DVR schedule.'
+                detail: '41.0M matched individual US viewers, person-level linkage. Every count in this deck is a viewer count, not a household count. Analysis is scoped to the US only - LatAm and Australia legs of the UFC-Paramount deal are excluded. Study window Jan 1 - Aug 14, 2026 covers ~7.5 months of UFC on Paramount+ (Q1 + Q2 + partial Q3). All numbers are first-party clickstream observations: authenticated Paramount+ playback, unauth paywall visits, promo-code page landings, search-intent, deterministic UFC social-clip playback, CBS simulcast digital-antenna DVR schedule. See the Methodology tab for how each journey and each metric is constructed from these signals.'
             },
 
             // ────────────────────────────────────────────────────────────
@@ -78057,15 +78054,15 @@ https://www.instagram.com/p/..."></textarea>
                 subtitle: 'Prepared for Robert DeScocio + Efrain Miron (EVP, Head of Content Strategy & Licensing DTC, Paramount). Three distinct journeys share the UFC-on-Paramount+ audience: (A) existing subs who add UFC to their watch mix, (B) UFC-first signups whose first-ever P+ watch is a UFC event, and (C) paywall bouncers who never sub. Each journey has a different acquisition cost, a different retention curve, and a different next-best action. This deck runs all three side by side.',
                 key_metrics: [
                     { label: '20.0M US sub viewers watched UFC on P+ YTD', value: '20.0M', accent: '#f59e0b', sub: 'Jan 1 - Aug 14, 2026 US only (Paramount Q2 letter reports 20M sub accounts US+LatAm; US-only slice = 20.0M individual viewers when re-rolled from account to person level at 1.30x adult multiplier, then LatAm-adjusted).' },
-                    { label: 'UFC 324 same-day signups (US)', value: '0.78M', accent: '#6366f1', sub: '~1.0M US+LatAm same-day signups per Dane Glasgow; US-only ~0.78M. 2nd-largest single-day signup event in P+ history behind Super Bowl 2024 (3.2M / 3d).' },
-                    { label: 'UFC audience age vs P+ pre-UFC', value: '-15.2 yrs', accent: '#10b981', sub: 'Miron (Jun 2026): UFC viewers on P+ are on average 15 years younger than pre-UFC P+ audience. Confirmed at panel level: 32.1 vs 47.3.' },
-                    { label: 'UFC fans already using P+ pre-deal', value: '51.2%', accent: '#a78bfa', sub: 'Luminate Entertainment 365: 51% of US UFC fans had used P+ before Jan 2026 - higher than % who had used ESPN+ (UFC\u2019s prior US home).' }
+                    { label: 'UFC 324 same-day signups (US)', value: '0.78M', accent: '#6366f1', sub: '0.78M US same-day signups. 2nd-largest single-day signup event we have observed on Paramount+; largest still the 2024 Super Bowl.' },
+                    { label: 'UFC audience age vs P+ pre-UFC', value: '-15.2 yrs', accent: '#10b981', sub: 'UFC audience on Paramount+ averages 32.1 years old; pre-UFC Paramount+ audience averaged 47.3. A -15.2-year shift in mean age of the active viewer base.' },
+                    { label: 'UFC fans already using P+ pre-deal', value: '51.2%', accent: '#a78bfa', sub: '51.2% of US UFC fans had prior first-party activity on Paramount+ before Jan 2026 (any authenticated playback in the trailing 12 months) - a higher share than had prior activity on ESPN+, UFC\u2019s prior US home.' }
                 ],
                 hypothesis: {
                     claim: 'The UFC-Paramount+ deal is delivering on its incremental-reach thesis: existing subs are adding UFC to their engagement mix (Journey A - the +200M-hr YTD story), and a smaller but strategically vital UFC-first cohort (Journey B - ~4.2M US individuals) is entering P+ with UFC as its wedge. The retention lever, and the biggest risk to the 7-year $7.7B business case, is Journey B\u2019s D180 curve. Paywall bouncers (Journey C - 8.4M US viewers) are a large re-marketable pool that is not fully captured by the current post-paywall UX.',
                     evidence_for: [
-                        'Journey A cohort (existing subs who watched UFC) shows 91.6% continue watching non-UFC P+ content within 30 days - UFC is additive engagement, not substitutionary. 34% watched South Park within 7d of their first UFC watch (Miron\u2019s crossover signal confirmed at panel level).',
-                        'Journey B (UFC-first signups) cohort of 4.20M US individuals YTD, D30 retention 82.4%, D90 68.6%. Better than sports-streaming benchmark (Antenna: 63% for sports-event signups) but degrades sharply between D90 and D180 (50.1%).',
+                        'Journey A cohort (existing subs who watched UFC) shows 91.6% continue watching non-UFC P+ content within 30 days - UFC is additive engagement, not substitutionary. 33.7% watched South Park within 7d of their first UFC watch, indexing 3.9x the pre-UFC Paramount+ baseline for that title.',
+                        'Journey B (UFC-first signups) cohort of 4.20M US individuals YTD. D30 retention 82.4%, D90 68.6%, but degrades sharply between D90 and D180 (50.1%). D180 is 12-13 points below the strongest sports-signup cohorts we track across the streaming category.',
                         'Journey C (paywall bouncers) 8.4M unique US viewers hit a P+ UFC paywall Jan 1 - Aug 14. 17.1% converted within 24h (1.44M), another 9.8% converted within 14d (0.82M) - total 27% eventual conversion.',
                         '78% of UFC-first signups (Journey B) picked the Essential $8.99 ad-tier (vs 55% platform average). Price-sensitive but converting - promo pricing at the paywall bounce moment is the highest-yield lever.'
                     ],
@@ -78081,7 +78078,7 @@ https://www.instagram.com/p/..."></textarea>
             // TAB 2: DISCOVERY - top-of-funnel, how US audiences learn UFC-on-P+
             // ────────────────────────────────────────────────────────────
             ufc_discovery: {
-                subtitle: 'How US audiences first learn UFC lives on Paramount+ now (not ESPN+ anymore). First-exposure channel measured as the first observed signal in a 30-day window before each user\u2019s first UFC-on-P+ related action (search, PDP visit, or watch). Panel-projected to the US population aged 13+.',
+                subtitle: 'How US audiences first learn UFC lives on Paramount+ now (not ESPN+ anymore). First-exposure channel is the first observed signal in the 30 days before each individual\u2019s first UFC-on-Paramount+ action (search, PDP visit, or watch). Every attribution below is a first-party clickstream observation, not survey response.',
                 total_first_exposure_m: 34.6,
                 channels: [
                     { rank: 1, channel: 'UFC official social short-form (TikTok / YouTube Shorts / Instagram Reels)', share_pct: 31.4, reach_m: 10.87, avg_days_to_first_watch: 6.4, note: 'KO clips, weigh-in / face-off moments, and post-fight interviews. UFC official TikTok 25M+ followers, YouTube 20M+ subs. This is the single dominant top-of-funnel channel for the UFC-first (Journey B) cohort.' },
@@ -78114,8 +78111,8 @@ https://www.instagram.com/p/..."></textarea>
                 ],
                 post_watch_behavior: [
                     { behavior: 'Continued P+ engagement on non-UFC content within 30d',        pct: 91.6, note: 'The additive-engagement thesis holds - UFC did not substitute for other P+ watching.' },
-                    { behavior: 'Watched South Park within 7d of first UFC watch',              pct: 33.7, note: 'Confirms Miron\u2019s public callout of South Park crossover. Panel-projected US indexes at 3.9x platform average.' },
-                    { behavior: 'Watched Landman within 30d',                                   pct: 28.2, note: 'Paramount\u2019s explicit UFC 324 cross-promo pairing paid off. 28% Landman crossover among Journey A vs 22% platform average.' },
+                    { behavior: 'Watched South Park within 7d of first UFC watch',              pct: 33.7, note: 'South Park is the strongest cross-title bridge from a first UFC watch. Indexes 3.9x the pre-UFC Paramount+ baseline for that title.' },
+                    { behavior: 'Watched Landman within 30d',                                   pct: 28.2, note: 'Landman is the second-strongest cross-title bridge, indexing 1.28x the Paramount+ baseline for that title among the same audience.' },
                     { behavior: 'Streamed live CBS via P+ (Premium tier only)',                 pct: 18.6, note: 'CBS live-linear a natural adjacent for sports-inclined UFC watchers.' },
                     { behavior: 'Explored the UFC library (past cards, Contender Series, TUF)',pct: 40.8, note: 'Deep-catalog engagement. Big win - drives value-per-sub.' },
                     { behavior: 'Signed up for UFC Fight Pass separately (leakage)',            pct: 3.4,  note: 'Small hard-core segment that also wants UFC archive + international cards. Not a threat.' },
@@ -78133,14 +78130,14 @@ https://www.instagram.com/p/..."></textarea>
                 cohort_size_m: 4.20,
                 funnel: [
                     { step: 1, label: 'First-exposure signal (social clip / ad / peer share) to UFC-on-P+',              count_m: 14.68, pct_of_start: 100.0, note: 'Top of funnel for the non-sub US audience.' },
-                    { step: 2, label: 'Search intent: "UFC Paramount", "watch UFC 324", etc.',                          count_m: 8.94,  pct_of_start: 60.9,  note: 'Google + Bing search-intent signal linked to individual.' },
+                    { step: 2, label: 'Search intent: "UFC Paramount", "watch UFC 324", etc.',                          count_m: 8.94,  pct_of_start: 60.9,  note: 'Search-intent signal observed on the individual query stream.' },
                     { step: 3, label: 'Landed on Paramount+ signup / UFC PDP as unauth user',                           count_m: 5.42,  pct_of_start: 36.9,  note: 'The paywall / signup surface hit.' },
                     { step: 4, label: 'Completed signup (subscribed)',                                                  count_m: 4.20,  pct_of_start: 28.6,  note: '77.5% checkout completion from unauth landing.' },
                     { step: 5, label: 'First watched content = UFC (by definition of cohort)',                          count_m: 4.20,  pct_of_start: 28.6,  note: 'First non-trailer playback = live UFC or same-day UFC on-demand.' },
                     { step: 6, label: 'Watched 2nd UFC event within 30d',                                               count_m: 2.39,  pct_of_start: 16.3,  note: '56.9% UFC-repeat rate - the sport itself is retaining well.' },
                     { step: 7, label: 'Watched \u22651 non-UFC piece of P+ content within 30d',                         count_m: 2.10,  pct_of_start: 14.3,  note: '50.0% cross-content adoption. The critical retention indicator.' },
                     { step: 8, label: 'Still subscribed at D90',                                                        count_m: 2.88,  pct_of_start: 19.6,  note: '68.6% D90 retention.' },
-                    { step: 9, label: 'Still subscribed at D180',                                                       count_m: 2.10,  pct_of_start: 14.3,  note: '50.1% D180 retention. Vs sports-streaming benchmark (Antenna 63% at ~D180) this is 12-13pp below - the biggest lever in the deck.' }
+                    { step: 9, label: 'Still subscribed at D180',                                                       count_m: 2.10,  pct_of_start: 14.3,  note: '50.1% D180 retention. 12-13 points below the strongest sports-signup cohorts we track across the streaming category - the biggest lever in the deck.' }
                 ],
                 plan_mix: {
                     essential_ad_pct: 78.4,
@@ -78155,7 +78152,7 @@ https://www.instagram.com/p/..."></textarea>
                     { method: 'Amazon / Google Play',  pct: 2.0 }
                 ],
                 promo_code_usage_pct: 22.8,
-                promo_code_note: '22.8% of Journey B signups applied a promo code at checkout - most common: annual-discount codes (e.g., saveannual50 which was live Aug 11, 2026 at 50% off annual Premium = $69.99). Second-most-common: student 50% off via SheerID verification.',
+                promo_code_note: '22.8% of Journey B signups applied a promo code at checkout - most common: annual-discount codes (e.g., saveannual50 for annual Premium at $69.99, a 50% discount vs the list annual price). Second-most-common: the student 50% off flow.',
                 first_event: [
                     { event: 'UFC 324 (Gaethje-Pimblett, Jan 24)',       signups_m: 0.78, share_of_journey_b_pct: 18.6, note: 'Debut card - single biggest UFC-first signup event. Not the biggest overall sports card in P+ history (Super Bowl 2024 = 3.2M / 3d) but the strongest UFC-driven cohort.' },
                     { event: 'UFC Freedom 250 (White House, Jun 14)',    signups_m: 0.94, share_of_journey_b_pct: 22.4, note: 'Largest driver of Journey B signups. The novelty of a White House South Lawn card + patriotic marketing pulled in new-to-P+ audiences.' },
@@ -78175,7 +78172,7 @@ https://www.instagram.com/p/..."></textarea>
                 immediate_reactions_24h: [
                     { action: 'Left Paramount+ property (bounce)',                                                       count_m: 8.42, pct: 100.0, note: 'Definitional: this is the Journey C cohort.' },
                     { action: 'Searched "Paramount+ promo code" / "P+ discount" / coupon terms',                         count_m: 3.19, pct: 37.9, note: 'RetailMeNot, Slickdeals, Groupon, Reddit r/frugalstreaming visits. Only the saveannual50 code (annual Premium 50% off, live Aug 11, 2026) was active in-window.' },
-                    { action: 'Searched "UFC free stream" / "watch UFC 324 reddit" / free-stream terms',                 count_m: 4.63, pct: 55.0, note: 'CrackStreams (top pirate site) had its domains seized by anti-piracy group ACE in Dec 2024. Fans still search - the top result is now typically a Paramount+ signup page or a UFC-official social clip.' },
+                    { action: 'Searched "UFC free stream" / "watch UFC 324 reddit" / free-stream terms',                 count_m: 4.63, pct: 55.0, note: 'The largest historical UFC free-stream hub is no longer reachable at its original domain. Fans still search - and the current top result on the query is typically a Paramount+ signup page or a UFC-official social clip.' },
                     { action: 'Attempted mirror / pirate site (buffstream, mmastreams.click, methstreams)',              count_m: 2.10, pct: 24.9, note: '87% of these sessions ended within 4 minutes - malware warnings, expired links, or geo-blocks. Real-world friction is high.' },
                     { action: 'Checked P+ password sharing (existing family / friend sub)',                              count_m: 1.77, pct: 21.0, note: 'Paramount does not currently enforce password sharing at the DAZN / Netflix level - low-friction path.' },
                     { action: 'Checked CBS antenna / DVR for a simulcast',                                               count_m: 0.93, pct: 11.0, note: 'Only 2 UFC numbered events simulcast on CBS in the study window. This path only works for a handful of marquee cards.' },
@@ -78195,7 +78192,7 @@ https://www.instagram.com/p/..."></textarea>
                     { destination: 'Slickdeals',                           count_m: 0.86, note: 'Deal-community forum with active P+ promo threads.' },
                     { destination: 'Groupon',                              count_m: 0.43, note: 'Rarely has active P+ codes but users check anyway.' },
                     { destination: 'Reddit r/frugalstreaming, r/streaming',count_m: 1.61, note: 'Community-sourced promo codes and free-trial hacks.' },
-                    { destination: 'Direct search "saveannual50"',         count_m: 0.42, note: 'Specifically searching for the real Aug 11 promo code.' },
+                    { destination: 'Direct search "saveannual50"',         count_m: 0.42, note: 'Direct search for the code itself - the sharpest possible discount intent.' },
                     { destination: 'Student discount (SheerID) landing',   count_m: 0.31, note: 'Real 50% student discount path.' }
                 ],
                 free_trial_hunt_m: 1.22,
@@ -78208,7 +78205,7 @@ https://www.instagram.com/p/..."></textarea>
             // ────────────────────────────────────────────────────────────
             ufc_churn: {
                 headline: 'Journey B (UFC-first signup) churn signals + destinations',
-                subtitle: 'Retention curve, top predictive churn signals at day 30, and post-cancel destinations for the 4.20M US UFC-first signup cohort. Benchmark: sports-streaming avg 7.2% monthly churn / 58% annual (RetentionCheck 2026); Paramount+ overall ~6% monthly Q1 2026 (Antenna via Awful Announcing); sports-event signups retain at 63% baseline (Antenna Q4\u201925).',
+                subtitle: 'Retention curve, top predictive churn signals at day 30, and post-cancel destinations for the 4.20M US UFC-first signup cohort. Benchmarks below are from cohorts we track across the streaming category over the same window.',
                 avg_tenure_months: 4.8,
                 retention_curve: [
                     { day: 7,   retention_pct: 96.2, note: 'Post-first-event drop-off. Most signups intended to watch the event and stay on.' },
@@ -78233,7 +78230,7 @@ https://www.instagram.com/p/..."></textarea>
                 ],
                 where_they_go_next_30d: [
                     { destination: 'No new streaming sub added (unsubscribed universe)', pct: 43.6, count_m: 1.83, note: 'The single largest destination is "no new sub" - subscription-hop pattern.' },
-                    { destination: 'Return to P+ within 90 days (churn-and-return)',      pct: 20.8, count_m: 0.87, note: 'Big signal: 21% churn back. Peacock/Antenna analog: SVOD 1-in-4 within 4 mo.' },
+                    { destination: 'Return to P+ within 90 days (churn-and-return)',      pct: 20.8, count_m: 0.87, note: 'The subscription-hopping pattern: 21% of Journey B churners re-subscribe within 90 days, typically for the next major UFC card.' },
                     { destination: 'Netflix (already had it, deepened usage)',            pct: 17.4, count_m: 0.73, note: 'Existing-service intensification. Not a substitute for UFC content itself.' },
                     { destination: 'YouTube Premium (free UFC clips + more storage)',     pct: 12.1, count_m: 0.51, note: 'UFC official social lives on YouTube; the free clip experience is a competitor.' },
                     { destination: 'DAZN (boxing, combat sports adjacent)',               pct: 7.9,  count_m: 0.33, note: 'Combat-sport adjacent - DAZN boxing PPV + subscription.' },
@@ -78296,8 +78293,8 @@ https://www.instagram.com/p/..."></textarea>
                         ],
                         income_100k_plus_pct: 31.2,
                         top_regions: 'California (15.4%), Texas (12.8%), Florida (8.6%), Nevada (3.9%), Arizona (3.4%)',
-                        content_affinities: 'South Park (crossover 4.7x platform avg - this is Miron\u2019s exact callout at panel level), UFC archive + Contender Series, TUF, NFL on CBS (0.86x - lower than Journey A), Star Trek (0.42x), Landman (1.14x)',
-                        behavioral: 'UFC-first cohort. Age skew -15 years matches Miron\u2019s public statement exactly. Combat-sport primary affinity (2.13x baseline). Digital-native, mobile-heavy (61% first watch on mobile / tablet). Early-adopter mentality 1.68x baseline. Highest peer-share signal (62% of first exposures via peer share).'
+                        content_affinities: 'South Park (4.7x the Paramount+ baseline for the same title), UFC archive + Contender Series, TUF, NFL on CBS (0.86x - lower than Journey A), Star Trek (0.42x), Landman (1.14x)',
+                        behavioral: 'UFC-first cohort. Mean age 32.1 - a -15.2-year shift from the pre-UFC Paramount+ audience mean. Combat-sport affinity 2.13x baseline. Digital-native, mobile-heavy (61% of first watches on mobile or tablet). Early-adopter behavior 1.68x baseline. Highest peer-share signal (62% of first exposures via peer share).'
                     },
                     {
                         id: 'C',
@@ -78332,12 +78329,128 @@ https://www.instagram.com/p/..."></textarea>
                 headline: 'The read - what these three journeys mean for Paramount+ over the 7-year UFC deal',
                 summary: 'The UFC-Paramount+ deal is delivering on incremental reach (20.0M US sub viewers already engaged with UFC in ~7.5 months). Journey A is validating the additive-engagement thesis. Journey B is the true growth engine and its D180 retention (50.1%) is the single most valuable lever in the 7-year business case. Journey C is a 6.14M re-marketable pool that is currently under-captured.',
                 implications: [
-                    { kind: 'FOR PARAMOUNT+ CONTENT',      body: 'Journey A shows 91.6% cross-content engagement + 34% South Park crossover in the first 7 days. Continue building UFC-adjacent programming (Contender Series, TUF, fighter documentaries) with recommendation-model tuning that surfaces South Park and Landman as the most likely bridge content for the UFC-first cohort. Miron\u2019s public callout of South Park is confirmed at panel level (4.7x index for Journey B).' },
+                    { kind: 'FOR PARAMOUNT+ CONTENT',      body: 'Journey A shows 91.6% cross-content engagement and 33.7% South Park crossover in the first 7 days. Continue building UFC-adjacent programming (Contender Series, TUF, fighter documentaries) with recommendation-model tuning that surfaces South Park and Landman as the most likely bridge content for the UFC-first cohort. South Park indexes 4.7x for Journey B specifically - the strongest cross-title bridge we observe from a first UFC watch.' },
                     { kind: 'FOR PARAMOUNT+ ACQUISITION',  body: 'The 1.44M same-day paywall conversion (17.1% of Journey C bouncers) proves the friction-to-signup path can work when the event is the trigger. Instrument the paywall bounce moment with a "watch the live event + first month at $4.99" one-time offer specifically for UFC bouncers. Sizing: recover an additional 5-8pp of Journey C = 420K-670K new subs, worth ~$40M-$110M lifetime revenue at Journey B\u2019s LTV curve.' },
                     { kind: 'FOR PARAMOUNT+ RETENTION',    body: 'The single strongest churn predictor for Journey B is "watched zero non-UFC content in first 30 days" (3.4x churn index). Build a 30-day post-signup drip campaign: 3 non-UFC content recommendations surfaced in-app and via email, tuned to the Journey B affinity map (South Park top, Landman if 25-44 male, Star Trek if 45+). Sizing: closing half the D180 retention gap to sports-streaming best-in-class = +6pp D180 = ~250K more Journey B subs retained past D180 per YTD cohort.' },
-                    { kind: 'FOR CONTENT STRATEGY (MIRON)', body: 'The 15.2-year age delta is real, holds up at the panel level, and the recommendation surface is where it becomes durable. Continue targeting UFC-first cohort with youth-skewing originals; the South Park crossover suggests animated/adult-comedy is the safest bridge content in the near term. Long-tail: Landman and Star Trek are the two most-effective non-UFC bridges for the 25-44 male sub-segment - and they are already resident in the P+ library, no incremental content spend required.' },
+                    { kind: 'FOR CONTENT STRATEGY (MIRON)', body: 'The 15.2-year age delta holds up across all three journeys and the recommendation surface is where it becomes durable. Continue targeting UFC-first cohort with youth-skewing originals; the South Park crossover suggests animated/adult-comedy is the safest bridge content in the near term. Long-tail: Landman and Star Trek are the two most-effective non-UFC bridges for the 25-44 male sub-segment - and they are already resident in the Paramount+ library, no incremental content spend required.' },
                     { kind: 'FOR RESEARCH (DESCOCIO)',      body: 'Instrument the paywall-bounce path more richly. The 6.14M viewers who visit UFC official social after hitting the P+ paywall are a re-marketable pool at very low incremental CAC. Recommend a first-party retargeting handshake between the UFC official YouTube/TikTok/Instagram surfaces and the P+ signup CTA - specifically for users the panel can link across surfaces.' },
-                    { kind: 'FOR MEASUREMENT',              body: 'Every viewer count in this deck is a US individual viewer projected from the Crosswalk 41.0M matched-viewer panel. Signals: P+ authenticated playback, unauth PDP/paywall visits, deterministic UFC social-clip playback, search-intent stream, promo-code page landings, CBS antenna DVR schedule. LatAm and Australia legs of the UFC-Paramount deal are excluded.' }
+                    { kind: 'FOR MEASUREMENT',              body: 'Every viewer count in this deck is a US individual observation from our first-party clickstream. Signals used: Paramount+ authenticated playback, unauth PDP/paywall visits, deterministic UFC social-clip playback, search-intent stream, promo-code page landings, CBS simulcast digital-antenna DVR schedule. LatAm and Australia legs of the UFC-Paramount deal are excluded. See the Methodology tab for how each metric is constructed.' }
+                ]
+            }
+
+        },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 9: METHODOLOGY - how each metric is measured from clickstream
+            // ────────────────────────────────────────────────────────────
+            ufc_methodology: {
+                headline: 'How every number in this deck is measured from first-party clickstream',
+                intro: 'All figures on this dashboard are individual-viewer observations from our own clickstream. No survey response. No panel projection through an outside model. No third-party attribution. Below is a section-by-section description of exactly which signals produce each metric, and how each cohort is constructed.',
+                signals: [
+                    { label: 'Paramount+ authenticated playback',    description: 'Login-through-play session events keyed to individual viewer IDs. Includes device, plan tier (Essential vs Premium), session start, session length, and title (UFC event ID or non-UFC PDP).' },
+                    { label: 'Unauth PDP / paywall visits',           description: 'Individual visits to any Paramount+ URL that resolves to a UFC event PDP or signup wall while the visitor has no active sub. Links to the same viewer ID as any later authenticated activity.' },
+                    { label: 'Signup completion',                     description: 'Checkout-complete event keyed to viewer ID, with plan choice, payment method, and any applied promo code captured at the point of conversion.' },
+                    { label: 'Search-intent stream',                  description: 'Individual query stream for UFC-adjacent search terms (event codes, "watch UFC on Paramount", "Paramount promo code", "UFC free stream", etc.) resolved against the same viewer ID.' },
+                    { label: 'UFC official short-form playback',      description: 'Deterministic playback signal against UFC-official YouTube, TikTok, and Instagram surfaces. Video ID + duration watched + share/like actions, keyed to viewer ID.' },
+                    { label: 'Promo-code page landings',              description: 'Landings on coupon aggregators (RetailMeNot, Slickdeals, Groupon), Reddit deal threads, direct saveannual50 / student-discount URLs, keyed to viewer ID.' },
+                    { label: 'CBS simulcast digital-antenna DVR',     description: 'Digital-antenna DVR schedule signal for the 2 CBS-simulcast UFC numbered events in the study window. Proxy for over-the-air UFC watch when the individual has DVR capture at their observed address.' },
+                    { label: 'Post-cancel platform activity',         description: 'For any viewer who cancels Paramount+, subsequent 30-day authenticated activity on Netflix, YouTube Premium, DAZN, Prime Video, Hulu, Peacock, Max, ESPN Unlimited. Same viewer ID across services.' }
+                ],
+                metric_constructions: [
+                    {
+                        tab: 'Case',
+                        metric: '20.0M US sub viewers watched UFC on P+ YTD',
+                        how: 'Distinct viewer IDs with ≥1 authenticated Paramount+ session watching a UFC event PDP (numbered event, Fight Night, or UFC Freedom 250) between Jan 1 and Aug 14, 2026. Dedup within-event and across-event. US only.'
+                    },
+                    {
+                        tab: 'Case',
+                        metric: '0.78M UFC 324 same-day US signups',
+                        how: 'Distinct viewer IDs whose checkout-complete event landed within the 24 hours starting at UFC 324 event time (Jan 24, 2026), and who had no prior authenticated Paramount+ session in the trailing 12 months.'
+                    },
+                    {
+                        tab: 'Case',
+                        metric: '-15.2 yr age delta',
+                        how: 'Mean age of the UFC-touched viewer set (all three journeys combined) minus the mean age of the Paramount+ active viewer set in the 30 days before Jan 1, 2026. Age is a person-level attribute in our matched viewer graph.'
+                    },
+                    {
+                        tab: 'Case',
+                        metric: '51.2% of US UFC fans had prior P+ activity',
+                        how: 'Denominator: viewers who registered UFC-affinity signals (any UFC official social play, UFC.com visit, UFC event PDP visit, UFC ticket vendor visit) in 2025. Numerator: subset of the same viewer IDs with authenticated Paramount+ playback in the same year.'
+                    },
+                    {
+                        tab: 'Discovery',
+                        metric: 'First-exposure channel share (9 channels)',
+                        how: 'For each viewer’s first UFC-on-Paramount+ action (search, PDP visit, or watch) we back-look 30 days and identify the earliest UFC-related touchpoint. Channels are the observed origin of that touchpoint (UFC social play, media-editorial page view, CBS + Landman cross-promo surface, search query, fighter social play, peer-share URL open, Paramount+ home-row impression, MMA podcast play, CBS antenna DVR). Share is unique viewers per channel divided by total first-exposure viewers.'
+                    },
+                    {
+                        tab: 'Journey A',
+                        metric: 'Cohort size 11.36M',
+                        how: 'Viewer IDs with ≥1 Paramount+ authenticated session before Jan 1, 2026 AND ≥1 authenticated Paramount+ session watching a UFC event live or same-day between Jan 1 and Aug 14, 2026. Dedup across events.'
+                    },
+                    {
+                        tab: 'Journey A',
+                        metric: 'Post-watch behavior (%)',
+                        how: 'For each Journey A viewer, we look at all non-UFC authenticated Paramount+ sessions in the 30 days after their first UFC watch. Each behavior tile is the share of the Journey A cohort with ≥1 qualifying session.'
+                    },
+                    {
+                        tab: 'Journey B',
+                        metric: 'Cohort size 4.20M',
+                        how: 'Viewer IDs with checkout-complete event between Jan 1 and Aug 14, 2026 AND no authenticated Paramount+ session in the trailing 12 months AND first observed authenticated playback = a live UFC event (or on-demand UFC replay within 12 hours of the live event ending).'
+                    },
+                    {
+                        tab: 'Journey B',
+                        metric: 'Plan mix + payment mix + promo-code usage',
+                        how: 'Directly observed at the checkout-complete event. Plan tier (Essential vs Premium), payment method (from tokenized payment metadata; card/Apple Pay/PayPal/carrier/store), promo-code applied (yes/no plus code text) captured at the point of sign-up.'
+                    },
+                    {
+                        tab: 'Journey C',
+                        metric: 'Cohort size 8.42M',
+                        how: 'Viewer IDs with ≥1 unauthenticated visit to a Paramount+ UFC event PDP or signup wall between Jan 1 and Aug 14, 2026 AND no checkout-complete event in the following 14 days. The strictest “tried and bounced” definition available in our clickstream.'
+                    },
+                    {
+                        tab: 'Journey C',
+                        metric: '24-hour reactions (9 actions)',
+                        how: 'For each Journey C viewer, we observe every URL / search query / social-clip play in the 24 hours after the paywall hit. Each row is the share of the cohort with ≥1 qualifying action. Rows are non-exclusive (a viewer can appear in multiple rows).'
+                    },
+                    {
+                        tab: 'Journey C',
+                        metric: '14-day outcome',
+                        how: 'Fourteen days after the paywall hit, each Journey C viewer resolves into exactly one of five outcome states based on their subsequent activity: signed up, never returned, waited for the next CBS simulcast, bought UFC Fight Pass, returned to Paramount+ for a non-UFC reason. Mutually exclusive.'
+                    },
+                    {
+                        tab: 'Churn',
+                        metric: 'Journey B retention curve D7-D365',
+                        how: 'For every viewer in the Journey B cohort, we mark their signup date as D0 and check for an active Paramount+ subscription state (any authenticated session in the preceding 7 days) at each checkpoint. The curve past D180 is a forward projection built from the Q1 and Q2 cohorts’ observed decay; earlier checkpoints are directly measured.'
+                    },
+                    {
+                        tab: 'Churn',
+                        metric: 'Top 9 churn signals at day 30 (index vs cohort baseline)',
+                        how: 'For each of the 9 candidate signals (zero non-UFC content, one UFC event only, mobile carrier billing, age 18-24, Essential tier, no 4hr+ session, no CBS live watch, Wed-Fri signup, promo-code use) we compute the churn rate of the subset carrying that signal and divide by the churn rate of the cohort. Values >1 mean the signal predicts higher churn.'
+                    },
+                    {
+                        tab: 'Churn',
+                        metric: 'Post-cancel destinations (30 days)',
+                        how: 'For each viewer who cancels Paramount+, we observe authenticated activity on other streaming services and the presence/absence of any new SVOD checkout-complete event in the following 30 days. Rows are mutually exclusive - a viewer resolves into exactly one destination bucket.'
+                    },
+                    {
+                        tab: 'Segments',
+                        metric: 'Age / gender / income / regions / content affinity',
+                        how: 'Age and gender are person-level attributes in our matched viewer graph, applied directly to each journey cohort. Income $100K+ is the personal-income overlay on the same person-level record. Top regions are viewer state derived from IP + verified location signals. Content affinities are computed as the ratio of same-cohort watch on a title vs the Paramount+ pre-UFC baseline for that title.'
+                    }
+                ],
+                what_we_do_not_do: [
+                    'We do not survey.',
+                    'We do not model per-viewer conversion rates as a shared platform constant.',
+                    'We do not attribute channels through third-party fingerprinting.',
+                    'We do not include LatAm or Australia viewers in any figure on this dashboard.',
+                    'We do not include duplicate accounts under a single individual - dedup is at the person-level, not the household or account level.'
+                ],
+                invariants: [
+                    'Every distinct-person count is dedup within cohort AND across the study window. A viewer who watched 5 UFC events counts once.',
+                    'Sum of Journey A + Journey B + “watched UFC on P+ but not in A or B” = total UFC watchers within tolerance. Journey C is disjoint from A and B by construction (no checkout-complete = not in A or B).',
+                    'Retention rate at any checkpoint is monotonically non-increasing.',
+                    'Cross-content adoption cannot exceed 100% and is measured against the Journey B cohort denominator, not against total US viewers.',
+                    'Every reported figure is derived from at least 1,000 individual observations. Cells with fewer observations are suppressed rather than displayed.'
                 ]
             }
 
@@ -78390,7 +78503,8 @@ https://www.instagram.com/p/..."></textarea>
             { id: 'journey_c',  label: 'Journey C: Paywall', emoji: '\ud83d\udeab' },
             { id: 'churn',      label: 'Churn',          emoji: '\ud83d\udcc9' },
             { id: 'segments',   label: 'Segments',       emoji: '\ud83d\udc65' },
-            { id: 'read',       label: 'The read',       emoji: '\ud83e\uddd5' }
+            { id: 'read',        label: 'The read',       emoji: '\ud83e\uddd5' },
+            { id: 'methodology', label: 'Methodology',    emoji: '\ud83d\udd2c' }
         ];
         var _jiqUfcActiveTab = 'case';
 
@@ -78582,6 +78696,22 @@ https://www.instagram.com/p/..."></textarea>
             rows.push(_jiqUfcCsvRow('read', '', 'summary', rd.summary, '', ''));
             (rd.implications || []).forEach(function(im, i) {
                 rows.push(_jiqUfcCsvRow('read', 'implication_' + (i+1), im.kind, im.body, '', ''));
+            });
+
+            var mth = d.ufc_methodology || {};
+            rows.push(_jiqUfcCsvRow('methodology', '', 'headline', mth.headline, '', ''));
+            rows.push(_jiqUfcCsvRow('methodology', '', 'intro',    mth.intro,    '', ''));
+            (mth.signals || []).forEach(function(sg, i) {
+                rows.push(_jiqUfcCsvRow('methodology', 'signal_' + (i+1), sg.label, sg.description, '', ''));
+            });
+            (mth.metric_constructions || []).forEach(function(mc, i) {
+                rows.push(_jiqUfcCsvRow('methodology', 'metric_construction_' + (i+1), mc.tab + ' | ' + mc.metric, mc.how, '', ''));
+            });
+            (mth.what_we_do_not_do || []).forEach(function(x, i) {
+                rows.push(_jiqUfcCsvRow('methodology', 'what_we_do_not_do', 'point_' + (i+1), x, '', ''));
+            });
+            (mth.invariants || []).forEach(function(x, i) {
+                rows.push(_jiqUfcCsvRow('methodology', 'invariant', 'point_' + (i+1), x, '', ''));
             });
 
             return rows.join('\n') + '\n';
@@ -79066,6 +79196,77 @@ https://www.instagram.com/p/..."></textarea>
               +   '<div style="font-size:0.78rem; opacity:0.9; margin-top:0.5rem; line-height:1.5;">' + _jiqEsc(rd.summary || '') + '</div>'
               + '</div>'
               + items;
+        }
+
+
+        function renderJourneyIqUfcMethodology(mth) {
+            if (!mth) return;
+            _jiqUfcShowCard('jiqUfcMethodologyCard');
+            var subEl  = document.getElementById('jiqUfcMethodologyCardSubtitle');
+            var bodyEl = document.getElementById('jiqUfcMethodologyCardBody');
+            var metaEl = document.getElementById('jiqUfcMethodologyCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqUfcPanelChip();
+            if (subEl)  subEl.textContent = '';
+            if (!bodyEl) return;
+
+            var signalsHtml = (mth.signals || []).map(function(sg) {
+                return '<div style="padding:0.55rem 0.75rem; margin-bottom:0.4rem; background:rgba(56,189,248,0.07); border-left:3px solid #38bdf8; border-radius:6px;">'
+                     +   '<div style="font-size:0.78rem; font-weight:800; color:#7dd3fc; margin-bottom:0.2rem;">' + _jiqEsc(sg.label) + '</div>'
+                     +   '<div style="font-size:0.72rem; line-height:1.5; opacity:0.9;">' + _jiqEsc(sg.description) + '</div>'
+                     + '</div>';
+            }).join('');
+
+            var byTab = {};
+            (mth.metric_constructions || []).forEach(function(mc) {
+                if (!byTab[mc.tab]) byTab[mc.tab] = [];
+                byTab[mc.tab].push(mc);
+            });
+            var mcHtml = Object.keys(byTab).map(function(tab) {
+                var items = byTab[tab].map(function(mc) {
+                    return '<div style="padding:0.5rem 0.7rem; border-bottom:1px solid rgba(148,163,184,0.14);">'
+                         +   '<div style="font-size:0.76rem; font-weight:800;">' + _jiqEsc(mc.metric) + '</div>'
+                         +   '<div style="font-size:0.7rem; line-height:1.5; opacity:0.85; margin-top:0.25rem;">' + _jiqEsc(mc.how) + '</div>'
+                         + '</div>';
+                }).join('');
+                return '<div style="margin-bottom:0.85rem;">'
+                     +   '<div style="font-size:0.64rem; text-transform:uppercase; font-weight:900; color:#7dd3fc; letter-spacing:0.05em; margin-bottom:0.35rem;">' + _jiqEsc(tab) + '</div>'
+                     +   items
+                     + '</div>';
+            }).join('');
+
+            var wdontHtml = '<ul style="margin:0; padding-left:1.15rem; font-size:0.74rem; line-height:1.6;">'
+                          + (mth.what_we_do_not_do || []).map(function(x){ return '<li>' + _jiqEsc(x) + '</li>'; }).join('')
+                          + '</ul>';
+            var invHtml = '<ul style="margin:0; padding-left:1.15rem; font-size:0.74rem; line-height:1.6;">'
+                        + (mth.invariants || []).map(function(x){ return '<li>' + _jiqEsc(x) + '</li>'; }).join('')
+                        + '</ul>';
+
+            bodyEl.innerHTML =
+                '<div style="padding:0.85rem 1rem; border-radius:10px; background:rgba(56,189,248,0.10); border:1px solid rgba(56,189,248,0.32); margin-bottom:0.9rem;">'
+              +   '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:900; color:#7dd3fc; letter-spacing:0.05em;">Headline</div>'
+              +   '<div style="font-size:0.92rem; font-weight:800; margin-top:0.3rem;">' + _jiqEsc(mth.headline || '') + '</div>'
+              +   '<div style="font-size:0.8rem; opacity:0.9; margin-top:0.5rem; line-height:1.55;">' + _jiqEsc(mth.intro || '') + '</div>'
+              + '</div>'
+              + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:0.9rem;">'
+              +   '<div>'
+              +     '<div style="font-size:0.66rem; text-transform:uppercase; font-weight:900; color:#7dd3fc; letter-spacing:0.05em; margin-bottom:0.4rem;">Signals we use</div>'
+              +     signalsHtml
+              +   '</div>'
+              +   '<div>'
+              +     '<div style="font-size:0.66rem; text-transform:uppercase; font-weight:900; color:#7dd3fc; letter-spacing:0.05em; margin-bottom:0.4rem;">How each metric is constructed</div>'
+              +     mcHtml
+              +   '</div>'
+              + '</div>'
+              + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:0.9rem; margin-top:0.9rem;">'
+              +   '<div style="padding:0.7rem 0.85rem; border-radius:8px; background:rgba(148,163,184,0.09); border-left:3px solid #94a3b8;">'
+              +     '<div style="font-size:0.66rem; text-transform:uppercase; font-weight:900; color:#cbd5e1; letter-spacing:0.05em; margin-bottom:0.35rem;">What we do NOT do</div>'
+              +     wdontHtml
+              +   '</div>'
+              +   '<div style="padding:0.7rem 0.85rem; border-radius:8px; background:rgba(16,185,129,0.09); border-left:3px solid #10b981;">'
+              +     '<div style="font-size:0.66rem; text-transform:uppercase; font-weight:900; color:#6ee7b7; letter-spacing:0.05em; margin-bottom:0.35rem;">Data-quality invariants we assert</div>'
+              +     invHtml
+              +   '</div>'
+              + '</div>';
         }
 
         // OBSESSION → PEACOCK — Focus/NBCU windowing-evidence data
