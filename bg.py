@@ -29331,7 +29331,7 @@ def _ensure_apple_pay_present(df, persona_doc=None):
             mask = df['Column'].astype(str).str.upper() == 'DIGITAL BANKING'
             bp_col = 'Brand Penetration (Row)'
             if bp_col in df.columns and 'Category Share' in df.columns:
-                bp_vals = _pd.to_numeric(df.loc[mask, bp_col], errors='coerce').fillna(0.0)
+                bp_vals = _pd.to_numeric(df.loc[mask, bp_col].astype(str).str.replace('%', '', regex=False).str.strip(), errors='coerce').fillna(0.0)
                 tot = bp_vals.sum()
                 if tot > 0:
                     df.loc[mask, 'Category Share'] = (bp_vals / tot * 100).round(4)
@@ -29342,7 +29342,7 @@ def _ensure_apple_pay_present(df, persona_doc=None):
                     sample_size = int(float(str(ss_row.iloc[0]['Original Raw Numbers']).replace(',', '')))
                 except Exception:
                     sample_size = 1
-                bp_full = _pd.to_numeric(df[bp_col], errors='coerce').fillna(0.0)
+                bp_full = _pd.to_numeric(df[bp_col].astype(str).str.replace('%', '', regex=False).str.strip(), errors='coerce').fillna(0.0)
                 new_idx = df.index[-1]
                 raw = int(round(bp_full.iloc[-1] / 100.0 * sample_size))
                 df.at[new_idx, 'Original Raw Numbers'] = raw
@@ -29378,7 +29378,7 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
         bp = 'Brand Penetration (Row)'
         if bp not in df.columns:
             return df
-        df[bp] = _pd.to_numeric(df[bp], errors='coerce').fillna(0.0)
+        df[bp] = _pd.to_numeric(df[bp].astype(str).str.replace('%', '', regex=False).str.strip(), errors='coerce').fillna(0.0)
 
         # Persona signal extraction (best-effort)
         psum = ''
@@ -29971,7 +29971,7 @@ def _enforce_realistic_ceilings(df, project_name: str = '', persona_doc=None):
             pass
         for cat in cats_touched:
             mask = df['Column'].astype(str).str.upper() == cat
-            bp_vals = _pd.to_numeric(df.loc[mask, bp], errors='coerce').fillna(0.0)
+            bp_vals = _pd.to_numeric(df.loc[mask, bp].astype(str).str.replace('%', '', regex=False).str.strip(), errors='coerce').fillna(0.0)
             tot = bp_vals.sum()
             if tot > 0 and 'Category Share' in df.columns:
                 df.loc[mask, 'Category Share'] = (bp_vals / tot * 100).round(4)
@@ -30260,7 +30260,7 @@ def _apply_persona_uniqueness_noise(df, project_name: str = ''):
         bp = 'Brand Penetration (Row)'
         if bp not in df.columns or not project_name:
             return df
-        df[bp] = _pd.to_numeric(df[bp], errors='coerce').fillna(0.0)
+        df[bp] = _pd.to_numeric(df[bp].astype(str).str.replace('%', '', regex=False).str.strip(), errors='coerce').fillna(0.0)
 
         EXCLUDE = {'SAMPLE SIZE', 'AGE', 'GENDER', 'ETHNICITY', 'INCOME',
                    'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION',
@@ -30324,7 +30324,7 @@ def _break_intra_category_pinning(df, project_name: str = ''):
         bp = 'Brand Penetration (Row)'
         if bp not in df.columns:
             return df
-        df[bp] = _pd.to_numeric(df[bp], errors='coerce').fillna(0.0)
+        df[bp] = _pd.to_numeric(df[bp].astype(str).str.replace('%', '', regex=False).str.strip(), errors='coerce').fillna(0.0)
 
         EXCLUDE = {'SAMPLE SIZE','AGE','GENDER','ETHNICITY','INCOME','EDUCATION',
                    'RELATIONSHIP','SEXUAL_ORIENTATION','PARENTAL_STATUS','OCCUPATION',
@@ -30364,7 +30364,7 @@ def _break_intra_category_pinning(df, project_name: str = ''):
             pass
         for cat in cats_touched:
             mask = df['Column'].astype(str).str.upper() == cat
-            bp_vals = _pd.to_numeric(df.loc[mask, bp], errors='coerce').fillna(0.0)
+            bp_vals = _pd.to_numeric(df.loc[mask, bp].astype(str).str.replace('%', '', regex=False).str.strip(), errors='coerce').fillna(0.0)
             tot = bp_vals.sum()
             if tot > 0 and 'Category Share' in df.columns:
                 df.loc[mask, 'Category Share'] = (bp_vals / tot * 100).round(4)
@@ -30405,7 +30405,7 @@ def _break_global_long_tail_pinning(df, project_name: str = '',
         bp_col = 'Brand Penetration (Row)'
         if bp_col not in df.columns:
             return df
-        df[bp_col] = _pd.to_numeric(df[bp_col], errors='coerce').fillna(0.0)
+        df[bp_col] = _pd.to_numeric(df[bp_col].astype(str).str.replace('%', '', regex=False).str.strip(), errors='coerce').fillna(0.0)
 
         # Identify pin clusters in the qualifying band
         rounded = df[bp_col].round(4)
@@ -30460,7 +30460,7 @@ def _break_global_long_tail_pinning(df, project_name: str = '',
         if 'Category Share' in df.columns:
             for cat in cats_touched:
                 m = df['Column'].astype(str).str.upper() == cat
-                bps = _pd.to_numeric(df.loc[m, bp_col], errors='coerce').fillna(0.0)
+                bps = _pd.to_numeric(df.loc[m, bp_col].astype(str).str.replace('%', '', regex=False).str.strip(), errors='coerce').fillna(0.0)
                 tot = float(bps.sum())
                 if tot > 0:
                     df.loc[m, 'Category Share'] = (bps / tot * 100).round(4)
@@ -30815,7 +30815,16 @@ def _align_cross_category_bp(df):
     for _col in ['Brand Penetration (Row)', 'Category Share', 'Original Raw Numbers',
                  'US Gen Pop Projection']:
         if _col in df.columns:
-            df[_col] = _pd.to_numeric(df[_col], errors='coerce').fillna(0.0)
+            # Scrub '%' + commas before numeric coerce so '"12.3456%"' cells
+            # from any upstream writer don't get zeroed to 0.0. See
+            # 2026-08-17 Spectrum -> Frontier defect (commit 23940cde).
+            df[_col] = _pd.to_numeric(
+                df[_col].astype(str)
+                        .str.replace('%', '', regex=False)
+                        .str.replace(',', '', regex=False)
+                        .str.strip(),
+                errors='coerce'
+            ).fillna(0.0)
 
     _SKIP = {'INPUT_METADATA', 'BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY',
              'AVID FAN', 'CASUAL FAN'}

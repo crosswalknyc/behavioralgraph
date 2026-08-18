@@ -11903,7 +11903,10 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
 
     # ── G4: within-cat 4dp collisions ≥ 10 ────────────────────────────
     try:
-        bps = pd.to_numeric(df[bp_col], errors='coerce').fillna(0.0)
+        bps = pd.to_numeric(
+            df[bp_col].astype(str).str.replace('%', '', regex=False).str.strip(),
+            errors='coerce'
+        ).fillna(0.0)
         cats = df['Column'].astype(str).str.upper()
         skip = DEPIN_DEMO_CATS | DEPIN_META_CATS
         col_4dp = bps.round(4)
