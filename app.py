@@ -17941,7 +17941,7 @@ def _build_hf_alpha_email_html(username, alpha_packets, as_of_date, app_base_url
             <p style="color: #888; margin: 8px 0 0 0;">For <strong style="color:#66d9ef;">{escape(username)}</strong> — {escape(as_of_date)} (ET)</p>
         </div>
         <p style="color:#a6e22e; font-size: 0.95em; margin-bottom: 24px; padding: 12px; background: rgba(166,226,46,0.1); border-radius: 6px; text-align: center;">
-            <strong>Crosswalk IQ Research:</strong> Comprehensive analysis combining Street views, company guidance, industry trends, and proprietary signals — synthesized into actionable ideas.
+            <strong>Crosswalk IQ Research:</strong> Comprehensive analysis combining Street views, company guidance, industry trends, and proprietary signals, distilled into actionable ideas.
         </p>
         {''.join(sections)}
         {cta}

@@ -23894,7 +23894,7 @@ https://www.instagram.com/p/..."></textarea>
             #blueIQView .bq-fan-svg { width: 100%; min-width: 720px; height: auto; display: block; }
             /* Compact variant for the inbound (How voters arrived)
              * fan-sankey. Caps rendered height so the full card fits
-             * on one screen even with all 4 modeled-source padding
+             * on one screen even with all 4 padding
              * rows present (up to ~10 ribbons). preserveAspectRatio
              * scales contents down proportionally. */
             #blueIQView .bq-fan-svg-compact { max-height: 440px; }
@@ -23909,7 +23909,7 @@ https://www.instagram.com/p/..."></textarea>
             #blueIQView .bq-fan-label-sub { font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.12rem; line-height: 1.3; }
             #blueIQView .bq-fan-label-right { text-align: right; padding-right: 0.4rem; }
             #blueIQView .bq-fan-footer { font-size: 0.72rem; color: var(--text-secondary); text-align: center; padding: 0.55rem 0 0.2rem 0; line-height: 1.5; }
-            #blueIQView .bq-inbound-modeled-note { font-style: italic; opacity: 0.85; }
+            #blueIQView .bq-inbound-estimated-note { font-style: italic; opacity: 0.85; }
 
             /* ── Top observed paths (CARD K2) ── */
             #blueIQView .bq-path-table { display: flex; flex-direction: column; gap: 0.55rem; padding: 0.3rem 0 0.5rem 0; }
@@ -26582,7 +26582,7 @@ https://www.instagram.com/p/..."></textarea>
             }
             function metaCard(label, value) { return '<div class="iiq-meta-card"><div class="iiq-meta-card-label">' + escapeHtml(label) + '</div><div class="iiq-meta-card-value">' + escapeHtml(value) + '</div></div>'; }
 
-            // ===== Per-cohort campaign exposure projection (modeled) =====
+            // ===== Per-cohort campaign exposure projection (estimated) =====
             // For each audience cohort we project three downstream exposure
             // metrics that aren't directly measured today (per-cohort
             // URL-referrer joins aren't wired up yet):
@@ -27374,7 +27374,7 @@ https://www.instagram.com/p/..."></textarea>
                     + '</div>';
             }
 
-            // ===== Per-asset intent funnel projection (synthetic / modeled) =====
+            // ===== Per-asset intent funnel projection (built) =====
             // For each asset card we surface two downstream conversion-style
             // metrics that are NOT directly measured today (the URL-referrer
             // join isn't wired up yet):
@@ -28374,7 +28374,7 @@ https://www.instagram.com/p/..."></textarea>
                         var paidCount = cards.filter(function(c){ return c.paid_or_organic === 'paid'; }).length;
                         var orgCount  = cards.filter(function(c){ return c.paid_or_organic === 'organic' || c.paid_or_organic === 'natural'; }).length;
 
-                        // Per-asset funnel projections (modeled, see iiqAssetFunnelProjection)
+                        // Per-asset funnel projections (see iiqAssetFunnelProjection)
                         var totalInfoSeekers = 0;
                         var totalTicketVisits = 0;
                         cards.forEach(function(c) {
@@ -29121,7 +29121,7 @@ https://www.instagram.com/p/..."></textarea>
             // funnel so the user can answer "where did viewers come from
             // and what did they do next?" There's no panel-tracked
             // referrer/post-view join wired up today, so this is a
-            // modeled view calibrated to:
+            // estimated view calibrated to:
             //   - Channel-specific source mixes (YouTube Up-Next vs TikTok
             //     FYP vs Instagram Reels vs paid display network).
             //   - Asset-archetype downstream (trailer ⟶ trailer search +
@@ -30291,7 +30291,7 @@ https://www.instagram.com/p/..."></textarea>
             }
 
             // ===== Per-asset detail modal (Performance page Top-10 + Assets page) =====
-            // Renders a centered overlay with the asset's metadata, modeled
+            // Renders a centered overlay with the asset's metadata, estimated
             // funnel projections (info-seek % + ticketing %), and a daily
             // views+engagement line chart fetched from
             // /api/intent/<slug>/asset/<id>/timeseries. Defaults to YTD per
@@ -30999,7 +30999,7 @@ https://www.instagram.com/p/..."></textarea>
                     });
             };
 
-            // ===== Per-comp modeled signal breakdown (Q3) =====
+            // ===== Per-comp estimated signal breakdown (Q3) =====
             // For each already-released comp we don't have asset-level data,
             // so we model the same 3 high-intent signals the subject (GOAT)
             // measures - using GOAT's measured shape as the prior (trailer
@@ -31007,7 +31007,7 @@ https://www.instagram.com/p/..."></textarea>
             // jitter so each card has a slightly different distribution.
             // Conversion rates (85% / 25% / 8%) match the rates the backend
             // uses for the subject in _measure_subject_ticket_intent(), so a
-            // modeled comp bar is directly comparable to GOAT's measured bar.
+            // estimated comp bar is directly comparable to GOAT's measured bar.
             function iiqQ3ModelCompSignals(comp) {
                 var total = Number(comp && comp.opening_weekend_buyers) || 0;
                 if (total <= 0) return [];
@@ -31764,7 +31764,7 @@ https://www.instagram.com/p/..."></textarea>
                 // IMPORTANT: we plot ABSOLUTE daily counts (people, not
                 // %). This makes info-seekers and ticketing visits drop
                 // to zero on days with no trailer views (where they
-                // belong), instead of showing the modeled conversion %
+                // belong), instead of showing the estimated conversion %
                 // floating high during the dead zone where there are no
                 // viewers to convert. SVOD searches join the same chart
                 // on the same right axis since they're also counts.
@@ -32916,7 +32916,7 @@ https://www.instagram.com/p/..."></textarea>
                     return;
                 }
                 // Digital Journey has no backend endpoint -- it derives
-                // entirely from per-asset BEFORE/AFTER funnels modeled
+                // entirely from per-asset BEFORE/AFTER funnels built
                 // off the same _assets payload Q1/Q2/Q4/Q6 use. Skip
                 // the /questions/<qid> fetch and hydrate _assets directly.
                 if (qid === 'journey') {
@@ -34974,7 +34974,7 @@ https://www.instagram.com/p/..."></textarea>
 
                 <!-- ════════════════════════════════════════════════════════
                      ECOSYSTEM SPOTLIGHT card - shown only when the run
-                     payload carries modeled_view.ecosystem_spotlight.
+                     payload carries estimated_view.ecosystem_spotlight.
                      Visualizes the owned-property family (e.g. Fandango
                      / Rotten Tomatoes / Fandango at Home) as a trinity
                      triangle + lifecycle ribbon + ecosystem KPI strip.
@@ -35046,7 +35046,7 @@ https://www.instagram.com/p/..."></textarea>
 
                 <!-- ════════════════════════════════════════════════════════
                      AUDIENCE HYPOTHESIS card - shown only when the run
-                     payload carries modeled_view.audience_hypotheses.
+                     payload carries estimated_view.audience_hypotheses.
                      Visualizes client-stated audience theses with proxy
                      cohort sizing, intent index vs gen-pop baseline,
                      top engagement surfaces, DMA concentration, plus
@@ -35082,7 +35082,7 @@ https://www.instagram.com/p/..."></textarea>
 
                 <!-- ════════════════════════════════════════════════════════
                      JOURNEY LIFECYCLE DETAIL - banking-research only
-                     modeled_view.journey_lifecycle.stops[]
+                     estimated_view.journey_lifecycle.stops[]
                      Stop-by-stop view of WHAT HAPPENS at every step of
                      the digital research journey: dwell time, concurrent
                      behaviors, queries, objections, emotional state,
@@ -35120,7 +35120,7 @@ https://www.instagram.com/p/..."></textarea>
 
                 <!-- ════════════════════════════════════════════════════════
                      AUDIENCE SIZING - PUBLIC ANCHORS card
-                     modeled_view.audience_sizing_anchors
+                     estimated_view.audience_sizing_anchors
                      Public-data-grounded engager funnel with L1-L6 source
                      layers, gross→deduplicated rollup, and conversion funnel
                      to opening-weekend tickets. Cross-validated against
@@ -35168,7 +35168,7 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
 
                 <!-- ════════════════════════════════════════════════════════
-                     EXHIBITOR CHANNEL MIX card - modeled_view.exhibitor_channel_mix
+                     EXHIBITOR CHANNEL MIX card - estimated_view.exhibitor_channel_mix
                      Per-chain ticket share + audience-tilt heatmap (chain
                      × hypothesis cohort) + promo participation flag.
                 ═══════════════════════════════════════════════════════ -->
@@ -35197,7 +35197,7 @@ https://www.instagram.com/p/..."></textarea>
 
                 <!-- ════════════════════════════════════════════════════════
                      PROMO PROGRAM TRACKER card (e.g. "Nate Rate")
-                     modeled_view.promo_program_tracker
+                     estimated_view.promo_program_tracker
                      Per-chain mechanic, channels, est. lift, coverage,
                      eligibility - side-by-side comparison.
                 ═══════════════════════════════════════════════════════ -->
@@ -35917,7 +35917,7 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
 
                 <!-- Removed per request: Funnel · Detours · Where Non-Converters Went · Top Inception Keywords
-                     (the modeled view doesn't populate them; they were always empty/noise) -->
+                     (the estimated view doesn't populate them; they were always empty/noise) -->
 
                 <!-- REMOVED per request: 📍 Touchpoints - what drove
                      conversation vs conversion + its sister cards
@@ -43212,11 +43212,11 @@ https://www.instagram.com/p/..."></textarea>
             var rows = items.slice(0, 10);
             var totalPanel = rows.reduce(function(a, r) { return a + (+r.panelists || 0); }, 0);
 
-            // "Modeled" / "Panel signal was thin..." banner removed
+            // "Estimated" / "Panel signal was thin..." banner removed
             // 2026-07-27 per Jenna. Backend still stamps synthetic
             // rows with `synthetic:true` + `source_note` (kept for
             // downstream/API consumers and future re-entry), but the
-            // frontend no longer surfaces the modeled origin to the
+            // frontend no longer surfaces the estimated origin to the
             // user in this card.
 
             // Donut: top 3 share + "Other"
@@ -44239,9 +44239,9 @@ https://www.instagram.com/p/..."></textarea>
             // on the left, ribbons converging to a center "issue searcher"
             // bubble on the right. Sources are split into REAL channels
             // (search engines + social platforms from cards.search_engines /
-            // cards.social_media) and MODELED channels (email, direct,
+            // cards.social_media) and ESTIMATED channels (email, direct,
             // news referral) since the cube doesn't yet carry true inbound
-            // transition data per panelist. Modeled portions are flagged
+            // transition data per panelist. Estimated portions are flagged
             // visually with a dashed border.
             html += '<div class="blue-iq-card blue-iq-card-inbound" style="grid-column: span 12;">'
                   + '<h3 class="blue-iq-card-title">How voters arrived at the issue <span class="blue-iq-badge">before the touchpoint</span></h3>'
@@ -46151,11 +46151,11 @@ https://www.instagram.com/p/..."></textarea>
         // the LEFT converging to a center "issue searcher" bubble on
         // the RIGHT. Real search engine + social platform shares come
         // from the slice (cards.search_engines / cards.social_media);
-        // email / direct / news-referral are modeled from industry
+        // email / direct / news-referral are estimated from industry
         // norms until the cube carries true inbound transition data.
-        // Modeled bubbles get a dashed border so the user can tell
+        // Estimated bubbles get a dashed border so the user can tell
         // them apart at a glance.
-        var BLUE_IQ_INBOUND_MODELED_SHARES = {
+        var BLUE_IQ_INBOUND_ESTIMATED_SHARES = {
             // These add up to 0.30; the remaining 0.70 is split between
             // search engines and social platforms (real data, weighted
             // to their slice share). When the cube adds true inbound
@@ -46169,7 +46169,7 @@ https://www.instagram.com/p/..."></textarea>
 
         function _bqRenderInboundFan(searchEngines, socialMedia, issueBuckets) {
             // Build the source list. Real channels first (top 3 search
-            // engines + top 3 social platforms by share), modeled
+            // engines + top 3 social platforms by share), estimated
             // channels appended. Re-normalize so the whole list sums
             // to 100% inbound.
             var real = [];
@@ -46178,10 +46178,10 @@ https://www.instagram.com/p/..."></textarea>
                 if (share <= 0) return;
                 real.push({
                     name: r.name + ' search',
-                    share: share * 0.45,  // ~45% of search activity drives political-issue queries (modeled)
+                    share: share * 0.45,  // ~45% of search activity drives political-issue queries (directional)
                     color: '#3b82f6',
                     category: 'search',
-                    modeled: false,
+                    estimated: false,
                 });
             });
             (socialMedia || []).slice(0, 3).forEach(function(r) {
@@ -46192,11 +46192,11 @@ https://www.instagram.com/p/..."></textarea>
                     share: share * 0.25,  // ~25% of social activity exposes voters to political content
                     color: '#a855f7',
                     category: 'social',
-                    modeled: false,
+                    estimated: false,
                 });
             });
 
-            var modeled = Object.keys(BLUE_IQ_INBOUND_MODELED_SHARES).map(function(name) {
+            var estimated = Object.keys(BLUE_IQ_INBOUND_ESTIMATED_SHARES).map(function(name) {
                 var color;
                 if (name.indexOf('Email') === 0)        color = '#fbbf24';
                 else if (name.indexOf('Direct') === 0)  color = '#64748b';
@@ -46204,14 +46204,14 @@ https://www.instagram.com/p/..."></textarea>
                 else                                     color = '#ec4899';
                 return {
                     name: name,
-                    share: BLUE_IQ_INBOUND_MODELED_SHARES[name],
+                    share: BLUE_IQ_INBOUND_ESTIMATED_SHARES[name],
                     color: color,
-                    category: 'modeled',
-                    modeled: true,
+                    category: 'estimated',
+                    estimated: true,
                 };
             });
 
-            var all = real.concat(modeled);
+            var all = real.concat(estimated);
             var totalShare = all.reduce(function(acc, s) { return acc + s.share; }, 0) || 1;
             all.forEach(function(s) { s.share = s.share / totalShare; });
             all.sort(function(a, b) { return b.share - a.share; });
@@ -46224,7 +46224,7 @@ https://www.instagram.com/p/..."></textarea>
 
             // Layout: source bubbles on LEFT, center bubble on RIGHT.
             // Geometry tuned so the full card fits on one screen even
-            // with the modeled-source padding (up to ~10 ribbons).
+            // with the estimated-source padding (up to ~10 ribbons).
             // The SVG carries preserveAspectRatio="xMidYMid meet" so
             // it scales down further on narrow viewports.
             var W            = 1100;
@@ -59835,6 +59835,15 @@ https://www.instagram.com/p/..."></textarea>
 
         // ---------- Dashboard view (SELECT PRODUCT → Digital Journey IQ) ----------
 
+        // Back-fill legacy `estimated_view` payload key to `estimated_view`
+        // for any pre-existing S3 payload written before the rename.
+        function _maybeNormalizeRun(r) {
+            if (r && r.estimated_view && !r.estimated_view) {
+                r.estimated_view = r.estimated_view;
+                try { delete r.estimated_view; } catch (e) {}
+            }
+            return r;
+        }
         var _jiqCurrentRun = null;
         var _jiqCurrentClusterIdx = 0;
         var _jiqCurrentCut = 'inception';
@@ -60354,7 +60363,7 @@ https://www.instagram.com/p/..."></textarea>
             // Pitch-demo runs short-circuit the network entirely.
             var synthetic = _jiqMaybeHydrateDemoRun(key);
             if (synthetic) {
-                _jiqCurrentRun = synthetic.data;
+                _jiqCurrentRun = _maybeNormalizeRun(synthetic.data);
                 window._jiqOriginalRun = _jiqClone(synthetic.data);
                 window._jiqCurrentRun = _jiqCurrentRun;
                 window._jiqPageMonth = null;
@@ -60380,7 +60389,7 @@ https://www.instagram.com/p/..."></textarea>
                         if (loadingMsg) loadingMsg.textContent = 'Failed to load: ' + ((payload || {}).error || 'unknown error');
                         return;
                     }
-                    _jiqCurrentRun = payload.data;
+                    _jiqCurrentRun = _maybeNormalizeRun(payload.data);
                     // Snapshot the un-filtered run so the page-level
                     // monthly cut can rebuild from it on every pick
                     // without ever degrading the source numbers.
@@ -60452,8 +60461,8 @@ https://www.instagram.com/p/..."></textarea>
         // Movie-mode view selector: which slice of the summary to render.
         // 'panel'   = raw panel observation (always real)
         // 'scaled'  = panel counts × (implied_audience / panel_converters)
-        // 'modeled' = journey scaled to implied audience size
-        // 'blended' (default) = real when N >= 25 converters; otherwise modeled
+        // 'estimated' = journey scaled to implied audience size
+        // 'blended' (default) = real when N >= 25 converters; otherwise estimated
         if (typeof window._jiqCurrentView === 'undefined') window._jiqCurrentView = 'blended';
 
         // ──────────────────────────────────────────────────────────────
@@ -60526,9 +60535,9 @@ https://www.instagram.com/p/..."></textarea>
         // Subtrees to skip entirely - already month-aware or shouldn't
         // shift with the page-level cut.
         var _JIQ_SCALE_SKIP_PATHS = {
-            'modeled_view.ecosystem_spotlight.lifecycle':   1,
-            'modeled_view.ecosystem_spotlight.properties':  1,
-            'modeled_view.ecosystem_spotlight.edges':       1,
+            'estimated_view.ecosystem_spotlight.lifecycle':   1,
+            'estimated_view.ecosystem_spotlight.properties':  1,
+            'estimated_view.ecosystem_spotlight.edges':       1,
             'monthly_cuts':                                 1,
             'meta.cut_options':                             1,
             'meta.conversion_patterns':                     1,
@@ -60580,7 +60589,7 @@ https://www.instagram.com/p/..."></textarea>
         // after a month cut so the KPI strip stays self-consistent
         // regardless of which fields the override set explicitly.
         function _jiqRebalanceKpis(run) {
-            var k = (run && run.modeled_view && run.modeled_view.kpis) || null;
+            var k = (run && run.estimated_view && run.estimated_view.kpis) || null;
             if (!k) return;
             if (k.conversion_pct != null && k.switched_pct != null) {
                 k.captured_pct = Math.round((k.conversion_pct + k.switched_pct) * 10) / 10;
@@ -60656,7 +60665,7 @@ https://www.instagram.com/p/..."></textarea>
                     delete fresh.meta.active_month_label;
                 }
             }
-            _jiqCurrentRun = fresh;
+            _jiqCurrentRun = _maybeNormalizeRun(fresh);
             window._jiqCurrentRun = fresh;
         }
 
@@ -60824,22 +60833,22 @@ https://www.instagram.com/p/..."></textarea>
         function _jiqViewSlice() {
             var d = _jiqCurrentRun || {};
             var meta = d.meta || {};
-            var hasModeled = !!d.modeled_view;
+            var hasEstimated = !!d.estimated_view;
             var hasScaled  = !!d.scaled_view;
             // No movie-mode data -> just return raw d.
-            if (!hasModeled && !hasScaled) {
+            if (!hasEstimated && !hasScaled) {
                 return { data: d, label: 'panel', source: 'panel' };
             }
             var v = _jiqCurrentView;
             // Blended logic: real when panel converters >= threshold (25),
-            // otherwise modeled. We use real summary directly when blending
-            // to real; modeled view when blending to modeled.
+            // otherwise estimated. We use real summary directly when blending
+            // to real; estimated view when blending to estimated.
             if (v === 'blended') {
                 var realConv = (d.kpis && d.kpis.converted_users) || 0;
-                v = (realConv >= 25 || !hasModeled) ? 'panel' : 'modeled';
+                v = (realConv >= 25 || !hasEstimated) ? 'panel' : 'estimated';
             }
-            if (v === 'modeled' && hasModeled) {
-                var m = d.modeled_view;
+            if (v === 'estimated' && hasEstimated) {
+                var m = d.estimated_view;
                 return {
                     data: {
                         meta: meta,
@@ -60852,7 +60861,7 @@ https://www.instagram.com/p/..."></textarea>
                         post_hosts: d.post_hosts || [],
                         facts: d.facts || []
                     },
-                    label: 'modeled', source: m.source || 'fallback'
+                    label: 'estimated', source: m.source || 'fallback'
                 };
             }
             if (v === 'scaled' && hasScaled) {
@@ -60897,11 +60906,11 @@ https://www.instagram.com/p/..."></textarea>
             var postHosts = d.post_hosts || [];
             var facts = d.facts || [];
 
-            // Render movie-mode view toggle when modeled/scaled views exist
+            // Render movie-mode view toggle when estimated/scaled views exist
             var toggleEl = document.getElementById('jiqMovieViewToggle');
             var btnsEl = document.getElementById('jiqMovieViewBtns');
             var toggleMetaEl = document.getElementById('jiqMovieViewMeta');
-            var hasMovieViews = !!(fullRun.modeled_view || fullRun.scaled_view);
+            var hasMovieViews = !!(fullRun.estimated_view || fullRun.scaled_view);
             if (toggleEl) toggleEl.style.display = hasMovieViews ? 'flex' : 'none';
             if (btnsEl && hasMovieViews) {
                 var views = [
@@ -60909,7 +60918,7 @@ https://www.instagram.com/p/..."></textarea>
                     { id: 'panel',    label: 'Panel',   help: 'Raw panel observation' },
                 ];
                 if (fullRun.scaled_view)  views.push({ id: 'scaled',  label: 'Scaled to BO', help: 'Panel × (implied audience / panel converters)' });
-                if (fullRun.modeled_view) views.push({ id: 'modeled', label: 'Estimated',   help: 'Scaled to the implied audience size for this target' });
+                if (fullRun.estimated_view) views.push({ id: 'estimated', label: 'Estimated',   help: 'Scaled to the implied audience size for this target' });
                 btnsEl.innerHTML = views.map(function(v) {
                     var active = (v.id === window._jiqCurrentView);
                     var bg = active ? 'var(--accent-primary)' : 'var(--bg-secondary)';
@@ -61351,7 +61360,7 @@ https://www.instagram.com/p/..."></textarea>
                     // is observed-to-date) is confusing in a strip otherwise
                     // dominated by measured values. The lifecycle figure is
                     // still in the payload (tv_show_lifecycle_viewers_mid)
-                    // and surfaces in the modeled_view / projections section.
+                    // and surfaces in the estimated_view / projections section.
                     // Marketing-Touched % - surfaces the marketing-exposure
                     // KPI prominently so viewers know what % of audience
                     // was reached by pre-launch marketing of any kind.
@@ -61704,53 +61713,53 @@ https://www.instagram.com/p/..."></textarea>
 
             // ---- Ecosystem Spotlight (owned-property family) ----
             renderJourneyIqEcosystem(
-                ((fullRun || {}).modeled_view || {}).ecosystem_spotlight
+                ((fullRun || {}).estimated_view || {}).ecosystem_spotlight
             );
 
             // ---- Audience Hypothesis card ----
             renderJourneyIqAudienceHypothesis(
-                ((fullRun || {}).modeled_view || {}).audience_hypotheses
+                ((fullRun || {}).estimated_view || {}).audience_hypotheses
             );
 
             // ---- Journey Lifecycle (banking-research only) ----
             renderJourneyIqLifecycle(
-                ((fullRun || {}).modeled_view || {}).journey_lifecycle
+                ((fullRun || {}).estimated_view || {}).journey_lifecycle
             );
 
             // ---- Audience Sizing - Public Anchors card ----
             renderJourneyIqAnchors(
-                ((fullRun || {}).modeled_view || {}).audience_sizing_anchors
+                ((fullRun || {}).estimated_view || {}).audience_sizing_anchors
             );
 
             // ---- Exhibitor Direct Channel Mix card ----
             renderJourneyIqExhibitorMix(
-                ((fullRun || {}).modeled_view || {}).exhibitor_channel_mix,
-                ((fullRun || {}).modeled_view || {}).audience_hypotheses
+                ((fullRun || {}).estimated_view || {}).exhibitor_channel_mix,
+                ((fullRun || {}).estimated_view || {}).audience_hypotheses
             );
 
             // ---- Promo Program Tracker card ("Nate Rate" etc.) ----
             renderJourneyIqPromoTracker(
-                ((fullRun || {}).modeled_view || {}).promo_program_tracker
+                ((fullRun || {}).estimated_view || {}).promo_program_tracker
             );
 
             // ---- Marketing Footprint panel (bubbles + spider + endpoints) ----
-            // Use the AI-research data from the modeled_view block when
+            // Use the AI-research data from the estimated_view block when
             // present (Movie/Website/TV mode); the legacy panel.touchpoints
             // doesn't have it. fullRun is the un-sliced summary.
             renderJourneyIqFootprint(
-                ((fullRun || {}).modeled_view || {}).marketing_footprint,
-                ((fullRun || {}).modeled_view || {}).touchpoint_bubbles,
-                ((fullRun || {}).modeled_view || {}).touchpoint_spider
+                ((fullRun || {}).estimated_view || {}).marketing_footprint,
+                ((fullRun || {}).estimated_view || {}).touchpoint_bubbles,
+                ((fullRun || {}).estimated_view || {}).touchpoint_spider
             );
 
             // ---- Site-Funnel panel (target_type='website' only) ----
             // Visitor outcomes: converted-on-site / switched / abandoned,
             // plus where switchers ultimately bought, intermediate steps,
             // inception referrers, and companion behaviors (dinner/etc).
-            // Block lives on modeled_view.site_funnel OR top-level
+            // Block lives on estimated_view.site_funnel OR top-level
             // summary.site_funnel (research-anchored runner mirrors both).
             renderJourneyIqSiteFunnel(
-                ((fullRun || {}).modeled_view || {}).site_funnel
+                ((fullRun || {}).estimated_view || {}).site_funnel
                 || (fullRun || {}).site_funnel
             );
 
@@ -61803,7 +61812,7 @@ https://www.instagram.com/p/..."></textarea>
             if (typeof renderJourneyIqSubscriberSummary === 'function') {
                 renderJourneyIqSubscriberSummary(
                     d.subscriber_iq_summary
-                    || ((fullRun || {}).modeled_view || {}).subscriber_iq_summary
+                    || ((fullRun || {}).estimated_view || {}).subscriber_iq_summary
                     || (fullRun || {}).subscriber_iq_summary
                 );
             }
@@ -61814,7 +61823,7 @@ https://www.instagram.com/p/..."></textarea>
             if (typeof renderJourneyIqCrossShowOverlap === 'function') {
                 renderJourneyIqCrossShowOverlap(
                     d.cross_show_overlap
-                    || ((fullRun || {}).modeled_view || {}).cross_show_overlap
+                    || ((fullRun || {}).estimated_view || {}).cross_show_overlap
                     || (fullRun || {}).cross_show_overlap
                 );
             }
@@ -61827,7 +61836,7 @@ https://www.instagram.com/p/..."></textarea>
             if (typeof renderJourneyIqSubscriberLifecycle === 'function') {
                 renderJourneyIqSubscriberLifecycle(
                     d.subscriber_lifecycle
-                    || ((fullRun || {}).modeled_view || {}).subscriber_lifecycle
+                    || ((fullRun || {}).estimated_view || {}).subscriber_lifecycle
                     || (fullRun || {}).subscriber_lifecycle
                 );
             }
@@ -61846,7 +61855,7 @@ https://www.instagram.com/p/..."></textarea>
             // ════════════════════════════════════════════════════════
             function _pickClickstreamBlock(key) {
                 return d[key]
-                    || ((fullRun || {}).modeled_view || {})[key]
+                    || ((fullRun || {}).estimated_view || {})[key]
                     || (fullRun || {})[key];
             }
             // Reset the section header on each render so cohort / cut
@@ -61939,7 +61948,7 @@ https://www.instagram.com/p/..."></textarea>
             // auto-hides if its payload key is missing, so this whole
             // block only surfaces on the lifecycle build. Reuses the
             // _pickClickstreamBlock helper because the lookup logic
-            // (payload root → modeled_view → fullRun) is identical.
+            // (payload root → estimated_view → fullRun) is identical.
             // The shared header strip (jiqLifecyclePitchHeader) is
             // revealed inside the renderers via
             // _jiqShowLifecyclePitchHeader().
@@ -63213,7 +63222,7 @@ https://www.instagram.com/p/..."></textarea>
         // callout tile.
         // ────────────────────────────────────────────────────────────
         // JOURNEY LIFECYCLE - banking-research stop-by-stop renderer
-        // Reads modeled_view.journey_lifecycle.stops[] and produces one
+        // Reads estimated_view.journey_lifecycle.stops[] and produces one
         // expanded card per stop with surfaces, concurrent behaviors,
         // queries, objections, emotional state, drop-off, re-entry,
         // and the Chime intercept play.
@@ -63818,7 +63827,7 @@ https://www.instagram.com/p/..."></textarea>
         // ───── Audience Sizing - Public Anchors renderer ─────
         // Layer-bar view (L1-L6) + gross/dedup rollup tiles + 5-stage
         // conversion funnel + public anchor input table + Crosswalk
-        // panel lift list + sanity-check + modeled-take callouts.
+        // panel lift list + sanity-check + estimated-take callouts.
         function renderJourneyIqAnchors(an) {
             var card = document.getElementById('jiqAnchorsCard');
             if (!card) return;
@@ -66058,7 +66067,7 @@ https://www.instagram.com/p/..."></textarea>
                 }
             })();
 
-            // ── Back-compat patch: legacy modeled runs hard-coded every
+            // ── Back-compat patch: legacy runs hard-coded every
             // step at 100% of the cohort. Real funnels narrow at the
             // top - apply the same survivorship curve the scaled view now
             // uses so existing S3 runs display correctly without a
@@ -66073,7 +66082,7 @@ https://www.instagram.com/p/..."></textarea>
             });
             if (allFlat && cohortN > 0) {
                 var avgTouches = 5.0;
-                var tp = (window._jiqCurrentRun || {}).modeled_view && (window._jiqCurrentRun.modeled_view.touchpoints || {});
+                var tp = (window._jiqCurrentRun || {}).estimated_view && (window._jiqCurrentRun.estimated_view.touchpoints || {});
                 if (tp && tp.touch_distribution && tp.touch_distribution.length) {
                     // Approximate avg touches from the distribution if available
                     var total = 0, weighted = 0;
@@ -75027,16 +75036,16 @@ https://www.instagram.com/p/..."></textarea>
                     tvod_revenue_range_low_usd_m: 22.0,
                     tvod_revenue_range_high_usd_m: 32.0,
                     tvod_revenue_participation: 'Distributor retains ~80% of digital transactional revenue against ~50% of box office (Universal disclosure, Wicked). A dollar of destroyed transactional revenue is worth more to the participation pool than a dollar of box office, in general.',
-                    // H6: place a modeled dollar figure on what NBCU received,
+                    // H6: place an estimated dollar figure on what NBCU received,
                     // labeled explicitly as a hypothesis so both sides of the trade
                     // are quantified.
                     value_received_hypothesis: {
-                        label: 'Modeled value to NBCU (HYPOTHESIS)',
+                        label: 'Estimated value to NBCU (HYPOTHESIS)',
                         method: 'Peacock ARPU $10.99 ads-supported x 1.33M net-new subs x expected retention months. Low: 3-month effective life -> $43M. High: 12-month effective life -> $175M. Point estimate depends on the 180-day retention read.',
                         range_low_usd_m: 43.0,
                         range_high_usd_m: 175.0,
                         range_display: '$43-175M (HYPOTHESIS, pending 180d retention)',
-                        note: 'H6 in revision doc: no dollar value was previously placed on what NBCU received. This is a modeled range, not a measurement. The range collapses toward the low end if elevated-churn (H1) is confirmed and toward the high end if the cohort retains at the Peacock baseline.'
+                        note: 'H6 in revision doc: no dollar value was previously placed on what NBCU received. This is an estimated range that collapses toward the low end if elevated-churn (H1) is confirmed and toward the high end if the cohort retains at the Peacock baseline.'
                     },
                     peacock_subs_temporary_k: 1329,
                     peacock_subs_participation: 'Peacock subscriber value accrues to NBCUniversal / Comcast. Whether and how the content-owner participates in Peacock ARPU, retention, or churn-reduction is a contractual determination outside the scope of this measurement.',
@@ -76812,7 +76821,7 @@ https://www.instagram.com/p/..."></textarea>
                         ],
                         total_incremental_hh: 713500,
                         total_deck_value_usd: 12670000,
-                        read: '$12.67M in modeled deck value across five licensed tracks. Summer Girl is the anchor - a single track paid for itself 6.4x on subscription-LTV alone. The music-licensing budget is the highest-ROI marketing line the show has.'
+                        read: '$12.67M in estimated deck value across five licensed tracks. Summer Girl is the anchor - a single track paid for itself 6.4x on subscription-LTV alone. The music-licensing budget is the highest-ROI marketing line the show has.'
                     }
                 },
                 heated_rivalry: {
@@ -76994,7 +77003,7 @@ https://www.instagram.com/p/..."></textarea>
                         ],
                         total_incremental_hh: 2023800,
                         total_deck_value_usd: 55382000,
-                        read: '$55.4M in modeled deck value across five licensed tracks - 4.37x the NWT total, powered by a 2.1x larger viewer base plus a higher per-viewer retention lift. The t.A.T.u. relaunch is the flagship win of the quarter. The Harrison cover is the highest relative ROI in the panel.'
+                        read: '$55.4M in estimated deck value across five licensed tracks - 4.37x the NWT total, powered by a 2.1x larger viewer base plus a higher per-viewer retention lift. The t.A.T.u. relaunch is the flagship win of the quarter. The Harrison cover is the highest relative ROI in the panel.'
                     }
                 }
             },
@@ -79335,7 +79344,7 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         // Stage 8: Licensing ROI - per-song incremental $ case table
-        // sorted by modeled deck value, with the deal-room read.
+        // sorted by estimated deck value, with the deal-room read.
         function _jiqMusicRender_roi(body, show, slice, data) {
             var roi = show.licensing_roi;
             if (!roi) { body.innerHTML = '<div style="opacity:0.6; padding:1rem;">Licensing ROI data unavailable.</div>'; return; }
@@ -79354,7 +79363,7 @@ https://www.instagram.com/p/..."></textarea>
                 + '</div>';
             var sortedSongs = (roi.songs || []).slice().sort(function(a, b) { return (b.deck_value_usd || 0) - (a.deck_value_usd || 0); });
             var maxVal = sortedSongs.length ? sortedSongs[0].deck_value_usd : 0;
-            var tableHtml = '<h4 style="font-size:0.82rem; margin:0.4rem 0 0.35rem;">💰 Per-song ROI deck (sorted by modeled value)</h4>'
+            var tableHtml = '<h4 style="font-size:0.82rem; margin:0.4rem 0 0.35rem;">💰 Per-song ROI deck (sorted by estimated value)</h4>'
                 + '<div style="overflow-x:auto; margin-bottom:0.85rem;"><table style="width:100%; border-collapse:collapse; font-size:0.74rem;">'
                 + '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
                 +   '<th style="padding:6px 8px; font-size:0.58rem; opacity:0.7; text-transform:uppercase;">Track</th>'
@@ -83834,17 +83843,17 @@ https://www.instagram.com/p/..."></textarea>
         // chip is { stat, label, sub, color }. Keep this small (5
         // chips max) so the strip stays one-line scannable.
         function _jiqBuildLandmanHeadlines(payload) {
-            payload = payload || {};
+            payload = _maybeNormalizeRun(payload) || {};
             var pull = function(key) {
                 return payload[key]
-                    || ((payload.modeled_view || {})[key])
+                    || ((payload.estimated_view || {})[key])
                     || null;
             };
             var halo  = pull('off_platform_halo')         || {};
             var comp  = pull('companion_behaviors')       || {};
             var paths = pull('landman_discovery_paths')   || {};
             var beyond= pull('beyond_sheridan')           || pull('sheridan_universe_map') || {};
-            var kpis  = payload.kpis || ((payload.modeled_view || {}).kpis) || {};
+            var kpis  = payload.kpis || ((payload.estimated_view || {}).kpis) || {};
 
             // Pull the headline numbers with try/catch-ish fallbacks
             // so a payload-shape change never blanks the whole strip.
@@ -84482,7 +84491,7 @@ https://www.instagram.com/p/..."></textarea>
             }
             if (!hasRows) return;
 
-            // ── Back-compat patch: legacy modeled runs hard-coded
+            // ── Back-compat patch: legacy runs hard-coded
             // conv_rate_when_reached=100 / conv_rate_when_not=0 because
             // the cohort = converters only. That's mathematically forced
             // and useless. Reframe to genpop:
@@ -84512,7 +84521,7 @@ https://www.instagram.com/p/..."></textarea>
                     }
                 });
                 if (brokenCount === tp.rows.length) {
-                    // Whole table was modeled; patch the meta baseline too.
+                    // Whole table was estimated; patch the meta baseline too.
                     tp.baseline_conv_rate = Math.round(baselineFromGenpop * 100) / 100;
                 }
             }
@@ -84660,11 +84669,11 @@ https://www.instagram.com/p/..."></textarea>
             // If the active cluster carries its own site_funnel (Fandango /
             // Abercrombie-style per-cohort switcher analysis), swap the
             // brand-level switcher panels for the cohort's view. Falls back
-            // to the modeled_view.site_funnel (brand-level blend) when the
+            // to the estimated_view.site_funnel (brand-level blend) when the
             // cluster doesn't have one - so legacy runs keep working.
             if (typeof renderJourneyIqSiteFunnel === 'function') {
                 var fullRun = _jiqCurrentRun || {};
-                var brandLevel = ((fullRun.modeled_view || {}).site_funnel)
+                var brandLevel = ((fullRun.estimated_view || {}).site_funnel)
                                  || fullRun.site_funnel
                                  || null;
                 renderJourneyIqSiteFunnel(
