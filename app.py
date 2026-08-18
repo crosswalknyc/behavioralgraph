@@ -41912,7 +41912,17 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "audience shape drivers (gender / age / ethnicity / geography / "
         "income) and 3-5 brands that under-index (so the reasoner doesn't "
         "over-lift them).\n"
-        "  5. Return ONLY a JSON object. No markdown fences, no prose."
+        "  5. `subject_raw_tu` and `subject_raw_avid` MUST NOT be "
+        "perfectly round numbers. NEVER emit 1000, 2000, 3000, 3500, "
+        "5000, 10000, 12500, 25000, 40000 etc. NEVER emit 2001, 12345, "
+        "99999, 22222 or similar placeholder-looking values. Realistic "
+        "panel counts land on messy numbers - if you'd naturally have "
+        "picked 3000, pick 2987 or 3042 instead; if you'd naturally have "
+        "picked 40000, pick 39516 or 40318 instead. This applies whether "
+        "you're guessing (new subject) or echoing back a parent's value "
+        "(refresh / cut). The engine will jitter round values anyway, but "
+        "you should never emit them in the first place.\n"
+        "  6. Return ONLY a JSON object. No markdown fences, no prose."
     )
 
     user_prompt = (
@@ -42034,12 +42044,42 @@ def _spec_from_draft(draft):
             extra_rows.append([str(row[0]), str(row[1])])
         elif isinstance(row, dict) and 'column' in row and 'value' in row:
             extra_rows.append([str(row['column']), str(row['value'])])
+    # Enforce the "no round sample sizes" rule from the workspace rule
+    # `.cursor/rules/no-round-sample-sizes.mdc`. Every subject_raw_* that
+    # flows into the profile engine passes through this function - both
+    # dashboard chatbot and partner API. Jitter deterministically off
+    # subject, so repeat calls for the same subject produce the same
+    # messy value (idempotent, cross-cut coherent).
+    try:
+        from scripts._sample_size_jitter import ensure_messy_sample_size
+    except Exception:
+        # Extremely defensive - if the helper import ever fails we still
+        # want the pipeline to run, so provide an inline shim that does
+        # the minimum: a subject-hashed offset to break trailing zeros.
+        import hashlib as _hl
+        def ensure_messy_sample_size(subj, v, minimum=800, default_if_missing=9873):
+            try:
+                x = int(round(float(v))) if v is not None else 0
+            except Exception:
+                x = 0
+            if x <= 0:
+                x = default_if_missing
+            off = int(_hl.sha256(f"{subj}|{x}".encode()).hexdigest()[:8], 16) % 197 - 98
+            x = x + off
+            return max(minimum + 7, x if x % 1000 != 0 else x + 47)
+
+    subject_raw_tu = ensure_messy_sample_size(subject, draft.get('subject_raw_tu'))
+    subject_raw_avid = ensure_messy_sample_size(
+        f"{subject}|avid", draft.get('subject_raw_avid'),
+        default_if_missing=2937,
+    )
+
     spec = {
         'name': subject,
         'file_stem': stem,
         'brand_category': draft.get('brand_category') or 'BRAND',
-        'subject_raw_tu': int(draft.get('subject_raw_tu') or 10000),
-        'subject_raw_avid': int(draft.get('subject_raw_avid') or 3000),
+        'subject_raw_tu': subject_raw_tu,
+        'subject_raw_avid': subject_raw_avid,
         'subject_rows': subject_rows,
         'tu_demos': draft.get('tu_demos') or {},
         'avid_demos': draft.get('avid_demos') or draft.get('tu_demos') or {},
