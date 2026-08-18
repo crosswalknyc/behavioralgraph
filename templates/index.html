@@ -20953,12 +20953,7 @@ https://www.instagram.com/p/..."></textarea>
                             </div>
 
                             <div id="synthChatBriefPreview" style="display:none; padding: 0.75rem; margin-bottom: 0.5rem; background: rgba(84, 141, 255, 0.06); border: 1px solid rgba(84,141,255,0.30); border-radius: 8px;">
-                                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
-                                    <strong style="color: var(--text-primary); font-size: 0.9rem;">📝 Draft brief - review before approving</strong>
-                                    <span id="synthChatBriefModel" style="font-size: 0.7rem; opacity: 0.7;"></span>
-                                </div>
-                                <pre id="synthChatBriefJson" style="max-height: 340px; overflow: auto; font-size: 0.72rem; background: rgba(0,0,0,0.30); padding: 0.6rem; border-radius: 6px; color: #e9e9e9; white-space: pre-wrap;"></pre>
-                                <div style="display:flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                                <div style="display:flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
                                     <label style="font-size:0.8rem; color: var(--text-secondary); display:flex; align-items:center; gap:0.35rem;">
                                         <input type="checkbox" id="synthChatRunAvid" checked> Run Avid cohort too
                                     </label>
@@ -58077,15 +58072,7 @@ https://www.instagram.com/p/..."></textarea>
                     return;
                 }
                 synthChatCurrentDraft = data.spec_draft || {};
-                var s = synthChatCurrentDraft;
-                var summary =
-                    'Here is the draft brief for **' + (s.subject || 'this profile') + '**:\n\n' +
-                    '- Category: ' + (s.brand_category || '?') + (s.category_note ? ' (' + s.category_note + ')' : '') + '\n' +
-                    '- TU sample: ' + (s.subject_raw_tu || 0).toLocaleString() + ' panelists\n' +
-                    (s.subject_raw_avid ? '- Avid sample: ' + s.subject_raw_avid.toLocaleString() + ' panelists\n' : '') +
-                    '- Peer set: ' + ((s.extra_rows || []).length) + ' anchor rows\n' +
-                    '- Est. run: ~' + (s.estimated_run_minutes || 25) + ' min\n\n' +
-                    'Review the JSON below. Approve to run, or send another message to adjust.';
+                var summary = _synthChatBuildActionSummary(synthChatCurrentDraft);
                 synthChatPushTurn('agent', summary);
                 _synthChatShowBrief(synthChatCurrentDraft, data.model);
             } catch (e) {
@@ -58096,16 +58083,55 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
 
-        function _synthChatShowBrief(draft, model) {
+        function _synthChatShowBrief(draft, _model) {
             var panel = document.getElementById('synthChatBriefPreview');
-            var pre = document.getElementById('synthChatBriefJson');
-            var modelBadge = document.getElementById('synthChatBriefModel');
-            if (!panel || !pre) return;
-            pre.textContent = JSON.stringify(draft, null, 2);
-            if (modelBadge) modelBadge.textContent = model ? ('model: ' + model) : '';
+            if (!panel) return;
             panel.style.display = 'block';
             var runAvid = document.getElementById('synthChatRunAvid');
-            if (runAvid) runAvid.checked = draft.run_avid !== false;
+            if (runAvid) runAvid.checked = draft && draft.run_avid !== false;
+        }
+
+        // Turn the interpret step's decision into a plain-English sentence
+        // the user actually wants to read. No JSON, no 'TU sample /
+        // panelists / peer set / anchor rows / estimated run' internals.
+        function _synthChatBuildActionSummary(s) {
+            s = s || {};
+            var subject = s.subject || 'this profile';
+            var parentName = s.existing_match_display_name || subject;
+            var mins = s.estimated_run_minutes;
+            var eta = (mins ? ' (~' + mins + ' min)' : '');
+            var deriveHint = (s.derive_type || '').trim().toLowerCase();
+            var refreshHint = (s.refresh_row_hypothesis || '').trim();
+            var line = '';
+            switch ((s.decision || '').toLowerCase()) {
+                case 'existing_match':
+                    line = 'I already have **' + parentName + '**' +
+                        (s.existing_match_days_old != null
+                            ? ' from ' + s.existing_match_days_old + ' days ago'
+                            : '') +
+                        '. You can grab it now, no credits.';
+                    break;
+                case 'derive_cut':
+                    line = 'Creating a cut of the existing **' + parentName + '** data' +
+                        (deriveHint ? ' for ' + deriveHint : '') +
+                        eta + '.';
+                    break;
+                case 'time_shifted_refresh':
+                    line = 'Refreshing the existing **' + parentName + '** data for the new window' +
+                        eta + '.';
+                    if (refreshHint) line += '\n\n' + refreshHint;
+                    break;
+                case 'cut_needs_parent':
+                    line = 'Building **' + subject + '** first, then producing your cut' +
+                        (deriveHint ? ' (' + deriveHint + ')' : '') +
+                        eta + '.';
+                    break;
+                case 'new_build':
+                default:
+                    line = 'Building a new **' + subject + '** profile' + eta + '.';
+                    break;
+            }
+            return line + '\n\nApprove to run, or send another message to adjust.';
         }
 
         function synthChatCancelBrief() {
@@ -58145,7 +58171,7 @@ https://www.instagram.com/p/..."></textarea>
                 synthChatPushTurn('agent',
                     'Queued run `' + data.run_id + '` for **' + data.subject + '**' +
                     (data.pending_position ? ' (position ' + data.pending_position + ' in queue)' : '') +
-                    '. I will update this thread as the pipeline progresses.');
+                    '. I will update this thread as it progresses.');
                 _synthChatStartPolling(data.run_id);
             } catch (e) {
                 synthChatPushTurn('agent', 'Approve failed: ' + (e && e.message || e));
