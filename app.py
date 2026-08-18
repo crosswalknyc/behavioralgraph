@@ -41612,11 +41612,24 @@ def _profile_catalog_for_chat():
     """Return a compact list of every profile in the dashboard catalog:
     [{s3_key, display_name, subject, category, last_modified, days_old}, ...]
 
-    Reads from the in-memory `s3_cache['jobs']` (kept fresh by the
-    existing persisted-cache refresh loop). This is the same source of
-    truth the Select Profile dropdown uses, so if it's in the dropdown
-    it's in this list. Lightweight - no S3 round trip.
+    Reads from the in-memory `s3_cache['jobs']`. This is the same source
+    of truth the Select Profile dropdown uses, so if it's in the dropdown
+    it's in this list.
+
+    Critical: forces a persisted-cache refresh probe BEFORE reading so
+    profiles created in the last few minutes (including via the chatbot
+    or partner API on OTHER Render workers) are visible here. Without
+    this, a chat prompt like "do a cut of X" can miss a parent that
+    was just built and misclassify the request as new_build.
+    Directive 2026-08-17: cuts requested via chat were pulling as fresh
+    builds because interpret was seeing a stale catalog.
     """
+    # Best-effort cross-worker propagation. The helper is throttled so
+    # it does at most one S3 HEAD per ~3s per worker.
+    try:
+        maybe_refresh_persisted_cache_if_changed()
+    except Exception:
+        pass
     from datetime import timezone as _tz
     now = datetime.now(_tz.utc)
     jobs = []
@@ -42073,15 +42086,26 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "the file (0 credits) OR refresh it (5 credits). Do not build.\n"
         "  * time_shifted_refresh: the user's ask matches a candidate but "
         f"the candidate is > {SYNTH_CHAT_FRESH_DAYS} days old, OR the user "
-        "explicitly asked for an updated / refreshed / current version. Fill "
-        "existing_match_s3_key AND refresh_row_hypothesis with concrete "
-        "row-by-row reasoning about what would have realistically changed "
-        "for this audience between the parent's date and today (specific "
-        "tour dates, product launches, controversies, macro trends). The "
-        "resulting profile MUST NOT swing sample size dramatically vs the "
-        "parent - state a sample_size that is within +/-15%% of the "
-        "parent's unless there is a documented reason for a bigger shift "
-        "(name that reason in refresh_row_hypothesis).\n"
+        "explicitly asked for an updated / refreshed / current version, OR "
+        "the user's ask includes a specific time window that's likely "
+        "different from the parent's (phrases like 'past 60 days', "
+        "'trailing 12 months', 'since March', 'last quarter', 'this year', "
+        "'over the last year', 'YTD', 'H1 2026' when a matching parent "
+        "exists in the candidate list). Fill existing_match_s3_key AND "
+        "refresh_row_hypothesis with concrete row-by-row reasoning about "
+        "what would have realistically changed for this audience between "
+        "the parent's date and today (specific tour dates, product "
+        "launches, controversies, macro trends). The resulting profile "
+        "MUST NOT swing sample size dramatically vs the parent - state a "
+        "sample_size that is within +/-15%% of the parent's unless there "
+        "is a documented reason for a bigger shift (name that reason in "
+        "refresh_row_hypothesis).\n"
+        "    -> IMPORTANT: 'do a cut of X for the past 60 days' when 'X' "
+        "matches a candidate is a time_shifted_refresh, NOT new_build - "
+        "even if the user used the word 'cut'. 'cut' in casual usage "
+        "often just means 'a slice / a version' rather than the strict "
+        "derive_cut sense (which is reserved for demographic / intensity "
+        "cuts like avid, female, millennial).\n"
         "  * derive_cut: the user's ask is a CUT of an existing candidate "
         "(e.g. 'avid Taylor Swift' when Taylor Swift TU exists; 'female "
         "cut of the Dune audience' when Dune TU exists). Fill "
@@ -42338,6 +42362,20 @@ def api_synth_chat_interpret():
             MASTER_CATEGORIES = {}
         catalog = _profile_catalog_for_chat()
         candidates = _shortlist_profile_matches(text, catalog)
+        # Observability: log the candidate list so we can debug
+        # misclassifications like "chatbot picked new_build when a
+        # parent exists in the catalog."
+        try:
+            print(f"[synth-chat interpret] prompt={text[:120]!r} "
+                  f"catalog_size={len(catalog)} candidates={len(candidates)}"
+                  + ("".join([
+                      f"\n  candidate: score={c.get('_score'):.3f} "
+                      f"display={c.get('display_name')!r} "
+                      f"key={c.get('s3_key')!r} age={c.get('days_old')}d"
+                      for c in candidates[:5]
+                  ]) if candidates else "  (no candidates)"))
+        except Exception:
+            pass
         system_prompt, user_prompt = _synth_chat_interpret_prompts(
             text, chat_history=history, master_categories=MASTER_CATEGORIES,
             candidate_matches=candidates,
@@ -42773,6 +42811,17 @@ def _v1_interpret(prompt):
         MASTER_CATEGORIES = {}
     catalog = _profile_catalog_for_chat()
     candidates = _shortlist_profile_matches(prompt, catalog)
+    try:
+        print(f"[v1_interpret] prompt={prompt[:120]!r} "
+              f"catalog_size={len(catalog)} candidates={len(candidates)}"
+              + ("".join([
+                  f"\n  candidate: score={c.get('_score'):.3f} "
+                  f"display={c.get('display_name')!r} "
+                  f"key={c.get('s3_key')!r} age={c.get('days_old')}d"
+                  for c in candidates[:5]
+              ]) if candidates else "  (no candidates)"))
+    except Exception:
+        pass
     system_prompt, user_prompt = _synth_chat_interpret_prompts(
         prompt, chat_history=[], master_categories=MASTER_CATEGORIES,
         candidate_matches=candidates,
