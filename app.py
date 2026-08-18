@@ -4753,13 +4753,32 @@ def admin_generate_api_key(username):
         user['api_key_last_rotated'] = _iso_now_utc()
         user['has_chatbot_profile_iq_access'] = True
         save_users(data)
+
+        # Auto-email the raw key to the user so they get it in their inbox
+        # the moment it's issued. Best-effort - a missing email or a Gmail
+        # failure never breaks generate (admin still sees the raw key in
+        # the response and copies it manually).
+        email_ok = False
+        email_msg = 'No email on file for user'
+        recipient = (user.get('email') or '').strip()
+        if recipient:
+            try:
+                email_ok, email_msg = send_api_key_email(recipient, username, raw)
+            except Exception as _e:
+                email_ok = False
+                email_msg = str(_e)
+
         return jsonify({
             'success': True,
             'username': username,
             'api_key': raw,
             'api_key_last_rotated': user['api_key_last_rotated'],
-            'note': ('This key will not be shown again. Copy it now and '
-                     'send it to the user over a secure channel.'),
+            'email_sent': bool(email_ok),
+            'email_recipient': recipient or None,
+            'email_status': email_msg,
+            'note': ('Copy this key now. It will not be shown again. '
+                     'A copy has also been emailed to the user if we '
+                     'have an email on file.'),
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -6197,6 +6216,100 @@ You can change your password after logging in if you'd like.
         return True, "Email sent via SMTP"
     except Exception as e:
         return False, str(e)
+
+
+def send_api_key_email(email, username, raw_key):
+    """Send a freshly-issued API key to the user directly.
+
+    Mirrors send_password_reset_email: try Gmail API first (if wired),
+    fall back to SMTP. Best-effort. Returns (ok, message). Failure is
+    logged; the admin still gets the raw key in the generate response
+    to copy manually.
+
+    Established 2026-08-18: Jenna wants the key auto-emailed the moment
+    it's issued so the user has it in their inbox before the admin even
+    tabs out of the modal.
+    """
+    if not email:
+        return False, 'No email on file for user'
+    app_url = os.environ.get('APP_URL', 'https://dashboard.crosswalknyc.com')
+
+    text = f"""
+Your Crosswalk IQ API key has been issued.
+
+Username: {username}
+API key:  {raw_key}
+
+Auth header: X-Crosswalk-API-Key
+Base URL:    {app_url}
+
+Runs against this key deduct from your existing Crosswalk IQ credit
+balance. Keep the key secret. If it leaks, ask an admin to rotate it.
+
+- Crosswalk IQ Team
+"""
+
+    body = f"""
+        <div class="email-header">Your Crosswalk IQ API key</div>
+        <p>Your API key has been issued. Use it to run pipelines and cuts
+        programmatically against your existing credit balance.</p>
+        <div class="email-card">
+            <div class="email-card-title">API credentials</div>
+            <div style="margin: 10px 0;"><span class="email-label">Username</span><br><span class="email-value">{username}</span></div>
+            <div style="margin: 10px 0;"><span class="email-label">API key</span><br><span class="email-value" style="font-family: 'Space Mono', Consolas, monospace; word-break: break-all;">{raw_key}</span></div>
+            <div style="margin: 10px 0;"><span class="email-label">Auth header</span><br><span class="email-value">X-Crosswalk-API-Key</span></div>
+            <div style="margin: 10px 0;"><span class="email-label">Base URL</span><br><span class="email-value">{app_url}</span></div>
+        </div>
+        <p style="color:#b8860b; font-size: 13px; margin-top: 14px;">
+            Keep this key secret. Anyone who has it can run pipelines against
+            your credit balance. If it leaks, ask an admin to rotate it right
+            away.
+        </p>
+    """
+    html = _wrap_email_html(body)
+
+    tokens = load_gmail_tokens()
+    if tokens and tokens.get('access_token'):
+        try:
+            ok, msg = send_email_via_gmail(
+                email,
+                'Your Crosswalk IQ API key',
+                html,
+                text,
+            )
+            if ok:
+                return True, 'Email sent via Gmail'
+        except Exception as e:
+            print(f'API-key email Gmail path failed: {e}')
+
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+    smtp_port = int(os.environ.get('SMTP_PORT', 587))
+    smtp_user = os.environ.get('SMTP_USER', '')
+    smtp_password = os.environ.get('SMTP_PASSWORD', '')
+    from_email = os.environ.get('FROM_EMAIL', smtp_user)
+
+    if not smtp_user or not smtp_password:
+        return False, 'Email not configured'
+
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = 'Your Crosswalk IQ API key'
+        msg['From'] = from_email
+        msg['To'] = email
+        msg.attach(MIMEText(text, 'plain'))
+        msg.attach(MIMEText(html, 'html'))
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(from_email, email, msg.as_string())
+        return True, 'Email sent via SMTP'
+    except Exception as e:
+        return False, str(e)
+
 
 @app.route('/api/admin/gmail/share', methods=['POST'])
 @requires_admin  

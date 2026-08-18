@@ -3979,6 +3979,7 @@
                                         <code id="apiKeyRevealValue" style="flex: 1; padding: 0.4rem 0.55rem; background: var(--bg-dark); border-radius: 4px; font-family: 'Space Mono', monospace; font-size: 0.75rem; color: var(--accent-cyan); user-select: all; word-break: break-all;"></code>
                                         <button type="button" class="btn btn-small btn-primary" onclick="_copyApiKey()" style="padding: 0.35rem 0.7rem; font-size: 0.7rem;">Copy</button>
                                     </div>
+                                    <div id="apiKeyEmailStatus" style="margin-top: 0.45rem; font-size: 0.68rem; color: var(--text-secondary); line-height: 1.4;"></div>
                                 </div>
                                 <div style="margin-top: 0.6rem; font-size: 0.7rem; color: var(--text-secondary); opacity: 0.75;">
                                     Partner base URL: <code style="color: var(--accent-cyan);">https://dashboard.crosswalknyc.com</code> · auth header: <code style="color: var(--accent-cyan);">X-Crosswalk-API-Key</code> · credits use this user's balance.
@@ -12448,8 +12449,9 @@
             return el && el.value ? el.value.trim() : '';
         }
 
-        function _renderApiKeyPanel(user) {
+        function _renderApiKeyPanel(user, opts) {
             user = user || {};
+            opts = opts || {};
             var hasSha = !!(user.api_key_sha256 && user.api_key_sha256.length > 0);
             var enabled = !!user.api_key_enabled;
             var lastRot = user.api_key_last_rotated || '';
@@ -12464,8 +12466,14 @@
             var reveal = document.getElementById('apiKeyRevealBox');
             if (!chip || !summary) return;
 
-            // Hide the reveal box between users - only shown right after generate.
-            if (reveal) reveal.style.display = 'none';
+            // Hide the reveal box between users - only shown right after
+            // generate/rotate. Callers that just displayed a fresh key
+            // pass {preserveReveal: true} to keep the box on screen.
+            if (reveal && !opts.preserveReveal) {
+                reveal.style.display = 'none';
+                var emailNote = document.getElementById('apiKeyEmailStatus');
+                if (emailNote) emailNote.innerHTML = '';
+            }
 
             // Reset all buttons.
             [genBtn, rotBtn, revBtn, enBtn].forEach(function(b){ if (b) b.style.display = 'none'; });
@@ -12524,12 +12532,16 @@
                     alert('Generate failed: ' + (data.error || r.statusText));
                     return;
                 }
-                _showRawApiKey(data.api_key);
+                // Render the status panel first (keeps the reveal box hidden
+                // by default) then explicitly reveal + show email confirmation
+                // so the raw key + delivery status stay on screen until the
+                // admin closes the modal.
                 _renderApiKeyPanel({
                     api_key_sha256: 'x',
                     api_key_enabled: true,
                     api_key_last_rotated: data.api_key_last_rotated || new Date().toISOString(),
-                });
+                }, { preserveReveal: true });
+                _showRawApiKey(data.api_key, data);
             } catch (e) {
                 alert('Generate failed: ' + e.message);
             }
@@ -12551,12 +12563,12 @@
                 });
                 var data = await r.json();
                 if (!r.ok || !data.success) { alert('Rotate failed: ' + (data.error || r.statusText)); return; }
-                _showRawApiKey(data.api_key);
                 _renderApiKeyPanel({
                     api_key_sha256: 'x',
                     api_key_enabled: true,
                     api_key_last_rotated: data.api_key_last_rotated || new Date().toISOString(),
-                });
+                }, { preserveReveal: true });
+                _showRawApiKey(data.api_key, data);
             } catch (e) { alert('Rotate failed: ' + e.message); }
         };
 
@@ -12593,13 +12605,35 @@
             } catch (e) { alert('Enable failed: ' + e.message); }
         }
 
-        function _showRawApiKey(raw) {
+        function _showRawApiKey(raw, meta) {
             var box = document.getElementById('apiKeyRevealBox');
             var val = document.getElementById('apiKeyRevealValue');
             if (!box || !val || !raw) return;
             val.textContent = raw;
             box.style.display = 'block';
+            // Render email-delivery status underneath the key so the admin
+            // knows the user already has it in their inbox (2026-08-18).
+            var note = document.getElementById('apiKeyEmailStatus');
+            if (note) {
+                meta = meta || {};
+                if (meta.email_sent && meta.email_recipient) {
+                    note.innerHTML =
+                        '<span style="color: var(--accent-lime);">✓ Also emailed to ' +
+                        _escapeHtml(meta.email_recipient) + '</span>';
+                } else if (meta.email_recipient) {
+                    note.innerHTML =
+                        '<span style="color: var(--accent-red);">⚠ Could not email ' +
+                        _escapeHtml(meta.email_recipient) + ' — ' +
+                        _escapeHtml(meta.email_status || 'unknown error') +
+                        '. Send the key over a secure channel manually.</span>';
+                } else {
+                    note.innerHTML =
+                        '<span style="color: var(--accent-orange);">⚠ No email on file for this user. ' +
+                        'Send the key over a secure channel manually.</span>';
+                }
+            }
         }
+
 
         function _copyApiKey() {
             var val = document.getElementById('apiKeyRevealValue');
