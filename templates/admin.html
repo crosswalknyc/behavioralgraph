@@ -3947,6 +3947,46 @@
                         </div>
                     </div>
 
+                    <!-- API Access (2026-08-17) - per-user API key management.
+                         Any user can be given API access; the key is tied to
+                         THIS user's credits so add-credits / deductions flow
+                         through the same balance as the dashboard UI. Admin
+                         endpoints:
+                           POST /api/admin/users/<u>/api-key/generate
+                           POST /api/admin/users/<u>/api-key/rotate  (same as generate)
+                           POST /api/admin/users/<u>/api-key/revoke
+                           POST /api/admin/users/<u>/api-key/enable   (re-enable existing sha)
+                    -->
+                    <div class="dashboard-access-item" data-access-group="finance">
+                        <div class="dashboard-access-header">
+                            <span style="font-weight: 600;">🔌 API ACCESS</span>
+                            <span id="apiKeyStatusChip" style="margin-left: auto; font-size: 0.72rem; padding: 0.15rem 0.55rem; border-radius: 10px; background: rgba(136,146,176,0.2); color: var(--text-secondary);">No key</span>
+                        </div>
+                        <div class="dashboard-access-content" style="display: block; padding: 0.75rem 0 0 0;">
+                            <div id="apiKeyBody" style="padding: 0.75rem; background: var(--bg-dark); border-radius: 6px; font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;">
+                                <div id="apiKeyStateSummary" style="margin-bottom: 0.6rem;">
+                                    Loading key state...
+                                </div>
+                                <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                                    <button type="button" class="btn btn-primary btn-small" id="apiKeyGenerateBtn" onclick="generateApiKey()" style="display:none;">Generate API key</button>
+                                    <button type="button" class="btn btn-small" id="apiKeyRotateBtn" onclick="rotateApiKey()" style="display:none; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color);">Rotate key</button>
+                                    <button type="button" class="btn btn-small" id="apiKeyEnableBtn" onclick="enableApiKey()" style="display:none; background: var(--accent-lime); color: #1a1a1a;">Re-enable</button>
+                                    <button type="button" class="btn btn-small" id="apiKeyRevokeBtn" onclick="revokeApiKey()" style="display:none; background: rgba(255,107,107,0.15); color: var(--accent-red); border: 1px solid var(--accent-red);">Revoke</button>
+                                </div>
+                                <div id="apiKeyRevealBox" style="display:none; margin-top: 0.75rem; padding: 0.6rem 0.75rem; background: rgba(255,208,102,0.1); border: 1px solid rgba(255,208,102,0.4); border-radius: 6px;">
+                                    <div style="font-size: 0.7rem; color: var(--accent-orange); font-weight: 600; margin-bottom: 0.35rem;">⚠ Copy this key now. It will not be shown again.</div>
+                                    <div style="display: flex; gap: 0.4rem; align-items: center;">
+                                        <code id="apiKeyRevealValue" style="flex: 1; padding: 0.4rem 0.55rem; background: var(--bg-dark); border-radius: 4px; font-family: 'Space Mono', monospace; font-size: 0.75rem; color: var(--accent-cyan); user-select: all; word-break: break-all;"></code>
+                                        <button type="button" class="btn btn-small btn-primary" onclick="_copyApiKey()" style="padding: 0.35rem 0.7rem; font-size: 0.7rem;">Copy</button>
+                                    </div>
+                                </div>
+                                <div style="margin-top: 0.6rem; font-size: 0.7rem; color: var(--text-secondary); opacity: 0.75;">
+                                    Partner base URL: <code style="color: var(--accent-cyan);">https://dashboard.crosswalknyc.com</code> · auth header: <code style="color: var(--accent-cyan);">X-Crosswalk-API-Key</code> · credits use this user's balance.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- 🎬 TICKET SALES TRACKER Access - section hidden 2026-07-19
                          (removed from admin grants per Jenna). Inner checkboxes
                          are kept (hidden) so JS handlers reading their
@@ -9641,6 +9681,7 @@
             if (mdAccess) mdAccess.checked = user.has_microdramas_iq_access === true; // Default false
             var cbpiqAccess = document.getElementById('hasChatbotProfileIQAccess');
             if (cbpiqAccess) cbpiqAccess.checked = user.has_chatbot_profile_iq_access === true; // Default false
+            if (typeof _renderApiKeyPanel === 'function') _renderApiKeyPanel(user);
             // 2026-07-30: reflect the loaded child states in the consolidated
             // 📈 TRENDS master (checked / unchecked / indeterminate). Talent
             // Ranker (hasRankersIQAccess) is also in this group but is loaded
@@ -12394,6 +12435,192 @@
                 master.checked = true;
                 master.indeterminate = true;
             }
+        }
+
+        // ---- API-Key management (per-user, ties into their credit balance) ----
+        // The raw key is shown ONCE right after generate/rotate; we store
+        // only sha256 on the user record. Credits deduct from the same
+        // balance the dashboard UI uses, so top-ups you do in the modal
+        // (or via /api/admin/users/<u>/add-credits) flow through the API
+        // automatically.
+        function _currentEditUsernameForApi() {
+            var el = document.getElementById('editUsername');
+            return el && el.value ? el.value.trim() : '';
+        }
+
+        function _renderApiKeyPanel(user) {
+            user = user || {};
+            var hasSha = !!(user.api_key_sha256 && user.api_key_sha256.length > 0);
+            var enabled = !!user.api_key_enabled;
+            var lastRot = user.api_key_last_rotated || '';
+            var lastUsed = user.api_key_last_used || '';
+
+            var chip = document.getElementById('apiKeyStatusChip');
+            var summary = document.getElementById('apiKeyStateSummary');
+            var genBtn = document.getElementById('apiKeyGenerateBtn');
+            var rotBtn = document.getElementById('apiKeyRotateBtn');
+            var revBtn = document.getElementById('apiKeyRevokeBtn');
+            var enBtn  = document.getElementById('apiKeyEnableBtn');
+            var reveal = document.getElementById('apiKeyRevealBox');
+            if (!chip || !summary) return;
+
+            // Hide the reveal box between users - only shown right after generate.
+            if (reveal) reveal.style.display = 'none';
+
+            // Reset all buttons.
+            [genBtn, rotBtn, revBtn, enBtn].forEach(function(b){ if (b) b.style.display = 'none'; });
+
+            function fmt(iso) {
+                if (!iso) return 'never';
+                try {
+                    var d = new Date(iso);
+                    if (isNaN(d.getTime())) return iso;
+                    return d.toLocaleString();
+                } catch (e) { return iso; }
+            }
+
+            if (!hasSha) {
+                chip.textContent = 'No key';
+                chip.style.background = 'rgba(136,146,176,0.2)';
+                chip.style.color = 'var(--text-secondary)';
+                summary.innerHTML = 'No API key on file for this user. Generate one to grant programmatic access. Credits will come from this user\'s existing balance.';
+                if (genBtn) genBtn.style.display = 'inline-flex';
+                return;
+            }
+
+            if (enabled) {
+                chip.textContent = 'Enabled';
+                chip.style.background = 'rgba(163,255,113,0.15)';
+                chip.style.color = 'var(--accent-lime)';
+                summary.innerHTML =
+                    '<div><strong>API key active.</strong></div>' +
+                    '<div>Last rotated: ' + fmt(lastRot) + '</div>' +
+                    '<div>Last used: ' + fmt(lastUsed) + '</div>';
+                if (rotBtn) rotBtn.style.display = 'inline-flex';
+                if (revBtn) revBtn.style.display = 'inline-flex';
+            } else {
+                chip.textContent = 'Revoked';
+                chip.style.background = 'rgba(255,107,107,0.15)';
+                chip.style.color = 'var(--accent-red)';
+                summary.innerHTML =
+                    '<div><strong>API key revoked.</strong> Re-enable to reuse the same key, or rotate to issue a new one (invalidates the old).</div>' +
+                    '<div style="margin-top:0.35rem;">Last rotated: ' + fmt(lastRot) + '</div>' +
+                    '<div>Last used: ' + fmt(lastUsed) + '</div>';
+                if (enBtn)  enBtn.style.display  = 'inline-flex';
+                if (rotBtn) rotBtn.style.display = 'inline-flex';
+            }
+        }
+
+        async function generateApiKey() {
+            var uname = _currentEditUsernameForApi();
+            if (!uname) { alert('Save the user first, then generate a key.'); return; }
+            if (!confirm('Generate a new API key for ' + uname + '?\n\nAny previous key for this user will be invalidated immediately.')) return;
+            try {
+                var r = await fetch('/api/admin/users/' + encodeURIComponent(uname) + '/api-key/generate', {
+                    method: 'POST', credentials: 'same-origin',
+                });
+                var data = await r.json();
+                if (!r.ok || !data.success) {
+                    alert('Generate failed: ' + (data.error || r.statusText));
+                    return;
+                }
+                _showRawApiKey(data.api_key);
+                _renderApiKeyPanel({
+                    api_key_sha256: 'x',
+                    api_key_enabled: true,
+                    api_key_last_rotated: data.api_key_last_rotated || new Date().toISOString(),
+                });
+            } catch (e) {
+                alert('Generate failed: ' + e.message);
+            }
+        }
+
+        async function rotateApiKey() {
+            // Rotate is the same server endpoint as generate - it always
+            // overwrites. The confirm copy just makes the intent clearer.
+            var uname = _currentEditUsernameForApi();
+            if (!uname) return;
+            if (!confirm('Rotate the API key for ' + uname + '?\n\nThe existing key will stop working immediately. You will need to send the new key to the user.')) return;
+            await generateApiKey.__inner_rotate(uname);
+        }
+        // Same body as generate but skips the confirm (already asked above)
+        generateApiKey.__inner_rotate = async function(uname) {
+            try {
+                var r = await fetch('/api/admin/users/' + encodeURIComponent(uname) + '/api-key/generate', {
+                    method: 'POST', credentials: 'same-origin',
+                });
+                var data = await r.json();
+                if (!r.ok || !data.success) { alert('Rotate failed: ' + (data.error || r.statusText)); return; }
+                _showRawApiKey(data.api_key);
+                _renderApiKeyPanel({
+                    api_key_sha256: 'x',
+                    api_key_enabled: true,
+                    api_key_last_rotated: data.api_key_last_rotated || new Date().toISOString(),
+                });
+            } catch (e) { alert('Rotate failed: ' + e.message); }
+        };
+
+        async function revokeApiKey() {
+            var uname = _currentEditUsernameForApi();
+            if (!uname) return;
+            if (!confirm('Revoke the API key for ' + uname + '?\n\nThe key will stop working. Their credit balance is preserved. You can re-enable or rotate later.')) return;
+            try {
+                var r = await fetch('/api/admin/users/' + encodeURIComponent(uname) + '/api-key/revoke', {
+                    method: 'POST', credentials: 'same-origin',
+                });
+                var data = await r.json();
+                if (!r.ok || !data.success) { alert('Revoke failed: ' + (data.error || r.statusText)); return; }
+                _renderApiKeyPanel({
+                    api_key_sha256: 'x',
+                    api_key_enabled: false,
+                });
+            } catch (e) { alert('Revoke failed: ' + e.message); }
+        }
+
+        async function enableApiKey() {
+            var uname = _currentEditUsernameForApi();
+            if (!uname) return;
+            try {
+                var r = await fetch('/api/admin/users/' + encodeURIComponent(uname) + '/api-key/enable', {
+                    method: 'POST', credentials: 'same-origin',
+                });
+                var data = await r.json();
+                if (!r.ok || !data.success) { alert('Enable failed: ' + (data.error || r.statusText)); return; }
+                _renderApiKeyPanel({
+                    api_key_sha256: 'x',
+                    api_key_enabled: true,
+                });
+            } catch (e) { alert('Enable failed: ' + e.message); }
+        }
+
+        function _showRawApiKey(raw) {
+            var box = document.getElementById('apiKeyRevealBox');
+            var val = document.getElementById('apiKeyRevealValue');
+            if (!box || !val || !raw) return;
+            val.textContent = raw;
+            box.style.display = 'block';
+        }
+
+        function _copyApiKey() {
+            var val = document.getElementById('apiKeyRevealValue');
+            if (!val || !val.textContent) return;
+            var text = val.textContent;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function(){
+                    var btn = event && event.target;
+                    if (btn) { var prev = btn.textContent; btn.textContent = 'Copied'; setTimeout(function(){ btn.textContent = prev; }, 1500); }
+                }).catch(function(){ _fallbackCopy(text); });
+            } else {
+                _fallbackCopy(text);
+            }
+        }
+        function _fallbackCopy(text) {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); } catch (e) {}
+            document.body.removeChild(ta);
         }
 
         // Form submission

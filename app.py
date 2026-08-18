@@ -4691,6 +4691,134 @@ def add_user_credits(username):
         return jsonify({'success': False, 'error': str(e)})
 
 
+# ============================================================================
+# API-KEY MANAGEMENT — admin can turn API access on/off per user + issue keys
+# ============================================================================
+# 2026-08-17: Jenna wants API access controllable per user directly from
+# the admin user-edit modal so the same credit balance the user already
+# has flows through the API (adds/deducts propagate automatically).
+#
+# Fields we manage on any user record:
+#   * api_key_enabled        bool  - master on/off. If false, key is
+#                                    rejected even if the sha256 matches.
+#   * api_key_sha256         str   - sha256 of the raw key. We never
+#                                    store the raw key.
+#   * api_key_last_rotated   ISO8601 - last time we (re)issued a key.
+#   * api_key_last_used      ISO8601 - stamped by _touch_api_key_used()
+#                                     on successful auth.
+#
+# The API key is tied to `has_chatbot_profile_iq_access` for feature
+# gating and `credits` for billing - both already exist on every user
+# record, so nothing else needs to change downstream.
+# ----------------------------------------------------------------------------
+
+
+def _generate_raw_api_key() -> str:
+    """40-char hex = 160 bits of entropy. Plenty for auth."""
+    import secrets as _secrets
+    return _secrets.token_hex(20)
+
+
+def _sha256_hex(text: str) -> str:
+    import hashlib as _hashlib
+    return _hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _iso_now_utc() -> str:
+    from datetime import datetime as _dt, timezone as _tz
+    return _dt.now(_tz.utc).isoformat()
+
+
+@app.route('/api/admin/users/<username>/api-key/generate', methods=['POST'])
+@requires_admin
+def admin_generate_api_key(username):
+    """Issue a new API key for a user (or rotate the existing one).
+
+    The raw key is returned ONCE in the response body. We store only its
+    sha256. If the user already had a key, the old one is invalidated
+    immediately (idempotent - safe to click twice).
+
+    Also flips `api_key_enabled` and `has_chatbot_profile_iq_access` to
+    True so the key can actually be used right away without a second
+    trip through the modal.
+    """
+    try:
+        data = load_users()
+        if username not in (data.get('users') or {}):
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        user = data['users'][username]
+        raw = _generate_raw_api_key()
+        user['api_key_sha256'] = _sha256_hex(raw)
+        user['api_key_enabled'] = True
+        user['api_key_last_rotated'] = _iso_now_utc()
+        user['has_chatbot_profile_iq_access'] = True
+        save_users(data)
+        return jsonify({
+            'success': True,
+            'username': username,
+            'api_key': raw,
+            'api_key_last_rotated': user['api_key_last_rotated'],
+            'note': ('This key will not be shown again. Copy it now and '
+                     'send it to the user over a secure channel.'),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/users/<username>/api-key/revoke', methods=['POST'])
+@requires_admin
+def admin_revoke_api_key(username):
+    """Disable a user's API key without deleting the sha256 or their credits.
+
+    Sets `api_key_enabled=False`. The user record and credit balance are
+    preserved so re-enabling later (via generate) doesn't lose history.
+    """
+    try:
+        data = load_users()
+        if username not in (data.get('users') or {}):
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        user = data['users'][username]
+        user['api_key_enabled'] = False
+        save_users(data)
+        return jsonify({
+            'success': True,
+            'username': username,
+            'api_key_enabled': False,
+            'message': 'API key disabled. Credit balance preserved.',
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/users/<username>/api-key/enable', methods=['POST'])
+@requires_admin
+def admin_enable_api_key(username):
+    """Re-enable a previously-revoked API key (keeps the same sha256).
+
+    Use this if you disabled a key by mistake. If the user has never had
+    a key issued, this returns an error - use generate instead.
+    """
+    try:
+        data = load_users()
+        if username not in (data.get('users') or {}):
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        user = data['users'][username]
+        if not (user.get('api_key_sha256') or '').strip():
+            return jsonify({
+                'success': False,
+                'error': 'No API key on file. Use generate to issue one.',
+            }), 400
+        user['api_key_enabled'] = True
+        save_users(data)
+        return jsonify({
+            'success': True,
+            'username': username,
+            'api_key_enabled': True,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/users/<username>/credit-history/undo', methods=['POST'])
 @requires_admin
 def undo_user_credit_history_entry(username):
@@ -41647,6 +41775,29 @@ def _lookup_user_by_api_key(raw_key):
         if not u.get('api_key_enabled'):
             continue
         if (u.get('api_key_sha256') or '').lower() == digest.lower():
+            # Stamp last_used so the admin can see key activity in the
+            # user modal. Coalesce writes to at most once per 5 min per
+            # key to avoid hammering S3 on high-frequency partners.
+            try:
+                from datetime import datetime as _dt, timezone as _tz
+                now = _dt.now(_tz.utc)
+                prev_iso = (u.get('api_key_last_used') or '').strip()
+                should_stamp = True
+                if prev_iso:
+                    try:
+                        prev = _dt.fromisoformat(prev_iso.replace('Z', '+00:00'))
+                        if (now - prev).total_seconds() < 300:
+                            should_stamp = False
+                    except Exception:
+                        pass
+                if should_stamp:
+                    u['api_key_last_used'] = now.isoformat()
+                    try:
+                        save_users(data)
+                    except Exception:
+                        pass  # non-fatal - auth still succeeds
+            except Exception:
+                pass
             return u, uname
     return None, None
 
