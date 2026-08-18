@@ -58322,6 +58322,11 @@ https://www.instagram.com/p/..."></textarea>
         // POSTs it to the Hetzner brief queue via /api/brief-chat/*.
         let synthChatHistory = [];
         let synthChatCurrentDraft = null;
+        // 2026-08-18 batch mode: when the interpret endpoint returns
+        // `batch: true` this holds the array of spec_drafts. On
+        // approve we iterate through it and fire N approve calls in
+        // parallel. Cleared on cancel or after successful queue.
+        let synthChatBatchDrafts = null;
         let synthChatActiveRun = null;
         let synthChatPollTimer = null;
         // Date-clarification state. When the server returns
@@ -58838,7 +58843,24 @@ https://www.instagram.com/p/..."></textarea>
                     synthChatPushTurn('agent', msg);
                     return;
                 }
+                // Batch response (2026-08-18): backend detected
+                // multi-subject prompt and returned an array of
+                // drafts. Render a stacked summary + reveal the
+                // approval panel with 'Approve all N' button text.
+                if (data.batch && Array.isArray(data.spec_drafts) && data.spec_drafts.length) {
+                    synthChatCurrentDraft = null;
+                    synthChatBatchDrafts = data.spec_drafts;
+                    var batchSummary = _synthChatBuildBatchSummary(
+                        data.spec_drafts,
+                        data.estimated_credits_total,
+                        data.failures || [],
+                        data.shared_context || '');
+                    synthChatPushTurn('agent', batchSummary);
+                    _synthChatShowBrief(null, data.model);
+                    return;
+                }
                 synthChatCurrentDraft = data.spec_draft || {};
+                synthChatBatchDrafts = null;
                 var summary = _synthChatBuildActionSummary(synthChatCurrentDraft);
                 synthChatPushTurn('agent', summary);
                 _synthChatShowBrief(synthChatCurrentDraft, data.model);
@@ -58860,10 +58882,63 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
 
+        // Build a plain-English summary of a batch of drafts, one
+        // line per subject with estimated credits, plus a total
+        // and any failure lines. Copy honors the workspace rule on
+        // no-modeled-or-source-language.mdc.
+        function _synthChatBuildBatchSummary(drafts, totalCredits, failures, sharedCtx) {
+            var lines = ['I will queue **' + drafts.length + ' profiles** in parallel:'];
+            for (var i = 0; i < drafts.length; i++) {
+                var d = drafts[i] || {};
+                var subj = d.subject || d.name || ('Profile ' + (i + 1));
+                var decision = String(d.decision || 'new_build').toLowerCase();
+                var cred = (typeof d.estimated_credits === 'number')
+                    ? d.estimated_credits + ' credit' + (d.estimated_credits === 1 ? '' : 's')
+                    : '';
+                var mins = d.estimated_run_minutes;
+                var eta = mins ? ' (~' + mins + ' min)' : '';
+                var action = 'new build';
+                if (decision === 'existing_match')       action = 'reuse existing';
+                else if (decision === 'derive_cut')      action = 'derived cut';
+                else if (decision === 'time_shifted_refresh') action = 'refresh existing';
+                else if (decision === 'cut_needs_parent') action = 'new build + cut';
+                lines.push((i + 1) + '. **' + subj + '** \u2014 ' + action + eta + (cred ? ' \u00b7 ' + cred : ''));
+            }
+            if (typeof totalCredits === 'number' && totalCredits >= 0) {
+                lines.push('');
+                lines.push('**Total cost:** ' + totalCredits + ' credit' + (totalCredits === 1 ? '' : 's') + ' when you approve.');
+            }
+            if (Array.isArray(failures) && failures.length) {
+                lines.push('');
+                lines.push('**Could not interpret:** ' + failures.map(function(f){return f.subject_input;}).join(', ') + ' \u2014 send them again separately if you want to try.');
+            }
+            if (sharedCtx) {
+                lines.push('');
+                lines.push('_Shared context applied to each: "' + sharedCtx + '"_');
+            }
+            lines.push('');
+            lines.push('Approve to queue all ' + drafts.length + ', or send another message to adjust.');
+            return lines.join('\n');
+        }
+
         function _synthChatShowBrief(draft, _model) {
             var panel = document.getElementById('synthChatBriefPreview');
             if (!panel) return;
             panel.style.display = 'block';
+            // Adjust the Approve button label to reflect batch vs
+            // single-subject mode so the user knows what they are
+            // committing to. Fallback to the static default if the
+            // button element is missing (shouldn't happen).
+            try {
+                var btn = document.getElementById('synthChatApproveBtn');
+                if (btn) {
+                    if (synthChatBatchDrafts && synthChatBatchDrafts.length > 1) {
+                        btn.textContent = 'Approve all ' + synthChatBatchDrafts.length + ' & run';
+                    } else {
+                        btn.textContent = 'Approve & run';
+                    }
+                }
+            } catch (_) {}
         }
 
         // Turn the interpret step's decision into a plain-English sentence
@@ -58922,11 +58997,22 @@ https://www.instagram.com/p/..."></textarea>
         function synthChatCancelBrief() {
             var panel = document.getElementById('synthChatBriefPreview');
             if (panel) panel.style.display = 'none';
+            var wasBatch = !!(synthChatBatchDrafts && synthChatBatchDrafts.length);
             synthChatCurrentDraft = null;
-            synthChatPushTurn('agent', 'Draft cancelled. Send another message to try again.');
+            synthChatBatchDrafts = null;
+            synthChatPushTurn('agent',
+                wasBatch ? 'Batch cancelled. Send another message to try again.'
+                         : 'Draft cancelled. Send another message to try again.');
         }
 
         async function synthChatApproveBrief() {
+            // Batch mode short-circuit: if we have an array of
+            // drafts, hand off to the multi-approve helper. It
+            // fires N approve calls in parallel and starts N polls.
+            if (synthChatBatchDrafts && synthChatBatchDrafts.length) {
+                await _synthChatApproveBatch();
+                return;
+            }
             if (!synthChatCurrentDraft) return;
             // The interpret step already decided run_avid based on
             // chat opt-out detection. Trust the draft; the dashboard
@@ -59001,6 +59087,85 @@ https://www.instagram.com/p/..."></textarea>
                 try { _endThinking && _endThinking(); } catch (_) {}
                 _synthChatHideStopButton();
                 synthChatInflightController = null;
+                approveBtn.disabled = false;
+                approveBtn.textContent = prev;
+            }
+        }
+
+        // Batch approve helper (2026-08-18). Reads the email input
+        // once (shared across every subject), then fires POSTs to
+        // /api/brief-chat/approve for every draft in parallel. On
+        // each success, pushes a queued turn and starts a poll for
+        // that run_id so status updates appear inline.
+        async function _synthChatApproveBatch() {
+            var approveBtn = document.getElementById('synthChatApproveBtn');
+            if (!approveBtn) return;
+            var drafts = synthChatBatchDrafts || [];
+            if (!drafts.length) return;
+            // Shared email input (same rules as single-mode).
+            var _rawEmail = (document.getElementById('synthChatEmailTo').value || '');
+            var _seen = {};
+            var _cleanEmails = [];
+            _rawEmail.split(/[,;\n]+/).forEach(function(part) {
+                var addr = String(part || '').trim();
+                if (!addr) return;
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) return;
+                var k = addr.toLowerCase();
+                if (_seen[k]) return;
+                _seen[k] = 1;
+                _cleanEmails.push(addr);
+            });
+            var emailTo = _cleanEmails.join(', ');
+
+            approveBtn.disabled = true;
+            var prev = approveBtn.textContent;
+            approveBtn.textContent = 'Queuing ' + drafts.length + '...';
+            var _endThinking = _synthChatBeginThinking('approve');
+            try {
+                var results = await Promise.all(drafts.map(function(d) {
+                    return fetch('/api/brief-chat/approve', {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            spec_draft: d,
+                            run_avid: d && d.run_avid !== false,
+                            email_to: emailTo,
+                        }),
+                    }).then(function(r) { return r.json().catch(function(){ return {success:false, error:'bad json'};}); })
+                      .catch(function(e){ return {success:false, error:String(e && e.message || e)}; });
+                }));
+                var queuedNames = [];
+                var errored = [];
+                for (var i = 0; i < results.length; i++) {
+                    var r = results[i];
+                    var d = drafts[i] || {};
+                    var subj = d.subject || d.name || ('Profile ' + (i + 1));
+                    if (r && r.success && r.run_id) {
+                        queuedNames.push(subj);
+                        _synthChatPushTurnWithMeta('agent',
+                            'Queued **' + (r.subject || subj) + '**' +
+                                (r.pending_position ? ' (position ' + r.pending_position + ' in queue)' : '') +
+                                '. I will update this thread as it progresses.',
+                            { run_id: r.run_id, status: 'queued', subject: r.subject || subj });
+                        _synthChatStartPolling(r.run_id, r.subject || subj);
+                    } else {
+                        errored.push({ subject: subj, error: (r && r.error) || 'queue failed' });
+                    }
+                }
+                var panel = document.getElementById('synthChatBriefPreview');
+                if (panel) panel.style.display = 'none';
+                synthChatBatchDrafts = null;
+                try { _synthChatRefreshQueueBadge(); } catch (_) {}
+                if (errored.length) {
+                    synthChatPushTurn('agent',
+                        'Some profiles could not be queued: ' +
+                        errored.map(function(e){return e.subject + ' (' + e.error + ')';}).join('; '));
+                }
+            } catch (e) {
+                synthChatPushTurn('agent',
+                    'Batch approve failed: ' + (e && e.message || e));
+            } finally {
+                try { _endThinking && _endThinking(); } catch (_) {}
                 approveBtn.disabled = false;
                 approveBtn.textContent = prev;
             }

@@ -42146,6 +42146,140 @@ def _synth_chat_gate():
     return user, None
 
 
+# ---------------------------------------------------------------------------
+# Batch-mode multi-subject detection (2026-08-18).
+# Recognizes prompts like:
+#   - "run individual profiles for VIZIO, Samsung, LG"
+#   - "profiles for the following: Coke, Pepsi, Dr Pepper"
+#   - "separate profiles for each of X, Y, and Z"
+#   - "one profile each for A, B, C"
+# ...and returns a list of subject strings so the interpret endpoint can
+# fan out into N parallel Claude calls, one per subject.
+#
+# Anti-false-positive guardrails:
+#   * Must contain an explicit multi-request keyword ("individual profiles",
+#     "separate profiles", "profiles for the following", "profile each",
+#     "each of").
+#   * Must have >= 2 comma-separated or "and"-separated items after
+#     stripping the trigger phrase.
+#   * Rejects if the whole prompt is under ~10 chars (typo territory).
+#   * Cap batch size at 15 so we don't self-DDoS the interpret step or
+#     nuke the worker pool.
+# ---------------------------------------------------------------------------
+SYNTH_CHAT_BATCH_MAX = 15
+
+
+def _detect_batch_subjects(user_text: str) -> list[str]:
+    """Return a list of subject strings if the prompt is a batch request,
+    otherwise []. See module-header for detection rules.
+    """
+    import re as _re
+    text = (user_text or '').strip()
+    if len(text) < 10:
+        return []
+
+    # Trigger phrases (must be present verbatim, case-insensitive).
+    # Ordered so the most specific patterns are tried first.
+    # The plural-only trigger `profiles for` catches short prompts like
+    # "profiles for A, B, C" - safe from single-subject false positives
+    # because the caller enforces >= 2 subjects before returning.
+    triggers = [
+        r'run\s+individual\s+profiles?\s+for[:\s]+',
+        r'individual\s+profiles?\s+for[:\s]+',
+        r'separate\s+profiles?\s+for(?:\s+each\s+of)?[:\s]+',
+        r'profiles\s+for\s+the\s+following[:\s]+',
+        r'profiles\s+for\s+each\s+of[:\s]+',
+        r'one\s+profile\s+each\s+for[:\s]+',
+        r'a\s+profile\s+for\s+each\s+of[:\s]+',
+        r'profiles\s+of\s+each[:\s]+',
+        r'build\s+profiles\s+for[:\s]+',
+        r'profiles\s+for[:\s]+',
+    ]
+    trigger_re = _re.compile(
+        r'^(?:.*?\b(?:' + '|'.join(triggers) + r'))', _re.IGNORECASE)
+    m = trigger_re.search(text)
+    if not m:
+        return []
+
+    tail = text[m.end():].strip()
+    # Strip a leading parenthetical wrapper if the user wrote
+    # "run profiles for TV brands (VIZIO, Samsung, LG)" - the parenthetical
+    # IS the subject list in that case.
+    paren_wrap = _re.match(r'^[^(]*\(([^)]+)\)\s*$', tail)
+    if paren_wrap:
+        tail = paren_wrap.group(1).strip()
+
+    # Strip any trailing " for the past 60 days" / " with X context" so
+    # the shared context applies to every subject rather than getting
+    # glued to the last one. We keep the tail intact for the per-subject
+    # interpret prompt (via _shared_context_from_batch).
+    parts = _re.split(r'\s*(?:,|;|\band\b|\bor\b)\s*', tail)
+    subjects: list[str] = []
+    for p in parts:
+        s = p.strip().strip('.').strip()
+        # Drop obvious non-subject fragments left over from parsing.
+        if not s or len(s) > 120:
+            continue
+        # Reject if it starts with a verb that suggests it's a modifier
+        # ("for the past 60 days", "with millennial cut", etc.).
+        if _re.match(r'^(for|with|during|over|since|in|by)\s', s, _re.IGNORECASE):
+            continue
+        subjects.append(s)
+
+    # Detach a trailing shared-context modifier from the LAST subject if
+    # present. E.g. "profiles for A, B, C for the past 60 days" splits
+    # into ["A", "B", "C for the past 60 days"] on the first pass. The
+    # last item then gets peeled apart at the modifier boundary so the
+    # per-subject Claude call sees "C" as the subject and "for the past
+    # 60 days" as shared context reattached in the caller.
+    if subjects:
+        last = subjects[-1]
+        modifier_re = _re.compile(
+            r'^(.+?)\s+((?:for|during|over|since|in|throughout|'
+            r'trailing|past|last|next|this|Q[1-4]|H[12]|YTD|'
+            r'as\s+of)\b.*)$',
+            _re.IGNORECASE,
+        )
+        m2 = modifier_re.match(last)
+        if m2:
+            head = m2.group(1).strip()
+            # Only accept the split if the head is a plausible subject
+            # (>=1 char, <=60 chars, has no obvious modifier verbs).
+            if head and len(head) <= 60:
+                subjects[-1] = head
+
+    # Need at least 2 real subjects and no more than the cap.
+    if len(subjects) < 2:
+        return []
+    if len(subjects) > SYNTH_CHAT_BATCH_MAX:
+        # Signal overflow to the caller by returning the full list; the
+        # caller enforces the cap and surfaces a user-visible error.
+        return subjects
+    return subjects
+
+
+def _shared_context_from_batch(user_text: str, subjects: list[str]) -> str:
+    """Extract the shared context (date range, cut modifiers, etc.) from
+    a batch prompt so it can be re-attached to each per-subject Claude
+    call. E.g. from
+      "run individual profiles for VIZIO, Samsung, LG for the past 60 days"
+    return "for the past 60 days".
+    """
+    import re as _re
+    text = user_text or ''
+    # Find the last subject name in the text; everything after it is
+    # shared context that applies to the whole batch.
+    if not subjects:
+        return ''
+    last = subjects[-1]
+    idx = text.lower().rfind(last.lower())
+    if idx < 0:
+        return ''
+    tail = text[idx + len(last):].strip()
+    tail = _re.sub(r'^[),.:;\s]+', '', tail)
+    return tail
+
+
 def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categories=None,
                                     candidate_matches=None):
     """Build the (system, user) prompts that turn free-form user text into a
@@ -42687,6 +42821,142 @@ def _save_synth_chat_history(username, history):
         return False
 
 
+def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
+                                       history: list) -> dict:
+    """Run one Claude interpret call for a single subject inside a batch.
+    Returns a dict with `success` + either `spec_draft`+`candidates` or
+    `error`. Never raises - errors bubble up as `success: false`.
+    """
+    per_prompt = subject.strip()
+    if shared_context:
+        per_prompt = f"{per_prompt} {shared_context}".strip()
+    try:
+        try:
+            from iq_rankers import MASTER_CATEGORIES
+        except Exception:
+            MASTER_CATEGORIES = {}
+        catalog = _profile_catalog_for_chat()
+        candidates = _shortlist_profile_matches(per_prompt, catalog)
+        system_prompt, user_prompt = _synth_chat_interpret_prompts(
+            per_prompt, chat_history=history,
+            master_categories=MASTER_CATEGORIES,
+            candidate_matches=candidates,
+        )
+        result = _run_nflx_claude_agent(
+            system_prompt=system_prompt, user_prompt=user_prompt,
+            max_tokens=8192, temperature=0.4,
+        )
+        if not result.get('success'):
+            return {
+                'success': False, 'subject_input': subject,
+                'error': result.get('error', 'interpret failed'),
+            }
+        spec_draft = result.get('data') or {}
+
+        # Apply the same guardrails the single-subject path does.
+        try:
+            swapped, swap_note = _enforce_base_parent_pick(
+                spec_draft, candidates, per_prompt)
+            if swapped:
+                spec_draft['_parent_guardrail_note'] = swap_note
+        except Exception:
+            pass
+
+        decision_str = str(spec_draft.get('decision') or '').strip().lower()
+        user_optout = _user_optout_of_avid(per_prompt, chat_history=history)
+        claude_says_false = spec_draft.get('run_avid') is False
+        if decision_str in _AVID_INAPPLICABLE_DECISIONS:
+            spec_draft['run_avid'] = False if decision_str == 'derive_cut' else True
+        elif claude_says_false and user_optout:
+            spec_draft['run_avid'] = False
+        else:
+            spec_draft['run_avid'] = True
+
+        try:
+            _dec_norm, _, _ = _normalize_v1_decision(spec_draft)
+        except Exception:
+            _dec_norm = str(spec_draft.get('decision') or 'new_build').strip() or 'new_build'
+        est_credits = int(_V1_CREDITS.get(_dec_norm, CREDITS_PROFILE_ANALYSIS))
+        spec_draft['estimated_credits'] = est_credits
+
+        return {
+            'success': True, 'subject_input': subject,
+            'spec_draft': spec_draft,
+            'estimated_credits': est_credits,
+            'candidates': [
+                {k: v for k, v in c.items()
+                 if not k.startswith('_') or k == '_score'}
+                for c in candidates
+            ],
+            'model': result.get('model'),
+        }
+    except Exception as e:
+        return {
+            'success': False, 'subject_input': subject,
+            'error': f'{type(e).__name__}: {e}',
+        }
+
+
+def _synth_chat_interpret_batch(user_text: str, subjects: list,
+                                  history: list):
+    """Fan-out interpret across a list of subjects. Runs up to 5 Claude
+    calls concurrently (well under our Anthropic key pool ceiling) and
+    stitches the results into a single response with a `batch: true`
+    flag so the frontend can render N approval cards.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    shared_context = _shared_context_from_batch(user_text, subjects)
+    print(f"[synth-chat interpret batch] subjects={subjects} "
+          f"shared_context={shared_context!r}")
+
+    results_by_index: dict = {}
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        futs = {
+            pool.submit(_synth_chat_interpret_one_subject,
+                         subj, shared_context, history): idx
+            for idx, subj in enumerate(subjects)
+        }
+        for fut in as_completed(futs):
+            idx = futs[fut]
+            try:
+                results_by_index[idx] = fut.result()
+            except Exception as e:
+                results_by_index[idx] = {
+                    'success': False,
+                    'subject_input': subjects[idx],
+                    'error': f'{type(e).__name__}: {e}',
+                }
+
+    ordered = [results_by_index[i] for i in range(len(subjects))]
+    ok_drafts = [r for r in ordered if r.get('success')]
+    failures = [r for r in ordered if not r.get('success')]
+    total_credits = sum(int(r.get('estimated_credits') or 0)
+                        for r in ok_drafts)
+
+    return jsonify({
+        'success': True,
+        'batch': True,
+        'batch_size': len(subjects),
+        'subjects': subjects,
+        'spec_drafts': [r.get('spec_draft') for r in ok_drafts],
+        'per_subject_meta': [
+            {
+                'subject_input': r.get('subject_input'),
+                'estimated_credits': r.get('estimated_credits'),
+                'model': r.get('model'),
+                'candidates': r.get('candidates', []),
+            } for r in ok_drafts
+        ],
+        'failures': [
+            {'subject_input': r.get('subject_input'),
+             'error': r.get('error')}
+            for r in failures
+        ],
+        'estimated_credits_total': total_credits,
+        'shared_context': shared_context,
+    })
+
+
 @app.route('/api/brief-chat/interpret', methods=['POST'])
 @app.route('/api/synth-chat/interpret', methods=['POST'])  # legacy alias
 @requires_auth
@@ -42706,6 +42976,37 @@ def api_synth_chat_interpret():
         return jsonify({'success': False, 'error': 'empty request text'}), 400
 
     history = body.get('history') or []
+
+    # ------------------------------------------------------------------
+    # BATCH MODE (2026-08-18): if the prompt matches
+    # "run individual profiles for X, Y, Z" style, fan out into one
+    # Claude call per subject and return an array of spec_drafts. The
+    # frontend renders one approval card per draft + an "Approve all"
+    # button. Cap enforced at SYNTH_CHAT_BATCH_MAX so we don't swamp
+    # the interpret step or the 10-worker pool.
+    # ------------------------------------------------------------------
+    _batch_subjects = _detect_batch_subjects(text)
+    if _batch_subjects:
+        if len(_batch_subjects) > SYNTH_CHAT_BATCH_MAX:
+            return jsonify({
+                'success': False,
+                'error': (
+                    f"That looks like {len(_batch_subjects)} subjects. "
+                    f"Batch mode is capped at {SYNTH_CHAT_BATCH_MAX} at "
+                    f"a time - split it into two messages and I'll queue "
+                    f"them all in parallel."
+                ),
+            }), 400
+        try:
+            return _synth_chat_interpret_batch(
+                text, _batch_subjects, history=history,
+            )
+        except Exception as _batch_err:
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': f'batch interpret failed: {_batch_err}',
+            }), 500
 
     try:
         try:
