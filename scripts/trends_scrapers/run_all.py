@@ -47,6 +47,12 @@ SCRAPERS = [
     ('libby_trends',       'scripts.trends_scrapers.libby_trends',       'Libby popular',        'libby'),
     ('philanthropy_news',  'scripts.trends_scrapers.philanthropy_news',  'Philanthropy news',    'news'),
     ('business_news',      'scripts.trends_scrapers.business_news',      'Business news',        'news'),
+    # FAST (Free Ad-Supported Streaming TV): one snapshot covering the
+    # top 100 titles on Roku Channel, Tubi, Pluto TV, and Amazon
+    # (Prime Video ad-tier, which absorbed Freevee in Nov 2024). Data
+    # comes from JustWatch's public GraphQL - no cookies, no
+    # datacenter-IP blocking.
+    ('fast_channels',      'scripts.trends_scrapers.fast_channels',      'FAST channels',        'fast'),
     # Lens scoring depends on every OTHER latest snapshot being in
     # place first (it reads them all to build the item universe).
     # Kept AFTER all content scrapers so a same-day run picks up
