@@ -41709,10 +41709,31 @@ def _prompt_extract_cut_hints(prompt_norm):
     return hits
 
 
+_HISTORICAL_YEAR_RE = re.compile(r'\b(19[9]\d|20[0-2]\d|2030)\b')
+_CUT_SUFFIX_TOKENS = {
+    'avid', 'casual', 'female', 'male',
+    'millennial', 'millennials', 'gen', 'genz', 'boomer', 'boomers',
+    'spotify', 'youtube', 'tiktok', 'facebook', 'instagram', 'apple',
+    'happys', 'happy', 'place', 'reba', 'show',
+}
+
+
 def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CANDIDATES):
     """Return the top-N profile candidates most likely to match the user's
     prompt. Uses token-overlap scoring against each candidate's subject
     and display_name. Cheap - runs in-memory over ~200-1000 records.
+
+    Ranking signals, in order of importance:
+      1. Token overlap between prompt and candidate subject/display_name.
+      2. Base-profile boost: if the user's ask has NO year AND NO explicit
+         cut modifier (avid, female, spotify, etc.), the base profile
+         (shortest display_name, no suffix) beats sibling skins.
+      3. Historical-year penalty: candidates whose display_name contains
+         a year like '2023' or '2024' get penalized UNLESS the prompt
+         also contains that exact year. This is what prevents 'reba
+         mcentire past 60 days' from being routed at 'Reba McEntire -
+         2024 Total Universe' when the base 'Reba McEntire' exists.
+      4. Recency: newer profiles beat older ones on ties.
 
     Returns a list ordered best-first, each entry with the catalog
     fields plus `_score` (float, 0..1) so Claude can see how strong
@@ -41724,6 +41745,12 @@ def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CA
     p_tokens = set(t for t in p_norm.split() if len(t) >= 3)
     if not p_tokens:
         return []
+    # Extract explicit years from the prompt so historical-year skins
+    # only rank high when the user actually asked for that year.
+    prompt_years = set(_HISTORICAL_YEAR_RE.findall(prompt or ''))
+    # Detect explicit cut modifiers so we know whether the user is asking
+    # for a sibling skin ("avid Reba") or the base current profile ("Reba").
+    prompt_has_cut_hint = bool(_prompt_extract_cut_hints(p_norm))
     scored = []
     for c in catalog:
         subject_norm = _normalize_for_match(c.get('subject') or '')
@@ -41732,13 +41759,8 @@ def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CA
         c_tokens = set(t for t in combined.split() if len(t) >= 3)
         if not c_tokens:
             continue
-        # Jaccard-ish: overlap / prompt_tokens (weighted toward prompt
-        # coverage - user says "taylor swift" and profile display is
-        # "Taylor Swift - Avid Fan"; both tokens covered = strong).
         overlap = p_tokens & c_tokens
         if not overlap:
-            # Substring fallback: catches "Fast and the Furious" vs
-            # "Fast_and_the_Furious" tokenization edge cases.
             for pt in p_tokens:
                 if len(pt) >= 5 and pt in combined:
                     overlap = overlap | {pt}
@@ -41746,13 +41768,40 @@ def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CA
             continue
         prompt_coverage = len(overlap) / max(len(p_tokens), 1)
         subject_hit = 1.0 if any(t in subject_norm.split() for t in overlap) else 0.5
-        score = round(prompt_coverage * subject_hit, 4)
+        score = prompt_coverage * subject_hit
+
+        # Historical-year handling. If the display name contains a year
+        # AND the prompt does NOT mention that exact year, this candidate
+        # is a historical skin the user did not ask for -- push it down.
+        display_years = set(_HISTORICAL_YEAR_RE.findall(
+            c.get('display_name') or ''))
+        if display_years and not (display_years & prompt_years):
+            score *= 0.55
+        elif display_years and (display_years & prompt_years):
+            # User explicitly named a historical year and this candidate
+            # matches -- reward it.
+            score *= 1.15
+
+        # Base-profile boost: when the user's ask has NO year and NO cut
+        # modifier, prefer the shortest matching display name (i.e. the
+        # base 'Reba McEntire', not 'Reba McEntire - Spotify Fan').
+        if not prompt_years and not prompt_has_cut_hint:
+            display_raw = str(c.get('display_name') or '')
+            has_suffix = (' - ' in display_raw) or bool(display_years)
+            if not has_suffix:
+                score *= 1.30
+
+        score = round(score, 4)
         if score < 0.15:
             continue
         c2 = dict(c)
         c2['_score'] = score
         scored.append(c2)
-    scored.sort(key=lambda x: x['_score'], reverse=True)
+    # Sort by score desc, then by recency desc (newer wins on ties).
+    def _sort_key(x):
+        lm = x.get('last_modified') or ''
+        return (-x['_score'], lm[::-1] if isinstance(lm, str) else '')
+    scored.sort(key=_sort_key)
     return scored[:max_candidates]
 
 
@@ -41902,11 +41951,48 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         )
     candidates_block = "\n".join(cand_lines) if cand_lines else "  (no candidate matches - treat as new_build)"
 
+    # ── Time anchor ──────────────────────────────────────────────────
+    # Claude has no reliable notion of "today" and will invent windows
+    # in the future ("past 60 days = Dec 2026 to Jan 2027") if we don't
+    # anchor it. Compute the current date server-side and pass it in as
+    # both an ISO string and the derived defaults for common relative
+    # windows so Claude never has to guess.
+    from datetime import date as _date, timedelta as _td
+    _today = _date.today()
+    _today_iso = _today.isoformat()
+    _today_pretty = _today.strftime('%B %d, %Y')
+    _t_minus_30 = (_today - _td(days=30)).isoformat()
+    _t_minus_60 = (_today - _td(days=60)).isoformat()
+    _t_minus_90 = (_today - _td(days=90)).isoformat()
+    _t_minus_180 = (_today - _td(days=180)).isoformat()
+    _t_minus_365 = (_today - _td(days=365)).isoformat()
+
     system_prompt = (
         "You are the Profile Brief Architect for BehavioralGraph's Profile "
         "IQ product. Your job: take a user's natural-language request and "
         "produce a STRUCTURED JSON draft spec that will be used to build "
         "the profile.\n\n"
+
+        # -- Time anchor ------------------------------------------------
+        # Every relative window ("past 60 days", "trailing 6 months",
+        # "this year", "since March") MUST be computed against this
+        # anchor. Never emit a `date_range` whose end date is in the
+        # future -- that means the audience does not exist yet.
+        f"CURRENT DATE (server clock): {_today_iso} ({_today_pretty}).\n"
+        "  * Anchor every relative window to this date.\n"
+        "  * NEVER emit a `date_range` whose end is later than the\n"
+        "    current date. If your window would push into the future,\n"
+        "    you have miscomputed - re-anchor to today and try again.\n"
+        "  * Precomputed helpers (end = today, start = today - N days):\n"
+        f"      past  30 days   -> {{start: {_t_minus_30}, end: {_today_iso}}}\n"
+        f"      past  60 days   -> {{start: {_t_minus_60}, end: {_today_iso}}}\n"
+        f"      past  90 days   -> {{start: {_t_minus_90}, end: {_today_iso}}}\n"
+        f"      past 180 days   -> {{start: {_t_minus_180}, end: {_today_iso}}}\n"
+        f"      past year (365) -> {{start: {_t_minus_365}, end: {_today_iso}}}\n"
+        "  * All events, tour dates, releases, controversies, and\n"
+        "    macro trends you cite in `refresh_row_hypothesis` and\n"
+        "    `persona_notes` MUST be dated on or before the current\n"
+        "    date. Do not invent events from the future.\n\n"
 
         "STRICT VOCABULARY RULE - applies to every prose field you emit "
         "(persona_notes, category_note, assumptions, any human-readable "
@@ -42128,6 +42214,31 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "existing 'Taylor Swift' TU entry directly (existing_match or "
         "time_shifted_refresh). An ask like 'avid Taylor Swift' is a cut "
         "and should map to derive_cut with derive_type='avid'.\n\n"
+
+        # -- Parent-selection tiebreak --------------------------------
+        # When the catalog has both a base profile ('Reba McEntire')
+        # AND historical-year skins ('Reba McEntire - 2024 Total
+        # Universe', 'Reba McEntire - 2023 Total Universe'), the base
+        # profile is the current-year one and is the correct parent for
+        # any request that does NOT name a historical year.
+        "PARENT-SELECTION TIEBREAK (mandatory when multiple candidates "
+        "share the same subject):\n"
+        "  * Pick the BASE profile (shortest display_name with no year "
+        "suffix and no ' - <cut>' suffix) whenever the user's ask does "
+        "NOT name a historical year, a specific platform, or a specific "
+        "cut. That is the current-year Total Universe. E.g. for 'Reba "
+        "McEntire past 60 days' the parent is 'Reba McEntire', NOT "
+        "'Reba McEntire - 2024 Total Universe' and NOT 'Reba McEntire - "
+        "Spotify Fan'.\n"
+        "  * ONLY pick a year-suffixed historical skin (e.g. '... - 2024 "
+        "Total Universe') when the user's ask contains that exact year. "
+        "'past 60 days' / 'trailing X months' / 'YTD' / 'this year' are "
+        "NOT historical years - they are relative windows anchored to "
+        "the current date above.\n"
+        "  * ONLY pick a platform / persona / demographic skin (e.g. "
+        "'... - Spotify Fan', '... - Avid Female Fan', '... - Happy's "
+        "Place Fan') when the user's ask explicitly names that same "
+        "platform / persona / demographic modifier.\n\n"
 
         "RULES:\n"
         "  1. STRICT VOCABULARY (see top). NEVER surface methodology "
