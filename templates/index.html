@@ -764,7 +764,50 @@
             font-size: 0.7rem;
             opacity: 0.7;
         }
-        .user-dropdown-item.open .user-dropdown-caret { transform: rotate(180deg); }
+        .user-dropdown-item.open .user-dropdown-caret,
+        .user-dropdown-subitem.open .user-dropdown-caret { transform: rotate(180deg); }
+
+        /* Deeper (level-3) submenu items, e.g. individual videos under Video Tutorials */
+        .user-dropdown-subitem2 {
+            display: block;
+            width: 100%;
+            padding: 0.45rem 1rem 0.45rem 2.85rem;
+            color: var(--text-secondary);
+            font-size: 0.82rem;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.12s, color 0.12s;
+            background: none;
+            border: none;
+            text-align: left;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+        .user-dropdown-subitem2:hover {
+            background: rgba(255,255,255,0.07);
+            color: var(--text-primary);
+        }
+        /* "Soon" tag for resource items whose content is not yet available */
+        .user-dropdown-soon {
+            float: right;
+            font-size: 0.6rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--accent-cyan);
+            opacity: 0.6;
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            padding: 0.05rem 0.4rem;
+        }
+        .user-dropdown-subitem-disabled {
+            cursor: default;
+            opacity: 0.55;
+        }
+        .user-dropdown-subitem-disabled:hover {
+            background: none;
+            color: var(--text-secondary);
+        }
 
         /* How-To video modal */
         .howto-video-overlay {
@@ -18831,11 +18874,17 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                                     </button>
                                     <div class="user-dropdown-divider"></div>
                                     <a class="user-dropdown-item" href="/download" target="_blank" rel="noopener">Download Desktop App</a>
-                                    <button type="button" class="user-dropdown-item" id="btnOpenMethodology">Methodology</button>
-                                    <button type="button" class="user-dropdown-item" id="btnHowToVideos" aria-expanded="false">How-To Videos<span class="user-dropdown-caret">&#9662;</span></button>
-                                    <div class="user-dropdown-submenu" id="howToVideosSubmenu">
-                                        <button type="button" class="user-dropdown-subitem" data-howto-video="{{ url_for('static', filename='videos/profile-iq.mp4') }}" data-howto-title="Profile IQ">Profile IQ</button>
-                                        <button type="button" class="user-dropdown-subitem" data-howto-video="{{ url_for('static', filename='videos/subscriber-iq.mp4') }}" data-howto-title="Subscriber IQ">Subscriber IQ</button>
+                                    <button type="button" class="user-dropdown-item" id="btnResourceCenter" aria-expanded="false">Crosswalk Resource Center<span class="user-dropdown-caret">&#9662;</span></button>
+                                    <div class="user-dropdown-submenu" id="resourceCenterSubmenu">
+                                        <button type="button" class="user-dropdown-subitem" id="btnVideoTutorials" aria-expanded="false">Video Tutorials<span class="user-dropdown-caret">&#9662;</span></button>
+                                        <div class="user-dropdown-submenu user-dropdown-submenu-2" id="videoTutorialsSubmenu">
+                                            <button type="button" class="user-dropdown-subitem2" data-howto-video="{{ url_for('static', filename='videos/profile-iq.mp4') }}" data-howto-title="Profile IQ">Profile IQ</button>
+                                            <button type="button" class="user-dropdown-subitem2" data-howto-video="{{ url_for('static', filename='videos/subscriber-iq.mp4') }}" data-howto-title="Subscriber IQ">Subscriber IQ</button>
+                                        </div>
+                                        <button type="button" class="user-dropdown-subitem" id="btnOpenMethodology">Methodology</button>
+                                        <button type="button" class="user-dropdown-subitem user-dropdown-subitem-disabled" disabled>Metric Glossary<span class="user-dropdown-soon">Soon</span></button>
+                                        <button type="button" class="user-dropdown-subitem user-dropdown-subitem-disabled" disabled>How-To Guides<span class="user-dropdown-soon">Soon</span></button>
+                                        <button type="button" class="user-dropdown-subitem user-dropdown-subitem-disabled" disabled>FAQs<span class="user-dropdown-soon">Soon</span></button>
                                     </div>
                                     <div class="user-dropdown-divider"></div>
                                     <a class="user-dropdown-item" href="/logout">Logout</a>
@@ -39575,17 +39624,21 @@ https://www.instagram.com/p/..."></textarea>
                     });
                 }
 
-                // How-To Videos submenu toggle + video modal
-                var btnHowTo = document.getElementById('btnHowToVideos');
-                var howToSubmenu = document.getElementById('howToVideosSubmenu');
-                if (btnHowTo && howToSubmenu) {
-                    btnHowTo.addEventListener('click', function(e) {
-                        e.stopPropagation();
-                        var isOpen = howToSubmenu.classList.toggle('open');
-                        btnHowTo.classList.toggle('open', isOpen);
-                        btnHowTo.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-                    });
+                // Crosswalk Resource Center + nested Video Tutorials submenu toggles
+                function _wireSubmenuToggle(btnId, submenuId) {
+                    var b = document.getElementById(btnId);
+                    var s = document.getElementById(submenuId);
+                    if (b && s) {
+                        b.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            var isOpen = s.classList.toggle('open');
+                            b.classList.toggle('open', isOpen);
+                            b.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                        });
+                    }
                 }
+                _wireSubmenuToggle('btnResourceCenter', 'resourceCenterSubmenu');
+                _wireSubmenuToggle('btnVideoTutorials', 'videoTutorialsSubmenu');
                 var howToOverlay = document.getElementById('howToVideoOverlay');
                 var howToPlayer = document.getElementById('howToVideoPlayer');
                 var howToTitle = document.getElementById('howToVideoTitle');
