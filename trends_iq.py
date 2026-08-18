@@ -5188,6 +5188,69 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
 
 
 # ============================================================================
+# Card 5b: FAST channels (Roku, Tubi, Pluto, Amazon)
+# ============================================================================
+# The four platforms in dashboard sub-tab order. Slug matches
+# `fast_channels.FAST_PLATFORMS`; `available_default` is what the panel
+# reports before the first daily snapshot lands.
+FAST_PLATFORMS = [
+    ('roku',    'The Roku Channel', False),
+    ('tubi',    'Tubi',             False),
+    ('pluto',   'Pluto TV',         False),
+    ('amazon',  'Amazon',           False),
+]
+
+
+def _fetch_fast_trending(state: Optional[str], lookback_days: int,
+                          keywords: Optional[list[str]] = None,
+                          asof: Optional[str] = None) -> dict:
+    """Read the daily FAST-channels snapshot and shape it into the same
+    per-platform dict the frontend already consumes for streaming.
+
+    The scraper writes a single S3 object
+    `trends_iq_snapshots/latest/fast_channels.json` whose `sources`
+    key contains one entry per platform (roku / tubi / pluto / amazon),
+    each with an `items` list of up to 100 titles (mixed Film + TV) in
+    JustWatch popularity order.
+    """
+    snap = _read_snapshot('fast_channels', asof) if asof else _read_snapshot('fast_channels')
+    sources = (snap or {}).get('sources') or {}
+
+    result: dict[str, dict] = {}
+    for slug, label, _default_avail in FAST_PLATFORMS:
+        block = sources.get(slug) or {}
+        items = list(block.get('items') or [])
+        # Bucket rank stamped by the scraper is already correct;
+        # do a defensive re-rank in case an upstream dedupe pass ever
+        # touches the list.
+        for i, it in enumerate(items, 1):
+            it['rank'] = i
+        # Split into films / tv the same way streaming does so the
+        # frontend can render whichever shape it prefers. For FAST the
+        # default view is a single flat top-100, but exposing the
+        # split for free keeps the rendering flexible.
+        films = [dict(it) for it in items
+                  if (it.get('category_display') or '').lower() == 'film']
+        tv    = [dict(it) for it in items
+                  if (it.get('category_display') or '').lower() == 'tv']
+        for i, r in enumerate(films, 1):
+            r['bucket_rank'] = i
+        for i, r in enumerate(tv, 1):
+            r['bucket_rank'] = i
+        result[slug] = {
+            'label':      block.get('label') or label,
+            'items':      items,
+            'films':      films,
+            'tv':         tv,
+            'available':  bool(block.get('available') and items),
+            'fetched_at': (snap or {}).get('fetched_at'),
+        }
+        if (snap or {}).get('error'):
+            result[slug]['note'] = f"latest snapshot: {(snap or {}).get('error')}"
+    return result
+
+
+# ============================================================================
 # Card 6: Trending products by retailer
 # ============================================================================
 _AMAZON_ITEM_RE = re.compile(
@@ -5501,6 +5564,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'business_news':       lambda: _read_snapshot('business_news',      asof),
             'stream_estimates':    lambda: _read_snapshot('stream_estimates',   asof),
             'lens_scores':         lambda: _read_snapshot('lens_scores',        asof),
+            'fast_trending':       lambda: _fetch_fast_trending(state, lookback_days,
+                                                                  keywords=geo_kws, asof=asof),
         }
     else:
         tasks = {
@@ -5510,6 +5575,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                                                      keywords=geo_kws),
             'streaming_trending':  lambda: _fetch_streaming_trending(state, lookback_days,
                                                                         keywords=geo_kws),
+            'fast_trending':       lambda: _fetch_fast_trending(state, lookback_days,
+                                                                   keywords=geo_kws),
             # Products by retailer removed from the dashboard 2026-07-28.
             # Aggregator + scrapers preserved in code so re-enabling is
             # a one-line change - just re-add the task here and the panel
@@ -5543,6 +5610,11 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     headlines, articles_by_source = results.get('headlines_pack') or ([], [])
     social_trending    = results.get('social_trending') or {}
     streaming_trending = results.get('streaming_trending') or {}
+    # FAST-channel rankings (Roku / Tubi / Pluto / Amazon ad-tier).
+    # Same shape as `streaming_trending` (per-platform dict with
+    # `items`, `films`, `tv`, `available`) so the frontend can reuse
+    # every helper it built for the Streaming panel.
+    fast_trending      = results.get('fast_trending') or {}
     # Products tab retired 2026-07-28; keep an empty list bound so the
     # payload contract (`cards.products_by_retailer` present + list-typed)
     # stays intact for any older cached frontend still deployed.
@@ -5774,6 +5846,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'lens_cutoffs':                   lens_cutoffs,
             'social_trending':                social_trending,
             'streaming_trending':             streaming_trending,
+            'fast_trending':                  fast_trending,
             'products_by_retailer':           products,
             'movers':                         movers,
         },
@@ -5803,6 +5876,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'retailers':     len(products),
             'streaming':     sum(1 for p in streaming_trending.values()
                                     if (p or {}).get('available')),
+            'fast':          sum(len(((fast_trending.get(k) or {}).get('items') or []))
+                                  for k in ('roku', 'tubi', 'pluto', 'amazon')),
             'music':         sum(len(((music_charts.get(k) or {}).get('items') or []))
                                   for k in ('spotify', 'apple', 'tiktok', 'shazam', 'amazon')),
             'podcasts':      sum(len(((podcast_charts.get(k) or {}).get('items') or []))

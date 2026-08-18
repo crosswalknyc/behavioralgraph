@@ -24515,6 +24515,11 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-social-tab.unavailable { opacity: 0.5; cursor: not-allowed; }
             #trendsIQView .tiq-social-panel { display: none; }
             #trendsIQView .tiq-social-panel.active { display: block; }
+            #trendsIQView .tiq-fast-kind { display: inline-block; font-size: 0.65rem; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 4px; margin-left: 0.35rem; vertical-align: middle; }
+            #trendsIQView .tiq-fast-kind.film { background: rgba(56,189,248,0.18); color: #7dd3fc; }
+            #trendsIQView .tiq-fast-kind.tv   { background: rgba(168,85,247,0.18); color: #c4b5fd; }
+            #trendsIQView .tiq-fast-year { font-size: 0.75rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.3rem; }
+            #trendsIQView .tiq-fast-genres { margin-top: 0.15rem; font-size: 0.7rem; color: var(--text-secondary); opacity: 0.75; }
             #trendsIQView .tiq-retailer-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
             #trendsIQView .tiq-retailer-tab { padding: 0.4rem 0.85rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; font-size: 0.8rem; cursor: pointer; color: var(--text-secondary); user-select: none; display: inline-flex; align-items: center; gap: 0.35rem; }
             #trendsIQView .tiq-retailer-tab.active { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: #fff; border-color: transparent; }
@@ -49290,6 +49295,8 @@ https://www.instagram.com/p/..."></textarea>
                   tip: 'Social: Trending posts and videos on Reddit, YouTube, and TikTok. Real content, not hashtag lists.' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺',
                   tip: 'Streaming: Daily Top-10 rankings on Netflix, Disney+, Hulu, Max, Prime Video, and ESPN+, split into Film and TV.' },
+                { key: 'fast',      label: 'FAST',             count: counts.fast      || 0, icon: '📡',
+                  tip: 'FAST channels: Top 100 titles on Roku Channel, Tubi, Pluto TV, and Amazon (ad-supported tier). Ranked by JustWatch US popularity, interleaved Film and TV.' },
                 { key: 'watchlist', label: 'Watchlist',        count: watchCount,            icon: '★',
                   tip: 'Watchlist: The trends you have starred. Populates the daily digest email so you get pinged when anything on this list breaks out, drops off, or crosses a threshold you set.' },
             ];
@@ -49323,6 +49330,7 @@ https://www.instagram.com/p/..."></textarea>
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
+                _renderTIQPanel('fast',      renderTIQFast(cards.fast_trending || {})) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
 
             // Persona-lens filter setup.  `cards.lens_config` is the
@@ -51064,6 +51072,99 @@ https://www.instagram.com/p/..."></textarea>
             if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
         };
 
+        // FAST (Free Ad-Supported Streaming TV) - Roku Channel, Tubi,
+        // Pluto TV, Amazon (Prime Video ad-tier). Same sub-tab pattern
+        // as renderTIQStreaming but with a single flat top-100 list
+        // per platform instead of a Film/TV column split - JustWatch's
+        // popularity ranking already interleaves both, and that mixed
+        // ranking is what makes the FAST tab feel distinct from the
+        // subscription-Streaming tab.
+        var _tiqFastOrder = ['roku', 'tubi', 'pluto', 'amazon'];
+
+        function renderTIQFast(fast) {
+            var allKeys = Object.keys(fast || {});
+            if (!allKeys.length) {
+                return '<div class="tiq-empty">FAST rankings are warming up.</div>';
+            }
+            var keys = _tiqFastOrder.filter(function(k) { return fast[k]; })
+                .concat(allKeys.filter(function(k) { return _tiqFastOrder.indexOf(k) === -1; }));
+
+            if (!window.__trendsIQ.activeFast ||
+                !fast[window.__trendsIQ.activeFast]) {
+                window.__trendsIQ.activeFast = keys.find(function(k) {
+                    return (fast[k] || {}).available;
+                }) || keys[0];
+            }
+
+            var tabs = keys.map(function(k) {
+                var s = fast[k] || {};
+                var active = (k === window.__trendsIQ.activeFast) ? ' active' : '';
+                var unavail = !s.available ? ' unavailable' : '';
+                return '<div class="tiq-social-tab' + active + unavail + '" onclick="setTrendsIQFast(\'' + k + '\')">' + _tiqEsc(s.label || k) + '</div>';
+            }).join('');
+
+            var panels = keys.map(function(k) {
+                var s = fast[k] || {};
+                var active = (k === window.__trendsIQ.activeFast) ? ' active' : '';
+                var body;
+                if (!s.available) {
+                    // Neutral placeholder, no operator hints (same rule
+                    // as the Streaming panel).
+                    body = '<div class="tiq-placeholder">' +
+                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
+                           '<div>Loading.</div>' +
+                           '</div>';
+                } else if (!(s.items || []).length) {
+                    body = '<div class="tiq-empty">No trending titles right now.</div>';
+                } else {
+                    var items = s.items || [];
+                    var subtitle = 'Top ' + items.length + ' titles on ' +
+                                    _tiqEsc(s.label || k) +
+                                    ' (US popularity, ad-supported tier).';
+                    var rows = items.map(function(it, i) {
+                        var streamKey = it.title;
+                        var img = _tiqPosterCell(it.image);
+                        var kindChip = it.category_display
+                            ? '<span class="tiq-fast-kind ' + (it.category_display === 'Film' ? 'film' : 'tv') + '">' + _tiqEsc(it.category_display) + '</span>'
+                            : '';
+                        var year = it.year ? '<span class="tiq-fast-year">' + _tiqEsc(String(it.year)) + '</span>' : '';
+                        var genres = (it.genres && it.genres.length)
+                            ? '<div class="tiq-fast-genres">' + _tiqEsc(it.genres.slice(0, 3).join(' · ')) + '</div>'
+                            : '';
+                        return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
+                               img +
+                               '<div class="tiq-row-body">' +
+                               '<div class="tiq-row-title">' + _tiqEsc(it.title) + ' ' + year + ' ' + kindChip +
+                               _tiqActions('fast', k, streamKey, streamKey, 'National') + '</div>' +
+                               genres +
+                               '</div></div>';
+                    }).join('');
+                    body = '<div class="tiq-card-sub" style="margin-bottom:12px;">' + subtitle + '</div>' +
+                           '<div class="tiq-card">' +
+                           '<div class="tiq-headline-list">' + rows + '</div>' +
+                           '</div>';
+                }
+                return '<div class="tiq-social-panel' + active + '" data-tiq-fast="' + k + '">' + body + '</div>';
+            }).join('');
+            return '<div class="tiq-social-tabs">' + tabs + '</div>' + panels;
+        }
+
+        window.setTrendsIQFast = function(key) {
+            window.__trendsIQ.activeFast = key;
+            var fast = (window.__trendsIQ.lastData &&
+                         window.__trendsIQ.lastData.cards &&
+                         window.__trendsIQ.lastData.cards.fast_trending) || {};
+            document.querySelectorAll('#trendsIQPanels [data-tiq-panel="fast"] .tiq-social-tab').forEach(function(el) {
+                var s = fast[key] || {};
+                var isActive = el.textContent.trim().toLowerCase() === (s.label || key).toLowerCase();
+                el.classList.toggle('active', isActive);
+            });
+            document.querySelectorAll('#trendsIQPanels [data-tiq-fast]').forEach(function(el) {
+                el.classList.toggle('active', el.getAttribute('data-tiq-fast') === key);
+            });
+            if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
+        };
+
         function renderTIQProducts(retailers) {
             if (!retailers.length) return '<div class="tiq-empty">No retailer feeds returned data.</div>';
             var tabs = retailers.map(function(r) {
@@ -51239,6 +51340,7 @@ https://www.instagram.com/p/..."></textarea>
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
+                _renderTIQPanel('fast',      renderTIQFast(cards.fast_trending || {})) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
             // Re-run lens filter after the star-toggle repaint so rows
             // stay hidden/visible per the active lens.
