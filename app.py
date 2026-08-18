@@ -42807,9 +42807,21 @@ def api_synth_chat_interpret():
             or spec_draft.get('name')
             or 'this profile'
         )
+        # Surface the credit cost so the approval card can show it
+        # BEFORE the user clicks Approve. Uses the same _V1_CREDITS
+        # table the Partner API uses to charge, so what you see is
+        # what you pay. 2026-08-18: Jenna directive.
+        try:
+            _dec_norm, _, _ = _normalize_v1_decision(spec_draft)
+        except Exception:
+            _dec_norm = str(spec_draft.get('decision') or 'new_build').strip() or 'new_build'
+        estimated_credits = int(
+            _V1_CREDITS.get(_dec_norm, CREDITS_PROFILE_ANALYSIS))
+        spec_draft['estimated_credits'] = estimated_credits
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
+            'estimated_credits': estimated_credits,
             'candidates': [
                 {k: v for k, v in c.items() if not k.startswith('_') or k == '_score'}
                 for c in candidates
