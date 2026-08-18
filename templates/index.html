@@ -35036,28 +35036,37 @@ https://www.instagram.com/p/..."></textarea>
 
         <!-- DIGITAL JOURNEY IQ VIEW -->
         <div id="journeyIQView" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
-            <div style="padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--border-color); background: var(--bg-secondary); display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                <div>
-                    <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-secondary); font-weight: 600;">Digital Journey IQ</div>
+            <div style="padding: 0.6rem 1.25rem; border-bottom: 1px solid var(--border-color); background: var(--bg-secondary); display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                <!-- Title cluster: label + story name on one baseline. Compressed
+                     from the previous stacked layout so the whole header collapses
+                     onto a single row alongside the date badge + run picker + refresh. -->
+                <div style="display: flex; align-items: baseline; gap: 0.65rem; flex-wrap: wrap; min-width: 0;">
+                    <div style="font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">Digital Journey IQ</div>
                     <div id="jiqDashTitle" style="font-size: 1.15rem; font-weight: 700;">Select a run</div>
-                    <!-- Consolidated header row: Date Range badge + (optional) monthly
-                         cut pills + run-picker select + refresh button all share one
-                         flex row. jiqDateRangeBox auto-hides until a run is loaded;
-                         jiqMonthCutBar auto-shows only when the run carries a
-                         monthly_cuts block (e.g. Fandango Jan–May 2026). For runs
-                         without either, the row just shows the picker + refresh.
-                         flex-wrap lets items stack on narrow screens. -->
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center; margin-top: 0.55rem;">
-                        <div id="jiqDateRangeBox" style="display: none; padding: 0.25rem 0.75rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.75rem; font-weight: 700; color: var(--accent-lime); white-space: nowrap;"></div>
-                        <div id="jiqMonthCutBar" style="display: none; flex-wrap: wrap; gap: 6px; align-items: center;"></div>
-                        <select id="jiqRunPicker" onchange="onJourneyIqRunPicked(this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; width: 320px; max-width: 320px; min-width: 0; flex: 0 0 auto;">
-                            <option value="">- pick a past run -</option>
-                        </select>
-                        <button type="button" class="btn btn-small" onclick="loadJourneyIqRunList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
-                    </div>
-                    <div id="jiqMonthCutNote" style="display: none; margin-top: 0.45rem; padding: 0.4rem 0.7rem; background: rgba(99, 102, 241, 0.08); border-left: 3px solid var(--accent-primary); border-radius: 6px; font-size: 0.72rem; color: var(--text-primary); line-height: 1.4; max-width: 760px; cursor: pointer;" title="Click to expand details"></div>
-                    <div id="jiqMonthCutTable" style="display: none; margin-top: 0.5rem; max-width: 980px; overflow-x: auto;"></div>
                 </div>
+                <!-- Controls cluster: Date Range badge + (optional) monthly cut
+                     pills + run-picker select + refresh button all share one flex
+                     row. jiqDateRangeBox auto-hides until a run is loaded;
+                     jiqMonthCutBar auto-shows only when the run carries a
+                     monthly_cuts block. flex-wrap lets items stack on narrow screens. -->
+                <div style="display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center;">
+                    <div id="jiqDateRangeBox" style="display: none; padding: 0.25rem 0.75rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.75rem; font-weight: 700; color: var(--accent-lime); white-space: nowrap;"></div>
+                    <div id="jiqMonthCutBar" style="display: none; flex-wrap: wrap; gap: 6px; align-items: center;"></div>
+                    <select id="jiqRunPicker" onchange="onJourneyIqRunPicked(this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 13px; width: 320px; max-width: 320px; min-width: 0; flex: 0 0 auto;">
+                        <option value="">- pick a past run -</option>
+                    </select>
+                    <button type="button" class="btn btn-small" onclick="loadJourneyIqRunList()" style="padding: 0.35rem 0.5rem; min-width: auto;">↻</button>
+                </div>
+            </div>
+            <!-- Monthly-cut note + table hang below the header. Hidden by
+                 default; auto-shown by the renderer only when the run
+                 carries a monthly_cuts block. Keeping them here (outside
+                 the flex header row) prevents the header itself from
+                 expanding into a second row when a monthly-cuts run is
+                 loaded. -->
+            <div style="padding: 0 1.25rem;">
+                <div id="jiqMonthCutNote" style="display: none; margin-top: 0.45rem; padding: 0.4rem 0.7rem; background: rgba(99, 102, 241, 0.08); border-left: 3px solid var(--accent-primary); border-radius: 6px; font-size: 0.72rem; color: var(--text-primary); line-height: 1.4; max-width: 760px; cursor: pointer;" title="Click to expand details"></div>
+                <div id="jiqMonthCutTable" style="display: none; margin-top: 0.5rem; max-width: 980px; overflow-x: auto;"></div>
             </div>
 
             <div id="jiqDashLoading" style="display: none; padding: 3rem; text-align: center; color: var(--text-secondary);">
