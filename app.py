@@ -42722,6 +42722,15 @@ def api_v1_profiles_status(run_id):
             if avid_url:
                 resp['avid_download_url'] = avid_url
                 resp['avid_s3_key'] = avid_key
+        # Prove the file is discoverable in the Select Profile dropdown,
+        # not just a raw S3 download. Every /run output goes through
+        # register_profile_in_dashboard (canonical helper) just like a
+        # profile built via the regular launch path. These fields let
+        # a partner (or the dashboard poller) confirm that end-state.
+        if 'tu_registered_in_dashboard' in status:
+            resp['registered_in_dashboard'] = bool(status.get('tu_registered_in_dashboard'))
+        if 'avid_registered_in_dashboard' in status:
+            resp['avid_registered_in_dashboard'] = bool(status.get('avid_registered_in_dashboard'))
 
     return jsonify(resp)
 
