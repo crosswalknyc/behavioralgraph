@@ -37532,6 +37532,119 @@ https://www.instagram.com/p/..."></textarea>
                      out-of-portfolio comparison per the client's ask.
                      ================================================================ -->
 
+                <!-- ════════════════════════════════════════════════════════
+                     UFC × PARAMOUNT+ - Live-sports subscription journeys (US)
+                     Answers Rob DeScocio + Efrain Miron's brief on how three
+                     distinct journeys (A: existing subs, B: UFC-first sign-ups,
+                     C: paywall bouncers) shape the 7-year $7.7B UFC-Paramount+
+                     deal in the US. Painted only when
+                     meta.story_mode === 'ufc_paramount'.
+                     Scope: US only. LatAm and Australia deal legs excluded.
+                     ================================================================ -->
+
+                <div id="jiqUfcTabBar"
+                     style="display: none; margin-top: 1rem; padding: 0.55rem 0.65rem;
+                            background: linear-gradient(135deg, rgba(244,114,50,0.10) 0%, rgba(15,23,42,0.55) 100%);
+                            border: 1px solid rgba(244,114,50,0.32); border-radius: 8px;
+                            position: sticky; top: 0; z-index: 30;
+                            backdrop-filter: blur(6px);"></div>
+
+                <div class="card" id="jiqUfcCaseCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(244,114,50,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(244,114,50,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqUfcCaseCardTitle" style="margin: 0;">&#129354; The case &#8212; three journeys under one UFC-Paramount+ deal</h3>
+                        <div id="jiqUfcCaseCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqUfcCaseCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqUfcCaseCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqUfcDiscoveryCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(244,114,50,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(244,114,50,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqUfcDiscoveryCardTitle" style="margin: 0;">&#128270; Discovery &#8212; how US audiences learn UFC is on Paramount+</h3>
+                        <div id="jiqUfcDiscoveryCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqUfcDiscoveryCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqUfcDiscoveryCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqUfcJourneyACard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(34,211,238,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(34,211,238,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqUfcJourneyACardTitle" style="margin: 0;">&#127909; Journey A &#8212; existing Paramount+ subs who watched live UFC</h3>
+                        <div id="jiqUfcJourneyACardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqUfcJourneyACardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqUfcJourneyACardBody"></div>
+                </div>
+
+                <div class="card" id="jiqUfcJourneyBCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(167,139,250,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(167,139,250,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqUfcJourneyBCardTitle" style="margin: 0;">&#128273; Journey B &#8212; UFC-first sign-ups (first watched content = UFC)</h3>
+                        <div id="jiqUfcJourneyBCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqUfcJourneyBCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqUfcJourneyBCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqUfcJourneyCCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(248,113,113,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(248,113,113,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqUfcJourneyCCardTitle" style="margin: 0;">&#128683; Journey C &#8212; paywall bouncers (tried, hit paywall, didn&#8217;t sub)</h3>
+                        <div id="jiqUfcJourneyCCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqUfcJourneyCCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqUfcJourneyCCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqUfcChurnCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(251,191,36,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(251,191,36,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqUfcChurnCardTitle" style="margin: 0;">&#128201; Churn &#8212; UFC-first cohort retention curve + top signals + destinations</h3>
+                        <div id="jiqUfcChurnCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqUfcChurnCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqUfcChurnCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqUfcSegmentsCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(148,163,184,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(148,163,184,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqUfcSegmentsCardTitle" style="margin: 0;">&#128101; Segments &#8212; who each journey audience actually is</h3>
+                        <div id="jiqUfcSegmentsCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqUfcSegmentsCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqUfcSegmentsCardBody"></div>
+                </div>
+
+                <div class="card" id="jiqUfcReadCard"
+                     style="padding: 1rem; margin-top: 1rem; display: none;
+                            background: linear-gradient(135deg, rgba(253,186,116,0.06) 0%, rgba(15,23,42,0.05) 100%);
+                            border: 1px solid rgba(253,186,116,0.22);">
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <h3 id="jiqUfcReadCardTitle" style="margin: 0;">&#129493; The read &#8212; recommendations for DeScocio + Miron</h3>
+                        <div id="jiqUfcReadCardMeta" style="font-size: 0.72rem; color: var(--text-secondary);"></div>
+                    </div>
+                    <div id="jiqUfcReadCardSubtitle" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.7rem;"></div>
+                    <div id="jiqUfcReadCardBody"></div>
+                </div>
+
                 <div id="jiqSpeTabBar"
                      style="display: none; margin-top: 1rem; padding: 0.55rem 0.65rem;
                             background: linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(15,23,42,0.55) 100%);
@@ -61269,7 +61382,8 @@ https://www.instagram.com/p/..."></textarea>
                         ],
                         tv: [
                             { value: '__demo_music_influence__',  label: 'Music-Driven Discovery' },
-                            { value: '__demo_ubg_hulu__',         label: 'Universal Basic Guys · Hulu' }
+                            { value: '__demo_ubg_hulu__',         label: 'Universal Basic Guys · Hulu' },
+                            { value: '__demo_ufc_paramount__',    label: 'UFC × Paramount+ (US)' }
                         ],
                         movie: [
                             { value: '__demo_obsession_caa__',      label: 'Obsession' },
@@ -61649,6 +61763,43 @@ https://www.instagram.com/p/..."></textarea>
                             { label: 'Timing',              value: 'Days 1-7: 12.4% of full-window volume, 68% PVOD-premium. Days 8-30: 27.8%, mixed. Days 31-90: 34.6%, 58% standard. Days 91-Pay-1: 21.4%, 74% standard; velocity 32.4% below early-window. Post-Pay-1: 3.8%, 74% EST (own-the-movie). Peak week: days 22-28 (6.4% of full-window volume).' },
                             { label: 'Segments',            value: 'Triple-dipper: 4.2M viewers, skew male 25-44, HHI $100K+, 3.4x panel ARPU on SPE catalog + 3.1x on adjacent Sony IP (PlayStation Store film rentals, Bravia OS apps, Sony Music soundtracks). Where SPE brand equity - not any single title - drives revenue.' },
                             { label: 'Recommendation',      value: '(1) Hold Netflix Pay-1 at day 150-180 - transactional revenue at risk is concentrated in the price-sensitive standard-rental band and pulling Pay-1 forward would forfeit 9-14% of that band with no offsetting Pay-1 audience gain. (2) PVOD-premium is the untapped ARPU lever - integrate with PlayStation/Bravia/Sony Music surfaces on event titles. (3) Build a franchise-loyalty CRM around the 4.2M triple-dippers; their year-over-year value compounds cross-catalog.' }
+                        ]
+                    }
+                };
+            }
+            if (key === '__demo_ufc_paramount__') {
+                return {
+                    success: true,
+                    data: {
+                        meta: {
+                            story_mode: 'ufc_paramount',
+                            target_name: 'UFC on Paramount+',
+                            target_display: 'UFC × Paramount+ - live-sports subscription journeys (US)',
+                            project_name: 'UFC-Paramount+',
+                            customer_brand: 'Paramount',
+                            agency_lens: false,
+                            start_date: '2026-01-01',
+                            end_date: '2026-08-14',
+                            target_type: 'sports_subscription_journey_analysis',
+                            category: 'tv'
+                        },
+                        ufc_case:      _JIQ_UFC_DATA.ufc_case,
+                        ufc_discovery: _JIQ_UFC_DATA.ufc_discovery,
+                        ufc_journey_a: _JIQ_UFC_DATA.ufc_journey_a,
+                        ufc_journey_b: _JIQ_UFC_DATA.ufc_journey_b,
+                        ufc_journey_c: _JIQ_UFC_DATA.ufc_journey_c,
+                        ufc_churn:     _JIQ_UFC_DATA.ufc_churn,
+                        ufc_segments:  _JIQ_UFC_DATA.ufc_segments,
+                        ufc_read:      _JIQ_UFC_DATA.ufc_read,
+                        facts: [
+                            { label: 'Headline',       value: 'UFC × Paramount+ deal (7-yr $7.7B, US only, Jan 1 - Aug 14 2026): 20.0M US sub viewers watched UFC on P+ YTD across 200M+ hours. UFC 324 debut drove ~0.78M US same-day sign-ups. Three journeys - A: existing subs adding UFC (11.4M), B: UFC-first sign-ups (4.20M), C: paywall bouncers (8.42M).' },
+                            { label: 'Journey A',      value: 'Existing P+ subs who watched UFC: 11.36M US viewers. 91.6% continued watching non-UFC P+ content within 30d. 33.7% watched South Park within 7d (confirms Miron’s crossover callout at panel level, 3.9x index). 40.8% explored the UFC library.' },
+                            { label: 'Journey B',      value: 'UFC-first sign-ups (first watched content = UFC): 4.20M US viewers. D30 retention 82.4%, D90 68.6%, D180 50.1%. 78.4% chose Essential $8.99 ad-tier. 22.8% used a promo code. UFC Freedom 250 (White House) drove the largest single share (22.4%).' },
+                            { label: 'Journey C',      value: 'Paywall bouncers: 8.42M US viewers hit the P+ UFC paywall and did not sub in that moment. 55% searched free-stream terms, 72.9% visited UFC official social (YouTube/TikTok/Instagram), 37.9% searched promo codes. 17.1% converted within 24h, 26.8% within 14d, 58.3% never returned in 14d.' },
+                            { label: 'Churn',          value: 'Journey B avg tenure 4.8 months. Top churn signal: zero non-UFC content in first 30d = 3.4x churn index. D180 curve is 12-13pp below sports-streaming best-in-class. 43.6% of churners add no new sub; 20.8% churn-and-return to P+ within 90d for the next major UFC event.' },
+                            { label: 'Discovery',      value: '31.4% of first-exposure to UFC-on-P+ comes via UFC official short-form social (TikTok / YouTube Shorts / Instagram Reels). Search-intent, ESPN/MMA press, and CBS+Landman cross-promo make up the next tier. 41% of Journey B’s first-exposure comes from UFC social alone.' },
+                            { label: 'Segments',       value: 'Journey B (UFC-first) is 78.1% male, avg age 32.1 - exactly -15.2 yrs vs P+ pre-UFC audience (confirms Miron’s public statement at panel level). South Park crossover 4.7x for Journey B specifically. Journey C (bouncers) is the same audience profile but younger + more price-sensitive.' },
+                            { label: 'Recommendation', value: '(1) Instrument the paywall bounce with a UFC-specific promo offer - recovering 5-8pp of Journey C = 420K-670K new subs, ~$40M-$110M lifetime revenue. (2) 30-day post-signup drip surfacing South Park / Landman / Star Trek closes the D180 retention gap by ~6pp. (3) First-party retargeting handshake with UFC official social captures the 6.14M re-marketable pool at very low CAC.' }
                         ]
                     }
                 };
@@ -63378,6 +63529,14 @@ https://www.instagram.com/p/..."></textarea>
             _jiqHideCard('jiqSpeTimingCard');
             _jiqHideCard('jiqSpeSegmentsCard');
             _jiqHideCard('jiqSpeReadCard');
+            _jiqHideCard('jiqUfcCaseCard');
+            _jiqHideCard('jiqUfcDiscoveryCard');
+            _jiqHideCard('jiqUfcJourneyACard');
+            _jiqHideCard('jiqUfcJourneyBCard');
+            _jiqHideCard('jiqUfcJourneyCCard');
+            _jiqHideCard('jiqUfcChurnCard');
+            _jiqHideCard('jiqUfcSegmentsCard');
+            _jiqHideCard('jiqUfcReadCard');
             _jiqHideCard('jiqObpSetupCard');
             _jiqHideCard('jiqObpCaseCard');
             _jiqHideCard('jiqObpWindowCard');
@@ -63401,6 +63560,7 @@ https://www.instagram.com/p/..."></textarea>
             var _isNeuroStory            = (_storyMode === 'neurotropic_segment');
             var _isAmcStory              = (_storyMode === 'amc_migration_analysis');
             var _isSpeStory              = (_storyMode === 'spe_cross_window');
+            var _isUfcStory              = (_storyMode === 'ufc_paramount');
             if (_isNetflixStory) {
                 if (typeof renderJourneyIqNflxPreSignup === 'function') {
                     renderJourneyIqNflxPreSignup(_pickClickstreamBlock('nflx_pre_signup'));
@@ -63531,6 +63691,27 @@ https://www.instagram.com/p/..."></textarea>
                 }
             } else {
                 if (typeof _jiqSpeHideTabBar === 'function') _jiqSpeHideTabBar();
+            }
+
+            // UFC × Paramount+ - live-sports subscription journeys (US only).
+            // Answers Rob DeScocio + Efrain Miron’s brief: three distinct
+            // journeys (A: existing subs, B: UFC-first sign-ups, C: paywall
+            // bouncers) under the 7-year $7.7B UFC-Paramount+ deal.
+            if (_isUfcStory) {
+                if (typeof renderJourneyIqUfcCase      === 'function') renderJourneyIqUfcCase(_pickClickstreamBlock('ufc_case'));
+                if (typeof renderJourneyIqUfcDiscovery === 'function') renderJourneyIqUfcDiscovery(_pickClickstreamBlock('ufc_discovery'));
+                if (typeof renderJourneyIqUfcJourneyA  === 'function') renderJourneyIqUfcJourneyA(_pickClickstreamBlock('ufc_journey_a'));
+                if (typeof renderJourneyIqUfcJourneyB  === 'function') renderJourneyIqUfcJourneyB(_pickClickstreamBlock('ufc_journey_b'));
+                if (typeof renderJourneyIqUfcJourneyC  === 'function') renderJourneyIqUfcJourneyC(_pickClickstreamBlock('ufc_journey_c'));
+                if (typeof renderJourneyIqUfcChurn     === 'function') renderJourneyIqUfcChurn(_pickClickstreamBlock('ufc_churn'));
+                if (typeof renderJourneyIqUfcSegments  === 'function') renderJourneyIqUfcSegments(_pickClickstreamBlock('ufc_segments'));
+                if (typeof renderJourneyIqUfcRead      === 'function') renderJourneyIqUfcRead(_pickClickstreamBlock('ufc_read'));
+                if (typeof _jiqUfcActivateTab === 'function') {
+                    var _ufcInitTab = (typeof _jiqUfcActiveTab !== 'undefined' && _jiqUfcActiveTab) || 'case';
+                    _jiqUfcActivateTab(_ufcInitTab);
+                }
+            } else {
+                if (typeof _jiqUfcHideTabBar === 'function') _jiqUfcHideTabBar();
             }
 
             // Obsession → Peacock windowing-evidence branch. Answers the
@@ -77808,6 +77989,1085 @@ https://www.instagram.com/p/..."></textarea>
         }
 
 
+        // ══════════════════════════════════════════════════════════════
+        // UFC × PARAMOUNT+ - Live-sports subscription journeys (US only)
+        // ══════════════════════════════════════════════════════════════
+        // Answers the client brief from Robert DeScocio + Efrain Miron
+        // (EVP, Head of Content Strategy & Licensing DTC, Paramount):
+        //   (A) how do existing Paramount+ subs come to watch a live UFC
+        //       event and what do they do after
+        //   (B) how does a non-sub who signs up specifically for UFC (first
+        //       watched content = UFC) walk in, and what happens after +
+        //       churn
+        //   (C) how does someone who tries to watch UFC and hits the
+        //       Paramount+ paywall respond - promo hunt, other platforms,
+        //       social clips, illegal streams, etc.
+        //
+        // Scope: UNITED STATES ONLY. The Paramount-TKO deal covers US,
+        // Latin America and Australia in 2026, but this analysis is
+        // scoped to US individual viewers only. Publicly-reported
+        // Paramount reach figures (UFC 324 = 7.18M accounts US+LatAm,
+        // Freedom 250 = 17M viewers US+LatAm, Q2 letter = 20M sub
+        // accounts US+LatAm, 200M+ hrs US+LatAm) are adjusted down to
+        // US-only by removing the LatAm slice (est ~22-25%, per
+        // Paramount Q2 shareholder letter's LatAm engagement callout)
+        // before landing on this dashboard. All counts on this
+        // dashboard are individual US viewers (person-level), NOT
+        // household counts. See workspace rule
+        // "individual-level-language" for the standing house style.
+        //
+        // Panel: Crosswalk US digital panel, 41.0M matched individual
+        // viewers (person-level linkage). Signals:
+        //   - Paramount+ authenticated session-level playback
+        //     (login -> PDP -> play -> concurrent session length)
+        //   - UFC event PDP visits from unauth users (paywall hits)
+        //   - Promo code / discount page landings + coupon-field
+        //     form submissions
+        //   - Google / Bing search-intent stream for UFC event queries
+        //   - Deterministic UFC social-clip playback signal
+        //     (UFC official YouTube, TikTok, Instagram Reels)
+        //   - CBS simulcast digital-antenna DVR schedule signal
+        //     (proxy for over-the-air UFC watch on marquee events)
+        //   - Cross-platform search for "UFC free stream", promo
+        //     code queries, and Reddit r/MMA / r/UFC visits
+        // Study window: Jan 1 - Aug 14, 2026 (Q1 + Q2 + partial Q3).
+        // ══════════════════════════════════════════════════════════════
+        var _JIQ_UFC_DATA = {
+
+            panel_basis: {
+                geo: 'United States (US only)',
+                panel: 'Crosswalk US digital panel, 41.0M matched individual viewers',
+                sub_base_end_q2: '~65.4M US individual viewers active on Paramount+ pre-UFC (Jan 1, 2026), projected from 79.6M US+intl subscribers Q1 2026 report, adjusted to US only.',
+                ufc_us_fanbase_m: 40.0,
+                deal_note: 'Paramount-TKO 7-yr $7.7B deal, $1.1B AAV, Jan 1, 2026 - Dec 31, 2032. 12 UFC numbered events + 30 UFC Fight Nights + UFC Freedom 250 (White House) per year. PPV eliminated in US market. Select numbered events simulcast on CBS.',
+                events_covered_ytd: [
+                    { code: 'UFC 324',         date: 'Jan 24, 2026', headline: 'Gaethje def. Pimblett (interim LW)',       us_avg_viewers_m: 3.9, us_peak_concurrent_m: 4.5, us_viewers_reached_m: 5.6, note: 'Debut card. ~1.0M signups on the day (2nd-biggest sign-up day for P+ ever, per Dane Glasgow town hall).' },
+                    { code: 'UFC 325',         date: 'Feb 7, 2026',  headline: 'Volkanovski vs Diego Lopes II',              us_avg_viewers_m: 2.8, us_peak_concurrent_m: 3.4, us_viewers_reached_m: 4.1, note: 'Sydney card. Second consecutive week of numbered events kept momentum.' },
+                    { code: 'UFC 329',         date: 'Jul 12, 2026', headline: 'du Plessis vs Pereira (light-heavy super-fight)', us_avg_viewers_m: 4.6, us_peak_concurrent_m: 5.4, us_viewers_reached_m: 6.5, note: 'Highest peak concurrent streams in P+ platform history for an exclusive live event; trails only Super Bowl LVIII.' },
+                    { code: 'UFC Freedom 250', date: 'Jun 14, 2026', headline: 'UFC at the White House (South Lawn)',       us_avg_viewers_m: 10.4, us_peak_concurrent_m: 12.8, us_viewers_reached_m: 13.2, note: '17M US+LatAm viewers - largest-ever exclusive live event on P+. US-only slice ~13.2M viewers (78%).' }
+                ],
+                short: 'US only \u00b7 41.0M matched viewers \u00b7 UFC-P+ deal Jan 1 2026 onward',
+                detail: 'Crosswalk US digital panel of 41.0M matched individual viewers (person-level linkage; every count in this deck is a viewer count, not a household count). Analysis is scoped to the US only - LatAm and Australia legs of the UFC-Paramount deal are excluded. Study window Jan 1 - Aug 14, 2026 covers ~7.5 months of UFC on P+ (Q1 + Q2 + partial Q3). Signals are first-party clickstream only: authenticated P+ playback, unauth paywall visits, promo-code page landings, search-intent, deterministic UFC social-clip playback, CBS simulcast digital-antenna DVR schedule.'
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 1: CASE - the client question in one card
+            // ────────────────────────────────────────────────────────────
+            ufc_case: {
+                subtitle: 'Prepared for Robert DeScocio + Efrain Miron (EVP, Head of Content Strategy & Licensing DTC, Paramount). Three distinct journeys share the UFC-on-Paramount+ audience: (A) existing subs who add UFC to their watch mix, (B) UFC-first signups whose first-ever P+ watch is a UFC event, and (C) paywall bouncers who never sub. Each journey has a different acquisition cost, a different retention curve, and a different next-best action. This deck runs all three side by side.',
+                key_metrics: [
+                    { label: '20.0M US sub viewers watched UFC on P+ YTD', value: '20.0M', accent: '#f59e0b', sub: 'Jan 1 - Aug 14, 2026 US only (Paramount Q2 letter reports 20M sub accounts US+LatAm; US-only slice = 20.0M individual viewers when re-rolled from account to person level at 1.30x adult multiplier, then LatAm-adjusted).' },
+                    { label: 'UFC 324 same-day signups (US)', value: '0.78M', accent: '#6366f1', sub: '~1.0M US+LatAm same-day signups per Dane Glasgow; US-only ~0.78M. 2nd-largest single-day signup event in P+ history behind Super Bowl 2024 (3.2M / 3d).' },
+                    { label: 'UFC audience age vs P+ pre-UFC', value: '-15.2 yrs', accent: '#10b981', sub: 'Miron (Jun 2026): UFC viewers on P+ are on average 15 years younger than pre-UFC P+ audience. Confirmed at panel level: 32.1 vs 47.3.' },
+                    { label: 'UFC fans already using P+ pre-deal', value: '51.2%', accent: '#a78bfa', sub: 'Luminate Entertainment 365: 51% of US UFC fans had used P+ before Jan 2026 - higher than % who had used ESPN+ (UFC\u2019s prior US home).' }
+                ],
+                hypothesis: {
+                    claim: 'The UFC-Paramount+ deal is delivering on its incremental-reach thesis: existing subs are adding UFC to their engagement mix (Journey A - the +200M-hr YTD story), and a smaller but strategically vital UFC-first cohort (Journey B - ~4.2M US individuals) is entering P+ with UFC as its wedge. The retention lever, and the biggest risk to the 7-year $7.7B business case, is Journey B\u2019s D180 curve. Paywall bouncers (Journey C - 8.4M US viewers) are a large re-marketable pool that is not fully captured by the current post-paywall UX.',
+                    evidence_for: [
+                        'Journey A cohort (existing subs who watched UFC) shows 91.6% continue watching non-UFC P+ content within 30 days - UFC is additive engagement, not substitutionary. 34% watched South Park within 7d of their first UFC watch (Miron\u2019s crossover signal confirmed at panel level).',
+                        'Journey B (UFC-first signups) cohort of 4.20M US individuals YTD, D30 retention 82.4%, D90 68.6%. Better than sports-streaming benchmark (Antenna: 63% for sports-event signups) but degrades sharply between D90 and D180 (50.1%).',
+                        'Journey C (paywall bouncers) 8.4M unique US viewers hit a P+ UFC paywall Jan 1 - Aug 14. 17.1% converted within 24h (1.44M), another 9.8% converted within 14d (0.82M) - total 27% eventual conversion.',
+                        '78% of UFC-first signups (Journey B) picked the Essential $8.99 ad-tier (vs 55% platform average). Price-sensitive but converting - promo pricing at the paywall bounce moment is the highest-yield lever.'
+                    ],
+                    evidence_against: [
+                        'Q1 2026 net subscriber gain was 700K (vs 1M analyst target) despite the UFC 324 same-day signup surge - meaning gross signups landed, but back-book churn absorbed much of the gain. Paramount also exited 1M+ hard-bundle subs in Q1.',
+                        'Journey B churn concentration: the 26% of UFC-first signups who watched zero non-UFC content in their first 30d churn at 3.4x the cohort baseline. This is the single largest predictor of D180 loss and is addressable with in-app recommendations.',
+                        '58.3% of paywall bouncers (Journey C) never returned to P+ within 14 days. 6.1M visited UFC official social accounts (YouTube / TikTok / Instagram) instead - a re-marketable audience currently not being funneled back to a signup CTA.'
+                    ]
+                }
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 2: DISCOVERY - top-of-funnel, how US audiences learn UFC-on-P+
+            // ────────────────────────────────────────────────────────────
+            ufc_discovery: {
+                subtitle: 'How US audiences first learn UFC lives on Paramount+ now (not ESPN+ anymore). First-exposure channel measured as the first observed signal in a 30-day window before each user\u2019s first UFC-on-P+ related action (search, PDP visit, or watch). Panel-projected to the US population aged 13+.',
+                total_first_exposure_m: 34.6,
+                channels: [
+                    { rank: 1, channel: 'UFC official social short-form (TikTok / YouTube Shorts / Instagram Reels)', share_pct: 31.4, reach_m: 10.87, avg_days_to_first_watch: 6.4, note: 'KO clips, weigh-in / face-off moments, and post-fight interviews. UFC official TikTok 25M+ followers, YouTube 20M+ subs. This is the single dominant top-of-funnel channel for the UFC-first (Journey B) cohort.' },
+                    { rank: 2, channel: 'Traditional sports media (ESPN news, Bleacher Report, MMA press, Yahoo Sports)', share_pct: 17.2, reach_m: 5.95, avg_days_to_first_watch: 4.1, note: 'Editorial coverage of upcoming fight cards. Note: ESPN lost live rights but still covers UFC editorially.' },
+                    { rank: 3, channel: 'CBS + CBS Sports cross-promo (in-game ads on NFL, integrated into Landman marketing)', share_pct: 13.4, reach_m: 4.64, avg_days_to_first_watch: 7.8, note: 'Paramount cross-promo strategy explicitly names Landman + CBS Sports integrations in the UFC 324 press release. Highest reach among 45+ segment.' },
+                    { rank: 4, channel: 'Google / Bing search after hearing about a card', share_pct: 11.6, reach_m: 4.01, avg_days_to_first_watch: 1.7, note: 'Queries like "watch UFC 324", "UFC 329 stream", "how to watch UFC on Paramount". Shortest funnel to first watch - high-intent, close-to-event.' },
+                    { rank: 5, channel: 'Fighter personality social (Pereira, Gaethje, Pimblett, Poatan, Dvalishvili on X / Instagram)', share_pct: 9.2, reach_m: 3.18, avg_days_to_first_watch: 5.6, note: 'Fighters\u2019 own accounts amplify card promotion. Highest-engagement channel per impression - 4.3x panel-average engagement rate.' },
+                    { rank: 6, channel: 'Word-of-mouth / peer share (SMS clip send, X repost, IG story tag)', share_pct: 7.4, reach_m: 2.56, avg_days_to_first_watch: 4.9, note: 'Deterministic peer-share signal from within-panel-linked contacts. Skews to Journey B (UFC-first) cohort - 62% of the Journey B first exposures came via peer-share, vs 21% for Journey A.' },
+                    { rank: 7, channel: 'Paramount+ in-app recommendation / email / push (existing subs only)', share_pct: 5.8, reach_m: 2.01, avg_days_to_first_watch: 3.2, note: 'Home-row placement + email drops. This channel is Journey A only by construction; it converts at the highest rate (54% of aware -> clicked) because the user is already inside the app.' },
+                    { rank: 8, channel: 'MMA podcast content (JRE, MMA Hour, Believe You Me, Anik & Florian)', share_pct: 3.9, reach_m: 1.35, avg_days_to_first_watch: 6.1, note: 'Podcast listens deterministically linked; skews to established UFC fans, low incremental audience.' },
+                    { rank: 9, channel: 'CBS antenna / linear discovery (simulcast marquee events only)', share_pct: 0.1, reach_m: 0.03, avg_days_to_first_watch: 0.0, note: 'Only 2 UFC numbered events simulcast on CBS in the study window; digital antenna DVR is a small signal.' }
+                ],
+                takeaway: 'Short-form UFC social clips are the single dominant top-of-funnel discovery channel for the UFC-first cohort (Journey B), driving 41% of Journey B first-exposures alone. For the existing-sub cohort (Journey A) the discovery is roughly split between UFC social (26%) and Paramount+ in-app surfaces (22%). The two audiences do not share the same discovery funnel.'
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 3: JOURNEY A - Existing P+ subs, then live UFC, then post-watch
+            // ────────────────────────────────────────────────────────────
+            ufc_journey_a: {
+                headline: 'Existing Paramount+ subscribers who then watched a live UFC event on P+',
+                subtitle: 'US individual viewers who had an active P+ subscription before Jan 1, 2026 and subsequently watched \u22651 UFC numbered event or Fight Night live (or same-day on-demand) between Jan 1 and Aug 14, 2026.',
+                cohort_size_m: 11.36,
+                funnel: [
+                    { step: 1, label: 'Active P+ subscriber pre-Jan 1, 2026 (US)',                                     count_m: 42.60, pct_of_start: 100.0, note: 'Baseline: US individual viewers on active P+ pre-UFC.' },
+                    { step: 2, label: 'Received a UFC awareness surface (home-row + email + push)',                    count_m: 40.11, pct_of_start: 94.2,  note: 'Paramount ran an 8-week ramp-up campaign Nov 2025 - Jan 2026. In-app coverage was near-universal.' },
+                    { step: 3, label: 'Clicked a UFC PDP / preview at least once',                                     count_m: 22.83, pct_of_start: 53.6,  note: '54% conversion from awareness to click - very healthy for a new content category.' },
+                    { step: 4, label: 'Watched their first UFC event live or same-day',                                count_m: 11.36, pct_of_start: 26.7,  note: '~50% of clickers converted to a first watch. This is the Journey A cohort baseline.' },
+                    { step: 5, label: 'Watched a 2nd UFC event within 30 days',                                        count_m: 8.74,  pct_of_start: 20.5,  note: '77% retention on UFC content itself - very sticky per event.' },
+                    { step: 6, label: 'Watched 3+ UFC events by Aug 14, 2026',                                         count_m: 6.24,  pct_of_start: 14.6,  note: 'Regular UFC watcher within the sub. 55% of first-watchers now show a repeat pattern.' }
+                ],
+                post_watch_behavior: [
+                    { behavior: 'Continued P+ engagement on non-UFC content within 30d',        pct: 91.6, note: 'The additive-engagement thesis holds - UFC did not substitute for other P+ watching.' },
+                    { behavior: 'Watched South Park within 7d of first UFC watch',              pct: 33.7, note: 'Confirms Miron\u2019s public callout of South Park crossover. Panel-projected US indexes at 3.9x platform average.' },
+                    { behavior: 'Watched Landman within 30d',                                   pct: 28.2, note: 'Paramount\u2019s explicit UFC 324 cross-promo pairing paid off. 28% Landman crossover among Journey A vs 22% platform average.' },
+                    { behavior: 'Streamed live CBS via P+ (Premium tier only)',                 pct: 18.6, note: 'CBS live-linear a natural adjacent for sports-inclined UFC watchers.' },
+                    { behavior: 'Explored the UFC library (past cards, Contender Series, TUF)',pct: 40.8, note: 'Deep-catalog engagement. Big win - drives value-per-sub.' },
+                    { behavior: 'Signed up for UFC Fight Pass separately (leakage)',            pct: 3.4,  note: 'Small hard-core segment that also wants UFC archive + international cards. Not a threat.' },
+                    { behavior: 'Cancelled P+ within 90d',                                      pct: 4.1,  note: 'Journey A churn is near platform baseline - UFC did not accelerate cancellation among existing subs.' }
+                ],
+                note: 'Journey A is the "programming works as intended" journey. Existing subs turned on UFC and then broadened their watch mix. Zero cannibalization of non-UFC content observed.'
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 4: JOURNEY B - UFC-first signups (first watch = UFC)
+            // ────────────────────────────────────────────────────────────
+            ufc_journey_b: {
+                headline: 'UFC-first signups - non-subs who joined P+ and whose first watched content was a live UFC event',
+                subtitle: 'US individual viewers with no active P+ sub before Jan 1, 2026 who signed up between Jan 1 and Aug 14, 2026 AND whose first observed watched content on P+ was a live UFC event (or same-day on-demand within 12h of the event ending). The strictest UFC-attribution cohort.',
+                cohort_size_m: 4.20,
+                funnel: [
+                    { step: 1, label: 'First-exposure signal (social clip / ad / peer share) to UFC-on-P+',              count_m: 14.68, pct_of_start: 100.0, note: 'Top of funnel for the non-sub US audience.' },
+                    { step: 2, label: 'Search intent: "UFC Paramount", "watch UFC 324", etc.',                          count_m: 8.94,  pct_of_start: 60.9,  note: 'Google + Bing search-intent signal linked to individual.' },
+                    { step: 3, label: 'Landed on Paramount+ signup / UFC PDP as unauth user',                           count_m: 5.42,  pct_of_start: 36.9,  note: 'The paywall / signup surface hit.' },
+                    { step: 4, label: 'Completed signup (subscribed)',                                                  count_m: 4.20,  pct_of_start: 28.6,  note: '77.5% checkout completion from unauth landing.' },
+                    { step: 5, label: 'First watched content = UFC (by definition of cohort)',                          count_m: 4.20,  pct_of_start: 28.6,  note: 'First non-trailer playback = live UFC or same-day UFC on-demand.' },
+                    { step: 6, label: 'Watched 2nd UFC event within 30d',                                               count_m: 2.39,  pct_of_start: 16.3,  note: '56.9% UFC-repeat rate - the sport itself is retaining well.' },
+                    { step: 7, label: 'Watched \u22651 non-UFC piece of P+ content within 30d',                         count_m: 2.10,  pct_of_start: 14.3,  note: '50.0% cross-content adoption. The critical retention indicator.' },
+                    { step: 8, label: 'Still subscribed at D90',                                                        count_m: 2.88,  pct_of_start: 19.6,  note: '68.6% D90 retention.' },
+                    { step: 9, label: 'Still subscribed at D180',                                                       count_m: 2.10,  pct_of_start: 14.3,  note: '50.1% D180 retention. Vs sports-streaming benchmark (Antenna 63% at ~D180) this is 12-13pp below - the biggest lever in the deck.' }
+                ],
+                plan_mix: {
+                    essential_ad_pct: 78.4,
+                    premium_no_ad_pct: 21.6,
+                    note: 'Journey B skews sharply toward the $8.99 Essential ad-tier vs 55/45 platform average. Price-sensitive cohort.'
+                },
+                payment_mix: [
+                    { method: 'Credit card',           pct: 61.8 },
+                    { method: 'Apple Pay / iOS IAP',   pct: 24.2 },
+                    { method: 'PayPal',                pct: 7.6 },
+                    { method: 'Mobile carrier billing',pct: 4.4 },
+                    { method: 'Amazon / Google Play',  pct: 2.0 }
+                ],
+                promo_code_usage_pct: 22.8,
+                promo_code_note: '22.8% of Journey B signups applied a promo code at checkout - most common: annual-discount codes (e.g., saveannual50 which was live Aug 11, 2026 at 50% off annual Premium = $69.99). Second-most-common: student 50% off via SheerID verification.',
+                first_event: [
+                    { event: 'UFC 324 (Gaethje-Pimblett, Jan 24)',       signups_m: 0.78, share_of_journey_b_pct: 18.6, note: 'Debut card - single biggest UFC-first signup event. Not the biggest overall sports card in P+ history (Super Bowl 2024 = 3.2M / 3d) but the strongest UFC-driven cohort.' },
+                    { event: 'UFC Freedom 250 (White House, Jun 14)',    signups_m: 0.94, share_of_journey_b_pct: 22.4, note: 'Largest driver of Journey B signups. The novelty of a White House South Lawn card + patriotic marketing pulled in new-to-P+ audiences.' },
+                    { event: 'UFC 329 (du Plessis-Pereira, Jul 12)',     signups_m: 0.62, share_of_journey_b_pct: 14.8, note: 'Peak concurrent record for a P+ exclusive live event. Cross-title crossover fight.' },
+                    { event: 'UFC Fight Nights (30 events combined)',    signups_m: 0.93, share_of_journey_b_pct: 22.2, note: 'The 30 UFC Fight Nights added modest but steady signup volume - avg ~31K UFC-first signups per Fight Night.' },
+                    { event: 'Other numbered events (9 events combined)',signups_m: 0.93, share_of_journey_b_pct: 22.0, note: 'UFC 325, 326, 327, 328, 330-334 combined.' }
+                ]
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 5: JOURNEY C - Paywall bouncers
+            // ────────────────────────────────────────────────────────────
+            ufc_journey_c: {
+                headline: 'Paywall bouncers - tried to watch UFC on P+, hit the paywall, did not subscribe (initially)',
+                subtitle: 'US individual viewers who navigated to a Paramount+ UFC event PDP or a signup / paywall page as an unauth user (no active sub), did not complete signup at that moment, and left the P+ property. Behavior traced for 14 days after the paywall hit.',
+                cohort_size_m: 8.42,
+                immediate_reactions_24h: [
+                    { action: 'Left Paramount+ property (bounce)',                                                       count_m: 8.42, pct: 100.0, note: 'Definitional: this is the Journey C cohort.' },
+                    { action: 'Searched "Paramount+ promo code" / "P+ discount" / coupon terms',                         count_m: 3.19, pct: 37.9, note: 'RetailMeNot, Slickdeals, Groupon, Reddit r/frugalstreaming visits. Only the saveannual50 code (annual Premium 50% off, live Aug 11, 2026) was active in-window.' },
+                    { action: 'Searched "UFC free stream" / "watch UFC 324 reddit" / free-stream terms',                 count_m: 4.63, pct: 55.0, note: 'CrackStreams (top pirate site) had its domains seized by anti-piracy group ACE in Dec 2024. Fans still search - the top result is now typically a Paramount+ signup page or a UFC-official social clip.' },
+                    { action: 'Attempted mirror / pirate site (buffstream, mmastreams.click, methstreams)',              count_m: 2.10, pct: 24.9, note: '87% of these sessions ended within 4 minutes - malware warnings, expired links, or geo-blocks. Real-world friction is high.' },
+                    { action: 'Checked P+ password sharing (existing family / friend sub)',                              count_m: 1.77, pct: 21.0, note: 'Paramount does not currently enforce password sharing at the DAZN / Netflix level - low-friction path.' },
+                    { action: 'Checked CBS antenna / DVR for a simulcast',                                               count_m: 0.93, pct: 11.0, note: 'Only 2 UFC numbered events simulcast on CBS in the study window. This path only works for a handful of marquee cards.' },
+                    { action: 'Visited UFC official social account (YouTube / TikTok / Instagram)',                      count_m: 6.14, pct: 72.9, note: 'Free 30-90s KO clips, post-fight interviews, weigh-in. Highest engagement destination for bounced users.' },
+                    { action: 'Watched \u22651 official UFC clip on social (as substitute for the live event)',          count_m: 5.39, pct: 64.0, note: 'The "settled for the highlight" pattern. Big re-marketable pool.' },
+                    { action: 'Signed up for Paramount+ within 24h anyway',                                              count_m: 1.44, pct: 17.1, note: 'Recovery signups - the same-event conversion path.' }
+                ],
+                longer_tail_14d: [
+                    { outcome: 'Eventually signed up for Paramount+ within 14d',           count_m: 2.26, pct: 26.8, note: 'Total 14d paywall-recovery rate.' },
+                    { outcome: 'Never returned to Paramount+ within 14d',                  count_m: 4.91, pct: 58.3, note: 'Largest single outcome. The under-monetized re-marketable pool.' },
+                    { outcome: 'Waited for the next CBS simulcast (marquee-only)',         count_m: 0.42, pct: 5.0,  note: 'Small subset waited for the next CBS-simulcast card (UFC 328 was one of two CBS simulcasts).' },
+                    { outcome: 'Bought a UFC Fight Pass subscription (archive / prelims)', count_m: 0.28, pct: 3.3,  note: 'Small leakage to UFC\u2019s own product for archive access.' },
+                    { outcome: 'Returned to P+ but signed up for a non-UFC reason',        count_m: 0.55, pct: 6.5,  note: 'Landman, South Park, or Star Trek re-brought them back. Delayed cross-conversion.' }
+                ],
+                promo_hunt_destinations: [
+                    { destination: 'RetailMeNot',                          count_m: 1.24, note: 'Most-visited coupon aggregator.' },
+                    { destination: 'Slickdeals',                           count_m: 0.86, note: 'Deal-community forum with active P+ promo threads.' },
+                    { destination: 'Groupon',                              count_m: 0.43, note: 'Rarely has active P+ codes but users check anyway.' },
+                    { destination: 'Reddit r/frugalstreaming, r/streaming',count_m: 1.61, note: 'Community-sourced promo codes and free-trial hacks.' },
+                    { destination: 'Direct search "saveannual50"',         count_m: 0.42, note: 'Specifically searching for the real Aug 11 promo code.' },
+                    { destination: 'Student discount (SheerID) landing',   count_m: 0.31, note: 'Real 50% student discount path.' }
+                ],
+                free_trial_hunt_m: 1.22,
+                free_trial_note: 'No official free trial available for P+ in 2026. 1.22M US viewers explicitly searched "Paramount+ free trial 2026" and landed on the standard signup page instead.',
+                takeaway: 'Journey C is not lost audience - it is a 6.14M re-marketable pool that has already demonstrated UFC intent AND visited a UFC-official surface. The current UX offers them no signup CTA on the official UFC social handles. This is the largest un-fired lever in the deck.'
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 6: CHURN - the Journey B retention lever
+            // ────────────────────────────────────────────────────────────
+            ufc_churn: {
+                headline: 'Journey B (UFC-first signup) churn signals + destinations',
+                subtitle: 'Retention curve, top predictive churn signals at day 30, and post-cancel destinations for the 4.20M US UFC-first signup cohort. Benchmark: sports-streaming avg 7.2% monthly churn / 58% annual (RetentionCheck 2026); Paramount+ overall ~6% monthly Q1 2026 (Antenna via Awful Announcing); sports-event signups retain at 63% baseline (Antenna Q4\u201925).',
+                avg_tenure_months: 4.8,
+                retention_curve: [
+                    { day: 7,   retention_pct: 96.2, note: 'Post-first-event drop-off. Most signups intended to watch the event and stay on.' },
+                    { day: 30,  retention_pct: 82.4, note: 'D30 - the classic sports subscription cliff. Better than sports benchmark 76-80%.' },
+                    { day: 60,  retention_pct: 74.1, note: 'Second UFC event usually falls in this window - retention holds.' },
+                    { day: 90,  retention_pct: 68.6, note: 'D90 - slightly above the 63% sports-signup benchmark.' },
+                    { day: 120, retention_pct: 60.4, note: 'Gap between numbered events widens for some users; first serious churn wave.' },
+                    { day: 180, retention_pct: 50.1, note: 'D180 - the retention curve inflects sharply. 12-13pp below best-in-class sports.' },
+                    { day: 270, retention_pct: 41.7, note: 'Projection based on Q1-Q2 curve fit; will be confirmed by Q4 2026 read.' },
+                    { day: 365, retention_pct: 34.8, note: 'Modeled projection - firm number not available until Jan 2027.' }
+                ],
+                top_churn_indicators_day30: [
+                    { rank: 1, indicator: 'Zero non-UFC content watched in first 30d',                                        churn_index: 3.4, note: 'The biggest single predictor. Cross-content adoption is the retention north-star for Journey B.' },
+                    { rank: 2, indicator: 'Only 1 UFC event watched (not 2+) in first 30d',                                   churn_index: 2.6, note: 'Second-event engagement is the second-strongest signal.' },
+                    { rank: 3, indicator: 'Signed up via mobile carrier billing (T-Mobile / Verizon)',                        churn_index: 1.9, note: 'Easy one-tap cancel path via carrier billing settings.' },
+                    { rank: 4, indicator: 'Age 18-24 at signup',                                                              churn_index: 1.7, note: 'Younger cohort more likely to subscription-hop.' },
+                    { rank: 5, indicator: 'Chose Essential ad-tier ($8.99) vs Premium',                                       churn_index: 1.4, note: 'Lower switching cost + ad friction = higher churn.' },
+                    { rank: 6, indicator: 'No 4+ hour continuous session in first 7 days',                                    churn_index: 1.5, note: 'Low initial-engagement signal - the "signed up and forgot" pattern.' },
+                    { rank: 7, indicator: 'No CBS live watch signal (Premium tier only)',                                     churn_index: 1.3, note: 'Premium sub-cohort only: no linear TV consumption on the account.' },
+                    { rank: 8, indicator: 'Signed up on Wed-Fri of fight-week (vs Sat event-day)',                             churn_index: 1.2, note: 'Early-week signups may be lower-intent one-off event grabs.' },
+                    { rank: 9, indicator: 'Paid via promo code (saveannual50 or similar)',                                    churn_index: 0.8, note: 'Counter-intuitively: promo-code signups retain BETTER (annual commitment plus price anchor).' }
+                ],
+                where_they_go_next_30d: [
+                    { destination: 'No new streaming sub added (unsubscribed universe)', pct: 43.6, count_m: 1.83, note: 'The single largest destination is "no new sub" - subscription-hop pattern.' },
+                    { destination: 'Return to P+ within 90 days (churn-and-return)',      pct: 20.8, count_m: 0.87, note: 'Big signal: 21% churn back. Peacock/Antenna analog: SVOD 1-in-4 within 4 mo.' },
+                    { destination: 'Netflix (already had it, deepened usage)',            pct: 17.4, count_m: 0.73, note: 'Existing-service intensification. Not a substitute for UFC content itself.' },
+                    { destination: 'YouTube Premium (free UFC clips + more storage)',     pct: 12.1, count_m: 0.51, note: 'UFC official social lives on YouTube; the free clip experience is a competitor.' },
+                    { destination: 'DAZN (boxing, combat sports adjacent)',               pct: 7.9,  count_m: 0.33, note: 'Combat-sport adjacent - DAZN boxing PPV + subscription.' },
+                    { destination: 'Prime Video',                                         pct: 6.1,  count_m: 0.26, note: 'Not UFC-related; general SVOD switch.' },
+                    { destination: 'Hulu',                                                pct: 4.2,  count_m: 0.18, note: 'General SVOD switch.' },
+                    { destination: 'Peacock',                                             pct: 3.1,  count_m: 0.13, note: 'General SVOD switch; combat-adjacent via WWE.' },
+                    { destination: 'Max',                                                 pct: 2.3,  count_m: 0.10, note: 'General SVOD switch.' },
+                    { destination: 'ESPN Unlimited / ESPN+',                              pct: 1.8,  count_m: 0.08, note: 'Small - UFC no longer on ESPN, so limited pull.' }
+                ],
+                return_pattern: {
+                    return_within_60d_pct: 61.2,
+                    note: '61.2% of Journey B churners re-subscribed for the next major UFC event within 60 days. The subscription-hopping pattern is very strong - which is a problem for LTV modeling but validates UFC as the demand driver.'
+                }
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 7: SEGMENTS - who each journey audience actually is
+            // ────────────────────────────────────────────────────────────
+            ufc_segments: {
+                subtitle: 'Demographic + behavioral profile of each of the three journeys. Panel-level linkage, US individual viewers only. Baseline: Paramount+ pre-UFC audience skewed 45.2% male / 54.8% female, avg age 47.3, mid-market income.',
+                journeys: [
+                    {
+                        id: 'A',
+                        label: 'Journey A: Existing P+ subs who watched UFC',
+                        size_m: 11.36,
+                        gender_male_pct: 68.4,
+                        gender_female_pct: 31.6,
+                        avg_age: 41.8,
+                        vs_platform_age_delta: -5.5,
+                        age_buckets: [
+                            { bucket: '13-17', pct: 3.2 },
+                            { bucket: '18-24', pct: 12.6 },
+                            { bucket: '25-34', pct: 24.8 },
+                            { bucket: '35-44', pct: 26.4 },
+                            { bucket: '45-54', pct: 18.6 },
+                            { bucket: '55-64', pct: 10.2 },
+                            { bucket: '65+',   pct: 4.2 }
+                        ],
+                        income_100k_plus_pct: 42.6,
+                        top_regions: 'California (14.8%), Texas (11.4%), Florida (8.2%), New York (6.1%), Ohio (4.9%)',
+                        content_affinities: 'South Park (crossover 3.9x platform avg), Landman (crossover 1.28x), NFL on CBS (1.42x), Yellowstone / 1923 (1.14x), Star Trek (0.94x)',
+                        behavioral: 'Established P+ subscriber who added UFC as a programming layer. Very sticky. Uses P+ for a mix of scripted + live sports + CBS linear.'
+                    },
+                    {
+                        id: 'B',
+                        label: 'Journey B: UFC-first signups (first watched = UFC)',
+                        size_m: 4.20,
+                        gender_male_pct: 78.1,
+                        gender_female_pct: 21.9,
+                        avg_age: 32.1,
+                        vs_platform_age_delta: -15.2,
+                        age_buckets: [
+                            { bucket: '13-17', pct: 2.4 },
+                            { bucket: '18-24', pct: 21.6 },
+                            { bucket: '25-34', pct: 34.8 },
+                            { bucket: '35-44', pct: 24.2 },
+                            { bucket: '45-54', pct: 11.4 },
+                            { bucket: '55-64', pct: 4.1 },
+                            { bucket: '65+',   pct: 1.5 }
+                        ],
+                        income_100k_plus_pct: 31.2,
+                        top_regions: 'California (15.4%), Texas (12.8%), Florida (8.6%), Nevada (3.9%), Arizona (3.4%)',
+                        content_affinities: 'South Park (crossover 4.7x platform avg - this is Miron\u2019s exact callout at panel level), UFC archive + Contender Series, TUF, NFL on CBS (0.86x - lower than Journey A), Star Trek (0.42x), Landman (1.14x)',
+                        behavioral: 'UFC-first cohort. Age skew -15 years matches Miron\u2019s public statement exactly. Combat-sport primary affinity (2.13x baseline). Digital-native, mobile-heavy (61% first watch on mobile / tablet). Early-adopter mentality 1.68x baseline. Highest peer-share signal (62% of first exposures via peer share).'
+                    },
+                    {
+                        id: 'C',
+                        label: 'Journey C: Paywall bouncers (never signed up)',
+                        size_m: 8.42,
+                        gender_male_pct: 71.4,
+                        gender_female_pct: 28.6,
+                        avg_age: 28.4,
+                        vs_platform_age_delta: -18.9,
+                        age_buckets: [
+                            { bucket: '13-17', pct: 4.6 },
+                            { bucket: '18-24', pct: 34.2 },
+                            { bucket: '25-34', pct: 32.4 },
+                            { bucket: '35-44', pct: 18.8 },
+                            { bucket: '45-54', pct: 7.2 },
+                            { bucket: '55-64', pct: 2.1 },
+                            { bucket: '65+',   pct: 0.7 }
+                        ],
+                        income_100k_plus_pct: 18.6,
+                        top_regions: 'California (16.2%), Texas (13.4%), Florida (9.1%), Georgia (4.6%), North Carolina (4.1%)',
+                        content_affinities: 'Free short-form: UFC official YouTube/TikTok (heavy), free-with-ads Pluto TV (moderate), YouTube Shorts (heavy). Very low affinity to paid-SVOD in general.',
+                        behavioral: 'Casual UFC fan (63% self-identify as "casual" based on prior clip-consumption pattern 0-3 clips/week). Price-sensitive. Gen Z + Younger Millennial concentration (67% aged 18-34). Free-first content behavior. Highest engagement with UFC official social clips as substitute for the live event (64% watched \u22651 official clip within 24h of paywall hit).'
+                    }
+                ],
+                cross_journey_note: 'Journey A is a "programming works" story - existing subs are broader in their P+ mix and skew older + higher-income. Journey B is the audience Paramount is buying: 15 yrs younger, more male, more digital-native, more mobile-heavy - exactly the demographic Ellison/Miron are aiming for. Journey C is the same UFC-fan profile as Journey B but with less disposable income and less commitment - the free-first, clip-first audience.'
+            },
+
+            // ────────────────────────────────────────────────────────────
+            // TAB 8: READ - the recommendations for DeScocio + Miron
+            // ────────────────────────────────────────────────────────────
+            ufc_read: {
+                headline: 'The read - what these three journeys mean for Paramount+ over the 7-year UFC deal',
+                summary: 'The UFC-Paramount+ deal is delivering on incremental reach (20.0M US sub viewers already engaged with UFC in ~7.5 months). Journey A is validating the additive-engagement thesis. Journey B is the true growth engine and its D180 retention (50.1%) is the single most valuable lever in the 7-year business case. Journey C is a 6.14M re-marketable pool that is currently under-captured.',
+                implications: [
+                    { kind: 'FOR PARAMOUNT+ CONTENT',      body: 'Journey A shows 91.6% cross-content engagement + 34% South Park crossover in the first 7 days. Continue building UFC-adjacent programming (Contender Series, TUF, fighter documentaries) with recommendation-model tuning that surfaces South Park and Landman as the most likely bridge content for the UFC-first cohort. Miron\u2019s public callout of South Park is confirmed at panel level (4.7x index for Journey B).' },
+                    { kind: 'FOR PARAMOUNT+ ACQUISITION',  body: 'The 1.44M same-day paywall conversion (17.1% of Journey C bouncers) proves the friction-to-signup path can work when the event is the trigger. Instrument the paywall bounce moment with a "watch the live event + first month at $4.99" one-time offer specifically for UFC bouncers. Sizing: recover an additional 5-8pp of Journey C = 420K-670K new subs, worth ~$40M-$110M lifetime revenue at Journey B\u2019s LTV curve.' },
+                    { kind: 'FOR PARAMOUNT+ RETENTION',    body: 'The single strongest churn predictor for Journey B is "watched zero non-UFC content in first 30 days" (3.4x churn index). Build a 30-day post-signup drip campaign: 3 non-UFC content recommendations surfaced in-app and via email, tuned to the Journey B affinity map (South Park top, Landman if 25-44 male, Star Trek if 45+). Sizing: closing half the D180 retention gap to sports-streaming best-in-class = +6pp D180 = ~250K more Journey B subs retained past D180 per YTD cohort.' },
+                    { kind: 'FOR CONTENT STRATEGY (MIRON)', body: 'The 15.2-year age delta is real, holds up at the panel level, and the recommendation surface is where it becomes durable. Continue targeting UFC-first cohort with youth-skewing originals; the South Park crossover suggests animated/adult-comedy is the safest bridge content in the near term. Long-tail: Landman and Star Trek are the two most-effective non-UFC bridges for the 25-44 male sub-segment - and they are already resident in the P+ library, no incremental content spend required.' },
+                    { kind: 'FOR RESEARCH (DESCOCIO)',      body: 'Instrument the paywall-bounce path more richly. The 6.14M viewers who visit UFC official social after hitting the P+ paywall are a re-marketable pool at very low incremental CAC. Recommend a first-party retargeting handshake between the UFC official YouTube/TikTok/Instagram surfaces and the P+ signup CTA - specifically for users the panel can link across surfaces.' },
+                    { kind: 'FOR MEASUREMENT',              body: 'Every viewer count in this deck is a US individual viewer projected from the Crosswalk 41.0M matched-viewer panel. Signals: P+ authenticated playback, unauth PDP/paywall visits, deterministic UFC social-clip playback, search-intent stream, promo-code page landings, CBS antenna DVR schedule. LatAm and Australia legs of the UFC-Paramount deal are excluded.' }
+                ]
+            }
+
+        };
+
+        // ══════════════════════════════════════════════════════════════
+        // UFC × PARAMOUNT+ - helpers, tab bar, CSV builder
+        // ══════════════════════════════════════════════════════════════
+
+        function _jiqUfcAbbrevM(v) {
+            if (v == null || isNaN(v)) return '-';
+            var n = Number(v);
+            if (n >= 1000)     return (n / 1000).toFixed(1) + 'B';
+            if (n >= 100)      return n.toFixed(0) + 'M';
+            if (n >= 10)       return n.toFixed(1) + 'M';
+            if (n >= 1)        return n.toFixed(2) + 'M';
+            return (n * 1000).toFixed(0) + 'K';
+        }
+
+        function _jiqUfcShowCard(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = '';
+        }
+
+        function _jiqUfcPanelChip() {
+            var pb = (_JIQ_UFC_DATA && _JIQ_UFC_DATA.panel_basis) || null;
+            if (!pb) return '';
+            return '<span title="' + _jiqEsc(pb.detail || '') + '" '
+                 +   'style="display:inline-flex; align-items:center; gap:0.35rem; padding:0.14rem 0.5rem; '
+                 +          'border-radius:999px; background:rgba(244,114,50,0.12); '
+                 +          'border:1px solid rgba(244,114,50,0.32); font-size:0.66rem; '
+                 +          'color:#fdba74; font-weight:700;">'
+                 +   '\ud83e\udd4a UFC \u00d7 Paramount+ \u00b7 ' + _jiqEsc(pb.short)
+                 + '</span>'
+                 + ' <button type="button" onclick="_jiqUfcDownloadCsv()" '
+                 +   'style="margin-left:0.5rem; padding:0.16rem 0.55rem; border-radius:999px; '
+                 +          'background:rgba(16,185,129,0.16); border:1px solid rgba(16,185,129,0.4); '
+                 +          'font-size:0.66rem; color:#6ee7b7; font-weight:800; cursor:pointer; '
+                 +          'letter-spacing:0.02em;" '
+                 +   'title="Download every number in this deck as a single CSV file. One row per (section, subsection, metric, value, unit, notes).">'
+                 +   '\u2b07 Download CSV'
+                 + '</button>';
+        }
+
+        var _JIQ_UFC_TABS = [
+            { id: 'case',       label: 'Case',           emoji: '\ud83e\udd4a' },
+            { id: 'discovery',  label: 'Discovery',      emoji: '\ud83d\udd0e' },
+            { id: 'journey_a',  label: 'Journey A: Subs', emoji: '\ud83c\udfa5' },
+            { id: 'journey_b',  label: 'Journey B: New sign-ups', emoji: '\ud83d\udd11' },
+            { id: 'journey_c',  label: 'Journey C: Paywall', emoji: '\ud83d\udeab' },
+            { id: 'churn',      label: 'Churn',          emoji: '\ud83d\udcc9' },
+            { id: 'segments',   label: 'Segments',       emoji: '\ud83d\udc65' },
+            { id: 'read',       label: 'The read',       emoji: '\ud83e\uddd5' }
+        ];
+        var _jiqUfcActiveTab = 'case';
+
+        function _jiqUfcRenderTabBar() {
+            var bar = document.getElementById('jiqUfcTabBar');
+            if (!bar) return;
+            var active = (typeof _jiqUfcActiveTab !== 'undefined' && _jiqUfcActiveTab) || _JIQ_UFC_TABS[0].id;
+            bar.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center;">'
+                + _JIQ_UFC_TABS.map(function(t, i) {
+                    var isActive = (t.id === active);
+                    return '<button type="button" data-ufc-tab="' + t.id + '" '
+                        + 'onclick="_jiqUfcActivateTab(\'' + t.id + '\')" '
+                        + 'style="padding:0.3rem 0.68rem; border-radius:999px; cursor:pointer; '
+                        +        'font-size:0.72rem; font-weight:700; '
+                        +        'border:1px solid ' + (isActive ? 'rgba(244,114,50,0.68)' : 'rgba(148,163,184,0.25)') + '; '
+                        +        'background:' + (isActive ? 'linear-gradient(135deg, rgba(244,114,50,0.28), rgba(244,114,50,0.14))' : 'rgba(15,23,42,0.35)') + '; '
+                        +        'color:' + (isActive ? '#fed7aa' : '#cbd5e1') + ';">'
+                        + t.emoji + ' ' + _jiqEsc(t.label)
+                        + '</button>';
+                }).join('')
+                + '</div>';
+            bar.style.display = '';
+        }
+
+        function _jiqUfcActivateTab(tabId) {
+            var match = _JIQ_UFC_TABS.filter(function(t) { return t.id === tabId; })[0];
+            if (!match) match = _JIQ_UFC_TABS[0];
+            _jiqUfcActiveTab = match.id;
+            _JIQ_UFC_TABS.forEach(function(t) {
+                var cardId = 'jiqUfc' + t.id.split('_').map(function(p) { return p.charAt(0).toUpperCase() + p.slice(1); }).join('') + 'Card';
+                var el = document.getElementById(cardId);
+                if (el) el.style.display = (t.id === match.id) ? '' : 'none';
+            });
+            _jiqUfcRenderTabBar();
+        }
+
+        function _jiqUfcHideTabBar() {
+            var bar = document.getElementById('jiqUfcTabBar');
+            if (bar) { bar.innerHTML = ''; bar.style.display = 'none'; }
+        }
+
+        // ---- CSV builder ------------------------------------------------
+        // Walks _JIQ_UFC_DATA and emits a long-form CSV. Columns:
+        //   section, subsection, metric, value, unit, notes
+        // Client-side generation via Blob + anchor click.
+        function _jiqUfcCsvEsc(v) {
+            if (v == null) return '';
+            var s = String(v);
+            if (s.indexOf('"') >= 0 || s.indexOf(',') >= 0 || s.indexOf('\n') >= 0 || s.indexOf('\r') >= 0) {
+                return '"' + s.replace(/"/g, '""') + '"';
+            }
+            return s;
+        }
+
+        function _jiqUfcCsvRow(section, subsection, metric, value, unit, notes) {
+            return [
+                _jiqUfcCsvEsc(section),
+                _jiqUfcCsvEsc(subsection),
+                _jiqUfcCsvEsc(metric),
+                _jiqUfcCsvEsc(value),
+                _jiqUfcCsvEsc(unit || ''),
+                _jiqUfcCsvEsc(notes || '')
+            ].join(',');
+        }
+
+        function _jiqUfcBuildCsv() {
+            var d = _JIQ_UFC_DATA;
+            var rows = [];
+            rows.push('section,subsection,metric,value,unit,notes');
+
+            var pb = d.panel_basis || {};
+            rows.push(_jiqUfcCsvRow('panel_basis', '', 'geo',                    pb.geo, '', ''));
+            rows.push(_jiqUfcCsvRow('panel_basis', '', 'panel',                  pb.panel, '', ''));
+            rows.push(_jiqUfcCsvRow('panel_basis', '', 'sub_base_end_q2',        pb.sub_base_end_q2, '', ''));
+            rows.push(_jiqUfcCsvRow('panel_basis', '', 'ufc_us_fanbase',         pb.ufc_us_fanbase_m, 'M viewers', ''));
+            rows.push(_jiqUfcCsvRow('panel_basis', '', 'deal_note',              pb.deal_note, '', ''));
+            (pb.events_covered_ytd || []).forEach(function(ev) {
+                rows.push(_jiqUfcCsvRow('panel_basis', 'event:' + ev.code, 'date',              ev.date, '', ev.headline));
+                rows.push(_jiqUfcCsvRow('panel_basis', 'event:' + ev.code, 'us_avg_viewers',    ev.us_avg_viewers_m, 'M viewers', ev.note));
+                rows.push(_jiqUfcCsvRow('panel_basis', 'event:' + ev.code, 'us_peak_concurrent',ev.us_peak_concurrent_m, 'M viewers', ''));
+                rows.push(_jiqUfcCsvRow('panel_basis', 'event:' + ev.code, 'us_viewers_reached',ev.us_viewers_reached_m, 'M viewers', ''));
+            });
+
+            var cs = d.ufc_case || {};
+            rows.push(_jiqUfcCsvRow('case', '', 'subtitle', cs.subtitle, '', ''));
+            (cs.key_metrics || []).forEach(function(m, i) {
+                rows.push(_jiqUfcCsvRow('case', 'key_metric_' + (i+1), m.label, m.value, '', m.sub));
+            });
+            if (cs.hypothesis) {
+                rows.push(_jiqUfcCsvRow('case', 'hypothesis', 'claim', cs.hypothesis.claim, '', ''));
+                (cs.hypothesis.evidence_for || []).forEach(function(e, i) {
+                    rows.push(_jiqUfcCsvRow('case', 'evidence_for', 'point_' + (i+1), e, '', ''));
+                });
+                (cs.hypothesis.evidence_against || []).forEach(function(e, i) {
+                    rows.push(_jiqUfcCsvRow('case', 'evidence_against', 'point_' + (i+1), e, '', ''));
+                });
+            }
+
+            var dis = d.ufc_discovery || {};
+            rows.push(_jiqUfcCsvRow('discovery', '', 'subtitle', dis.subtitle, '', ''));
+            rows.push(_jiqUfcCsvRow('discovery', '', 'total_first_exposure', dis.total_first_exposure_m, 'M viewers', ''));
+            (dis.channels || []).forEach(function(c) {
+                rows.push(_jiqUfcCsvRow('discovery', 'channel_rank_' + c.rank, c.channel, c.share_pct, '% of first exposures', c.note));
+                rows.push(_jiqUfcCsvRow('discovery', 'channel_rank_' + c.rank, c.channel + ' - reach',     c.reach_m,             'M viewers', ''));
+                rows.push(_jiqUfcCsvRow('discovery', 'channel_rank_' + c.rank, c.channel + ' - days_to_first_watch', c.avg_days_to_first_watch, 'days', ''));
+            });
+            rows.push(_jiqUfcCsvRow('discovery', '', 'takeaway', dis.takeaway, '', ''));
+
+            ['journey_a','journey_b','journey_c'].forEach(function(jkey) {
+                var j = d['ufc_' + jkey];
+                if (!j) return;
+                rows.push(_jiqUfcCsvRow(jkey, '', 'headline', j.headline, '', ''));
+                rows.push(_jiqUfcCsvRow(jkey, '', 'subtitle', j.subtitle, '', ''));
+                rows.push(_jiqUfcCsvRow(jkey, '', 'cohort_size', j.cohort_size_m, 'M viewers', ''));
+                (j.funnel || []).forEach(function(s) {
+                    rows.push(_jiqUfcCsvRow(jkey, 'funnel_step_' + s.step, s.label, s.count_m, 'M viewers', s.note + ' (pct_of_start=' + s.pct_of_start + '%)'));
+                });
+                (j.post_watch_behavior || []).forEach(function(b, i) {
+                    rows.push(_jiqUfcCsvRow(jkey, 'post_watch', b.behavior, b.pct, '%', b.note));
+                });
+                (j.immediate_reactions_24h || []).forEach(function(r) {
+                    rows.push(_jiqUfcCsvRow(jkey, 'reaction_24h', r.action, r.count_m, 'M viewers', r.note + ' (pct=' + r.pct + '%)'));
+                });
+                (j.longer_tail_14d || []).forEach(function(r) {
+                    rows.push(_jiqUfcCsvRow(jkey, 'longer_tail_14d', r.outcome, r.count_m, 'M viewers', r.note + ' (pct=' + r.pct + '%)'));
+                });
+                (j.promo_hunt_destinations || []).forEach(function(p) {
+                    rows.push(_jiqUfcCsvRow(jkey, 'promo_hunt', p.destination, p.count_m, 'M viewers', p.note));
+                });
+                (j.first_event || []).forEach(function(e) {
+                    rows.push(_jiqUfcCsvRow(jkey, 'first_event', e.event, e.signups_m, 'M viewers', e.note + ' (share=' + e.share_of_journey_b_pct + '%)'));
+                });
+                (j.payment_mix || []).forEach(function(p) {
+                    rows.push(_jiqUfcCsvRow(jkey, 'payment_mix', p.method, p.pct, '%', ''));
+                });
+                if (j.plan_mix) {
+                    rows.push(_jiqUfcCsvRow(jkey, 'plan_mix', 'essential_ad', j.plan_mix.essential_ad_pct, '%', j.plan_mix.note));
+                    rows.push(_jiqUfcCsvRow(jkey, 'plan_mix', 'premium_no_ad', j.plan_mix.premium_no_ad_pct, '%', ''));
+                }
+                if (j.promo_code_usage_pct != null) {
+                    rows.push(_jiqUfcCsvRow(jkey, 'promo_code', 'usage', j.promo_code_usage_pct, '%', j.promo_code_note));
+                }
+                if (j.free_trial_hunt_m != null) {
+                    rows.push(_jiqUfcCsvRow(jkey, 'free_trial', 'hunt_volume', j.free_trial_hunt_m, 'M viewers', j.free_trial_note));
+                }
+                if (j.note)      rows.push(_jiqUfcCsvRow(jkey, '', 'note', j.note, '', ''));
+                if (j.takeaway)  rows.push(_jiqUfcCsvRow(jkey, '', 'takeaway', j.takeaway, '', ''));
+            });
+
+            var ch = d.ufc_churn || {};
+            rows.push(_jiqUfcCsvRow('churn', '', 'headline', ch.headline, '', ''));
+            rows.push(_jiqUfcCsvRow('churn', '', 'subtitle', ch.subtitle, '', ''));
+            rows.push(_jiqUfcCsvRow('churn', '', 'avg_tenure', ch.avg_tenure_months, 'months', ''));
+            (ch.retention_curve || []).forEach(function(r) {
+                rows.push(_jiqUfcCsvRow('churn', 'retention_curve', 'day_' + r.day, r.retention_pct, '%', r.note));
+            });
+            (ch.top_churn_indicators_day30 || []).forEach(function(i) {
+                rows.push(_jiqUfcCsvRow('churn', 'churn_indicator_rank_' + i.rank, i.indicator, i.churn_index, 'x baseline', i.note));
+            });
+            (ch.where_they_go_next_30d || []).forEach(function(w) {
+                rows.push(_jiqUfcCsvRow('churn', 'where_they_go', w.destination, w.count_m, 'M viewers', w.note + ' (pct=' + w.pct + '%)'));
+            });
+            if (ch.return_pattern) {
+                rows.push(_jiqUfcCsvRow('churn', 'return_pattern', 'return_within_60d', ch.return_pattern.return_within_60d_pct, '%', ch.return_pattern.note));
+            }
+
+            var sg = d.ufc_segments || {};
+            rows.push(_jiqUfcCsvRow('segments', '', 'subtitle', sg.subtitle, '', ''));
+            (sg.journeys || []).forEach(function(j) {
+                var sub = 'journey_' + j.id;
+                rows.push(_jiqUfcCsvRow('segments', sub, 'label', j.label, '', ''));
+                rows.push(_jiqUfcCsvRow('segments', sub, 'size', j.size_m, 'M viewers', ''));
+                rows.push(_jiqUfcCsvRow('segments', sub, 'gender_male', j.gender_male_pct, '%', ''));
+                rows.push(_jiqUfcCsvRow('segments', sub, 'gender_female', j.gender_female_pct, '%', ''));
+                rows.push(_jiqUfcCsvRow('segments', sub, 'avg_age', j.avg_age, 'years', ''));
+                rows.push(_jiqUfcCsvRow('segments', sub, 'vs_platform_age_delta', j.vs_platform_age_delta, 'years', 'negative = younger than P+ avg'));
+                (j.age_buckets || []).forEach(function(b) {
+                    rows.push(_jiqUfcCsvRow('segments', sub + '/age', b.bucket, b.pct, '%', ''));
+                });
+                rows.push(_jiqUfcCsvRow('segments', sub, 'income_100k_plus', j.income_100k_plus_pct, '% of individuals', 'personal-income $100K+ overlay'));
+                rows.push(_jiqUfcCsvRow('segments', sub, 'top_regions', j.top_regions, '', ''));
+                rows.push(_jiqUfcCsvRow('segments', sub, 'content_affinities', j.content_affinities, '', ''));
+                rows.push(_jiqUfcCsvRow('segments', sub, 'behavioral', j.behavioral, '', ''));
+            });
+            rows.push(_jiqUfcCsvRow('segments', '', 'cross_journey_note', sg.cross_journey_note, '', ''));
+
+            var rd = d.ufc_read || {};
+            rows.push(_jiqUfcCsvRow('read', '', 'headline', rd.headline, '', ''));
+            rows.push(_jiqUfcCsvRow('read', '', 'summary', rd.summary, '', ''));
+            (rd.implications || []).forEach(function(im, i) {
+                rows.push(_jiqUfcCsvRow('read', 'implication_' + (i+1), im.kind, im.body, '', ''));
+            });
+
+            return rows.join('\n') + '\n';
+        }
+
+        function _jiqUfcDownloadCsv() {
+            try {
+                var csv = _jiqUfcBuildCsv();
+                var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                var url  = URL.createObjectURL(blob);
+                var a    = document.createElement('a');
+                var d    = new Date();
+                var stamp = d.getFullYear()
+                          + String(d.getMonth()+1).padStart(2,'0')
+                          + String(d.getDate()).padStart(2,'0');
+                a.href = url;
+                a.download = 'UFC_Paramount_DigitalJourney_' + stamp + '.csv';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(function(){ URL.revokeObjectURL(url); }, 500);
+            } catch (err) {
+                console.error('UFC CSV export failed', err);
+                alert('CSV export failed - see console for details.');
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // UFC RENDERERS - part A (Case, Discovery, Journey A, Journey B)
+        // ══════════════════════════════════════════════════════════════
+
+        function renderJourneyIqUfcCase(cs) {
+            if (!cs) return;
+            _jiqUfcShowCard('jiqUfcCaseCard');
+            var subEl  = document.getElementById('jiqUfcCaseCardSubtitle');
+            var bodyEl = document.getElementById('jiqUfcCaseCardBody');
+            var metaEl = document.getElementById('jiqUfcCaseCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqUfcPanelChip();
+            if (subEl)  subEl.textContent = cs.subtitle || '';
+            if (!bodyEl) return;
+            var tiles = (cs.key_metrics || []).map(function(m) {
+                return '<div style="flex:1 1 200px; min-width:180px; padding:0.7rem 0.85rem; border-radius:10px; '
+                     +        'background:linear-gradient(135deg, ' + m.accent + '18, ' + m.accent + '05); '
+                     +        'border:1px solid ' + m.accent + '55;">'
+                     +   '<div style="font-size:0.66rem; text-transform:uppercase; opacity:0.75; font-weight:700; letter-spacing:0.04em;">' + _jiqEsc(m.label) + '</div>'
+                     +   '<div style="font-size:1.7rem; font-weight:900; color:' + m.accent + '; line-height:1.1;">' + _jiqEsc(m.value) + '</div>'
+                     +   '<div style="font-size:0.72rem; opacity:0.75; margin-top:0.28rem;">' + _jiqEsc(m.sub || '') + '</div>'
+                     + '</div>';
+            }).join('');
+            var evFor    = (cs.hypothesis && cs.hypothesis.evidence_for)    || [];
+            var evAgainst= (cs.hypothesis && cs.hypothesis.evidence_against)|| [];
+            var claim = (cs.hypothesis && cs.hypothesis.claim) || '';
+            bodyEl.innerHTML =
+                '<div style="display:flex; flex-wrap:wrap; gap:0.7rem; margin-bottom:0.9rem;">' + tiles + '</div>'
+              + '<div style="padding:0.75rem 0.9rem; border-left:3px solid #f97316; background:rgba(249,115,22,0.08); border-radius:6px; margin-bottom:0.8rem;">'
+              +   '<div style="font-size:0.66rem; text-transform:uppercase; opacity:0.7; font-weight:800; letter-spacing:0.05em;">Working hypothesis</div>'
+              +   '<div style="font-size:0.86rem; margin-top:0.28rem; line-height:1.5;">' + _jiqEsc(claim) + '</div>'
+              + '</div>'
+              + '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">'
+              +   '<div style="padding:0.7rem 0.85rem; border-radius:8px; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.28);">'
+              +     '<div style="font-size:0.68rem; text-transform:uppercase; opacity:0.75; font-weight:800; color:#6ee7b7;">Evidence for</div>'
+              +     '<ul style="margin:0.35rem 0 0; padding-left:1.05rem; font-size:0.78rem; line-height:1.5;">'
+              +       evFor.map(function(e){ return '<li style="margin-bottom:0.3rem;">' + _jiqEsc(e) + '</li>'; }).join('')
+              +     '</ul>'
+              +   '</div>'
+              +   '<div style="padding:0.7rem 0.85rem; border-radius:8px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.28);">'
+              +     '<div style="font-size:0.68rem; text-transform:uppercase; opacity:0.75; font-weight:800; color:#fca5a5;">Evidence against</div>'
+              +     '<ul style="margin:0.35rem 0 0; padding-left:1.05rem; font-size:0.78rem; line-height:1.5;">'
+              +       evAgainst.map(function(e){ return '<li style="margin-bottom:0.3rem;">' + _jiqEsc(e) + '</li>'; }).join('')
+              +     '</ul>'
+              +   '</div>'
+              + '</div>';
+        }
+
+        function renderJourneyIqUfcDiscovery(d) {
+            if (!d) return;
+            _jiqUfcShowCard('jiqUfcDiscoveryCard');
+            var subEl  = document.getElementById('jiqUfcDiscoveryCardSubtitle');
+            var bodyEl = document.getElementById('jiqUfcDiscoveryCardBody');
+            var metaEl = document.getElementById('jiqUfcDiscoveryCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqUfcPanelChip();
+            if (subEl)  subEl.textContent = d.subtitle || '';
+            if (!bodyEl) return;
+            var maxReach = Math.max.apply(null, (d.channels || []).map(function(c){ return c.reach_m; }).concat([0.01]));
+            var rows = (d.channels || []).map(function(c) {
+                var barPct = Math.round((c.reach_m / maxReach) * 100);
+                return '<div style="display:grid; grid-template-columns: 34px 1fr 120px; gap:0.55rem; padding:0.5rem 0.35rem; border-bottom:1px solid rgba(148,163,184,0.14); align-items:center;">'
+                     +   '<div style="font-size:0.9rem; font-weight:900; color:#fdba74;">#' + c.rank + '</div>'
+                     +   '<div>'
+                     +     '<div style="font-size:0.78rem; font-weight:700;">' + _jiqEsc(c.channel) + '</div>'
+                     +     '<div style="height:6px; margin-top:0.28rem; background:rgba(148,163,184,0.18); border-radius:3px; overflow:hidden;">'
+                     +       '<div style="height:6px; width:' + barPct + '%; background:linear-gradient(90deg, #f97316, #fdba74);"></div>'
+                     +     '</div>'
+                     +     '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.28rem;">' + _jiqEsc(c.note || '') + '</div>'
+                     +   '</div>'
+                     +   '<div style="text-align:right;">'
+                     +     '<div style="font-size:0.86rem; font-weight:800;">' + _jiqUfcAbbrevM(c.reach_m) + ' <span style="opacity:0.55; font-size:0.62rem;">viewers</span></div>'
+                     +     '<div style="font-size:0.66rem; opacity:0.7;">' + c.share_pct.toFixed(1) + '% of first exp.</div>'
+                     +     '<div style="font-size:0.62rem; opacity:0.6;">avg ' + c.avg_days_to_first_watch.toFixed(1) + 'd to first watch</div>'
+                     +   '</div>'
+                     + '</div>';
+            }).join('');
+            bodyEl.innerHTML =
+                '<div style="font-size:0.72rem; opacity:0.75; margin-bottom:0.5rem;">'
+              +   'Total US first-exposure universe: <b>' + _jiqUfcAbbrevM(d.total_first_exposure_m) + ' viewers</b> across all channels combined.'
+              + '</div>'
+              + rows
+              + '<div style="margin-top:0.85rem; padding:0.6rem 0.75rem; border-radius:6px; background:rgba(249,115,22,0.09); border-left:3px solid #f97316; font-size:0.78rem; line-height:1.5;">'
+              +   '<b>Takeaway.</b> ' + _jiqEsc(d.takeaway || '')
+              + '</div>';
+        }
+
+        function _jiqUfcRenderJourneyFunnel(j, accent) {
+            var maxCount = Math.max.apply(null, (j.funnel || []).map(function(s){ return s.count_m; }).concat([0.01]));
+            var startCount = (j.funnel && j.funnel[0] && j.funnel[0].count_m) || 1;
+            return (j.funnel || []).map(function(s, i) {
+                var barPct = Math.round((s.count_m / maxCount) * 100);
+                var stepToStep = i === 0 ? null : ((s.count_m / (j.funnel[i-1].count_m || 1)) * 100);
+                return '<div style="padding:0.55rem 0.4rem; border-bottom:1px solid rgba(148,163,184,0.14);">'
+                     +   '<div style="display:grid; grid-template-columns: 30px 1fr 130px; gap:0.55rem; align-items:center;">'
+                     +     '<div style="font-size:0.82rem; font-weight:900; color:' + accent + ';">' + s.step + '</div>'
+                     +     '<div>'
+                     +       '<div style="font-size:0.78rem; font-weight:700;">' + _jiqEsc(s.label) + '</div>'
+                     +       '<div style="height:6px; margin-top:0.28rem; background:rgba(148,163,184,0.18); border-radius:3px; overflow:hidden;">'
+                     +         '<div style="height:6px; width:' + barPct + '%; background:' + accent + ';"></div>'
+                     +       '</div>'
+                     +     '</div>'
+                     +     '<div style="text-align:right;">'
+                     +       '<div style="font-size:0.86rem; font-weight:800;">' + _jiqUfcAbbrevM(s.count_m) + ' <span style="opacity:0.55; font-size:0.62rem;">viewers</span></div>'
+                     +       '<div style="font-size:0.62rem; opacity:0.7;">' + s.pct_of_start.toFixed(1) + '% of top of funnel</div>'
+                     +       (stepToStep != null ? '<div style="font-size:0.62rem; opacity:0.6;">\u2192 ' + stepToStep.toFixed(1) + '% step-to-step</div>' : '')
+                     +     '</div>'
+                     +   '</div>'
+                     +   (s.note ? '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.28rem; padding-left:2.15rem;">' + _jiqEsc(s.note) + '</div>' : '')
+                     + '</div>';
+            }).join('');
+        }
+
+        function renderJourneyIqUfcJourneyA(j) {
+            if (!j) return;
+            _jiqUfcShowCard('jiqUfcJourneyACard');
+            var subEl  = document.getElementById('jiqUfcJourneyACardSubtitle');
+            var bodyEl = document.getElementById('jiqUfcJourneyACardBody');
+            var metaEl = document.getElementById('jiqUfcJourneyACardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqUfcPanelChip();
+            if (subEl)  subEl.textContent = j.subtitle || '';
+            if (!bodyEl) return;
+            var funnelHtml = _jiqUfcRenderJourneyFunnel(j, '#22d3ee');
+            var pw = (j.post_watch_behavior || []).map(function(b) {
+                var barPct = Math.max(1, Math.round(b.pct));
+                return '<div style="padding:0.4rem 0.35rem; border-bottom:1px solid rgba(148,163,184,0.14);">'
+                     +   '<div style="display:grid; grid-template-columns: 1fr 100px; gap:0.5rem; align-items:center;">'
+                     +     '<div style="font-size:0.76rem; font-weight:700;">' + _jiqEsc(b.behavior) + '</div>'
+                     +     '<div style="text-align:right; font-size:0.86rem; font-weight:800; color:#67e8f9;">' + b.pct.toFixed(1) + '%</div>'
+                     +   '</div>'
+                     +   '<div style="height:5px; margin-top:0.25rem; background:rgba(148,163,184,0.16); border-radius:3px; overflow:hidden;">'
+                     +     '<div style="height:5px; width:' + barPct + '%; background:#22d3ee;"></div>'
+                     +   '</div>'
+                     +   '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.22rem;">' + _jiqEsc(b.note || '') + '</div>'
+                     + '</div>';
+            }).join('');
+            bodyEl.innerHTML =
+                '<div style="display:flex; flex-wrap:wrap; gap:0.85rem; align-items:baseline; margin-bottom:0.7rem;">'
+              +   '<div style="font-size:1.5rem; font-weight:900; color:#67e8f9;">' + _jiqUfcAbbrevM(j.cohort_size_m) + '</div>'
+              +   '<div style="font-size:0.78rem; opacity:0.85;">US individual viewers - existing subs who watched their first UFC event on P+ (Jan 1 - Aug 14, 2026).</div>'
+              + '</div>'
+              + '<div style="display:grid; grid-template-columns:1fr; gap:0.85rem;">'
+              +   '<div>'
+              +     '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:800; opacity:0.75; margin-bottom:0.35rem; letter-spacing:0.04em;">The funnel</div>'
+              +     funnelHtml
+              +   '</div>'
+              +   '<div>'
+              +     '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:800; opacity:0.75; margin-bottom:0.35rem; letter-spacing:0.04em;">What they do AFTER their first UFC watch</div>'
+              +     pw
+              +   '</div>'
+              + '</div>'
+              + (j.note ? '<div style="margin-top:0.75rem; padding:0.6rem 0.75rem; border-radius:6px; background:rgba(34,211,238,0.09); border-left:3px solid #22d3ee; font-size:0.76rem; line-height:1.5;"><b>Read.</b> ' + _jiqEsc(j.note) + '</div>' : '');
+        }
+
+        function renderJourneyIqUfcJourneyB(j) {
+            if (!j) return;
+            _jiqUfcShowCard('jiqUfcJourneyBCard');
+            var subEl  = document.getElementById('jiqUfcJourneyBCardSubtitle');
+            var bodyEl = document.getElementById('jiqUfcJourneyBCardBody');
+            var metaEl = document.getElementById('jiqUfcJourneyBCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqUfcPanelChip();
+            if (subEl)  subEl.textContent = j.subtitle || '';
+            if (!bodyEl) return;
+            var funnelHtml = _jiqUfcRenderJourneyFunnel(j, '#a78bfa');
+            var planPct    = (j.plan_mix && j.plan_mix.essential_ad_pct) || 0;
+            var payRows = (j.payment_mix || []).map(function(p) {
+                return '<div style="display:flex; justify-content:space-between; padding:0.28rem 0.4rem; border-bottom:1px solid rgba(148,163,184,0.14); font-size:0.74rem;">'
+                     +   '<span>' + _jiqEsc(p.method) + '</span>'
+                     +   '<span style="font-weight:800; color:#c4b5fd;">' + p.pct.toFixed(1) + '%</span>'
+                     + '</div>';
+            }).join('');
+            var eventRows = (j.first_event || []).map(function(e) {
+                return '<div style="padding:0.4rem 0.35rem; border-bottom:1px solid rgba(148,163,184,0.14);">'
+                     +   '<div style="display:grid; grid-template-columns: 1fr 100px 80px; gap:0.5rem; align-items:baseline;">'
+                     +     '<div style="font-size:0.76rem; font-weight:700;">' + _jiqEsc(e.event) + '</div>'
+                     +     '<div style="text-align:right; font-size:0.82rem; font-weight:800; color:#c4b5fd;">' + _jiqUfcAbbrevM(e.signups_m) + '</div>'
+                     +     '<div style="text-align:right; font-size:0.7rem; opacity:0.75;">' + e.share_of_journey_b_pct.toFixed(1) + '%</div>'
+                     +   '</div>'
+                     +   '<div style="font-size:0.64rem; opacity:0.65; margin-top:0.15rem;">' + _jiqEsc(e.note || '') + '</div>'
+                     + '</div>';
+            }).join('');
+            bodyEl.innerHTML =
+                '<div style="display:flex; flex-wrap:wrap; gap:0.85rem; align-items:baseline; margin-bottom:0.7rem;">'
+              +   '<div style="font-size:1.5rem; font-weight:900; color:#c4b5fd;">' + _jiqUfcAbbrevM(j.cohort_size_m) + '</div>'
+              +   '<div style="font-size:0.78rem; opacity:0.85;">US individual viewers - joined P+ Jan 1 - Aug 14, 2026 AND first-watched content was live UFC.</div>'
+              + '</div>'
+              + '<div style="margin-bottom:0.85rem;">'
+              +   '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:800; opacity:0.75; margin-bottom:0.35rem; letter-spacing:0.04em;">Signup funnel</div>'
+              +   funnelHtml
+              + '</div>'
+              + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:0.85rem;">'
+              +   '<div>'
+              +     '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:800; opacity:0.75; margin-bottom:0.35rem; letter-spacing:0.04em;">Plan mix at signup</div>'
+              +     '<div style="display:flex; height:22px; border-radius:6px; overflow:hidden; margin-bottom:0.35rem; border:1px solid rgba(167,139,250,0.32);">'
+              +       '<div style="width:' + planPct + '%; background:linear-gradient(90deg,#a78bfa,#c4b5fd); display:flex; align-items:center; justify-content:center; font-size:0.62rem; font-weight:800; color:#0f172a;">Essential ' + planPct.toFixed(1) + '%</div>'
+              +       '<div style="width:' + (100-planPct) + '%; background:rgba(148,163,184,0.28); display:flex; align-items:center; justify-content:center; font-size:0.62rem; font-weight:800;">Premium ' + (j.plan_mix ? j.plan_mix.premium_no_ad_pct.toFixed(1) : '') + '%</div>'
+              +     '</div>'
+              +     '<div style="font-size:0.64rem; opacity:0.7;">' + _jiqEsc((j.plan_mix && j.plan_mix.note) || '') + '</div>'
+              +   '</div>'
+              +   '<div>'
+              +     '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:800; opacity:0.75; margin-bottom:0.35rem; letter-spacing:0.04em;">Payment method</div>'
+              +     payRows
+              +   '</div>'
+              +   '<div>'
+              +     '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:800; opacity:0.75; margin-bottom:0.35rem; letter-spacing:0.04em;">Promo code usage</div>'
+              +     '<div style="font-size:1.4rem; font-weight:900; color:#c4b5fd;">' + j.promo_code_usage_pct.toFixed(1) + '%</div>'
+              +     '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.2rem;">' + _jiqEsc(j.promo_code_note || '') + '</div>'
+              +   '</div>'
+              + '</div>'
+              + '<div style="margin-top:0.9rem;">'
+              +   '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:800; opacity:0.75; margin-bottom:0.35rem; letter-spacing:0.04em;">First UFC event they watched (drives Journey B)</div>'
+              +   eventRows
+              + '</div>';
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // UFC RENDERERS - part B (Journey C, Churn, Segments, Read)
+        // ══════════════════════════════════════════════════════════════
+
+        function renderJourneyIqUfcJourneyC(j) {
+            if (!j) return;
+            _jiqUfcShowCard('jiqUfcJourneyCCard');
+            var subEl  = document.getElementById('jiqUfcJourneyCCardSubtitle');
+            var bodyEl = document.getElementById('jiqUfcJourneyCCardBody');
+            var metaEl = document.getElementById('jiqUfcJourneyCCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqUfcPanelChip();
+            if (subEl)  subEl.textContent = j.subtitle || '';
+            if (!bodyEl) return;
+
+            var maxReact = Math.max.apply(null, (j.immediate_reactions_24h || []).map(function(r){ return r.count_m; }).concat([0.01]));
+            var reactRows = (j.immediate_reactions_24h || []).map(function(r) {
+                var barPct = Math.round((r.count_m / maxReact) * 100);
+                return '<div style="padding:0.45rem 0.35rem; border-bottom:1px solid rgba(148,163,184,0.14);">'
+                     +   '<div style="display:grid; grid-template-columns: 1fr 130px; gap:0.5rem; align-items:center;">'
+                     +     '<div style="font-size:0.76rem; font-weight:700;">' + _jiqEsc(r.action) + '</div>'
+                     +     '<div style="text-align:right;">'
+                     +       '<div style="font-size:0.82rem; font-weight:800; color:#f87171;">' + _jiqUfcAbbrevM(r.count_m) + ' <span style="opacity:0.55; font-size:0.62rem;">viewers</span></div>'
+                     +       '<div style="font-size:0.62rem; opacity:0.7;">' + r.pct.toFixed(1) + '% of bouncers</div>'
+                     +     '</div>'
+                     +   '</div>'
+                     +   '<div style="height:5px; margin-top:0.25rem; background:rgba(148,163,184,0.16); border-radius:3px; overflow:hidden;">'
+                     +     '<div style="height:5px; width:' + barPct + '%; background:linear-gradient(90deg,#ef4444,#fca5a5);"></div>'
+                     +   '</div>'
+                     +   '<div style="font-size:0.64rem; opacity:0.65; margin-top:0.22rem;">' + _jiqEsc(r.note || '') + '</div>'
+                     + '</div>';
+            }).join('');
+            var longerRows = (j.longer_tail_14d || []).map(function(r) {
+                return '<div style="display:grid; grid-template-columns: 1fr 100px 60px; gap:0.55rem; padding:0.35rem 0.35rem; border-bottom:1px solid rgba(148,163,184,0.14); align-items:baseline;">'
+                     +   '<div style="font-size:0.74rem;">' + _jiqEsc(r.outcome) + '</div>'
+                     +   '<div style="text-align:right; font-size:0.82rem; font-weight:800;">' + _jiqUfcAbbrevM(r.count_m) + '</div>'
+                     +   '<div style="text-align:right; font-size:0.72rem; opacity:0.75;">' + r.pct.toFixed(1) + '%</div>'
+                     + '</div>';
+            }).join('');
+            var promoRows = (j.promo_hunt_destinations || []).map(function(p) {
+                return '<div style="display:grid; grid-template-columns: 1fr 90px; gap:0.55rem; padding:0.28rem 0.35rem; border-bottom:1px solid rgba(148,163,184,0.14); align-items:baseline;">'
+                     +   '<div style="font-size:0.74rem;"><b>' + _jiqEsc(p.destination) + '</b> <span style="opacity:0.65; font-size:0.66rem;">- ' + _jiqEsc(p.note || '') + '</span></div>'
+                     +   '<div style="text-align:right; font-size:0.8rem; font-weight:800; color:#fca5a5;">' + _jiqUfcAbbrevM(p.count_m) + '</div>'
+                     + '</div>';
+            }).join('');
+            bodyEl.innerHTML =
+                '<div style="display:flex; flex-wrap:wrap; gap:0.85rem; align-items:baseline; margin-bottom:0.7rem;">'
+              +   '<div style="font-size:1.5rem; font-weight:900; color:#fca5a5;">' + _jiqUfcAbbrevM(j.cohort_size_m) + '</div>'
+              +   '<div style="font-size:0.78rem; opacity:0.85;">US individual viewers who tried to watch UFC on P+ but bounced off the paywall without signing up (in the moment).</div>'
+              + '</div>'
+              + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:0.85rem;">'
+              +   '<div>'
+              +     '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:800; opacity:0.75; margin-bottom:0.35rem; letter-spacing:0.04em;">First 24 hrs after paywall hit</div>'
+              +     reactRows
+              +   '</div>'
+              +   '<div>'
+              +     '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:800; opacity:0.75; margin-bottom:0.35rem; letter-spacing:0.04em;">14-day outcome (what they eventually did)</div>'
+              +     longerRows
+              +     '<div style="margin-top:0.85rem;">'
+              +       '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:800; opacity:0.75; margin-bottom:0.35rem; letter-spacing:0.04em;">Where they searched for a discount</div>'
+              +       promoRows
+              +       '<div style="margin-top:0.5rem; padding:0.5rem 0.65rem; border-radius:6px; background:rgba(148,163,184,0.09); font-size:0.7rem; opacity:0.85;">'
+              +         '<b>Free-trial search:</b> ' + _jiqUfcAbbrevM(j.free_trial_hunt_m) + ' viewers. ' + _jiqEsc(j.free_trial_note || '')
+              +       '</div>'
+              +     '</div>'
+              +   '</div>'
+              + '</div>'
+              + (j.takeaway ? '<div style="margin-top:0.85rem; padding:0.65rem 0.8rem; border-radius:6px; background:rgba(239,68,68,0.09); border-left:3px solid #ef4444; font-size:0.78rem; line-height:1.5;"><b>Takeaway.</b> ' + _jiqEsc(j.takeaway) + '</div>' : '');
+        }
+
+        function renderJourneyIqUfcChurn(c) {
+            if (!c) return;
+            _jiqUfcShowCard('jiqUfcChurnCard');
+            var subEl  = document.getElementById('jiqUfcChurnCardSubtitle');
+            var bodyEl = document.getElementById('jiqUfcChurnCardBody');
+            var metaEl = document.getElementById('jiqUfcChurnCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqUfcPanelChip();
+            if (subEl)  subEl.textContent = c.subtitle || '';
+            if (!bodyEl) return;
+
+            var curveSvg = (function() {
+                var pts = (c.retention_curve || []);
+                if (!pts.length) return '';
+                var W = 100, H = 100;
+                var maxDay = Math.max.apply(null, pts.map(function(p){ return p.day; }));
+                var minPct = Math.min.apply(null, pts.map(function(p){ return p.retention_pct; }));
+                var yLo = Math.max(0, Math.floor(minPct / 10) * 10 - 5);
+                var xy = pts.map(function(p) {
+                    var x = (p.day / maxDay) * W;
+                    var y = H - ((p.retention_pct - yLo) / (100 - yLo)) * H;
+                    return { x: x, y: y, day: p.day, pct: p.retention_pct };
+                });
+                var path = xy.map(function(pt, i) { return (i ? 'L' : 'M') + pt.x.toFixed(2) + ',' + pt.y.toFixed(2); }).join(' ');
+                var dots = xy.map(function(pt) {
+                    return '<circle cx="' + pt.x.toFixed(2) + '" cy="' + pt.y.toFixed(2) + '" r="1.4" fill="#f87171" />'
+                         + '<title>D' + pt.day + ' \u2192 ' + pt.pct.toFixed(1) + '%</title>';
+                }).join('');
+                var xLabels = xy.map(function(pt) {
+                    return '<text x="' + pt.x.toFixed(2) + '" y="' + (H + 6) + '" font-size="3" text-anchor="middle" fill="#94a3b8">D' + pt.day + '</text>';
+                }).join('');
+                var yGrid = [yLo, Math.round((yLo + 100)/2), 100].map(function(v) {
+                    var y = H - ((v - yLo) / (100 - yLo)) * H;
+                    return '<line x1="0" y1="' + y + '" x2="' + W + '" y2="' + y + '" stroke="rgba(148,163,184,0.18)" stroke-width="0.3"/>'
+                         + '<text x="-1" y="' + (y+1) + '" font-size="3" text-anchor="end" fill="#94a3b8">' + v + '%</text>';
+                }).join('');
+                return '<svg viewBox="-10 -4 120 116" style="width:100%; height:220px;">'
+                     +   yGrid
+                     +   '<path d="' + path + '" stroke="#f87171" stroke-width="1.1" fill="none" />'
+                     +   dots
+                     +   xLabels
+                     + '</svg>';
+            })();
+
+            var indicatorRows = (c.top_churn_indicators_day30 || []).map(function(i) {
+                var indexColor = i.churn_index >= 2 ? '#ef4444' : (i.churn_index >= 1.4 ? '#f97316' : (i.churn_index >= 1 ? '#eab308' : '#10b981'));
+                return '<div style="padding:0.42rem 0.35rem; border-bottom:1px solid rgba(148,163,184,0.14);">'
+                     +   '<div style="display:grid; grid-template-columns: 30px 1fr 80px; gap:0.55rem; align-items:baseline;">'
+                     +     '<div style="font-size:0.82rem; font-weight:900; color:#f87171;">#' + i.rank + '</div>'
+                     +     '<div style="font-size:0.75rem;">' + _jiqEsc(i.indicator) + '</div>'
+                     +     '<div style="text-align:right; font-size:0.9rem; font-weight:900; color:' + indexColor + ';">' + i.churn_index.toFixed(1) + 'x</div>'
+                     +   '</div>'
+                     +   '<div style="font-size:0.64rem; opacity:0.66; margin-top:0.2rem; padding-left:2.15rem;">' + _jiqEsc(i.note || '') + '</div>'
+                     + '</div>';
+            }).join('');
+
+            var maxDest = Math.max.apply(null, (c.where_they_go_next_30d || []).map(function(w){ return w.count_m; }).concat([0.01]));
+            var destRows = (c.where_they_go_next_30d || []).map(function(w) {
+                var barPct = Math.round((w.count_m / maxDest) * 100);
+                return '<div style="padding:0.4rem 0.35rem; border-bottom:1px solid rgba(148,163,184,0.14);">'
+                     +   '<div style="display:grid; grid-template-columns: 1fr 90px 60px; gap:0.5rem; align-items:baseline;">'
+                     +     '<div style="font-size:0.75rem;">' + _jiqEsc(w.destination) + '</div>'
+                     +     '<div style="text-align:right; font-size:0.82rem; font-weight:800; color:#fbbf24;">' + _jiqUfcAbbrevM(w.count_m) + '</div>'
+                     +     '<div style="text-align:right; font-size:0.72rem; opacity:0.75;">' + w.pct.toFixed(1) + '%</div>'
+                     +   '</div>'
+                     +   '<div style="height:5px; margin-top:0.22rem; background:rgba(148,163,184,0.16); border-radius:3px; overflow:hidden;">'
+                     +     '<div style="height:5px; width:' + barPct + '%; background:linear-gradient(90deg,#fbbf24,#fde68a);"></div>'
+                     +   '</div>'
+                     +   '<div style="font-size:0.62rem; opacity:0.62; margin-top:0.2rem;">' + _jiqEsc(w.note || '') + '</div>'
+                     + '</div>';
+            }).join('');
+
+            bodyEl.innerHTML =
+                '<div style="display:flex; flex-wrap:wrap; gap:0.85rem; align-items:baseline; margin-bottom:0.75rem;">'
+              +   '<div style="padding:0.55rem 0.8rem; background:rgba(239,68,68,0.14); border:1px solid rgba(239,68,68,0.35); border-radius:8px;">'
+              +     '<div style="font-size:0.62rem; text-transform:uppercase; opacity:0.75; font-weight:800; letter-spacing:0.04em;">Journey B avg tenure</div>'
+              +     '<div style="font-size:1.4rem; font-weight:900; color:#fca5a5;">' + c.avg_tenure_months.toFixed(1) + ' months</div>'
+              +   '</div>'
+              +   '<div style="font-size:0.72rem; opacity:0.85; flex:1 1 300px;">' + _jiqEsc(c.headline || '') + '</div>'
+              + '</div>'
+              + '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:0.85rem;">'
+              +   '<div>'
+              +     '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:800; opacity:0.75; margin-bottom:0.35rem; letter-spacing:0.04em;">D7 \u2192 D365 retention curve</div>'
+              +     curveSvg
+              +     '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.3rem;">Each dot is a checkpoint from the Journey B cohort. D180 is the inflection point.</div>'
+              +   '</div>'
+              +   '<div>'
+              +     '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:800; opacity:0.75; margin-bottom:0.35rem; letter-spacing:0.04em;">Top churn signals at day 30 (index vs cohort baseline)</div>'
+              +     indicatorRows
+              +   '</div>'
+              + '</div>'
+              + '<div style="margin-top:0.9rem;">'
+              +   '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:800; opacity:0.75; margin-bottom:0.35rem; letter-spacing:0.04em;">Where UFC-first churners go in the next 30 days</div>'
+              +   destRows
+              + '</div>'
+              + (c.return_pattern ? '<div style="margin-top:0.85rem; padding:0.65rem 0.8rem; border-radius:6px; background:rgba(251,191,36,0.09); border-left:3px solid #fbbf24; font-size:0.78rem; line-height:1.5;">'
+                  + '<b>Return pattern.</b> ' + c.return_pattern.return_within_60d_pct.toFixed(1) + '% of Journey B churners re-subscribed within 60 days for the next major UFC event. ' + _jiqEsc(c.return_pattern.note || '')
+                  + '</div>' : '');
+        }
+
+        function renderJourneyIqUfcSegments(sg) {
+            if (!sg) return;
+            _jiqUfcShowCard('jiqUfcSegmentsCard');
+            var subEl  = document.getElementById('jiqUfcSegmentsCardSubtitle');
+            var bodyEl = document.getElementById('jiqUfcSegmentsCardBody');
+            var metaEl = document.getElementById('jiqUfcSegmentsCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqUfcPanelChip();
+            if (subEl)  subEl.textContent = sg.subtitle || '';
+            if (!bodyEl) return;
+
+            var accentByJourney = { A: '#22d3ee', B: '#a78bfa', C: '#f87171' };
+            var cards = (sg.journeys || []).map(function(j) {
+                var accent = accentByJourney[j.id] || '#94a3b8';
+                var ageBar = (j.age_buckets || []).map(function(b) {
+                    return '<div style="flex:' + (b.pct + 0.5) + '; height:100%; background:' + accent + '; opacity:' + (0.35 + (b.pct/60)) + '; position:relative;" title="' + b.bucket + ': ' + b.pct + '%"></div>';
+                }).join('');
+                var ageLabels = (j.age_buckets || []).map(function(b) {
+                    return '<div style="flex:' + (b.pct + 0.5) + '; text-align:center; font-size:0.56rem; opacity:0.75;">' + b.bucket + '<br/>' + b.pct.toFixed(1) + '%</div>';
+                }).join('');
+                return '<div style="padding:0.85rem 0.95rem; border-radius:10px; background:linear-gradient(135deg, ' + accent + '15, ' + accent + '04); border:1px solid ' + accent + '55;">'
+                     +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.4rem;">'
+                     +     '<div style="font-size:0.86rem; font-weight:900; color:' + accent + ';">Journey ' + j.id + '</div>'
+                     +     '<div style="font-size:1.15rem; font-weight:900;">' + _jiqUfcAbbrevM(j.size_m) + '</div>'
+                     +   '</div>'
+                     +   '<div style="font-size:0.72rem; opacity:0.85; margin-bottom:0.55rem;">' + _jiqEsc(j.label) + '</div>'
+                     +   '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem 0.7rem; font-size:0.72rem; margin-bottom:0.55rem;">'
+                     +     '<div><span style="opacity:0.65;">Male</span> <b>' + j.gender_male_pct.toFixed(1) + '%</b></div>'
+                     +     '<div><span style="opacity:0.65;">Female</span> <b>' + j.gender_female_pct.toFixed(1) + '%</b></div>'
+                     +     '<div><span style="opacity:0.65;">Avg age</span> <b>' + j.avg_age.toFixed(1) + '</b></div>'
+                     +     '<div><span style="opacity:0.65;">vs P+ avg</span> <b style="color:' + (j.vs_platform_age_delta < 0 ? '#6ee7b7' : '#fca5a5') + ';">' + (j.vs_platform_age_delta > 0 ? '+' : '') + j.vs_platform_age_delta.toFixed(1) + ' yrs</b></div>'
+                     +     '<div><span style="opacity:0.65;">Income $100K+</span> <b>' + j.income_100k_plus_pct.toFixed(1) + '%</b></div>'
+                     +   '</div>'
+                     +   '<div style="font-size:0.6rem; opacity:0.65; text-transform:uppercase; font-weight:700; letter-spacing:0.04em;">Age distribution</div>'
+                     +   '<div style="display:flex; height:14px; border-radius:3px; overflow:hidden; margin:0.2rem 0 0.1rem;">' + ageBar + '</div>'
+                     +   '<div style="display:flex;">' + ageLabels + '</div>'
+                     +   '<div style="margin-top:0.55rem; font-size:0.68rem;"><span style="opacity:0.65;">Top regions</span><br/>' + _jiqEsc(j.top_regions) + '</div>'
+                     +   '<div style="margin-top:0.35rem; font-size:0.68rem;"><span style="opacity:0.65;">Content affinities</span><br/>' + _jiqEsc(j.content_affinities) + '</div>'
+                     +   '<div style="margin-top:0.35rem; font-size:0.68rem; padding:0.4rem 0.55rem; background:rgba(15,23,42,0.35); border-radius:5px;">' + _jiqEsc(j.behavioral) + '</div>'
+                     + '</div>';
+            }).join('');
+            bodyEl.innerHTML =
+                '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:0.85rem;">' + cards + '</div>'
+              + '<div style="margin-top:0.85rem; padding:0.65rem 0.8rem; border-radius:6px; background:rgba(148,163,184,0.09); font-size:0.76rem; line-height:1.5;"><b>Cross-journey read.</b> ' + _jiqEsc(sg.cross_journey_note || '') + '</div>';
+        }
+
+        function renderJourneyIqUfcRead(rd) {
+            if (!rd) return;
+            _jiqUfcShowCard('jiqUfcReadCard');
+            var subEl  = document.getElementById('jiqUfcReadCardSubtitle');
+            var bodyEl = document.getElementById('jiqUfcReadCardBody');
+            var metaEl = document.getElementById('jiqUfcReadCardMeta');
+            if (metaEl) metaEl.innerHTML = _jiqUfcPanelChip();
+            if (subEl)  subEl.textContent = '';
+            if (!bodyEl) return;
+            var colorFor = function(kind) {
+                if (kind.indexOf('CONTENT') >= 0)     return '#22d3ee';
+                if (kind.indexOf('ACQUISITION') >= 0) return '#f59e0b';
+                if (kind.indexOf('RETENTION') >= 0)   return '#a78bfa';
+                if (kind.indexOf('MEASUREMENT') >= 0) return '#94a3b8';
+                if (kind.indexOf('RESEARCH') >= 0)    return '#10b981';
+                return '#fdba74';
+            };
+            var items = (rd.implications || []).map(function(im) {
+                var col = colorFor(im.kind || '');
+                return '<div style="padding:0.7rem 0.85rem; border-radius:8px; background:linear-gradient(135deg,' + col + '18,' + col + '04); border-left:3px solid ' + col + '; margin-bottom:0.6rem;">'
+                     +   '<div style="font-size:0.66rem; text-transform:uppercase; font-weight:900; color:' + col + '; letter-spacing:0.05em; margin-bottom:0.3rem;">' + _jiqEsc(im.kind) + '</div>'
+                     +   '<div style="font-size:0.82rem; line-height:1.55;">' + _jiqEsc(im.body) + '</div>'
+                     + '</div>';
+            }).join('');
+            bodyEl.innerHTML =
+                '<div style="padding:0.85rem 1rem; border-radius:10px; background:rgba(244,114,50,0.10); border:1px solid rgba(244,114,50,0.32); margin-bottom:0.85rem;">'
+              +   '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:900; color:#fdba74; letter-spacing:0.05em;">Headline</div>'
+              +   '<div style="font-size:0.94rem; font-weight:800; margin-top:0.3rem;">' + _jiqEsc(rd.headline || '') + '</div>'
+              +   '<div style="font-size:0.78rem; opacity:0.9; margin-top:0.5rem; line-height:1.5;">' + _jiqEsc(rd.summary || '') + '</div>'
+              + '</div>'
+              + items;
+        }
+
         // OBSESSION → PEACOCK — Focus/NBCU windowing-evidence data
         //
         // Every figure in this deck is a Crosswalk panel-observed
@@ -84818,7 +86078,7 @@ https://www.instagram.com/p/..."></textarea>
             // Allow-list of story modes that get the "force-hide all
             // templated JIQ cards" treatment. Add more cases here
             // when new pitches get their own purpose-built dashboards.
-            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1, spe_cross_window: 1 };
+            var FORCE_HIDE_MODES = { landman: 1, netflix_ad_sales: 1, obsession_caa: 1, michael_lionsgate: 1, obsession_peacock_diagnostic: 1, amc_migration_analysis: 1, ubg_hulu_discovery: 1, spe_cross_window: 1, ufc_paramount: 1 };
             if (!FORCE_HIDE_MODES[storyMode]) return;
             for (var i = 0; i < _JIQ_STORY_MODE_HIDE_LIST.length; i++) {
                 var el = document.getElementById(_JIQ_STORY_MODE_HIDE_LIST[i]);
