@@ -43508,24 +43508,50 @@ def api_synth_chat_history():
 @app.route('/api/synth-chat/health', methods=['GET'])  # legacy alias
 @requires_auth
 def api_synth_chat_health():
-    """Quick health-check the frontend uses to decide whether to show the tab."""
+    """Health check + queue counts scoped to the current user.
+
+    The queue badge in the chatbot UI polls this endpoint. It was
+    previously showing global counts (every user's jobs), which is
+    both confusing and a small info leak. As of 2026-08-18 the
+    counts are scoped to the caller's own jobs by passing their
+    email as `?user=` to the Hetzner listener. Super-admins can
+    request the unscoped/global view with `?scope=global`.
+    """
     user, err = _synth_chat_gate()
     if err:
         return err
     if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
         return jsonify({'success': False, 'configured': False,
                          'error': 'profile engine unavailable'}), 503
+
+    scope_arg = (request.args.get('scope') or '').strip().lower()
+    is_super = user.get('role') == 'super_admin'
+    want_global = (scope_arg == 'global' and is_super)
+
+    # Identifier we send to Hetzner. Must match what synth_queue_worker
+    # writes into the status file's `user_email` field. app.py always
+    # sets that to `user.get('email') or username`, so we mirror it.
+    user_id = (user.get('email') or user.get('username') or '').strip()
+
     try:
         import requests as _requests
-        resp = _requests.get(f"{SYNTH_QUEUE_URL}/synth/health", timeout=5)
+        params = {} if (want_global or not user_id) else {'user': user_id}
+        resp = _requests.get(
+            f"{SYNTH_QUEUE_URL}/synth/health",
+            params=params,
+            timeout=5,
+        )
         if resp.status_code == 200:
+            body = resp.json()
+            body['scope'] = 'global' if (want_global or not user_id) else 'user'
             return jsonify({'success': True, 'configured': True,
-                             'queue': resp.json()})
+                             'queue': body})
         return jsonify({'success': False, 'configured': True,
                          'error': f'queue health {resp.status_code}'}), 502
-    except Exception as e:
+    except Exception:
+        traceback.print_exc()
         return jsonify({'success': False, 'configured': True,
-                         'error': str(e)}), 502
+                         'error': 'queue temporarily unavailable'}), 502
 
 
 # ============================================================================
