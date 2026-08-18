@@ -20952,17 +20952,70 @@ https://www.instagram.com/p/..."></textarea>
                                 </div>
                             </div>
 
-                            <div id="synthChatBriefPreview" style="display:none; padding: 0.75rem; margin-bottom: 0.5rem; background: rgba(84, 141, 255, 0.06); border: 1px solid rgba(84,141,255,0.30); border-radius: 8px;">
-                                <div style="display:flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-                                    <label style="font-size:0.8rem; color: var(--text-secondary); display:flex; align-items:center; gap:0.35rem;">
-                                        <input type="checkbox" id="synthChatRunAvid" checked> Run Avid cohort too
+                            <!-- Scoped CSS: undo the global label / .btn / input
+                                 rules for this panel only. The globals set
+                                 display:block, text-transform:uppercase, and
+                                 width:100% which make the labels stack + all-caps
+                                 and the buttons full-width-stacked. Leave the
+                                 globals alone (other views depend on them) and
+                                 reset in an id-scoped block. -->
+                            <style>
+                                #synthChatBriefPreview label {
+                                    display: inline-flex !important;
+                                    text-transform: none !important;
+                                    margin-bottom: 0 !important;
+                                    font-size: 0.85rem !important;
+                                    color: var(--text-primary) !important;
+                                    align-items: center;
+                                    gap: 0.4rem;
+                                }
+                                #synthChatBriefPreview input[type="checkbox"] {
+                                    width: 16px !important;
+                                    height: 16px !important;
+                                    padding: 0 !important;
+                                    margin: 0 !important;
+                                    accent-color: var(--accent-blue);
+                                    flex: 0 0 auto;
+                                }
+                                #synthChatBriefPreview input[type="email"] {
+                                    width: 240px !important;
+                                    padding: 0.35rem 0.55rem !important;
+                                    font-size: 0.85rem !important;
+                                    border-radius: 4px;
+                                }
+                                #synthChatBriefPreview .btn {
+                                    width: auto !important;
+                                    padding: 0.5rem 1.1rem !important;
+                                    font-size: 0.8rem !important;
+                                    white-space: nowrap;
+                                }
+                                #synthChatBriefPreview .brief-controls-row {
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 1rem;
+                                    flex-wrap: wrap;
+                                }
+                                #synthChatBriefPreview .brief-actions-row {
+                                    display: flex;
+                                    justify-content: flex-end;
+                                    gap: 0.5rem;
+                                    margin-top: 0.75rem;
+                                }
+                            </style>
+                            <div id="synthChatBriefPreview" style="display:none; padding: 0.85rem 1rem; margin-bottom: 0.5rem; background: rgba(84, 141, 255, 0.06); border: 1px solid rgba(84,141,255,0.30); border-radius: 8px;">
+                                <div class="brief-controls-row">
+                                    <label>
+                                        <input type="checkbox" id="synthChatRunAvid" checked>
+                                        <span>Run Avid cohort too</span>
                                     </label>
-                                    <label style="font-size:0.8rem; color: var(--text-secondary); display:flex; align-items:center; gap:0.35rem;">
-                                        Email to: <input type="email" id="synthChatEmailTo" placeholder="you@example.com" style="width: 220px; padding: 0.25rem 0.4rem; font-size: 0.8rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+                                    <label>
+                                        <span style="color: var(--text-secondary); font-size: 0.8rem;">Email to</span>
+                                        <input type="email" id="synthChatEmailTo" placeholder="you@example.com">
                                     </label>
-                                    <span style="flex:1;"></span>
-                                    <button class="btn" onclick="synthChatCancelBrief()" style="padding: 0.4rem 0.85rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">Cancel</button>
-                                    <button class="btn btn-primary" onclick="synthChatApproveBrief()" id="synthChatApproveBtn" style="padding: 0.4rem 1rem; font-size: 0.8rem;">Approve &amp; run</button>
+                                </div>
+                                <div class="brief-actions-row">
+                                    <button class="btn" onclick="synthChatCancelBrief()" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">Cancel</button>
+                                    <button class="btn btn-primary" onclick="synthChatApproveBrief()" id="synthChatApproveBtn">Approve &amp; run</button>
                                 </div>
                             </div>
 
