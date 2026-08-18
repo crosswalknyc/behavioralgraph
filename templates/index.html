@@ -21001,6 +21001,76 @@ https://www.instagram.com/p/..."></textarea>
                                     gap: 0.5rem;
                                     margin-top: 0.75rem;
                                 }
+                                /* Animated 'agent is thinking' bubble
+                                   shown while the interpret / approve
+                                   round-trip is in flight, so the user
+                                   sees visible progress instead of a
+                                   silent disabled button. */
+                                .synth-thinking-bubble {
+                                    margin-bottom: 0.55rem;
+                                    padding: 0.55rem 0.7rem;
+                                    background: rgba(255,255,255,0.05);
+                                    border-radius: 8px;
+                                    animation: synthThinkFade 0.35s ease-out;
+                                }
+                                .synth-thinking-bubble .synth-thinking-label {
+                                    font-size: 0.7rem;
+                                    opacity: 0.7;
+                                    margin-bottom: 0.25rem;
+                                }
+                                .synth-thinking-bubble .synth-thinking-status {
+                                    font-size: 0.85rem;
+                                    line-height: 1.4;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 0.55rem;
+                                    color: var(--text-primary);
+                                }
+                                .synth-thinking-dots {
+                                    display: inline-flex;
+                                    align-items: center;
+                                    gap: 3px;
+                                }
+                                .synth-thinking-dots .synth-dot {
+                                    width: 6px;
+                                    height: 6px;
+                                    border-radius: 50%;
+                                    background: rgba(84, 141, 255, 0.85);
+                                    animation: synthDotPulse 1.2s
+                                        infinite ease-in-out;
+                                }
+                                .synth-thinking-dots .synth-dot:nth-child(2) {
+                                    animation-delay: 0.2s;
+                                }
+                                .synth-thinking-dots .synth-dot:nth-child(3) {
+                                    animation-delay: 0.4s;
+                                }
+                                .synth-thinking-text {
+                                    transition: opacity 0.25s ease;
+                                }
+                                .synth-thinking-elapsed {
+                                    margin-left: auto;
+                                    font-size: 0.7rem;
+                                    color: var(--text-secondary);
+                                    opacity: 0.7;
+                                    font-variant-numeric: tabular-nums;
+                                }
+                                @keyframes synthDotPulse {
+                                    0%, 60%, 100% {
+                                        transform: scale(0.55);
+                                        opacity: 0.35;
+                                    }
+                                    30% {
+                                        transform: scale(1);
+                                        opacity: 1;
+                                    }
+                                }
+                                @keyframes synthThinkFade {
+                                    from { opacity: 0;
+                                        transform: translateY(4px); }
+                                    to   { opacity: 1;
+                                        transform: translateY(0); }
+                                }
                             </style>
                             <div id="synthChatBriefPreview" style="display:none; padding: 0.85rem 1rem; margin-bottom: 0.5rem; background: rgba(84, 141, 255, 0.06); border: 1px solid rgba(84,141,255,0.30); border-radius: 8px;">
                                 <div class="brief-controls-row">
@@ -58214,6 +58284,89 @@ https://www.instagram.com/p/..."></textarea>
             synthChatStashedProposedRange = null;
         }
 
+        // Animated 'agent is thinking' indicator.
+        //
+        // Pushes a live bubble into #synthChatMessages (NOT into
+        // synthChatHistory, so it does not get persisted or replayed)
+        // with a pulsing 3-dot spinner, a rotating status line, and
+        // an elapsed-seconds counter. Returns a cleanup function the
+        // caller must invoke when the round-trip finishes so the
+        // bubble is removed and the interval cleared.
+        //
+        // Copy is plain English (no 'reasoning', 'modeled', 'panel',
+        // 'queue', 'pipeline' internals per the no-modeled-or-source-
+        // language rule).
+        function _synthChatBeginThinking(kind) {
+            var box = document.getElementById('synthChatMessages');
+            if (!box) return function() {};
+            var stages;
+            if (kind === 'approve') {
+                stages = [
+                    'Sending your ask over...',
+                    'Reserving a spot...',
+                    'Confirming...',
+                ];
+            } else {
+                stages = [
+                    'Reading your ask...',
+                    'Checking what we already have...',
+                    'Comparing against past profiles...',
+                    'Working out the shape of the audience...',
+                    'Estimating time and credits...',
+                    'Almost there...',
+                ];
+            }
+            var bubbleId = 'synthThinkingBubble_' +
+                Math.random().toString(36).slice(2, 8);
+            var startedAt = Date.now();
+            var el = document.createElement('div');
+            el.className = 'synth-thinking-bubble';
+            el.id = bubbleId;
+            el.innerHTML =
+                '<div class="synth-thinking-label">🤖 Agent</div>' +
+                '<div class="synth-thinking-status">' +
+                    '<span class="synth-thinking-dots">' +
+                        '<span class="synth-dot"></span>' +
+                        '<span class="synth-dot"></span>' +
+                        '<span class="synth-dot"></span>' +
+                    '</span>' +
+                    '<span class="synth-thinking-text">' +
+                        _synthChatEscapeHtml(stages[0]) +
+                    '</span>' +
+                    '<span class="synth-thinking-elapsed">0s</span>' +
+                '</div>';
+            box.appendChild(el);
+            box.scrollTop = box.scrollHeight;
+
+            var idx = 0;
+            var textEl = el.querySelector('.synth-thinking-text');
+            var elapsedEl = el.querySelector('.synth-thinking-elapsed');
+            var rotateTimer = setInterval(function() {
+                idx = (idx + 1) % stages.length;
+                if (!textEl) return;
+                textEl.style.opacity = '0';
+                setTimeout(function() {
+                    if (!textEl) return;
+                    textEl.textContent = stages[idx];
+                    textEl.style.opacity = '1';
+                }, 220);
+            }, 2400);
+            var elapsedTimer = setInterval(function() {
+                if (!elapsedEl) return;
+                var secs = Math.floor((Date.now() - startedAt) / 1000);
+                elapsedEl.textContent = secs + 's';
+            }, 1000);
+
+            return function _synthChatEndThinking() {
+                clearInterval(rotateTimer);
+                clearInterval(elapsedTimer);
+                var node = document.getElementById(bubbleId);
+                if (node && node.parentNode) {
+                    node.parentNode.removeChild(node);
+                }
+            };
+        }
+
         async function synthChatSubmit() {
             var input = document.getElementById('synthChatInput');
             var btn = document.getElementById('synthChatSubmitBtn');
@@ -58256,7 +58409,8 @@ https://www.instagram.com/p/..."></textarea>
 
             btn.disabled = true;
             var prev = btn.textContent;
-            btn.textContent = 'Thinking...';
+            btn.textContent = 'Working...';
+            var _endThinking = _synthChatBeginThinking('interpret');
             try {
                 var r = await fetch('/api/brief-chat/interpret', {
                     method: 'POST', credentials: 'same-origin',
@@ -58301,6 +58455,7 @@ https://www.instagram.com/p/..."></textarea>
             } catch (e) {
                 synthChatPushTurn('agent', 'Request failed: ' + (e && e.message || e));
             } finally {
+                try { _endThinking && _endThinking(); } catch (_) {}
                 btn.disabled = false;
                 btn.textContent = prev;
             }
@@ -58372,7 +58527,8 @@ https://www.instagram.com/p/..."></textarea>
             var approveBtn = document.getElementById('synthChatApproveBtn');
             approveBtn.disabled = true;
             var prev = approveBtn.textContent;
-            approveBtn.textContent = 'Queuing...';
+            approveBtn.textContent = 'Working...';
+            var _endThinking = _synthChatBeginThinking('approve');
             try {
                 var r = await fetch('/api/brief-chat/approve', {
                     method: 'POST', credentials: 'same-origin',
@@ -58401,6 +58557,7 @@ https://www.instagram.com/p/..."></textarea>
             } catch (e) {
                 synthChatPushTurn('agent', 'Approve failed: ' + (e && e.message || e));
             } finally {
+                try { _endThinking && _endThinking(); } catch (_) {}
                 approveBtn.disabled = false;
                 approveBtn.textContent = prev;
             }
