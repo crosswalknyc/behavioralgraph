@@ -21005,10 +21005,6 @@ https://www.instagram.com/p/..."></textarea>
                             <div id="synthChatBriefPreview" style="display:none; padding: 0.85rem 1rem; margin-bottom: 0.5rem; background: rgba(84, 141, 255, 0.06); border: 1px solid rgba(84,141,255,0.30); border-radius: 8px;">
                                 <div class="brief-controls-row">
                                     <label>
-                                        <input type="checkbox" id="synthChatRunAvid" checked>
-                                        <span>Run Avid cohort too</span>
-                                    </label>
-                                    <label>
                                         <span style="color: var(--text-secondary); font-size: 0.8rem;">Email to</span>
                                         <input type="email" id="synthChatEmailTo" placeholder="you@example.com">
                                     </label>
@@ -58314,8 +58310,6 @@ https://www.instagram.com/p/..."></textarea>
             var panel = document.getElementById('synthChatBriefPreview');
             if (!panel) return;
             panel.style.display = 'block';
-            var runAvid = document.getElementById('synthChatRunAvid');
-            if (runAvid) runAvid.checked = draft && draft.run_avid !== false;
         }
 
         // Turn the interpret step's decision into a plain-English sentence
@@ -58370,7 +58364,10 @@ https://www.instagram.com/p/..."></textarea>
 
         async function synthChatApproveBrief() {
             if (!synthChatCurrentDraft) return;
-            var runAvid = !!document.getElementById('synthChatRunAvid').checked;
+            // The interpret step already decided run_avid based on
+            // chat opt-out detection. Trust the draft; the dashboard
+            // no longer exposes an override checkbox.
+            var runAvid = synthChatCurrentDraft.run_avid !== false;
             var emailTo = (document.getElementById('synthChatEmailTo').value || '').trim();
             var approveBtn = document.getElementById('synthChatApproveBtn');
             approveBtn.disabled = true;
