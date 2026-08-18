@@ -19360,7 +19360,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     {% endif %}
                     {% if has_chatbot_profile_iq_access or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('chatbot-profile-iq')" id="customAnalysisTabChatbotProfileIQ">
-                        💬 Chatbot Profile IQ <span style="font-size: 0.7em; opacity: 0.9;">(25 credits)</span>
+                        💬 Chatbot Profile IQ <span style="font-size: 0.7em; opacity: 0.9;">(5 credits)</span>
                     </button>
                     {% endif %}
                 </div>
@@ -20971,9 +20971,12 @@ https://www.instagram.com/p/..."></textarea>
                                 </div>
                             </div>
 
-                            <div style="display:flex; gap: 0.5rem;">
-                                <textarea id="synthChatInput" placeholder="What profile do you want? (audience, cohort, brand, talent, or segment)" rows="2" style="flex: 1; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; resize: vertical;"></textarea>
-                                <button class="btn btn-primary" onclick="synthChatSubmit()" id="synthChatSubmitBtn" style="padding: 0.6rem 1.2rem; font-size: 0.9rem; align-self: stretch;">Send</button>
+                            <div style="display:flex; flex-direction: column; gap: 0.4rem;">
+                                <textarea id="synthChatInput" placeholder="What profile do you want? (audience, cohort, brand, talent, or segment)" rows="3" style="width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; resize: vertical; min-height: 72px; font-family: inherit;" onkeydown="if(event.key==='Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); synthChatSubmit(); }"></textarea>
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+                                    <span style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.7;">⌘ Enter to send</span>
+                                    <button class="btn btn-primary" onclick="synthChatSubmit()" id="synthChatSubmitBtn" style="width: auto !important; min-width: 140px; max-width: 200px; padding: 0.55rem 1.25rem; font-size: 0.85rem;">Send</button>
+                                </div>
                             </div>
                         </div>
                     </div>
