@@ -62399,7 +62399,11 @@ https://www.instagram.com/p/..."></textarea>
                 if (typeof renderJourneyIqAmcSegments  === 'function') renderJourneyIqAmcSegments(_pickClickstreamBlock('amc_segments'));
                 if (typeof renderJourneyIqAmcRead      === 'function') renderJourneyIqAmcRead(_pickClickstreamBlock('amc_read'));
                 if (typeof _jiqAmcActivateTab === 'function') {
-                    _jiqAmcActivateTab(_jiqAmcActiveTab || 'case');
+                    // typeof guard: defensive against any hoisting quirk
+                    // that leaves _jiqAmcActiveTab unresolved at this
+                    // point (see AMC+ story-mode debugging Aug 18).
+                    var _amcInitTab = (typeof _jiqAmcActiveTab !== 'undefined' && _jiqAmcActiveTab) || 'case';
+                    _jiqAmcActivateTab(_amcInitTab);
                 }
             } else {
                 if (typeof _jiqAmcHideTabBar === 'function') _jiqAmcHideTabBar();
@@ -75022,7 +75026,7 @@ https://www.instagram.com/p/..."></textarea>
             var bar = document.getElementById('jiqAmcTabBar');
             if (!bar) return;
             bar.style.display = '';
-            var active = _jiqAmcActiveTab || _JIQ_AMC_TABS[0].id;
+            var active = (typeof _jiqAmcActiveTab !== 'undefined' && _jiqAmcActiveTab) || _JIQ_AMC_TABS[0].id;
             bar.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; align-items:stretch;">'
                 + _JIQ_AMC_TABS.map(function(t, i) {
                     var on = (t.id === active);
