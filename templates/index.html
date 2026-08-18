@@ -58421,6 +58421,127 @@ https://www.instagram.com/p/..."></textarea>
             };
         }
 
+        // In-flight abort controller for interpret/approve fetches
+        // so the Stop button can cancel a long-running call. 2026-08-18.
+        let synthChatInflightController = null;
+
+        // Status-ping short-circuit. Handles 'update / status /
+        // any progress' asks locally instead of routing them to
+        // interpret. Fixes 2026-08-18 regression where typing
+        // 'udpate' during a running Reba cut kicked off a new
+        // interpret call ('Working out the shape of the audience')
+        // instead of returning status.
+        function _synthChatIsStatusRequest(text) {
+            var t = String(text || '').trim().toLowerCase()
+                .replace(/[.?!,\s]+$/, '');
+            if (!t || t.length > 60) return false;
+            var oneshot = {
+                'update': 1, 'updates': 1, 'udpate': 1, 'udpates': 1,
+                'status': 1, 'staus': 1, 'progress': 1, 'progres': 1,
+                'check': 1, 'check status': 1,
+                'any update': 1, 'any updates': 1, 'any progress': 1,
+                'whats up': 1, "what's up": 1, 'whats going on': 1,
+                "what's going on": 1, 'whats the status': 1,
+                "what's the status": 1, 'hows it going': 1,
+                "how's it going": 1, 'how is it going': 1,
+                'still running': 1, 'done yet': 1, 'is it done': 1,
+                'where are we': 1, 'wheres it at': 1,
+                "where's it at": 1, 'any news': 1,
+            };
+            if (oneshot[t]) return true;
+            return /(^|\b)(update|status|progress)(\b|$)/.test(t);
+        }
+
+        function _synthChatFindActiveRunFromHistory() {
+            var terminal = { complete: 1, error: 1, failed: 1, cancelled: 1 };
+            for (var i = synthChatHistory.length - 1; i >= 0; i--) {
+                var t = synthChatHistory[i];
+                if (!t || !t.meta || !t.meta.run_id) continue;
+                var st = (t.meta.status || 'queued').toLowerCase();
+                if (terminal[st]) return null;
+                return { run_id: t.meta.run_id, subject: t.meta.subject };
+            }
+            return null;
+        }
+
+        async function _synthChatReplyWithStatus(runId, subject) {
+            try {
+                var r = await fetch('/api/brief-chat/status/' +
+                    encodeURIComponent(runId), { credentials: 'same-origin' });
+                var data = await r.json();
+                if (!r.ok || !data.success) {
+                    synthChatPushTurn('agent',
+                        "I can't reach the queue right now. Try again in a few seconds.");
+                    return;
+                }
+                var st = data.status || {};
+                var cur = st.status || 'queued';
+                var label = _synthChatStatusLabel(cur);
+                var name = subject ||
+                    _synthChatSubjectForRun(runId) ||
+                    'Your profile';
+                var lines = ['**' + name + '** -> ' + label + '.'];
+                if (typeof st.pending_position === 'number' && cur === 'queued') {
+                    lines.push('Position ' + st.pending_position + ' in queue.');
+                }
+                if (cur === 'tu_done' && st.tu_key) {
+                    lines.push('Primary file ready: ' + st.tu_key);
+                }
+                if (cur === 'avid_done' && st.avid_key) {
+                    lines.push('Avid file ready: ' + st.avid_key);
+                }
+                if (cur === 'complete') {
+                    if (st.tu_key)   lines.push('File: ' + st.tu_key);
+                    if (st.avid_key) lines.push('Avid file: ' + st.avid_key);
+                    lines.push('Reload the Select Profile dropdown to see them.');
+                }
+                if (cur === 'error' || cur === 'failed') {
+                    lines.push('Error: ' + (st.error || 'unknown'));
+                }
+                if (cur !== 'complete' && cur !== 'error' && cur !== 'failed') {
+                    lines.push("I'll keep updating this thread as it progresses.");
+                }
+                synthChatPushTurn('agent', lines.join('\n'));
+                try { _synthChatPatchLastMetaStatus(runId, cur); } catch (_) {}
+            } catch (e) {
+                synthChatPushTurn('agent',
+                    "Status check failed: " + (e && e.message || e));
+            }
+        }
+
+        function _synthChatShowStopButton() {
+            var btn = document.getElementById('synthChatSubmitBtn');
+            if (!btn) return;
+            var stop = document.getElementById('synthChatStopBtn');
+            if (!stop) {
+                stop = document.createElement('button');
+                stop.id = 'synthChatStopBtn';
+                stop.type = 'button';
+                stop.textContent = 'Stop';
+                stop.className = 'btn';
+                stop.style.cssText =
+                    'margin-left: 0.4rem; width: auto; min-width: 80px; ' +
+                    'padding: 0.55rem 1rem; font-size: 0.85rem; ' +
+                    'background: rgba(255,107,107,0.15); ' +
+                    'color: var(--accent-red); ' +
+                    'border: 1px solid var(--accent-red);';
+                stop.onclick = _synthChatStopInflight;
+                btn.parentNode.insertBefore(stop, btn.nextSibling);
+            }
+            stop.style.display = 'inline-block';
+        }
+
+        function _synthChatHideStopButton() {
+            var stop = document.getElementById('synthChatStopBtn');
+            if (stop) stop.style.display = 'none';
+        }
+
+        function _synthChatStopInflight() {
+            if (synthChatInflightController) {
+                try { synthChatInflightController.abort(); } catch (_) {}
+            }
+        }
+
         async function synthChatSubmit() {
             var input = document.getElementById('synthChatInput');
             var btn = document.getElementById('synthChatSubmitBtn');
@@ -58428,6 +58549,15 @@ https://www.instagram.com/p/..."></textarea>
             if (!text) return;
             input.value = '';
             synthChatPushTurn('user', text);
+
+            // Status-update short-circuit. See _synthChatIsStatusRequest.
+            if (_synthChatIsStatusRequest(text)) {
+                var active = _synthChatFindActiveRunFromHistory();
+                if (active && active.run_id) {
+                    await _synthChatReplyWithStatus(active.run_id, active.subject);
+                    return;
+                }
+            }
 
             // If we're awaiting a date confirmation, handle the
             // reply BEFORE hitting the interpret endpoint. A plain
@@ -58465,11 +58595,15 @@ https://www.instagram.com/p/..."></textarea>
             var prev = btn.textContent;
             btn.textContent = 'Working...';
             var _endThinking = _synthChatBeginThinking('interpret');
+            synthChatInflightController = (typeof AbortController !== 'undefined')
+                ? new AbortController() : null;
+            _synthChatShowStopButton();
             try {
                 var r = await fetch('/api/brief-chat/interpret', {
                     method: 'POST', credentials: 'same-origin',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ text: text, history: synthChatHistory.slice(0, -1) }),
+                    signal: synthChatInflightController ? synthChatInflightController.signal : undefined,
                 });
                 var data = await r.json();
                 if (!r.ok || !data.success) {
@@ -58477,6 +58611,11 @@ https://www.instagram.com/p/..."></textarea>
                         'Sorry, I could not interpret that. ' + (data.error || 'Unknown error') +
                         (data.raw_excerpt ? '\n\n' + data.raw_excerpt.slice(0, 400) : ''));
                     return;
+                }
+                // Echo estimated_credits onto spec_draft so
+                // _synthChatBuildActionSummary can show it in the card.
+                if (data.spec_draft && typeof data.estimated_credits === 'number') {
+                    data.spec_draft.estimated_credits = data.estimated_credits;
                 }
                 if (data.needs_date_clarification) {
                     // Stash the draft and ask about dates. Do NOT
@@ -58507,9 +58646,18 @@ https://www.instagram.com/p/..."></textarea>
                 synthChatPushTurn('agent', summary);
                 _synthChatShowBrief(synthChatCurrentDraft, data.model);
             } catch (e) {
-                synthChatPushTurn('agent', 'Request failed: ' + (e && e.message || e));
+                if (e && (e.name === 'AbortError' ||
+                          /aborted/i.test(String(e.message || '')))) {
+                    synthChatPushTurn('agent',
+                        'Stopped. Nothing was queued. Send another message when you want to try again.');
+                } else {
+                    synthChatPushTurn('agent',
+                        'Request failed: ' + (e && e.message || e));
+                }
             } finally {
                 try { _endThinking && _endThinking(); } catch (_) {}
+                _synthChatHideStopButton();
+                synthChatInflightController = null;
                 btn.disabled = false;
                 btn.textContent = prev;
             }
@@ -58561,6 +58709,16 @@ https://www.instagram.com/p/..."></textarea>
                     line = 'Building a new **' + subject + '** profile' + eta + '.';
                     break;
             }
+            var credits = s.estimated_credits;
+            if (typeof credits === 'number') {
+                if (credits === 0) {
+                    line += '\n\n**Cost:** 0 credits (reusing an existing file).';
+                } else {
+                    line += '\n\n**Cost:** ' + credits +
+                        ' credit' + (credits === 1 ? '' : 's') +
+                        ' when you approve.';
+                }
+            }
             return line + '\n\nApprove to run, or send another message to adjust.';
         }
 
@@ -58583,6 +58741,9 @@ https://www.instagram.com/p/..."></textarea>
             var prev = approveBtn.textContent;
             approveBtn.textContent = 'Working...';
             var _endThinking = _synthChatBeginThinking('approve');
+            synthChatInflightController = (typeof AbortController !== 'undefined')
+                ? new AbortController() : null;
+            _synthChatShowStopButton();
             try {
                 var r = await fetch('/api/brief-chat/approve', {
                     method: 'POST', credentials: 'same-origin',
@@ -58592,6 +58753,7 @@ https://www.instagram.com/p/..."></textarea>
                         run_avid: runAvid,
                         email_to: emailTo,
                     }),
+                    signal: synthChatInflightController ? synthChatInflightController.signal : undefined,
                 });
                 var data = await r.json();
                 if (!r.ok || !data.success) {
@@ -58609,9 +58771,18 @@ https://www.instagram.com/p/..."></textarea>
                     { run_id: data.run_id, status: 'queued', subject: data.subject });
                 _synthChatStartPolling(data.run_id, data.subject);
             } catch (e) {
-                synthChatPushTurn('agent', 'Approve failed: ' + (e && e.message || e));
+                if (e && (e.name === 'AbortError' ||
+                          /aborted/i.test(String(e.message || '')))) {
+                    synthChatPushTurn('agent',
+                        'Stopped. Nothing was queued. Send another message when you want to try again.');
+                } else {
+                    synthChatPushTurn('agent',
+                        'Approve failed: ' + (e && e.message || e));
+                }
             } finally {
                 try { _endThinking && _endThinking(); } catch (_) {}
+                _synthChatHideStopButton();
+                synthChatInflightController = null;
                 approveBtn.disabled = false;
                 approveBtn.textContent = prev;
             }
