@@ -57993,6 +57993,10 @@ https://www.instagram.com/p/..."></textarea>
                 .then(function(d) {
                     synthChatHistory = (d && d.history) || [];
                     synthChatRerender();
+                    // Resume polling for the most-recent still-running job
+                    // in this user's history so a tab refresh / Render
+                    // redeploy doesn't orphan an in-flight run.
+                    _synthChatResumeIfInFlight();
                 })
                 .catch(function(){});
             fetch('/api/brief-chat/health', { credentials: 'same-origin' })
@@ -58046,6 +58050,59 @@ https://www.instagram.com/p/..."></textarea>
                     body: JSON.stringify({ history: synthChatHistory }),
                 });
             } catch (_) {}
+        }
+
+        // Push a turn that also carries meta (e.g. run_id, status,
+        // subject) so we can resume polling after a tab refresh or
+        // a Render redeploy that severs the poll connection.
+        function _synthChatPushTurnWithMeta(role, text, meta) {
+            var turn = { role: role, text: text, ts: new Date().toISOString(), meta: meta || {} };
+            synthChatHistory.push(turn);
+            synthChatRerender();
+            try {
+                fetch('/api/brief-chat/history', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ history: synthChatHistory }),
+                });
+            } catch (_) {}
+        }
+
+        // Patch the last turn whose meta.run_id matches, updating its
+        // status. Called from the poller so on the NEXT tab load we
+        // know whether the job is still in flight.
+        function _synthChatPatchLastMetaStatus(runId, newStatus) {
+            if (!runId || !newStatus) return;
+            for (var i = synthChatHistory.length - 1; i >= 0; i--) {
+                var t = synthChatHistory[i];
+                if (t && t.meta && t.meta.run_id === runId) {
+                    t.meta.status = newStatus;
+                    try {
+                        fetch('/api/brief-chat/history', {
+                            method: 'POST', credentials: 'same-origin',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ history: synthChatHistory }),
+                        });
+                    } catch (_) {}
+                    return;
+                }
+            }
+        }
+
+        // Called from synthChatInit after history load. Finds the
+        // most recent turn with an in-flight run and resumes polling
+        // so a tab refresh / Render redeploy doesn't orphan the run.
+        function _synthChatResumeIfInFlight() {
+            var terminal = { complete: 1, error: 1, failed: 1 };
+            for (var i = synthChatHistory.length - 1; i >= 0; i--) {
+                var t = synthChatHistory[i];
+                if (!t || !t.meta || !t.meta.run_id) continue;
+                var st = (t.meta.status || 'queued').toLowerCase();
+                if (terminal[st]) return;  // most recent job already done
+                synthChatActiveRun = t.meta.run_id;
+                try { _synthChatStartPolling(t.meta.run_id); } catch (_) {}
+                return;
+            }
         }
 
         async function synthChatSubmit() {
@@ -58168,10 +58225,11 @@ https://www.instagram.com/p/..."></textarea>
                 var panel = document.getElementById('synthChatBriefPreview');
                 if (panel) panel.style.display = 'none';
                 synthChatCurrentDraft = null;
-                synthChatPushTurn('agent',
+                _synthChatPushTurnWithMeta('agent',
                     'Queued run `' + data.run_id + '` for **' + data.subject + '**' +
                     (data.pending_position ? ' (position ' + data.pending_position + ' in queue)' : '') +
-                    '. I will update this thread as it progresses.');
+                    '. I will update this thread as it progresses.',
+                    { run_id: data.run_id, status: 'queued', subject: data.subject });
                 _synthChatStartPolling(data.run_id);
             } catch (e) {
                 synthChatPushTurn('agent', 'Approve failed: ' + (e && e.message || e));
@@ -58195,6 +58253,7 @@ https://www.instagram.com/p/..."></textarea>
                     var cur = st.status || 'unknown';
                     if (cur !== lastStatus) {
                         lastStatus = cur;
+                        try { _synthChatPatchLastMetaStatus(runId, cur); } catch (_) {}
                         var msg = 'Run `' + runId + '` -> ' + cur;
                         if (cur === 'tu_done' && st.tu_key) msg += '\nTU CSV: ' + st.tu_key;
                         if (cur === 'avid_done' && st.avid_key) msg += '\nAvid CSV: ' + st.avid_key;
