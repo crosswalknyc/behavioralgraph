@@ -41471,8 +41471,68 @@ SYNTH_QUEUE_URL = os.environ.get('SYNTH_QUEUE_URL',
 SYNTH_QUEUE_SECRET = os.environ.get('SYNTH_QUEUE_SECRET', '')
 
 
+def _lookup_user_by_api_key(raw_key):
+    """Resolve an external X-Crosswalk-API-Key value to a user record.
+
+    Convention: a partner's raw key is a 40-char random hex string. Its
+    sha256 lives on the user record as `api_key_sha256`, and `api_key_enabled`
+    controls revocation without deleting the record. We iterate the users
+    table because we expect < 100 partners; if that grows, add an
+    in-memory hash->username cache warmed on startup.
+
+    Returns (user_dict, username) or (None, None).
+    """
+    if not raw_key or not isinstance(raw_key, str):
+        return None, None
+    key = raw_key.strip()
+    if not key:
+        return None, None
+    try:
+        import hashlib as _hashlib
+        digest = _hashlib.sha256(key.encode('utf-8')).hexdigest()
+    except Exception:
+        return None, None
+    try:
+        data = load_users()
+    except Exception:
+        return None, None
+    users = (data or {}).get('users') or {}
+    for uname, u in users.items():
+        if not isinstance(u, dict):
+            continue
+        if not u.get('api_key_enabled'):
+            continue
+        if (u.get('api_key_sha256') or '').lower() == digest.lower():
+            return u, uname
+    return None, None
+
+
 def _synth_chat_gate():
-    """Return (user_dict, error_response_or_None). None error means allow."""
+    """Return (user_dict, error_response_or_None). None error means allow.
+
+    Accepts either a logged-in session (browser / dashboard use) OR an
+    external partner API key sent as `X-Crosswalk-API-Key: <raw_key>`.
+    The API-key path is what external software integrations use.
+    """
+    api_key = request.headers.get('X-Crosswalk-API-Key') if request else None
+    if api_key:
+        u, uname = _lookup_user_by_api_key(api_key)
+        if not u:
+            return None, (jsonify({
+                'success': False,
+                'error': 'invalid or revoked X-Crosswalk-API-Key',
+            }), 401)
+        role = u.get('role', '')
+        has_flag = bool(u.get('has_chatbot_profile_iq_access', False))
+        if role != 'super_admin' and not has_flag:
+            return None, (jsonify({
+                'success': False,
+                'error': 'API key does not have Chatbot Profile IQ access.',
+            }), 403)
+        u.setdefault('username', uname)
+        u['_auth_via'] = 'api_key'
+        return u, None
+
     user = get_current_user()
     if not user:
         return None, (jsonify({'success': False, 'error': 'not authenticated'}), 401)
@@ -41484,6 +41544,7 @@ def _synth_chat_gate():
             'error': 'Chatbot Profile IQ access not granted for this account. '
                      'Contact your admin.',
         }), 403)
+    user['_auth_via'] = 'session'
     return user, None
 
 
@@ -41906,6 +41967,303 @@ def api_synth_chat_health():
     except Exception as e:
         return jsonify({'success': False, 'configured': True,
                          'error': str(e)}), 502
+
+
+# ============================================================================
+# PARTNER API v1 — external programmatic access to Chatbot Profile IQ
+# ============================================================================
+# These endpoints let a partner's software integrate with the profile
+# engine over HTTPS instead of going through the dashboard UI. Auth is
+# via `X-Crosswalk-API-Key: <raw_key>` header (see _synth_chat_gate +
+# _lookup_user_by_api_key). Keys are issued to a partner-scoped internal
+# user record with `has_chatbot_profile_iq_access: True`, its own credit
+# balance, and `api_key_enabled: True`. Revoke a key by flipping
+# `api_key_enabled` to False on the partner user record.
+#
+# Design summary (locked with Jenna 2026-08-17):
+#   * One key per partner (revocable, no self-service issuing)
+#   * One-shot flow: partner POSTs natural-language prompt, we run
+#     interpret + auto-approve + enqueue in one call
+#   * 5 credits per profile, deducted from the partner's user record
+#     via existing consume_credit()
+#   * Result delivered as an S3 pre-signed download URL (24h expiry)
+#     when the partner polls status and the run is complete
+# ============================================================================
+
+
+def _generate_presigned_profile_url(s3_key, expires_seconds=86400):
+    """Return an S3 pre-signed HTTPS URL for the finished profile CSV.
+
+    Falls back to None if we can't reach S3 (partner should poll again).
+    24-hour default expiry gives the partner plenty of time to fetch
+    without our URL becoming a permanent leak channel.
+    """
+    if not s3_key:
+        return None
+    try:
+        return s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': S3_BUCKET, 'Key': s3_key},
+            ExpiresIn=int(expires_seconds),
+        )
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _fetch_run_status_from_queue(run_id):
+    """Return the raw status dict from Hetzner queue, or None on failure."""
+    if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
+        return None
+    try:
+        import requests as _requests
+        resp = _requests.get(
+            f"{SYNTH_QUEUE_URL}/synth/status/{run_id}", timeout=15,
+            headers={'X-Synth-Auth': SYNTH_QUEUE_SECRET},
+        )
+        if resp.status_code != 200:
+            return None
+        return resp.json() or None
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+@app.route('/api/v1/health', methods=['GET'])
+def api_v1_health():
+    """Public health check for partners. No auth required.
+
+    Reports whether the profile engine is reachable end-to-end (Render
+    Flask + Hetzner queue). Partners hit this before wiring their
+    integration or when debugging why a run isn't accepted.
+    """
+    queue_ok = False
+    queue_error = None
+    if SYNTH_QUEUE_URL and SYNTH_QUEUE_SECRET:
+        try:
+            import requests as _requests
+            resp = _requests.get(f"{SYNTH_QUEUE_URL}/synth/health", timeout=5)
+            queue_ok = (resp.status_code == 200)
+            if not queue_ok:
+                queue_error = f'queue returned {resp.status_code}'
+        except Exception as e:
+            queue_error = str(e)
+    else:
+        queue_error = 'queue not configured'
+    return jsonify({
+        'status': 'ok' if queue_ok else 'degraded',
+        'api_version': 'v1',
+        'queue_available': queue_ok,
+        'queue_error': queue_error,
+    }), (200 if queue_ok else 503)
+
+
+@app.route('/api/v1/profiles/run', methods=['POST'])
+def api_v1_profiles_run():
+    """One-shot: interpret a natural-language prompt, auto-approve the
+    resulting brief, enqueue the build, deduct 5 credits.
+
+    Request:
+      Headers: X-Crosswalk-API-Key: <raw_key>
+               Content-Type: application/json
+      Body: {"prompt": "audience of ...", "run_avid": true (optional, default true)}
+
+    Response 200:
+      {
+        "run_id": "...",
+        "subject": "...",
+        "brand_category": "...",
+        "run_avid": true,
+        "credits_charged": 5,
+        "credits_remaining": <int or -1>,
+        "estimated_run_minutes": <int>,
+        "status_url": "https://<host>/api/v1/profiles/<run_id>",
+        "brief_summary": "<300 chars of the audience shape>"
+      }
+
+    Response 402 if the partner doesn't have enough credits.
+    Response 401 / 403 for auth failures.
+    Response 502 if the queue is unreachable.
+    """
+    user, err = _synth_chat_gate()
+    if err:
+        return err
+    if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
+        return jsonify({
+            'success': False,
+            'error': 'profile engine queue not configured on server',
+        }), 503
+
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+
+    prompt = (body.get('prompt') or body.get('text') or '').strip()
+    if not prompt:
+        return jsonify({'success': False,
+                         'error': 'required field: "prompt"'}), 400
+    if len(prompt) > 4000:
+        return jsonify({'success': False,
+                         'error': 'prompt exceeds 4000 characters'}), 400
+
+    run_avid = bool(body.get('run_avid', True))
+
+    username = user.get('username') or 'partner_api'
+    price = CREDITS_PROFILE_ANALYSIS  # 5
+    if not has_credits_for(username, price):
+        _, credits_left = check_user_credits(username)
+        return jsonify({
+            'success': False,
+            'error': (f'insufficient credits: this run costs {price} '
+                      f'credits and this key has {credits_left} remaining'),
+            'credits_required': price,
+            'credits_remaining': credits_left,
+        }), 402
+
+    try:
+        try:
+            from iq_rankers import MASTER_CATEGORIES
+        except Exception:
+            MASTER_CATEGORIES = {}
+        system_prompt, user_prompt = _synth_chat_interpret_prompts(
+            prompt, chat_history=[], master_categories=MASTER_CATEGORIES,
+        )
+        interp = _run_nflx_claude_agent(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=8192, temperature=0.4,
+        )
+        if not interp.get('success'):
+            return jsonify({
+                'success': False,
+                'error': interp.get('error', 'brief-interpret failed'),
+            }), interp.get('status', 502)
+        draft = interp.get('data') or {}
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False,
+                         'error': f'interpret failed: {e}'}), 500
+
+    spec = _spec_from_draft(draft)
+
+    payload = {
+        'user_email': user.get('email') or username,
+        'run_avid': run_avid,
+        'email_to': '',
+        'spec': spec,
+        'source': 'partner_api_v1',
+        'partner_username': username,
+    }
+
+    try:
+        import requests as _requests
+        resp = _requests.post(
+            f"{SYNTH_QUEUE_URL}/synth/queue",
+            json=payload, timeout=30,
+            headers={'X-Synth-Auth': SYNTH_QUEUE_SECRET,
+                     'Content-Type': 'application/json'},
+        )
+        if resp.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'queue returned {resp.status_code}: {resp.text[:400]}',
+            }), 502
+        queue_resp = resp.json() or {}
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False,
+                         'error': f'queue POST failed: {e}'}), 502
+
+    run_id = queue_resp.get('run_id')
+    try:
+        consume_credit(
+            username,
+            description=f"Chatbot Profile IQ - {spec.get('name', 'profile')}",
+            job_id=run_id or '',
+            pull_type='Chatbot Profile IQ (API v1)',
+            credits_used=price,
+        )
+    except Exception:
+        traceback.print_exc()
+
+    _, credits_left = check_user_credits(username)
+
+    brief_summary = (draft.get('persona_notes') or '').strip()
+    if len(brief_summary) > 300:
+        brief_summary = brief_summary[:297] + '...'
+
+    status_url = f"{request.host_url.rstrip('/')}/api/v1/profiles/{run_id}" if run_id else None
+
+    return jsonify({
+        'success': True,
+        'run_id': run_id,
+        'subject': spec.get('name'),
+        'brand_category': spec.get('brand_category'),
+        'run_avid': run_avid,
+        'credits_charged': price,
+        'credits_remaining': credits_left,
+        'estimated_run_minutes': int(draft.get('estimated_run_minutes') or 15),
+        'status_url': status_url,
+        'brief_summary': brief_summary,
+    })
+
+
+@app.route('/api/v1/profiles/<run_id>', methods=['GET'])
+def api_v1_profiles_status(run_id):
+    """Poll status for a run. When status == "complete", the response
+    includes `download_url` (24h S3 pre-signed URL for the profile CSV).
+
+    Request:
+      Headers: X-Crosswalk-API-Key: <raw_key>
+
+    Response while running:
+      {"run_id": "...", "status": "running", "progress": "TU building",
+       "started_at": "..."}
+
+    Response when complete:
+      {"run_id": "...", "status": "complete",
+       "download_url": "https://...", "download_expires_seconds": 86400,
+       "profile_name": "...", "s3_key": "...", "completed_at": "..."}
+
+    Response 404 if the run_id is unknown or belongs to another partner.
+    """
+    user, err = _synth_chat_gate()
+    if err:
+        return err
+
+    status = _fetch_run_status_from_queue(run_id)
+    if not status:
+        return jsonify({'success': False, 'error': 'run not found or queue unreachable',
+                         'run_id': run_id}), 404
+
+    resp = {
+        'success': True,
+        'run_id': run_id,
+        'status': status.get('status') or 'unknown',
+        'progress': status.get('progress') or status.get('phase'),
+        'started_at': status.get('started_at'),
+        'completed_at': status.get('completed_at'),
+        'subject': status.get('subject'),
+    }
+
+    if (resp['status'] or '').lower() == 'complete':
+        s3_key = status.get('tu_s3_key') or status.get('s3_key') or status.get('output_key')
+        if s3_key:
+            url = _generate_presigned_profile_url(s3_key, expires_seconds=86400)
+            if url:
+                resp['download_url'] = url
+                resp['download_expires_seconds'] = 86400
+                resp['s3_key'] = s3_key
+                resp['profile_name'] = status.get('profile_name') or s3_key.rsplit('/', 1)[-1]
+        avid_key = status.get('avid_s3_key')
+        if avid_key:
+            avid_url = _generate_presigned_profile_url(avid_key, expires_seconds=86400)
+            if avid_url:
+                resp['avid_download_url'] = avid_url
+                resp['avid_s3_key'] = avid_key
+
+    return jsonify(resp)
 
 
 # ============================================================================
