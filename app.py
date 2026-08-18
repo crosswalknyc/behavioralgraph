@@ -42031,7 +42031,7 @@ def _spec_from_draft(draft):
     synth_engine_row_by_row.synthesize_from_spec expects on Hetzner."""
     subject = draft.get('subject') or draft.get('name') or 'Unknown Subject'
     stem = draft.get('file_stem') or subject.replace(' ', '_').replace('/', '_')
-    stem = ''.join(c for c in stem if c.isalnum() or c in '_-') or 'Synth_Profile'
+    stem = ''.join(c for c in stem if c.isalnum() or c in '_-') or 'Profile'
     subject_rows_raw = draft.get('subject_rows') or []
     subject_rows = []
     for row in subject_rows_raw:
@@ -42103,7 +42103,7 @@ def api_synth_chat_approve():
     if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
         return jsonify({
             'success': False,
-            'error': 'SYNTH_QUEUE_URL / SYNTH_QUEUE_SECRET not configured on Render.',
+            'error': 'profile engine unavailable',
         }), 503
 
     try:
@@ -42118,16 +42118,12 @@ def api_synth_chat_approve():
     spec = _spec_from_draft(draft)
     run_avid = bool(body.get('run_avid', True))
     email_to = (body.get('email_to') or '').strip()
-    # Explicit user override on the approval step. The interactive UI
-    # can pass mode='refresh' when the user picked "refresh this stale
-    # profile", or mode='new' when they clicked "build fresh anyway".
-    approval_mode = (body.get('mode') or 'auto').strip().lower()
-    force_new = (approval_mode == 'new') or bool(body.get('force_new'))
-    force_refresh = (approval_mode == 'refresh')
-
-    decision, ex_key, d_type = _normalize_v1_decision(
-        draft, force_new=force_new, force_refresh=force_refresh,
-    )
+    # Directive 2026-08-17: no override flags are accepted from the
+    # dashboard or the partner API. The interpret step's decision is
+    # authoritative. If ops needs to force a specific decision (e.g.
+    # bypass a stale existing_match), that's done LOCALLY on Hetzner
+    # via migration/local_override_profile.py - not through this route.
+    decision, ex_key, d_type = _normalize_v1_decision(draft)
 
     # existing_match: no queue, no build, no credit charge. Return the
     # pre-signed URL right here so the dashboard can offer a download.
@@ -42202,7 +42198,7 @@ def api_synth_chat_status(run_id):
         return err
     if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
         return jsonify({'success': False,
-                         'error': 'synth queue not configured'}), 503
+                         'error': 'profile engine unavailable'}), 503
     try:
         import requests as _requests
         resp = _requests.get(
@@ -42255,7 +42251,7 @@ def api_synth_chat_health():
         return err
     if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
         return jsonify({'success': False, 'configured': False,
-                         'error': 'SYNTH_QUEUE_URL/SYNTH_QUEUE_SECRET missing'}), 503
+                         'error': 'profile engine unavailable'}), 503
     try:
         import requests as _requests
         resp = _requests.get(f"{SYNTH_QUEUE_URL}/synth/health", timeout=5)
@@ -42394,19 +42390,23 @@ def _v1_interpret(prompt):
     return draft, candidates, interp
 
 
-def _normalize_v1_decision(draft, force_new=False, force_refresh=False):
-    """Return (decision, existing_match_s3_key, derive_type) after
-    respecting caller overrides:
-      * force_new=True → always new_build
-      * force_refresh=True → upgrade existing_match to time_shifted_refresh
+def _normalize_v1_decision(draft):
+    """Return (decision, existing_match_s3_key, derive_type).
+
+    The interpret step's decision is FINAL for both the partner API and
+    the dashboard chatbot. Neither surface exposes overrides - only
+    local CLI (see migration/local_override_profile.py on Hetzner)
+    can force a specific decision. Directive 2026-08-17: no bypass
+    flags on external / dashboard surfaces.
+
+    The only mutations here are defensive:
+      * unknown decision value -> fall back to new_build
+      * cut / refresh / existing_match without a parent key ->
+        promote to new_build or cut_needs_parent as appropriate
     """
     decision = (draft.get('decision') or 'new_build').strip()
     ex_key = (draft.get('existing_match_s3_key') or '').strip()
     d_type = (draft.get('derive_type') or '').strip()
-    if force_new:
-        return 'new_build', '', ''
-    if force_refresh and decision == 'existing_match':
-        decision = 'time_shifted_refresh'
     valid = set(_V1_CREDITS.keys())
     if decision not in valid:
         decision = 'new_build'
@@ -42491,18 +42491,19 @@ def api_v1_profiles_run():
       Body:
         {
           "prompt": "audience of ...",     # required
-          "run_avid": true,                 # optional, default true
-          "force_new": false,               # optional, ignore any existing match
-          "mode": "auto|reuse|refresh|new"  # optional. auto=default,
-                                             # reuse=only accept existing_match,
-                                             # refresh=force time_shifted_refresh
-                                             #         if a match exists,
-                                             # new=alias for force_new
+          "run_avid": true                  # optional, default true
         }
+
+    NO OVERRIDE FLAGS are accepted. The interpret step's decision is
+    authoritative on both this API and the dashboard. Any bypass
+    (force fresh, force refresh, reuse-only) must be done LOCALLY on
+    Hetzner via migration/local_override_profile.py by ops. This
+    prevents partners and dashboard users from accidentally
+    double-pulling or bypassing existing-match detection.
 
     Credit tiers by decision:
       * existing_match       0 credits (returns download_url immediately)
-      * derive_cut           3 credits (skin off an existing parent)
+      * derive_cut           3 credits (cut derived from an existing parent)
       * time_shifted_refresh 5 credits (rebuild anchored to older parent)
       * new_build            5 credits (fresh build from scratch)
       * cut_needs_parent     8 credits (parent build + cut derivation)
@@ -42518,7 +42519,7 @@ def api_v1_profiles_run():
     if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
         return jsonify({
             'success': False,
-            'error': 'profile engine queue not configured on server',
+            'error': 'profile engine unavailable',
         }), 503
 
     try:
@@ -42535,12 +42536,6 @@ def api_v1_profiles_run():
                          'error': 'prompt exceeds 4000 characters'}), 400
 
     run_avid = bool(body.get('run_avid', True))
-    force_new = bool(body.get('force_new'))
-    mode = (body.get('mode') or 'auto').strip().lower()
-    if mode == 'new':
-        force_new = True
-    force_refresh = (mode == 'refresh')
-    reuse_only = (mode == 'reuse')
 
     username = user.get('username') or 'partner_api'
 
@@ -42556,17 +42551,7 @@ def api_v1_profiles_run():
         return jsonify({'success': False,
                          'error': f'interpret failed: {e}'}), 500
 
-    decision, ex_key, d_type = _normalize_v1_decision(
-        draft, force_new=force_new, force_refresh=force_refresh,
-    )
-    if reuse_only and decision != 'existing_match':
-        return jsonify({
-            'success': False,
-            'error': ("mode=reuse requested but no existing profile matches "
-                       "this ask closely enough; got decision="
-                       f"{decision}. Rerun with mode='auto' to proceed."),
-            'decision': decision,
-        }), 409
+    decision, ex_key, d_type = _normalize_v1_decision(draft)
 
     price = _V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
 
@@ -42598,9 +42583,6 @@ def api_v1_profiles_run():
             'download_expires_seconds': 86400 if url else None,
             'credits_charged': 0,
             'credits_remaining': credits_left,
-            'hint': ("If you want a fresh version of this profile, resend with "
-                     "mode='refresh' (5 credits) - we'll rebuild it anchored "
-                     "to this file so the audience shape stays consistent."),
         })
 
     spec = _spec_from_draft(draft)
