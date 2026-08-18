@@ -1889,6 +1889,64 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
     save_users(data)
     return True
 
+
+def refund_credit(username, credits=1, reason=''):
+    """Reverse a previously-taken credit charge. Used when a downstream
+    step (queue POST, worker enqueue, etc.) fails AFTER we've charged
+    the user. Symmetric with consume_credit - reads users.json,
+    decrements the used counters, adds an audit-log entry, saves.
+
+    Returns True on success. Safe to call when the original charge
+    used a company pool: the pool's used counter is also decremented.
+    """
+    if credits is None or credits <= 0:
+        return True
+    try:
+        data = load_users()
+    except Exception:
+        traceback.print_exc()
+        return False
+    user = (data.get('users') or {}).get(username)
+    if not user:
+        return False
+
+    entry = {
+        'used_at': datetime.now().isoformat(),
+        'description': f'REFUND: {reason or "downstream failure"}',
+        'job_id': '',
+        'pull_type': 'refund',
+        'credits_used': -int(credits),
+    }
+
+    company = (user.get('company') or '').strip()
+    pool = _get_company_pool(data, company)
+    has_personal_override = user.get('credit_source') == 'personal'
+
+    if pool is not None and not has_personal_override:
+        pool_used = pool.get('credit_pool_used', 0)
+        pool_unlimited = pool.get('credit_pool', 0) == -1
+        if not pool_unlimited:
+            pool['credit_pool_used'] = max(0, pool_used - int(credits))
+        user_used = user.get('credits_used', 0)
+        user['credits_used'] = max(0, user_used - int(credits))
+    else:
+        user_unlimited = _numeric_credits_balance(user) == -1
+        if not user_unlimited:
+            user['credits'] = _numeric_credits_balance(user) + int(credits)
+        user['credits_used'] = max(0, user.get('credits_used', 0) - int(credits))
+
+    history = user.setdefault('credit_usage_history', [])
+    history.insert(0, entry)
+    user['credit_usage_history'] = history[:500]
+
+    try:
+        save_users(data)
+    except Exception:
+        traceback.print_exc()
+        return False
+    return True
+
+
 def _normalize_role(role):
     """Treat legacy 'enterprise' as 'user'; only user, admin, super_admin are valid."""
     if role == 'enterprise':
@@ -42046,6 +42104,75 @@ def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CA
     return scored[:max_candidates]
 
 
+# --------------------------------------------------------------------
+# Background flusher for API-key last-used stamps (2026-08-18 fix #3).
+# Batches all pending stamps into a single read-modify-write against
+# users.json, at most once per 60s. Eliminates the race where a
+# poll's inline save_users overwrote a concurrent debit.
+# --------------------------------------------------------------------
+_last_used_pending: dict = {}   # {username: iso_string}
+_last_used_lock = None
+_last_used_flusher_started = False
+
+
+def _queue_last_used_flush(username: str, iso_ts: str):
+    import threading as _threading
+    global _last_used_lock, _last_used_flusher_started
+    if _last_used_lock is None:
+        _last_used_lock = _threading.Lock()
+    if not username or not iso_ts:
+        return
+    with _last_used_lock:
+        _last_used_pending[username] = iso_ts
+        already_running = _last_used_flusher_started
+        if not already_running:
+            _last_used_flusher_started = True
+    if already_running:
+        return
+    # First call in this worker process - start the background flusher.
+    def _flusher_loop():
+        import time as _time
+        while True:
+            _time.sleep(60)
+            try:
+                with _last_used_lock:
+                    if not _last_used_pending:
+                        continue
+                    pending = dict(_last_used_pending)
+                    _last_used_pending.clear()
+                try:
+                    data = load_users()
+                except Exception:
+                    traceback.print_exc()
+                    continue
+                users = (data or {}).get('users') or {}
+                touched = False
+                for uname, iso in pending.items():
+                    u = users.get(uname)
+                    if not isinstance(u, dict):
+                        continue
+                    prev = (u.get('api_key_last_used') or '')
+                    # Only bump forward - never rewrite an older stamp.
+                    if iso > prev:
+                        u['api_key_last_used'] = iso
+                        touched = True
+                if touched:
+                    try:
+                        save_users(data)
+                    except Exception:
+                        traceback.print_exc()
+            except Exception:
+                traceback.print_exc()
+    try:
+        import threading as _threading2
+        t = _threading2.Thread(target=_flusher_loop,
+                                name='api-key-last-used-flusher',
+                                daemon=True)
+        t.start()
+    except Exception:
+        traceback.print_exc()
+
+
 def _lookup_user_by_api_key(raw_key):
     """Resolve an external X-Crosswalk-API-Key value to a user record.
 
@@ -42079,26 +42206,27 @@ def _lookup_user_by_api_key(raw_key):
             continue
         if (u.get('api_key_sha256') or '').lower() == digest.lower():
             # Stamp last_used so the admin can see key activity in the
-            # user modal. Coalesce writes to at most once per 5 min per
-            # key to avoid hammering S3 on high-frequency partners.
+            # user modal.
+            #
+            # WARNING (2026-08-18 hardening, fix #3): The prior version
+            # of this block called save_users(data) inline on every
+            # auth. That was a read-modify-write on the whole users.json
+            # blob on every partner call, and it raced against
+            # consume_credit / refund_credit (which also do full-file
+            # read-modify-write). A poll that landed between a credit
+            # load and save could overwrite the debit.
+            #
+            # Fix: only update the in-memory user dict. A separate
+            # background flusher (once per 60s) writes any pending
+            # last-used stamps in one merged read-modify-write. Auth
+            # is now zero-cost with respect to S3. The admin UI still
+            # shows recent activity, with a max ~60s lag when the
+            # system is otherwise idle.
             try:
                 from datetime import datetime as _dt, timezone as _tz
                 now = _dt.now(_tz.utc)
-                prev_iso = (u.get('api_key_last_used') or '').strip()
-                should_stamp = True
-                if prev_iso:
-                    try:
-                        prev = _dt.fromisoformat(prev_iso.replace('Z', '+00:00'))
-                        if (now - prev).total_seconds() < 300:
-                            should_stamp = False
-                    except Exception:
-                        pass
-                if should_stamp:
-                    u['api_key_last_used'] = now.isoformat()
-                    try:
-                        save_users(data)
-                    except Exception:
-                        pass  # non-fatal - auth still succeeds
+                u['api_key_last_used'] = now.isoformat()
+                _queue_last_used_flush(uname, now.isoformat())
             except Exception:
                 pass
             return u, uname
@@ -43422,14 +43550,119 @@ def api_synth_chat_health():
 # ============================================================================
 
 
+# ---------------------------------------------------------------------------
+# Download-key whitelist (2026-08-18 security hardening, ship-blocker #1).
+#
+# THREAT: The partner API accepts an `s3_key` value that flows out of the
+# Claude interpret step and passes it straight to
+# `s3.generate_presigned_url`. A prompt-injected or partner-crafted
+# interpretation could steer Claude to return a key that points at a
+# staff-only S3 object (system/users.json, metadata/gmail_tokens.json,
+# _backups/, etc.). Without a gate, we'd sign a URL to those files.
+#
+# MITIGATION: Every pre-sign passes through _partner_download_key_allowed
+# which enforces:
+#   1. Non-empty string, no leading slash, no path traversal, no
+#      control chars.
+#   2. Must be a .csv (case-insensitive).
+#   3. Must NOT sit under any staff-only prefix (system/, metadata/,
+#      logs/, _backups/, tokens/, config/, secrets/, admin/).
+#   4. Must be either (a) present in the live profile catalog
+#      (`_profile_catalog_for_chat`) OR (b) match the canonical profile
+#      filename pattern `<name>_MM_DD_YYYY_HH_MM.csv` at the top level.
+#      Path (b) is the safety net for the ~3s window right after a
+#      Hetzner worker writes a fresh CSV, before the catalog has caught
+#      up. It only accepts a very tight filename shape so a partner
+#      can't just append `.csv` to a bad key and bypass the check.
+#
+# Blocks are logged so we can audit prompt-injection attempts.
+# ---------------------------------------------------------------------------
+import re as _re_dlkey
+_PROFILE_FILENAME_RE = _re_dlkey.compile(
+    r'^[A-Za-z0-9][A-Za-z0-9_\-\+\.]{0,255}_'
+    r'(?:0[1-9]|1[0-2])_(?:0[1-9]|[12][0-9]|3[01])_'
+    r'\d{4}_(?:[01][0-9]|2[0-3])_[0-5][0-9]\.csv$',
+    _re_dlkey.IGNORECASE,
+)
+_STAFF_ONLY_PREFIXES = (
+    'system/', 'metadata/', 'logs/', '_backups/',
+    'tokens/', 'config/', 'secrets/', 'admin/',
+    'reference/', 'gen_pop_hostmap_sync/',
+)
+
+
+def _log_download_block(s3_key, reason):
+    """Structured stderr line for a blocked pre-sign attempt. Gives us
+    an audit trail if a partner or a prompt injection ever tries to
+    fetch a staff-only object.
+    """
+    try:
+        print(f"[partner-download-block] reason={reason} "
+              f"key={str(s3_key)[:200]!r}")
+    except Exception:
+        pass
+
+
+def _partner_download_key_allowed(s3_key):
+    """Return True iff we're willing to sign a pre-signed URL for this
+    S3 key. See module-header comment for the threat model + mitigation.
+    """
+    if not isinstance(s3_key, str):
+        _log_download_block(s3_key, 'not_a_string')
+        return False
+    key = s3_key.strip()
+    if not key:
+        _log_download_block(key, 'empty')
+        return False
+    if key.startswith('/'):
+        _log_download_block(key, 'leading_slash')
+        return False
+    if '..' in key:
+        _log_download_block(key, 'path_traversal')
+        return False
+    if '\x00' in key or any(ord(c) < 32 for c in key):
+        _log_download_block(key, 'control_chars')
+        return False
+    if not key.lower().endswith('.csv'):
+        _log_download_block(key, 'non_csv_extension')
+        return False
+    lower = key.lower()
+    for banned in _STAFF_ONLY_PREFIXES:
+        if lower.startswith(banned) or ('/' + banned) in lower:
+            _log_download_block(key, f'banned_prefix:{banned}')
+            return False
+
+    # Strongest gate: in the live profile catalog.
+    try:
+        catalog = _profile_catalog_for_chat() or []
+    except Exception:
+        catalog = []
+    catalog_keys = {c.get('s3_key') for c in catalog
+                    if isinstance(c, dict)}
+    if key in catalog_keys:
+        return True
+
+    # Safety-net: matches the canonical profile filename pattern at
+    # the top level (no subdirectory). Covers the ~3s window after a
+    # fresh build where the catalog hasn't yet picked up the new CSV.
+    # Filename pattern is strict enough that a hostile key can't hit
+    # this path by accident.
+    if '/' not in key and _PROFILE_FILENAME_RE.match(key):
+        return True
+
+    _log_download_block(key, 'not_in_catalog_and_pattern_mismatch')
+    return False
+
+
 def _generate_presigned_profile_url(s3_key, expires_seconds=86400):
     """Return an S3 pre-signed HTTPS URL for the finished profile CSV.
 
-    Falls back to None if we can't reach S3 (partner should poll again).
-    24-hour default expiry gives the partner plenty of time to fetch
-    without our URL becoming a permanent leak channel.
+    Falls back to None if we can't reach S3 OR if the key fails the
+    partner-download whitelist. 24-hour default expiry gives the
+    partner plenty of time to fetch without our URL becoming a
+    permanent leak channel.
     """
-    if not s3_key:
+    if not _partner_download_key_allowed(s3_key):
         return None
     try:
         return s3_client.generate_presigned_url(
@@ -43464,28 +43697,26 @@ def _fetch_run_status_from_queue(run_id):
 def api_v1_health():
     """Public health check for partners. No auth required.
 
-    Reports whether the profile engine is reachable end-to-end (Render
-    Flask + Hetzner queue). Partners hit this before wiring their
-    integration or when debugging why a run isn't accepted.
+    Reports whether the profile engine is reachable end-to-end. Never
+    leaks internal error strings, stack traces, upstream URLs, or
+    exception messages - partners get "ok" / "degraded" and a stable
+    status enum only.
     """
     queue_ok = False
-    queue_error = None
     if SYNTH_QUEUE_URL and SYNTH_QUEUE_SECRET:
         try:
             import requests as _requests
             resp = _requests.get(f"{SYNTH_QUEUE_URL}/synth/health", timeout=5)
             queue_ok = (resp.status_code == 200)
-            if not queue_ok:
-                queue_error = f'queue returned {resp.status_code}'
-        except Exception as e:
-            queue_error = str(e)
-    else:
-        queue_error = 'queue not configured'
+        except Exception:
+            # Deliberately swallowed - never expose the exception text
+            # or upstream URL to callers. Ops sees this in stderr.
+            traceback.print_exc()
+            queue_ok = False
     return jsonify({
         'status': 'ok' if queue_ok else 'degraded',
         'api_version': 'v1',
-        'queue_available': queue_ok,
-        'queue_error': queue_error,
+        'engine_available': queue_ok,
     }), (200 if queue_ok else 503)
 
 
@@ -43499,6 +43730,270 @@ _V1_CREDITS = {
     'new_build':            CREDITS_PROFILE_ANALYSIS,       # 5
     'cut_needs_parent':     CREDITS_PROFILE_ANALYSIS + 3,   # 8
 }
+
+# --------------------------------------------------------------------
+# Partner-API rate limiter (2026-08-18 security hardening, fix #2).
+#
+# THREAT: A partner with a valid but $0-balance key can hit /v1/check
+# and /v1/run in a tight loop and burn our Anthropic bill without ever
+# paying for a run.
+#
+# MITIGATION:
+#   1. Per-key sliding-window rate limiter (in-memory, per-Render-worker).
+#      Two windows enforced per endpoint: 60s and 24h.
+#   2. Credit-balance preflight BEFORE any Claude call, on BOTH /check
+#      and /run. A partner with 0 credits gets 402 without spending a
+#      single Claude token.
+#
+# The rate limiter is a defense-in-depth layer. Since it's per-Render-
+# worker (not global across the whole cluster), a determined attacker
+# with a valid key could get roughly N * per_worker_cap across N Render
+# workers. Render is on a small plan (~1-2 workers), so the ceiling is
+# effectively the per-worker cap.
+# --------------------------------------------------------------------
+_V1_RATE_LIMITS = {
+    # (per_minute_cap, per_day_cap)
+    '/v1/check': (60, 500),
+    '/v1/run':   (30, 200),
+    '/v1/status': (300, 5000),  # polling is expected to be frequent
+}
+_v1_rate_windows: dict = {}  # {(key_id, endpoint): [(ts_epoch), ...]}
+_v1_rate_windows_lock = None
+
+
+def _rate_limit_check(key_id: str, endpoint: str) -> tuple:
+    """Return (allowed: bool, retry_after: int, current_minute: int,
+    current_day: int, per_min_cap: int, per_day_cap: int).
+
+    Uses a simple two-window sliding counter. Both counters must be
+    under their cap for the request to be allowed. On refusal, the
+    caller gets a Retry-After hint.
+    """
+    import time as _time
+    import threading as _threading
+    global _v1_rate_windows_lock
+    if _v1_rate_windows_lock is None:
+        _v1_rate_windows_lock = _threading.Lock()
+    caps = _V1_RATE_LIMITS.get(endpoint) or (60, 1000)
+    per_min_cap, per_day_cap = caps
+    if not key_id:
+        return True, 0, 0, 0, per_min_cap, per_day_cap
+    now = _time.time()
+    min_cutoff = now - 60
+    day_cutoff = now - 86400
+    with _v1_rate_windows_lock:
+        bucket_key = (key_id, endpoint)
+        hits = _v1_rate_windows.get(bucket_key, [])
+        # Prune expired entries.
+        hits = [t for t in hits if t >= day_cutoff]
+        current_minute = sum(1 for t in hits if t >= min_cutoff)
+        current_day = len(hits)
+        if current_minute >= per_min_cap:
+            # Compute retry-after from the oldest hit in the minute window.
+            oldest_in_min = min(t for t in hits if t >= min_cutoff)
+            retry_after = max(1, int(60 - (now - oldest_in_min)))
+            _v1_rate_windows[bucket_key] = hits
+            return False, retry_after, current_minute, current_day, per_min_cap, per_day_cap
+        if current_day >= per_day_cap:
+            retry_after = max(60, int(86400 - (now - hits[0])))
+            _v1_rate_windows[bucket_key] = hits
+            return False, retry_after, current_minute, current_day, per_min_cap, per_day_cap
+        hits.append(now)
+        _v1_rate_windows[bucket_key] = hits
+        return True, 0, current_minute + 1, current_day + 1, per_min_cap, per_day_cap
+
+
+def _partner_key_id(user: dict) -> str:
+    """Stable id we can rate-limit by for a partner key. Uses the
+    sha256 hash we already store; session users get 'session:<username>'.
+    """
+    if not isinstance(user, dict):
+        return ''
+    if user.get('_auth_via') == 'api_key':
+        return (user.get('api_key_sha256') or '').lower()[:24]
+    return f"session:{user.get('username') or 'anon'}"
+
+
+def _rate_limit_response(retry_after: int, cur_min: int, cur_day: int,
+                          cap_min: int, cap_day: int, endpoint: str):
+    """Build a 429 JSON response with a Retry-After header. Never
+    leaks internal error details.
+    """
+    resp = jsonify({
+        'success': False,
+        'error': (f'rate limit exceeded on {endpoint}: '
+                  f'{cur_min}/{cap_min} per minute, '
+                  f'{cur_day}/{cap_day} per day'),
+        'retry_after_seconds': retry_after,
+    })
+    resp.status_code = 429
+    resp.headers['Retry-After'] = str(retry_after)
+    return resp
+
+
+# --------------------------------------------------------------------
+# Idempotency cache (2026-08-18 security hardening, fix #4).
+#
+# THREAT: A network timeout that retries POST /v1/run would enqueue a
+# second job and charge the partner twice for the same work.
+#
+# MITIGATION: The partner sends an `Idempotency-Key` header. If we've
+# already processed that (partner_username, idempotency_key) pair in
+# the last 24h, we return the cached response verbatim. No second
+# Claude call. No second queue POST. No second charge.
+#
+# Storage is in-memory per-Render-worker. That's sufficient because
+# the same partner's retries almost always land on the same worker
+# within the retry window; when they don't, worst case is one extra
+# job (same as pre-fix behavior). A future upgrade could persist this
+# in S3 for true cross-worker idempotency.
+# --------------------------------------------------------------------
+_v1_idempotency_cache: dict = {}   # {(username, key): (ts_epoch, response_dict)}
+_v1_idempotency_lock = None
+_V1_IDEMPOTENCY_TTL_SECONDS = 86400
+
+
+def _idempotency_lookup(username: str, key: str):
+    import time as _time, threading as _threading
+    global _v1_idempotency_lock
+    if _v1_idempotency_lock is None:
+        _v1_idempotency_lock = _threading.Lock()
+    if not username or not key:
+        return None
+    with _v1_idempotency_lock:
+        entry = _v1_idempotency_cache.get((username, key))
+        if not entry:
+            return None
+        ts, resp = entry
+        if (_time.time() - ts) > _V1_IDEMPOTENCY_TTL_SECONDS:
+            _v1_idempotency_cache.pop((username, key), None)
+            return None
+        return resp
+
+
+def _idempotency_store(username: str, key: str, response_dict):
+    import time as _time, threading as _threading
+    global _v1_idempotency_lock
+    if _v1_idempotency_lock is None:
+        _v1_idempotency_lock = _threading.Lock()
+    if not username or not key or not isinstance(response_dict, dict):
+        return
+    with _v1_idempotency_lock:
+        _v1_idempotency_cache[(username, key)] = (_time.time(), response_dict)
+        # Occasional GC so this dict doesn't grow without bound. Cheap
+        # enough to run on every store because we don't expect
+        # thousands of concurrent partners.
+        if len(_v1_idempotency_cache) > 5000:
+            now = _time.time()
+            expired = [k for k, (ts, _) in _v1_idempotency_cache.items()
+                       if (now - ts) > _V1_IDEMPOTENCY_TTL_SECONDS]
+            for k in expired:
+                _v1_idempotency_cache.pop(k, None)
+
+
+# --------------------------------------------------------------------
+# Per-partner run_id ownership map (2026-08-18 security hardening,
+# fix #4). Prevents a partner from polling another partner's run_id.
+#
+# In-memory per-Render-worker, plus a best-effort S3 mirror at
+# system/api_run_owners.json so ownership survives Render restarts.
+# On a worker cache miss for a legit lookup, we consult S3.
+# --------------------------------------------------------------------
+_v1_run_owners: dict = {}   # {run_id: username}
+_v1_run_owners_lock = None
+_V1_RUN_OWNERS_S3_KEY = 'system/api_run_owners.json'
+
+
+def _record_run_owner(run_id: str, username: str):
+    import threading as _threading
+    global _v1_run_owners_lock
+    if _v1_run_owners_lock is None:
+        _v1_run_owners_lock = _threading.Lock()
+    if not run_id or not username:
+        return
+    with _v1_run_owners_lock:
+        _v1_run_owners[run_id] = username
+    # Best-effort S3 mirror so ownership survives worker restarts.
+    # Read-modify-write; contention here is low (only new runs write).
+    try:
+        obj = s3_client.get_object(Bucket=S3_BUCKET,
+                                     Key=_V1_RUN_OWNERS_S3_KEY)
+        current = json.loads(obj['Body'].read().decode('utf-8') or '{}')
+    except Exception:
+        current = {}
+    if not isinstance(current, dict):
+        current = {}
+    current[run_id] = username
+    # Cap to the most recent 20k entries so the file doesn't grow
+    # forever.
+    if len(current) > 20000:
+        current = dict(list(current.items())[-20000:])
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=_V1_RUN_OWNERS_S3_KEY,
+            Body=json.dumps(current).encode('utf-8'),
+            ContentType='application/json',
+        )
+    except Exception:
+        traceback.print_exc()
+
+
+def _lookup_run_owner(run_id: str) -> str:
+    """Return the username that owns this run_id, or '' if unknown."""
+    import threading as _threading
+    global _v1_run_owners_lock
+    if _v1_run_owners_lock is None:
+        _v1_run_owners_lock = _threading.Lock()
+    if not run_id:
+        return ''
+    with _v1_run_owners_lock:
+        owner = _v1_run_owners.get(run_id, '')
+    if owner:
+        return owner
+    # Cache miss - consult S3 mirror.
+    try:
+        obj = s3_client.get_object(Bucket=S3_BUCKET,
+                                     Key=_V1_RUN_OWNERS_S3_KEY)
+        current = json.loads(obj['Body'].read().decode('utf-8') or '{}')
+        owner = (current.get(run_id) or '') if isinstance(current, dict) else ''
+        if owner:
+            with _v1_run_owners_lock:
+                _v1_run_owners[run_id] = owner
+        return owner
+    except Exception:
+        return ''
+
+
+def _partner_credit_preflight(username: str, min_credits: int):
+    """Confirm the partner has at least `min_credits` credits before
+    we spend a Claude call on their behalf. Returns (None, None) on
+    allow, (jsonify_response, 402) on reject.
+    """
+    if min_credits <= 0:
+        return None, None
+    try:
+        if has_credits_for(username, min_credits):
+            return None, None
+    except Exception:
+        # If the credit lookup blows up, fail closed - don't spend Claude.
+        return jsonify({
+            'success': False,
+            'error': 'credit balance temporarily unavailable',
+        }), 503
+    try:
+        _, remaining = check_user_credits(username)
+    except Exception:
+        remaining = 0
+    resp = jsonify({
+        'success': False,
+        'error': (f'insufficient credits: this endpoint requires at '
+                  f'least {min_credits} credit balance to run '
+                  f'(current balance: {remaining}).'),
+        'credits_required_minimum': min_credits,
+        'credits_remaining': remaining,
+    })
+    return resp, 402
 
 
 def _v1_interpret(prompt):
@@ -43604,6 +44099,16 @@ def api_v1_profiles_check():
     user, err = _synth_chat_gate()
     if err:
         return err
+
+    # Rate limit BEFORE the Claude call so a valid-key partner can't
+    # burn our Anthropic bill in a tight loop.
+    key_id = _partner_key_id(user)
+    allowed, retry_after, cur_min, cur_day, cap_min, cap_day = _rate_limit_check(
+        key_id, '/v1/check')
+    if not allowed:
+        return _rate_limit_response(retry_after, cur_min, cur_day,
+                                     cap_min, cap_day, '/v1/check')
+
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
@@ -43613,6 +44118,14 @@ def api_v1_profiles_check():
         return jsonify({'success': False, 'error': 'required field: "prompt"'}), 400
     if len(prompt) > 4000:
         return jsonify({'success': False, 'error': 'prompt exceeds 4000 chars'}), 400
+
+    # Credit preflight - refuse before Claude is called. /check is free
+    # to the caller but expensive to us. Require at least the cheapest
+    # billable tier (derive_cut = 3) so a $0 partner can't spam.
+    pf_resp, pf_status = _partner_credit_preflight(
+        user.get('username') or 'partner_api', min_credits=3)
+    if pf_resp is not None:
+        return pf_resp, pf_status
 
     try:
         draft, candidates, interp = _v1_interpret(prompt)
@@ -43694,6 +44207,14 @@ def api_v1_profiles_run():
             'error': 'profile engine unavailable',
         }), 503
 
+    # Rate limit BEFORE the Claude call. See _V1_RATE_LIMITS for caps.
+    key_id = _partner_key_id(user)
+    allowed, retry_after, cur_min, cur_day, cap_min, cap_day = _rate_limit_check(
+        key_id, '/v1/run')
+    if not allowed:
+        return _rate_limit_response(retry_after, cur_min, cur_day,
+                                     cap_min, cap_day, '/v1/run')
+
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
@@ -43711,6 +44232,26 @@ def api_v1_profiles_run():
 
     username = user.get('username') or 'partner_api'
 
+    # Idempotency-Key: if we've already processed this key in the last
+    # 24h for this partner, return the cached response instead of
+    # re-interpreting + re-queueing + re-charging. This is what makes
+    # timeout-retry safe.
+    idem_key = (request.headers.get('Idempotency-Key') or '').strip()
+    if idem_key:
+        cached = _idempotency_lookup(username, idem_key)
+        if cached is not None:
+            return jsonify(cached)
+
+    # Credit preflight BEFORE Claude. Require the median tier (5) at
+    # minimum. If interpret says a cheaper path (existing_match=0,
+    # derive_cut=3) applies, we still won't over-charge - the actual
+    # charge is `price` below - but this gate ensures a $0 partner
+    # never gets a Claude call spent on their behalf.
+    pf_resp, pf_status = _partner_credit_preflight(
+        username, min_credits=CREDITS_PROFILE_ANALYSIS)
+    if pf_resp is not None:
+        return pf_resp, pf_status
+
     try:
         draft, _candidates, interp = _v1_interpret(prompt)
         if draft is None:
@@ -43727,6 +44268,9 @@ def api_v1_profiles_run():
 
     price = _V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
 
+    # Exact-tier credit re-check (some tiers cost more than the median
+    # preflight - e.g. cut_needs_parent=8). If interpret picked a
+    # tier that exceeds the partner's balance, refuse cleanly.
     if price > 0 and not has_credits_for(username, price):
         _, credits_left = check_user_credits(username)
         return jsonify({
@@ -43743,7 +44287,7 @@ def api_v1_profiles_run():
     if decision == 'existing_match':
         url = _generate_presigned_profile_url(ex_key, expires_seconds=86400)
         _, credits_left = check_user_credits(username)
-        return jsonify({
+        resp_body = {
             'success': True,
             'decision': 'existing_match',
             'decision_reason': draft.get('decision_reason') or '',
@@ -43755,7 +44299,10 @@ def api_v1_profiles_run():
             'download_expires_seconds': 86400 if url else None,
             'credits_charged': 0,
             'credits_remaining': credits_left,
-        })
+        }
+        if idem_key:
+            _idempotency_store(username, idem_key, resp_body)
+        return jsonify(resp_body)
 
     spec = _spec_from_draft(draft)
 
@@ -43779,6 +44326,35 @@ def api_v1_profiles_run():
     if decision == 'time_shifted_refresh':
         payload['refresh_row_hypothesis'] = draft.get('refresh_row_hypothesis') or ''
 
+    # ---- Atomic debit: charge BEFORE queue POST so a queue failure
+    # can be cleanly refunded. If the charge itself fails, we never
+    # queue; if the queue fails, we refund. This eliminates the
+    # window where a partner had credits taken but no run in flight,
+    # AND the window where a run got queued but credits were never
+    # taken.
+    charged = False
+    if price > 0:
+        try:
+            charged = bool(consume_credit(
+                username,
+                description=f"Chatbot Profile IQ [{decision}] - {spec.get('name', 'profile')}",
+                job_id='',   # run_id not known yet - patched below
+                pull_type=f'Chatbot Profile IQ v1 ({decision})',
+                credits_used=price,
+            ))
+        except Exception:
+            traceback.print_exc()
+            charged = False
+        if not charged:
+            _, credits_left = check_user_credits(username)
+            return jsonify({
+                'success': False,
+                'error': 'credit charge failed - no run started',
+                'decision': decision,
+                'credits_required': price,
+                'credits_remaining': credits_left,
+            }), 402
+
     try:
         import requests as _requests
         resp = _requests.post(
@@ -43788,27 +44364,37 @@ def api_v1_profiles_run():
                      'Content-Type': 'application/json'},
         )
         if resp.status_code != 200:
+            # Queue rejected the job - refund immediately so the
+            # partner isn't charged for nothing.
+            if charged:
+                try:
+                    refund_credit(username, credits=price,
+                                    reason=f'v1 queue rejected ({resp.status_code})')
+                except Exception:
+                    traceback.print_exc()
             return jsonify({
                 'success': False,
-                'error': f'queue returned {resp.status_code}: {resp.text[:400]}',
+                'error': f'queue rejected: HTTP {resp.status_code}',
             }), 502
         queue_resp = resp.json() or {}
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({'success': False,
-                         'error': f'queue POST failed: {e}'}), 502
-
-    run_id = queue_resp.get('run_id')
-    try:
-        consume_credit(
-            username,
-            description=f"Chatbot Profile IQ [{decision}] - {spec.get('name', 'profile')}",
-            job_id=run_id or '',
-            pull_type=f'Chatbot Profile IQ v1 ({decision})',
-            credits_used=price,
-        )
     except Exception:
         traceback.print_exc()
+        # Refund on any exception too - the queue POST didn't succeed.
+        if charged:
+            try:
+                refund_credit(username, credits=price,
+                                reason='v1 queue POST exception')
+            except Exception:
+                traceback.print_exc()
+        return jsonify({'success': False,
+                         'error': 'queue temporarily unavailable'}), 502
+
+    run_id = queue_resp.get('run_id')
+
+    # Record partner ownership of this run_id so /v1/profiles/<run_id>
+    # can enforce partner-scoped polling.
+    if run_id:
+        _record_run_owner(run_id, username)
 
     _, credits_left = check_user_credits(username)
 
@@ -43818,7 +44404,7 @@ def api_v1_profiles_run():
 
     status_url = f"{request.host_url.rstrip('/')}/api/v1/profiles/{run_id}" if run_id else None
 
-    return jsonify({
+    resp_body = {
         'success': True,
         'decision': decision,
         'decision_reason': draft.get('decision_reason') or '',
@@ -43833,7 +44419,10 @@ def api_v1_profiles_run():
         'estimated_run_minutes': int(draft.get('estimated_run_minutes') or 15),
         'status_url': status_url,
         'brief_summary': brief_summary,
-    })
+    }
+    if idem_key and run_id:
+        _idempotency_store(username, idem_key, resp_body)
+    return jsonify(resp_body)
 
 
 @app.route('/api/v1/profiles/<run_id>', methods=['GET'])
@@ -43858,6 +44447,28 @@ def api_v1_profiles_status(run_id):
     user, err = _synth_chat_gate()
     if err:
         return err
+
+    # Rate-limit status polls (partners typically poll every 15-30s).
+    key_id = _partner_key_id(user)
+    allowed, retry_after, cur_min, cur_day, cap_min, cap_day = _rate_limit_check(
+        key_id, '/v1/status')
+    if not allowed:
+        return _rate_limit_response(retry_after, cur_min, cur_day,
+                                     cap_min, cap_day, '/v1/status')
+
+    # Per-partner run_id ownership (2026-08-18 fix #4). If we know who
+    # owns this run_id and it isn't this partner, refuse with 404 (not
+    # 403 - we don't confirm the run's existence to a stranger).
+    # Session-authenticated dashboard users bypass this check because
+    # the dashboard's Select Profile UX shows shared profiles to all
+    # users.
+    if user.get('_auth_via') == 'api_key':
+        owner = _lookup_run_owner(run_id)
+        current = user.get('username') or 'partner_api'
+        if owner and owner != current:
+            return jsonify({'success': False,
+                             'error': 'run not found',
+                             'run_id': run_id}), 404
 
     status = _fetch_run_status_from_queue(run_id)
     if not status:
