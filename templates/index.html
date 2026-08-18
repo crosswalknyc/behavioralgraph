@@ -49505,8 +49505,8 @@ https://www.instagram.com/p/..."></textarea>
                     all:         cards.trending_searches             || [],
                     by_category: cards.trending_searches_by_category || {},
                 })) +
-                _renderTIQPanel('people',    renderTIQWikipedia(cards.wikipedia_trending || []) +
-                                              renderTIQPeople(cards.trending_people || [])) +
+                _renderTIQPanel('people',    renderTIQPeople(_tiqFusePeople(cards.trending_people || [],
+                                                                             cards.wikipedia_trending || []))) +
                 _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
                 _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
@@ -50590,12 +50590,139 @@ https://www.instagram.com/p/..."></textarea>
                    '" title="' + _tiqEsc(tooltip) + '">' + label + '</span>';
         }
 
+        // People-name canonicalizer for the frontend fusion pass. Mirrors
+        // the backend normalizer in trends_iq._extract_person_names + the
+        // possessive strip so "Hayden Panettiere" / "Hayden Panettiere's"
+        // / "Actress Hayden Panettiere" / "hayden panettiere" all fold
+        // into the same key. Used only by _tiqFusePeople below - the
+        // display name is preserved from whichever row wins.
+        function _tiqNormalizePersonName(s) {
+            return String(s || '')
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/[\u2019\u2018]/g, "'")
+                .replace(/'s\b/g, '')
+                .replace(/'/g, '')
+                .replace(/[^a-z0-9 ]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        // Fuse the two people signals (Wikipedia pageview + GDELT mention
+        // counter) into ONE ranked list so the People panel renders a
+        // single card. Jenna 2026-07-30: two stacked cards showing the
+        // same person at different ranks made the tab feel noisy.
+        //
+        // - people list is authoritative for name shape, mentions, why,
+        //   context_meta, image (backend already backfills wiki thumbs).
+        // - wiki rows enrich matching people rows with image + pageviews
+        //   when the people row is missing them.
+        // - wiki-only rows (people not present in the GDELT counter) get
+        //   synthesized into people-shape rows so they appear in the same
+        //   grid, using views_today as the pageview count and mentions=0
+        //   (renderTIQPeople hides the mentions line when it's zero).
+        // - dupes inside the people list (e.g. any residual possessive
+        //   split that survives the backend fold) collapse by canonical
+        //   name, summing mentions and keeping whichever row has the
+        //   richer image/why/context.
+        function _tiqFusePeople(peopleList, wikiList) {
+            var byKey = {};
+            var out = [];
+            (peopleList || []).forEach(function(p) {
+                if (!p || !p.name) return;
+                var key = _tiqNormalizePersonName(p.name);
+                if (!key) return;
+                var existing = byKey[key];
+                if (!existing) {
+                    byKey[key] = p;
+                    out.push(p);
+                    return;
+                }
+                var pm = Number(p.mentions) || 0;
+                var em = Number(existing.mentions) || 0;
+                // Fold both counter buckets into one row. Sum mentions +
+                // pageviews + projections; union sources; keep the row
+                // with more original signal as the display row.
+                var winner  = (pm >= em) ? p : existing;
+                var loser   = (pm >= em) ? existing : p;
+                winner.mentions           = pm + em;
+                winner.mentions_projected = (Number(winner.mentions_projected) || 0)
+                                          + (Number(loser.mentions_projected)  || 0);
+                var wp = Number(winner.pageviews) || 0;
+                var lp = Number(loser.pageviews)  || 0;
+                if (lp && !wp) winner.pageviews = lp;
+                var wpp = Number(winner.pageviews_projected) || 0;
+                var lpp = Number(loser.pageviews_projected)  || 0;
+                if (lpp && !wpp) winner.pageviews_projected = lpp;
+                if (!winner.image && loser.image) winner.image = loser.image;
+                if (!winner.why   && loser.why)   winner.why   = loser.why;
+                if ((!winner.context_meta || !winner.context_meta.length)
+                    && loser.context_meta && loser.context_meta.length) {
+                    winner.context_meta = loser.context_meta;
+                }
+                var srcSet = {};
+                (winner.sources || []).forEach(function(s) { srcSet[s] = true; });
+                (loser.sources  || []).forEach(function(s) { srcSet[s] = true; });
+                winner.sources = Object.keys(srcSet);
+                if (winner !== existing) {
+                    var idx = out.indexOf(existing);
+                    if (idx >= 0) out[idx] = winner;
+                    byKey[key] = winner;
+                }
+            });
+            (wikiList || []).forEach(function(w) {
+                if (!w) return;
+                var name = w.title || '';
+                var key = _tiqNormalizePersonName(name);
+                if (!key) return;
+                var target = byKey[key];
+                if (target) {
+                    if (!target.image && w.thumbnail) target.image = w.thumbnail;
+                    var v = Number(w.views_today) || 0;
+                    if (v && !target.pageviews) target.pageviews = v;
+                    if (v && !target.pageviews_projected) target.pageviews_projected = v;
+                    return;
+                }
+                var v = Number(w.views_today) || 0;
+                var synth = {
+                    name: name,
+                    image: w.thumbnail || '',
+                    mentions: 0,
+                    mentions_projected: 0,
+                    pageviews: v,
+                    pageviews_projected: v,
+                    sources: ['wikipedia'],
+                    is_new: !!w.is_new,
+                    delta_pct: (typeof w.delta_pct === 'number') ? w.delta_pct : null,
+                    _wiki_only: true,
+                    why: w.description || w.extract || '',
+                    url: w.url || '',
+                };
+                byKey[key] = synth;
+                out.push(synth);
+            });
+            out.sort(function(a, b) {
+                var am = Number(a.mentions) || 0;
+                var bm = Number(b.mentions) || 0;
+                if (bm !== am) return bm - am;
+                var ap = Number(a.pageviews) || 0;
+                var bp = Number(b.pageviews) || 0;
+                return bp - ap;
+            });
+            return out;
+        }
+
         // Trending on Wikipedia - top-viewed articles with WoW pageview
         // delta. Backed by scripts/trends_scrapers/wikipedia_trending.py
         // and Wikimedia's public REST API (no auth). Surfaces "what is
         // everyone suddenly researching" across all topic areas - people,
         // films, events, places - which is a wider net than the People
         // card that lives just below it.
+        //
+        // 2026-08-18: no longer called at the panel level - the wiki
+        // list is fused into the single Trending People card via
+        // _tiqFusePeople. Kept in the codebase in case a follow up
+        // wants to break out a separate wiki view.
         function renderTIQWikipedia(rows) {
             if (!rows || !rows.length) return '';
             var html = '<div class="tiq-card" style="margin-bottom:16px;">' +
@@ -50700,6 +50827,19 @@ https://www.instagram.com/p/..."></textarea>
                 var avatarStyle = p.image
                     ? ('background-image: url(\'' + String(p.image).replace(/'/g, "%27") + '\')')
                     : '';
+                var metaLine = '';
+                if (mentionsProj > 0 && pageviewsProj > 0) {
+                    metaLine = _tiqNum(mentionsProj) + ' mentions &middot; ' + _tiqNum(pageviewsProj) + ' pageviews';
+                } else if (mentionsProj > 0) {
+                    metaLine = _tiqNum(mentionsProj) + ' mentions';
+                } else if (pageviewsProj > 0) {
+                    metaLine = _tiqNum(pageviewsProj) + ' pageviews';
+                }
+                // Wiki-only rows have no GDELT signature - fall back to
+                // wikipedia as the watchlist / actions source key.
+                var actionsSrc = (p._wiki_only || (p.sources && p.sources.length === 1
+                                                      && p.sources[0] === 'wikipedia'))
+                                    ? 'wikipedia' : 'gdelt';
                 html += '<div class="tiq-person-card">' +
                         '<div class="tiq-person-avatar" style="' + avatarStyle + '"></div>' +
                         '<div class="tiq-person-body">' +
@@ -50707,11 +50847,9 @@ https://www.instagram.com/p/..."></textarea>
                           '<span>' + _tiqEsc(p.name) + '</span>' +
                           trendPill +
                           crossPill +
-                          _tiqActions('person', 'gdelt', p.name, p.name, 'National') +
+                          _tiqActions('person', actionsSrc, p.name, p.name, 'National') +
                         '</div>' +
-                        '<div class="tiq-person-mentions">' + _tiqNum(mentionsProj) + ' mentions' +
-                        (pageviewsProj ? ' &middot; ' + _tiqNum(pageviewsProj) + ' pageviews' : '') +
-                        '</div>' +
+                        (metaLine ? '<div class="tiq-person-mentions">' + metaLine + '</div>' : '') +
                         whyHtml +
                         '</div>' +
                         '</div>';
@@ -51549,8 +51687,8 @@ https://www.instagram.com/p/..."></textarea>
                     all:         cards.trending_searches             || [],
                     by_category: cards.trending_searches_by_category || {},
                 })) +
-                _renderTIQPanel('people',    renderTIQWikipedia(cards.wikipedia_trending || []) +
-                                              renderTIQPeople(cards.trending_people || [])) +
+                _renderTIQPanel('people',    renderTIQPeople(_tiqFusePeople(cards.trending_people || [],
+                                                                             cards.wikipedia_trending || []))) +
                 _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
                 _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +

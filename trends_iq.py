@@ -4192,6 +4192,18 @@ def _extract_person_names(text: str) -> list[str]:
             parts = parts[1:]
         while parts and _is_bad_token(parts[-1]):
             parts = parts[:-1]
+        # Fold possessive suffix on the trailing token so "Hayden
+        # Panettiere's ex-boyfriend..." captures as "Hayden Panettiere",
+        # not "Hayden Panettiere's" (a separate counter bucket). The
+        # _NAME_RE character class [A-Za-z'\-]* absorbs the apostrophe
+        # inside the trailing token, so the strip has to happen after
+        # the run has been split into parts.
+        if parts:
+            last = parts[-1]
+            if last.endswith("'s") and len(last) > 2:
+                parts[-1] = last[:-2]
+            elif last.endswith("'"):
+                parts[-1] = last[:-1]
         if len(parts) < 2:
             continue
         # After trim, any bad token INSIDE the run (rare, but possible
