@@ -42928,7 +42928,27 @@ def api_synth_chat_approve():
 
     spec = _spec_from_draft(draft)
     run_avid = bool(body.get('run_avid', True))
-    email_to = (body.get('email_to') or '').strip()
+    # Accept a single address or a comma / semicolon / whitespace-
+    # separated list. Clean each entry, drop obvious garbage, dedupe
+    # case-insensitively, and rejoin with ', ' so the wire contract
+    # stays a plain string (Hetzner side splits it back into SES
+    # Destinations).
+    import re as _re_email
+    _raw_email = (body.get('email_to') or '')
+    _seen_emails = set()
+    _clean_emails = []
+    for _part in _re_email.split(r'[,;\s]+', _raw_email):
+        _addr = (_part or '').strip()
+        if not _addr:
+            continue
+        if not _re_email.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', _addr):
+            continue
+        _key = _addr.lower()
+        if _key in _seen_emails:
+            continue
+        _seen_emails.add(_key)
+        _clean_emails.append(_addr)
+    email_to = ', '.join(_clean_emails)
     # Directive 2026-08-17: no override flags are accepted from the
     # dashboard or the partner API. The interpret step's decision is
     # authoritative. If ops needs to force a specific decision (e.g.

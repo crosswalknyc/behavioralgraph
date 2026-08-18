@@ -21126,7 +21126,7 @@ https://www.instagram.com/p/..."></textarea>
                                 <div class="brief-controls-row">
                                     <label>
                                         <span style="color: var(--text-secondary); font-size: 0.8rem;">Email to</span>
-                                        <input type="email" id="synthChatEmailTo" placeholder="you@example.com">
+                                        <input type="text" id="synthChatEmailTo" placeholder="you@example.com (comma-separate for multiple)" autocomplete="off">
                                     </label>
                                 </div>
                                 <div class="brief-actions-row">
@@ -58735,7 +58735,24 @@ https://www.instagram.com/p/..."></textarea>
             // chat opt-out detection. Trust the draft; the dashboard
             // no longer exposes an override checkbox.
             var runAvid = synthChatCurrentDraft.run_avid !== false;
-            var emailTo = (document.getElementById('synthChatEmailTo').value || '').trim();
+            // Accept a single email or a comma-separated list. Split,
+            // trim, dedupe, and drop anything that clearly isn't an
+            // email address so the worker gets a clean payload. Values
+            // are re-joined with ", " so the wire format stays a plain
+            // string (backward compatible with the Hetzner worker).
+            var _rawEmail = (document.getElementById('synthChatEmailTo').value || '');
+            var _seen = {};
+            var _cleanEmails = [];
+            _rawEmail.split(/[,;\n]+/).forEach(function(part) {
+                var addr = String(part || '').trim();
+                if (!addr) return;
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) return;
+                var k = addr.toLowerCase();
+                if (_seen[k]) return;
+                _seen[k] = 1;
+                _cleanEmails.push(addr);
+            });
+            var emailTo = _cleanEmails.join(', ');
             var approveBtn = document.getElementById('synthChatApproveBtn');
             approveBtn.disabled = true;
             var prev = approveBtn.textContent;
