@@ -51296,36 +51296,68 @@ https://www.instagram.com/p/..."></textarea>
                            '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
                            '<div>Loading.</div>' +
                            '</div>';
-                } else if (!(s.items || []).length) {
+                } else if (!(s.items || []).length &&
+                             !(s.films || []).length &&
+                             !(s.tv    || []).length) {
                     body = '<div class="tiq-empty">No trending titles right now.</div>';
                 } else {
-                    var items = s.items || [];
-                    var subtitle = 'Top ' + items.length + ' titles on ' +
+                    // Backend ships `films` + `tv` splits with per-bucket
+                    // rank. Fall back to client-side bucketing on
+                    // `category_display` if a legacy cached payload
+                    // doesn't have the split.
+                    var filmRows = s.films || [];
+                    var tvRows   = s.tv    || [];
+                    if (!filmRows.length && !tvRows.length) {
+                        (s.items || []).forEach(function(it) {
+                            var cd = (it.category_display || '').toLowerCase();
+                            if (cd === 'film' || cd === 'films' || cd === 'movie') {
+                                filmRows.push(it);
+                            } else {
+                                tvRows.push(it);
+                            }
+                        });
+                    }
+                    var totalCount = (filmRows.length + tvRows.length) || (s.items || []).length;
+                    var subtitle = 'Top ' + totalCount + ' titles on ' +
                                     _tiqEsc(s.label || k) +
                                     ' (US popularity, ad-supported tier).';
-                    var rows = items.map(function(it, i) {
-                        var streamKey = it.title;
-                        var img = _tiqPosterCell(it.image);
-                        var kindChip = it.category_display
-                            ? '<span class="tiq-fast-kind ' + (it.category_display === 'Film' ? 'film' : 'tv') + '">' + _tiqEsc(it.category_display) + '</span>'
-                            : '';
-                        var year = it.year ? '<span class="tiq-fast-year">' + _tiqEsc(String(it.year)) + '</span>' : '';
-                        var genres = (it.genres && it.genres.length)
-                            ? '<div class="tiq-fast-genres">' + _tiqEsc(it.genres.slice(0, 3).join(' · ')) + '</div>'
-                            : '';
-                        var views = _tiqAudienceChip(it.us_streams);
-                        return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
-                               img +
-                               '<div class="tiq-row-body">' +
-                               '<div class="tiq-row-title">' + _tiqEsc(it.title) + ' ' + year + ' ' + kindChip +
-                               _tiqActions('fast', k, streamKey, streamKey, 'National') + '</div>' +
-                               (views ? '<div class="tiq-row-meta">' + views + '</div>' : '') +
-                               genres +
-                               '</div></div>';
-                    }).join('');
+                    var renderCol = function(label, rows) {
+                        var lis = (rows || []).map(function(it, i) {
+                            var streamKey = it.title;
+                            var img = _tiqPosterCell(it.image);
+                            var year = it.year ? '<span class="tiq-fast-year">' + _tiqEsc(String(it.year)) + '</span>' : '';
+                            var genres = (it.genres && it.genres.length)
+                                ? '<div class="tiq-fast-genres">' + _tiqEsc(it.genres.slice(0, 3).join(' · ')) + '</div>'
+                                : '';
+                            var views = _tiqAudienceChip(it.us_streams);
+                            // bucket_rank is the row's position inside
+                            // its Film or TV column (1..N). Falls back
+                            // to the paint-order index when a cached
+                            // payload doesn't have it.
+                            var rk = it.bucket_rank || (i + 1);
+                            return '<div class="tiq-row"><div class="tiq-rank">' + rk + '</div>' +
+                                   img +
+                                   '<div class="tiq-row-body">' +
+                                   '<div class="tiq-row-title">' + _tiqEsc(it.title) + ' ' + year +
+                                   _tiqActions('fast', k, streamKey, streamKey, 'National') + '</div>' +
+                                   (views ? '<div class="tiq-row-meta">' + views + '</div>' : '') +
+                                   genres +
+                                   '</div></div>';
+                        }).join('');
+                        return '<div class="tiq-card"><h4>' + _tiqEsc(label) + '</h4>' +
+                               '<div class="tiq-headline-list">' + (lis || '<div class="tiq-empty">No data.</div>') + '</div></div>';
+                    };
+                    // Collapse to a single column if one side is empty
+                    // (rare on FAST but happens on niche channels).
+                    var hasFilm = (filmRows || []).length > 0;
+                    var hasTV   = (tvRows   || []).length > 0;
+                    var cols    = (hasFilm && hasTV) ? '1fr 1fr' : '1fr';
+                    var gridInner = '';
+                    if (hasFilm) gridInner += renderCol('Film', filmRows);
+                    if (hasTV)   gridInner += renderCol('TV',   tvRows);
                     body = '<div class="tiq-card-sub" style="margin-bottom:12px;">' + subtitle + '</div>' +
-                           '<div class="tiq-card">' +
-                           '<div class="tiq-headline-list">' + rows + '</div>' +
+                           '<div class="tiq-cards-grid" style="grid-template-columns: ' + cols + ';">' +
+                           gridInner +
                            '</div>';
                 }
                 return '<div class="tiq-social-panel' + active + '" data-tiq-fast="' + k + '">' + body + '</div>';
