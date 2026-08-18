@@ -41829,6 +41829,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"assumptions\": [\"list of assumptions the user should verify\"],\n"
         "  \"estimated_run_minutes\": <int>,\n"
         "  \"date_range\": { \"start\": \"2025-07-01\", \"end\": \"2026-06-30\" },\n"
+        "  \"date_range_explicit\": <true|false>,\n"
         "  \"decision\": \"new_build|existing_match|time_shifted_refresh|derive_cut|cut_needs_parent\",\n"
         "  \"decision_reason\": \"1-2 sentences explaining the decision\",\n"
         "  \"existing_match_s3_key\": \"<if matches an existing catalog entry>\",\n"
@@ -41848,6 +41849,22 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "year, use their window instead and echo it back in `date_range` and "
         "in `persona_notes`. If ambiguous, keep the default and note it in "
         "`assumptions`.\n\n"
+
+        "DATE RANGE EXPLICIT FLAG (MANDATORY):\n"
+        "  * `date_range_explicit`: set to TRUE only if the user's request "
+        "text explicitly names a date, month, quarter, year, or relative "
+        "window. Examples that ARE explicit: 'for 2024', 'in Q3 2025', "
+        "'trailing 6 months', 'past 60 days', 'since March', 'last "
+        "quarter', 'Jul-Dec 2025', 'over the last year', 'YTD', 'H1 2026'.\n"
+        "  * Set to FALSE if the user did not name a window at all. E.g. "
+        "'Taylor Swift audience', 'do a profile of Reba fans', 'T-Mobile "
+        "5G customers' - these have NO date signal, so explicit=false.\n"
+        "  * Prior chat turns count: if a previous user turn already named "
+        "a window (e.g. 'trailing 60 days') and this turn is a follow-up "
+        "about the same subject, keep explicit=true and reuse that window.\n"
+        "  * NEVER return true just because you filled in the default. "
+        "The dashboard uses this flag to know whether to ask the user to "
+        "confirm dates before proceeding.\n\n"
 
         "CANDIDATES FROM EXISTING CATALOG (may be empty). These are the "
         "closest matches to the user's ask that already exist. They are "
@@ -41935,6 +41952,92 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
     return system_prompt, user_prompt
 
 
+# Regexes for detecting whether a user's free-form request has an
+# explicit date / time window. Belt-and-suspenders alongside Claude's
+# `date_range_explicit` field: if EITHER signal fires we treat the
+# window as user-specified and skip the clarification prompt.
+_DATE_SIGNAL_PATTERNS = [
+    # Years 2019-2030 (allow bare year or "for 2024", "in 2025", etc.)
+    r'\b(19[9]\d|20[0-2]\d|2030)\b',
+    # Month names (full or 3-letter)
+    r'\b(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|jul(y)?|'
+    r'aug(ust)?|sep(t(ember)?)?|oct(ober)?|nov(ember)?|dec(ember)?)\b',
+    # Quarters
+    r'\bq[1-4]\b|\bh[12]\b',
+    # YTD
+    r'\bytd\b|\byear[\s-]to[\s-]date\b',
+    # Relative windows: "last N days/weeks/months/years", "past N ...",
+    # "trailing N ...", "N-day", "over the last ..."
+    r'\b(last|past|trailing|previous|next|over|within|during)\s+'
+    r'(the\s+)?\d+\s*(day|week|month|quarter|year)s?\b',
+    r'\b\d+[\s-]?(day|week|month|quarter|year)s?\b',
+    # "last quarter", "past year", "recent month" (no digit)
+    r'\b(last|past|trailing|previous|this|next|recent)\s+'
+    r'(quarter|year|month|week|day|weekend|season)\b',
+    # ISO / slash-style dates
+    r'\b\d{4}[-/]\d{1,2}([-/]\d{1,2})?\b',
+    r'\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b',
+    # "since X", "from X", "through X", "until X" where X is a month/date
+    r'\b(since|from|through|until|between|starting)\s+'
+    r'(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d)',
+]
+
+
+def _user_specified_dates(user_text, chat_history=None):
+    """Return True if user_text (or a recent history turn) contains an
+    explicit date, month, quarter, year, or relative window reference.
+
+    Belt-and-suspenders: pairs with Claude's `date_range_explicit` field
+    so we still catch dates even if Claude misclassifies. If EITHER
+    signal fires, we treat the window as user-specified.
+    """
+    import re as _re
+    haystack = (user_text or '').lower()
+    if chat_history:
+        # Scan last 4 user turns too so a follow-up like "do the same
+        # for Beyoncé" inherits the date signal from earlier in the chat.
+        recent_user = [t for t in chat_history[-8:]
+                       if (t.get('role') or '').lower() == 'user']
+        for t in recent_user[-4:]:
+            haystack += ' ' + (t.get('text') or '').lower()
+    for pattern in _DATE_SIGNAL_PATTERNS:
+        try:
+            if _re.search(pattern, haystack, flags=_re.IGNORECASE):
+                return True
+        except _re.error:
+            continue
+    return False
+
+
+# Free-text patterns that mean "yes proceed with the defaults you
+# suggested". Used ONLY when the chatbot is awaiting a date
+# confirmation - so a plain "ok" releases the stashed draft to the
+# approval panel without a redundant Claude call.
+_DATE_CONFIRM_PATTERNS = [
+    r'^\s*(y|yes|yeah|yep|yup|sure|ok(ay)?|k|kk|confirm(ed)?|'
+    r'looks good|sounds good|proceed|go|ship it|do it|use (them|those|'
+    r'that|the default|defaults?)|those work|that works|works for me|'
+    r'that\'?s (fine|good)|fine)\s*[.!]?\s*$',
+]
+
+
+def _is_date_confirmation(user_text):
+    """True if user's reply is a simple 'yes proceed' style ack.
+
+    Called ONLY when the frontend has flagged the chat as awaiting a
+    date confirmation. Keeps us from burning a Claude call to interpret
+    a plain 'ok'.
+    """
+    import re as _re
+    txt = (user_text or '').strip().lower()
+    if not txt:
+        return False
+    for pattern in _DATE_CONFIRM_PATTERNS:
+        if _re.match(pattern, txt, flags=_re.IGNORECASE):
+            return True
+    return False
+
+
 def _synth_chat_history_key(username):
     safe = ''.join(c for c in (username or 'anon')
                     if c.isalnum() or c in '-_.@').lower()
@@ -42013,6 +42116,28 @@ def api_synth_chat_interpret():
             }), result.get('status', 502)
 
         spec_draft = result.get('data') or {}
+
+        # Date-clarification gate. If the user didn't specify a window
+        # AND Claude also flagged the range as non-explicit, we return
+        # `needs_date_clarification: true` so the frontend can ask
+        # rather than silently defaulting. The Partner API `/run`
+        # endpoint ignores this flag - it just uses the default range
+        # (that's the documented contract). This gate applies to the
+        # dashboard chatbot only.
+        claude_explicit = bool(spec_draft.get('date_range_explicit'))
+        user_explicit = _user_specified_dates(text, chat_history=history)
+        needs_date_clarification = not (claude_explicit or user_explicit)
+
+        dr = spec_draft.get('date_range') or {}
+        proposed_range = {
+            'start': dr.get('start') or '2025-07-01',
+            'end': dr.get('end') or '2026-06-30',
+        }
+        subject_label = (
+            spec_draft.get('subject')
+            or spec_draft.get('name')
+            or 'this profile'
+        )
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
@@ -42021,6 +42146,9 @@ def api_synth_chat_interpret():
                 for c in candidates
             ],
             'model': result.get('model'),
+            'needs_date_clarification': needs_date_clarification,
+            'proposed_date_range': proposed_range,
+            'subject_label': subject_label,
         })
     except Exception as e:
         traceback.print_exc()

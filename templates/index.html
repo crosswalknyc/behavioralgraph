@@ -57984,6 +57984,15 @@ https://www.instagram.com/p/..."></textarea>
         let synthChatCurrentDraft = null;
         let synthChatActiveRun = null;
         let synthChatPollTimer = null;
+        // Date-clarification state. When the server returns
+        // needs_date_clarification=true we stash the draft and
+        // set the awaiting flag; the next user message either
+        // releases the stash (plain 'ok') or gets combined with
+        // the original ask and re-interpreted.
+        let synthChatAwaitingDateConfirm = false;
+        let synthChatStashedDraft = null;
+        let synthChatStashedOriginalText = '';
+        let synthChatStashedProposedRange = null;
 
         function synthChatInit() {
             if (window.__synthChatBooted) return;
@@ -58105,6 +58114,55 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
 
+        // Plain-English label for a { start, end } range object.
+        function _synthChatFormatRange(range) {
+            if (!range || !range.start || !range.end) return '';
+            function _fmt(iso) {
+                var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+                if (!m) return iso;
+                var months = ['January','February','March','April',
+                              'May','June','July','August',
+                              'September','October','November','December'];
+                var yr = m[1];
+                var mo = months[parseInt(m[2], 10) - 1] || m[2];
+                var dy = String(parseInt(m[3], 10));
+                return mo + ' ' + dy + ', ' + yr;
+            }
+            return _fmt(range.start) + ' to ' + _fmt(range.end);
+        }
+
+        // True if user's reply looks like a plain 'yes proceed'
+        // ack. When awaiting a date confirmation we short-circuit
+        // and release the stashed draft without another Claude
+        // call.
+        function _synthChatIsDateConfirmation(text) {
+            var t = String(text || '').trim().toLowerCase()
+                .replace(/[.!,\s]+$/, '');
+            if (!t) return false;
+            var yes = {
+                'y': 1, 'yes': 1, 'yeah': 1, 'yep': 1, 'yup': 1,
+                'sure': 1, 'ok': 1, 'okay': 1, 'k': 1, 'kk': 1,
+                'confirm': 1, 'confirmed': 1, 'proceed': 1, 'go': 1,
+                'do it': 1, 'ship it': 1, 'looks good': 1,
+                'sounds good': 1, 'works for me': 1, 'that works': 1,
+                "that's fine": 1, 'thats fine': 1, 'fine': 1,
+                'use them': 1, 'use those': 1, 'use that': 1,
+                'use the default': 1, 'use defaults': 1,
+                'those work': 1,
+            };
+            return yes[t] === 1;
+        }
+
+        // Clear the date-clarification state. Called after either
+        // releasing the stashed draft or falling through to a
+        // re-interpret.
+        function _synthChatClearDateState() {
+            synthChatAwaitingDateConfirm = false;
+            synthChatStashedDraft = null;
+            synthChatStashedOriginalText = '';
+            synthChatStashedProposedRange = null;
+        }
+
         async function synthChatSubmit() {
             var input = document.getElementById('synthChatInput');
             var btn = document.getElementById('synthChatSubmitBtn');
@@ -58112,6 +58170,39 @@ https://www.instagram.com/p/..."></textarea>
             if (!text) return;
             input.value = '';
             synthChatPushTurn('user', text);
+
+            // If we're awaiting a date confirmation, handle the
+            // reply BEFORE hitting the interpret endpoint. A plain
+            // 'ok' releases the stashed draft with no Claude call;
+            // any other reply gets combined with the stashed
+            // original ask so Claude sees the full request in one
+            // shot.
+            if (synthChatAwaitingDateConfirm) {
+                if (_synthChatIsDateConfirmation(text)) {
+                    var stashed = synthChatStashedDraft || {};
+                    var rangeLabel = _synthChatFormatRange(
+                        synthChatStashedProposedRange);
+                    _synthChatClearDateState();
+                    synthChatCurrentDraft = stashed;
+                    var summary = _synthChatBuildActionSummary(
+                        synthChatCurrentDraft);
+                    if (rangeLabel) {
+                        summary += '\n\nUsing ' + rangeLabel + '.';
+                    }
+                    synthChatPushTurn('agent', summary);
+                    _synthChatShowBrief(synthChatCurrentDraft, null);
+                    return;
+                }
+                // User replied with a different date instruction.
+                // Combine with the original ask so Claude has the
+                // full context in a single interpret call.
+                if (synthChatStashedOriginalText) {
+                    text = synthChatStashedOriginalText
+                        + '. Date range: ' + text;
+                }
+                _synthChatClearDateState();
+            }
+
             btn.disabled = true;
             var prev = btn.textContent;
             btn.textContent = 'Thinking...';
@@ -58126,6 +58217,30 @@ https://www.instagram.com/p/..."></textarea>
                     synthChatPushTurn('agent',
                         'Sorry, I could not interpret that. ' + (data.error || 'Unknown error') +
                         (data.raw_excerpt ? '\n\n' + data.raw_excerpt.slice(0, 400) : ''));
+                    return;
+                }
+                if (data.needs_date_clarification) {
+                    // Stash the draft and ask about dates. Do NOT
+                    // reveal the approval brief yet.
+                    synthChatStashedDraft = data.spec_draft || {};
+                    synthChatStashedOriginalText = text;
+                    synthChatStashedProposedRange =
+                        data.proposed_date_range || null;
+                    synthChatAwaitingDateConfirm = true;
+                    var subj = data.subject_label
+                        || synthChatStashedDraft.subject
+                        || 'this profile';
+                    var rangeLabel = _synthChatFormatRange(
+                        synthChatStashedProposedRange)
+                        || 'July 1, 2025 to June 30, 2026';
+                    var msg = 'Which time window should I use for **'
+                        + subj + '**?\n\n'
+                        + 'Default: **' + rangeLabel
+                        + '** (the last 12 months).\n\n'
+                        + 'Reply **ok** to use that, or tell me a '
+                        + 'different window (e.g. "for 2024", '
+                        + '"trailing 6 months", "Q4 2025").';
+                    synthChatPushTurn('agent', msg);
                     return;
                 }
                 synthChatCurrentDraft = data.spec_draft || {};
