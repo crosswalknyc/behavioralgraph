@@ -58109,7 +58109,9 @@ https://www.instagram.com/p/..."></textarea>
                 var st = (t.meta.status || 'queued').toLowerCase();
                 if (terminal[st]) return;  // most recent job already done
                 synthChatActiveRun = t.meta.run_id;
-                try { _synthChatStartPolling(t.meta.run_id); } catch (_) {}
+                try {
+                    _synthChatStartPolling(t.meta.run_id, t.meta.subject || null);
+                } catch (_) {}
                 return;
             }
         }
@@ -58341,11 +58343,11 @@ https://www.instagram.com/p/..."></textarea>
                 if (panel) panel.style.display = 'none';
                 synthChatCurrentDraft = null;
                 _synthChatPushTurnWithMeta('agent',
-                    'Queued run `' + data.run_id + '` for **' + data.subject + '**' +
+                    'Queued **' + data.subject + '**' +
                     (data.pending_position ? ' (position ' + data.pending_position + ' in queue)' : '') +
                     '. I will update this thread as it progresses.',
                     { run_id: data.run_id, status: 'queued', subject: data.subject });
-                _synthChatStartPolling(data.run_id);
+                _synthChatStartPolling(data.run_id, data.subject);
             } catch (e) {
                 synthChatPushTurn('agent', 'Approve failed: ' + (e && e.message || e));
             } finally {
@@ -58354,9 +58356,39 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
 
-        function _synthChatStartPolling(runId) {
+        // Look up the profile name associated with a run_id from
+        // history meta. Used when a resume-poll starts without an
+        // explicit subject argument (e.g. after a tab refresh).
+        function _synthChatSubjectForRun(runId) {
+            for (var i = synthChatHistory.length - 1; i >= 0; i--) {
+                var t = synthChatHistory[i];
+                if (t && t.meta && t.meta.run_id === runId && t.meta.subject) {
+                    return t.meta.subject;
+                }
+            }
+            return null;
+        }
+
+        // Map internal status codes to user-friendly labels so
+        // status updates read as plain English instead of pipeline
+        // internals.
+        function _synthChatStatusLabel(cur) {
+            switch (String(cur || '').toLowerCase()) {
+                case 'queued':    return 'queued';
+                case 'running':   return 'running';
+                case 'tu_done':   return 'primary profile ready';
+                case 'avid_done': return 'avid cut ready';
+                case 'complete':  return 'complete';
+                case 'error':     return 'error';
+                case 'failed':    return 'failed';
+                default:          return cur || 'checking...';
+            }
+        }
+
+        function _synthChatStartPolling(runId, subjectHint) {
             if (synthChatPollTimer) clearInterval(synthChatPollTimer);
             var lastStatus = null;
+            var subject = subjectHint || _synthChatSubjectForRun(runId) || 'Your profile';
             synthChatPollTimer = setInterval(async function() {
                 try {
                     var r = await fetch('/api/brief-chat/status/' + encodeURIComponent(runId), {
@@ -58369,13 +58401,14 @@ https://www.instagram.com/p/..."></textarea>
                     if (cur !== lastStatus) {
                         lastStatus = cur;
                         try { _synthChatPatchLastMetaStatus(runId, cur); } catch (_) {}
-                        var msg = 'Run `' + runId + '` -> ' + cur;
-                        if (cur === 'tu_done' && st.tu_key) msg += '\nTU CSV: ' + st.tu_key;
-                        if (cur === 'avid_done' && st.avid_key) msg += '\nAvid CSV: ' + st.avid_key;
+                        var label = _synthChatStatusLabel(cur);
+                        var msg = '**' + subject + '** -> ' + label;
+                        if (cur === 'tu_done' && st.tu_key) msg += '\nFile: ' + st.tu_key;
+                        if (cur === 'avid_done' && st.avid_key) msg += '\nAvid file: ' + st.avid_key;
                         if (cur === 'complete') {
                             msg += '\nFinished. Reload the Select Profile dropdown to see the new files.';
-                            if (st.tu_key) msg += '\nTU: ' + st.tu_key;
-                            if (st.avid_key) msg += '\nAvid: ' + st.avid_key;
+                            if (st.tu_key) msg += '\nFile: ' + st.tu_key;
+                            if (st.avid_key) msg += '\nAvid file: ' + st.avid_key;
                         }
                         if (cur === 'error') msg += '\nError: ' + (st.error || 'unknown');
                         synthChatPushTurn('agent', msg);
