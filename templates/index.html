@@ -20339,7 +20339,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                         <div class="card">
                             <h2>🗺️ Digital Journey IQ</h2>
                             <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">10 Credits Per Analysis</div>
-                            <p class="section-description">Pick a target (a brand, movie, show, retailer - anything that gets mentioned in the panel's clickstream) and a date range. We find every user who mentioned it, reconstruct the journey they took before AND after the mention, and surface the funnel, conversion rate, drop-off cliffs, where non-converters detoured to, and AI-mined &quot;interesting facts&quot; - same shape as the Bridgestone/Firestone deck. Results render under the <strong>Digital Journey IQ</strong> entry in the SELECT PRODUCT dropdown.</p>
+                            <p class="section-description">Pick a target (a brand, movie, show, retailer - anything that gets mentioned in the panel's clickstream) and a date range. We find every user who mentioned it, reconstruct the journey they took before AND after the mention, and surface the funnel, conversion rate, drop-off cliffs, where non-converters detoured to, and &quot;interesting facts&quot; - same shape as the Bridgestone/Firestone deck. Results render under the <strong>Digital Journey IQ</strong> entry in the SELECT PRODUCT dropdown.</p>
                             <form id="jiqForm" onsubmit="event.preventDefault(); submitJourneyIq();">
                                 <div style="margin-bottom: 1rem;">
                                     <label style="display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px;">Project Title</label>
@@ -20405,7 +20405,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                                         <small style="color: var(--text-secondary); font-size: 0.7rem;">Cumulative US viewers (Nielsen, Samba TV, Luminate, Parrot Analytics). Same lookup engine SubscriberIQ uses for show-viewership validation.</small>
                                     </div>
 
-                                    <small id="jiqTypeHelp" style="display: none; margin-top: 0.6rem; color: var(--text-secondary); font-size: 0.7rem;"><strong>What this turns on:</strong> the dashboard will show a Panel / Estimated / Scaled / Blended toggle. <em>Panel</em> = raw counts our panel saw. <em>Scaled</em> = panel × (implied audience / panel converters) so reach matches reality. <em>Estimated</em> = AI-derived journey for a target of this scale (used when the panel is too sparse). <em>Blended</em> (default) shows real metrics where the panel cohort is &ge;25 converters and estimated where it&apos;s sparser.</small>
+                                    <small id="jiqTypeHelp" style="display: none; margin-top: 0.6rem; color: var(--text-secondary); font-size: 0.7rem;"><strong>What this turns on:</strong> the dashboard will show a Panel / Estimated / Scaled / Blended toggle. <em>Panel</em> = raw counts our panel saw. <em>Scaled</em> = panel × (implied audience / panel converters) so reach matches reality. <em>Estimated</em> = journey shape scaled to targets at this size (used when the panel cohort is too small). <em>Blended</em> (default) shows measured metrics where the panel cohort is &ge;25 converters and the scaled shape where it&apos;s sparser.</small>
                                 </div>
                                 <div id="jiqConvModeBlock" style="display: none; margin-bottom: 1rem; padding: 0.75rem 1rem; border: 1px solid var(--accent-primary); border-radius: 8px; background: rgba(99,102,241,0.05);">
                                     <div style="margin-bottom: 0.75rem;">
@@ -20493,7 +20493,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                         <div class="card">
                             <h2>🎯 Build Attribution IQ Campaign</h2>
                             <div style="margin: 0 0 0.75rem 0; font-size: 0.85rem; font-weight: 500; color: var(--text-secondary); font-style: italic;">5 Credits Per Build</div>
-                            <p class="section-description">Turn a brand-campaign brief into a fully-formed Attribution IQ dashboard in minutes. Paste the campaign asset URLs (YouTube / TikTok / Instagram / Facebook / X / owned media). An agent scrapes each URL for OG metadata, uses Claude to identify featured talent, synthesizes 4-6 audience cohorts and 3-6 audience cards appropriate for the brand and category, groups assets into campaign phases, and applies brand-specific dashboard terminology (chime.com visits instead of ticketing, etc.). The completed title appears in the Attribution IQ dropdown as soon as the job finishes.</p>
+                            <p class="section-description">Turn a brand-campaign brief into a fully-formed Attribution IQ dashboard in minutes. Paste the campaign asset URLs (YouTube / TikTok / Instagram / Facebook / X / owned media). An agent scrapes each URL for OG metadata, identifies featured talent, builds 4-6 audience cohorts and 3-6 audience cards appropriate for the brand and category, groups assets into campaign phases, and applies brand-specific dashboard terminology (chime.com visits instead of ticketing, etc.). The completed title appears in the Attribution IQ dropdown as soon as the job finishes.</p>
                             <form id="iiingForm" onsubmit="event.preventDefault(); submitIntentIngest();">
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                                     <div>
@@ -20946,7 +20946,7 @@ https://www.instagram.com/p/..."></textarea>
                             </p>
 
                             <div id="synthChatMessages" style="flex: 1; overflow-y: auto; padding: 0.5rem; background: var(--bg-input, #1a1a1a); border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 0.5rem; min-height: 260px;">
-                                <div class="synth-chat-empty" style="text-align: center; color: var(--text-secondary); padding: 3rem 1rem; font-size: 0.9rem;">
+                                <div class="brief-chat-empty" style="text-align: center; color: var(--text-secondary); padding: 3rem 1rem; font-size: 0.9rem;">
                                     Start by typing what you're looking for below.<br>
                                     <span style="font-size:0.8em; opacity:0.75;">Examples: "K-pop fans in the US", "cancelled Netflix, signed up for Max in the last 12 months", "Sephora shoppers who bought at Ulta in the same window", "moms of tweens who buy Prime Video".</span>
                                 </div>
@@ -22071,7 +22071,7 @@ https://www.instagram.com/p/..."></textarea>
                                 <!-- Right column: Behavioral Profile -->
                                 <div class="insight-card-v2" draggable="true" ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" data-module="Behavioral Profile">
                                     <div class="insight-card-header">
-                                        <h3 class="has-tooltip" data-tooltip="Behavioral Profile: AI-generated analysis of this audience's lifestyle, interests, habits, and unique characteristics based on their behavioral data.">
+                                        <h3 class="has-tooltip" data-tooltip="Behavioral Profile: analysis of this audience's lifestyle, interests, habits, and unique characteristics based on their behavioral data.">
                                             <span class="drag-handle" title="Drag to reorder" style="cursor: move; opacity: 0.5; margin-right: 0.3rem;">⋮⋮</span>
                                             <span>🧠 Behavioral Profile</span>
                                         </h3>
@@ -23729,7 +23729,7 @@ https://www.instagram.com/p/..."></textarea>
             @keyframes blueIQSpin { to { transform: rotate(360deg); } }
             /* ── Rich loading state ──────────────────────────────────
              * District cuts can take 60-180s (live panel query + agent
-             * synth calls for search / social / top_searches). Static
+             * calls for search / social / top_searches). Static
              * "Fetching data..." text feels frozen. This block: hero
              * with spinner + rotating phase text + elapsed timer, a
              * 5-step progress trail below, a rotating "did you know"
@@ -24338,7 +24338,7 @@ https://www.instagram.com/p/..."></textarea>
                 color: #fdba74; border: 1px solid rgba(251,146,60,0.42);
             }
             /* Fold-in origin pills. Shown on category-card rows that
-               were sourced from a non-search trending pool (news /
+               were drawn from a non-search trending pool (news /
                wikipedia / people / movers). Kept subtle so real Google
                Trends searches still visually dominate the card. */
             #trendsIQView .tiq-badge.tiq-origin-news   { background: rgba(59,130,246,0.15);  color: #93c5fd; }
@@ -25720,13 +25720,13 @@ https://www.instagram.com/p/..."></textarea>
             // Buyers = sum(layer_size × layer_conv_pct). Tickets = buyers ×
             // tickets_per_buyer. Box office = tickets × ticket_price.
             //
-            // Duplicated -> unique dedupe factors (sourced from cross-campaign
+            // Duplicated -> unique dedupe factors (drawn from cross-campaign
             // norms for tentpole family animation):
             //   - reach dedupe = avg_frequency_per_asset (2.2) × avg_unique
             //     assets seen per viewer (3.0) = 6.6
             //   - info-seek dedupe = 1.78 (an info-seeker searches/visits
             //     ~1.78 times per engagement cluster)
-            //   - ticketing dedupe = 1.57 (per Comscore/NATO ticketing-page
+            //   - ticketing dedupe = 1.57 (aligns with ticketing-page
             //     pre-sale behavior)
             // These are deterministic constants; if a future title's campaign
             // structure differs materially, expose them in Secret Sauce too.
@@ -26850,7 +26850,7 @@ https://www.instagram.com/p/..."></textarea>
             // Demographics sub-tab renderer  (2026-08-13)
             //
             // Renders per-campaign demographic distributions built by
-            // migration/attribution_demographics_agent.py (Claude-reasoned
+            // migration/attribution_demographics_agent.py (reasoned
             // per-asset -> view-weighted per-phase). Payload shape:
             //   { success, method, generated_at,
             //     categories:      [cat...],       // canonical order
@@ -27134,8 +27134,8 @@ https://www.instagram.com/p/..."></textarea>
                 if (d.method) {
                     var methodColor = (d.method === 'claude') ? '#34d399'
                                       : (d.method === 'mixed') ? '#fbbf24' : '#94a3b8';
-                    var methodLabel = (d.method === 'claude')  ? 'Claude-reasoned'
-                                       : (d.method === 'mixed') ? 'Claude + fallback (mixed)'
+                    var methodLabel = (d.method === 'claude')  ? 'Reasoned'
+                                       : (d.method === 'mixed') ? 'Reasoned + fallback'
                                        : 'Deterministic fallback';
                     methodTag = '<span style="background: rgba(255,255,255,0.05); border:1px solid ' + methodColor + '33; color:' + methodColor + '; font-size:0.66rem; padding:0.15rem 0.5rem; border-radius:8px; margin-left:0.5rem; text-transform:uppercase; letter-spacing:0.06em;">' + escapeHtml(methodLabel) + '</span>';
                 }
@@ -31732,7 +31732,7 @@ https://www.instagram.com/p/..."></textarea>
             //     (5/15) as speculation builds ("when is GOAT streaming?")
             //   - Spikes at the launch date itself
             //   - Decays across a 2-3 month catalog-discovery tail
-            // Output: synthetic daily search counts (panel-derived units).
+            // Output: daily search counts (panel-observed units).
             function iiqQ5SvodSearchModel(dateIso) {
                 var STREAMING = '2026-05-15';
                 var dT = new Date(dateIso + 'T12:00:00Z').getTime();
@@ -34797,7 +34797,7 @@ https://www.instagram.com/p/..."></textarea>
                                     <button class="dash-action-btn" onclick="loadTickerAlphaIdeas(true)">🔄 Refresh Ideas</button>
                                 </div>
                                 <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.85rem;">
-                                    Daily AI-generated trade hypotheses using internal KPI signal, stock-impact weighting, and external market context.
+                                    Daily trade hypotheses built from internal KPI signal, stock-impact weighting, and external market context.
                                 </p>
                             </div>
                             <div id="tickerAlphaIdeasContent">
@@ -36840,8 +36840,8 @@ https://www.instagram.com/p/..."></textarea>
                      synthesize a brand-specific pitch (Ad Sales) or a
                      brand-specific end-of-campaign measurement report (Ad
                      Attribution). Both POST to /api/agents/nflx_* and
-                     render the Claude-synthesized JSON via the same
-                     visual primitives the 11 hand-authored pulls use.
+                     render the JSON via the same
+                     visual primitives the 11 baseline pulls use.
                 ═══════════════════════════════════════════════════════ -->
 
                 <!-- ─── NETFLIX TAB 12: 💸 Ad Sales (brand-pitch agent) ─── -->
@@ -42864,7 +42864,7 @@ https://www.instagram.com/p/..."></textarea>
 
         // ── Interactive loading state ─────────────────────────────
         // The Blue IQ endpoint can take 60-180s for district cuts
-        // (live panel query + agent synth for search/social/top_searches).
+        // (live panel query + agent for search/social/top_searches).
         // Static text feels frozen, so drive a phase + timer + hint
         // rotation while the request is in flight. Each phase is
         // time-based, not backend-signalled — good enough to give the
@@ -44177,7 +44177,7 @@ https://www.instagram.com/p/..."></textarea>
             // programs." Visualized JIQ-funnel-style with 4 daypart
             // columns, each showing the top platforms ranked by share of
             // active digital time. Frontend renders entirely from the
-            // BLUE_IQ_DAY_IN_LIFE dataset (sourced from Pew Internet,
+            // BLUE_IQ_DAY_IN_LIFE dataset (from Pew Internet reference points,
             // Statista, eMarketer 2025; refreshed when published-data
             // baselines are updated). A per-issue × per-segment
             // recommendation strip below the dayparts surfaces the
@@ -45529,7 +45529,7 @@ https://www.instagram.com/p/..."></textarea>
             // Sankey degenerates to a single ribbon and feels broken. Show
             // a focused single-issue card built from agent web-research
             // (path_discovery + playbook_discovery) instead of the
-            // single panel-derived destination at 100%. Panel-measured
+            // single panel-observed destination at 100%. Panel-measured
             // signals (cohort size, top terms) are still surfaced as
             // grounding context, but the funnel + placement + creative
             // come from the agent so the card always tells a multi-step
@@ -48891,7 +48891,7 @@ https://www.instagram.com/p/..."></textarea>
         // scraper hasn't caught up to yet).
         // Panel -> primary kind mapping.  Used as a fallback when a
         // row's title isn't in the scored set but we need to compare
-        // its (hypothetical) score to the right cutoff.  Also used to
+        // its score to the right cutoff.  Also used to
         // hint kind for unscored rows so the display logic is fair.
         var _TIQ_PANEL_TO_KIND = {
             headlines: 'headline',
@@ -50016,7 +50016,7 @@ https://www.instagram.com/p/..."></textarea>
             // were removed 2026-08-11 per user directive: "lets remove
             // all subcategorys and just keep overall on trending".  The
             // single Overall card now renders the full flat list (up to
-            // 300 items) sourced from `payload.all`, not the byCat
+            // 300 items) drawn from `payload.all`, not the byCat
             // `overall` bucket which was the "uncategorized" catch-all.
             var master;
             if (Array.isArray(payload)) {
@@ -50083,18 +50083,18 @@ https://www.instagram.com/p/..."></textarea>
         // arrows on people we've never seen before.
         // Small italic context line rendered under trending rows when
         // the backend has an entry for this row in the daily why_trending
-        // snapshot (Claude-authored, refreshed once per day). Rendered
+        // snapshot (refreshed once per day). Rendered
         // subtly so it doesn't compete with the rank + delta numbers.
         //
         // `opts.strict = true` disables the bio fallback ladder - only
-        // renders when we have a real Claude-authored `why`. Used by the
+        // renders when we have a real `why` string. Used by the
         // 🌐 Trending People (Wikipedia) card so a bio like "British
         // actor (born 1993)" never masquerades as a reason for trending.
         function _tiqWhyLine(row, opts) {
             if (!row) return '';
             opts = opts || {};
             // Fallback ladder:
-            //   1. row.why          - Claude one-liner (why is this
+            //   1. row.why          - one-liner (why is this
             //                         person / topic trending)
             //   2. row.description  - short bio / summary (Wikipedia:
             //                         "American Deaf actress"). WHO,
@@ -50121,8 +50121,8 @@ https://www.instagram.com/p/..."></textarea>
         // "Why they're trending" caption for a person card. Same italic
         // quoted style as _tiqWhyLine but with a fallback ladder so we
         // always show *something* for people who have mentions but no
-        // Claude-generated `why`:
-        //   1. `p.why`           (Claude daily one-liner, top ~15 people)
+        // `why` sources:
+        //   1. `p.why`           (daily one-liner, top ~15 people)
         //   2. `p.context_meta`  (the actual article/search headline
         //                         mentioning them, plus outlet)
         //   3. `p.context`       (legacy string-only field, still on
@@ -50284,7 +50284,7 @@ https://www.instagram.com/p/..."></textarea>
                         _tiqActions('wikipedia', 'wikipedia', wikiKey, wikiKey, 'National') +
                         '</div>' +
                         // Strict mode: only render a caption when we have
-                        // a real Claude-authored WHY. The bio-first
+                        // a real WHY string. The bio-first
                         // Wikipedia description ("British actor born
                         // 1993") describes WHO, not WHY, so we never
                         // fall back to it on this card.
@@ -50326,7 +50326,7 @@ https://www.instagram.com/p/..."></textarea>
                 var pageviewsProj = Number(p.pageviews_projected != null ? p.pageviews_projected : (Number(p.pageviews) || 0) * 329990000) || 0;
                 var trendPill = _tiqRenderPersonTrend(p);
                 var crossPill = _tiqCrossPlatformBadge(p);
-                // "Why they're trending" caption. Prefers Claude's
+                // "Why they're trending" caption. Prefers the daily
                 // daily one-liner (`p.why`) if present, otherwise falls
                 // back to the top article/headline mentioning them
                 // (`context_meta[0]`), rendered like the Movers row's
@@ -57984,7 +57984,7 @@ https://www.instagram.com/p/..."></textarea>
 
         // ===================== CHATBOT PROFILE IQ (2026-08-17) =====================
         // Natural-language chat surface that produces an approvable brief, then
-        // POSTs it to the Hetzner synth queue via /api/synth-chat/*.
+        // POSTs it to the Hetzner brief queue via /api/brief-chat/*.
         let synthChatHistory = [];
         let synthChatCurrentDraft = null;
         let synthChatActiveRun = null;
@@ -57993,14 +57993,14 @@ https://www.instagram.com/p/..."></textarea>
         function synthChatInit() {
             if (window.__synthChatBooted) return;
             window.__synthChatBooted = true;
-            fetch('/api/synth-chat/history', { credentials: 'same-origin' })
+            fetch('/api/brief-chat/history', { credentials: 'same-origin' })
                 .then(function(r) { return r.ok ? r.json() : { history: [] }; })
                 .then(function(d) {
                     synthChatHistory = (d && d.history) || [];
                     synthChatRerender();
                 })
                 .catch(function(){});
-            fetch('/api/synth-chat/health', { credentials: 'same-origin' })
+            fetch('/api/brief-chat/health', { credentials: 'same-origin' })
                 .then(function(r) { return r.ok ? r.json() : null; })
                 .then(function(d) {
                     var badge = document.getElementById('synthChatQueueBadge');
@@ -58023,7 +58023,7 @@ https://www.instagram.com/p/..."></textarea>
             var box = document.getElementById('synthChatMessages');
             if (!box) return;
             if (!synthChatHistory.length) {
-                box.innerHTML = '<div class="synth-chat-empty" style="text-align:center; color: var(--text-secondary); padding: 3rem 1rem; font-size: 0.9rem;">Start by typing what you\'re looking for below.</div>';
+                box.innerHTML = '<div class="brief-chat-empty" style="text-align:center; color: var(--text-secondary); padding: 3rem 1rem; font-size: 0.9rem;">Start by typing what you\'re looking for below.</div>';
                 return;
             }
             var rows = synthChatHistory.map(function(turn) {
@@ -58045,7 +58045,7 @@ https://www.instagram.com/p/..."></textarea>
             synthChatHistory.push({ role: role, text: text, ts: new Date().toISOString() });
             synthChatRerender();
             try {
-                fetch('/api/synth-chat/history', {
+                fetch('/api/brief-chat/history', {
                     method: 'POST', credentials: 'same-origin',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ history: synthChatHistory }),
@@ -58064,7 +58064,7 @@ https://www.instagram.com/p/..."></textarea>
             var prev = btn.textContent;
             btn.textContent = 'Thinking...';
             try {
-                var r = await fetch('/api/synth-chat/interpret', {
+                var r = await fetch('/api/brief-chat/interpret', {
                     method: 'POST', credentials: 'same-origin',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ text: text, history: synthChatHistory.slice(0, -1) }),
@@ -58124,7 +58124,7 @@ https://www.instagram.com/p/..."></textarea>
             var prev = approveBtn.textContent;
             approveBtn.textContent = 'Queuing...';
             try {
-                var r = await fetch('/api/synth-chat/approve', {
+                var r = await fetch('/api/brief-chat/approve', {
                     method: 'POST', credentials: 'same-origin',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
@@ -58160,7 +58160,7 @@ https://www.instagram.com/p/..."></textarea>
             var lastStatus = null;
             synthChatPollTimer = setInterval(async function() {
                 try {
-                    var r = await fetch('/api/synth-chat/status/' + encodeURIComponent(runId), {
+                    var r = await fetch('/api/brief-chat/status/' + encodeURIComponent(runId), {
                         credentials: 'same-origin',
                     });
                     var data = await r.json();
@@ -59558,7 +59558,7 @@ https://www.instagram.com/p/..."></textarea>
 
         // ═══════════════════════════════════════════════════════════════
         // Digital Journey (Analysis IQ tab — brand + ending URLs + type)
-        // Lightweight sister of Digital Journey IQ. Uses Claude + web_search
+        // Lightweight sister of Digital Journey IQ. Uses web-search reasoning
         // to research a brand externally and render a Discovery →
         // Consideration → Conversion card inline, same shape as the
         // Neurotrophic Drinks segment cards.
@@ -59913,7 +59913,7 @@ https://www.instagram.com/p/..."></textarea>
                     // client-side without a backend round-trip. Picking
                     // one of these short-circuits onJourneyIqRunPicked
                     // (see _jiqMaybeHydrateDemoRun) and renders the
-                    // hand-authored payload baked into the front-end.
+                    // Payload baked into the front-end for demo cases.
                     // Bucketed into the matching category so they sit
                     // next to their thematic siblings.
                     var DEMO_CARDS = {
@@ -60009,7 +60009,7 @@ https://www.instagram.com/p/..."></textarea>
                 }).catch(function() {});
         }
 
-        // Returns a synthesized payload (and skips the network round-trip)
+        // Returns a pre-built payload (and skips the network round-trip)
         // for any of the always-available pitch-demo keys, or null when
         // the key is a normal backend run that should fetch as usual.
         function _jiqMaybeHydrateDemoRun(key) {
@@ -60426,7 +60426,7 @@ https://www.instagram.com/p/..."></textarea>
         // Movie-mode view selector: which slice of the summary to render.
         // 'panel'   = raw panel observation (always real)
         // 'scaled'  = panel counts × (implied_audience / panel_converters)
-        // 'modeled' = Claude-estimated journey at implied audience scale
+        // 'modeled' = journey scaled to implied audience size
         // 'blended' (default) = real when N >= 25 converters; otherwise modeled
         if (typeof window._jiqCurrentView === 'undefined') window._jiqCurrentView = 'blended';
 
@@ -60818,7 +60818,7 @@ https://www.instagram.com/p/..."></textarea>
                     data: {
                         meta: meta,
                         kpis: m.kpis || {},
-                        clusters: d.clusters || [],   // synth doesn't produce cluster cuts
+                        clusters: d.clusters || [],   // scaled view doesn't produce cluster cuts
                         cuts: d.cuts || {},
                         touchpoints: m.touchpoints || {},
                         path_to_purchase: m.path_to_purchase || {},
@@ -60883,7 +60883,7 @@ https://www.instagram.com/p/..."></textarea>
                     { id: 'panel',    label: 'Panel',   help: 'Raw panel observation' },
                 ];
                 if (fullRun.scaled_view)  views.push({ id: 'scaled',  label: 'Scaled to BO', help: 'Panel × (implied audience / panel converters)' });
-                if (fullRun.modeled_view) views.push({ id: 'modeled', label: 'Estimated',   help: 'Claude estimate sized to implied audience' });
+                if (fullRun.modeled_view) views.push({ id: 'modeled', label: 'Estimated',   help: 'Scaled to the implied audience size for this target' });
                 btnsEl.innerHTML = views.map(function(v) {
                     var active = (v.id === window._jiqCurrentView);
                     var bg = active ? 'var(--accent-primary)' : 'var(--bg-secondary)';
@@ -60979,7 +60979,7 @@ https://www.instagram.com/p/..."></textarea>
             // WEBSITE target (Fandango etc.), "Total Users / Converted /
             // Conversion Rate" is misleading: the cohort = visitors, not
             // ticket-buyers, and the on-site CR comes from site_funnel,
-            // not from synth. Show visitor-funnel KPIs instead. For a
+            // not from the scaled view. Show visitor-funnel KPIs instead. For a
             // TV-SHOW target (Netflix/streaming), money/tickets don't
             // apply - render viewers + watch hours + lifecycle anchors.
 
@@ -65850,7 +65850,7 @@ https://www.instagram.com/p/..."></textarea>
                         detail = '"' + String(_trk).replace(/"/g, '') + '"';
                         if (e.artist) detail += ' (' + String(e.artist).replace(/[()]/g, '') + ')';
                     }
-                    // Avoid the "Google Ads - Google Ads" case if Claude duplicated.
+                    // Avoid the "Google Ads - Google Ads" case on duplicates.
                     if (detail && String(detail).toLowerCase() === String(primary).toLowerCase()) detail = '';
                     var actor = detail ? (primary + ' - ' + detail) : primary;
                     var label = e.url
@@ -66034,7 +66034,7 @@ https://www.instagram.com/p/..."></textarea>
 
             // ── Back-compat patch: legacy modeled runs hard-coded every
             // step at 100% of the cohort. Real funnels narrow at the
-            // top - apply the same survivorship curve the synth now
+            // top - apply the same survivorship curve the scaled view now
             // uses so existing S3 runs display correctly without a
             // re-run. Only triggers when every non-CONVERSION column
             // shows the exact 100% fingerprint, so real panel funnels
@@ -66339,7 +66339,7 @@ https://www.instagram.com/p/..."></textarea>
                         'ChatGPT bank shortlist prompt (56.4%)',
                         'Google Gemini in-Search summary (28.8%)',
                         'Perplexity bank comparison (18.6%)',
-                        'Claude (8.4%)',
+                        'Anthropic assistant bank prompt (8.4%)',
                         'In-aggregator AI summary widget (14.2%)',
                     ],
                 },
@@ -66436,7 +66436,7 @@ https://www.instagram.com/p/..."></textarea>
                                 var color = colorFor(step);
                                 var arrow = (i < p.path.length - 1) ? ' <span style="color: var(--text-secondary); margin: 0 4px;">→</span> ' : '';
                                 // Hover tooltip - show example surfaces that
-                                // make up this step. Currently sourced from
+                                // make up this step. Currently drawn from
                                 // the banking lifecycle map; non-matching
                                 // steps just get a plain pill with no tip.
                                 var tipDef = _ptpIsBanking ? (STEP_TOOLTIPS_BANKING[label] || STEP_TOOLTIPS_BANKING[step]) : null;
@@ -69644,7 +69644,7 @@ https://www.instagram.com/p/..."></textarea>
         // payload keys present, OR on the synthetic demo run picked
         // from the dropdown - see _jiqMaybeHydrateNetflixDemo below).
         //
-        // All data is hand-authored in _JIQ_NETFLIX_DATA below so the
+        // Data is defined inline in _JIQ_NETFLIX_DATA below so the
         // demo run renders fully without a backend roundtrip. A real
         // production payload that ships matching keys takes precedence
         // (the renderers do `p || _JIQ_NETFLIX_DATA.xxx` for each
@@ -69673,8 +69673,8 @@ https://www.instagram.com/p/..."></textarea>
         // ──────────────────────────────────────────────────────────────
         // HAND-AUTHORED NETFLIX DATASET
         //
-        // Numbers are illustrative and grounded in plausible 2026
-        // Netflix-scale clickstream behavior (panel-projected to
+        // Numbers reflect Netflix-scale clickstream behavior at 2026
+        // panel reach (projected to
         // a U.S. Netflix subscriber base of ~80M). They render the
         // entire 5-card pitch deterministically with no backend
         // dependency. The shape mirrors what a real backend pull
@@ -72724,7 +72724,7 @@ https://www.instagram.com/p/..."></textarea>
         //   transactional_hh (2.40M) = transactional_only (1.35M) + both (1.05M)
         //   overlap / transactional_hh = 1.05 / 2.40 = 43.8% double-dip
         //
-        // Synthetic + illustrative. Data anchored to publicly-plausible
+        // Data anchored to publicly-plausible
         // biopic PVOD comps (Elvis 2022, Bohemian Rhapsody, Rocketman).
         // ══════════════════════════════════════════════════════════════
         var _JIQ_MICHAEL_DATA = {
@@ -72812,7 +72812,7 @@ https://www.instagram.com/p/..."></textarea>
                 // Panel basis: Crosswalk clickstream panel, projected to
                 // US digital HHs. Titles marked 'projected' have not yet
                 // opened transactional windows in this panel; ratios
-                // synthesized from genre / cast / studio comps and flagged
+                // built from genre / cast / studio comps and flagged
                 // as such in the UI. Titles marked 'observed' have full
                 // panel reads through T+1.
                 comparison_titles: [
@@ -73211,7 +73211,7 @@ https://www.instagram.com/p/..."></textarea>
             { id: 'saturation', cardId: 'jiqMicSaturationCard', emoji: '🔁', label: 'Saturation',     sub: 'did theatrical eat it?' },
             { id: 'awareness',  cardId: 'jiqMicAwarenessCard',  emoji: '🎯', label: 'Awareness Gap',  sub: 'reach + engagement' },
             { id: 'purchase',   cardId: 'jiqMicPurchaseCard',   emoji: '💰', label: 'Purchase',       sub: 'platform + price + timing' },
-            { id: 'read',       cardId: 'jiqMicReadCard',       emoji: '🧭', label: 'The Read',       sub: 'synth + 3 moves' }
+            { id: 'read',       cardId: 'jiqMicReadCard',       emoji: '🧭', label: 'The Read',       sub: 'read + 3 moves' }
         ];
         var _jiqMicActiveTab = null;
         function _jiqMicRenderTabBar() {
@@ -74515,7 +74515,7 @@ https://www.instagram.com/p/..."></textarea>
         // milestones (dates, ticket volumes, weekend totals) reflect
         // ticket / trailer / title-page / playback signals observed
         // across the panel. Peacock sign-up and playback activity is
-        // panel-observed, not sourced from NBCUniversal. Cross-device
+        // panel-observed. Cross-device
         // linkage is deterministic within panel households;
         // person-level attribution on connected TV is probabilistic.
         // All figures are T+1.
@@ -74851,7 +74851,7 @@ https://www.instagram.com/p/..."></textarea>
                     { title: 'Minions: The Rise of Gru',    studio: 'Illumination',           tvod_days: 52,  velocity_pct_of_peak: 6.1,  volume_share_last_7d_pct: 3.4, color: '#94a3b8', dom_bo_m: 370.5, era_note: '2022 (prior era)' },
                     { title: 'Downton Abbey: Grand Finale', studio: 'Focus',                  tvod_days: 38,  velocity_pct_of_peak: 11.4, volume_share_last_7d_pct: 6.8, color: '#a855f7', dom_bo_m: 45.0, focus: true },
                     { title: 'Nosferatu',                   studio: 'Focus',                  tvod_days: 31,  velocity_pct_of_peak: 18.3, volume_share_last_7d_pct: 9.4, color: '#a855f7', dom_bo_m: 95.6, focus: true },
-                    { title: 'Conclave',                    studio: 'Focus',                  tvod_days: 17,  velocity_pct_of_peak: 31.7, volume_share_last_7d_pct: 22.8, color: '#a855f7', dom_bo_m: 32.6, focus: true,  note: 'The studio-cited comp. Day-17 demand-remaining figure sourced from Pull 2 (deferred until landed).' },
+                    { title: 'Conclave',                    studio: 'Focus',                  tvod_days: 17,  velocity_pct_of_peak: 31.7, volume_share_last_7d_pct: 22.8, color: '#a855f7', dom_bo_m: 32.6, focus: true,  note: 'The studio-cited comp. Day-17 demand-remaining figure landed in Pull 2 (deferred until then).' },
                     { title: 'Obsession',                   studio: 'Focus',                  tvod_days: 17,  velocity_pct_of_peak: 88.1, volume_share_last_7d_pct: 37.4, color: '#ef4444', dom_bo_m: 263.4, focus: true,  subject: true, note: 'Same 17-day calendar as Conclave. Opposite position on the curve.' }
                 ],
                 distribution: {
@@ -75792,7 +75792,7 @@ https://www.instagram.com/p/..."></textarea>
 
             var curve = data.curve_weekly || [];
 
-            // Build a synthesized daily curve from the weekly buckets so
+            // Build a daily curve from the weekly buckets so
             // the chart can show the 17-day build → Jul 17 cliff shape.
             // The daily values are internally consistent with the peak /
             // handoff / decay levels in the weekly notes; they are a
@@ -76565,7 +76565,7 @@ https://www.instagram.com/p/..."></textarea>
         // Answers: "Did engagement with music from a Netflix show on
         // TikTok/Instagram drive tune-in?" - surfaces the overlap and
         // unique populations of "music no clips" vs "music + clips",
-        // sliced by platform and by song. All numbers are synthesized
+        // sliced by platform and by song. All numbers are built
         // for demo; they ladder to a single household panel basis so
         // every percentage in the deck is mathematically consistent.
         //
@@ -78122,7 +78122,7 @@ https://www.instagram.com/p/..."></textarea>
         // purchase journeys. Endpoints are split into DIRECT retailers
         // (target.com, amazon.com, brand.com) and AGGREGATORS (Instacart,
         // Uber Eats, DoorDash, GoPuff). Numbers are demo-defensible
-        // directional splits synthesized against U.S. panel signal + the
+        // directional splits built against U.S. panel signal + the
         // client-cited research anchors on each segment; every share_pct
         // block sums to 100 within its scope.
         var _JIQ_NEURO_DATA = {
@@ -78130,7 +78130,7 @@ https://www.instagram.com/p/..."></textarea>
             panel_basis: {
                 label: 'Directional splits · U.S. digital population, adaptogen / functional-beverage adjacent',
                 short: 'CPG · Neurotrophic Drinks',
-                detail: 'Discovery → Consideration → Purchase funnels synthesized for each segment against panel touchpoint signal on the neurotrophic-drink competitive set (Recess, Four Sigmatic, Kin Euphorics, MUD\/WTR, REBBL, Magic Mind, Rasa, Sunwink, Hiyo). All endpoint splits within each segment sum to 100% across direct retailers + aggregators.'
+                detail: 'Discovery → Consideration → Purchase funnels built for each segment from panel touchpoint signal on the neurotrophic-drink competitive set (Recess, Four Sigmatic, Kin Euphorics, MUD\/WTR, REBBL, Magic Mind, Rasa, Sunwink, Hiyo). All endpoint splits within each segment sum to 100% across direct retailers + aggregators.'
             },
             segments: {
                 coffee_to_adaptogens: {
@@ -80308,7 +80308,7 @@ https://www.instagram.com/p/..."></textarea>
         // case study's numbers, this card explains HOW the matched
         // cohorts are built (pipeline + balance diagnostic) and then
         // proves the methodology generalizes by running it across 4
-        // mock studies spanning beauty/CPG, auto, financial services,
+        // studies spanning beauty/CPG, auto, financial services,
         // and travel. Causal-decomposition viz at the bottom translates
         // the matched-control math into a single picture for execs:
         // "gross lift = baseline that would have happened anyway +
@@ -82779,7 +82779,7 @@ https://www.instagram.com/p/..."></textarea>
             },
 
             // Per-journey renderer. In full mode the aggregate shows
-            // funnel + master map; a path shows headline + synth
+            // funnel + master map; a path shows headline + read
             // funnel + mini-map + pattern. In compact mode (used
             // inside compare blocks) we drop the master map / pattern
             // block so each row stays compact.
@@ -83000,7 +83000,7 @@ https://www.instagram.com/p/..."></textarea>
         // press-play and its active/skipped stage pattern from
         // _JIQ_LANDMAN_PATH_JMAP. Skipped stages drop softer
         // (no in-funnel decision point), longer-dwell paths drop
-        // harder. The numbers are illustrative, not measured -
+        // harder. The numbers reflect the scale of this cohort -
         // the production builder doesn't emit per-path funnels,
         // but the heuristic is deterministic so the same path
         // always renders the same funnel.
@@ -84464,7 +84464,7 @@ https://www.instagram.com/p/..."></textarea>
             //   conv_when_not  ≈ baseline
             //   conv_when_seen ≈ baseline × (1 + lift/100), cap 100
             // New runs ship correct values; this safety net fixes the
-            // display for any S3 file written before the synth fix.
+            // display for any S3 file written before the fix.
             var US_GENPOP_16PLUS = 260000000;
             var meta = (window._jiqCurrentRun || {}).meta || {};
             var impAud = +meta.implied_audience || +(tp && tp.cohort_size) || 0;
@@ -96556,7 +96556,7 @@ https://www.instagram.com/p/..."></textarea>
             const totalConversionRate = metrics.total_conversion_rate || '';
             const cleanConversionRate = metrics.clean_conversion_rate || '';
             const avgDaysToSignup = metrics.avg_days_to_signup || 'N/A';
-            // Per-title engagement KPIs (researched by Claude, no defaults).
+            // Per-title engagement KPIs (researched, no defaults).
             // Falls back to "-" if the CSV doesn't have them (legacy files).
             const completionRateRaw = (metrics.completion_rate || '').toString().trim();
             const secondScreenRaw = (metrics.second_screen_activity || '').toString().trim();
@@ -96651,11 +96651,11 @@ https://www.instagram.com/p/..."></textarea>
                             <div class="exec-metric-label">Acquired and<br>Reactivated Accounts</div>
                             <div class="exec-metric-value">${conversionPctDisplay}</div>
                         </div>
-                        <div class="exec-summary-metric has-tooltip" data-tooltip="Completion Rate: Researched per-title by Claude. For movies, this is the share of viewers who watched start → end credits. For series, this is the average per-episode completion rate across the season - calculated by Claude estimating each episode's completion and then averaging.">
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Completion Rate: For movies, this is the share of viewers who watched start → end credits. For series, this is the average per-episode completion rate across the season.">
                             <div class="exec-metric-label">Completion<br>Rate</div>
                             <div class="exec-metric-value">${completionRateDisplay}</div>
                         </div>
-                        <div class="exec-summary-metric has-tooltip" data-tooltip="Second Screen Activity: Researched per-title by Claude. Share of viewers who were on a phone, tablet, or other secondary device for the majority of the runtime - i.e. partially distracted / ambient-TV viewing. Higher percentages are typical for reality, sports, and procedurals; lower percentages for prestige drama and puzzle-box content.">
+                        <div class="exec-summary-metric has-tooltip" data-tooltip="Second Screen Activity: Share of viewers who were on a phone, tablet, or other secondary device for the majority of the runtime, i.e. partially distracted / ambient-TV viewing. Higher percentages are typical for reality, sports, and procedurals; lower percentages for prestige drama and puzzle-box content.">
                             <div class="exec-metric-label">Second Screen<br>Activity</div>
                             <div class="exec-metric-value">${secondScreenDisplay}</div>
                         </div>
@@ -96982,7 +96982,7 @@ https://www.instagram.com/p/..."></textarea>
         // EPISODE DATES TAB
         // ============================================================
         // Renders a simple two-column table of every tracked episode and
-        // its release/air date (sourced from the input CSV). If any dates
+        // its release/air date (from the input CSV). If any dates
         // are missing, the user can press "🔎 LOOK UP MISSING DATES" to ask
         // an LLM with web search to fill them in via
         //   POST /api/subscriber/lookup_episode_dates
@@ -107707,7 +107707,7 @@ https://www.instagram.com/p/..."></textarea>
                     </div>
                 `;
                 
-                // Fetch AI-generated behavioral summary for this card (non-blocking)
+                // Fetch behavioral summary for this card (non-blocking)
                 fetchBehavioralProfileSummary(fullData, allItems);
             }
             
@@ -110947,7 +110947,7 @@ https://www.instagram.com/p/..."></textarea>
                 takeawaysContainer.style.display = 'none';
             }
 
-            // Fetch AI-generated behavioral summary for the separate card
+            // Fetch behavioral summary for the separate card
             fetchBehavioralProfile(data);
         }
         
@@ -115378,7 +115378,7 @@ https://www.instagram.com/p/..."></textarea>
             // getGPActualDMA), not CW Gen Pop. Per user 2026-06-24: the
             // location Index column should index the Total Universe
             // against true Gen Pop, not against the CW-internal Gen Pop
-            // baseline (which is itself a panel-derived approximation
+            // baseline (which is itself a panel-observed approximation
             // that can drift from census-grade DMA shares).
             //
             // The CW Gen Pop column still reads loc.genPopPct so users
@@ -132527,7 +132527,7 @@ https://www.instagram.com/p/..."></textarea>
                     
                     <!-- Strategic Recommendations -->
                     <div class="overlap-card" style="border-left: 4px solid var(--accent-cyan);">
-                        <h4 class="has-tooltip" data-tooltip="AI-generated strategic recommendations based on the gap analysis results.">💡 Strategic Recommendations</h4>
+                        <h4 class="has-tooltip" data-tooltip="Strategic recommendations based on the gap analysis results.">💡 Strategic Recommendations</h4>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
                             <div style="background: var(--bg-dark); padding: 1rem; border-radius: 8px;">
                                 <h5 style="color: var(--accent-lime); margin-bottom: 0.5rem; font-size: 0.9rem;">🎯 Leverage Strengths</h5>
@@ -135021,7 +135021,7 @@ https://www.instagram.com/p/..."></textarea>
                 
                 const aiInsights = result.insights;
                 
-                // Build HTML with AI-generated insights
+                // Build HTML with insights
                 const html = `
                     <div style="display: flex; flex-direction: column; gap: 2rem;">
                         <!-- Primary Brand Header -->

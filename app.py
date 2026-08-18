@@ -8684,12 +8684,12 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
         from claude_client import is_claude_reasoning_enabled, claude_reason_json
     except Exception as exc:
         return {'success': False, 'status': 503,
-                'error': 'Claude client not available: {0}'.format(exc)}
+                'error': 'Reasoning service not available: {0}'.format(exc)}
 
     if not is_claude_reasoning_enabled():
         return {'success': False, 'status': 503,
-                'error': 'Claude reasoning is not enabled on this server. '
-                         'Set ANTHROPIC_API_KEY and USE_CLAUDE_REASONING=1 '
+                'error': 'Reasoning service is not enabled on this server. '
+                         'Configure the reasoning credentials '
                          'to activate the Netflix ad-sales agents.'}
 
     chosen_model = (model
@@ -8706,13 +8706,13 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
         )
     except Exception as exc:
         return {'success': False, 'status': 502,
-                'error': 'Claude call failed: {0}'.format(exc)}
+                'error': 'Reasoning request failed: {0}'.format(exc)}
 
     parsed = _extract_json_object(raw)
     if parsed is None:
         snippet = (raw or '')[:600]
         return {'success': False, 'status': 502,
-                'error': 'Claude returned non-JSON output.',
+                'error': 'Reasoning service returned non-JSON output.',
                 'raw_excerpt': snippet}
 
     return {'success': True, 'data': parsed, 'model': chosen_model}
@@ -41969,7 +41969,8 @@ def _save_synth_chat_history(username, history):
         return False
 
 
-@app.route('/api/synth-chat/interpret', methods=['POST'])
+@app.route('/api/brief-chat/interpret', methods=['POST'])
+@app.route('/api/synth-chat/interpret', methods=['POST'])  # legacy alias
 @requires_auth
 def api_synth_chat_interpret():
     """Free-form text -> draft spec JSON. Non-destructive: does NOT queue
@@ -42093,7 +42094,8 @@ def _spec_from_draft(draft):
     return spec
 
 
-@app.route('/api/synth-chat/approve', methods=['POST'])
+@app.route('/api/brief-chat/approve', methods=['POST'])
+@app.route('/api/synth-chat/approve', methods=['POST'])  # legacy alias
 @requires_auth
 def api_synth_chat_approve():
     """User-approved spec + run params -> POSTs to Hetzner queue. Returns run_id."""
@@ -42189,7 +42191,8 @@ def api_synth_chat_approve():
     })
 
 
-@app.route('/api/synth-chat/status/<run_id>', methods=['GET'])
+@app.route('/api/brief-chat/status/<run_id>', methods=['GET'])
+@app.route('/api/synth-chat/status/<run_id>', methods=['GET'])  # legacy alias
 @requires_auth
 def api_synth_chat_status(run_id):
     """Poll Hetzner queue for run status."""
@@ -42219,7 +42222,8 @@ def api_synth_chat_status(run_id):
         return jsonify({'success': False, 'error': str(e)}), 502
 
 
-@app.route('/api/synth-chat/history', methods=['GET', 'POST'])
+@app.route('/api/brief-chat/history', methods=['GET', 'POST'])
+@app.route('/api/synth-chat/history', methods=['GET', 'POST'])  # legacy alias
 @requires_auth
 def api_synth_chat_history():
     """Per-user chat message history persistence (S3-backed)."""
@@ -42242,7 +42246,8 @@ def api_synth_chat_history():
     return jsonify({'success': ok})
 
 
-@app.route('/api/synth-chat/health', methods=['GET'])
+@app.route('/api/brief-chat/health', methods=['GET'])
+@app.route('/api/synth-chat/health', methods=['GET'])  # legacy alias
 @requires_auth
 def api_synth_chat_health():
     """Quick health-check the frontend uses to decide whether to show the tab."""
