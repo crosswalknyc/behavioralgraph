@@ -41866,6 +41866,31 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "The dashboard uses this flag to know whether to ask the user to "
         "confirm dates before proceeding.\n\n"
 
+        "RUN AVID DEFAULT (MANDATORY):\n"
+        "  * `run_avid`: DEFAULT to TRUE for every new_build, "
+        "time_shifted_refresh, and cut_needs_parent decision. The Avid "
+        "cohort is the more actionable of the two deliverables and users "
+        "expect the TU + Avid pair by default (see workspace rule on "
+        "profile pair completeness).\n"
+        "  * Set to FALSE ONLY IF one of these is true:\n"
+        "      (a) The user's request explicitly opts out of the Avid "
+        "cut. Concrete opt-out phrases: 'no avid', 'just TU', 'TU only', "
+        "'skip avid', 'without avid', 'casual only', 'total universe "
+        "only', 'no avid cut', 'don't run avid', 'just the total'.\n"
+        "      (b) The decision is `derive_cut` (we're producing the "
+        "derived cut - there's no fresh TU build to also spawn Avid off "
+        "of).\n"
+        "      (c) The decision is `existing_match` (nothing is being "
+        "built).\n"
+        "      (d) The subject is an audience segment defined by "
+        "cancellation / churn / switching / opt-out behavior (e.g. "
+        "'Spectrum -> Starlink switchers', 'people who cancelled "
+        "Netflix'). For these the Avid concept doesn't apply cleanly - "
+        "you can't be an 'avid' member of a churn cohort.\n"
+        "  * If uncertain, DEFAULT TO TRUE. It's cheap to skip a "
+        "checkbox before approve; it's expensive to miss the Avid cut "
+        "the user actually wanted.\n\n"
+
         "CANDIDATES FROM EXISTING CATALOG (may be empty). These are the "
         "closest matches to the user's ask that already exist. They are "
         "ordered best-first with a score in [0,1]. NEVER invent an "
@@ -42009,6 +42034,53 @@ def _user_specified_dates(user_text, chat_history=None):
     return False
 
 
+# Phrases that indicate the user explicitly does NOT want an Avid cut.
+# Belt-and-suspenders alongside Claude's `run_avid` field - if either
+# signal says "no avid", the response forces run_avid=false. If neither
+# signal says opt-out AND the decision path builds fresh work
+# (new_build / time_shifted_refresh / cut_needs_parent), we FORCE
+# run_avid=true so a Claude misclassification can't silently drop the
+# Avid deliverable. Directive 2026-08-17 (Jenna): "it should always
+# run avid by default unless the user specifically says not to".
+_AVID_OPTOUT_PATTERNS = [
+    r'\bno\s+avid\b',
+    r'\bskip\s+avid\b',
+    r'\bwithout\s+avid\b',
+    r'\bnot?\s+avid\s+(cut|cohort|version|profile|run|build)\b',
+    r"\bdon'?t\s+(run|do|build|make)\s+(the\s+)?avid\b",
+    r"\bdo\s+not\s+(run|do|build|make)\s+(the\s+)?avid\b",
+    r'\bjust\s+(the\s+)?(tu|total\s+universe|casual)\b',
+    r'\btu\s+only\b',
+    r'\bcasual\s+only\b',
+    r'\btotal\s+universe\s+only\b',
+    r'\bno\s+avid\s+(cut|cohort|version)\b',
+    r'\bavid\s+not\s+needed\b',
+]
+
+
+def _user_optout_of_avid(user_text, chat_history=None):
+    """True if the user explicitly asked NOT to build the Avid cut."""
+    import re as _re
+    haystack = (user_text or '').lower()
+    if chat_history:
+        recent = [t for t in chat_history[-8:]
+                  if (t.get('role') or '').lower() == 'user']
+        for t in recent[-4:]:
+            haystack += ' ' + (t.get('text') or '').lower()
+    for pattern in _AVID_OPTOUT_PATTERNS:
+        try:
+            if _re.search(pattern, haystack, flags=_re.IGNORECASE):
+                return True
+        except _re.error:
+            continue
+    return False
+
+
+# Decisions where an Avid cohort is not applicable (nothing fresh is
+# built, so run_avid is a no-op).
+_AVID_INAPPLICABLE_DECISIONS = {'existing_match', 'derive_cut'}
+
+
 # Free-text patterns that mean "yes proceed with the defaults you
 # suggested". Used ONLY when the chatbot is awaiting a date
 # confirmation - so a plain "ok" releases the stashed draft to the
@@ -42116,6 +42188,31 @@ def api_synth_chat_interpret():
             }), result.get('status', 502)
 
         spec_draft = result.get('data') or {}
+
+        # Run-Avid default enforcement (2026-08-17 Jenna directive).
+        # Default is TRUE for every fresh-build decision (new_build /
+        # time_shifted_refresh / cut_needs_parent). We only honor a
+        # false value if EITHER Claude AND the user opt-out detector
+        # agree, OR the decision is one where run_avid is a no-op
+        # anyway (existing_match / derive_cut). This prevents Claude
+        # misclassifications from silently dropping the Avid cut.
+        decision_str = str(spec_draft.get('decision') or '').strip().lower()
+        user_optout = _user_optout_of_avid(text, chat_history=history)
+        claude_says_false = spec_draft.get('run_avid') is False
+        if decision_str in _AVID_INAPPLICABLE_DECISIONS:
+            # existing_match / derive_cut: run_avid is irrelevant.
+            # Preserve whatever Claude said (spec ends up ignored
+            # downstream anyway) but stop the frontend checkbox from
+            # showing false when it doesn't matter.
+            spec_draft['run_avid'] = False if decision_str == 'derive_cut' else True
+        elif claude_says_false and user_optout:
+            # Both agree - honor the opt-out.
+            spec_draft['run_avid'] = False
+        else:
+            # Fresh build without a clear user opt-out - force true.
+            # This covers "Claude wrongly set false", "field missing",
+            # and "field was true" uniformly.
+            spec_draft['run_avid'] = True
 
         # Date-clarification gate. If the user didn't specify a window
         # AND Claude also flagged the range as non-explicit, we return
@@ -42520,6 +42617,19 @@ def _v1_interpret(prompt):
     if not interp.get('success'):
         return None, candidates, interp
     draft = interp.get('data') or {}
+    # Apply the same run_avid default enforcement the chatbot uses so
+    # the Partner API can't be tricked into skipping the Avid cut by
+    # a Claude misclassification. Directive 2026-08-17: Avid on by
+    # default unless the caller's prompt explicitly opts out.
+    decision_str = str(draft.get('decision') or '').strip().lower()
+    user_optout = _user_optout_of_avid(prompt, chat_history=None)
+    claude_says_false = draft.get('run_avid') is False
+    if decision_str in _AVID_INAPPLICABLE_DECISIONS:
+        draft['run_avid'] = False if decision_str == 'derive_cut' else True
+    elif claude_says_false and user_optout:
+        draft['run_avid'] = False
+    else:
+        draft['run_avid'] = True
     return draft, candidates, interp
 
 
