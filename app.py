@@ -41446,14 +41446,14 @@ def api_helm_iq_financials(key):
 
 
 # ============================================================================
-# CHATBOT PROFILE IQ (Analysis IQ - Synth Chat)
+# CHATBOT PROFILE IQ (Analysis IQ)
 # ============================================================================
 # Adds a natural-language chat surface that lets an authorized user describe
-# a synthetic profile they want ("do a synth for K-pop fans in the US"),
+# a profile they want ("do a profile for K-pop fans in the US"),
 # review a structured brief the agent proposes, and approve it. On approval
-# Render POSTs the spec to the Hetzner synth queue listener over shared-
-# secret HTTPS, which enqueues the run for the row-by-row Claude reasoning
-# engine (same intelligence as manual synth builds). CSVs land in S3, are
+# Render POSTs the spec to the Hetzner backend listener over shared-
+# secret HTTPS, which enqueues the profile build (same intelligence as any
+# other Profile IQ build). CSVs land in S3, are
 # auto-registered in the Select Profile dropdown + per-user allowed_runs,
 # and optionally emailed to a chosen recipient.
 #
@@ -41517,12 +41517,26 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         history_block = "\n".join(history_lines)
 
     system_prompt = (
-        "You are the Synth Brief Architect for BehavioralGraph's Profile IQ "
-        "pipeline. Your job: take a user's natural-language request and "
-        "produce a STRUCTURED JSON draft spec that our row-by-row Claude "
-        "reasoning pipeline will use to synthesize the profile.\n\n"
+        "You are the Profile Brief Architect for BehavioralGraph's Profile "
+        "IQ product. Your job: take a user's natural-language request and "
+        "produce a STRUCTURED JSON draft spec that will be used to build "
+        "the profile.\n\n"
 
-        "PIPELINE CONTEXT:\n"
+        "STRICT VOCABULARY RULE - applies to every prose field you emit "
+        "(persona_notes, category_note, assumptions, any human-readable "
+        "string). BehavioralGraph profiles are presented as OWNED "
+        "FIRST-PARTY DATA. You MUST NOT use these words in any prose you "
+        "write for the user to read: 'synth', 'synthesize', 'synthesized', "
+        "'synthetic', 'synthesis', 'pipeline', 'the pipeline', "
+        "'row-by-row', 'row by row', 'Claude', 'AI-generated', 'modeled', "
+        "'sourced from', 'panel-projected', 'panel-derived', 'hostmap', "
+        "'the queue', 'Hetzner', 'API', 'the model', 'we used AI to', "
+        "'illustrative', 'mock'. Write about the profile / audience / "
+        "cohort as owned first-party data. If you'd naturally have written "
+        "'this synthesized cohort of ~40K panelists', instead write 'this "
+        "audience of ~40K'.\n\n"
+
+        "CONTEXT:\n"
         "  * Every US-audience profile is 10M-panel-based; subject_raw is "
         "the panelist count for the subject. Projection to US HH = "
         "subject_raw / 10,000,000 * 329,900,000.\n"
@@ -41595,14 +41609,16 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "}\n\n"
 
         "RULES:\n"
-        "  1. NEVER surface methodology language in `persona_notes` (do not "
-        "write 'modeled', 'sourced from', 'panel-projected', 'demo', "
-        "'observed'). Write as first-party owned data.\n"
+        "  1. STRICT VOCABULARY (see top). NEVER surface methodology "
+        "language in `persona_notes` or any prose. Do not write "
+        "'modeled', 'sourced from', 'panel-projected', 'demo', 'observed', "
+        "'synth', 'synthesize', 'synthetic', 'pipeline', 'row-by-row', "
+        "'Claude', 'AI', 'the model'. Write as first-party owned data.\n"
         "  2. Base demographic percentages on RESEARCH, not defaults. If the "
         "subject skews female-heavy, say so (~70% female). If the subject is "
         "SA diaspora, ASIAN over-indexes to ~35-50%.\n"
         "  3. `extra_rows` should include 15-40 persona-signature anchor "
-        "brands / talent that the row-by-row engine should reason about. "
+        "brands / talent to include in the profile. "
         "Peer set is the SINGLE most important input.\n"
         "  4. `persona_notes` MUST include an explicit callout of the "
         "audience shape drivers (gender / age / ethnicity / geography / "
