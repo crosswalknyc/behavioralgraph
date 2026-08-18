@@ -4315,6 +4315,7 @@ def create_user():
             'impact_iq_journeys': req_data.get('impact_iq_journeys', cd.get('impact_iq_journeys', ['*']) if cd else ['*']) or ['*'],
             'has_trends_iq_access': req_data.get('has_trends_iq_access', cd.get('has_trends_iq_access', False) if cd else False),
             'has_microdramas_iq_access': req_data.get('has_microdramas_iq_access', cd.get('has_microdramas_iq_access', False) if cd else False),
+            'has_chatbot_profile_iq_access': req_data.get('has_chatbot_profile_iq_access', cd.get('has_chatbot_profile_iq_access', False) if cd else False),
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
@@ -4498,6 +4499,8 @@ def update_user(username):
             user['has_trends_iq_access'] = bool(req_data['has_trends_iq_access'])
         if 'has_microdramas_iq_access' in req_data:
             user['has_microdramas_iq_access'] = bool(req_data['has_microdramas_iq_access'])
+        if 'has_chatbot_profile_iq_access' in req_data:
+            user['has_chatbot_profile_iq_access'] = bool(req_data['has_chatbot_profile_iq_access'])
         if 'has_impact_iq_access' in req_data:
             user['has_impact_iq_access'] = bool(req_data['has_impact_iq_access'])
         if 'impact_iq_journeys' in req_data:
@@ -7956,6 +7959,7 @@ def compute_product_access_flags(user, role):
             'has_helm_iq_access': True,
             'has_trends_iq_access': True,
             'has_microdramas_iq_access': True,
+            'has_chatbot_profile_iq_access': True,
         }
     u = user or {}
     has_sot_view = bool(u.get('has_share_of_time_access', True))
@@ -7995,6 +7999,9 @@ def compute_product_access_flags(user, role):
         'has_helm_iq_access': role == 'super_admin',
         'has_trends_iq_access': bool(u.get('has_trends_iq_access', False)),
         'has_microdramas_iq_access': bool(u.get('has_microdramas_iq_access', False)),
+        'has_chatbot_profile_iq_access': (
+            role == 'super_admin' or bool(u.get('has_chatbot_profile_iq_access', False))
+        ),
     }
 
 
@@ -8158,6 +8165,7 @@ def index():
                            has_helm_iq_access=has_helm_iq,
                            has_trends_iq_access=has_trends_iq,
                            has_microdramas_iq_access=has_microdramas_iq,
+                           has_chatbot_profile_iq_access=bool(user.get('has_chatbot_profile_iq_access', False)) or role == 'super_admin',
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
@@ -19543,6 +19551,7 @@ DEFAULT_HIDDEN_PRODUCTS = {
     'workspace': False,
     'helmIQ': False,
     'microdramasIQ': False,     # 2026-07-22 added with <option value="microdramasIQ">
+    'chatbotProfileIQ': False,  # 2026-08-17 Chatbot Profile IQ - Analysis IQ sub-tab
 }
 
 
@@ -41434,6 +41443,441 @@ def api_helm_iq_financials(key):
         return jsonify({'success': False, 'error': 'Movie not found'}), 404
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================================================
+# CHATBOT PROFILE IQ (Analysis IQ - Synth Chat)
+# ============================================================================
+# Adds a natural-language chat surface that lets an authorized user describe
+# a synthetic profile they want ("do a synth for K-pop fans in the US"),
+# review a structured brief the agent proposes, and approve it. On approval
+# Render POSTs the spec to the Hetzner synth queue listener over shared-
+# secret HTTPS, which enqueues the run for the row-by-row Claude reasoning
+# engine (same intelligence as manual synth builds). CSVs land in S3, are
+# auto-registered in the Select Profile dropdown + per-user allowed_runs,
+# and optionally emailed to a chosen recipient.
+#
+# Environment (set on Render):
+#   SYNTH_QUEUE_URL      - e.g. "http://168.119.215.48:8765"
+#   SYNTH_QUEUE_SECRET   - shared secret with Hetzner's /etc/synth-queue.env
+#
+# Access gate: has_chatbot_profile_iq_access flag OR super_admin role.
+# ============================================================================
+
+SYNTH_CHAT_HISTORY_KEY_PREFIX = "system/synth_chat_history"
+
+SYNTH_QUEUE_URL = os.environ.get('SYNTH_QUEUE_URL',
+                                   'http://168.119.215.48:8765').rstrip('/')
+SYNTH_QUEUE_SECRET = os.environ.get('SYNTH_QUEUE_SECRET', '')
+
+
+def _synth_chat_gate():
+    """Return (user_dict, error_response_or_None). None error means allow."""
+    user = get_current_user()
+    if not user:
+        return None, (jsonify({'success': False, 'error': 'not authenticated'}), 401)
+    role = user.get('role', '')
+    has_flag = bool(user.get('has_chatbot_profile_iq_access', False))
+    if role != 'super_admin' and not has_flag:
+        return None, (jsonify({
+            'success': False,
+            'error': 'Chatbot Profile IQ access not granted for this account. '
+                     'Contact your admin.',
+        }), 403)
+    return user, None
+
+
+def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categories=None):
+    """Build the (system, user) prompts that turn free-form user text into a
+    structured draft spec dict compatible with synthesize_from_spec on Hetzner.
+
+    The system prompt encodes:
+      - The canonical BRAND CATEGORY list (never invent a non-canonical one)
+      - The row-by-row engine's spec schema
+      - The workspace "always present as owned first-party data" rule
+      - Sample-size heuristics for talent / brand / concept / niche cohorts
+      - Demographic canonical buckets (from demos.csv / PIPELINE_DEMO_SCHEMA)
+    The user prompt is the free-form request + prior chat turns for context.
+    """
+    cats = master_categories or {}
+    cat_lines = []
+    for group, values in (cats or {}).items():
+        if isinstance(values, list):
+            cat_lines.append(f"{group}: {', '.join(values)}")
+    cat_block = "\n".join(cat_lines) if cat_lines else "(canonical categories list not loaded)"
+
+    history_block = ""
+    if chat_history:
+        history_lines = []
+        for turn in chat_history[-8:]:  # last 8 turns for context
+            role = (turn.get('role') or '').lower()
+            text = (turn.get('text') or '').strip()
+            if role and text:
+                history_lines.append(f"[{role}] {text[:600]}")
+        history_block = "\n".join(history_lines)
+
+    system_prompt = (
+        "You are the Synth Brief Architect for BehavioralGraph's Profile IQ "
+        "pipeline. Your job: take a user's natural-language request and "
+        "produce a STRUCTURED JSON draft spec that our row-by-row Claude "
+        "reasoning pipeline will use to synthesize the profile.\n\n"
+
+        "PIPELINE CONTEXT:\n"
+        "  * Every US-audience profile is 10M-panel-based; subject_raw is "
+        "the panelist count for the subject. Projection to US HH = "
+        "subject_raw / 10,000,000 * 329,900,000.\n"
+        "  * Profiles are pinned to a canonical BRAND CATEGORY. NEVER invent "
+        "a non-canonical one. If nothing fits, pick the closest and note it "
+        "in `category_note`.\n"
+        "  * Downstream, every non-demo brand row is per-brand Claude "
+        "reasoned - so 'peer set' and 'extra_rows' anchors matter more than "
+        "any category-wide lift. Do not try to pre-set BP values.\n\n"
+
+        "CANONICAL BRAND CATEGORY LIST (choose exactly one):\n"
+        f"{cat_block}\n\n"
+
+        "SAMPLE-SIZE HEURISTICS (subject_raw for TU cohort):\n"
+        "  * Mass-market brand (Netflix, McDonald's, Target): 200,000 - "
+        "500,000 panelists.\n"
+        "  * Mid-scale talent (Charlie Puth, Anya Taylor-Joy): 60,000 - "
+        "150,000.\n"
+        "  * Emerging talent / niche music act: 8,000 - 40,000.\n"
+        "  * Micro creator / fan-community: 3,000 - 12,000.\n"
+        "  * Cohort / audience segment (churners, switchers, consumer of X): "
+        "3,000 - 40,000 depending on TAM.\n"
+        "  * Avid cohort: 20-40% of TU sample.\n\n"
+
+        "CANONICAL DEMOGRAPHIC BUCKETS (use exactly these labels):\n"
+        "  GENDER: MALE, FEMALE, NON-BINARY, TRANS FEMALE, TRANS MALE\n"
+        "  AGE: 17 AND UNDER, 18-24, 25-34, 35-44, 45-54, 55-64, 65 OR OLDER\n"
+        "  ETHNICITY: WHITE, HISPANIC OR LATINO, ASIAN, "
+        "BLACK OR AFRICAN AMERICAN, ANOTHER RACE/ETHNICITY\n"
+        "  EDUCATION: HIGH SCHOOL OR LESS, SOME COLLEGE / ASSOCIATE DEGREE, "
+        "BACHELORS DEGREE, GRADUATE OR PROFESSIONAL DEGREE, PREFER NOT TO SAY\n"
+        "  INCOME: LESS THAN $25,000, $25,000 - $49,999, $50,000 - $74,999, "
+        "$75,000 - $99,999, $100,000 - $149,999, $150,000 - $249,999, "
+        "$250,000 OR MORE\n"
+        "  OCCUPATION: MANAGEMENT, BUSINESS & PROFESSIONAL; SERVICE & "
+        "HOSPITALITY; SALES & RETAIL; SCIENCE, TECHNOLOGY & TECHNICAL "
+        "PROFESSIONS; EDUCATION OR LIBRARY SERVICES; HEALTHCARE "
+        "PRACTITIONERS OR SUPPORT; SKILLED TRADES/CONSTRUCTION OR "
+        "MAINTENANCE; TRANSPORTATION & LOGISTICS; MANUFACTURING & "
+        "PRODUCTION; PUBLIC SAFETY & PROTECTIVE SERVICES; LEGAL; "
+        "AGRICULTURE & OUTDOOR; STUDENT; OTHER\n"
+        "  RELATIONSHIP: SINGLE, IN A RELATIONSHIP, MARRIED, "
+        "DIVORCED OR SEPARATED, WIDOWED\n"
+        "  PARENTAL_STATUS: HAS CHILDREN, NO CHILDREN, PREFER NOT TO SAY\n"
+        "  SEXUAL_ORIENTATION: STRAIGHT / HETEROSEXUAL, LGBTQ+, "
+        "PREFER NOT TO SAY\n"
+        "  PRIMARY_LANGUAGE: English, Spanish, Chinese, Other\n"
+        "  NUMBER_OF_CHILDREN: 0, 1, 2, 3, 4+\n"
+        "  AGE_OF_CHILDREN: No Kids, Under 3, 3 to 5, 6 to 10, 11 to 13, "
+        "14 to 17\n"
+        "Every bucket in every canonical category MUST appear in demos and "
+        "the sum MUST be 100.0 (four decimals fine).\n\n"
+
+        "OUTPUT SHAPE (strict JSON object, no prose outside):\n"
+        "{\n"
+        "  \"subject\": \"Human-readable subject name\",\n"
+        "  \"file_stem\": \"Snake_Case_Stem\",\n"
+        "  \"brand_category\": \"EXACT canonical value\",\n"
+        "  \"category_note\": \"if you had to pick a closest match\",\n"
+        "  \"subject_raw_tu\": <int>,\n"
+        "  \"subject_raw_avid\": <int, ~25% of TU or null if avid not requested>,\n"
+        "  \"run_avid\": <true|false>,\n"
+        "  \"subject_rows\": [[\"CATEGORY\",\"Value\"], ...],\n"
+        "  \"tu_demos\": { CATEGORY: { BUCKET: pct, ... }, ... },\n"
+        "  \"avid_demos\": { ... same schema, sharpened toward Avid ... },\n"
+        "  \"extra_rows\": [[\"CATEGORY\",\"Brand or Talent name\"], ...],\n"
+        "  \"persona_notes\": \"200-500 words of researched persona shape\",\n"
+        "  \"assumptions\": [\"list of assumptions the user should verify\"],\n"
+        "  \"estimated_run_minutes\": <int>\n"
+        "}\n\n"
+
+        "RULES:\n"
+        "  1. NEVER surface methodology language in `persona_notes` (do not "
+        "write 'modeled', 'sourced from', 'panel-projected', 'demo', "
+        "'observed'). Write as first-party owned data.\n"
+        "  2. Base demographic percentages on RESEARCH, not defaults. If the "
+        "subject skews female-heavy, say so (~70% female). If the subject is "
+        "SA diaspora, ASIAN over-indexes to ~35-50%.\n"
+        "  3. `extra_rows` should include 15-40 persona-signature anchor "
+        "brands / talent that the row-by-row engine should reason about. "
+        "Peer set is the SINGLE most important input.\n"
+        "  4. `persona_notes` MUST include an explicit callout of the "
+        "audience shape drivers (gender / age / ethnicity / geography / "
+        "income) and 3-5 brands that under-index (so the reasoner doesn't "
+        "over-lift them).\n"
+        "  5. Return ONLY a JSON object. No markdown fences, no prose."
+    )
+
+    user_prompt = (
+        f"USER REQUEST:\n{user_text.strip()}\n\n"
+        f"PRIOR CHAT CONTEXT (last few turns):\n{history_block or '(none)'}"
+        f"\n\nReturn the JSON draft spec now."
+    )
+    return system_prompt, user_prompt
+
+
+def _synth_chat_history_key(username):
+    safe = ''.join(c for c in (username or 'anon')
+                    if c.isalnum() or c in '-_.@').lower()
+    return f"{SYNTH_CHAT_HISTORY_KEY_PREFIX}/{safe}.json"
+
+
+def _load_synth_chat_history(username):
+    key = _synth_chat_history_key(username)
+    try:
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        return json.loads(obj['Body'].read().decode('utf-8'))
+    except Exception as e:
+        # NoSuchKey is expected for first-time users; any other error we log
+        if 'NoSuchKey' not in str(e):
+            print(f"[synth-chat] history load failed for {username}: {e}")
+        return []
+
+
+def _save_synth_chat_history(username, history):
+    key = _synth_chat_history_key(username)
+    try:
+        # Trim to last 200 turns to bound growth
+        trimmed = list(history or [])[-200:]
+        s3_client.put_object(
+            Bucket=S3_BUCKET, Key=key,
+            Body=json.dumps(trimmed, indent=2).encode('utf-8'),
+            ContentType='application/json',
+        )
+        return True
+    except Exception as e:
+        print(f"[synth-chat] history save failed for {username}: {e}")
+        return False
+
+
+@app.route('/api/synth-chat/interpret', methods=['POST'])
+@requires_auth
+def api_synth_chat_interpret():
+    """Free-form text -> draft spec JSON. Non-destructive: does NOT queue
+    the run. Front-end shows the returned draft as an approvable brief."""
+    user, err = _synth_chat_gate()
+    if err:
+        return err
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+
+    text = (body.get('text') or '').strip()
+    if not text:
+        return jsonify({'success': False, 'error': 'empty request text'}), 400
+
+    history = body.get('history') or []
+
+    try:
+        try:
+            from iq_rankers import MASTER_CATEGORIES
+        except Exception:
+            MASTER_CATEGORIES = {}
+        system_prompt, user_prompt = _synth_chat_interpret_prompts(
+            text, chat_history=history, master_categories=MASTER_CATEGORIES,
+        )
+        result = _run_nflx_claude_agent(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=8192, temperature=0.4,
+        )
+        if not result.get('success'):
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'brief-interpret failed'),
+                'raw_excerpt': result.get('raw_excerpt'),
+            }), result.get('status', 502)
+
+        spec_draft = result.get('data') or {}
+        return jsonify({
+            'success': True,
+            'spec_draft': spec_draft,
+            'model': result.get('model'),
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _spec_from_draft(draft):
+    """Convert the Claude-emitted draft into the exact spec dict shape that
+    synth_engine_row_by_row.synthesize_from_spec expects on Hetzner."""
+    subject = draft.get('subject') or draft.get('name') or 'Unknown Subject'
+    stem = draft.get('file_stem') or subject.replace(' ', '_').replace('/', '_')
+    stem = ''.join(c for c in stem if c.isalnum() or c in '_-') or 'Synth_Profile'
+    subject_rows_raw = draft.get('subject_rows') or []
+    subject_rows = []
+    for row in subject_rows_raw:
+        if isinstance(row, list) and len(row) >= 2:
+            subject_rows.append((str(row[0]), str(row[1])))
+        elif isinstance(row, dict) and 'column' in row and 'value' in row:
+            subject_rows.append((str(row['column']), str(row['value'])))
+    extra_rows_raw = draft.get('extra_rows') or []
+    extra_rows = []
+    for row in extra_rows_raw:
+        if isinstance(row, list) and len(row) >= 2:
+            extra_rows.append([str(row[0]), str(row[1])])
+        elif isinstance(row, dict) and 'column' in row and 'value' in row:
+            extra_rows.append([str(row['column']), str(row['value'])])
+    spec = {
+        'name': subject,
+        'file_stem': stem,
+        'brand_category': draft.get('brand_category') or 'BRAND',
+        'subject_raw_tu': int(draft.get('subject_raw_tu') or 10000),
+        'subject_raw_avid': int(draft.get('subject_raw_avid') or 3000),
+        'subject_rows': subject_rows,
+        'tu_demos': draft.get('tu_demos') or {},
+        'avid_demos': draft.get('avid_demos') or draft.get('tu_demos') or {},
+        'extra_rows': extra_rows,
+        'persona_notes': draft.get('persona_notes') or '',
+        'category_lifts': {},
+        'brand_overrides': {},
+    }
+    return spec
+
+
+@app.route('/api/synth-chat/approve', methods=['POST'])
+@requires_auth
+def api_synth_chat_approve():
+    """User-approved spec + run params -> POSTs to Hetzner queue. Returns run_id."""
+    user, err = _synth_chat_gate()
+    if err:
+        return err
+    if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
+        return jsonify({
+            'success': False,
+            'error': 'SYNTH_QUEUE_URL / SYNTH_QUEUE_SECRET not configured on Render.',
+        }), 503
+
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+
+    draft = body.get('spec_draft') or {}
+    if not draft:
+        return jsonify({'success': False, 'error': 'spec_draft required'}), 400
+
+    spec = _spec_from_draft(draft)
+    run_avid = bool(body.get('run_avid', True))
+    email_to = (body.get('email_to') or '').strip()
+
+    payload = {
+        'user_email': user.get('email') or user.get('username') or 'unknown',
+        'run_avid': run_avid,
+        'email_to': email_to,
+        'spec': spec,
+    }
+
+    try:
+        import requests as _requests
+        resp = _requests.post(
+            f"{SYNTH_QUEUE_URL}/synth/queue",
+            json=payload, timeout=30,
+            headers={'X-Synth-Auth': SYNTH_QUEUE_SECRET,
+                     'Content-Type': 'application/json'},
+        )
+        if resp.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'queue returned {resp.status_code}: {resp.text[:400]}',
+            }), 502
+        queue_resp = resp.json()
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({
+            'success': False, 'error': f'queue POST failed: {e}',
+        }), 502
+
+    return jsonify({
+        'success': True,
+        'run_id': queue_resp.get('run_id'),
+        'pending_position': queue_resp.get('pending_position'),
+        'subject': spec['name'],
+        'brand_category': spec['brand_category'],
+        'run_avid': run_avid,
+        'email_to': email_to,
+    })
+
+
+@app.route('/api/synth-chat/status/<run_id>', methods=['GET'])
+@requires_auth
+def api_synth_chat_status(run_id):
+    """Poll Hetzner queue for run status."""
+    user, err = _synth_chat_gate()
+    if err:
+        return err
+    if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
+        return jsonify({'success': False,
+                         'error': 'synth queue not configured'}), 503
+    try:
+        import requests as _requests
+        resp = _requests.get(
+            f"{SYNTH_QUEUE_URL}/synth/status/{run_id}", timeout=15,
+            headers={'X-Synth-Auth': SYNTH_QUEUE_SECRET},
+        )
+        if resp.status_code == 404:
+            return jsonify({'success': True,
+                             'status': {'run_id': run_id, 'status': 'unknown'}})
+        if resp.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'status returned {resp.status_code}: {resp.text[:400]}',
+            }), 502
+        return jsonify({'success': True, 'status': resp.json()})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 502
+
+
+@app.route('/api/synth-chat/history', methods=['GET', 'POST'])
+@requires_auth
+def api_synth_chat_history():
+    """Per-user chat message history persistence (S3-backed)."""
+    user, err = _synth_chat_gate()
+    if err:
+        return err
+    uname = user.get('username') or user.get('email') or 'anon'
+    if request.method == 'GET':
+        return jsonify({'success': True,
+                         'history': _load_synth_chat_history(uname)})
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+    history = body.get('history') or []
+    if not isinstance(history, list):
+        return jsonify({'success': False,
+                         'error': 'history must be a list'}), 400
+    ok = _save_synth_chat_history(uname, history)
+    return jsonify({'success': ok})
+
+
+@app.route('/api/synth-chat/health', methods=['GET'])
+@requires_auth
+def api_synth_chat_health():
+    """Quick health-check the frontend uses to decide whether to show the tab."""
+    user, err = _synth_chat_gate()
+    if err:
+        return err
+    if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
+        return jsonify({'success': False, 'configured': False,
+                         'error': 'SYNTH_QUEUE_URL/SYNTH_QUEUE_SECRET missing'}), 503
+    try:
+        import requests as _requests
+        resp = _requests.get(f"{SYNTH_QUEUE_URL}/synth/health", timeout=5)
+        if resp.status_code == 200:
+            return jsonify({'success': True, 'configured': True,
+                             'queue': resp.json()})
+        return jsonify({'success': False, 'configured': True,
+                         'error': f'queue health {resp.status_code}'}), 502
+    except Exception as e:
+        return jsonify({'success': False, 'configured': True,
+                         'error': str(e)}), 502
 
 
 # ============================================================================

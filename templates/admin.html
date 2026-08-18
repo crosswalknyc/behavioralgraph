@@ -2255,6 +2255,10 @@
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="microdramasIQ" onchange="updateHiddenProduct('microdramasIQ', this.checked)">
                                 <span>📱 Microdramas</span>
                             </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="chatbotProfileIQ" onchange="updateHiddenProduct('chatbotProfileIQ', this.checked)">
+                                <span>💬 Chatbot Profile IQ</span>
+                            </label>
                         </div>
                         <div style="margin-top: 0.75rem; padding: 0.6rem 0.75rem; background: rgba(124, 58, 237, 0.08); border-radius: 6px; border: 1px solid rgba(124, 58, 237, 0.25);">
                             <p style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">
@@ -3926,7 +3930,23 @@
                             </div>
                         </div>
                     </div>
-                    
+
+                    <!-- Chatbot Profile IQ Access (2026-08-17) - sub-tab in Analysis IQ.
+                         Runs a natural-language chat that produces an approvable brief,
+                         then kicks off a row-by-row synthesis on Hetzner. Kept as its
+                         own access flag so admins can grant it independent of Analysis
+                         IQ module access. Registered in DEFAULT_HIDDEN_PRODUCTS +
+                         index.html #viewNavDropdown (via chatbotProfileIQ key). -->
+                    <div class="dashboard-access-item" data-access-group="finance">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="hasChatbotProfileIQAccess">
+                                <span style="font-weight: 600;">💬 CHATBOT PROFILE IQ</span>
+                            </label>
+                            <span style="margin-left: auto; font-size: 0.72rem; color: var(--text-secondary);">Analysis IQ · natural-language synth</span>
+                        </div>
+                    </div>
+
                     <!-- 🎬 TICKET SALES TRACKER Access - section hidden 2026-07-19
                          (removed from admin grants per Jenna). Inner checkboxes
                          are kept (hidden) so JS handlers reading their
@@ -7326,7 +7346,7 @@
             impactIQ: false,
             roasIQ: false, brandPartnershipIQ: false, flywheelConversion: false,
             customAnalysis: false, shareOfTimeIQ: false, workspace: false,
-            helmIQ: false, microdramasIQ: false
+            helmIQ: false, microdramasIQ: false, chatbotProfileIQ: false
         };
         
         // Load Live Features from server
@@ -9619,6 +9639,8 @@
             if (tiqAccess) tiqAccess.checked = user.has_trends_iq_access === true; // Default false
             var mdAccess = document.getElementById('hasMicrodramasIQAccess');
             if (mdAccess) mdAccess.checked = user.has_microdramas_iq_access === true; // Default false
+            var cbpiqAccess = document.getElementById('hasChatbotProfileIQAccess');
+            if (cbpiqAccess) cbpiqAccess.checked = user.has_chatbot_profile_iq_access === true; // Default false
             // 2026-07-30: reflect the loaded child states in the consolidated
             // 📈 TRENDS master (checked / unchecked / indeterminate). Talent
             // Ranker (hasRankersIQAccess) is also in this group but is loaded
@@ -12430,6 +12452,7 @@
                 has_blue_iq_access: !!(document.getElementById('hasBlueIQAccess') && document.getElementById('hasBlueIQAccess').checked),
                 has_trends_iq_access: !!(document.getElementById('hasTrendsIQAccess') && document.getElementById('hasTrendsIQAccess').checked),
                 has_microdramas_iq_access: !!(document.getElementById('hasMicrodramasIQAccess') && document.getElementById('hasMicrodramasIQAccess').checked),
+                has_chatbot_profile_iq_access: !!(document.getElementById('hasChatbotProfileIQAccess') && document.getElementById('hasChatbotProfileIQAccess').checked),
                 has_impact_iq_access: !!(document.getElementById('hasImpactIQAccess') && document.getElementById('hasImpactIQAccess').checked),
                 impact_iq_journeys: getImpactIQJourneys(),
                 has_talent_fit_access: document.getElementById('hasTalentFitAccess').checked,

@@ -19345,6 +19345,11 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                         🔍 Incidence Check <span style="font-size: 0.7em; opacity: 0.9;">(Free)</span>
                     </button>
                     {% endif %}
+                    {% if has_chatbot_profile_iq_access or role == 'super_admin' %}
+                    <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('chatbot-profile-iq')" id="customAnalysisTabChatbotProfileIQ">
+                        💬 Chatbot Profile IQ <span style="font-size: 0.7em; opacity: 0.9;">(25 credits)</span>
+                    </button>
+                    {% endif %}
                 </div>
             </div>
             
@@ -20911,6 +20916,52 @@ https://www.instagram.com/p/..."></textarea>
                         <div class="card" id="incidenceCheckResultsCard" style="display: none;">
                             <h2>📊 Incidence Results</h2>
                             <div id="incidenceCheckResults"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chatbot Profile IQ Tab Content (2026-08-17) -->
+                <div id="customAnalysisTabContentChatbotProfileIQ" class="custom-analysis-tab-content">
+                    <div class="main-grid" style="grid-template-columns: 1fr; max-width: 1100px; margin: 0 auto;">
+                        <div class="card" style="display: flex; flex-direction: column; height: calc(100vh - 220px); min-height: 500px;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 0.5rem;">
+                                <h2 style="margin:0;">💬 Chatbot Profile IQ</h2>
+                                <span id="synthChatQueueBadge" style="font-size: 0.72rem; color: var(--text-secondary);"></span>
+                            </div>
+                            <p style="margin: 0 0 0.75rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">
+                                Describe the profile you want. The agent will draft a structured brief. Review it, tweak if needed, then approve to kick off a row-by-row synthesis. The finished profile will land in your Select Profile dropdown.
+                            </p>
+
+                            <div id="synthChatMessages" style="flex: 1; overflow-y: auto; padding: 0.5rem; background: var(--bg-input, #1a1a1a); border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 0.5rem; min-height: 260px;">
+                                <div class="synth-chat-empty" style="text-align: center; color: var(--text-secondary); padding: 3rem 1rem; font-size: 0.9rem;">
+                                    Start by typing what you're looking for below.<br>
+                                    <span style="font-size:0.8em; opacity:0.75;">Examples: "K-pop fans in the US", "cancelled Netflix, signed up for Max in the last 12 months", "Sephora shoppers who bought at Ulta in the same window", "moms of tweens who buy Prime Video".</span>
+                                </div>
+                            </div>
+
+                            <div id="synthChatBriefPreview" style="display:none; padding: 0.75rem; margin-bottom: 0.5rem; background: rgba(84, 141, 255, 0.06); border: 1px solid rgba(84,141,255,0.30); border-radius: 8px;">
+                                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
+                                    <strong style="color: var(--text-primary); font-size: 0.9rem;">📝 Draft brief - review before approving</strong>
+                                    <span id="synthChatBriefModel" style="font-size: 0.7rem; opacity: 0.7;"></span>
+                                </div>
+                                <pre id="synthChatBriefJson" style="max-height: 340px; overflow: auto; font-size: 0.72rem; background: rgba(0,0,0,0.30); padding: 0.6rem; border-radius: 6px; color: #e9e9e9; white-space: pre-wrap;"></pre>
+                                <div style="display:flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                                    <label style="font-size:0.8rem; color: var(--text-secondary); display:flex; align-items:center; gap:0.35rem;">
+                                        <input type="checkbox" id="synthChatRunAvid" checked> Run Avid cohort too
+                                    </label>
+                                    <label style="font-size:0.8rem; color: var(--text-secondary); display:flex; align-items:center; gap:0.35rem;">
+                                        Email to: <input type="email" id="synthChatEmailTo" placeholder="you@example.com" style="width: 220px; padding: 0.25rem 0.4rem; font-size: 0.8rem; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);">
+                                    </label>
+                                    <span style="flex:1;"></span>
+                                    <button class="btn" onclick="synthChatCancelBrief()" style="padding: 0.4rem 0.85rem; font-size: 0.8rem; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary);">Cancel</button>
+                                    <button class="btn btn-primary" onclick="synthChatApproveBrief()" id="synthChatApproveBtn" style="padding: 0.4rem 1rem; font-size: 0.8rem;">Approve &amp; run</button>
+                                </div>
+                            </div>
+
+                            <div style="display:flex; gap: 0.5rem;">
+                                <textarea id="synthChatInput" placeholder="What profile do you want to synthesize?" rows="2" style="flex: 1; padding: 0.6rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; resize: vertical;"></textarea>
+                                <button class="btn btn-primary" onclick="synthChatSubmit()" id="synthChatSubmitBtn" style="padding: 0.6rem 1.2rem; font-size: 0.9rem; align-self: stretch;">Send</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -57723,7 +57774,7 @@ https://www.instagram.com/p/..."></textarea>
                            'customAnalysisTabSVODAcquisition', 'customAnalysisTabCampaignROI', 'customAnalysisTabCrossShow',
                            'customAnalysisTabWatchTime', 'customAnalysisTabTicketSalesTracker', 'customAnalysisTabSFLFConversion',
                            'customAnalysisTabRoasIQ', 'customAnalysisTabEcommerceIQ', 'customAnalysisTabBrandPartnership', 'customAnalysisTabJourneyIQ', 'customAnalysisTabDigitalJourney', 'customAnalysisTabIntentIngest', 'customAnalysisTabSentimentIQ', 'customAnalysisTabTalentFit', 'customAnalysisTabFlywheelConversion',
-                           'customAnalysisTabShareOfTime', 'customAnalysisTabIncidenceCheck'];
+                           'customAnalysisTabShareOfTime', 'customAnalysisTabIncidenceCheck', 'customAnalysisTabChatbotProfileIQ'];
             tabIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -57741,7 +57792,8 @@ https://www.instagram.com/p/..."></textarea>
                                'customAnalysisTabContentIntentIngest',
                                'customAnalysisTabContentSentimentIQ',
                                'customAnalysisTabContentTalentFit', 'customAnalysisTabContentFlywheelConversion',
-                               'customAnalysisTabContentShareOfTime', 'customAnalysisTabContentIncidenceCheck'];
+                               'customAnalysisTabContentShareOfTime', 'customAnalysisTabContentIncidenceCheck',
+                               'customAnalysisTabContentChatbotProfileIQ'];
             contentIds.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.classList.remove('active');
@@ -57900,9 +57952,221 @@ https://www.instagram.com/p/..."></textarea>
                 const content = document.getElementById('customAnalysisTabContentIncidenceCheck');
                 if (tab) tab.classList.add('active');
                 if (content) content.classList.add('active');
+            } else if (tabName === 'chatbot-profile-iq') {
+                const tab = document.getElementById('customAnalysisTabChatbotProfileIQ');
+                const content = document.getElementById('customAnalysisTabContentChatbotProfileIQ');
+                if (tab) tab.classList.add('active');
+                if (content) content.classList.add('active');
+                if (typeof synthChatInit === 'function') synthChatInit();
             }
         }
-        
+
+        // ===================== CHATBOT PROFILE IQ (2026-08-17) =====================
+        // Natural-language chat surface that produces an approvable brief, then
+        // POSTs it to the Hetzner synth queue via /api/synth-chat/*.
+        let synthChatHistory = [];
+        let synthChatCurrentDraft = null;
+        let synthChatActiveRun = null;
+        let synthChatPollTimer = null;
+
+        function synthChatInit() {
+            if (window.__synthChatBooted) return;
+            window.__synthChatBooted = true;
+            fetch('/api/synth-chat/history', { credentials: 'same-origin' })
+                .then(function(r) { return r.ok ? r.json() : { history: [] }; })
+                .then(function(d) {
+                    synthChatHistory = (d && d.history) || [];
+                    synthChatRerender();
+                })
+                .catch(function(){});
+            fetch('/api/synth-chat/health', { credentials: 'same-origin' })
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(d) {
+                    var badge = document.getElementById('synthChatQueueBadge');
+                    if (badge && d && d.queue && d.queue.queue) {
+                        var q = d.queue.queue;
+                        badge.textContent =
+                            'queue: ' + q.pending + ' pending, ' + q.running + ' running, ' + q.completed + ' completed';
+                    }
+                })
+                .catch(function(){});
+        }
+
+        function _synthChatEscapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function synthChatRerender() {
+            var box = document.getElementById('synthChatMessages');
+            if (!box) return;
+            if (!synthChatHistory.length) {
+                box.innerHTML = '<div class="synth-chat-empty" style="text-align:center; color: var(--text-secondary); padding: 3rem 1rem; font-size: 0.9rem;">Start by typing what you\'re looking for below.</div>';
+                return;
+            }
+            var rows = synthChatHistory.map(function(turn) {
+                var role = (turn.role || 'user').toLowerCase();
+                var text = _synthChatEscapeHtml(turn.text || '');
+                var isUser = role === 'user';
+                var bg = isUser ? 'rgba(84, 141, 255, 0.14)' : 'rgba(255,255,255,0.05)';
+                var label = isUser ? '👤 You' : '🤖 Agent';
+                return '<div style="margin-bottom: 0.55rem; padding: 0.55rem 0.7rem; background: ' + bg + '; border-radius: 8px;">' +
+                    '<div style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 0.25rem;">' + label + '</div>' +
+                    '<div style="font-size: 0.85rem; white-space: pre-wrap; line-height: 1.4;">' + text + '</div>' +
+                    '</div>';
+            }).join('');
+            box.innerHTML = rows;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function synthChatPushTurn(role, text) {
+            synthChatHistory.push({ role: role, text: text, ts: new Date().toISOString() });
+            synthChatRerender();
+            try {
+                fetch('/api/synth-chat/history', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ history: synthChatHistory }),
+                });
+            } catch (_) {}
+        }
+
+        async function synthChatSubmit() {
+            var input = document.getElementById('synthChatInput');
+            var btn = document.getElementById('synthChatSubmitBtn');
+            var text = (input && input.value || '').trim();
+            if (!text) return;
+            input.value = '';
+            synthChatPushTurn('user', text);
+            btn.disabled = true;
+            var prev = btn.textContent;
+            btn.textContent = 'Thinking...';
+            try {
+                var r = await fetch('/api/synth-chat/interpret', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ text: text, history: synthChatHistory.slice(0, -1) }),
+                });
+                var data = await r.json();
+                if (!r.ok || !data.success) {
+                    synthChatPushTurn('agent',
+                        'Sorry, I could not interpret that. ' + (data.error || 'Unknown error') +
+                        (data.raw_excerpt ? '\n\n' + data.raw_excerpt.slice(0, 400) : ''));
+                    return;
+                }
+                synthChatCurrentDraft = data.spec_draft || {};
+                var s = synthChatCurrentDraft;
+                var summary =
+                    'Here is the draft brief for **' + (s.subject || 'this profile') + '**:\n\n' +
+                    '- Category: ' + (s.brand_category || '?') + (s.category_note ? ' (' + s.category_note + ')' : '') + '\n' +
+                    '- TU sample: ' + (s.subject_raw_tu || 0).toLocaleString() + ' panelists\n' +
+                    (s.subject_raw_avid ? '- Avid sample: ' + s.subject_raw_avid.toLocaleString() + ' panelists\n' : '') +
+                    '- Peer set: ' + ((s.extra_rows || []).length) + ' anchor rows\n' +
+                    '- Est. run: ~' + (s.estimated_run_minutes || 25) + ' min\n\n' +
+                    'Review the JSON below. Approve to run, or send another message to adjust.';
+                synthChatPushTurn('agent', summary);
+                _synthChatShowBrief(synthChatCurrentDraft, data.model);
+            } catch (e) {
+                synthChatPushTurn('agent', 'Request failed: ' + (e && e.message || e));
+            } finally {
+                btn.disabled = false;
+                btn.textContent = prev;
+            }
+        }
+
+        function _synthChatShowBrief(draft, model) {
+            var panel = document.getElementById('synthChatBriefPreview');
+            var pre = document.getElementById('synthChatBriefJson');
+            var modelBadge = document.getElementById('synthChatBriefModel');
+            if (!panel || !pre) return;
+            pre.textContent = JSON.stringify(draft, null, 2);
+            if (modelBadge) modelBadge.textContent = model ? ('model: ' + model) : '';
+            panel.style.display = 'block';
+            var runAvid = document.getElementById('synthChatRunAvid');
+            if (runAvid) runAvid.checked = draft.run_avid !== false;
+        }
+
+        function synthChatCancelBrief() {
+            var panel = document.getElementById('synthChatBriefPreview');
+            if (panel) panel.style.display = 'none';
+            synthChatCurrentDraft = null;
+            synthChatPushTurn('agent', 'Draft cancelled. Send another message to try again.');
+        }
+
+        async function synthChatApproveBrief() {
+            if (!synthChatCurrentDraft) return;
+            var runAvid = !!document.getElementById('synthChatRunAvid').checked;
+            var emailTo = (document.getElementById('synthChatEmailTo').value || '').trim();
+            var approveBtn = document.getElementById('synthChatApproveBtn');
+            approveBtn.disabled = true;
+            var prev = approveBtn.textContent;
+            approveBtn.textContent = 'Queuing...';
+            try {
+                var r = await fetch('/api/synth-chat/approve', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        spec_draft: synthChatCurrentDraft,
+                        run_avid: runAvid,
+                        email_to: emailTo,
+                    }),
+                });
+                var data = await r.json();
+                if (!r.ok || !data.success) {
+                    synthChatPushTurn('agent', 'Queue failed: ' + (data.error || r.statusText));
+                    return;
+                }
+                synthChatActiveRun = data.run_id;
+                var panel = document.getElementById('synthChatBriefPreview');
+                if (panel) panel.style.display = 'none';
+                synthChatCurrentDraft = null;
+                synthChatPushTurn('agent',
+                    'Queued run `' + data.run_id + '` for **' + data.subject + '**' +
+                    (data.pending_position ? ' (position ' + data.pending_position + ' in queue)' : '') +
+                    '. I will update this thread as the pipeline progresses.');
+                _synthChatStartPolling(data.run_id);
+            } catch (e) {
+                synthChatPushTurn('agent', 'Approve failed: ' + (e && e.message || e));
+            } finally {
+                approveBtn.disabled = false;
+                approveBtn.textContent = prev;
+            }
+        }
+
+        function _synthChatStartPolling(runId) {
+            if (synthChatPollTimer) clearInterval(synthChatPollTimer);
+            var lastStatus = null;
+            synthChatPollTimer = setInterval(async function() {
+                try {
+                    var r = await fetch('/api/synth-chat/status/' + encodeURIComponent(runId), {
+                        credentials: 'same-origin',
+                    });
+                    var data = await r.json();
+                    if (!r.ok || !data.success) return;
+                    var st = (data.status || {});
+                    var cur = st.status || 'unknown';
+                    if (cur !== lastStatus) {
+                        lastStatus = cur;
+                        var msg = 'Run `' + runId + '` -> ' + cur;
+                        if (cur === 'tu_done' && st.tu_key) msg += '\nTU CSV: ' + st.tu_key;
+                        if (cur === 'avid_done' && st.avid_key) msg += '\nAvid CSV: ' + st.avid_key;
+                        if (cur === 'complete') {
+                            msg += '\nFinished. Reload the Select Profile dropdown to see the new files.';
+                            if (st.tu_key) msg += '\nTU: ' + st.tu_key;
+                            if (st.avid_key) msg += '\nAvid: ' + st.avid_key;
+                        }
+                        if (cur === 'error') msg += '\nError: ' + (st.error || 'unknown');
+                        synthChatPushTurn('agent', msg);
+                        if (cur === 'complete' || cur === 'error') {
+                            clearInterval(synthChatPollTimer);
+                            synthChatPollTimer = null;
+                        }
+                    }
+                } catch (_) {}
+            }, 8000);
+        }
+
         // Custom Analysis Profile IQ now uses original formView - no custom form handler needed
 
         // ===================== TALENT FIT ASSESSMENT =====================
