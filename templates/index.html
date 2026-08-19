@@ -21173,6 +21173,13 @@ https://www.instagram.com/p/..."></textarea>
                             </div>
 
                             <div style="display:flex; flex-direction: column; gap: 0.4rem;">
+                                <div id="synthChatStarterChips" style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                                    <button type="button" onclick="synthChatChipFill('Pitching [brand] - help me figure out the right audience to profile')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Prep a pitch</button>
+                                    <button type="button" onclick="synthChatChipFill('Run a profile for [brand or talent]')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Build a profile</button>
+                                    <button type="button" onclick="synthChatChipFill('Sample size for [audience], past 12 months')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Size an audience first</button>
+                                    <button type="button" onclick="synthChatChipFill('Cut [existing profile] by [female, Gen Z, or a market]')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Cut a profile I own</button>
+                                    <button type="button" onclick="synthChatChipFill('Refresh [existing profile] for the latest 12 months')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Refresh a profile</button>
+                                </div>
                                 <textarea id="synthChatInput" placeholder="What profile do you want? (audience, cohort, brand, talent, or segment)" rows="3" style="width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; resize: vertical; min-height: 72px; font-family: inherit;" onkeydown="if(event.key==='Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); synthChatSubmit(); }"></textarea>
                                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
                                     <span id="synthChatInputHint" style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.7;">Enter to send &middot; Shift + Enter for new line</span>
@@ -58913,6 +58920,8 @@ https://www.instagram.com/p/..."></textarea>
         function synthChatRerender() {
             var box = document.getElementById('synthChatMessages');
             if (!box) return;
+            var _chips = document.getElementById('synthChatStarterChips');
+            if (_chips) _chips.style.display = synthChatHistory.length ? 'none' : 'flex';
             if (!synthChatHistory.length) {
                 box.innerHTML = '<div class="brief-chat-empty" style="text-align:center; color: var(--text-secondary); padding: 3rem 1rem; font-size: 0.9rem;">Start by typing what you\'re looking for below.</div>';
                 return;
@@ -58930,6 +58939,18 @@ https://www.instagram.com/p/..."></textarea>
             }).join('');
             box.innerHTML = rows;
             box.scrollTop = box.scrollHeight;
+        }
+
+        function synthChatChipFill(template) {
+            var input = document.getElementById('synthChatInput');
+            if (!input) return;
+            input.value = template;
+            input.focus();
+            var a = template.indexOf('[');
+            var b = template.indexOf(']');
+            if (a >= 0 && b > a) {
+                try { input.setSelectionRange(a, b + 1); } catch (_) {}
+            }
         }
 
         function synthChatPushTurn(role, text) {
@@ -59880,11 +59901,27 @@ https://www.instagram.com/p/..."></textarea>
         // Turn the interpret step's decision into a plain-English sentence
         // the user actually wants to read. No JSON, no 'TU sample /
         // panelists / peer set / anchor rows / estimated run' internals.
-        // Guided-flow clarify helpers (2026-08-19). The first
-        // question of each step is client-side copy; every follow-up
-        // message comes from the clarify endpoint, which also updates
-        // the draft (region_scope / addon_cuts / estimated_credits).
+        // Guided-flow clarify helpers (2026-08-19, Cut Strategist
+        // rework same day). The first question of each step is
+        // client-side copy; every follow-up message comes from the
+        // clarify endpoint, which also updates the draft
+        // (business_goal / addon_cuts / estimated_credits). The base
+        // build is ALWAYS the national total universe + avid; every
+        // cut (markets included) is 3 credits derived from it.
         function _synthChatClarifyQuestion(step) {
+            if (step === 'goal') {
+                return 'Quick context so I can recommend the right ' +
+                    'cuts: **what is this for?** A pitch, media ' +
+                    'planning, content strategy, competitive ' +
+                    'research... one line is plenty. Or say **skip**.';
+            }
+            if (step === 'strategy') {
+                return 'Want any **add-on cuts**? Female only, male ' +
+                    'only, by generation, an age band, or a specific ' +
+                    'market - **3 credits per cut**, every cut ' +
+                    'derived from the national build. Name them, or ' +
+                    'say **none**.';
+            }
             if (step === 'cuts') {
                 return 'Want any **additional cuts** beyond the ' +
                     'standard build? Female only, male only, by ' +
@@ -59892,11 +59929,11 @@ https://www.instagram.com/p/..."></textarea>
                     '**3 credits per cut** - name the ones you want, ' +
                     'or say **none**.';
             }
-            return 'Quick scoping question: is this for a ' +
-                '**regional business**? Reply **national** for ' +
-                'nationwide, or name the markets to include (e.g. ' +
-                '"LA and San Diego", "Texas only") - the location ' +
-                'mix will then include ONLY those markets.';
+            return 'Is this for a **regional business**? The total ' +
+                'universe and avid always build national - name the ' +
+                'markets you care about (e.g. "LA and San Diego") ' +
+                'and each becomes its own **3-credit cut**, or ' +
+                'reply **national**.';
         }
 
         async function _synthChatClarifyAnswer(answerText) {
