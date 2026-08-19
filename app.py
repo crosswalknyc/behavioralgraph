@@ -44087,6 +44087,442 @@ def _synth_chat_incidence_check(text, history=None):
     })
 
 
+# --------------------------------------------------------------------
+# Guided scoping flow (2026-08-19, Jenna directive: "create a type of
+# prompt that helps ensure the user is getting the right cut of data
+# ... natural language metatagging ... if I say im pitching go go
+# squeeze it would help me figure out what kind of profile to build
+# ... it should also ask do you want to add additional cuts (3 credits
+# x cut, said as they add them) ... are you a regional business - if
+# regional the locations are ONLY those they list (Malibu resolves to
+# Los Angeles) ... cuts must ladder up to the total universe profile.")
+#
+# Three pieces:
+#   1. DISCOVERY: "I'm pitching GoGo squeeZ" (a business goal, not an
+#      audience) -> one reasoning call proposes 2-4 audience framings
+#      the user picks from. Direct asks ("build a profile of X") skip
+#      this entirely and behave exactly as before.
+#   2. CLARIFY steps: every fresh single-subject build gets two quick
+#      questions before the approval card - region (national vs
+#      specific markets, free text resolved to canonical Nielsen DMAs)
+#      and add-on cuts (female only, male only, generations, age
+#      bands, a specific DMA... 3 credits per cut, priced as added).
+#   3. The answers ride the draft: `region_scope` constrains the
+#      build's LOCATION category to ONLY the listed DMAs (enforced
+#      worker-side + injected into persona notes); `addon_cuts` are
+#      derived off the finished TU parent so they ladder up by
+#      construction, with partition coherence enforced for full
+#      gender/generation sets.
+# --------------------------------------------------------------------
+
+_NIELSEN_DMAS_CACHE = None
+
+
+def _nielsen_dma_list():
+    """Canonical Nielsen DMA labels exactly as the pipeline emits them
+    in LOCATION rows ('New York Ny', 'Los Angeles Ca', ...). Loaded
+    from reference_nielsen_dmas.txt (committed next to app.py, dumped
+    from Gen_Pop_2026.csv LOCATION rows)."""
+    global _NIELSEN_DMAS_CACHE
+    if _NIELSEN_DMAS_CACHE is not None:
+        return _NIELSEN_DMAS_CACHE
+    dmas = []
+    try:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            'reference_nielsen_dmas.txt')
+        with open(path, encoding='utf-8') as f:
+            dmas = [ln.strip() for ln in f if ln.strip()]
+    except Exception as e:
+        print(f"[dma-list] load failed: {e}")
+    _NIELSEN_DMAS_CACHE = dmas
+    return dmas
+
+
+def _synth_chat_is_discovery_request(text):
+    """True when the message states a business goal (pitch, meeting,
+    deck, client) WITHOUT defining an audience - the case where the
+    user needs help figuring out what kind of profile to build.
+    Direct build asks return False so they behave exactly as today.
+    """
+    import re as _re
+    t = (text or '').strip().lower()
+    if not t or len(t) > 500:
+        return False
+    # Direct build ask with an audience attached -> NOT discovery.
+    if _re.search(r'\b(build|run|make|create|pull|queue|launch|refresh)'
+                  r'\b[^.?!]{0,40}\b(profile|cut|audience|cohort)s?\b'
+                  r'\s+(of|on|for)\s+\S', t):
+        return False
+    # Explicit audience descriptors -> they already know the cut.
+    if _re.search(r'\b(viewers|buyers|purchasers|shoppers|subscribers|'
+                  r'listeners|owners|fans|users|moms|dads|parents)\b'
+                  r'[^.?!]{0,30}\b(of|who|for)\b', t):
+        return False
+    pitch = _re.search(
+        r"\b(i'?m|im|we'?re|were|i am|we are)\s+pitching\b"
+        r"|\bpitching\s+[a-z0-9]"
+        r"|\bprepping\s+(a\s+|the\s+)?(deck|pitch|meeting|presentation)\b"
+        r"|\b(meeting|presenting)\s+(with|to)\s+[a-z0-9]"
+        r"|\brfp\s+(for|from)\b"
+        r"|\b(new\s+)?(client|prospect)\s+is\s+[a-z0-9]"
+        r"|\bwhat\s+(kind|type)\s+of\s+profile\b"
+        r"|\bhelp\s+me\s+figure\s+out\s+(what|which|who)\b"
+        r"|\bwho\s+should\s+(we|i)\s+(profile|pull|target)\b",
+        t)
+    return bool(pitch)
+
+
+def _synth_chat_discovery_options(text):
+    """One reasoning call: business context -> 2-4 audience framings.
+    Returns a Flask response with a `discovery` payload the frontend
+    renders as a numbered pick list."""
+    system_prompt = (
+        "You help an insights operator decide which audience profile to "
+        "build for a business goal (a pitch, client meeting, or deck). "
+        "Given their goal, propose 2-4 DISTINCT audience framings, "
+        "ordered most-recommended first.\n\n"
+        "Good framings are specific and buildable, e.g. for a GoGo "
+        "squeeZ pitch: 'Moms who shop for GoGo squeeZ' (the buyer), "
+        "'Kids' snack category buyers' (the category), 'GoGo squeeZ "
+        "brand engagers' (the widest brand audience). Think: who is "
+        "the DECISION MAKER, who is the CATEGORY buyer, who is the "
+        "brand's engaged audience, and (when relevant) who is the "
+        "growth target the pitch is chasing.\n\n"
+        "Each option needs:\n"
+        "  label: short display name (<= 6 words)\n"
+        "  audience: one buildable audience sentence, phrased so it "
+        "can be handed straight to a profile builder\n"
+        "  why: one sentence on when this framing wins the pitch\n\n"
+        "Return STRICT JSON only:\n"
+        "{\"brand\": \"<who they're pitching>\", \"options\": ["
+        "{\"label\": \"...\", \"audience\": \"...\", \"why\": \"...\"}"
+        ", ...]}"
+    )
+    result = _run_nflx_claude_agent(
+        system_prompt=system_prompt,
+        user_prompt=f"Business goal from the operator:\n{text.strip()}",
+        max_tokens=1500, temperature=0.5,
+    )
+    if not result.get('success'):
+        return jsonify({
+            'success': False,
+            'error': ('I could not scope that. Tell me who you are '
+                      'pitching and I will propose audience options.'),
+        }), result.get('status', 502)
+    d = result.get('data') or {}
+    options = []
+    for o in (d.get('options') or [])[:4]:
+        if not isinstance(o, dict):
+            continue
+        label = str(o.get('label') or '').strip()
+        audience = str(o.get('audience') or '').strip()
+        if not label or not audience:
+            continue
+        options.append({
+            'label': label,
+            'audience': audience,
+            'why': str(o.get('why') or '').strip(),
+        })
+    if len(options) < 2:
+        return jsonify({
+            'success': False,
+            'error': ('I could not scope that. Tell me who you are '
+                      'pitching and I will propose audience options.'),
+        }), 502
+    brand = str(d.get('brand') or '').strip() or 'this pitch'
+    lines = [f"Let's make sure we pull the right audience for "
+             f"**{brand}**. A few ways to frame it:", ""]
+    for i, o in enumerate(options, 1):
+        lines.append(f"**{i}. {o['label']}** - {o['audience']}")
+        if o['why']:
+            lines.append(f"   {o['why']}")
+    lines.append("")
+    lines.append("Reply with a number to build that audience, or "
+                 "describe your own framing.")
+    return jsonify({
+        'success': True,
+        'discovery': {
+            'brand': brand,
+            'options': options,
+            'message': "\n".join(lines),
+        },
+        'model': result.get('model'),
+    })
+
+
+def _resolve_markets_to_dmas(answer_text):
+    """Resolve free-text market names to canonical Nielsen DMA labels.
+    'Malibu' -> 'Los Angeles Ca'; 'the Bay Area' -> 'San Francisco
+    Oakland San Jose Ca'. Returns (resolved: list, unresolved: list).
+    Output is validated against the canonical 210-DMA list - the
+    resolver can never invent a market."""
+    dmas = _nielsen_dma_list()
+    if not dmas:
+        return [], [answer_text]
+    system_prompt = (
+        "You map US place names (cities, neighborhoods, counties, "
+        "regions, states) to Nielsen DMA market names from a fixed "
+        "list. A neighborhood or suburb maps to its DMA (Malibu -> "
+        "Los Angeles Ca; Brooklyn -> New York Ny; the Bay Area -> "
+        "San Francisco Oakland San Jose Ca). A state or multi-market "
+        "region maps to ALL the DMAs it contains (e.g. Arizona -> "
+        "Phoenix Prescott Az, Tucson Sierra Vista Az, Yuma Az El "
+        "Centro Ca). Only use names EXACTLY as they appear in the "
+        "list. If a place cannot be mapped, put it in unresolved.\n\n"
+        "CANONICAL DMA LIST:\n" + "\n".join(dmas) + "\n\n"
+        "Return STRICT JSON only:\n"
+        "{\"dmas\": [\"<exact canonical name>\", ...], "
+        "\"unresolved\": [\"<input place>\", ...]}"
+    )
+    result = _run_nflx_claude_agent(
+        system_prompt=system_prompt,
+        user_prompt=f"Markets the user listed:\n{answer_text.strip()}",
+        max_tokens=1200, temperature=0.1,
+    )
+    if not result.get('success'):
+        return [], [answer_text]
+    d = result.get('data') or {}
+    canon = {x.lower(): x for x in dmas}
+    resolved, seen = [], set()
+    for name in (d.get('dmas') or []):
+        c = canon.get(str(name).strip().lower())
+        if c and c not in seen:
+            resolved.append(c)
+            seen.add(c)
+    unresolved = [str(u).strip() for u in (d.get('unresolved') or [])
+                  if str(u).strip()]
+    return resolved, unresolved
+
+
+# Add-on cut catalog: canonical cut ids -> pin definitions. Generation
+# bands snap to the pipeline's fixed AGE buckets as DISJOINT sets so a
+# full generation partition can ladder up to the parent cleanly.
+_ADDON_AGE_BUCKETS = ['18-24', '25-34', '35-44', '45-54', '55-64',
+                      '65 OR OLDER']
+_ADDON_CUT_CATALOG = {
+    'female':      {'label': 'Female only', 'kind': 'gender',
+                    'pin_category': 'GENDER', 'pin_buckets': ['FEMALE']},
+    'male':        {'label': 'Male only', 'kind': 'gender',
+                    'pin_category': 'GENDER', 'pin_buckets': ['MALE']},
+    'gen_z':       {'label': 'Gen Z (18-24)', 'kind': 'generation',
+                    'pin_category': 'AGE', 'pin_buckets': ['18-24']},
+    'millennials': {'label': 'Millennials (25-44)', 'kind': 'generation',
+                    'pin_category': 'AGE',
+                    'pin_buckets': ['25-34', '35-44']},
+    'gen_x':       {'label': 'Gen X (45-64)', 'kind': 'generation',
+                    'pin_category': 'AGE',
+                    'pin_buckets': ['45-54', '55-64']},
+    'boomers':     {'label': 'Boomers (65+)', 'kind': 'generation',
+                    'pin_category': 'AGE',
+                    'pin_buckets': ['65 OR OLDER']},
+}
+ADDON_CUT_CREDITS = 3
+
+
+def _parse_addon_cuts_answer(answer_text, subject):
+    """Parse a free-text add-on cuts answer into validated cut defs.
+    Supports catalog cuts (gender / generations), explicit age bands
+    (mapped onto the fixed AGE buckets), and DMA cuts (resolved to
+    canonical Nielsen names). Returns (cuts, notes)."""
+    import re as _re
+    t = (answer_text or '').strip()
+    low = t.lower()
+    if not t or _re.match(r'^(no|none|nope|skip|nothing|no thanks?|'
+                          r"i'?m good|just the (main|base) (one|profile)|"
+                          r'not (now|needed))\s*[.!]?$', low):
+        return [], []
+
+    dma_list = _nielsen_dma_list()
+    system_prompt = (
+        "You parse an operator's request for add-on audience cuts of a "
+        "profile into a strict catalog. Available cut types:\n"
+        "  - gender: female, male\n"
+        "  - generation: gen_z, millennials, gen_x, boomers\n"
+        "  - age_band: any subset of the fixed AGE buckets "
+        f"{_ADDON_AGE_BUCKETS} (map ranges onto whole buckets, e.g. "
+        "'under 35' -> ['18-24','25-34']; '35 plus' -> "
+        "['35-44','45-54','55-64','65 OR OLDER'])\n"
+        "  - dma: a US market; use the EXACT canonical name from the "
+        "DMA list below (Malibu -> Los Angeles Ca)\n"
+        "'by generation(s)' or 'generational cuts' means ALL FOUR "
+        "generations. 'by gender' or 'male and female' means BOTH "
+        "female and male. Do not invent cut types outside this "
+        "catalog; anything unparseable goes in `ignored`.\n\n"
+        "CANONICAL DMA LIST:\n" + "\n".join(dma_list) + "\n\n"
+        "Return STRICT JSON only:\n"
+        "{\"cuts\": ["
+        "{\"type\": \"gender\", \"id\": \"female\"}, "
+        "{\"type\": \"generation\", \"id\": \"gen_z\"}, "
+        "{\"type\": \"age_band\", \"label\": \"18-34\", "
+        "\"buckets\": [\"18-24\", \"25-34\"]}, "
+        "{\"type\": \"dma\", \"dma\": \"Los Angeles Ca\"}"
+        "], \"ignored\": [\"...\"]}"
+    )
+    result = _run_nflx_claude_agent(
+        system_prompt=system_prompt,
+        user_prompt=(f"Profile subject: {subject}\n"
+                     f"Requested add-on cuts:\n{t}"),
+        max_tokens=1500, temperature=0.1,
+    )
+    if not result.get('success'):
+        return None, ['parse_failed']
+    d = result.get('data') or {}
+    cuts, notes, seen = [], [], set()
+    canon_dma = {x.lower(): x for x in dma_list}
+    for c in (d.get('cuts') or []):
+        if not isinstance(c, dict):
+            continue
+        ctype = str(c.get('type') or '').strip().lower()
+        if ctype in ('gender', 'generation'):
+            cid = str(c.get('id') or '').strip().lower()
+            base = _ADDON_CUT_CATALOG.get(cid)
+            if not base or cid in seen:
+                continue
+            seen.add(cid)
+            cuts.append({'cut_id': cid, **base,
+                         'credits': ADDON_CUT_CREDITS})
+        elif ctype == 'age_band':
+            buckets = [b for b in (c.get('buckets') or [])
+                       if b in _ADDON_AGE_BUCKETS]
+            if not buckets:
+                continue
+            label = str(c.get('label') or '').strip() \
+                or '/'.join(buckets)
+            cid = 'age_' + _re.sub(r'[^a-z0-9]+', '_', label.lower())
+            if cid in seen:
+                continue
+            seen.add(cid)
+            cuts.append({'cut_id': cid, 'label': f'Ages {label}',
+                         'kind': 'age_band', 'pin_category': 'AGE',
+                         'pin_buckets': buckets,
+                         'credits': ADDON_CUT_CREDITS})
+        elif ctype == 'dma':
+            dma = canon_dma.get(str(c.get('dma') or '').strip().lower())
+            if not dma:
+                continue
+            cid = 'dma_' + _re.sub(r'[^a-z0-9]+', '_', dma.lower())
+            if cid in seen:
+                continue
+            seen.add(cid)
+            cuts.append({'cut_id': cid, 'label': f'{dma} only',
+                         'kind': 'dma', 'pin_category': 'LOCATION',
+                         'pin_buckets': [dma],
+                         'credits': ADDON_CUT_CREDITS})
+    for ig in (d.get('ignored') or []):
+        s = str(ig).strip()
+        if s:
+            notes.append(s)
+    return cuts, notes
+
+
+@app.route('/api/brief-chat/clarify', methods=['POST'])
+@requires_auth
+def api_synth_chat_clarify():
+    """One clarify step of the guided flow. Stateless: the draft rides
+    the request and the updated draft rides the response, exactly like
+    the date-confirmation stash pattern.
+
+    body: { step: 'region'|'cuts', answer: str, draft: {...} }
+    """
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+    step = str(body.get('step') or '').strip().lower()
+    answer = str(body.get('answer') or '').strip()
+    draft = body.get('draft') or {}
+    if step not in ('region', 'cuts') or not isinstance(draft, dict):
+        return jsonify({'success': False, 'error': 'bad clarify step'}), 400
+
+    import re as _re
+    subject = str(draft.get('subject') or draft.get('name')
+                  or 'this profile')
+    base_credits = int(draft.get('base_credits')
+                       or draft.get('estimated_credits') or 5)
+    draft.setdefault('base_credits', base_credits)
+
+    if step == 'region':
+        low = answer.lower()
+        if not answer or _re.match(
+                r'^(national|nationwide|nation wide|all|whole country|'
+                r'us|usa|everywhere|no|none|skip|not regional)\s*[.!]?$',
+                low):
+            draft['region_scope'] = {'mode': 'national'}
+            msg = ("Nationwide it is. One more thing: want any "
+                   "**additional cuts** beyond the standard build? "
+                   "Female only, male only, by generation, an age "
+                   "band, or a specific market. **"
+                   f"{ADDON_CUT_CREDITS} credits per cut** - name the "
+                   "ones you want, or say **none**.")
+            return jsonify({'success': True, 'draft': draft,
+                            'message': msg, 'next_step': 'cuts'})
+        resolved, unresolved = _resolve_markets_to_dmas(answer)
+        if not resolved:
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': ("I couldn't map "
+                            f"{', '.join(unresolved) or 'that'} to a "
+                            "US media market. Name the metro areas or "
+                            "states (e.g. \"LA and San Diego\", "
+                            "\"Texas\"), or say **national**."),
+                'next_step': 'region',
+            })
+        draft['region_scope'] = {'mode': 'regional', 'dmas': resolved}
+        parts = [f"Locked to **{len(resolved)} market"
+                 f"{'s' if len(resolved) != 1 else ''}**: "
+                 + ", ".join(resolved) + ". The profile's location "
+                 "mix will include ONLY these markets."]
+        if unresolved:
+            parts.append(f"(Couldn't map: {', '.join(unresolved)} - "
+                         "tell me the metro if you want them added.)")
+        parts.append("Want any **additional cuts** beyond the "
+                     "standard build? Female only, male only, by "
+                     "generation, an age band, or one of your "
+                     f"markets on its own. **{ADDON_CUT_CREDITS} "
+                     "credits per cut** - name them, or say **none**.")
+        return jsonify({'success': True, 'draft': draft,
+                        'message': "\n\n".join(parts),
+                        'next_step': 'cuts'})
+
+    # step == 'cuts'
+    cuts, notes = _parse_addon_cuts_answer(answer, subject)
+    if cuts is None:
+        return jsonify({
+            'success': True, 'draft': draft,
+            'message': ("I couldn't parse that cut list. Try e.g. "
+                        "\"female and male\", \"by generation\", "
+                        "\"18-34\", \"Los Angeles only\" - or say "
+                        "**none**."),
+            'next_step': 'cuts',
+        })
+    draft['addon_cuts'] = cuts
+    total = base_credits + ADDON_CUT_CREDITS * len(cuts)
+    draft['estimated_credits'] = total
+    if cuts:
+        cut_lines = "\n".join(
+            f"  - {c['label']} (+{ADDON_CUT_CREDITS} credits)"
+            for c in cuts)
+        msg = (f"Added **{len(cuts)} cut"
+               f"{'s' if len(cuts) != 1 else ''}** at "
+               f"{ADDON_CUT_CREDITS} credits each:\n{cut_lines}\n\n"
+               f"Total: **{total} credits** (base {base_credits} + "
+               f"{len(cuts)} x {ADDON_CUT_CREDITS}). Every cut is "
+               "derived from the finished total-universe profile so "
+               "the numbers ladder up. Review the brief below and "
+               "approve to queue.")
+    else:
+        msg = ("No add-on cuts. Review the brief below and approve "
+               "to queue.")
+        if notes:
+            msg = ("Couldn't map: " + ", ".join(notes[:4]) + ". "
+                   + msg)
+    return jsonify({'success': True, 'draft': draft, 'message': msg,
+                    'next_step': 'approve'})
+
+
 @app.route('/api/brief-chat/interpret', methods=['POST'])
 @app.route('/api/synth-chat/interpret', methods=['POST'])  # legacy alias
 @requires_auth
@@ -44130,6 +44566,21 @@ def api_synth_chat_interpret():
                           'and window directly, e.g. "sample size for '
                           'Peloton owners, past 6 months".'),
             }), 500
+
+    # ------------------------------------------------------------------
+    # DISCOVERY (2026-08-19): pitch-shaped asks without an audience
+    # ("I'm pitching GoGo squeeZ") get 2-4 proposed audience framings
+    # to pick from instead of a guessed build. Direct build asks skip
+    # this branch entirely.
+    # ------------------------------------------------------------------
+    if _synth_chat_is_discovery_request(text):
+        try:
+            return _synth_chat_discovery_options(text)
+        except Exception:
+            traceback.print_exc()
+            # Non-fatal: fall through to the normal interpret so a
+            # detector misfire never blocks a legitimate build ask.
+            pass
 
     # ------------------------------------------------------------------
     # BATCH MODE (2026-08-18): if the prompt matches
@@ -44394,12 +44845,25 @@ def api_synth_chat_interpret():
         estimated_credits = int(
             _V1_CREDITS.get(_dec_norm, CREDITS_PROFILE_ANALYSIS))
         spec_draft['estimated_credits'] = estimated_credits
+        # base_credits anchors the add-on cuts math in the clarify
+        # flow: total = base + 3 x cuts. Kept separate so re-answering
+        # the cuts question can't compound.
+        spec_draft['base_credits'] = estimated_credits
         spec_draft['estimated_run_minutes'] = _estimate_run_minutes(
             _dec_norm, bool(spec_draft.get('run_avid')))
+        # Guided clarify steps (2026-08-19): every fresh single-subject
+        # build asks region (national vs markets-only) then add-on
+        # cuts (3 credits each) before the approval card. Derive-cut /
+        # existing-match asks skip - there's no fresh build to scope.
+        clarify_steps = []
+        if _dec_norm in ('new_build', 'time_shifted_refresh',
+                         'cut_needs_parent'):
+            clarify_steps = ['region', 'cuts']
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
             'estimated_credits': estimated_credits,
+            'clarify_steps': clarify_steps,
             'candidates': [
                 {k: v for k, v in c.items() if not k.startswith('_') or k == '_score'}
                 for c in candidates
@@ -44721,6 +45185,48 @@ def _spec_from_draft(draft):
         'follower_platforms': (draft.get('follower_platforms')
                                 if audience_type_out != 'general' else None),
     }
+    # Guided-flow passthrough (2026-08-19): regional scope + add-on
+    # cuts collected by /api/brief-chat/clarify ride the spec to the
+    # worker. region_scope constrains LOCATION to ONLY the listed DMAs
+    # (worker-side filter + renorm) and is injected into persona_notes
+    # so the row-by-row reasoning natively thinks in those markets
+    # (regional grocers, teams, weather, culture). addon_cuts are
+    # derived off the finished TU parent (3 credits each).
+    _rs = draft.get('region_scope') or {}
+    if isinstance(_rs, dict) and _rs.get('mode') == 'regional' \
+            and _rs.get('dmas'):
+        _dmas = [str(d).strip() for d in _rs['dmas'] if str(d).strip()]
+        if _dmas:
+            spec['region_scope'] = {'mode': 'regional', 'dmas': _dmas}
+            _region_note = (
+                "\n\nREGIONAL SCOPE (hard constraint): this audience "
+                "exists ONLY in these Nielsen DMA markets: "
+                + ", ".join(_dmas) + ". Every row's reasoning must "
+                "reflect these markets exclusively - regional grocers, "
+                "restaurant chains, sports teams, media, and culture "
+                "for these DMAs; near-zero for brands that only "
+                "operate elsewhere. The LOCATION category will contain "
+                "ONLY these markets.")
+            spec['persona_notes'] = (spec.get('persona_notes') or '') \
+                + _region_note
+    _cuts = draft.get('addon_cuts') or []
+    if isinstance(_cuts, list) and _cuts:
+        _clean_cuts = []
+        for c in _cuts:
+            if not isinstance(c, dict):
+                continue
+            if not c.get('cut_id') or not c.get('pin_category') \
+                    or not c.get('pin_buckets'):
+                continue
+            _clean_cuts.append({
+                'cut_id': str(c['cut_id']),
+                'label': str(c.get('label') or c['cut_id']),
+                'kind': str(c.get('kind') or 'demo'),
+                'pin_category': str(c['pin_category']).upper(),
+                'pin_buckets': [str(b) for b in c['pin_buckets']],
+            })
+        if _clean_cuts:
+            spec['addon_cuts'] = _clean_cuts
     # If Claude proposed clickstream_signals at interpret time (for a
     # platform/retailer behavioral cohort), thread them into a partial
     # persona_doc so the synth engine can use them for BRAND INPUT even
