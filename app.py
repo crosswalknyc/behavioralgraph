@@ -44602,6 +44602,104 @@ def api_synth_chat_history():
     return jsonify({'success': ok})
 
 
+@app.route('/api/brief-chat/active-runs', methods=['GET'])
+@app.route('/api/synth-chat/active-runs', methods=['GET'])  # legacy alias
+@requires_auth
+def api_synth_chat_active_runs():
+    """Return the caller's in-flight profile runs with step progress.
+
+    Powers the chatbot's "status update" reply. When a user types
+    "status update" (or any variant) the frontend hits this endpoint,
+    gets back the list of their non-terminal runs, and formats a
+    per-run "step X of Y (label)" line for each.
+
+    Established 2026-08-19 (Jenna directive: "if someone asks status
+    update it should update you on all open running profiles in
+    process and give percentage of completion like on step 5 of 19
+    kinda thing"). Prior behavior: the frontend only surfaced the
+    single most-recent run_id from the on-page chat history, so a
+    user with two builds in flight only saw one.
+
+    Session-authenticated dashboard users only. Partner API keys must
+    use GET /api/v1/profiles/<run_id> per run — the "list every run"
+    surface is intentionally not exposed to partners so one key can't
+    enumerate cross-partner traffic.
+    """
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
+        return jsonify({'success': False,
+                         'error': 'profile engine unavailable'}), 503
+
+    scope_arg = (request.args.get('scope') or '').strip().lower()
+    is_super = user.get('role') == 'super_admin'
+    want_global = (scope_arg == 'global' and is_super)
+    user_id = (user.get('email') or user.get('username') or '').strip()
+
+    try:
+        import requests as _requests
+        params = {'active': '1', 'limit': 50}
+        if not want_global and user_id:
+            params['user'] = user_id
+        resp = _requests.get(
+            f"{SYNTH_QUEUE_URL}/synth/list",
+            params=params,
+            headers={'X-Synth-Auth': SYNTH_QUEUE_SECRET},
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'active-runs returned {resp.status_code}: '
+                         f'{resp.text[:400]}',
+            }), 502
+        raw = resp.json() or []
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 502
+
+    # Shape each entry into a compact chat-friendly summary. Progress
+    # percent is computed on the read side so old status.json files
+    # (without step_index) still return a usable payload — those show
+    # as "queued" / "running" without a percent.
+    #
+    # Total steps is authoritative from the worker (PROFILE_STEPS_TOTAL
+    # == 11 as of 2026-08-19). If a status file was written by a worker
+    # slot that hasn't picked up the new code yet it'll be missing
+    # step_total; default to 11 so the display is still sensible.
+    runs = []
+    for doc in raw:
+        step_index = doc.get('step_index')
+        step_total = doc.get('step_total') or 11
+        step_label = doc.get('step_label') or ''
+        percent = None
+        if isinstance(step_index, int) and step_total:
+            percent = int(round(100.0 * step_index / step_total))
+            percent = max(0, min(100, percent))
+        runs.append({
+            'run_id': doc.get('run_id'),
+            'subject': doc.get('subject'),
+            'status': doc.get('status'),
+            'decision': doc.get('decision'),
+            'started_at': doc.get('started_at'),
+            'updated_at': doc.get('updated_at'),
+            'step_index': step_index,
+            'step_total': step_total,
+            'step_label': step_label,
+            'percent': percent,
+            'tu_step_index': doc.get('tu_step_index'),
+            'avid_step_index': doc.get('avid_step_index'),
+            'tu_key': doc.get('tu_key'),
+            'avid_key': doc.get('avid_key'),
+        })
+    return jsonify({
+        'success': True,
+        'runs': runs,
+        'scoped_to_user': None if want_global else user_id,
+    })
+
+
 @app.route('/api/brief-chat/health', methods=['GET'])
 @app.route('/api/synth-chat/health', methods=['GET'])  # legacy alias
 @requires_auth
