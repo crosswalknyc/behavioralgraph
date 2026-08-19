@@ -59235,9 +59235,22 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 var data = await r.json();
                 if (!r.ok || !data.success) {
+                    // Never surface raw model output to the user. Log
+                    // the raw excerpt to the console for debugging and
+                    // show a friendly message. If the error string
+                    // itself looks JSON-y (starts with '{' or '['),
+                    // replace it with a generic phrasing so partial
+                    // model output cannot leak into the chat either.
+                    if (data.raw_excerpt) {
+                        try { console.warn('[brief-chat] raw model excerpt:', data.raw_excerpt); } catch(e) {}
+                    }
+                    var _errMsg = String(data.error || 'I had trouble understanding that. Could you rephrase?');
+                    var _errLead = _errMsg.trim().slice(0, 5);
+                    if (_errLead.indexOf('{') === 0 || _errLead.indexOf('[') === 0 || _errLead.indexOf('```') === 0) {
+                        _errMsg = 'I had trouble understanding that. Could you rephrase with the subject name(s)?';
+                    }
                     synthChatPushTurn('agent',
-                        'Sorry, I could not interpret that. ' + (data.error || 'Unknown error') +
-                        (data.raw_excerpt ? '\n\n' + data.raw_excerpt.slice(0, 400) : ''));
+                        "Sorry, I couldn't interpret that. " + _errMsg);
                     return;
                 }
                 // Echo estimated_credits onto spec_draft so

@@ -17456,10 +17456,19 @@ def _load_hf_novelty_memory(ticker_slug, weeks_back=4, current_day_str=None):
 
 
 def _extract_json_object(text):
+    """Parse the first JSON value out of a model response.
+
+    Accepts either an object ``{...}`` or an array ``[...]``. Returns
+    whatever `json.loads` produces (dict or list) or ``None`` on failure.
+    Callers that need a specific shape should isinstance-check.
+    Historically returned only dicts; array support was added 2026-08-18
+    so batch-style responses (e.g. Claude emitting `[spec1, spec2, ...]`
+    when the chat history primed it for multi-subject) don't fall
+    through to the frontend as raw text.
+    """
     text = (text or '').strip()
     if not text:
         return None
-    # Strip markdown fences if present
     if '```json' in text:
         try:
             text = text.split('```json', 1)[1].split('```', 1)[0].strip()
@@ -17474,13 +17483,36 @@ def _extract_json_object(text):
         return json.loads(text)
     except Exception:
         pass
-    start = text.find('{')
-    end = text.rfind('}')
-    if start >= 0 and end > start:
+    # Prefer the widest OBJECT if one exists (the historically-supported
+    # case). Fall back to widest ARRAY. Whichever came first wins on tie.
+    obj_start = text.find('{')
+    obj_end = text.rfind('}')
+    arr_start = text.find('[')
+    arr_end = text.rfind(']')
+
+    def _try(a, b):
+        if a < 0 or b <= a:
+            return None
         try:
-            return json.loads(text[start:end + 1])
+            return json.loads(text[a:b + 1])
         except Exception:
             return None
+
+    # If both shapes are present, prefer whichever starts first.
+    obj_valid = obj_start >= 0 and obj_end > obj_start
+    arr_valid = arr_start >= 0 and arr_end > arr_start
+    if obj_valid and arr_valid:
+        first = _try(obj_start, obj_end) if obj_start < arr_start \
+                else _try(arr_start, arr_end)
+        if first is not None:
+            return first
+        second = _try(arr_start, arr_end) if obj_start < arr_start \
+                 else _try(obj_start, obj_end)
+        return second
+    if obj_valid:
+        return _try(obj_start, obj_end)
+    if arr_valid:
+        return _try(arr_start, arr_end)
     return None
 
 
@@ -42297,20 +42329,94 @@ def _synth_chat_gate():
 SYNTH_CHAT_BATCH_MAX = 15
 
 
+def _detect_implicit_list_subjects(text: str) -> list[str]:
+    """Recognize a bare `A, B, and C` (or `A, B, & C`) list of proper
+    nouns as a multi-subject batch request even when no explicit
+    "profiles for" trigger phrase is present.
+
+    Guardrails to avoid false positives on free-form sentences:
+      - At least 2 comma separators OR 1 comma + a terminal ` and ` /
+        ` & `. (One item is not a list.)
+      - Every item must look like a name/brand (2-50 chars,
+        starts with a capitalized letter or is fully upper-case,
+        no verbs/prepositions/articles as the leading token).
+      - Total item count 2..15.
+      - Reject if the text has a sentence-y verb before the first
+        comma (e.g. "I want to build profiles for A, B, and C" -
+        that has the trigger "build profiles for" and should have
+        matched the explicit path).
+    """
+    import re as _re
+    t = (text or '').strip().rstrip('.!?').strip()
+    if len(t) < 5 or len(t) > 600:
+        return []
+    # Quick reject: obvious sentence starters that mean "please do X".
+    # Those must use an explicit trigger phrase. This helper is only
+    # for the "PAUL ANKA, TONY BENNETT, AND FRANKIE VALLI" case where
+    # the user just pasted a list.
+    lead_reject = _re.match(
+        r'^(please|can|could|would|will|make|do|run|build|create|'
+        r'give|show|help|i\s+want|i\s+need|i\'?d\s+like)\b',
+        t, _re.IGNORECASE)
+    if lead_reject:
+        return []
+    # Must have at least one comma AND (another comma OR a trailing
+    # " and "/" & ").
+    if ',' not in t:
+        return []
+    has_and = bool(_re.search(r'\b(?:and|or)\b|\s&\s', t, _re.IGNORECASE))
+    n_commas = t.count(',')
+    if not (n_commas >= 2 or (n_commas >= 1 and has_and)):
+        return []
+    # Case-insensitive split, same as the trigger path.
+    parts = _re.split(r'\s*(?:,|;|\band\b|\bor\b|\b&\b)\s*',
+                       t, flags=_re.IGNORECASE)
+    subjects: list[str] = []
+    for p in parts:
+        s = p.strip().strip('.').strip()
+        if not s:
+            continue
+        # Reject if the token is too long or too short to be a name.
+        if len(s) < 2 or len(s) > 60:
+            return []
+        # Reject if the leading token is a lowercase word (article /
+        # preposition / verb). Every real name/brand starts either
+        # with a capitalized letter or is fully upper-case.
+        first = s.split()[0]
+        if not (first[0].isupper() or first.isupper()):
+            return []
+        # Reject leftover connector words.
+        if _re.match(r'^(and|or|the|these|those)$', s, _re.IGNORECASE):
+            continue
+        subjects.append(s)
+    if not (2 <= len(subjects) <= SYNTH_CHAT_BATCH_MAX):
+        return []
+    return subjects
+
+
 def _detect_batch_subjects(user_text: str) -> list[str]:
     """Return a list of subject strings if the prompt is a batch request,
     otherwise []. See module-header for detection rules.
+
+    2026-08-18: three fixes on top of the original v1
+      (a) The split on `and`/`or` was case-sensitive so ALL-CAPS lists
+          like `PAUL ANKA, TONY BENNETT, AND FRANKIE VALLI` left
+          `AND FRANKIE VALLI` glued as one token. Now case-insensitive.
+      (b) Connector phrases like `the following:` / `the listed
+          individuals:` / `these people:` / `each of these:` are
+          stripped from the front of the tail before splitting so the
+          first subject isn't `the listed individuals: PAUL ANKA`.
+      (c) When no explicit trigger phrase fires but the text is
+          shaped like a bare comma-list of proper nouns
+          `A, B, and C` (2-15 items, each 2-50 chars, each starting
+          with a capitalized token), batch mode fires implicitly.
     """
     import re as _re
     text = (user_text or '').strip()
     if len(text) < 10:
         return []
 
-    # Trigger phrases (must be present verbatim, case-insensitive).
-    # Ordered so the most specific patterns are tried first.
-    # The plural-only trigger `profiles for` catches short prompts like
-    # "profiles for A, B, C" - safe from single-subject false positives
-    # because the caller enforces >= 2 subjects before returning.
+    # Trigger phrases (case-insensitive). Ordered specific first.
     triggers = [
         r'run\s+individual\s+profiles?\s+for[:\s]+',
         r'individual\s+profiles?\s+for[:\s]+',
@@ -42321,36 +42427,65 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
         r'a\s+profile\s+for\s+each\s+of[:\s]+',
         r'profiles\s+of\s+each[:\s]+',
         r'build\s+profiles\s+for[:\s]+',
+        # 2026-08-18: catch "create a profile for each of..." /
+        # "create profiles for..." style asks.
+        r'create\s+(?:a\s+)?profiles?\s+for(?:\s+each\s+of)?[:\s]+',
+        r'make\s+(?:a\s+)?profiles?\s+for(?:\s+each\s+of)?[:\s]+',
+        r'give\s+me\s+(?:a\s+)?profiles?\s+for(?:\s+each\s+of)?[:\s]+',
         r'profiles\s+for[:\s]+',
     ]
     trigger_re = _re.compile(
         r'^(?:.*?\b(?:' + '|'.join(triggers) + r'))', _re.IGNORECASE)
     m = trigger_re.search(text)
-    if not m:
-        return []
 
-    tail = text[m.end():].strip()
+    if m:
+        tail = text[m.end():].strip()
+    else:
+        # No explicit trigger. Try implicit-list detection below.
+        tail = None
+
+    # Fallback: implicit "A, B, and C" list of proper nouns without an
+    # explicit trigger. Handles inputs like
+    #   PAUL ANKA, TONY BENNETT, AND FRANKIE VALLI
+    #   Paul Anka, Tony Bennett, and Frankie Valli
+    #   Amazon, Apple, and Google
+    # while rejecting free-form sentences and single-name prompts.
+    if tail is None:
+        _impl = _detect_implicit_list_subjects(text)
+        return _impl  # empty list if not confident
+
+    # Strip a leading connector phrase like `the following:` /
+    # `these people:` / `the listed individuals:` / `each of these:` /
+    # `the following list:` etc. so the first name isn't prefixed.
+    tail = _re.sub(
+        r'^(?:the\s+)?(?:following|listed|below|above|these|those)'
+        r'\s*(?:individuals|people|names?|artists?|brands?|subjects?|'
+        r'items?|entries|companies|talent|actors?|musicians?|creators?|'
+        r'list)?\s*:?\s*',
+        '', tail, flags=_re.IGNORECASE).strip()
+    tail = _re.sub(r'^(?:each\s+of\s+)?(?:these|those|the)\s*:\s*',
+                    '', tail, flags=_re.IGNORECASE).strip()
+
     # Strip a leading parenthetical wrapper if the user wrote
-    # "run profiles for TV brands (VIZIO, Samsung, LG)" - the parenthetical
-    # IS the subject list in that case.
+    # "run profiles for TV brands (VIZIO, Samsung, LG)".
     paren_wrap = _re.match(r'^[^(]*\(([^)]+)\)\s*$', tail)
     if paren_wrap:
         tail = paren_wrap.group(1).strip()
 
-    # Strip any trailing " for the past 60 days" / " with X context" so
-    # the shared context applies to every subject rather than getting
-    # glued to the last one. We keep the tail intact for the per-subject
-    # interpret prompt (via _shared_context_from_batch).
-    parts = _re.split(r'\s*(?:,|;|\band\b|\bor\b)\s*', tail)
+    # Case-INsensitive split so "AND" (all caps) is a separator too.
+    parts = _re.split(r'\s*(?:,|;|\band\b|\bor\b|\b&\b)\s*',
+                       tail, flags=_re.IGNORECASE)
     subjects: list[str] = []
     for p in parts:
         s = p.strip().strip('.').strip()
-        # Drop obvious non-subject fragments left over from parsing.
         if not s or len(s) > 120:
             continue
-        # Reject if it starts with a verb that suggests it's a modifier
-        # ("for the past 60 days", "with millennial cut", etc.).
-        if _re.match(r'^(for|with|during|over|since|in|by)\s', s, _re.IGNORECASE):
+        # Drop tokens that are pure connector words left after the split.
+        if _re.match(r'^(and|or|the|these|those)$', s, _re.IGNORECASE):
+            continue
+        # Reject modifier-style fragments.
+        if _re.match(r'^(for|with|during|over|since|in|by)\s', s,
+                      _re.IGNORECASE):
             continue
         subjects.append(s)
 
@@ -42894,7 +43029,10 @@ _DATE_CONFIRM_PATTERNS = [
     r'^\s*(y|yes|yeah|yep|yup|sure|ok(ay)?|k|kk|confirm(ed)?|'
     r'looks good|sounds good|proceed|go|ship it|do it|use (them|those|'
     r'that|the default|defaults?)|those work|that works|works for me|'
-    r'that\'?s (fine|good)|fine)\s*[.!]?\s*$',
+    r'that\'?s (fine|good)|fine|default|defaults|the default|'
+    r'use default|use defaults|keep default|keep defaults|'
+    r'default is fine|defaults are fine|default works|defaults work)'
+    r'\s*[.!]?\s*$',
 ]
 
 
@@ -43174,6 +43312,43 @@ def api_synth_chat_interpret():
             }), result.get('status', 502)
 
         spec_draft = result.get('data') or {}
+
+        # 2026-08-18: If Claude returned a JSON ARRAY (happens when the
+        # chat history primes it for multi-subject: "run all 3 profiles
+        # across ..." after a 3-subject batch), package the array as a
+        # batch response instead of failing back to the frontend as
+        # non-JSON. Each element is treated as an already-interpreted
+        # per-subject draft, so we skip the per-subject Claude fan-out.
+        if isinstance(spec_draft, list):
+            drafts = [d for d in spec_draft if isinstance(d, dict)]
+            if drafts:
+                return jsonify({
+                    'success': True,
+                    'batch': True,
+                    'batch_size': len(drafts),
+                    'subjects': [d.get('subject') or d.get('file_stem')
+                                 or f'subject {i+1}'
+                                 for i, d in enumerate(drafts)],
+                    'spec_drafts': drafts,
+                    'per_subject_meta': [
+                        {
+                            'subject_input': d.get('subject'),
+                            'estimated_credits': d.get('estimated_credits') or 5,
+                            'model': result.get('model'),
+                            'candidates': [],
+                        } for d in drafts
+                    ],
+                    'failures': [],
+                    'estimated_credits_total': sum(
+                        int(d.get('estimated_credits') or 5) for d in drafts),
+                    'shared_context': '',
+                })
+            # Empty array - fall through to error path below.
+            return jsonify({
+                'success': False,
+                'error': 'Could not interpret that request. '
+                         'Try rephrasing with the subject name(s).',
+            }), 400
 
         # Parent-selection guardrail (2026-08-18 Reba-2024 regression).
         # Deterministically swap Claude's existing_match away from any
