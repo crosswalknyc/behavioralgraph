@@ -44697,21 +44697,19 @@ def _partner_parent_key_allowed(s3_key):
     top-level profile filename pattern qualify. This closes the last
     "not a produced profile CSV" surface: a jailbroken prompt saying
     "derive a cut of purgatory/Unreleased_Client.csv" or "refresh from
-    system/something.csv" gets the parent key stripped in
-    `_sanitize_v1_key_or_none` BEFORE it reaches the queue, and the
-    decision is demoted so the worker never reads a staff-only object.
+    system/something.csv" is handled in two places:
+
+      1. `_v1_interpret` inline-scrubs `existing_match_s3_key`,
+         `s3_key`, and `parent_s3_key` fields in the draft, blanking
+         any that fail this allowlist BEFORE we build the JSON
+         response.
+      2. `_normalize_v1_decision` gates the parent key again on the
+         way to the queue: if it fails, we blank it and demote the
+         decision (existing_match/time_shifted_refresh -> new_build;
+         derive_cut -> cut_needs_parent). The worker never receives
+         a staff-only key as parent_s3_key.
     """
     return _partner_download_key_allowed(s3_key)
-
-
-def _sanitize_v1_key_or_none(s3_key):
-    """Return the key if it passes the partner allowlist, otherwise
-    None. Used to strip staff-only paths from JSON responses so we
-    never echo `system/...` / `purgatory/...` back to a partner even
-    when Claude proposes it in the draft."""
-    if s3_key and _partner_parent_key_allowed(s3_key):
-        return s3_key
-    return None
 
 
 def _generate_presigned_profile_url(s3_key, expires_seconds=86400):
