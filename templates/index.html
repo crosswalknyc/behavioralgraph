@@ -78470,7 +78470,7 @@ https://www.instagram.com/p/..."></textarea>
                     {
                         id: 'B',
                         label: 'Journey B: UFC-first signups (first watched = UFC)',
-                        size_m: 4.20,
+                        size_m: 4.23,
                         gender_male_pct: 78.1,
                         gender_female_pct: 21.9,
                         avg_age: 32.1,
@@ -78933,6 +78933,339 @@ https://www.instagram.com/p/..."></textarea>
         // UFC RENDERERS - part A (Case, Discovery, Journey A, Journey B)
         // ══════════════════════════════════════════════════════════════
 
+        // ═════════════════════════════════════════════════════════════
+        // UFC VISUAL HELPERS - journey maps, funnel flows, retention
+        // curves, and paywall fan-out. Each helper returns an HTML
+        // string containing an SVG that fills its parent container.
+        // ═════════════════════════════════════════════════════════════
+        var _JIQ_UFC_VCOL = {
+            A: '#22d3ee',   // Journey A - cyan (existing subs)
+            B: '#a78bfa',   // Journey B - purple (UFC-first signups)
+            C: '#f87171',   // Journey C - red (paywall bouncers)
+            benchmark: '#94a3b8',
+            axis: 'rgba(148,163,184,0.55)',
+            grid: 'rgba(148,163,184,0.14)',
+            drop: '#ef4444'
+        };
+
+        function _jiqUfcSvgStage(x, y, w, h, o) {
+            var c = o.color || '#94a3b8';
+            var countFS = o.small ? 0.70 : 0.90;
+            var labelFS = o.small ? 0.50 : 0.55;
+            var subFS   = 0.46;
+            return '<g>'
+                 + '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="7" ry="7" '
+                 +       'fill="' + c + '20" stroke="' + c + '" stroke-width="1.3"/>'
+                 + '<text x="' + (x + w/2) + '" y="' + (y + h/2 - 4) + '" text-anchor="middle" '
+                 +       'style="font-size:' + countFS + 'rem; font-weight:900; fill:' + c + ';">'
+                 +   _jiqEsc(o.count || '') + '</text>'
+                 + '<text x="' + (x + w/2) + '" y="' + (y + h/2 + 12) + '" text-anchor="middle" '
+                 +       'style="font-size:' + labelFS + 'rem; fill:#e5e7eb; font-weight:600;">'
+                 +   _jiqEsc(o.label || '') + '</text>'
+                 + (o.sub ? '<text x="' + (x + w/2) + '" y="' + (y + h - 5) + '" text-anchor="middle" '
+                 +       'style="font-size:' + subFS + 'rem; fill:#94a3b8;">' + _jiqEsc(o.sub) + '</text>' : '')
+                 + '</g>';
+        }
+
+        function _jiqUfcSvgArrow(x1, y, x2, o) {
+            o = o || {};
+            var color = o.color || 'rgba(148,163,184,0.7)';
+            var head = 5;
+            return '<g>'
+                 + '<line x1="' + x1 + '" y1="' + y + '" x2="' + (x2-head) + '" y2="' + y + '" '
+                 +      'stroke="' + color + '" stroke-width="1.4"/>'
+                 + '<polygon points="' + (x2-head) + ',' + (y-3.5) + ' ' + x2 + ',' + y + ' '
+                 +      + (x2-head) + ',' + (y+3.5) + '" fill="' + color + '"/>'
+                 + (o.label ? '<text x="' + ((x1+x2)/2) + '" y="' + (y - 6) + '" text-anchor="middle" '
+                 +      'style="font-size:0.5rem; fill:#e5e7eb; font-weight:700; opacity:0.85;">'
+                 +      _jiqEsc(o.label) + '</text>' : '')
+                 + '</g>';
+        }
+
+        function _jiqUfcSvgLane(y, lane, W) {
+            var titleW = 118;
+            var laneStart = titleW + 10;
+            var stages = lane.stages || [];
+            var slotW = (W - laneStart - 12) / stages.length;
+            var boxW = Math.min(148, slotW - 10);
+            var boxH = 54;
+            var yBox = y;
+            var yArrow = yBox + boxH/2;
+            var out = '<g>'
+                    + '<rect x="6" y="' + yBox + '" width="' + (titleW - 8) + '" height="' + boxH + '" rx="7" '
+                    +       'fill="' + lane.color + '22" stroke="' + lane.color + '" stroke-width="1.4"/>'
+                    + '<text x="' + (titleW/2) + '" y="' + (yBox + 22) + '" text-anchor="middle" '
+                    +       'style="font-size:0.72rem; font-weight:900; fill:' + lane.color + ';">'
+                    +   _jiqEsc(lane.title) + '</text>'
+                    + '<text x="' + (titleW/2) + '" y="' + (yBox + 40) + '" text-anchor="middle" '
+                    +       'style="font-size:0.52rem; fill:#e5e7eb; opacity:0.9;">'
+                    +   _jiqEsc(lane.sublabel || '') + '</text>'
+                    + '</g>';
+            for (var i = 0; i < stages.length; i++) {
+                var xBox = laneStart + i * slotW;
+                out += _jiqUfcSvgStage(xBox, yBox, boxW, boxH, {
+                    label: stages[i].label,
+                    count: stages[i].count,
+                    sub: stages[i].sub,
+                    color: lane.color,
+                    small: true
+                });
+                if (i < stages.length - 1) {
+                    out += _jiqUfcSvgArrow(xBox + boxW + 1, yArrow, xBox + slotW - 1, {
+                        color: lane.color + 'cc',
+                        label: stages[i].transition
+                    });
+                }
+            }
+            return out;
+        }
+
+        function _jiqUfcThreeLaneJourneyMap() {
+            var W = 1080;
+            var laneH = 54;
+            var laneGap = 32;
+            var top = 62;
+            var H = top + 3*(laneH + laneGap) + 20;
+            var laneA = {
+                title: 'JOURNEY A', sublabel: 'Existing subs', color: _JIQ_UFC_VCOL.A,
+                stages: [
+                    { count: '42.58M', label: 'Active P+ sub pre-Jan 1', sub: 'US baseline', transition: '94%' },
+                    { count: '40.11M', label: 'Saw UFC surface',       sub: 'awareness',   transition: '57%' },
+                    { count: '22.83M', label: 'Clicked a UFC PDP',     sub: 'consideration', transition: '50%' },
+                    { count: '11.36M', label: 'Watched first UFC',    sub: 'JRNY A cohort', transition: '77%' },
+                    { count: '8.74M',  label: 'Watched a 2nd UFC (30d)', sub: 'repeat', transition: '71%' },
+                    { count: '6.24M',  label: '3+ UFC events by Aug 14', sub: 'regular fan', transition: '' }
+                ]
+            };
+            var laneB = {
+                title: 'JOURNEY B', sublabel: 'UFC-first signups', color: _JIQ_UFC_VCOL.B,
+                stages: [
+                    { count: '14.68M', label: 'First-exposure signal',  sub: 'social + peer', transition: '61%' },
+                    { count: '8.94M',  label: 'Search intent',          sub: '"watch UFC"',    transition: '61%' },
+                    { count: '5.42M',  label: 'Landed signup / PDP',   sub: 'unauth landing', transition: '78%' },
+                    { count: '4.23M',  label: 'Signed up + UFC-first',  sub: 'JRNY B cohort', transition: '82%' },
+                    { count: '3.49M',  label: 'D30 still subbed',      sub: 'D30 82.4%',      transition: '60%' },
+                    { count: '2.09M',  label: 'D180 still subbed',     sub: 'D180 49.4%',    transition: '' }
+                ]
+            };
+            var laneC = {
+                title: 'JOURNEY C', sublabel: 'Paywall bouncers', color: _JIQ_UFC_VCOL.C,
+                stages: [
+                    { count: '8.42M', label: 'Hit UFC paywall',        sub: 'JRNY C cohort', transition: '73%' },
+                    { count: '6.14M', label: 'Watched official clip',  sub: '"settled for highlight"', transition: '52%' },
+                    { count: '3.19M', label: 'Promo-code hunt',        sub: 'RetailMeNot, Reddit', transition: '45%' },
+                    { count: '1.44M', label: 'Signed up within 24h',   sub: 'same-event save', transition: '' },
+                    { count: '2.26M', label: 'Signed up within 14d',   sub: 'total 14d recovery', transition: '' },
+                    { count: '5.31M', label: 'Never returned to P+',   sub: 're-marketable pool', transition: '' }
+                ]
+            };
+            var out = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto; display:block;" xmlns="http://www.w3.org/2000/svg">';
+            out += '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="rgba(15,23,42,0.55)" rx="12"/>';
+            out += '<text x="18" y="26" style="font-size:0.86rem; font-weight:900; fill:#e5e7eb;">Three digital journeys - Jan 1 - Aug 14, 2026 - US individual viewers</text>';
+            out += '<text x="18" y="46" style="font-size:0.56rem; fill:#94a3b8;">Each row is a distinct cohort of unique persons. Percentages between boxes are stage-to-stage conversion.</text>';
+            out += _jiqUfcSvgLane(top,               laneA, W);
+            out += _jiqUfcSvgLane(top +  (laneH + laneGap), laneB, W);
+            out += _jiqUfcSvgLane(top + 2*(laneH + laneGap), laneC, W);
+            out += '</svg>';
+            return '<div style="width:100%; overflow-x:auto; padding:0.6rem 0.4rem; margin-bottom:0.95rem; border-radius:12px; background:linear-gradient(180deg, rgba(15,23,42,0.55), rgba(15,23,42,0.2)); border:1px solid rgba(148,163,184,0.22);">'
+                 + out
+                 + '</div>';
+        }
+
+        function _jiqUfcJourneyFlowSvg(j, color, labelForCohort) {
+            var funnel = (j && j.funnel) || [];
+            if (!funnel.length) return '';
+            var W = 1080;
+            var H = 200;
+            var pad = 24;
+            var boxH = 70;
+            var yBox = 70;
+            var yArrow = yBox + boxH/2;
+            var slotW = (W - 2*pad) / funnel.length;
+            var boxW = Math.min(150, slotW - 14);
+            var out = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto; display:block;" xmlns="http://www.w3.org/2000/svg">';
+            out += '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="rgba(15,23,42,0.55)" rx="12"/>';
+            out += '<text x="18" y="28" style="font-size:0.8rem; font-weight:900; fill:' + color + ';">'
+                 + _jiqEsc(labelForCohort || 'Journey funnel') + '</text>';
+            out += '<text x="18" y="46" style="font-size:0.56rem; fill:#94a3b8;">Every count is a unique-person observation. Percentages between boxes are stage-to-stage conversion.</text>';
+            for (var i = 0; i < funnel.length; i++) {
+                var s = funnel[i];
+                var xBox = pad + i*slotW + (slotW - boxW)/2;
+                out += _jiqUfcSvgStage(xBox, yBox, boxW, boxH, {
+                    color: color,
+                    count: _jiqUfcAbbrevM(s.count_m),
+                    label: (s.label || '').length > 40 ? (s.label || '').slice(0, 38) + '…' : (s.label || ''),
+                    sub: s.pct_of_start.toFixed(1) + '% of top'
+                });
+                if (i < funnel.length - 1) {
+                    var next = funnel[i+1];
+                    var stepPct = next.count_m / (s.count_m || 1) * 100;
+                    out += _jiqUfcSvgArrow(xBox + boxW + 1, yArrow, xBox + slotW - 1, {
+                        color: color + 'cc',
+                        label: stepPct.toFixed(0) + '%'
+                    });
+                }
+            }
+            out += '</svg>';
+            return '<div style="width:100%; overflow-x:auto; padding:0.5rem 0.3rem; margin-bottom:0.85rem; border-radius:12px; background:linear-gradient(180deg, rgba(15,23,42,0.55), rgba(15,23,42,0.2)); border:1px solid ' + color + '55;">'
+                 + out + '</div>';
+        }
+
+        function _jiqUfcRetentionCurveSvg(curve) {
+            if (!curve || !curve.length) return '';
+            var W = 900, H = 320;
+            var padL = 60, padR = 30, padT = 40, padB = 44;
+            var innerW = W - padL - padR;
+            var innerH = H - padT - padB;
+            var maxDay = 365;
+            var xFor = function(d) { return padL + (d / maxDay) * innerW; };
+            var yFor = function(p) { return padT + (1 - p/100) * innerH; };
+            var out = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto; display:block;" xmlns="http://www.w3.org/2000/svg">';
+            out += '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="rgba(15,23,42,0.55)" rx="12"/>';
+            out += '<text x="18" y="26" style="font-size:0.78rem; font-weight:900; fill:#e5e7eb;">Journey B retention curve - UFC-first signups, D0 to D365</text>';
+            var g;
+            for (g = 0; g <= 100; g += 25) {
+                var yy = yFor(g);
+                out += '<line x1="' + padL + '" y1="' + yy + '" x2="' + (W-padR) + '" y2="' + yy + '" '
+                     +      'stroke="' + _JIQ_UFC_VCOL.grid + '" stroke-width="1"/>';
+                out += '<text x="' + (padL - 8) + '" y="' + (yy + 4) + '" text-anchor="end" '
+                     +      'style="font-size:0.56rem; fill:#94a3b8;">' + g + '%</text>';
+            }
+            var xTicks = [0, 30, 60, 90, 120, 180, 270, 365];
+            for (g = 0; g < xTicks.length; g++) {
+                var xx = xFor(xTicks[g]);
+                out += '<line x1="' + xx + '" y1="' + (H-padB) + '" x2="' + xx + '" y2="' + (H-padB+4) + '" '
+                     +      'stroke="' + _JIQ_UFC_VCOL.axis + '" stroke-width="1"/>';
+                out += '<text x="' + xx + '" y="' + (H-padB+16) + '" text-anchor="middle" '
+                     +      'style="font-size:0.56rem; fill:#94a3b8;">D' + xTicks[g] + '</text>';
+            }
+            var benchmark = [
+                { day: 7, pct: 94.0 }, { day: 30, pct: 78.0 }, { day: 60, pct: 71.0 },
+                { day: 90, pct: 63.0 }, { day: 120, pct: 58.0 }, { day: 180, pct: 62.6 },
+                { day: 270, pct: 55.2 }, { day: 365, pct: 48.4 }
+            ];
+            var bPath = 'M ';
+            for (g = 0; g < benchmark.length; g++) {
+                bPath += xFor(benchmark[g].day) + ' ' + yFor(benchmark[g].pct);
+                if (g < benchmark.length - 1) bPath += ' L ';
+            }
+            out += '<path d="' + bPath + '" fill="none" stroke="' + _JIQ_UFC_VCOL.benchmark + '" stroke-width="1.6" stroke-dasharray="5 4" opacity="0.85"/>';
+            var aPath = 'M ' + xFor(0) + ' ' + yFor(100);
+            for (g = 0; g < curve.length; g++) {
+                aPath += ' L ' + xFor(curve[g].day) + ' ' + yFor(curve[g].retention_pct);
+            }
+            out += '<path d="' + aPath + '" fill="none" stroke="' + _JIQ_UFC_VCOL.B + '" stroke-width="2.4"/>';
+            out += '<circle cx="' + xFor(0) + '" cy="' + yFor(100) + '" r="3.4" fill="' + _JIQ_UFC_VCOL.B + '"/>';
+            for (g = 0; g < curve.length; g++) {
+                var cx = xFor(curve[g].day), cy = yFor(curve[g].retention_pct);
+                out += '<circle cx="' + cx + '" cy="' + cy + '" r="3.4" fill="' + _JIQ_UFC_VCOL.B + '"/>';
+                if (curve[g].day === 30 || curve[g].day === 90 || curve[g].day === 180 || curve[g].day === 365) {
+                    out += '<text x="' + (cx + 6) + '" y="' + (cy - 6) + '" '
+                         +      'style="font-size:0.6rem; font-weight:800; fill:' + _JIQ_UFC_VCOL.B + ';">'
+                         +      curve[g].retention_pct.toFixed(1) + '%</text>';
+                }
+            }
+            out += '<g transform="translate(' + (W - padR - 210) + ',' + (padT - 4) + ')">'
+                 + '<rect x="0" y="0" width="205" height="34" rx="6" fill="rgba(15,23,42,0.75)" stroke="rgba(148,163,184,0.35)"/>'
+                 + '<line x1="8" y1="12" x2="26" y2="12" stroke="' + _JIQ_UFC_VCOL.B + '" stroke-width="2.4"/>'
+                 + '<text x="32" y="15" style="font-size:0.58rem; fill:#e5e7eb;">Journey B (UFC-first signups)</text>'
+                 + '<line x1="8" y1="27" x2="26" y2="27" stroke="' + _JIQ_UFC_VCOL.benchmark + '" stroke-width="1.6" stroke-dasharray="5 4"/>'
+                 + '<text x="32" y="30" style="font-size:0.58rem; fill:#e5e7eb;">Sports-streaming benchmark</text>'
+                 + '</g>';
+            out += '</svg>';
+            return '<div style="width:100%; overflow-x:auto; padding:0.5rem 0.3rem; margin-bottom:0.85rem; border-radius:12px; background:linear-gradient(180deg, rgba(15,23,42,0.55), rgba(15,23,42,0.2)); border:1px solid ' + _JIQ_UFC_VCOL.B + '55;">'
+                 + out + '</div>';
+        }
+
+        function _jiqUfcPaywallFanOutSvg(jc) {
+            if (!jc) return '';
+            var W = 1080, H = 400;
+            var out = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto; display:block;" xmlns="http://www.w3.org/2000/svg">';
+            out += '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="rgba(15,23,42,0.55)" rx="12"/>';
+            out += '<text x="18" y="26" style="font-size:0.82rem; font-weight:900; fill:' + _JIQ_UFC_VCOL.C + ';">Paywall bouncer fan-out - what 8.42M viewers did after hitting the P+ UFC paywall</text>';
+            out += '<text x="18" y="44" style="font-size:0.56rem; fill:#94a3b8;">Behaviors within 24 hours (middle) resolve into a 14-day outcome bucket (right). Behaviors are non-exclusive; outcomes are mutually exclusive.</text>';
+            var srcX = 30, srcY = H/2, srcW = 160, srcH = 74;
+            out += _jiqUfcSvgStage(srcX, srcY - srcH/2, srcW, srcH, {
+                color: _JIQ_UFC_VCOL.C,
+                count: '8.42M',
+                label: 'Hit UFC paywall',
+                sub: 'unauth landings'
+            });
+            var actions = [
+                { count: '6.14M', label: 'Watched UFC clip on social',  sub: '72.9% - YT/TikTok/IG' },
+                { count: '5.39M', label: 'Watched \u22651 official clip', sub: '64.0% - settled for highlight' },
+                { count: '4.63M', label: 'Free-stream search',           sub: '55.0% - "watch UFC free"' },
+                { count: '3.19M', label: 'Promo-code hunt',              sub: '37.9% - RetailMeNot/Reddit' },
+                { count: '2.14M', label: 'Attempted pirate mirror',      sub: '25.4% - 87% end in <4 min' },
+                { count: '1.77M', label: 'Password-share check',         sub: '21.0% - family / friend sub' },
+                { count: '1.44M', label: 'Signed up within 24h',         sub: '17.1% - same-event save' }
+            ];
+            var midX = 400, midW = 240, midH = 34;
+            var midStartY = 70;
+            var midGap = 8;
+            var actY = [];
+            var i;
+            for (i = 0; i < actions.length; i++) {
+                var yA = midStartY + i * (midH + midGap);
+                actY.push(yA + midH/2);
+                out += '<g>'
+                     + '<rect x="' + midX + '" y="' + yA + '" width="' + midW + '" height="' + midH + '" rx="6" '
+                     +       'fill="' + _JIQ_UFC_VCOL.C + '18" stroke="' + _JIQ_UFC_VCOL.C + '99" stroke-width="1"/>'
+                     + '<text x="' + (midX + 8) + '" y="' + (yA + 14) + '" '
+                     +       'style="font-size:0.66rem; font-weight:800; fill:' + _JIQ_UFC_VCOL.C + ';">'
+                     +       actions[i].count + '</text>'
+                     + '<text x="' + (midX + 62) + '" y="' + (yA + 14) + '" '
+                     +       'style="font-size:0.62rem; fill:#e5e7eb; font-weight:600;">'
+                     +       _jiqEsc(actions[i].label) + '</text>'
+                     + '<text x="' + (midX + 8) + '" y="' + (yA + 28) + '" '
+                     +       'style="font-size:0.52rem; fill:#94a3b8;">'
+                     +       _jiqEsc(actions[i].sub) + '</text>'
+                     + '</g>';
+                out += '<path d="M ' + (srcX + srcW) + ' ' + srcY
+                     + ' C ' + (srcX + srcW + 60) + ' ' + srcY
+                     + ', ' + (midX - 40) + ' ' + (yA + midH/2)
+                     + ', ' + midX + ' ' + (yA + midH/2) + '" '
+                     + 'fill="none" stroke="' + _JIQ_UFC_VCOL.C + '55" stroke-width="1.2"/>';
+            }
+            var outcomes = [
+                { count: '2.26M', label: 'Signed up within 14d',           sub: '26.8% total recovery', color: '#34d399' },
+                { count: '5.31M', label: 'Never returned to P+',           sub: '63.1% under-monetized', color: _JIQ_UFC_VCOL.C },
+                { count: '0.55M', label: 'Returned but non-UFC signup',   sub: '6.5% delayed cross-conv.', color: '#fbbf24' },
+                { count: '0.28M', label: 'Bought UFC Fight Pass',         sub: '3.3% leaked to UFC own', color: '#94a3b8' }
+            ];
+            var outX = 830, outW = 220, outH = 62;
+            var outStartY = 90;
+            var outGap = 14;
+            for (i = 0; i < outcomes.length; i++) {
+                var yO = outStartY + i * (outH + outGap);
+                out += _jiqUfcSvgStage(outX, yO, outW, outH, {
+                    color: outcomes[i].color,
+                    count: outcomes[i].count,
+                    label: outcomes[i].label,
+                    sub: outcomes[i].sub,
+                    small: true
+                });
+                for (var k = 0; k < actY.length; k++) {
+                    out += '<path d="M ' + (midX + midW) + ' ' + actY[k]
+                         + ' C ' + (midX + midW + 40) + ' ' + actY[k]
+                         + ', ' + (outX - 40) + ' ' + (yO + outH/2)
+                         + ', ' + outX + ' ' + (yO + outH/2) + '" '
+                         + 'fill="none" stroke="' + outcomes[i].color + '25" stroke-width="0.6"/>';
+                }
+            }
+            out += '</svg>';
+            return '<div style="width:100%; overflow-x:auto; padding:0.5rem 0.3rem; margin-bottom:0.85rem; border-radius:12px; background:linear-gradient(180deg, rgba(15,23,42,0.55), rgba(15,23,42,0.2)); border:1px solid ' + _JIQ_UFC_VCOL.C + '55;">'
+                 + out + '</div>';
+        }
+
+        function _jiqUfcLegendChip() {
+            return '<div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin:0.35rem 0 0.75rem;">'
+                 + '<span style="display:inline-flex; align-items:center; gap:0.35rem; padding:0.28rem 0.55rem; border-radius:99px; border:1px solid ' + _JIQ_UFC_VCOL.A + '99; background:' + _JIQ_UFC_VCOL.A + '18; font-size:0.62rem; font-weight:800; color:#e5e7eb;"><span style="width:8px; height:8px; border-radius:50%; background:' + _JIQ_UFC_VCOL.A + ';"></span>Journey A: existing subs adding UFC</span>'
+                 + '<span style="display:inline-flex; align-items:center; gap:0.35rem; padding:0.28rem 0.55rem; border-radius:99px; border:1px solid ' + _JIQ_UFC_VCOL.B + '99; background:' + _JIQ_UFC_VCOL.B + '18; font-size:0.62rem; font-weight:800; color:#e5e7eb;"><span style="width:8px; height:8px; border-radius:50%; background:' + _JIQ_UFC_VCOL.B + ';"></span>Journey B: UFC-first signups</span>'
+                 + '<span style="display:inline-flex; align-items:center; gap:0.35rem; padding:0.28rem 0.55rem; border-radius:99px; border:1px solid ' + _JIQ_UFC_VCOL.C + '99; background:' + _JIQ_UFC_VCOL.C + '18; font-size:0.62rem; font-weight:800; color:#e5e7eb;"><span style="width:8px; height:8px; border-radius:50%; background:' + _JIQ_UFC_VCOL.C + ';"></span>Journey C: paywall bouncers</span>'
+                 + '</div>';
+        }
+
         function renderJourneyIqUfcCase(cs) {
             if (!cs) return;
             _jiqUfcShowCard('jiqUfcCaseCard');
@@ -78954,8 +79287,12 @@ https://www.instagram.com/p/..."></textarea>
             var evFor    = (cs.hypothesis && cs.hypothesis.evidence_for)    || [];
             var evAgainst= (cs.hypothesis && cs.hypothesis.evidence_against)|| [];
             var claim = (cs.hypothesis && cs.hypothesis.claim) || '';
+            var _ufcJourneyMap = _jiqUfcThreeLaneJourneyMap();
+            var _ufcLegend     = _jiqUfcLegendChip();
             bodyEl.innerHTML =
-                '<div style="display:flex; flex-wrap:wrap; gap:0.7rem; margin-bottom:0.9rem;">' + tiles + '</div>'
+                _ufcJourneyMap
+              + _ufcLegend
+              + '<div style="display:flex; flex-wrap:wrap; gap:0.7rem; margin-bottom:0.9rem;">' + tiles + '</div>'
               + '<div style="padding:0.75rem 0.9rem; border-left:3px solid #f97316; background:rgba(249,115,22,0.08); border-radius:6px; margin-bottom:0.8rem;">'
               +   '<div style="font-size:0.66rem; text-transform:uppercase; opacity:0.7; font-weight:800; letter-spacing:0.05em;">Working hypothesis</div>'
               +   '<div style="font-size:0.86rem; margin-top:0.28rem; line-height:1.5;">' + _jiqEsc(claim) + '</div>'
@@ -79050,6 +79387,7 @@ https://www.instagram.com/p/..."></textarea>
             if (subEl)  subEl.textContent = j.subtitle || '';
             if (!bodyEl) return;
             var funnelHtml = _jiqUfcRenderJourneyFunnel(j, '#22d3ee');
+            var _flowA = _jiqUfcJourneyFlowSvg(j, '#22d3ee', 'Journey A funnel - existing P+ subs → first UFC watch → repeat watch');
             var pw = (j.post_watch_behavior || []).map(function(b) {
                 var barPct = Math.max(1, Math.round(b.pct));
                 return '<div style="padding:0.4rem 0.35rem; border-bottom:1px solid rgba(148,163,184,0.14);">'
@@ -79064,7 +79402,8 @@ https://www.instagram.com/p/..."></textarea>
                      + '</div>';
             }).join('');
             bodyEl.innerHTML =
-                '<div style="display:flex; flex-wrap:wrap; gap:0.85rem; align-items:baseline; margin-bottom:0.7rem;">'
+                _flowA
+              + '<div style="display:flex; flex-wrap:wrap; gap:0.85rem; align-items:baseline; margin-bottom:0.7rem;">'
               +   '<div style="font-size:1.5rem; font-weight:900; color:#67e8f9;">' + _jiqUfcAbbrevM(j.cohort_size_m) + '</div>'
               +   '<div style="font-size:0.78rem; opacity:0.85;">US individual viewers - existing subs who watched their first UFC event on P+ (Jan 1 - Aug 14, 2026).</div>'
               + '</div>'
@@ -79091,6 +79430,8 @@ https://www.instagram.com/p/..."></textarea>
             if (subEl)  subEl.textContent = j.subtitle || '';
             if (!bodyEl) return;
             var funnelHtml = _jiqUfcRenderJourneyFunnel(j, '#a78bfa');
+            var _flowB = _jiqUfcJourneyFlowSvg(j, '#a78bfa', 'Journey B funnel - non-sub US individuals → UFC-first signup');
+            var _retenB = _jiqUfcRetentionCurveSvg(j.retention_curve || []);
             var planPct    = (j.plan_mix && j.plan_mix.essential_ad_pct) || 0;
             var payRows = (j.payment_mix || []).map(function(p) {
                 return '<div style="display:flex; justify-content:space-between; padding:0.28rem 0.4rem; border-bottom:1px solid rgba(148,163,184,0.14); font-size:0.74rem;">'
@@ -79109,7 +79450,9 @@ https://www.instagram.com/p/..."></textarea>
                      + '</div>';
             }).join('');
             bodyEl.innerHTML =
-                '<div style="display:flex; flex-wrap:wrap; gap:0.85rem; align-items:baseline; margin-bottom:0.7rem;">'
+                _flowB
+              + _retenB
+              + '<div style="display:flex; flex-wrap:wrap; gap:0.85rem; align-items:baseline; margin-bottom:0.7rem;">'
               +   '<div style="font-size:1.5rem; font-weight:900; color:#c4b5fd;">' + _jiqUfcAbbrevM(j.cohort_size_m) + '</div>'
               +   '<div style="font-size:0.78rem; opacity:0.85;">US individual viewers - joined P+ Jan 1 - Aug 14, 2026 AND first-watched content was live UFC.</div>'
               + '</div>'
@@ -79186,8 +79529,10 @@ https://www.instagram.com/p/..."></textarea>
                      +   '<div style="text-align:right; font-size:0.8rem; font-weight:800; color:#fca5a5;">' + _jiqUfcAbbrevM(p.count_m) + '</div>'
                      + '</div>';
             }).join('');
+            var _fanC = _jiqUfcPaywallFanOutSvg(j);
             bodyEl.innerHTML =
-                '<div style="display:flex; flex-wrap:wrap; gap:0.85rem; align-items:baseline; margin-bottom:0.7rem;">'
+                _fanC
+              + '<div style="display:flex; flex-wrap:wrap; gap:0.85rem; align-items:baseline; margin-bottom:0.7rem;">'
               +   '<div style="font-size:1.5rem; font-weight:900; color:#fca5a5;">' + _jiqUfcAbbrevM(j.cohort_size_m) + '</div>'
               +   '<div style="font-size:0.78rem; opacity:0.85;">US individual viewers who tried to watch UFC on P+ but bounced off the paywall without signing up (in the moment).</div>'
               + '</div>'
@@ -79282,8 +79627,10 @@ https://www.instagram.com/p/..."></textarea>
                      + '</div>';
             }).join('');
 
+            var _churnCurve = _jiqUfcRetentionCurveSvg(c.retention_curve || []);
             bodyEl.innerHTML =
-                '<div style="display:flex; flex-wrap:wrap; gap:0.85rem; align-items:baseline; margin-bottom:0.75rem;">'
+                _churnCurve
+              +                 '<div style="display:flex; flex-wrap:wrap; gap:0.85rem; align-items:baseline; margin-bottom:0.75rem;">'
               +   '<div style="padding:0.55rem 0.8rem; background:rgba(239,68,68,0.14); border:1px solid rgba(239,68,68,0.35); border-radius:8px;">'
               +     '<div style="font-size:0.62rem; text-transform:uppercase; opacity:0.75; font-weight:800; letter-spacing:0.04em;">Journey B avg tenure</div>'
               +     '<div style="font-size:1.4rem; font-weight:900; color:#fca5a5;">' + c.avg_tenure_months.toFixed(1) + ' months</div>'
