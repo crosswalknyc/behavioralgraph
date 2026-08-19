@@ -43369,6 +43369,42 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
             }
         spec_draft = result.get('data') or {}
 
+        # Force the caller-provided subject name onto the draft so the
+        # approval card and file_stem match the specific slice we
+        # asked Claude to interpret. When we thread the full original
+        # request as shared_context (Cartesian batch case) Claude
+        # tends to echo the umbrella name back in `subject` (e.g.
+        # "EST Buyers vs. TVOD Renters by Retailer") instead of the
+        # per-slice name we handed it (e.g. "Amazon EST buyers").
+        # Overriding here is deterministic, no round-trip needed.
+        import re as _re_local
+        _canon_subject = _re_local.sub(r'\s+', ' ',
+                                          (subject or '').strip())
+        # Title-case any word that is entirely lowercase (so
+        # "amazon est buyers" -> "Amazon EST Buyers"), preserve
+        # acronyms and mixed-case tokens as-is (EST, TVOD, YouTube,
+        # AT&T), and keep common stopwords lowercase unless they're
+        # the first word (so "Fandango at Home" stays intact).
+        _stopwords = {'at', 'of', 'the', 'and', 'or', 'in', 'on',
+                      'to', 'from', 'for', 'by', 'vs', 'a', 'an'}
+        _tokens = _canon_subject.split()
+        _display_parts = []
+        for i, w in enumerate(_tokens):
+            if not w.islower():
+                _display_parts.append(w)  # preserve acronyms/mixed-case
+            elif i > 0 and w in _stopwords:
+                _display_parts.append(w)  # keep stopword lowercase
+            else:
+                _display_parts.append(w.capitalize())
+        _display_subject = ' '.join(_display_parts) if _display_parts else _canon_subject
+        if _display_subject:
+            spec_draft['subject'] = _display_subject
+            # Rebuild file_stem to match. Keep only alnum + _/- and
+            # collapse whitespace-to-underscore for a clean S3 key.
+            _stem = _re_local.sub(r'\s+', '_', _display_subject)
+            _stem = ''.join(c for c in _stem if c.isalnum() or c in '_-')
+            spec_draft['file_stem'] = _stem or 'Profile'
+
         # Apply the same guardrails the single-subject path does.
         try:
             swapped, swap_note = _enforce_base_parent_pick(
