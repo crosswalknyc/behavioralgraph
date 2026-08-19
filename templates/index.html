@@ -59141,6 +59141,90 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
 
+        function _synthChatFormatElapsed(startedAt) {
+            // 2026-08-19 helper for the status-update reply.
+            // Returns 'just started' / '12 min ago' / '3h 12m ago' from an
+            // ISO 8601 timestamp, or '' if the input is missing/bad.
+            if (!startedAt) return '';
+            try {
+                var t = new Date(startedAt);
+                if (isNaN(t.getTime())) return '';
+                var secs = Math.max(0, (Date.now() - t.getTime()) / 1000);
+                if (secs < 60) return 'just started';
+                var mins = Math.floor(secs / 60);
+                if (mins < 60) return 'started ' + mins + ' min ago';
+                var hrs = Math.floor(mins / 60);
+                var m = mins % 60;
+                return 'started ' + hrs + 'h ' + m + 'm ago';
+            } catch (_) { return ''; }
+        }
+
+        // 2026-08-19 (Jenna directive): "status update" should list every
+        // in-flight run and show step X of Y with percent complete. Prior
+        // handler only looked at the last run in on-page history, so a
+        // user with two concurrent builds saw only one.
+        async function _synthChatReplyWithAllActiveStatus() {
+            try {
+                var r = await fetch('/api/brief-chat/active-runs',
+                    { credentials: 'same-origin' });
+                var data = await r.json();
+                if (!r.ok || !data.success) {
+                    synthChatPushTurn('agent',
+                        "I can't reach the queue right now. Try again in a few seconds.");
+                    return false;
+                }
+                var runs = (data.runs || []).filter(function (x) {
+                    var s = (x.status || '').toLowerCase();
+                    return s !== 'complete' && s !== 'error' && s !== 'failed';
+                });
+                if (runs.length === 0) {
+                    synthChatPushTurn('agent',
+                        "You don't have any profiles running right now. " +
+                        "Start a new one by describing the audience or subject.");
+                    return true;
+                }
+                var lines = [];
+                if (runs.length === 1) {
+                    lines.push('1 profile in flight:');
+                } else {
+                    lines.push(runs.length + ' profiles in flight:');
+                }
+                lines.push('');
+                runs.forEach(function (rn) {
+                    var name = rn.subject || rn.run_id || 'Untitled profile';
+                    var label = _synthChatStatusLabel(rn.status || 'running');
+                    var head  = '**' + name + '** -> ' + label;
+                    if (typeof rn.step_index === 'number' &&
+                        typeof rn.step_total === 'number' &&
+                        rn.step_total > 0) {
+                        var pct = (typeof rn.percent === 'number')
+                            ? rn.percent
+                            : Math.round(100 * rn.step_index / rn.step_total);
+                        head += ' - step ' + rn.step_index + ' of ' +
+                                rn.step_total + ' (' + pct + '%)';
+                    }
+                    lines.push(head);
+                    if (rn.step_label) {
+                        lines.push('  ' + rn.step_label + '.');
+                    }
+                    var elapsed = _synthChatFormatElapsed(rn.started_at);
+                    if (elapsed) lines.push('  ' + elapsed + '.');
+                    lines.push('');
+                });
+                lines.push("I'll keep updating this thread as they progress.");
+                synthChatPushTurn('agent', lines.join('\n'));
+                runs.forEach(function (rn) {
+                    try { _synthChatPatchLastMetaStatus(rn.run_id, rn.status); }
+                    catch (_) {}
+                });
+                return true;
+            } catch (e) {
+                synthChatPushTurn('agent',
+                    "Status check failed: " + (e && e.message || e));
+                return false;
+            }
+        }
+
         function _synthChatShowStopButton() {
             var btn = document.getElementById('synthChatSubmitBtn');
             if (!btn) return;
@@ -59183,7 +59267,17 @@ https://www.instagram.com/p/..."></textarea>
             synthChatPushTurn('user', text);
 
             // Status-update short-circuit. See _synthChatIsStatusRequest.
+            //
+            // 2026-08-19 (Jenna): if the user asks for a status update we
+            // query the server for ALL of their in-flight runs (not just
+            // the last one referenced in this on-page chat history) and
+            // report per-run "step X of Y" progress. Fall back to the
+            // old single-run history lookup only if the active-runs
+            // endpoint fails AND we have a stale run in local history
+            // worth polling.
             if (_synthChatIsStatusRequest(text)) {
+                var _statusOk = await _synthChatReplyWithAllActiveStatus();
+                if (_statusOk) return;
                 var active = _synthChatFindActiveRunFromHistory();
                 if (active && active.run_id) {
                     await _synthChatReplyWithStatus(active.run_id, active.subject);
