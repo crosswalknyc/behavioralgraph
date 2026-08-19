@@ -43182,6 +43182,44 @@ def _save_synth_chat_history(username, history):
         return False
 
 
+# Deterministic wall-time estimator for the chatbot approval card.
+# We override whatever `estimated_run_minutes` value Claude puts in the
+# interpret JSON because the model has no grounding in the current
+# pipeline speed - it tends to guess 30-60 min based on "typical AI
+# synthesis workflow" priors. These numbers are anchored to actual
+# observed wall times after the 2026-08-18 optimizations (Anthropic
+# prompt caching + chunk_size=80 + max_workers=8): TU new_build
+# smoke-tested at ~9-12 min, TU + Avid pair at ~18-22 min.
+#
+# If we later observe drift we can retune here without touching the
+# prompt. Anti-drift note: this is a display estimate for the approval
+# card, not a hard SLA - it excludes any queue wait time on Hetzner.
+_RUN_MINUTES_TABLE = {
+    'existing_match':        0,   # reuse - no pipeline work
+    'derive_cut':            10,  # cut derived from parent, no fresh TU
+    'new_build':             12,  # TU only
+    'new_build_avid':        20,  # TU + Avid pair (largely parallel)
+    'time_shifted_refresh':  12,  # same shape as new_build
+    'time_shifted_refresh_avid': 20,
+    'cut_needs_parent':      25,  # TU + Avid + cut derive
+    'cut_needs_parent_avid': 25,
+}
+
+
+def _estimate_run_minutes(decision: str, run_avid: bool) -> int:
+    """Deterministic wall-time estimate (minutes) for the chatbot
+    approval card. Anchored to observed pipeline speed post the
+    2026-08-18 optimizations. Overrides Claude's hallucinated value.
+    """
+    d = (decision or '').strip().lower() or 'new_build'
+    key = d + ('_avid' if run_avid else '')
+    if key in _RUN_MINUTES_TABLE:
+        return _RUN_MINUTES_TABLE[key]
+    if d in _RUN_MINUTES_TABLE:
+        return _RUN_MINUTES_TABLE[d]
+    return 15
+
+
 def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
                                        history: list) -> dict:
     """Run one Claude interpret call for a single subject inside a batch.
@@ -43239,6 +43277,11 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
             _dec_norm = str(spec_draft.get('decision') or 'new_build').strip() or 'new_build'
         est_credits = int(_V1_CREDITS.get(_dec_norm, CREDITS_PROFILE_ANALYSIS))
         spec_draft['estimated_credits'] = est_credits
+        # Override Claude's hallucinated run-time guess with a value
+        # anchored to actual observed pipeline speed (see
+        # _estimate_run_minutes docstring).
+        spec_draft['estimated_run_minutes'] = _estimate_run_minutes(
+            _dec_norm, bool(spec_draft.get('run_avid')))
 
         return {
             'success': True, 'subject_input': subject,
@@ -43417,6 +43460,14 @@ def api_synth_chat_interpret():
         if isinstance(spec_draft, list):
             drafts = [d for d in spec_draft if isinstance(d, dict)]
             if drafts:
+                for _d in drafts:
+                    try:
+                        _dn, _, _ = _normalize_v1_decision(_d)
+                    except Exception:
+                        _dn = str(_d.get('decision') or 'new_build').strip() \
+                            or 'new_build'
+                    _d['estimated_run_minutes'] = _estimate_run_minutes(
+                        _dn, bool(_d.get('run_avid')))
                 return jsonify({
                     'success': True,
                     'batch': True,
@@ -43517,6 +43568,8 @@ def api_synth_chat_interpret():
         estimated_credits = int(
             _V1_CREDITS.get(_dec_norm, CREDITS_PROFILE_ANALYSIS))
         spec_draft['estimated_credits'] = estimated_credits
+        spec_draft['estimated_run_minutes'] = _estimate_run_minutes(
+            _dec_norm, bool(spec_draft.get('run_avid')))
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
@@ -44712,7 +44765,7 @@ def api_v1_profiles_run():
         'derive_type': d_type or None,
         'credits_charged': price,
         'credits_remaining': credits_left,
-        'estimated_run_minutes': int(draft.get('estimated_run_minutes') or 15),
+        'estimated_run_minutes': _estimate_run_minutes(decision, run_avid),
         'status_url': status_url,
         'brief_summary': brief_summary,
     }
