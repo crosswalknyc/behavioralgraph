@@ -34,7 +34,18 @@ Checks performed
     root-caused to a missing anchor, add its id/marker to
     ``REQUIRED_ANCHORS`` below and no future commit can drop it
     silently.
-5.  Optional (warn, do not fail): file shrunk by more than 5% vs the
+5.  Inline ``<script>`` blocks parse cleanly under ``node --check``.
+    Extracts every inline block (skipping ``<script src=...>``),
+    strips Jinja templating (``{{...}}`` and ``{%...%}``), and runs
+    ``node --check`` against the combined source. A JS syntax error
+    inside a script block leaves the tag balance intact and the file
+    ending intact, so the earlier checks miss it; but the browser
+    still halts every inline block on parse and the dashboard freezes
+    at the loading spinner. Added 2026-08-18 after the UFC Methodology
+    tab shipped a dangling `ufc_methodology:` property outside its
+    parent object. Skips with a warning (does not fail) if ``node`` is
+    not on PATH so environments without Node installed still pass.
+6.  Optional (warn, do not fail): file shrunk by more than 5% vs the
     previous HEAD version. Big deletions in a single commit are
     almost always accidental; small trims are legitimate. Only warns
     because deliberate large refactors do happen.
@@ -56,9 +67,12 @@ Wired into ``.githooks/pre-commit`` and
 """
 from __future__ import annotations
 
+import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -198,6 +212,85 @@ def check_size(src_bytes: int) -> str | None:
     return None
 
 
+# Regex to pull out every inline <script>...</script> body. Skips any
+# tag that carries a `src=` attribute (those load external files and
+# have no inline body to check).
+_INLINE_SCRIPT_RE = re.compile(
+    r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>",
+    re.DOTALL,
+)
+
+# Jinja templating that Node cannot parse. `{{ ... }}` is a print
+# expression; `{% ... %}` is a control block. Both are server-side
+# rendered before the browser sees the file, so we substitute inert
+# placeholders before running `node --check`.
+_JINJA_PRINT_RE = re.compile(r"\{\{.*?\}\}", re.DOTALL)
+_JINJA_BLOCK_RE = re.compile(r"\{%.*?%\}", re.DOTALL)
+
+
+def check_inline_js_syntax(src: str) -> tuple[str | None, str | None]:
+    """Run ``node --check`` against the concatenated inline JS.
+
+    Returns ``(error, warning)``:
+        error   - hard failure string (blocks commit)
+        warning - soft skip string (does not block)
+    Exactly one of the two is non-None on any given call.
+
+    This catches JS syntax errors inside an otherwise-balanced
+    ``<script>`` block, which the tag-balance check above misses.
+    Example real bug: a dangling ``ufc_methodology:`` property outside
+    its parent object (see commit 4ee091fe / hotfix 78e14472,
+    2026-08-18). File ends with ``</html>``, tags balance, all anchors
+    present - and the dashboard still freezes because ``SyntaxError``
+    halts inline JS at parse.
+
+    Skips with a warning (not an error) when ``node`` is not on PATH,
+    so environments without Node installed still pass the validator.
+    """
+    node = shutil.which("node")
+    if node is None:
+        return (None, "node not on PATH - skipping inline JS syntax "
+                      "check. Install Node to enable this check locally "
+                      "(GitHub Action always runs it).")
+
+    scripts = _INLINE_SCRIPT_RE.findall(src)
+    if not scripts:
+        return (None, "no inline <script> blocks found - JS syntax "
+                      "check skipped.")
+
+    # Join with a semicolon-newline so a missing terminator in one
+    # block doesn't bleed into the next and produce a misleading error
+    # location. Also substitute Jinja templating so `{{...}}` doesn't
+    # look like an object literal with an unexpected `{`.
+    combined = "\n;\n".join(scripts)
+    combined = _JINJA_PRINT_RE.sub("null", combined)
+    combined = _JINJA_BLOCK_RE.sub("", combined)
+
+    tmp_dir = tempfile.mkdtemp(prefix="validate_index_js_")
+    tmp_js = os.path.join(tmp_dir, "inline.js")
+    try:
+        with open(tmp_js, "w", encoding="utf-8") as f:
+            f.write(combined)
+        result = subprocess.run(
+            [node, "--check", tmp_js],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            return (None, None)
+        # Trim stderr to the first ~1500 chars so the error printout
+        # stays scannable but includes the SyntaxError and its location.
+        stderr = (result.stderr or "").strip()[:1500]
+        return (
+            f"inline JS syntax check failed via `node --check`. "
+            f"A <script> block contains a JS parse error - the browser "
+            f"will halt every inline block and the dashboard will freeze "
+            f"at the loading screen.\n{stderr}",
+            None,
+        )
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 def check_shrink_vs_head(cur_bytes: int, head_bytes: int) -> str | None:
     """Return a WARNING message (not error) if the file shrank sharply.
 
@@ -251,6 +344,12 @@ def main() -> int:
     errors.extend(check_required_anchors(src))
     errors.extend(check_forbidden_anchors(src))
 
+    js_err, js_warn = check_inline_js_syntax(src)
+    if js_err:
+        errors.append(js_err)
+    if js_warn:
+        warnings.append(js_warn)
+
     head_bytes = head_size_bytes(path)
     if head_bytes is not None:
         warn = check_shrink_vs_head(len(src_bytes), head_bytes)
@@ -273,8 +372,9 @@ def main() -> int:
         print("           3. Splice the missing block back in and re-stage.")
         return 1
 
+    js_status = "JS parses" if shutil.which("node") else "JS check skipped (no node)"
     print(f"[validate] OK ({len(REQUIRED_ANCHORS)} anchors present, "
-          f"tags balanced, ends with </html>)")
+          f"tags balanced, ends with </html>, {js_status})")
     return 0
 
 

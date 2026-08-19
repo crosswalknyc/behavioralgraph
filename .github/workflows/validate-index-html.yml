@@ -39,5 +39,15 @@ jobs:
         with:
           python-version: "3.11"
 
+      # Needed for the inline-JS syntax check in validate_index_html.py.
+      # Without node the validator prints a warning and skips that check,
+      # but CI should always run it so a syntax error inside a <script>
+      # block (see UFC Methodology hotfix 78e14472, 2026-08-18) is caught
+      # before merge.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Run validator
         run: python3 scripts/validate_index_html.py
