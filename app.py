@@ -44291,10 +44291,29 @@ def api_synth_chat_approve():
             'success': False, 'error': f'queue POST failed: {e}',
         }), 502
 
+    # Queue-returned-200-without-run_id parity fix (2026-08-19, Jessie
+    # fix #4 applied to session route). If the queue accepted the POST
+    # but didn't hand back a run_id, the caller has no way to poll and
+    # no way to receive the deliverable. Session users don't get a
+    # credit refund (session credit model differs from v1), but they
+    # DO get the same 502 error instead of `success: True, run_id:
+    # null` which is worse than useless.
+    _session_run_id = queue_resp.get('run_id')
+    if not _session_run_id:
+        try:
+            print(f"[synth_chat_run] queue returned 200 with no run_id "
+                  f"payload={str(queue_resp)[:400]!r} - returning 502")
+        except Exception:
+            pass
+        return jsonify({
+            'success': False,
+            'error': 'queue did not return a run_id',
+        }), 502
+
     return jsonify({
         'success': True,
         'decision': decision,
-        'run_id': queue_resp.get('run_id'),
+        'run_id': _session_run_id,
         'pending_position': queue_resp.get('pending_position'),
         'subject': spec['name'],
         'brand_category': spec['brand_category'],
@@ -45474,6 +45493,11 @@ def api_v1_profiles_status(run_id):
     }
 
     if (resp['status'] or '').lower() == 'complete':
+        # Only echo s3_key / avid_s3_key back to the partner when we ACTUALLY
+        # signed a URL for it (2026-08-19, Jessie fix #5). Echoing the string
+        # even when the pre-sign was refused leaks the fact that we accepted
+        # the path as a candidate, which is a minor prompt-injection oracle.
+        # If we can't sign it, we don't name it.
         s3_key = status.get('tu_s3_key') or status.get('s3_key') or status.get('output_key')
         if s3_key:
             url = _generate_presigned_profile_url(s3_key, expires_seconds=86400)
@@ -45487,6 +45511,7 @@ def api_v1_profiles_status(run_id):
             avid_url = _generate_presigned_profile_url(avid_key, expires_seconds=86400)
             if avid_url:
                 resp['avid_download_url'] = avid_url
+                resp['avid_s3_key'] = avid_key
                 resp['avid_s3_key'] = avid_key
         # Prove the file is discoverable in the Select Profile dropdown,
         # not just a raw S3 download. Every /run output goes through
