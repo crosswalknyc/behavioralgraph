@@ -41889,10 +41889,32 @@ https://www.instagram.com/p/..."></textarea>
             if (threshold == null) threshold = 100;
             const n = Number(index);
             if (!Number.isFinite(n) || n <= 0) return 'var(--index-under)';
+            // A metric that indexes at 100 matches Gen Pop - show it blue
+            // (neutral) rather than over (green) / under (red).
+            if (Math.round(n) === 100) return getIndexMatchColor();
             return n >= threshold ? 'var(--index-over)' : 'var(--index-under)';
         }
         function getChartIndexOverColor() { return getIndexOverColor(true); }
         function getChartIndexUnderColor() { return getIndexUnderColor(true); }
+        // Blue used when a metric indexes at exactly 100 (matches Gen Pop).
+        function getIndexMatchColor(resolved) {
+            if (resolved) {
+                try {
+                    const v = getComputedStyle(document.body).getPropertyValue('--accent-blue').trim();
+                    if (v) return v;
+                } catch (e) { /* body not ready */ }
+                return document.body.getAttribute('data-theme') === 'light' ? '#1e40af' : '#5a9ad9';
+            }
+            return 'var(--accent-blue)';
+        }
+        function getChartIndexMatchColor() { return getIndexMatchColor(true); }
+        // Chart datalabel/legend color: blue when the index rounds to 100
+        // (matches Gen Pop), else green over / red under, else neutral.
+        function getChartIndexColorFor(pct, genPop, neutralColor) {
+            if (!(genPop > 0)) return neutralColor;
+            if (Math.round((pct / genPop) * 100) === 100) return getChartIndexMatchColor();
+            return pct >= genPop ? getChartIndexOverColor() : getChartIndexUnderColor();
+        }
         
         // Format percentage for insights/differentiators. Never show 100% (represents entire sample).
         function formatInsightPct(pct, opts) {
@@ -114517,7 +114539,7 @@ https://www.instagram.com/p/..."></textarea>
                                 if (isGenPop) return ct.dataNeutral;
                                 const pct = agePcts[ctx.dataIndex] || 0;
                                 const genPop = ageGenPop[ctx.dataIndex] || 0;
-                                return (genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.dataNeutral);
+                                return getChartIndexColorFor(pct, genPop, ct.dataNeutral);
                             },
                             formatter: (value, ctx) => {
                                 const pct = agePcts[ctx.dataIndex] || 0;
@@ -114590,7 +114612,7 @@ https://www.instagram.com/p/..."></textarea>
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : formatPct(pct);
                                         const genPopProj = genPop > 0 ? Math.round((genPop / 100) * 329900000) : 0;
                                         const gpStr = (isGenPop || genPop <= 0.05) ? '' : (isProjection ? ` GP: ${formatNumber(genPopProj)}` : ` GP: ${formatPct(genPop)}`);
-                                        const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.axisLabel));
+                                        const indexColor = isGenPop ? ct.axisLabel : (getChartIndexColorFor(pct, genPop, ct.axisLabel));
                                         return {
                                             text: `${label} ${valStr}${gpStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
@@ -114607,7 +114629,7 @@ https://www.instagram.com/p/..."></textarea>
                                 const pct = genderPcts[ctx.dataIndex] || 0;
                                 const genPop = genderGenPop[ctx.dataIndex] || 0;
                                 if (isGenPop) return ct.dataNeutral;
-                                return (genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.dataNeutral);
+                                return getChartIndexColorFor(pct, genPop, ct.dataNeutral);
                             },
                             formatter: (v, ctx) => {
                                 const pct = genderPcts[ctx.dataIndex] || 0;
@@ -114715,7 +114737,7 @@ https://www.instagram.com/p/..."></textarea>
                                         const valStr = isProjection ? formatNumber(Math.round(val)) : formatPct(pct);
                                         const genPopProj = genPop > 0 ? Math.round((genPop / 100) * 329900000) : 0;
                                         const gpStr = (isGenPop || genPop <= 0.05) ? '' : (isProjection ? ` GP: ${formatNumber(genPopProj)}` : ` GP: ${formatPct(genPop)}`);
-                                        const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.axisLabel));
+                                        const indexColor = isGenPop ? ct.axisLabel : (getChartIndexColorFor(pct, genPop, ct.axisLabel));
                                         return {
                                             text: `${label} ${valStr}${gpStr}`,
                                             fillStyle: data.datasets[0].backgroundColor[i],
@@ -114732,7 +114754,7 @@ https://www.instagram.com/p/..."></textarea>
                                 const pct = ethPcts[ctx.dataIndex] || 0;
                                 const genPop = ethGenPop[ctx.dataIndex] || 0;
                                 if (isGenPop) return ct.dataNeutral;
-                                return (genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.dataNeutral);
+                                return getChartIndexColorFor(pct, genPop, ct.dataNeutral);
                             },
                             formatter: (v, ctx) => {
                                 const pct = ethPcts[ctx.dataIndex] || 0;
@@ -114857,7 +114879,7 @@ https://www.instagram.com/p/..."></textarea>
                                 const pct = incomePcts[ctx.dataIndex] || 0;
                                 const genPop = incomeGenPop[ctx.dataIndex] || 0;
                                 if (isGenPop) return ct.dataNeutral;
-                                return (genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.dataNeutral);
+                                return getChartIndexColorFor(pct, genPop, ct.dataNeutral);
                             },
                             formatter: (value, ctx) => {
                                 const pct = incomePcts[ctx.dataIndex] || 0;
@@ -114944,7 +114966,7 @@ https://www.instagram.com/p/..."></textarea>
                                     const pct = eduPcts[ctx.dataIndex] || 0;
                                     const genPop = eduGenPop[ctx.dataIndex] || 0;
                                     if (isGenPop) return ct.dataNeutral;
-                                    return (genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.dataNeutral);
+                                    return getChartIndexColorFor(pct, genPop, ct.dataNeutral);
                                 },
                                 formatter: (v, ctx) => {
                                     const pct = eduPcts[ctx.dataIndex] || 0;
@@ -115057,7 +115079,7 @@ https://www.instagram.com/p/..."></textarea>
                                             const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` GP: ${formatNumber(Math.round((genPop / 100) * 329900000))}` : '')
                                                 : (genPop > 0 ? ` GP: ${genPop.toFixed(2)}%` : ''));
-                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.axisLabel));
+                                            const indexColor = isGenPop ? ct.axisLabel : (getChartIndexColorFor(pct, genPop, ct.axisLabel));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     }
@@ -115071,7 +115093,7 @@ https://www.instagram.com/p/..."></textarea>
                                     const pct = relPcts[ctx.dataIndex] || 0;
                                     const genPop = relGenPop[ctx.dataIndex] || 0;
                                     if (isGenPop) return ct.dataNeutral;
-                                    return (genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.dataNeutral);
+                                    return getChartIndexColorFor(pct, genPop, ct.dataNeutral);
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = relPcts[ctx.dataIndex] || 0;
@@ -115176,7 +115198,7 @@ https://www.instagram.com/p/..."></textarea>
                                             const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` GP: ${formatNumber(Math.round((genPop / 100) * 329900000))}` : '')
                                                 : (genPop > 0 ? ` GP: ${genPop.toFixed(2)}%` : ''));
-                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.axisLabel));
+                                            const indexColor = isGenPop ? ct.axisLabel : (getChartIndexColorFor(pct, genPop, ct.axisLabel));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     }
@@ -115190,7 +115212,7 @@ https://www.instagram.com/p/..."></textarea>
                                     const pct = soPcts[ctx.dataIndex] || 0;
                                     const genPop = soGenPop[ctx.dataIndex] || 0;
                                     if (isGenPop) return ct.dataNeutral;
-                                    return (genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.dataNeutral);
+                                    return getChartIndexColorFor(pct, genPop, ct.dataNeutral);
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = soPcts[ctx.dataIndex] || 0;
@@ -115291,7 +115313,7 @@ https://www.instagram.com/p/..."></textarea>
                                             const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` GP: ${formatNumber(Math.round((genPop / 100) * 329900000))}` : '')
                                                 : (genPop > 0 ? ` GP: ${genPop.toFixed(2)}%` : ''));
-                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.axisLabel));
+                                            const indexColor = isGenPop ? ct.axisLabel : (getChartIndexColorFor(pct, genPop, ct.axisLabel));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     }
@@ -115305,7 +115327,7 @@ https://www.instagram.com/p/..."></textarea>
                                     const pct = psPcts[ctx.dataIndex] || 0;
                                     const genPop = psGenPop[ctx.dataIndex] || 0;
                                     if (isGenPop) return ct.dataNeutral;
-                                    return (genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.dataNeutral);
+                                    return getChartIndexColorFor(pct, genPop, ct.dataNeutral);
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = psPcts[ctx.dataIndex] || 0;
@@ -115419,7 +115441,7 @@ https://www.instagram.com/p/..."></textarea>
                                             const gpStr = isGenPop ? '' : (isProjection
                                                 ? (genPop > 0 ? ` GP: ${formatNumber(Math.round((genPop / 100) * 329900000))}` : '')
                                                 : (genPop > 0 ? ` GP: ${genPop.toFixed(2)}%` : ''));
-                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.axisLabel));
+                                            const indexColor = isGenPop ? ct.axisLabel : (getChartIndexColorFor(pct, genPop, ct.axisLabel));
                                             return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
                                         });
                                     }
@@ -115433,7 +115455,7 @@ https://www.instagram.com/p/..."></textarea>
                                     const pct = occPcts[ctx.dataIndex] || 0;
                                     const genPop = occGenPop[ctx.dataIndex] || 0;
                                     if (isGenPop) return ct.dataNeutral;
-                                    return (genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.dataNeutral);
+                                    return getChartIndexColorFor(pct, genPop, ct.dataNeutral);
                                 },
                                 formatter: (value, ctx) => {
                                     const pct = occPcts[ctx.dataIndex] || 0;
@@ -115498,7 +115520,7 @@ https://www.instagram.com/p/..."></textarea>
                             : genPopPct.toFixed(1) + '%';
                         const gpCensusStr = gpActual != null ? gpActual.toFixed(1) + '%' : '-';
                         const idxVal = Math.round(occIdx);
-                        const idxColor = idxVal > 110 ? getChartIndexOverColor() : idxVal < 90 ? getChartIndexUnderColor() : 'var(--text-secondary)';
+                        const idxColor = idxVal === 100 ? getIndexMatchColor() : (idxVal > 110 ? getChartIndexOverColor() : idxVal < 90 ? getChartIndexUnderColor() : 'var(--text-secondary)');
                         const idxStr = idxVal > 0 ? String(idxVal) : '-';
                         const cwGpCol = showCwGp ? `<span style="color:var(--text-secondary);text-align:right;">${cwGpStr}</span>` : '';
                         return `<div style="display:grid;grid-template-columns:${occGridCols};gap:0.25rem;padding:0.25rem 0.5rem;font-size:0.7rem;align-items:center;border-bottom:1px solid var(--border-color);">
