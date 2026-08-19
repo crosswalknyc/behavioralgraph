@@ -43965,56 +43965,35 @@ def _spec_from_draft(draft):
         elif isinstance(row, dict) and 'column' in row and 'value' in row:
             extra_rows.append([str(row['column']), str(row['value'])])
 
-    # ── Phantom-column guard (added 2026-08-19 after Paul Anka /
-    # Tony Bennett / Frankie Valli shipped with a `BRAND` column full
-    # of Hallmark Channel, Cracker Barrel, Blue Cross Blue Shield, etc.
-    # that the dashboard can't render because BRAND is only a top-level
-    # grouping in MASTER_CATEGORIES, not a valid Column value).
+    # ── Phantom-column heads-up log (added 2026-08-19).
+    # If Claude puts anchor rows in subject_rows / extra_rows with a
+    # top-level MASTER_CATEGORIES grouping label as the Column
+    # ('BRAND', 'CONTENT', 'SPORT', 'HEALTHCARE'), we let them flow
+    # through to Hetzner. The worker's canonicalize_phantom_rows()
+    # (migration/synth_hostmap_augment.py) will look each Value up in
+    # ClickHouse's reference.host_mapping — the SAME hostmap the
+    # augment pass already reads — and remap the row to the correct
+    # canonical sub-category, preserving Claude's research instead of
+    # dropping it. Non-hostmap brands get dropped on the Hetzner side
+    # per Rule #4.
     #
-    # If Claude puts anything in subject_rows / extra_rows with a
-    # top-level grouping label as the Column, the synth engine writes
-    # it verbatim — producing a phantom column no one can see.
-    #
-    # These labels are groupings only, never Column values:
-    #   BRAND       -> use AUTOMOBILE / RETAILERS / BROADCAST/CABLE / etc.
-    #   CONTENT     -> use SERIES / MOVIE / PODCAST / GAMES
-    #   SPORT       -> use MLB / NBA / NFL / NHL / MLS / WNBA
-    #   HEALTHCARE  -> use HEALTH & WELLNESS / INSURANCE / PHARMACY
-    #
-    # We drop offending rows with a warning; the row-by-row reasoning
-    # engine will still populate those brands from Gen Pop in their
-    # correct canonical Column if they're in-hostmap. Persona-critical
-    # anchors that Claude WANTED in extra_rows need to specify the
-    # right Column — if Claude can't determine it, the anchor gets
-    # skipped rather than dumped in a bucket the dashboard can't render.
+    # We only log here so the operator can see what will be remapped;
+    # no spec mutation.
     _PHANTOM_COLUMNS = {'BRAND', 'CONTENT', 'SPORT', 'HEALTHCARE'}
-    _dropped_phantom = []
-    _clean_subject_rows_v2 = []
+    _phantom_seen = []
     for col, val in subject_rows:
         if str(col).strip().upper() in _PHANTOM_COLUMNS:
-            _dropped_phantom.append(('subject_rows', col, val))
-            continue
-        _clean_subject_rows_v2.append((col, val))
-    subject_rows = _clean_subject_rows_v2
-
-    _clean_extra_rows_v2 = []
+            _phantom_seen.append(('subject_rows', col, val))
     for entry in extra_rows:
         if str(entry[0]).strip().upper() in _PHANTOM_COLUMNS:
-            _dropped_phantom.append(('extra_rows', entry[0], entry[1]))
-            continue
-        _clean_extra_rows_v2.append(entry)
-    extra_rows = _clean_extra_rows_v2
-
-    if _dropped_phantom:
+            _phantom_seen.append(('extra_rows', entry[0], entry[1]))
+    if _phantom_seen:
         try:
             print(
-                f"[phantom-column-guard] {subject!r}: dropped "
-                f"{len(_dropped_phantom)} row(s) with grouping-label Column "
-                f"(BRAND/CONTENT/SPORT/HEALTHCARE are groupings, not "
-                f"Column values). Row-by-row reasoning will still cover "
-                f"these brands if they're in Gen Pop + hostmap. "
-                f"Dropped: {_dropped_phantom[:8]}"
-                + (f' ...+{len(_dropped_phantom) - 8} more' if len(_dropped_phantom) > 8 else '')
+                f"[phantom-column-heads-up] {subject!r}: {len(_phantom_seen)} "
+                f"row(s) with grouping-label Column will be remapped on "
+                f"Hetzner via hostmap. Rows: {_phantom_seen[:8]}"
+                + (f' ...+{len(_phantom_seen) - 8} more' if len(_phantom_seen) > 8 else '')
             )
         except Exception:
             pass
