@@ -42952,7 +42952,13 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"existing_match_display_name\": \"<display name of the match>\",\n"
         "  \"existing_match_days_old\": <int or null>,\n"
         "  \"derive_type\": \"<if derive_cut: avid|casual|avid_F|avid_M|casual_F|casual_M|gender_F|gender_M|generation_millennials|generation_gen_z|generation_gen_x|generation_boomer|other>\",\n"
-        "  \"refresh_row_hypothesis\": \"<if time_shifted_refresh: 3-6 sentences on what would have realistically changed for each behavioral surface (brands, talent, platforms, retail, QSR, etc.) between the parent's last_modified date and today. Cite specific events, tour dates, product launches, controversies, macro trends. NOT a generic 'things change over time' - be concrete.>\"\n"
+        "  \"refresh_row_hypothesis\": \"<if time_shifted_refresh: 3-6 sentences on what would have realistically changed for each behavioral surface (brands, talent, platforms, retail, QSR, etc.) between the parent's last_modified date and today. Cite specific events, tour dates, product launches, controversies, macro trends. NOT a generic 'things change over time' - be concrete.>\",\n"
+        "  \"clickstream_signals\": [\n"
+        "    {\"host\": \"amazon.com\", \"path_pattern\": \"/gp/video/detail/\", \"param_hint\": \"buy-intent ref\", \"evidence\": \"...\"}\n"
+        "    // Only populate this list when the subject is a BEHAVIORAL COHORT tied to a specific platform/retailer where the URL shape of that behavior differs from the platform's generic traffic. Examples that WARRANT clickstream_signals: 'Amazon EST buyers' (digital purchase URLs), 'Amazon TVOD renters' (rental URLs), 'Apple TVOD Renters', 'Google Play EST Buyers', 'Fandango at Home Buyers', 'Netflix cancellers' (cancel-flow URLs), 'T-Mobile 5G Home Customer' (5G Home checkout URLs), 'Spectrum to Frontier switchers' (port-out / signup URLs).\n"
+        "    // Examples that should return an EMPTY list: standalone brands ('Nike', 'Netflix'), talent ('Taylor Swift'), shows ('Yellowstone'), sports teams, audiences (persona-driven). Their clickstream is caught by the auto-generated name-variant list already.\n"
+        "    // Each entry: host (bare domain like 'amazon.com' - no scheme), path_pattern (starts with '/' e.g. '/gp/video/detail/'), optional param_hint (short phrase describing distinguishing query params or path elements), evidence (short phrase citing what makes you confident of this URL shape - retailer help doc, checkout UI, etc.). Return 3-8 entries when populated. Do NOT fabricate URLs - only include patterns you can defend.\n"
+        "  ]\n"
         "}\n\n"
 
         "DEFAULT DATE RANGE - use these unless the user's request "
@@ -43848,6 +43854,30 @@ def _spec_from_draft(draft):
         'category_lifts': {},
         'brand_overrides': {},
     }
+    # If Claude proposed clickstream_signals at interpret time (for a
+    # platform/retailer behavioral cohort), thread them into a partial
+    # persona_doc so the synth engine can use them for BRAND INPUT even
+    # before the research agent runs. The research agent will overwrite
+    # this with a fuller doc when it fires, preserving these signals
+    # under `_seed_clickstream_signals` for reference.
+    cs_seed = draft.get('clickstream_signals') or []
+    if isinstance(cs_seed, list) and cs_seed:
+        normalized = []
+        for entry in cs_seed:
+            if not isinstance(entry, dict):
+                continue
+            host = str(entry.get('host', '') or '').strip().lower()
+            path = str(entry.get('path_pattern', '') or entry.get('path', '') or '').strip()
+            if not host or not path:
+                continue
+            normalized.append({
+                'host': host,
+                'path_pattern': path,
+                'param_hint': str(entry.get('param_hint', '') or '').strip(),
+                'evidence': str(entry.get('evidence', '') or '').strip(),
+            })
+        if normalized:
+            spec['persona_doc'] = {'clickstream_signals': normalized}
     return spec
 
 
