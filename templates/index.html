@@ -21125,8 +21125,12 @@ https://www.instagram.com/p/..."></textarea>
                             <div id="synthChatBriefPreview" style="display:none; padding: 0.85rem 1rem; margin-bottom: 0.5rem; background: rgba(84, 141, 255, 0.06); border: 1px solid rgba(84,141,255,0.30); border-radius: 8px;">
                                 <div class="brief-controls-row">
                                     <label>
-                                        <span style="color: var(--text-secondary); font-size: 0.8rem;">Email to</span>
-                                        <input type="text" id="synthChatEmailTo" placeholder="you@example.com (comma-separate for multiple)" autocomplete="off">
+                                        <span style="color: var(--text-secondary); font-size: 0.8rem;">Email to (optional)</span>
+                                        <input type="text" id="synthChatEmailTo" placeholder="you@example.com (comma-separate for multiple)" autocomplete="off" oninput="synthChatOnEmailInput()">
+                                    </label>
+                                    <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.35rem; font-size: 0.78rem; color: var(--text-secondary); cursor: pointer;">
+                                        <input type="checkbox" id="synthChatRememberEmail" onchange="synthChatSaveRememberedEmail()" style="width: auto; height: auto; margin: 0;">
+                                        <span>Remember this email on this device</span>
                                     </label>
                                 </div>
                                 <div class="brief-actions-row">
@@ -59360,10 +59364,56 @@ https://www.instagram.com/p/..."></textarea>
             return lines.join('\n');
         }
 
+        // Remember-me for the "Email to" field. localStorage keeps a
+        // single most-recent value on this device only - it is NOT
+        // auto-added to the To: list on the server. The server sends
+        // internal deliverables to Jenna / Jessie / Liz regardless;
+        // this field only controls whether the requester gets a
+        // branded "profile is live" note.
+        var SYNTH_REMEMBER_EMAIL_KEY = 'synthChatRememberedEmail_v1';
+        function synthChatPrefillRememberedEmail() {
+            try {
+                var input = document.getElementById('synthChatEmailTo');
+                var box   = document.getElementById('synthChatRememberEmail');
+                if (!input) return;
+                var saved = '';
+                try { saved = localStorage.getItem(SYNTH_REMEMBER_EMAIL_KEY) || ''; } catch (_) {}
+                if (saved && !input.value) {
+                    input.value = saved;
+                    if (box) box.checked = true;
+                }
+            } catch (_) {}
+        }
+        function synthChatSaveRememberedEmail() {
+            try {
+                var input = document.getElementById('synthChatEmailTo');
+                var box   = document.getElementById('synthChatRememberEmail');
+                if (!input || !box) return;
+                if (box.checked) {
+                    var v = (input.value || '').trim();
+                    if (v) {
+                        try { localStorage.setItem(SYNTH_REMEMBER_EMAIL_KEY, v); } catch (_) {}
+                    }
+                } else {
+                    try { localStorage.removeItem(SYNTH_REMEMBER_EMAIL_KEY); } catch (_) {}
+                }
+            } catch (_) {}
+        }
+        function synthChatOnEmailInput() {
+            try {
+                var box = document.getElementById('synthChatRememberEmail');
+                if (box && box.checked) synthChatSaveRememberedEmail();
+            } catch (_) {}
+        }
+
         function _synthChatShowBrief(draft, _model) {
             var panel = document.getElementById('synthChatBriefPreview');
             if (!panel) return;
             panel.style.display = 'block';
+            // Prefill the "Email to" field from localStorage when the
+            // brief panel opens, so returning users don't have to
+            // re-type their address every build.
+            try { synthChatPrefillRememberedEmail(); } catch (_) {}
             // Adjust the Approve button label to reflect batch vs
             // single-subject mode so the user knows what they are
             // committing to. Fallback to the static default if the
