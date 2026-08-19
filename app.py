@@ -42467,34 +42467,44 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
         return []
 
     # Trigger phrases (case-insensitive). Ordered specific first.
+    #
+    # 2026-08-19 (Jenna): "run profiles on vizio, samsung tv and lg tv
+    # owners" split off only Vizio because we required "for" after
+    # "run/build/make/create profiles" (no "on"/"of"). Added `(on|for|of)`
+    # alternation to every verb-based trigger AND a bare `profiles?
+    # on[:\s]` fallback so any prompt of the shape "<verb> profiles <on/for/of>
+    # X, Y and Z" fans out to a batch.
     triggers = [
-        r'run\s+individual\s+profiles?\s+for[:\s]+',
-        r'individual\s+profiles?\s+for[:\s]+',
-        r'separate\s+profiles?\s+for(?:\s+each\s+of)?[:\s]+',
-        r'profiles\s+for\s+the\s+following[:\s]+',
-        r'profiles\s+for\s+each\s+of[:\s]+',
-        r'one\s+profile\s+each\s+for[:\s]+',
-        r'a\s+profile\s+for\s+each\s+of[:\s]+',
+        r'run\s+(?:individual\s+)?profiles?\s+(?:on|for|of)(?:\s+each\s+of)?[:\s]+',
+        r'individual\s+profiles?\s+(?:on|for|of)[:\s]+',
+        r'separate\s+profiles?\s+(?:on|for|of)(?:\s+each\s+of)?[:\s]+',
+        r'profiles\s+(?:on|for|of)\s+the\s+following[:\s]+',
+        r'profiles\s+(?:on|for|of)\s+each\s+of[:\s]+',
+        r'one\s+profile\s+each\s+(?:on|for|of)[:\s]+',
+        r'a\s+profile\s+(?:on|for|of)\s+each\s+of[:\s]+',
         r'profiles\s+of\s+each[:\s]+',
-        r'build\s+profiles\s+for[:\s]+',
-        r'create\s+(?:a\s+)?profiles?\s+for(?:\s+each\s+of)?[:\s]+',
-        r'make\s+(?:a\s+)?profiles?\s+for(?:\s+each\s+of)?[:\s]+',
-        r'give\s+me\s+(?:a\s+)?profiles?\s+for(?:\s+each\s+of)?[:\s]+',
+        r'build\s+(?:a\s+)?profiles?\s+(?:on|for|of)(?:\s+each\s+of)?[:\s]+',
+        r'create\s+(?:a\s+)?profiles?\s+(?:on|for|of)(?:\s+each\s+of)?[:\s]+',
+        r'make\s+(?:a\s+)?profiles?\s+(?:on|for|of)(?:\s+each\s+of)?[:\s]+',
+        r'give\s+me\s+(?:a\s+)?profiles?\s+(?:on|for|of)(?:\s+each\s+of)?[:\s]+',
+        r'pull\s+(?:a\s+)?profiles?\s+(?:on|for|of)(?:\s+each\s+of)?[:\s]+',
+        r'generate\s+(?:a\s+)?profiles?\s+(?:on|for|of)(?:\s+each\s+of)?[:\s]+',
         # 2026-08-18: match Jenna's natural phrasing.
-        r'(?:profile\s+)?iqs?\s+(?:for|of|on)[:\s]+',
+        r'(?:profile\s+)?iqs?\s+(?:on|for|of)[:\s]+',
         r'i\s+need\s+(?:\d+\s+|three\s+|two\s+|four\s+|five\s+|'
         r'six\s+|seven\s+|eight\s+|nine\s+|ten\s+)?'
         r'(?:individual\s+|separate\s+|distinct\s+)?'
         r'(?:profile\s+)?(?:iqs?|profiles?)'
-        r'(?:\s+(?:they\s+are\s+for|for)[:\s]+|[.:\s]+they\s+are\s+for[:\s]+|'
-        r'\s+for[:\s]+|[.:\s]+for[:\s]+)',
-        r'they\s+are\s+for[:\s]+',
+        r'(?:\s+(?:they\s+are\s+(?:on|for|of)|(?:on|for|of))[:\s]+|'
+        r'[.:\s]+they\s+are\s+(?:on|for|of)[:\s]+|'
+        r'\s+(?:on|for|of)[:\s]+|[.:\s]+(?:on|for|of)[:\s]+)',
+        r'they\s+are\s+(?:on|for|of)[:\s]+',
         r"here\s+(?:they\s+are|are\s+the\s+(?:subjects?|profiles?|"
         r"names?|list))[:\s]+",
         r"here'?s\s+(?:the\s+)?(?:list|subjects?|names?)[:\s]+",
         r'(?:these|the)\s+subjects?\s+(?:are|is)[:\s]+',
         r'the\s+(?:subjects?|profiles?|names?|list)\s+(?:are|is)[:\s]+',
-        r'profiles\s+for[:\s]+',
+        r'profiles\s+(?:on|for|of)[:\s]+',
     ]
     trigger_re = _re.compile(
         r'^(?:.*?\b(?:' + '|'.join(triggers) + r'))',
@@ -42608,10 +42618,17 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
     # 60 days" as shared context reattached in the caller.
     if subjects:
         last = subjects[-1]
+        # 2026-08-19 added `using`, `with`, and explicit `default (time |
+        # measurement)? window` / `default window` so trailing context
+        # like "using default time window" gets peeled off the last
+        # subject. Established after Jenna's "run profiles on vizio,
+        # samsung tv and lg tv owners using default time window" prompt
+        # returned "lg tv owners using default time window" as one item.
         modifier_re = _re.compile(
             r'^(.+?)\s+((?:for|during|over|since|in|throughout|'
             r'trailing|past|last|next|this|Q[1-4]|H[12]|YTD|'
-            r'as\s+of)\b.*)$',
+            r'using|with|w/|w\.|as\s+of|'
+            r'default\s+(?:time\s+|measurement\s+)?window)\b.*)$',
             _re.IGNORECASE,
         )
         m2 = modifier_re.match(last)
