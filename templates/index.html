@@ -101057,6 +101057,9 @@ https://www.instagram.com/p/..."></textarea>
         // ─── Subscriber IQ Compare Tab ───────────────────────────────────────
         let _subCompSelected = new Set();
         let _subCompLoadedData = {};
+        let _subCompPlatformDemos = [];   // Profile IQ PLATFORM demo columns: { id, name, age:{}, gender:{} }
+        let _subCompPlatformList = null;  // cached Profile IQ platform profiles for the dropdown
+        let _subCompPlatformLoading = false;
 
         function initSubCompareProfileList() {
             renderSubCompareProfileList();
@@ -101121,6 +101124,7 @@ https://www.instagram.com/p/..."></textarea>
         function clearSubCompare() {
             _subCompSelected.clear();
             _subCompLoadedData = {};
+            _subCompPlatformDemos = [];
             updateSubCompCount();
             renderSubCompareProfileList((document.getElementById('subCompSearchInput')?.value || '').trim());
             document.getElementById('subCompResults').innerHTML = '<div class="comparison-empty" style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);"><p style="font-size: 1.1rem;">⚖️ Subscriber IQ Compare</p><p style="font-size: 0.85rem; margin-top: 0.5rem;">Select profiles from the left to compare key metrics, demographics, and platform data side-by-side</p></div>';
@@ -101175,19 +101179,22 @@ https://www.instagram.com/p/..."></textarea>
 
         function renderSubComparisonTable(profilesData, container) {
             const names = profilesData.map(p => (p.name || 'Unknown').replace(/</g, '&lt;'));
+            const platDemos = _subCompPlatformDemos || [];
 
-            // Horizontal scroll when comparing 5+ profiles: keep ~4 columns
-            // visible and let the rest scroll sideways. Fixed column widths
-            // keep every table aligned.
-            const _cmpManyCols = names.length > 4;
-            const _cmpMetricW = 190;
-            const _cmpProfileW = 200;
-            const _cmpColgroup = _cmpManyCols
-                ? '<colgroup><col style="width:' + _cmpMetricW + 'px">' + names.map(function(){ return '<col style="width:' + _cmpProfileW + 'px">'; }).join('') + '</colgroup>'
-                : '';
-            const _cmpTableOpen = _cmpManyCols
-                ? '<table class="rankers-table" style="border-collapse: collapse; font-size: 0.85rem; table-layout: fixed; width: ' + (_cmpMetricW + names.length * _cmpProfileW) + 'px;">' + _cmpColgroup
-                : '<table class="rankers-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+            const cardStyle = 'background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem;';
+
+            // Table opener + optional fixed-width colgroup for `dataCols` data
+            // columns (plus the leading label column). 5+ columns switch to
+            // fixed widths so the card can scroll sideways while staying aligned.
+            function _tblOpen(dataCols) {
+                if (dataCols <= 4) return '<table class="rankers-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">';
+                var cols = '';
+                for (var i = 0; i < dataCols; i++) cols += '<col style="width:200px">';
+                return '<table class="rankers-table" style="border-collapse: collapse; font-size: 0.85rem; table-layout: fixed; width: ' + (190 + dataCols * 200) + 'px;"><colgroup><col style="width:190px">' + cols + '</colgroup>';
+            }
+            function _tblWrap(inner, dataCols) {
+                return dataCols > 4 ? '<div style="overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.5rem;">' + inner + '</div>' : inner;
+            }
 
             // Key metrics row definitions
             const metricRows = [
@@ -101235,18 +101242,17 @@ https://www.instagram.com/p/..."></textarea>
                 return { totalPlatformImpact: totalSignupsProj, newSubscriberAcquisition: attributedProj, audienceReach: twProjV, conversionRate: conv, dormantReactive: dormantProj, avgDaysToSignup: avgDays, completionRate, secondScreen };
             });
 
-            // Build table HTML
-            let html = '<h3 style="margin: 0 0 1rem 0; color: var(--accent-cyan);">📊 Key Metrics Comparison</h3>';
-            html += _cmpTableOpen;
-            html += '<thead><tr><th style="text-align: left; padding: 0.75rem; border-bottom: 2px solid var(--border-color);">Metric</th>';
+            // ─── Card 1: Key Metrics Comparison ────────────────────────────
+            let kmHtml = '<h3 style="margin: 0 0 1rem 0; color: var(--accent-cyan);">📊 Key Metrics Comparison</h3>';
+            kmHtml += _tblOpen(profilesData.length);
+            kmHtml += '<thead><tr><th style="text-align: left; padding: 0.75rem; border-bottom: 2px solid var(--border-color);">Metric</th>';
             profilesData.forEach((p, i) => {
                 const n = names[i];
                 const dr = (p.data?.metadata?.date_range || p.data?.date_range || '').toString().trim();
                 const drHtml = dr ? `<div style="font-size: 0.68rem; font-weight: 400; color: var(--text-secondary); margin-top: 0.25rem;">Analysis Date Range: ${dr.replace(/</g, '&lt;')}</div>` : '';
-                html += `<th style="text-align: center; padding: 0.75rem; border-bottom: 2px solid var(--border-color); max-width: 180px; word-wrap: break-word;"><span style="color: var(--accent-lime); font-weight: 700;">${n}</span>${drHtml}</th>`;
+                kmHtml += `<th style="text-align: center; padding: 0.75rem; border-bottom: 2px solid var(--border-color); max-width: 180px; word-wrap: break-word;"><span style="color: var(--accent-lime); font-weight: 700;">${n}</span>${drHtml}</th>`;
             });
-            html += '</tr></thead><tbody>';
-
+            kmHtml += '</tr></thead><tbody>';
             metricRows.forEach(row => {
                 const values = metricsPerProfile.map(m => m[row.key]);
                 const nums = values.map(v => {
@@ -101256,103 +101262,236 @@ https://www.instagram.com/p/..."></textarea>
                 const finite = row.key === 'avgDaysToSignup' ? nums.filter(x => x !== Infinity && !isNaN(x)) : nums;
                 const best = row.higherBetter ? Math.max(...nums) : (finite.length ? Math.min(...finite) : null);
                 const bestIdx = (row.noWinner || best == null || (row.higherBetter && best === 0)) ? -1 : nums.indexOf(best);
-
-                html += '<tr>';
-                html += `<td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">${row.label}</td>`;
+                kmHtml += '<tr>';
+                kmHtml += `<td style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">${row.label}</td>`;
                 metricsPerProfile.forEach((m, i) => {
                     const display = row.format(m[row.key]);
                     const isBest = i === bestIdx;
-                    html += `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); ${isBest ? 'background: rgba(16,185,129,0.15); color: var(--accent-lime); font-weight: 600;' : ''}">${display}</td>`;
+                    kmHtml += `<td style="text-align: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color); ${isBest ? 'background: rgba(16,185,129,0.15); color: var(--accent-lime); font-weight: 600;' : ''}">${display}</td>`;
                 });
-                html += '</tr>';
+                kmHtml += '</tr>';
             });
-            html += '</tbody></table>';
+            kmHtml += '</tbody></table>';
+            let html = '<div style="' + cardStyle + '">' + _tblWrap(kmHtml, profilesData.length) + '</div>';
 
-            // Demographics comparison (Age)
-            const hasDemoAge = profilesData.some(p => (p.data?.demographics?.age || []).length > 0);
-            if (hasDemoAge) {
-                html += '<h3 style="margin: 2rem 0 1rem 0; color: var(--accent-cyan);">👥 Age Demographics</h3>';
-                const allAgeKeys = new Set();
-                profilesData.forEach(p => { (p.data?.demographics?.age || []).forEach(d => { const k = d.age_range || d.age || ''; if (k && k !== 'GENDER' && k !== 'N/A') allAgeKeys.add(k); }); });
-                const ageKeys = Array.from(allAgeKeys);
-                html += _cmpTableOpen;
-                html += '<thead><tr><th style="text-align: left; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">Age Range</th>';
-                names.forEach(n => { html += `<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);"><span style="color: var(--accent-lime); font-weight: 700;">${n}</span></th>`; });
-                html += '</tr></thead><tbody>';
-                ageKeys.forEach(key => {
-                    html += '<tr>';
-                    html += `<td style="padding: 0.6rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">${key}</td>`;
-                    profilesData.forEach(p => {
-                        const match = (p.data?.demographics?.age || []).find(d => (d.age_range || d.age) === key);
-                        const pct = match ? (match.percentage || '-') : '-';
-                        html += `<td style="text-align: center; padding: 0.6rem; border-bottom: 1px solid var(--border-color);">${pct}</td>`;
-                    });
-                    html += '</tr>';
+            // ─── Card 2: Demographics (Age + Gender) ───────────────────────
+            // Subscriber IQ profiles (lime) plus optional Profile IQ PLATFORM
+            // demographic columns (cyan) pulled in via the dropdown below.
+            const demoColCount = profilesData.length + platDemos.length;
+            const demoCols = [];
+            profilesData.forEach((p, i) => demoCols.push({ kind: 'sub', name: names[i], p: p }));
+            platDemos.forEach(pd => demoCols.push({ kind: 'plat', name: (pd.name || 'Platform').replace(/</g, '&lt;'), pd: pd }));
+
+            function _demoHeaderCells() {
+                var h = '';
+                demoCols.forEach(function(c) {
+                    if (c.kind === 'plat') {
+                        h += '<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">'
+                          + '<span style="color: var(--accent-cyan); font-weight: 700;">' + c.name + '</span>'
+                          + ' <button onclick="removeSubCompPlatformDemo(\'' + String(c.pd.id).replace(/'/g, "\\'") + '\')" title="Remove platform" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 0 2px;">&times;</button>'
+                          + '<div style="font-size: 0.58rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 0.15rem;">Profile IQ · Platform</div>'
+                          + '</th>';
+                    } else {
+                        h += '<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);"><span style="color: var(--accent-lime); font-weight: 700;">' + c.name + '</span></th>';
+                    }
                 });
-                html += '</tbody></table>';
+                return h;
             }
 
-            // Demographics comparison (Gender)
-            const genderKeywords = ['MALE', 'FEMALE'];
-            const hasDemoGender = profilesData.some(p => {
-                const demos = p.data?.demographics?.gender || p.data?.demographics?.age || [];
-                return demos.some(d => genderKeywords.some(kw => ((d.gender || d.age_range || d.age || '').toUpperCase()).includes(kw)));
+            const AGE_ORDER = ['17 and Under', '18-24', '25-34', '35-44', '45-54', '55-64', '65 or Older'];
+            const ageKeySet = new Set();
+            profilesData.forEach(p => { (p.data?.demographics?.age || []).forEach(d => { const k = d.age_range || d.age || ''; if (k && k !== 'GENDER' && k !== 'N/A') ageKeySet.add(k); }); });
+            platDemos.forEach(pd => { Object.keys(pd.age || {}).forEach(k => { if (k) ageKeySet.add(k); }); });
+            const ageKeys = Array.from(ageKeySet).sort((a, b) => { const ia = AGE_ORDER.indexOf(a), ib = AGE_ORDER.indexOf(b); return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib); });
+
+            const GENDER_ORDER = ['Female', 'Male', 'Non-Binary', 'Trans Male', 'Trans Female'];
+            const genderKeySet = new Set();
+            profilesData.forEach(p => {
+                (p.data?.demographics?.gender || []).forEach(d => { const k = (d.gender || '').trim(); if (k) genderKeySet.add(k); });
+                (p.data?.demographics?.age || []).forEach(d => { const k = (d.age_range || d.age || '').trim(); if (k && /male|female|binary|trans/i.test(k)) genderKeySet.add(k); });
             });
-            if (hasDemoGender) {
-                html += '<h3 style="margin: 2rem 0 1rem 0; color: var(--accent-cyan);">👥 Gender Demographics</h3>';
-                const allGenderKeys = new Set();
-                profilesData.forEach(p => {
-                    const demos = [...(p.data?.demographics?.gender || []), ...(p.data?.demographics?.age || [])];
-                    demos.forEach(d => { const k = (d.gender || d.age_range || d.age || '').toUpperCase(); if (genderKeywords.some(kw => k.includes(kw))) allGenderKeys.add(d.gender || d.age_range || d.age || ''); });
-                });
-                const genderKeys = Array.from(allGenderKeys);
-                html += _cmpTableOpen;
-                html += '<thead><tr><th style="text-align: left; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">Gender</th>';
-                names.forEach(n => { html += `<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);"><span style="color: var(--accent-lime); font-weight: 700;">${n}</span></th>`; });
-                html += '</tr></thead><tbody>';
-                genderKeys.forEach(key => {
-                    html += '<tr>';
-                    html += `<td style="padding: 0.6rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">${key}</td>`;
-                    profilesData.forEach(p => {
-                        const demos = [...(p.data?.demographics?.gender || []), ...(p.data?.demographics?.age || [])];
-                        const match = demos.find(d => (d.gender || d.age_range || d.age) === key);
-                        const pct = match ? (match.percentage || '-') : '-';
-                        html += `<td style="text-align: center; padding: 0.6rem; border-bottom: 1px solid var(--border-color);">${pct}</td>`;
-                    });
-                    html += '</tr>';
-                });
-                html += '</tbody></table>';
+            platDemos.forEach(pd => { Object.keys(pd.gender || {}).forEach(k => { if (k) genderKeySet.add(k); }); });
+            const genderKeys = Array.from(genderKeySet).sort((a, b) => { const ia = GENDER_ORDER.indexOf(a), ib = GENDER_ORDER.indexOf(b); return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib); });
+
+            function _subAgePct(p, key) {
+                const match = (p.data?.demographics?.age || []).find(d => (d.age_range || d.age) === key);
+                return match ? (match.percentage || '-') : '-';
+            }
+            function _subGenderPct(p, key) {
+                const g = (p.data?.demographics?.gender || []).find(d => (d.gender || '') === key)
+                    || (p.data?.demographics?.age || []).find(d => (d.age_range || d.age || '') === key);
+                return g ? (g.percentage || '-') : '-';
+            }
+            function _platPct(map, key) {
+                const v = map ? map[key] : undefined;
+                return (typeof v === 'number' && !isNaN(v)) ? v.toFixed(2) + '%' : '-';
             }
 
-            // Platform comparison
+            let demoHtml = '';
+            demoHtml += '<div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1rem;">';
+            demoHtml += '<select id="subCompPlatformSelect" onchange="onSubCompPlatformPicked(this.value)" style="padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary); font-size: 12px; font-weight: 700; max-width: 340px;"><option value="">＋ ADD PLATFORM DEMOGRAPHICS</option></select>';
+            platDemos.forEach(function(pd) {
+                demoHtml += '<span style="display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.6rem; border-radius: 99px; background: rgba(102,217,239,0.12); border: 1px solid rgba(102,217,239,0.4); color: var(--accent-cyan); font-size: 0.72rem; font-weight: 700;">' + (pd.name || 'Platform').replace(/</g, '&lt;') + '<button onclick="removeSubCompPlatformDemo(\'' + String(pd.id).replace(/'/g, "\\'") + '\')" style="background: none; border: none; color: var(--accent-cyan); cursor: pointer; font-size: 0.9rem; line-height: 1; padding: 0;">&times;</button></span>';
+            });
+            demoHtml += '</div>';
+
+            if (ageKeys.length > 0) {
+                let t = '<h3 style="margin: 0 0 1rem 0; color: var(--accent-cyan);">👥 Age Demographics</h3>';
+                t += _tblOpen(demoColCount);
+                t += '<thead><tr><th style="text-align: left; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">Age Range</th>' + _demoHeaderCells() + '</tr></thead><tbody>';
+                ageKeys.forEach(function(key) {
+                    t += '<tr><td style="padding: 0.6rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">' + key + '</td>';
+                    demoCols.forEach(function(c) {
+                        var pct = c.kind === 'sub' ? _subAgePct(c.p, key) : _platPct(c.pd.age, key);
+                        t += '<td style="text-align: center; padding: 0.6rem; border-bottom: 1px solid var(--border-color);">' + pct + '</td>';
+                    });
+                    t += '</tr>';
+                });
+                t += '</tbody></table>';
+                demoHtml += _tblWrap(t, demoColCount);
+            }
+
+            if (genderKeys.length > 0) {
+                let t = '<h3 style="margin: 2rem 0 1rem 0; color: var(--accent-cyan);">👥 Gender Demographics</h3>';
+                t += _tblOpen(demoColCount);
+                t += '<thead><tr><th style="text-align: left; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">Gender</th>' + _demoHeaderCells() + '</tr></thead><tbody>';
+                genderKeys.forEach(function(key) {
+                    t += '<tr><td style="padding: 0.6rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">' + key + '</td>';
+                    demoCols.forEach(function(c) {
+                        var pct = c.kind === 'sub' ? _subGenderPct(c.p, key) : _platPct(c.pd.gender, key);
+                        t += '<td style="text-align: center; padding: 0.6rem; border-bottom: 1px solid var(--border-color);">' + pct + '</td>';
+                    });
+                    t += '</tr>';
+                });
+                t += '</tbody></table>';
+                demoHtml += _tblWrap(t, demoColCount);
+            }
+
+            html += '<div style="' + cardStyle + '">'
+                 + '<h3 style="margin: 0 0 1rem 0; color: var(--accent-cyan);">🧑‍🤝‍🧑 Demographics</h3>'
+                 + demoHtml + '</div>';
+
+            // ─── Card 3: SVOD Platform Overlap (Subscriber IQ profiles) ────
             const hasPlat = profilesData.some(p => (p.data?.platforms || []).length > 0);
             if (hasPlat) {
-                html += '<h3 style="margin: 2rem 0 1rem 0; color: var(--accent-cyan);">📱 SVOD Platform Overlap</h3>';
+                let t = '<h3 style="margin: 0 0 1rem 0; color: var(--accent-cyan);">📱 SVOD Platform Overlap</h3>';
                 const allPlats = new Set();
                 profilesData.forEach(p => { (p.data?.platforms || []).forEach(pl => { const n = pl.platform || pl.name || ''; if (n) allPlats.add(n); }); });
                 const platKeys = Array.from(allPlats).sort();
-                html += _cmpTableOpen;
-                html += '<thead><tr><th style="text-align: left; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">Platform</th>';
-                names.forEach(n => { html += `<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);"><span style="color: var(--accent-lime); font-weight: 700;">${n}</span></th>`; });
-                html += '</tr></thead><tbody>';
+                t += _tblOpen(profilesData.length);
+                t += '<thead><tr><th style="text-align: left; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">Platform</th>';
+                names.forEach(n => { t += '<th style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color);"><span style="color: var(--accent-lime); font-weight: 700;">' + n + '</span></th>'; });
+                t += '</tr></thead><tbody>';
                 platKeys.forEach(key => {
-                    html += '<tr>';
-                    html += `<td style="padding: 0.6rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">${key}</td>`;
+                    t += '<tr><td style="padding: 0.6rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">' + key + '</td>';
                     profilesData.forEach(p => {
                         const match = (p.data?.platforms || []).find(pl => (pl.platform || pl.name) === key);
                         const pct = match ? (match.percentage || match.pct || '-') : '-';
-                        html += `<td style="text-align: center; padding: 0.6rem; border-bottom: 1px solid var(--border-color);">${pct}</td>`;
+                        t += '<td style="text-align: center; padding: 0.6rem; border-bottom: 1px solid var(--border-color);">' + pct + '</td>';
                     });
-                    html += '</tr>';
+                    t += '</tr>';
                 });
-                html += '</tbody></table>';
-            }
-
-            if (_cmpManyCols) {
-                html = '<div style="overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.5rem;">' + html + '</div>';
+                t += '</tbody></table>';
+                html += '<div style="' + cardStyle + '">' + _tblWrap(t, profilesData.length) + '</div>';
             }
 
             container.innerHTML = html;
+
+            // Populate the ADD PLATFORM DEMOGRAPHICS dropdown (async list load).
+            ensureSubCompPlatformList().then(_subCompPopulatePlatformSelect).catch(function(){});
+        }
+
+        // ── Profile IQ PLATFORM demographics → Subscriber IQ compare card ──
+        // _subCompPlatformDemos holds the rendered platform columns; the list
+        // for the dropdown is cached in _subCompPlatformList.
+        async function ensureSubCompPlatformList() {
+            if (_subCompPlatformList) return _subCompPlatformList;
+            if (_subCompPlatformLoading) return _subCompPlatformList || [];
+            _subCompPlatformLoading = true;
+            try {
+                let jobs = (typeof dashboardProfiles !== 'undefined' && dashboardProfiles && dashboardProfiles.length) ? dashboardProfiles : null;
+                if (!jobs) {
+                    const resp = await fetch('/api/jobs', { credentials: 'same-origin' });
+                    if (resp.ok) { const j = await resp.json(); jobs = j.jobs || []; }
+                }
+                jobs = jobs || [];
+                const isPlat = function(p) {
+                    const isSvod = p.is_svod || (p.key && String(p.key).startsWith('svod-acquisition/')) || (p.bucket === 'svod-acquisition');
+                    const master = (typeof getMasterCategory === 'function') ? getMasterCategory(p.category || 'UNCATEGORIZED', isSvod) : '';
+                    return master === 'PLATFORMS';
+                };
+                const seen = {};
+                const list = [];
+                jobs.filter(isPlat).forEach(function(p) {
+                    const id = p.s3_key || p.job_id;
+                    if (!id) return;
+                    const subject = (typeof getProfileSubject === 'function') ? getProfileSubject(p) : id;
+                    const key = subject || id;
+                    if (seen[key]) return;
+                    seen[key] = true;
+                    const name = (typeof getProfileFullName === 'function') ? getProfileFullName(p) : (p.display_name || p.project_name || id);
+                    list.push({ id: id, name: name, category: p.category || '' });
+                });
+                list.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+                _subCompPlatformList = list;
+            } catch (e) {
+                console.warn('Platform list load failed:', e);
+                _subCompPlatformList = _subCompPlatformList || [];
+            } finally {
+                _subCompPlatformLoading = false;
+            }
+            return _subCompPlatformList;
+        }
+
+        function _subCompPopulatePlatformSelect() {
+            const sel = document.getElementById('subCompPlatformSelect');
+            if (!sel) return;
+            const list = _subCompPlatformList || [];
+            const added = new Set((_subCompPlatformDemos || []).map(function(d) { return d.id; }));
+            let opts = '<option value="">＋ ADD PLATFORM DEMOGRAPHICS</option>';
+            list.forEach(function(p) {
+                if (added.has(p.id)) return;
+                const label = (p.name || 'Platform').replace(/</g, '&lt;');
+                opts += '<option value="' + String(p.id).replace(/"/g, '&quot;') + '">' + label + '</option>';
+            });
+            sel.innerHTML = opts;
+        }
+
+        function onSubCompPlatformPicked(id) {
+            if (!id) return;
+            addSubCompPlatformDemo(id);
+        }
+
+        async function addSubCompPlatformDemo(id) {
+            if (!id || (_subCompPlatformDemos || []).some(function(d) { return d.id === id; })) return;
+            const listItem = (_subCompPlatformList || []).find(function(p) { return p.id === id; });
+            const name = listItem ? listItem.name : id;
+            const sel = document.getElementById('subCompPlatformSelect');
+            if (sel) sel.disabled = true;
+            try {
+                const resp = await fetch('/api/get-csv-data/' + encodeURIComponent(id), { credentials: 'same-origin' });
+                if (resp.status === 401) { window.location.href = '/login'; return; }
+                const json = await resp.json();
+                if (!json || !json.success || typeof parseAllData !== 'function') {
+                    alert('Could not load demographics for this platform.');
+                    return;
+                }
+                const parsed = parseAllData(json.data);
+                const age = (parsed && parsed.demographics && parsed.demographics.age) || {};
+                const gender = (parsed && parsed.demographics && parsed.demographics.gender) || {};
+                _subCompPlatformDemos.push({ id: id, name: name, age: age, gender: gender });
+                runSubComparison();
+            } catch (e) {
+                console.warn('Add platform demo failed:', e);
+                alert('Could not load demographics for this platform.');
+            } finally {
+                if (sel) { sel.disabled = false; sel.value = ''; }
+            }
+        }
+
+        function removeSubCompPlatformDemo(id) {
+            _subCompPlatformDemos = (_subCompPlatformDemos || []).filter(function(d) { return d.id !== id; });
+            runSubComparison();
         }
 
         // ─── End Subscriber IQ Compare Tab ───────────────────────────────────
