@@ -43730,6 +43730,16 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         except Exception:
             pass
 
+        # Intersect-cut promoter: if the per-subject prompt looks like
+        # "<parent> for <cohort>" / "<parent> → <cohort>" and a strong
+        # candidate matches the left operand, promote from new_build
+        # to derive_cut so the cut runs cheap (~$2-4 vs. ~$40).
+        try:
+            _maybe_promote_intersect_to_derive_cut(
+                spec_draft, per_prompt, candidates)
+        except Exception:
+            pass
+
         decision_str = str(spec_draft.get('decision') or '').strip().lower()
         user_optout = _user_optout_of_avid(per_prompt, chat_history=history)
         claude_says_false = spec_draft.get('run_avid') is False
@@ -44027,6 +44037,18 @@ def api_synth_chat_interpret():
                 spec_draft['_parent_guardrail_note'] = swap_note
         except Exception as _guard_err:
             print(f"[synth-chat interpret] guardrail error: {_guard_err}")
+
+        # Intersect-cut promoter (2026-08-19). Same logic that runs in
+        # the batch check path: if the prompt is a cut of an existing
+        # profile (e.g. "Vizio for Spider-Man Moviegoers"), promote
+        # new_build -> derive_cut so we don't burn ~$40 of Anthropic
+        # on a build that could have run for ~$2-4.
+        try:
+            _maybe_promote_intersect_to_derive_cut(
+                spec_draft, text, candidates)
+        except Exception as _int_err:
+            print(f"[synth-chat interpret] intersect-cut error: "
+                  f"{_int_err}")
 
         # Run-Avid default enforcement (2026-08-17 Jenna directive).
         # Default is TRUE for every fresh-build decision (new_build /
@@ -45528,6 +45550,216 @@ def _v1_interpret(prompt):
     return draft, candidates, interp
 
 
+# --------------------------------------------------------------------
+# Intersect-cut parent detection (2026-08-19)
+#
+# Prompts like:
+#   "Vizio for Spider-Man Moviegoers → Digital Purchasers"
+#   "Netflix subscribers who also watch F1"
+#   "Amazon Prime x Peloton owners"
+# are audience INTERSECTS of an existing profile with another cohort.
+# Claude's interpret step tends to route these to `new_build`, which
+# runs the full 296-call row-by-row pipeline (~$40 Anthropic) instead
+# of a cheap `derive_cut` off the existing parent (~$2-4 Anthropic).
+#
+# `_detect_intersect_parent_from_prompt` looks for the intersect
+# grammar and, if the candidate list already contains a strong-scoring
+# parent whose display_name is the LEFT operand of the intersect,
+# returns (parent_s3_key, parent_display_name). Caller uses that to
+# mutate the draft: decision -> 'derive_cut', existing_match_s3_key ->
+# the parent key, before `_normalize_v1_decision` runs. This is
+# opt-in: if the prompt has no intersect operator, or no candidate
+# scores well, we do nothing and Claude's decision stands.
+# --------------------------------------------------------------------
+
+_INTERSECT_OPERATORS_RE = None
+
+
+def _intersect_ops_re():
+    """Compiled regex matching the intersect grammar. Captures the left
+    operand into group `left` when possible.
+    """
+    global _INTERSECT_OPERATORS_RE
+    import re as _re
+    if _INTERSECT_OPERATORS_RE is not None:
+        return _INTERSECT_OPERATORS_RE
+    # Grammar (case-insensitive):
+    #   <left> ' for ' <right>
+    #   <left> ' → ' <right>       (unicode arrow)
+    #   <left> ' -> ' <right>
+    #   <left> ' x ' <right>       (only when both sides look like Names)
+    #   <left> ' who also ' <right>
+    #   <left> ' who ' <verb> <right>   e.g. "netflix subs who watch f1"
+    #   <left> ' & ' <right>
+    #   <left> ' + ' <right>       when left is a proper subject
+    # We require the LEFT operand to be at least 2 tokens with a leading
+    # capital / all-cap word so we don't fire on "for Q3 2026" or "x 3
+    # times". The caller must further validate that <left> matches a
+    # candidate in the profile catalog.
+    pat = (
+        r'^(?P<left>[A-Z][^\n]{2,80}?)\s+'
+        r'(?:for|->|→|x|&|\+|who\s+also|who\s+watch|who\s+watched|'
+        r'who\s+bought|who\s+shop|who\s+use|who\s+viewed|'
+        r'who\s+stream|who\s+listen|who\s+rent)\s+'
+        r'(?P<right>.{2,200})$'
+    )
+    _INTERSECT_OPERATORS_RE = _re.compile(pat, _re.IGNORECASE)
+    return _INTERSECT_OPERATORS_RE
+
+
+def _detect_intersect_parent_from_prompt(prompt, candidates,
+                                          min_score=0.35):
+    """If the prompt is an intersect cut AND the candidate list has a
+    strong-scoring existing profile whose display_name matches the
+    LEFT operand, return (parent_s3_key, parent_display_name).
+
+    Otherwise return None. Never demotes a valid decision; used only
+    to promote `new_build` to `derive_cut`.
+
+    Guardrails:
+      - Requires an intersect operator in the prompt.
+      - Requires >= min_score on the matched candidate (default 0.35).
+      - Left-operand token overlap with parent must be >= 60% of the
+        parent's own token set. This is what prevents "Netflix for
+        Q3 2026" (year-shift) from being read as an intersect cut of
+        "Netflix" and "Q3 2026".
+      - Rejects candidates whose s3_key looks staff-only via
+        `_partner_download_key_allowed` (defense in depth for the
+        partner API surface).
+    """
+    import re as _re
+    if not prompt or not candidates:
+        return None
+    prefix_re = _re.compile(
+        r'^(?:please\s+)?'
+        r'(?:make|create|build|run|generate|do|give\s+me|'
+        r'show\s+me|i\s+want|i\'?d\s+like|i\s+need)\s+'
+        r'(?:a\s+|an\s+|the\s+|me\s+a\s+|us\s+a\s+)?'
+        r'(?:new\s+|individual\s+|separate\s+|distinct\s+)?'
+        r'(?:profile|profiles|iq|iqs|persona|personas|report|'
+        r'analysis|cut|derivative)\s+'
+        r'(?:of|for|on|about)\s+',
+        _re.IGNORECASE,
+    )
+    # Some intersect phrasings put the left operand mid-sentence after
+    # a preamble like "make a profile of Vizio for Spider-Man". The
+    # intersect regex is [A-Z] anchored to the start, so it would
+    # greedily match the preamble as part of `left`. Strip the
+    # preamble FIRST so `left` is always the actual left operand.
+    stripped = prefix_re.sub('', prompt.strip(), count=1)
+    m = _intersect_ops_re().match(stripped)
+    if not m:
+        return None
+    left = (m.group('left') or '').strip()
+    right = (m.group('right') or '').strip()
+    if not left or len(left) < 3:
+        return None
+    # Right-side must NOT be a pure date / time-window expression -
+    # those are time_shifted_refresh candidates, not intersect cuts.
+    # e.g. "Vizio TV Owners for Q3 2026" -> refresh, not derive_cut.
+    if _re.match(
+        r'^(?:q[1-4]|h[12])\s*\d{4}\b'                # Q3 2026 / H1 2026
+        r'|^(?:20\d{2})\b'                             # 2026
+        r'|^(?:the\s+)?(?:past|last|trailing|next)\s+'
+        r'\d+\s+(?:day|week|month|quarter|year)s?\b'   # past 60 days
+        r'|^ytd\b|^year\s+to\s+date\b'
+        r'|^(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)'
+        r'(?:uary|ruary|ch|il|e|y|ust|tember|ober|ember)?'
+        r'\s+\d{1,2}?,?\s*20\d{2}\b',                  # Jan 2026
+        right, _re.IGNORECASE,
+    ):
+        return None
+    left_norm = _normalize_for_match(left)
+    left_tokens = set(t for t in left_norm.split() if len(t) >= 3)
+    if not left_tokens:
+        return None
+
+    for c in candidates:
+        try:
+            score = float(c.get('_score') or 0.0)
+        except Exception:
+            score = 0.0
+        if score < min_score:
+            continue
+        s3_key = (c.get('s3_key') or '').strip()
+        if not s3_key:
+            continue
+        # Defense in depth: don't ever promote to a staff-only key
+        # (partner API) or a non-canonical filename shape. The
+        # existing allow-list helper covers both cases.
+        try:
+            if not _partner_download_key_allowed(s3_key):
+                continue
+        except Exception:
+            # If the helper doesn't exist in this build (e.g. chatbot-
+            # only surface), fall back to a permissive check.
+            pass
+        subject_norm = _normalize_for_match(c.get('subject') or '')
+        display_norm = _normalize_for_match(c.get('display_name') or '')
+        parent_tokens = set(
+            t for t in (f"{subject_norm} {display_norm}").split()
+            if len(t) >= 3
+        )
+        if not parent_tokens:
+            continue
+        overlap = left_tokens & parent_tokens
+        if not overlap:
+            continue
+        # The LEFT operand must be substantially recognized by this
+        # candidate. `left_coverage` = fraction of left tokens present
+        # in parent — this is what makes "Vizio" match parent
+        # "Vizio TV Owners" (1/1 = 100% coverage) while rejecting
+        # "Netflix subscribers" against "Amazon Prime" (0/2 = 0%).
+        left_coverage = len(overlap) / max(len(left_tokens), 1)
+        if left_coverage < 0.6:
+            continue
+        # Additionally: at least one overlap token must be a
+        # non-generic proper noun (>= 4 chars, not a stopword). Guards
+        # against a lone "for"-preposition triggering the promoter.
+        _stopwords_check = {'the', 'and', 'for', 'with', 'from',
+                             'that', 'this'}
+        if not any(len(t) >= 4 and t not in _stopwords_check
+                    for t in overlap):
+            continue
+        try:
+            print(f"[intersect-cut] promote to derive_cut: "
+                  f"left={left!r} parent={c.get('display_name')!r} "
+                  f"key={s3_key!r} score={score:.2f} "
+                  f"left_coverage={left_coverage:.2f}")
+        except Exception:
+            pass
+        return s3_key, (c.get('display_name') or '')
+    return None
+
+
+def _maybe_promote_intersect_to_derive_cut(draft, prompt, candidates):
+    """In-place: if `draft` decision is `new_build` and the prompt is
+    an intersect cut with a good parent candidate, promote to
+    `derive_cut` with that parent key.
+
+    Preserves any decision that isn't `new_build` (Claude already
+    picked something explicit). Preserves `existing_match_s3_key`
+    already set by Claude (only fills in when blank).
+    """
+    if not isinstance(draft, dict):
+        return draft
+    decision = (draft.get('decision') or '').strip().lower()
+    if decision and decision != 'new_build':
+        return draft
+    hit = _detect_intersect_parent_from_prompt(prompt, candidates)
+    if not hit:
+        return draft
+    parent_key, parent_display = hit
+    draft['decision'] = 'derive_cut'
+    draft['existing_match_s3_key'] = parent_key
+    # `derive_type` is a free-form label Claude usually sets. Give it
+    # a safe default so downstream normalization can identify why we
+    # promoted.
+    if not (draft.get('derive_type') or '').strip():
+        draft['derive_type'] = 'intersect_cut'
+    return draft
+
+
 def _normalize_v1_decision(draft):
     """Return (decision, existing_match_s3_key, derive_type).
 
@@ -45644,6 +45876,13 @@ def api_v1_profiles_check():
         traceback.print_exc()
         return jsonify({'success': False,
                          'error': 'could not interpret prompt'}), 500
+
+    # Intersect-cut promoter (2026-08-19). Runs BEFORE normalize so any
+    # promotion also passes through the parent-key allowlist gate.
+    try:
+        _maybe_promote_intersect_to_derive_cut(draft, prompt, candidates)
+    except Exception:
+        pass
 
     decision, ex_key, d_type = _normalize_v1_decision(draft)
     price = _V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
@@ -45777,6 +46016,14 @@ def api_v1_profiles_run():
         traceback.print_exc()
         return jsonify({'success': False,
                          'error': 'could not interpret prompt'}), 500
+
+    # Intersect-cut promoter (2026-08-19). Same guardrail as /v1/check
+    # so a partner isn't overcharged when a valid parent already exists.
+    try:
+        _maybe_promote_intersect_to_derive_cut(
+            draft, prompt, _candidates)
+    except Exception:
+        pass
 
     decision, ex_key, d_type = _normalize_v1_decision(draft)
 
