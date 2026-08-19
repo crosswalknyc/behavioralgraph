@@ -103964,7 +103964,22 @@ https://www.instagram.com/p/..."></textarea>
             const ageTableContainer = document.getElementById('subscriberAgeTable');
             if (ageTableContainer) {
                 if (validAgeData.length > 0) {
+                    // Median age banner (parity with the Profile IQ AGE card).
+                    const _subAgeDist = {};
+                    validAgeData.forEach(_it => {
+                        const _lbl = getAgeDisplayLabel(_it.age_range || _it.age || '');
+                        const _pctN = parseFloat(String(_it.percentage || '').replace('%', '').trim());
+                        if (_lbl && !isNaN(_pctN) && _pctN > 0) _subAgeDist[_lbl] = (_subAgeDist[_lbl] || 0) + _pctN;
+                    });
+                    const _subMedAge = (typeof calculateMedianAgeFromDistribution === 'function') ? calculateMedianAgeFromDistribution(_subAgeDist) : 0;
+                    const _gpAgeDist = (typeof genPopBaselineData !== 'undefined' && genPopBaselineData && genPopBaselineData.demographics && genPopBaselineData.demographics.age) || {};
+                    const _gpMedAge = (typeof calculateMedianAgeFromDistribution === 'function') ? calculateMedianAgeFromDistribution(_gpAgeDist) : 0;
+                    const _gpMedLine = _gpMedAge > 0 ? `<span style="display:block; color: var(--text-secondary); font-weight: 600;">Gen Pop Median: ${_gpMedAge.toFixed(2)} years</span>` : '';
+                    const _medianBanner = _subMedAge > 0
+                        ? `<div class="median-display" style="background: rgba(200,255,0,0.1); padding: 0.5rem 0.75rem; border-radius: 6px; margin-bottom: 1rem; line-height: 1.4;"><span class="median-highlight" style="display:block; color:#f0ff00; font-weight:700; text-shadow:0 0 8px rgba(240,255,0,0.5);">Signup Median: ${_subMedAge.toFixed(2)} years</span>${_gpMedLine}</div>`
+                        : '';
                     ageTableContainer.innerHTML = `
+                        ${_medianBanner}
                         <div class="demographics-table-wrapper">
                             <table class="demographics-table">
                                 <thead>
