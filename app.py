@@ -42265,15 +42265,31 @@ def _lookup_user_by_api_key(raw_key):
     return None, None
 
 
-def _synth_chat_gate():
+def _synth_chat_gate(allow_api_key: bool = True):
     """Return (user_dict, error_response_or_None). None error means allow.
 
-    Accepts either a logged-in session (browser / dashboard use) OR an
-    external partner API key sent as `X-Crosswalk-API-Key: <raw_key>`.
-    The API-key path is what external software integrations use.
+    By default accepts either a logged-in session (browser / dashboard
+    use) OR an external partner API key sent as
+    `X-Crosswalk-API-Key: <raw_key>`. Pass ``allow_api_key=False`` to
+    force session-only auth — used by the internal dashboard chatbot
+    routes (`/api/synth-chat/*`, `/api/brief-chat/*`) so partners get
+    steered to the documented `/api/v1/*` surface instead of leaking
+    internal terminology through the chatbot UI paths.
     """
     api_key = request.headers.get('X-Crosswalk-API-Key') if request else None
     if api_key:
+        if not allow_api_key:
+            # Partner keys must use the documented v1 API. Do NOT let
+            # them see internal chatbot-UI JSON (which mentions "queue",
+            # phase strings, etc.). Steer without exposing the internal
+            # path names.
+            return None, (jsonify({
+                'success': False,
+                'error': ('API keys are not accepted on this route. '
+                          'Use POST /api/v1/profiles/check, POST '
+                          '/api/v1/profiles/run, and GET /api/v1/'
+                          'profiles/<run_id>.'),
+            }), 403)
         u, uname = _lookup_user_by_api_key(api_key)
         if not u:
             return None, (jsonify({
@@ -43738,8 +43754,13 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
 @requires_auth
 def api_synth_chat_interpret():
     """Free-form text -> draft spec JSON. Non-destructive: does NOT queue
-    the run. Front-end shows the returned draft as an approvable brief."""
-    user, err = _synth_chat_gate()
+    the run. Front-end shows the returned draft as an approvable brief.
+
+    Session-authenticated dashboard users only. Partner API keys must
+    use POST /api/v1/profiles/check instead so they never see internal
+    chatbot JSON shapes.
+    """
+    user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
     try:
@@ -44317,8 +44338,12 @@ def _spec_from_draft(draft):
 @app.route('/api/synth-chat/approve', methods=['POST'])  # legacy alias
 @requires_auth
 def api_synth_chat_approve():
-    """User-approved spec + run params -> POSTs to Hetzner queue. Returns run_id."""
-    user, err = _synth_chat_gate()
+    """User-approved spec + run params -> POSTs to Hetzner queue. Returns run_id.
+
+    Session-authenticated dashboard users only. Partner API keys must
+    use POST /api/v1/profiles/run instead.
+    """
+    user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
     if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
@@ -44453,8 +44478,13 @@ def api_synth_chat_approve():
 @app.route('/api/synth-chat/status/<run_id>', methods=['GET'])  # legacy alias
 @requires_auth
 def api_synth_chat_status(run_id):
-    """Poll Hetzner queue for run status."""
-    user, err = _synth_chat_gate()
+    """Poll Hetzner queue for run status.
+
+    Session-authenticated dashboard users only. Partner API keys must
+    use GET /api/v1/profiles/<run_id> instead — that path scrubs
+    internal cohort/status enum values before returning JSON.
+    """
+    user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
     if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
@@ -44484,8 +44514,12 @@ def api_synth_chat_status(run_id):
 @app.route('/api/synth-chat/history', methods=['GET', 'POST'])  # legacy alias
 @requires_auth
 def api_synth_chat_history():
-    """Per-user chat message history persistence (S3-backed)."""
-    user, err = _synth_chat_gate()
+    """Per-user chat message history persistence (S3-backed).
+
+    Session-authenticated dashboard users only. Chat history is a UI
+    concern and never exposed via the partner API.
+    """
+    user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
     uname = user.get('username') or user.get('email') or 'anon'
@@ -44516,8 +44550,12 @@ def api_synth_chat_health():
     counts are scoped to the caller's own jobs by passing their
     email as `?user=` to the Hetzner listener. Super-admins can
     request the unscoped/global view with `?scope=global`.
+
+    Session-authenticated dashboard users only. Partner API keys must
+    use GET /api/v1/health instead (that endpoint returns a stable
+    "ok" / "degraded" enum with no internal counts).
     """
-    user, err = _synth_chat_gate()
+    user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
     if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
@@ -44731,6 +44769,160 @@ def _generate_presigned_profile_url(s3_key, expires_seconds=86400):
     except Exception:
         traceback.print_exc()
         return None
+
+
+# ---------------------------------------------------------------------------
+# Partner-API terminology scrub (2026-08-19).
+#
+# Directive from Jenna: "ensuring the API key NEVER leaks any info about
+# synth". Internally we call the pipeline a "synth" queue, workers, engines,
+# etc.; externally the product is "Chatbot Profile IQ" and every partner-
+# visible surface must speak that language.
+#
+# This module owns the outbound scrub:
+#   * `_V1_STATUS_MAP`     : normalizes internal status enum values coming
+#                            from Hetzner (queue/worker) to the small stable
+#                            set documented in PARTNER_API.md.
+#   * `_V1_PROGRESS_MAP`   : maps whatever short phase strings the worker
+#                            writes to a whitelisted partner-safe phrase.
+#   * `_V1_BANNED_TOKENS`  : substrings that must never appear in `progress`;
+#                            if any leaks in, we blank the field rather than
+#                            ship the internal term.
+#   * `_scrub_v1_status()` : the single entry point used by
+#                            `api_v1_profiles_status`.
+# ---------------------------------------------------------------------------
+_V1_STATUS_MAP = {
+    # Terminal states pass through cleanly.
+    'complete':  'complete',
+    'completed': 'complete',
+    'failed':    'failed',
+    'error':     'failed',
+    # Queued / running variants collapse to the two documented values.
+    'queued':    'queued',
+    'pending':   'queued',
+    'waiting':   'queued',
+    'running':   'running',
+    # Intermediate per-cohort markers the worker writes internally.
+    # Partners get "running" for every mid-build state so cohort naming
+    # like "tu_done" / "avid_done" / "cut_done" never surfaces.
+    'tu_done':   'running',
+    'avid_done': 'running',
+    'cut_done':  'running',
+    'starting':  'running',
+    'unknown':   'unknown',
+}
+
+# Any progress/phase string that mentions one of these substrings is a
+# clear internal-jargon leak and gets replaced with a generic phrase.
+# The list is intentionally conservative — anything even mildly synth-y
+# leaves via the fallback branch (blank field). New leak vectors we
+# spot in the wild should be appended here and covered by the
+# /tmp/test_v1_scrub.py regression test.
+_V1_BANNED_TOKENS = (
+    # LLM vendors & model names
+    'claude', 'anthropic', 'opus', 'sonnet',
+    'openai', 'gpt', 'llm', 'ai stage', 'ai step',
+    # Internal pipeline / codebase jargon
+    'synth', 'synthesis', 'synthesize', 'synthesized',
+    'row-by-row', 'row by row', 'row scoring', 'reasoning', 'chunk',
+    'hostmap', 'enforcer', 'depin', 'gen_pop', 'gen pop',
+    'panelist', 'panel', 'category signal',
+    'persona_doc', 'persona doc', 'persona brief',
+    'brief-interpret', 'brief interpret',
+    # Internal cohort abbreviations (partner sees "Total Universe" /
+    # "Avid Fan", never "TU cohort" / "Avid cohort" / "cut_done").
+    'tu cohort', 'tu_cohort', 'tu build', 'tu_build',
+    'avid cohort', 'avid_cohort',
+    'cohort',  # broad: partner-facing term is "Total Universe" or "Avid Fan"
+    'cut_done', 'tu_done', 'avid_done',
+    # Infrastructure names
+    'hetzner', 'render', 'clickhouse', 'systemd',
+    # Retry / crash mechanics
+    'worker', 'attempt ', 'traceback', 'exception', 'stack trace',
+    'nameerror', 'typeerror', 'keyerror',
+    # File paths / module names
+    '/root/', 'finished_codes', 'migration/', '.py:',
+    # Config knobs
+    'api_key', 'anthropic_api',
+)
+
+# Partner-facing progress phrases. Kept intentionally coarse: partners
+# know "we're building it, poll again". Fine-grained per-column progress
+# is an internal metric, not a customer deliverable.
+_V1_PROGRESS_MAP = {
+    'queued':    'queued',
+    'starting':  'preparing',
+    'running':   'building',
+    'tu_done':   'building',
+    'avid_done': 'building',
+    'cut_done':  'building',
+    'complete':  'complete',
+    'completed': 'complete',
+    'failed':    'failed',
+    'error':     'failed',
+}
+
+
+def _scrub_v1_progress(raw: str, mapped_status: str) -> str:
+    """Return a partner-safe progress string, or ''.
+
+    Rules:
+      1. If `raw` matches a well-known internal status key, use the
+         hand-curated mapping (e.g. 'tu_done' -> 'building').
+      2. Otherwise, if `raw` contains any token in `_V1_BANNED_TOKENS`,
+         return '' (safer to say nothing than to say something with an
+         internal name in it).
+      3. Otherwise, return a light-cleaned version of the string
+         (trimmed, capped at 80 chars, no newlines).
+
+    `mapped_status` is used as a fallback so callers always get a
+    reasonable phrase even when `raw` is empty.
+    """
+    text = (raw or '').strip()
+    if not text:
+        # Derive from the already-normalized status.
+        return _V1_PROGRESS_MAP.get(mapped_status, '')
+    low = text.lower()
+    # Fast path: exact hit against the internal enum table.
+    if low in _V1_PROGRESS_MAP:
+        return _V1_PROGRESS_MAP[low]
+    # Banned-substring guard.
+    for tok in _V1_BANNED_TOKENS:
+        if tok in low:
+            return _V1_PROGRESS_MAP.get(mapped_status, '')
+    # Otherwise pass through, but hard-cap length + strip newlines.
+    text = text.replace('\n', ' ').replace('\r', ' ').strip()
+    if len(text) > 80:
+        text = text[:77] + '...'
+    return text
+
+
+def _scrub_v1_status(raw_status: dict | None) -> dict:
+    """Take the raw Hetzner status dict and return ONLY the partner-safe
+    fields with normalized values. Never let unknown keys through — if
+    a future field gets added on the worker side, it stays server-side
+    until this allowlist is updated.
+    """
+    if not isinstance(raw_status, dict):
+        return {'status': 'unknown', 'progress': ''}
+    raw = (raw_status.get('status') or '').strip().lower()
+    mapped = _V1_STATUS_MAP.get(raw, 'unknown')
+    progress = _scrub_v1_progress(
+        (raw_status.get('progress') or raw_status.get('phase') or ''),
+        mapped,
+    )
+    # Strict allowlist of pass-through fields. Notice: no `error`, no
+    # `traceback`, no `phase`, no per-cohort `tu_key`/`avid_key`, no
+    # `attempts`, no `decision`, no `user_email`, no `partner_username`.
+    # Anything a partner needs must be explicitly named here.
+    out = {
+        'status': mapped,
+        'progress': progress,
+        'started_at': raw_status.get('started_at'),
+        'completed_at': raw_status.get('completed_at'),
+        'subject': raw_status.get('subject'),
+    }
+    return out
 
 
 def _fetch_run_status_from_queue(run_id):
@@ -45213,17 +45405,19 @@ def api_v1_profiles_check():
 
     try:
         body = request.get_json(force=True) or {}
-    except Exception as e:
-        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False,
+                         'error': 'invalid JSON body'}), 400
     prompt = (body.get('prompt') or body.get('text') or '').strip()
     if not prompt:
         return jsonify({'success': False, 'error': 'required field: "prompt"'}), 400
     if len(prompt) > 4000:
         return jsonify({'success': False, 'error': 'prompt exceeds 4000 chars'}), 400
 
-    # Credit preflight - refuse before Claude is called. /check is free
-    # to the caller but expensive to us. Require at least the cheapest
-    # billable tier (derive_cut = 3) so a $0 partner can't spam.
+    # Credit preflight - refuse before we spend upstream compute. /check
+    # is free to the caller but expensive to us. Require at least the
+    # cheapest billable tier (derive_cut = 3) so a $0 partner can't spam.
     pf_resp, pf_status = _partner_credit_preflight(
         user.get('username') or 'partner_api', min_credits=3)
     if pf_resp is not None:
@@ -45232,14 +45426,21 @@ def api_v1_profiles_check():
     try:
         draft, candidates, interp = _v1_interpret(prompt)
         if draft is None:
+            # Interpret failure — log the inner detail server-side only,
+            # never return raw error string / stack context to the partner.
+            try:
+                print(f"[v1_check] interpret failed: "
+                      f"{str(interp.get('error'))[:400]!r}")
+            except Exception:
+                pass
             return jsonify({
                 'success': False,
-                'error': interp.get('error', 'brief-interpret failed'),
+                'error': 'could not interpret prompt',
             }), interp.get('status', 502)
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
         return jsonify({'success': False,
-                         'error': f'interpret failed: {e}'}), 500
+                         'error': 'could not interpret prompt'}), 500
 
     decision, ex_key, d_type = _normalize_v1_decision(draft)
     price = _V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
@@ -45319,8 +45520,10 @@ def api_v1_profiles_run():
 
     try:
         body = request.get_json(force=True) or {}
-    except Exception as e:
-        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False,
+                         'error': 'invalid JSON body'}), 400
 
     prompt = (body.get('prompt') or body.get('text') or '').strip()
     if not prompt:
@@ -45357,14 +45560,20 @@ def api_v1_profiles_run():
     try:
         draft, _candidates, interp = _v1_interpret(prompt)
         if draft is None:
+            # Interpret failure — log inner detail server-side only.
+            try:
+                print(f"[v1_run] interpret failed: "
+                      f"{str(interp.get('error'))[:400]!r}")
+            except Exception:
+                pass
             return jsonify({
                 'success': False,
-                'error': interp.get('error', 'brief-interpret failed'),
+                'error': 'could not interpret prompt',
             }), interp.get('status', 502)
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
         return jsonify({'success': False,
-                         'error': f'interpret failed: {e}'}), 500
+                         'error': 'could not interpret prompt'}), 500
 
     decision, ex_key, d_type = _normalize_v1_decision(draft)
 
@@ -45466,53 +45675,58 @@ def api_v1_profiles_run():
                      'Content-Type': 'application/json'},
         )
         if resp.status_code != 200:
-            # Queue rejected the job - refund immediately so the
-            # partner isn't charged for nothing.
+            # Engine rejected the job — refund immediately so the
+            # partner isn't charged for nothing. Log the upstream
+            # status code server-side only.
+            try:
+                print(f"[v1_run] engine rejected: HTTP {resp.status_code}")
+            except Exception:
+                pass
             if charged:
                 try:
                     refund_credit(username, credits=price,
-                                    reason=f'v1 queue rejected ({resp.status_code})')
+                                    reason=f'v1 engine rejected ({resp.status_code})')
                 except Exception:
                     traceback.print_exc()
             return jsonify({
                 'success': False,
-                'error': f'queue rejected: HTTP {resp.status_code}',
+                'error': 'profile engine rejected the request',
             }), 502
         queue_resp = resp.json() or {}
     except Exception:
         traceback.print_exc()
-        # Refund on any exception too - the queue POST didn't succeed.
+        # Refund on any exception too — the handoff didn't succeed.
         if charged:
             try:
                 refund_credit(username, credits=price,
-                                reason='v1 queue POST exception')
+                                reason='v1 engine handoff exception')
             except Exception:
                 traceback.print_exc()
         return jsonify({'success': False,
-                         'error': 'queue temporarily unavailable'}), 502
+                         'error': 'profile engine temporarily unavailable'}), 502
 
     run_id = queue_resp.get('run_id')
 
-    # Queue-returned-200-without-run_id (2026-08-19, Jessie fix #4).
-    # If the queue accepted the POST but did not hand back a run_id,
-    # the partner has no way to poll and no way to receive the
-    # deliverable. Refund and treat as a queue failure - do NOT
+    # Engine-returned-200-without-run_id (2026-08-19, Jessie fix #4).
+    # If the engine accepted the handoff but did not hand back a
+    # run_id, the partner has no way to poll and no way to receive
+    # the deliverable. Refund and treat as a failure — do NOT
     # pretend it succeeded.
     if not run_id:
         try:
-            print(f"[v1_run] queue returned 200 with no run_id "
-                  f"payload={str(queue_resp)[:400]!r} - refunding + 502")
+            print(f"[v1_run] engine returned 200 with no run_id "
+                  f"payload={str(queue_resp)[:400]!r} — refunding + 502")
         except Exception:
             pass
         if charged:
             try:
                 refund_credit(username, credits=price,
-                              reason='v1 queue 200 without run_id')
+                              reason='v1 engine 200 without run_id')
             except Exception:
                 traceback.print_exc()
         return jsonify({
             'success': False,
-            'error': 'queue did not return a run_id',
+            'error': 'profile engine did not return a run id',
         }), 502
 
     # Record partner ownership BEFORE the response goes out so the
@@ -45602,18 +45816,15 @@ def api_v1_profiles_status(run_id):
 
     status = _fetch_run_status_from_queue(run_id)
     if not status:
-        return jsonify({'success': False, 'error': 'run not found or queue unreachable',
+        return jsonify({'success': False, 'error': 'run not found',
                          'run_id': run_id}), 404
 
-    resp = {
-        'success': True,
-        'run_id': run_id,
-        'status': status.get('status') or 'unknown',
-        'progress': status.get('progress') or status.get('phase'),
-        'started_at': status.get('started_at'),
-        'completed_at': status.get('completed_at'),
-        'subject': status.get('subject'),
-    }
+    # Partner-facing scrub (2026-08-19). Normalize internal cohort-level
+    # statuses (tu_done/avid_done/cut_done/error) to the small enum
+    # documented in PARTNER_API.md, and blank any progress string that
+    # mentions internal jargon. Only known-safe keys are ever forwarded.
+    resp = {'success': True, 'run_id': run_id}
+    resp.update(_scrub_v1_status(status))
 
     if (resp['status'] or '').lower() == 'complete':
         # Only echo s3_key / avid_s3_key back to the partner when we ACTUALLY
