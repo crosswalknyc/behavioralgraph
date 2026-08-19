@@ -101442,6 +101442,23 @@ https://www.instagram.com/p/..."></textarea>
                 const v = map ? map[key] : undefined;
                 return (typeof v === 'number' && !isNaN(v)) ? v.toFixed(2) + '%' : '-';
             }
+            function _ageDistForCol(c) {
+                const dict = {};
+                if (c.kind === 'sub') {
+                    ((c.p && c.p.data && c.p.data.demographics && c.p.data.demographics.age) || []).forEach(function(d) {
+                        const k = d.age_range || d.age || '';
+                        if (!k || /male|female|binary|trans/i.test(k)) return;
+                        const pctN = parseFloat(String(d.percentage || '').replace('%', '').trim());
+                        if (!isNaN(pctN) && pctN > 0) dict[k] = (dict[k] || 0) + pctN;
+                    });
+                } else if (c.pd && c.pd.age) {
+                    Object.keys(c.pd.age).forEach(function(k) {
+                        const v = c.pd.age[k];
+                        if (typeof v === 'number' && !isNaN(v) && v > 0) dict[k] = v;
+                    });
+                }
+                return dict;
+            }
 
             let demoHtml = '';
             demoHtml += '<div style="display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1rem;">';
@@ -101462,6 +101479,12 @@ https://www.instagram.com/p/..."></textarea>
                         t += '<td style="text-align: center; padding: 0.6rem; border-bottom: 1px solid var(--border-color);">' + pct + '</td>';
                     });
                     t += '</tr>';
+                });
+                // Median Age row - weighted median from each column's age distribution.
+                t += '<tr><td style="padding: 0.6rem; border-top: 2px solid var(--border-color); font-weight: 700; background: rgba(240,255,0,0.06);">Median Age</td>';
+                demoCols.forEach(function(c) {
+                    var _med = (typeof calculateMedianAgeFromDistribution === 'function') ? calculateMedianAgeFromDistribution(_ageDistForCol(c)) : 0;
+                    t += '<td style="text-align: center; padding: 0.6rem; border-top: 2px solid var(--border-color); font-weight: 700; background: rgba(240,255,0,0.06);">' + (_med > 0 ? _med.toFixed(1) + ' yrs' : '-') + '</td>';
                 });
                 t += '</tbody></table>';
                 demoHtml += _tblWrap(t, demoColCount);
