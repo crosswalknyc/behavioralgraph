@@ -44152,17 +44152,20 @@ def _synth_chat_incidence_check(text, history=None):
 #      audience) -> one reasoning call proposes 2-4 audience framings
 #      the user picks from. Direct asks ("build a profile of X") skip
 #      this entirely and behave exactly as before.
-#   2. CLARIFY steps: every fresh single-subject build gets two quick
-#      questions before the approval card - region (national vs
-#      specific markets, free text resolved to canonical Nielsen DMAs)
-#      and add-on cuts (female only, male only, generations, age
-#      bands, a specific DMA... 3 credits per cut, priced as added).
-#   3. The answers ride the draft: `region_scope` constrains the
-#      build's LOCATION category to ONLY the listed DMAs (enforced
-#      worker-side + injected into persona notes); `addon_cuts` are
-#      derived off the finished TU parent so they ladder up by
-#      construction, with partition coherence enforced for full
-#      gender/generation sets.
+#   2. CLARIFY steps (reworked 2026-08-19 per Jenna into the Cut
+#      Strategist): every fresh single-subject build asks the business
+#      goal, then ONE strategist reasoning call recommends 2-4 cuts
+#      that serve that goal (with honest skip advice), priced at
+#      3 credits per cut as they're added. Free-text answers can also
+#      name any cut or market directly.
+#   3. The answers ride the draft as `addon_cuts`, all derived off the
+#      finished NATIONAL TU parent so they ladder up by construction
+#      (partition coherence enforced for full gender/generation sets).
+#      THE BASE BUILD IS ALWAYS THE NATIONAL TOTAL UNIVERSE + AVID:
+#      naming a region never narrows the parent - each market becomes
+#      its own 3-credit DMA cut. (The old `region_scope` build filter
+#      is retired; the worker keeps its handler only for specs queued
+#      before the change.)
 # --------------------------------------------------------------------
 
 _NIELSEN_DMAS_CACHE = None
@@ -44369,6 +44372,81 @@ _ADDON_CUT_CATALOG = {
 ADDON_CUT_CREDITS = 3
 
 
+def _normalize_cut_items(raw_items, dma_list=None):
+    """Normalize cut items of shape {type, id|buckets|dma, label, why,
+    est_share} (as returned by the cuts parser AND the strategist) into
+    validated cut defs. Shared so both paths produce identical specs.
+    Unknown types / non-canonical DMAs / bad buckets are dropped."""
+    import re as _re
+    if dma_list is None:
+        dma_list = _nielsen_dma_list()
+    canon_dma = {x.lower(): x for x in (dma_list or [])}
+    cuts, seen = [], set()
+    for c in (raw_items or []):
+        if not isinstance(c, dict):
+            continue
+        ctype = str(c.get('type') or '').strip().lower()
+        extra = {}
+        why = str(c.get('why') or '').strip()
+        if why:
+            extra['why'] = why
+        try:
+            share = float(c.get('est_share'))
+            if 0 < share <= 1:
+                extra['est_share'] = round(share, 4)
+        except (TypeError, ValueError):
+            pass
+        if ctype in ('gender', 'generation'):
+            cid = str(c.get('id') or '').strip().lower()
+            base = _ADDON_CUT_CATALOG.get(cid)
+            if not base or cid in seen:
+                continue
+            seen.add(cid)
+            cuts.append({'cut_id': cid, **base,
+                         'credits': ADDON_CUT_CREDITS, **extra})
+        elif ctype == 'age_band':
+            buckets = [b for b in (c.get('buckets') or [])
+                       if b in _ADDON_AGE_BUCKETS]
+            if not buckets:
+                continue
+            label = str(c.get('label') or '').strip() \
+                or '/'.join(buckets)
+            cid = 'age_' + _re.sub(r'[^a-z0-9]+', '_', label.lower())
+            if cid in seen:
+                continue
+            seen.add(cid)
+            cuts.append({'cut_id': cid, 'label': f'Ages {label}',
+                         'kind': 'age_band', 'pin_category': 'AGE',
+                         'pin_buckets': buckets,
+                         'credits': ADDON_CUT_CREDITS, **extra})
+        elif ctype == 'dma':
+            dma = canon_dma.get(str(c.get('dma') or '').strip().lower())
+            if not dma:
+                continue
+            cid = 'dma_' + _re.sub(r'[^a-z0-9]+', '_', dma.lower())
+            if cid in seen:
+                continue
+            seen.add(cid)
+            cuts.append({'cut_id': cid, 'label': f'{dma} only',
+                         'kind': 'dma', 'pin_category': 'LOCATION',
+                         'pin_buckets': [dma],
+                         'credits': ADDON_CUT_CREDITS, **extra})
+    return cuts
+
+
+def _merge_cuts(*cut_lists):
+    """Merge cut lists preserving order, deduped by cut_id."""
+    merged, seen = [], set()
+    for lst in cut_lists:
+        for c in (lst or []):
+            cid = c.get('cut_id')
+            if not cid or cid in seen:
+                continue
+            seen.add(cid)
+            merged.append(c)
+    return merged
+
+
 def _parse_addon_cuts_answer(answer_text, subject):
     """Parse a free-text add-on cuts answer into validated cut defs.
     Supports catalog cuts (gender / generations), explicit age bands
@@ -44417,52 +44495,274 @@ def _parse_addon_cuts_answer(answer_text, subject):
     if not result.get('success'):
         return None, ['parse_failed']
     d = result.get('data') or {}
-    cuts, notes, seen = [], [], set()
-    canon_dma = {x.lower(): x for x in dma_list}
-    for c in (d.get('cuts') or []):
-        if not isinstance(c, dict):
-            continue
-        ctype = str(c.get('type') or '').strip().lower()
-        if ctype in ('gender', 'generation'):
-            cid = str(c.get('id') or '').strip().lower()
-            base = _ADDON_CUT_CATALOG.get(cid)
-            if not base or cid in seen:
-                continue
-            seen.add(cid)
-            cuts.append({'cut_id': cid, **base,
-                         'credits': ADDON_CUT_CREDITS})
-        elif ctype == 'age_band':
-            buckets = [b for b in (c.get('buckets') or [])
-                       if b in _ADDON_AGE_BUCKETS]
-            if not buckets:
-                continue
-            label = str(c.get('label') or '').strip() \
-                or '/'.join(buckets)
-            cid = 'age_' + _re.sub(r'[^a-z0-9]+', '_', label.lower())
-            if cid in seen:
-                continue
-            seen.add(cid)
-            cuts.append({'cut_id': cid, 'label': f'Ages {label}',
-                         'kind': 'age_band', 'pin_category': 'AGE',
-                         'pin_buckets': buckets,
-                         'credits': ADDON_CUT_CREDITS})
-        elif ctype == 'dma':
-            dma = canon_dma.get(str(c.get('dma') or '').strip().lower())
-            if not dma:
-                continue
-            cid = 'dma_' + _re.sub(r'[^a-z0-9]+', '_', dma.lower())
-            if cid in seen:
-                continue
-            seen.add(cid)
-            cuts.append({'cut_id': cid, 'label': f'{dma} only',
-                         'kind': 'dma', 'pin_category': 'LOCATION',
-                         'pin_buckets': [dma],
-                         'credits': ADDON_CUT_CREDITS})
-    for ig in (d.get('ignored') or []):
-        s = str(ig).strip()
-        if s:
-            notes.append(s)
+    cuts = _normalize_cut_items(d.get('cuts'), dma_list)
+    notes = [str(ig).strip() for ig in (d.get('ignored') or [])
+             if str(ig).strip()]
     return cuts, notes
+
+
+def _fmt_est_count(n):
+    """Round an estimated panel count for display: 48,213 -> '48K'.
+    Estimates never print with false precision (2026-08-19 Jenna:
+    quoted stats must read as ranges/approx so the final output can
+    never diverge from them)."""
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        return str(n)
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 10_000:
+        return f"{int(round(n / 1000))}K"
+    if n >= 1_000:
+        return f"{n / 1000:.1f}K"
+    return str(n)
+
+
+def _soften_precise_stats(text):
+    """Make any percentage quoted in generated copy read as
+    approximate (2026-08-19 Jenna: 'if we say female skews 67% we
+    give a range or say approx'). Bare 'NN%' / 'NN.N%' tokens get a
+    '~' prefix unless the surrounding text already marks them
+    approximate (~, about, roughly, approx, est., under, over, near,
+    up to) or they're the top of a NN-MM% range. Also normalizes em/en
+    dashes in generated copy to plain hyphens (workspace rule)."""
+    import re as _re
+    if not text:
+        return text
+    text = text.replace('\u2014', ' - ').replace('\u2013', ' - ')
+    text = _re.sub(r'[ \t]{2,}', ' ', text)
+    out, last = [], 0
+    for m in _re.finditer(r'\d{1,3}(?:\.\d+)?\s*(?:%|percent\b)', text):
+        prefix = text[max(0, m.start() - 12):m.start()]
+        if _re.search(r'(~|about|roughly|approx\w*|est\.?|under|over|'
+                      r'near|up to|-)\s*$', prefix, _re.IGNORECASE):
+            continue
+        out.append(text[last:m.start()])
+        out.append('~')
+        last = m.start()
+    out.append(text[last:])
+    return ''.join(out)
+
+
+def _synth_chat_cut_strategist(draft):
+    """The Cut Strategist (2026-08-19 Jenna directive): one reasoning
+    call that turns the subject + business goal + est. sample into a
+    recommended cut package with a one-line why per cut, priced at
+    ADDON_CUT_CREDITS each, plus honest skip advice for cuts that
+    would NOT add a story. Regional subjects get specific market cuts
+    recommended by canonical DMA name. The total-universe + avid base
+    build is ALWAYS national; every cut derives from it.
+
+    Quoted-stat discipline (2026-08-19 Jenna): pre-build copy never
+    states a precise figure the finished data would have to hit.
+    Whys are qualitative (prompt rule 6 + _soften_precise_stats
+    backstop) and per-cut sizes render as est. ranges, not points.
+
+    Returns (recs, skips, message) - recs are validated cut defs (the
+    same shape the clarify flow stores on the draft), skips are
+    {label, why} dicts, message is the rendered chat prompt. On any
+    failure returns ([], [], fallback_menu_message) so the flow
+    degrades to the generic cuts question.
+    """
+    subject = str(draft.get('subject') or draft.get('name')
+                  or 'this profile')
+    goal = str(draft.get('business_goal') or '').strip()
+    tu = 0
+    try:
+        tu = int(draft.get('subject_raw_tu') or 0)
+    except (TypeError, ValueError):
+        pass
+    dr = draft.get('date_range') or {}
+    window = f"{dr.get('start') or '2025-07-01'} to " \
+             f"{dr.get('end') or '2026-06-30'}"
+    fallback_msg = (
+        "Want any **add-on cuts** beyond the standard build? Female "
+        "only, male only, by generation, an age band, or a specific "
+        f"market. **{ADDON_CUT_CREDITS} credits per cut** - every cut "
+        "derives from the national total-universe build. Name the "
+        "ones you want, or say **none**.")
+
+    dma_list = _nielsen_dma_list()
+    system_prompt = (
+        "You are an audience strategist for a US consumer-behavior "
+        "profile product. A client is building a profile (the national "
+        "total universe plus its avid tier is always included in the "
+        "base). Your job: recommend which ADD-ON CUTS of that audience "
+        "would genuinely sharpen their business goal, and which cuts "
+        "would NOT add a story. Be a consultant, not a menu.\n\n"
+        "Available cut types (each cut costs "
+        f"{ADDON_CUT_CREDITS} credits):\n"
+        "  - gender: id 'female' or 'male'\n"
+        "  - generation: id 'gen_z' (18-24), 'millennials' (25-44), "
+        "'gen_x' (45-64), 'boomers' (65+)\n"
+        "  - age_band: any subset of the fixed AGE buckets "
+        f"{_ADDON_AGE_BUCKETS}\n"
+        "  - dma: a US market, EXACT canonical name from the DMA list "
+        "below. If the subject is a regional business (a chain with a "
+        "footprint, a team, a local brand), recommend its core "
+        "market(s) by name.\n\n"
+        "Rules:\n"
+        "  1. Recommend 2-4 cuts MAX, ordered by impact on the goal. "
+        "Every `why` must tie to the stated goal (or, if no goal was "
+        "given, to what is distinctive about this audience).\n"
+        "  2. For each recommendation include est_share: the fraction "
+        "of the total audience this cut keeps (e.g. female ~0.45-0.55, "
+        "one generation ~0.15-0.35, one DMA ~0.01-0.12 scaled to the "
+        "brand's geographic concentration).\n"
+        "  3. Name 1-2 cuts NOT worth buying under `skips` with an "
+        "honest why (e.g. 'gender split is near 50/50 here, it will "
+        "not change the story').\n"
+        "  4. Never recommend a cut whose est_share x the total sample "
+        "would be under ~1,500 panelists.\n"
+        "  5. Ground the whys in real knowledge of the subject's "
+        "actual audience. No filler.\n"
+        "  6. NEVER quote a precise percentage or count in `why` - "
+        "the finished data is the only source of exact numbers. Use "
+        "approximate language only: 'skews heavily female', 'roughly "
+        "two-thirds under 35', 'concentrated in New York and LA'.\n"
+        "  7. Plain punctuation only: hyphens and commas, never em "
+        "dashes.\n\n"
+        "CANONICAL DMA LIST:\n" + "\n".join(dma_list) + "\n\n"
+        "Return STRICT JSON only:\n"
+        "{\"recommendations\": ["
+        "{\"type\": \"gender\", \"id\": \"female\", \"why\": \"...\", "
+        "\"est_share\": 0.52}, "
+        "{\"type\": \"dma\", \"dma\": \"New York Ny\", \"why\": "
+        "\"...\", \"est_share\": 0.34}, "
+        "{\"type\": \"age_band\", \"label\": \"18-34\", \"buckets\": "
+        "[\"18-24\", \"25-34\"], \"why\": \"...\", \"est_share\": 0.3}"
+        "], \"skips\": [{\"label\": \"...\", \"why\": \"...\"}]}"
+    )
+    goal_line = goal or ('(not stated - infer what would sharpen '
+                         'this audience)')
+    user_prompt = (f"Profile subject: {subject}\n"
+                   f"Business goal: {goal_line}\n"
+                   f"Window: {window}")
+    if tu:
+        user_prompt += f"\nTotal-universe sample: {tu:,} panelists"
+    try:
+        result = _run_nflx_claude_agent(
+            system_prompt=system_prompt, user_prompt=user_prompt,
+            max_tokens=2000, temperature=0.4,
+        )
+    except Exception as e:
+        print(f"[cut-strategist] call failed: {e}")
+        return [], [], fallback_msg
+    if not result.get('success'):
+        return [], [], fallback_msg
+    d = result.get('data') or {}
+    recs = _normalize_cut_items(d.get('recommendations'), dma_list)
+    for r in recs:
+        if r.get('why'):
+            r['why'] = _soften_precise_stats(r['why'])
+    skips = []
+    for s in (d.get('skips') or [])[:3]:
+        if isinstance(s, dict) and str(s.get('label') or '').strip():
+            skips.append({'label': str(s['label']).strip(),
+                          'why': _soften_precise_stats(
+                              str(s.get('why') or '').strip())})
+    # Thinness guard: drop recs whose implied cut sample is too thin
+    # to read reliably; be honest about it in the skips. Sizes are
+    # carried as a RANGE (est_share is an estimate - the real cut
+    # sample derives from the finished parent's actual mix, so we
+    # never quote a point the data would have to hit).
+    if tu > 0:
+        kept = []
+        for r in recs:
+            share = r.get('est_share') or 0
+            est_n = int(tu * share) if share else None
+            if est_n is not None and est_n < 1500:
+                skips.append({
+                    'label': r.get('label') or r.get('cut_id'),
+                    'why': (f"would land under ~{_fmt_est_count(est_n)}"
+                            " panelists - too thin for a reliable "
+                            "read at this audience size")})
+                continue
+            if est_n is not None:
+                r['est_lo'] = int(est_n * 0.8)
+                r['est_hi'] = int(est_n * 1.2)
+            kept.append(r)
+        recs = kept
+    recs = recs[:4]
+    if not recs:
+        return [], skips, fallback_msg
+
+    lines = ["Here's how I'd cut this"
+             + (f" for {goal.rstrip('.')}" if goal else "")
+             + f" (each cut is {ADDON_CUT_CREDITS} credits, derived "
+             "from the national build):", ""]
+    for i, r in enumerate(recs, 1):
+        ln = f"**{i}. {r.get('label')}** (+{ADDON_CUT_CREDITS})"
+        if r.get('est_lo') and r.get('est_hi'):
+            ln += (f" - est. {_fmt_est_count(r['est_lo'])}-"
+                   f"{_fmt_est_count(r['est_hi'])} panelists")
+        lines.append(ln)
+        if r.get('why'):
+            lines.append(f"   {r['why']}")
+    if skips:
+        lines.append("")
+        for s in skips[:2]:
+            why = f" - {s['why']}" if s.get('why') else ""
+            lines.append(f"*Skip {s['label']}*{why}")
+    lines.append("")
+    lines.append("Reply with the ones you want (**\"1 and 3\"**, "
+                 "**\"all\"**, or by name), add any market by name "
+                 "(each market is its own "
+                 f"{ADDON_CUT_CREDITS}-credit cut), or say **none**. "
+                 "The total universe and avid stay national either "
+                 "way.")
+    return recs, skips, "\n".join(lines)
+
+
+def _parse_strategy_answer(answer, subject, draft):
+    """Map the user's reply to the strategist's numbered picks into cut
+    defs. Handles: none; all/both; number picks ('1 and 3'); ordinals
+    ('first and third'); free-text names / markets (via the cuts
+    parser); and mixes ('2 plus Dallas'). Returns (cuts, notes), or
+    (None, notes) when nothing could be parsed."""
+    import re as _re
+    recs = draft.get('strategist_recs') or []
+    t = (answer or '').strip()
+    low = t.lower()
+    if not t or _re.match(r'^(no|none|nope|skip|nothing|no thanks?|'
+                          r"i'?m good|just the (main|base) (one|profile)|"
+                          r'not (now|needed))\s*[.!]?$', low):
+        return [], []
+    if _re.match(r'^(all( of them)?|add all|yes to all|do all|'
+                 r'everything|all \d)\s*[.!]?$', low) and recs:
+        return list(recs), []
+    if low in ('both', 'both of them') and len(recs) == 2:
+        return list(recs), []
+
+    nums = [int(n) for n in _re.findall(r'\b([1-9])\b', t)]
+    for w, n in (('first', 1), ('second', 2), ('third', 3),
+                 ('fourth', 4)):
+        if _re.search(r'\b' + w + r'\b', low):
+            nums.append(n)
+    picked, seen_n = [], set()
+    for n in nums:
+        if n in seen_n or not (1 <= n <= len(recs)):
+            continue
+        seen_n.add(n)
+        picked.append(recs[n - 1])
+
+    remainder = t
+    if nums:
+        remainder = _re.sub(r'\b[1-9]\b', ' ', remainder)
+        remainder = _re.sub(r'\b(first|second|third|fourth|and|plus|'
+                            r'also|the|option|options|number|numbers|'
+                            r'add|want|take)\b', ' ', remainder,
+                            flags=_re.IGNORECASE)
+        remainder = _re.sub(r'[,&+.!]', ' ', remainder)
+        remainder = ' '.join(remainder.split())
+    if remainder and (not nums or len(remainder) > 2):
+        named, notes = _parse_addon_cuts_answer(remainder, subject)
+        if named is None:
+            return (picked, ['parse_partial']) if picked \
+                else (None, notes)
+        return _merge_cuts(picked, named), notes
+    return picked, []
 
 
 @app.route('/api/brief-chat/clarify', methods=['POST'])
@@ -44472,7 +44772,16 @@ def api_synth_chat_clarify():
     the request and the updated draft rides the response, exactly like
     the date-confirmation stash pattern.
 
-    body: { step: 'region'|'cuts', answer: str, draft: {...} }
+    Steps (2026-08-19 Cut Strategist rework):
+      goal     -> capture business_goal, run the strategist, ask for
+                  cut picks (next_step=strategy)
+      strategy -> parse picks/names/markets into addon_cuts, price,
+                  release the approval card (next_step=approve)
+      region / cuts -> legacy steps kept for stale clients. Region
+                  answers become DMA CUTS (3 credits each); the base
+                  build is ALWAYS the national total universe + avid.
+
+    body: { step: str, answer: str, draft: {...} }
     """
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
@@ -44484,7 +44793,8 @@ def api_synth_chat_clarify():
     step = str(body.get('step') or '').strip().lower()
     answer = str(body.get('answer') or '').strip()
     draft = body.get('draft') or {}
-    if step not in ('region', 'cuts') or not isinstance(draft, dict):
+    if step not in ('goal', 'strategy', 'region', 'cuts') \
+            or not isinstance(draft, dict):
         return jsonify({'success': False, 'error': 'bad clarify step'}), 400
 
     import re as _re
@@ -44494,15 +44804,75 @@ def api_synth_chat_clarify():
                        or draft.get('estimated_credits') or 5)
     draft.setdefault('base_credits', base_credits)
 
+    def _finalize_cuts_response(notes=None):
+        """Price whatever is on draft['addon_cuts'] and release the
+        approval card. Base ALWAYS covers the national TU + avid;
+        every cut is +ADDON_CUT_CREDITS derived from that parent."""
+        cuts = draft.get('addon_cuts') or []
+        total = base_credits + ADDON_CUT_CREDITS * len(cuts)
+        draft['estimated_credits'] = total
+        draft.pop('strategist_recs', None)
+        if cuts:
+            cut_lines = "\n".join(
+                f"  - {c.get('label') or c.get('cut_id')} "
+                f"(+{ADDON_CUT_CREDITS} credits)" for c in cuts)
+            msg = (f"Locked in **{len(cuts)} cut"
+                   f"{'s' if len(cuts) != 1 else ''}**:\n{cut_lines}\n\n"
+                   f"Total: **{total} credits** (base {base_credits} "
+                   f"covers the national total universe + avid; "
+                   f"{len(cuts)} x {ADDON_CUT_CREDITS} for the cuts, "
+                   "each derived from that national parent so the "
+                   "numbers ladder up). Review the brief below and "
+                   "approve to queue.")
+        else:
+            msg = ("No add-on cuts - just the national total universe "
+                   "+ avid. Review the brief below and approve to "
+                   "queue.")
+        if notes:
+            real = [n for n in notes if n not in
+                    ('parse_partial', 'parse_failed')][:4]
+            if real:
+                msg = "Couldn't map: " + ", ".join(real) + ". " + msg
+        return jsonify({'success': True, 'draft': draft,
+                        'message': msg, 'next_step': 'approve'})
+
+    if step == 'goal':
+        low = answer.lower()
+        if answer and not _re.match(
+                r'^(skip|none|no|nothing|nope|na|n/a|pass|'
+                r'just build( it)?|next)\s*[.!]?$', low):
+            draft['business_goal'] = answer[:500]
+        else:
+            draft['business_goal'] = ''
+        recs, _skips, message = _synth_chat_cut_strategist(draft)
+        draft['strategist_recs'] = recs
+        return jsonify({'success': True, 'draft': draft,
+                        'message': message, 'next_step': 'strategy'})
+
+    if step == 'strategy':
+        cuts, notes = _parse_strategy_answer(answer, subject, draft)
+        if cuts is None:
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': ("I couldn't parse that. Reply with the "
+                            "numbers (\"1 and 3\"), \"all\", cut "
+                            "names (\"female\", \"Gen Z\", \"Dallas "
+                            "only\") - or say **none**."),
+                'next_step': 'strategy',
+            })
+        draft['addon_cuts'] = cuts
+        return _finalize_cuts_response(notes)
+
     if step == 'region':
+        # Legacy step, reworked per Jenna 2026-08-19: a region answer
+        # NEVER narrows the base build. The TU + avid always build
+        # national; each named market becomes its own 3-credit cut.
         low = answer.lower()
         if not answer or _re.match(
                 r'^(national|nationwide|nation wide|all|whole country|'
                 r'us|usa|everywhere|no|none|skip|not regional)\s*[.!]?$',
                 low):
-            draft['region_scope'] = {'mode': 'national'}
-            msg = ("Nationwide it is. One more thing: want any "
-                   "**additional cuts** beyond the standard build? "
+            msg = ("Nationwide it is. Want any **additional cuts**? "
                    "Female only, male only, by generation, an age "
                    "band, or a specific market. **"
                    f"{ADDON_CUT_CREDITS} credits per cut** - name the "
@@ -44520,24 +44890,32 @@ def api_synth_chat_clarify():
                             "\"Texas\"), or say **national**."),
                 'next_step': 'region',
             })
-        draft['region_scope'] = {'mode': 'regional', 'dmas': resolved}
-        parts = [f"Locked to **{len(resolved)} market"
-                 f"{'s' if len(resolved) != 1 else ''}**: "
-                 + ", ".join(resolved) + ". The profile's location "
-                 "mix will include ONLY these markets."]
+        dma_cuts = _normalize_cut_items(
+            [{'type': 'dma', 'dma': d} for d in resolved])
+        draft['addon_cuts'] = _merge_cuts(draft.get('addon_cuts'),
+                                          dma_cuts)
+        n_cuts = len(draft['addon_cuts'])
+        draft['estimated_credits'] = base_credits \
+            + ADDON_CUT_CREDITS * n_cuts
+        parts = [
+            "The total universe and avid always build **national** - "
+            "each market you named becomes its own "
+            f"**{ADDON_CUT_CREDITS}-credit cut** from that parent:\n"
+            + "\n".join(f"  - {c['label']} (+{ADDON_CUT_CREDITS} "
+                        "credits)" for c in dma_cuts)]
         if unresolved:
             parts.append(f"(Couldn't map: {', '.join(unresolved)} - "
                          "tell me the metro if you want them added.)")
-        parts.append("Want any **additional cuts** beyond the "
-                     "standard build? Female only, male only, by "
-                     "generation, an age band, or one of your "
-                     f"markets on its own. **{ADDON_CUT_CREDITS} "
-                     "credits per cut** - name them, or say **none**.")
+        parts.append("Want any **other cuts**? Female only, male "
+                     "only, by generation, or an age band - "
+                     f"{ADDON_CUT_CREDITS} credits each. Name them, "
+                     "or say **none**.")
         return jsonify({'success': True, 'draft': draft,
                         'message': "\n\n".join(parts),
                         'next_step': 'cuts'})
 
-    # step == 'cuts'
+    # step == 'cuts' (legacy). Merges with any market cuts the region
+    # step already added instead of overwriting them.
     cuts, notes = _parse_addon_cuts_answer(answer, subject)
     if cuts is None:
         return jsonify({
@@ -44548,29 +44926,8 @@ def api_synth_chat_clarify():
                         "**none**."),
             'next_step': 'cuts',
         })
-    draft['addon_cuts'] = cuts
-    total = base_credits + ADDON_CUT_CREDITS * len(cuts)
-    draft['estimated_credits'] = total
-    if cuts:
-        cut_lines = "\n".join(
-            f"  - {c['label']} (+{ADDON_CUT_CREDITS} credits)"
-            for c in cuts)
-        msg = (f"Added **{len(cuts)} cut"
-               f"{'s' if len(cuts) != 1 else ''}** at "
-               f"{ADDON_CUT_CREDITS} credits each:\n{cut_lines}\n\n"
-               f"Total: **{total} credits** (base {base_credits} + "
-               f"{len(cuts)} x {ADDON_CUT_CREDITS}). Every cut is "
-               "derived from the finished total-universe profile so "
-               "the numbers ladder up. Review the brief below and "
-               "approve to queue.")
-    else:
-        msg = ("No add-on cuts. Review the brief below and approve "
-               "to queue.")
-        if notes:
-            msg = ("Couldn't map: " + ", ".join(notes[:4]) + ". "
-                   + msg)
-    return jsonify({'success': True, 'draft': draft, 'message': msg,
-                    'next_step': 'approve'})
+    draft['addon_cuts'] = _merge_cuts(draft.get('addon_cuts'), cuts)
+    return _finalize_cuts_response(notes)
 
 
 @app.route('/api/brief-chat/interpret', methods=['POST'])
@@ -44906,14 +45263,16 @@ def api_synth_chat_interpret():
         # passthrough above: locked values are already messy, so this
         # is a no-op for them (idempotent helper).
         _jitter_draft_est_sample(spec_draft)
-        # Guided clarify steps (2026-08-19): every fresh single-subject
-        # build asks region (national vs markets-only) then add-on
-        # cuts (3 credits each) before the approval card. Derive-cut /
-        # existing-match asks skip - there's no fresh build to scope.
+        # Guided clarify steps (2026-08-19 Cut Strategist): every fresh
+        # single-subject build asks the business goal, then the
+        # strategist recommends a cut package (3 credits per cut,
+        # every cut derived from the always-national TU + avid base).
+        # Derive-cut / existing-match asks skip - no fresh build to
+        # scope.
         clarify_steps = []
         if _dec_norm in ('new_build', 'time_shifted_refresh',
                          'cut_needs_parent'):
-            clarify_steps = ['region', 'cuts']
+            clarify_steps = ['goal', 'strategy']
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
@@ -45240,30 +45599,13 @@ def _spec_from_draft(draft):
         'follower_platforms': (draft.get('follower_platforms')
                                 if audience_type_out != 'general' else None),
     }
-    # Guided-flow passthrough (2026-08-19): regional scope + add-on
-    # cuts collected by /api/brief-chat/clarify ride the spec to the
-    # worker. region_scope constrains LOCATION to ONLY the listed DMAs
-    # (worker-side filter + renorm) and is injected into persona_notes
-    # so the row-by-row reasoning natively thinks in those markets
-    # (regional grocers, teams, weather, culture). addon_cuts are
-    # derived off the finished TU parent (3 credits each).
-    _rs = draft.get('region_scope') or {}
-    if isinstance(_rs, dict) and _rs.get('mode') == 'regional' \
-            and _rs.get('dmas'):
-        _dmas = [str(d).strip() for d in _rs['dmas'] if str(d).strip()]
-        if _dmas:
-            spec['region_scope'] = {'mode': 'regional', 'dmas': _dmas}
-            _region_note = (
-                "\n\nREGIONAL SCOPE (hard constraint): this audience "
-                "exists ONLY in these Nielsen DMA markets: "
-                + ", ".join(_dmas) + ". Every row's reasoning must "
-                "reflect these markets exclusively - regional grocers, "
-                "restaurant chains, sports teams, media, and culture "
-                "for these DMAs; near-zero for brands that only "
-                "operate elsewhere. The LOCATION category will contain "
-                "ONLY these markets.")
-            spec['persona_notes'] = (spec.get('persona_notes') or '') \
-                + _region_note
+    # Guided-flow passthrough (2026-08-19, reworked same day per Jenna):
+    # the base build is ALWAYS the national total universe + avid.
+    # Regions are never a build-level filter - each named market rides
+    # as a DMA add-on cut (3 credits) derived from the national
+    # parent, exactly like gender / generation / age cuts. region_scope
+    # is intentionally NOT read from the draft anymore; the worker
+    # keeps its filter only for specs queued before this change.
     _cuts = draft.get('addon_cuts') or []
     if isinstance(_cuts, list) and _cuts:
         _clean_cuts = []
