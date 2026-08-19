@@ -42872,6 +42872,42 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "CANONICAL BRAND CATEGORY LIST (choose exactly one):\n"
         f"{cat_block}\n\n"
 
+        # ── Phantom-column defense (added 2026-08-19 after Paul Anka,
+        # Tony Bennett, and Frankie Valli shipped with a `BRAND` column
+        # holding Hallmark Channel, Cracker Barrel, Blue Cross Blue
+        # Shield, Kennedy Center, etc. — the dashboard cannot render
+        # this column because BRAND is only a top-level grouping in
+        # MASTER_CATEGORIES, not a valid Column value).
+        "PHANTOM COLUMNS - the following labels are TOP-LEVEL groupings "
+        "only, NEVER valid Column names in subject_rows or extra_rows:\n"
+        "  * `BRAND`      -> use the specific sub-category: "
+        "AUTOMOBILE, RETAILERS, WHERE THEY DINE, BROADCAST/CABLE, "
+        "INSURANCE, TELECOM, TRAVEL, VENUE, BEVERAGE, CASUAL DINING, "
+        "APPAREL/FOOTWEAR, TECHNOLOGY/DEVICE, MOST PURCHASED BRANDS, "
+        "STREAMING MUSIC, PHARMACY, ACCESSORIES, BEAUTY, CPG, "
+        "AMUSEMENT PARKS, MEMBERSHIP, GROCERY, JEWELRY, EVENTS, ...\n"
+        "  * `CONTENT`    -> use SERIES / MOVIE / PODCAST / GAMES\n"
+        "  * `SPORT`      -> use MLB / NBA / NFL / NHL / MLS / WNBA / "
+        "MILB / SPORTS ORGANIZATIONS\n"
+        "  * `HEALTHCARE` -> use HEALTH & WELLNESS / INSURANCE / PHARMACY\n"
+        "If you cannot decide the right sub-category for a brand, DROP "
+        "it from subject_rows / extra_rows entirely. The row-by-row "
+        "reasoning engine will still populate the brand from Gen Pop "
+        "into its correct canonical column downstream.\n\n"
+
+        # ── Car-brand self-pin defense (same defect cluster: Paul Anka
+        # shipped with AUTOMOBILE > Lincoln at 94-99% because a car
+        # brand was pinned in subject_rows as if it were an
+        # affiliation).
+        "CAR-BRAND SELF-PINS - do NOT put a car brand (Lincoln, "
+        "Cadillac, Buick, Lexus, Mercedes, BMW, Toyota, Ford, "
+        "Honda, ...) in `subject_rows` for a talent / musician / actor "
+        "/ creator / athlete / podcaster subject. Fan-base car affinity "
+        "belongs in `extra_rows` if it's persona-signature, and the "
+        "row-by-row engine will compute a realistic BP from baseline. "
+        "Lincoln has ~0.06% Gen Pop panel reach; even a 65+ luxury-"
+        "leaning audience is 1-4%, never 90%+.\n\n"
+
         # ── Content-vs-platform classification (Rule added 2026-08-19
         # after P-Valley shipped miscategorized as STREAMING PLATFORM).
         # This is where Claude was reasoning wrong: a TV show that AIRS
@@ -43866,6 +43902,90 @@ def _spec_from_draft(draft):
             extra_rows.append([str(row[0]), str(row[1])])
         elif isinstance(row, dict) and 'column' in row and 'value' in row:
             extra_rows.append([str(row['column']), str(row['value'])])
+
+    # ── Phantom-column guard (added 2026-08-19 after Paul Anka /
+    # Tony Bennett / Frankie Valli shipped with a `BRAND` column full
+    # of Hallmark Channel, Cracker Barrel, Blue Cross Blue Shield, etc.
+    # that the dashboard can't render because BRAND is only a top-level
+    # grouping in MASTER_CATEGORIES, not a valid Column value).
+    #
+    # If Claude puts anything in subject_rows / extra_rows with a
+    # top-level grouping label as the Column, the synth engine writes
+    # it verbatim — producing a phantom column no one can see.
+    #
+    # These labels are groupings only, never Column values:
+    #   BRAND       -> use AUTOMOBILE / RETAILERS / BROADCAST/CABLE / etc.
+    #   CONTENT     -> use SERIES / MOVIE / PODCAST / GAMES
+    #   SPORT       -> use MLB / NBA / NFL / NHL / MLS / WNBA
+    #   HEALTHCARE  -> use HEALTH & WELLNESS / INSURANCE / PHARMACY
+    #
+    # We drop offending rows with a warning; the row-by-row reasoning
+    # engine will still populate those brands from Gen Pop in their
+    # correct canonical Column if they're in-hostmap. Persona-critical
+    # anchors that Claude WANTED in extra_rows need to specify the
+    # right Column — if Claude can't determine it, the anchor gets
+    # skipped rather than dumped in a bucket the dashboard can't render.
+    _PHANTOM_COLUMNS = {'BRAND', 'CONTENT', 'SPORT', 'HEALTHCARE'}
+    _dropped_phantom = []
+    _clean_subject_rows_v2 = []
+    for col, val in subject_rows:
+        if str(col).strip().upper() in _PHANTOM_COLUMNS:
+            _dropped_phantom.append(('subject_rows', col, val))
+            continue
+        _clean_subject_rows_v2.append((col, val))
+    subject_rows = _clean_subject_rows_v2
+
+    _clean_extra_rows_v2 = []
+    for entry in extra_rows:
+        if str(entry[0]).strip().upper() in _PHANTOM_COLUMNS:
+            _dropped_phantom.append(('extra_rows', entry[0], entry[1]))
+            continue
+        _clean_extra_rows_v2.append(entry)
+    extra_rows = _clean_extra_rows_v2
+
+    if _dropped_phantom:
+        try:
+            print(
+                f"[phantom-column-guard] {subject!r}: dropped "
+                f"{len(_dropped_phantom)} row(s) with grouping-label Column "
+                f"(BRAND/CONTENT/SPORT/HEALTHCARE are groupings, not "
+                f"Column values). Row-by-row reasoning will still cover "
+                f"these brands if they're in Gen Pop + hostmap. "
+                f"Dropped: {_dropped_phantom[:8]}"
+                + (f' ...+{len(_dropped_phantom) - 8} more' if len(_dropped_phantom) > 8 else '')
+            )
+        except Exception:
+            pass
+
+    # ── Sanity ceiling on car-brand self-pins (2026-08-19 same defect
+    # cluster: Paul Anka shipped with AUTOMOBILE > Lincoln at 94% BP
+    # because Claude proposed a subject_row hard-pin as if Lincoln were
+    # Paul Anka's affiliation). No talent / musician / actor / creator
+    # / athlete / podcaster subject should self-pin a car brand at 100
+    # unless the subject IS the car brand or a documented ambassador —
+    # and even then the reasoning engine should handle it, not a
+    # subject_row hard-pin. Drop AUTOMOBILE/luxury-car subject_rows
+    # that don't have the subject in their Value.
+    _car_columns = {'AUTOMOBILE'}
+    _norm_subj = ''.join(ch for ch in subject.lower() if ch.isalnum())
+    _clean_subject_rows_v3 = []
+    for col, val in subject_rows:
+        col_up = str(col).strip().upper()
+        val_norm = ''.join(ch for ch in str(val).lower() if ch.isalnum())
+        if col_up in _car_columns and val_norm != _norm_subj:
+            try:
+                print(
+                    f"[car-pin-guard] {subject!r}: dropping AUTOMOBILE "
+                    f"self-pin ({col}, {val!r}) — subject is not the car "
+                    f"brand. Row-by-row reasoning will assign a plausible "
+                    f"BP for {val!r} from baseline + persona lift."
+                )
+            except Exception:
+                pass
+            continue
+        _clean_subject_rows_v3.append((col, val))
+    subject_rows = _clean_subject_rows_v3
+
     # Enforce the "no round sample sizes" rule from the workspace rule
     # `.cursor/rules/no-round-sample-sizes.mdc`. Every subject_raw_* that
     # flows into the profile engine passes through this function - both
