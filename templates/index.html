@@ -21121,6 +21121,39 @@ https://www.instagram.com/p/..."></textarea>
                                     to   { opacity: 1;
                                         transform: translateY(0); }
                                 }
+                                /* Talk-to-text mic button (2026-08-19) */
+                                #synthChatMicBtn {
+                                    display: inline-flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    width: 38px;
+                                    height: 38px;
+                                    padding: 0;
+                                    border-radius: 50%;
+                                    background: var(--bg-input);
+                                    border: 1px solid var(--border-color);
+                                    color: var(--text-secondary);
+                                    cursor: pointer;
+                                    transition: color 0.15s ease,
+                                        border-color 0.15s ease,
+                                        background 0.15s ease;
+                                    flex: 0 0 auto;
+                                }
+                                #synthChatMicBtn:hover {
+                                    color: var(--text-primary);
+                                    border-color: var(--accent-blue, #548dff);
+                                }
+                                #synthChatMicBtn.synth-mic-listening {
+                                    color: #ff5c5c;
+                                    border-color: #ff5c5c;
+                                    background: rgba(255, 92, 92, 0.08);
+                                    animation: synthMicPulse 1.6s ease-in-out infinite;
+                                }
+                                @keyframes synthMicPulse {
+                                    0%   { box-shadow: 0 0 0 0 rgba(255, 92, 92, 0.45); }
+                                    70%  { box-shadow: 0 0 0 9px rgba(255, 92, 92, 0); }
+                                    100% { box-shadow: 0 0 0 0 rgba(255, 92, 92, 0); }
+                                }
                             </style>
                             <div id="synthChatBriefPreview" style="display:none; padding: 0.85rem 1rem; margin-bottom: 0.5rem; background: rgba(84, 141, 255, 0.06); border: 1px solid rgba(84,141,255,0.30); border-radius: 8px;">
                                 <div class="brief-controls-row">
@@ -21142,8 +21175,18 @@ https://www.instagram.com/p/..."></textarea>
                             <div style="display:flex; flex-direction: column; gap: 0.4rem;">
                                 <textarea id="synthChatInput" placeholder="What profile do you want? (audience, cohort, brand, talent, or segment)" rows="3" style="width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; resize: vertical; min-height: 72px; font-family: inherit;" onkeydown="if(event.key==='Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); synthChatSubmit(); }"></textarea>
                                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
-                                    <span style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.7;">Enter to send &middot; Shift + Enter for new line</span>
-                                    <button class="btn btn-primary" onclick="synthChatSubmit()" id="synthChatSubmitBtn" style="width: auto !important; min-width: 140px; max-width: 200px; padding: 0.55rem 1.25rem; font-size: 0.85rem;">Send</button>
+                                    <span id="synthChatInputHint" style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.7;">Enter to send &middot; Shift + Enter for new line</span>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto;">
+                                        <button type="button" id="synthChatMicBtn" onclick="synthChatMicToggle()" title="Talk to text" aria-label="Talk to text">
+                                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <rect x="9" y="2" width="6" height="12" rx="3"></rect>
+                                                <path d="M5 10v1a7 7 0 0 0 14 0v-1"></path>
+                                                <line x1="12" y1="18" x2="12" y2="22"></line>
+                                                <line x1="8" y1="22" x2="16" y2="22"></line>
+                                            </svg>
+                                        </button>
+                                        <button class="btn btn-primary" onclick="synthChatSubmit()" id="synthChatSubmitBtn" style="width: auto !important; min-width: 140px; max-width: 200px; padding: 0.55rem 1.25rem; font-size: 0.85rem;">Send</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -58793,6 +58836,7 @@ https://www.instagram.com/p/..."></textarea>
         function synthChatInit() {
             if (window.__synthChatBooted) return;
             window.__synthChatBooted = true;
+            synthChatMicInit();
             fetch('/api/brief-chat/history', { credentials: 'same-origin' })
                 .then(function(r) { return r.ok ? r.json() : { history: [] }; })
                 .then(function(d) {
@@ -59277,6 +59321,157 @@ https://www.instagram.com/p/..."></textarea>
             if (synthChatInflightController) {
                 try { synthChatInflightController.abort(); } catch (_) {}
             }
+        }
+
+        // ------------------------------------------------------------
+        // Talk-to-text mic input (2026-08-19). Browser-native Web
+        // Speech API - no audio ever leaves the page except through
+        // the browser vendor's own recognizer. Feature-detected:
+        // the button hides itself on browsers without support
+        // (Firefox default config). Chrome / Edge / Safari all work.
+        // ------------------------------------------------------------
+        var synthChatMicRec = null;
+        var synthChatMicListening = false;
+        var synthChatMicBaseText = '';
+        var _synthChatHintDefault = null;
+
+        function _synthChatMicCtor() {
+            return window.SpeechRecognition ||
+                   window.webkitSpeechRecognition || null;
+        }
+
+        function synthChatMicInit() {
+            var btn = document.getElementById('synthChatMicBtn');
+            if (!btn) return;
+            if (!_synthChatMicCtor()) {
+                // No recognizer in this browser: remove the button so
+                // users never see a dead control.
+                btn.style.display = 'none';
+            }
+        }
+
+        function _synthChatMicSetHint(text, isError) {
+            var hint = document.getElementById('synthChatInputHint');
+            if (!hint) return;
+            if (_synthChatHintDefault === null) {
+                _synthChatHintDefault = hint.textContent;
+            }
+            if (text === null) {
+                hint.textContent = _synthChatHintDefault;
+                hint.style.color = '';
+                hint.style.opacity = '';
+            } else {
+                hint.textContent = text;
+                hint.style.color = isError ? '#ff5c5c' : '';
+                hint.style.opacity = '1';
+            }
+        }
+
+        function _synthChatMicStopUI() {
+            synthChatMicListening = false;
+            var btn = document.getElementById('synthChatMicBtn');
+            if (btn) {
+                btn.classList.remove('synth-mic-listening');
+                btn.title = 'Talk to text';
+            }
+            _synthChatMicSetHint(null);
+        }
+
+        function synthChatMicToggle() {
+            if (synthChatMicListening) {
+                // Second click = stop. onend fires and resets the UI.
+                try { synthChatMicRec && synthChatMicRec.stop(); }
+                catch (_) { _synthChatMicStopUI(); }
+                return;
+            }
+            var Ctor = _synthChatMicCtor();
+            if (!Ctor) {
+                _synthChatMicSetHint(
+                    'Voice input is not supported in this browser', true);
+                setTimeout(function() { _synthChatMicSetHint(null); }, 4000);
+                return;
+            }
+            var input = document.getElementById('synthChatInput');
+            var btn = document.getElementById('synthChatMicBtn');
+            if (!input) return;
+
+            var rec = new Ctor();
+            rec.continuous = true;
+            rec.interimResults = true;
+            rec.lang = navigator.language || 'en-US';
+
+            // Snapshot whatever is already typed so dictation appends
+            // rather than clobbers. Add a joining space when needed.
+            synthChatMicBaseText = input.value || '';
+            if (synthChatMicBaseText &&
+                !/\s$/.test(synthChatMicBaseText)) {
+                synthChatMicBaseText += ' ';
+            }
+
+            rec.onresult = function(event) {
+                // Rebuild the full transcript from scratch each event.
+                // Simpler and more robust than incremental appends -
+                // interim segments get revised in place by the
+                // recognizer and this pattern always reflects the
+                // latest hypothesis.
+                var finalText = '';
+                var interim = '';
+                for (var i = 0; i < event.results.length; i++) {
+                    var seg = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) finalText += seg;
+                    else interim += seg;
+                }
+                input.value = synthChatMicBaseText + finalText + interim;
+                // Keep the caret at the end so a follow-up keystroke
+                // continues where dictation left off.
+                try {
+                    input.selectionStart =
+                        input.selectionEnd = input.value.length;
+                } catch (_) {}
+            };
+
+            rec.onerror = function(event) {
+                var msg = null;
+                if (event.error === 'not-allowed' ||
+                    event.error === 'service-not-allowed') {
+                    msg = 'Microphone blocked - allow mic access ' +
+                          'in your browser settings';
+                } else if (event.error === 'no-speech') {
+                    msg = 'No speech detected';
+                } else if (event.error === 'audio-capture') {
+                    msg = 'No microphone found';
+                } else if (event.error && event.error !== 'aborted') {
+                    msg = 'Voice input error: ' + event.error;
+                }
+                _synthChatMicStopUI();
+                if (msg) {
+                    _synthChatMicSetHint(msg, true);
+                    setTimeout(function() {
+                        _synthChatMicSetHint(null);
+                    }, 4000);
+                }
+            };
+
+            rec.onend = function() {
+                // Fires on manual stop, silence timeout, and errors.
+                _synthChatMicStopUI();
+                try { input.focus(); } catch (_) {}
+            };
+
+            try {
+                rec.start();
+            } catch (_) {
+                _synthChatMicStopUI();
+                return;
+            }
+            synthChatMicRec = rec;
+            synthChatMicListening = true;
+            if (btn) {
+                btn.classList.add('synth-mic-listening');
+                btn.title = 'Stop listening';
+            }
+            _synthChatMicSetHint(
+                'Listening... click the mic again to stop');
         }
 
         async function synthChatSubmit() {
