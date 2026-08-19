@@ -44309,6 +44309,11 @@ _STAFF_ONLY_PREFIXES = (
     'system/', 'metadata/', 'logs/', '_backups/',
     'tokens/', 'config/', 'secrets/', 'admin/',
     'reference/', 'gen_pop_hostmap_sync/',
+    # 2026-08-19 (Jessie fix): unreleased / staff-only draft area.
+    # Prompt-injection can't ask the engine to derive_cut FROM
+    # `purgatory/Unreleased_Client.csv` and bake staff-only content
+    # into a shared-catalog CSV.
+    'purgatory/',
 )
 
 
@@ -44373,6 +44378,35 @@ def _partner_download_key_allowed(s3_key):
 
     _log_download_block(key, 'not_in_catalog_and_pattern_mismatch')
     return False
+
+
+def _partner_parent_key_allowed(s3_key):
+    """Whether an S3 key is safe to hand to the Hetzner worker as
+    `parent_s3_key` (i.e. the file the worker will READ and derive
+    a new cut/refresh from).
+
+    Same threat model + gate as `_partner_download_key_allowed`. This
+    is separate so we can add parent-only rules later if needed, but
+    for now the two functions share the same policy: only files
+    already in the shared catalog OR matching the canonical
+    top-level profile filename pattern qualify. This closes the last
+    "not a produced profile CSV" surface: a jailbroken prompt saying
+    "derive a cut of purgatory/Unreleased_Client.csv" or "refresh from
+    system/something.csv" gets the parent key stripped in
+    `_sanitize_v1_key_or_none` BEFORE it reaches the queue, and the
+    decision is demoted so the worker never reads a staff-only object.
+    """
+    return _partner_download_key_allowed(s3_key)
+
+
+def _sanitize_v1_key_or_none(s3_key):
+    """Return the key if it passes the partner allowlist, otherwise
+    None. Used to strip staff-only paths from JSON responses so we
+    never echo `system/...` / `purgatory/...` back to a partner even
+    when Claude proposes it in the draft."""
+    if s3_key and _partner_parent_key_allowed(s3_key):
+        return s3_key
+    return None
 
 
 def _generate_presigned_profile_url(s3_key, expires_seconds=86400):
@@ -44775,6 +44809,24 @@ def _v1_interpret(prompt):
         draft['run_avid'] = False
     else:
         draft['run_avid'] = True
+
+    # Staff-only-path scrub (2026-08-19, Jessie fix #2). If Claude
+    # proposed an `existing_match_s3_key` pointing at anything outside
+    # the partner allowlist (system/, purgatory/, non-CSV, not in the
+    # shared catalog, etc.), blank it here so no downstream code path
+    # can echo the raw path back to a partner OR forward it to Hetzner
+    # as parent_s3_key. `_normalize_v1_decision` also gates this, but
+    # scrubbing on the draft closes any accidental `draft.get(...)`
+    # read that bypasses the normalizer.
+    for _key_field in ('existing_match_s3_key', 's3_key', 'parent_s3_key'):
+        _v = draft.get(_key_field)
+        if _v and not _partner_parent_key_allowed(_v):
+            try:
+                print(f"[v1_interpret] scrubbing draft.{_key_field}={str(_v)[:200]!r} "
+                      f"— fails partner allowlist")
+            except Exception:
+                pass
+            draft[_key_field] = None
     return draft, candidates, interp
 
 
@@ -44787,10 +44839,21 @@ def _normalize_v1_decision(draft):
     can force a specific decision. Directive 2026-08-17: no bypass
     flags on external / dashboard surfaces.
 
-    The only mutations here are defensive:
+    Defensive mutations:
       * unknown decision value -> fall back to new_build
       * cut / refresh / existing_match without a parent key ->
         promote to new_build or cut_needs_parent as appropriate
+      * PARENT KEY ALLOWLIST (2026-08-19, Jessie fix #1): if the
+        proposed parent key fails `_partner_parent_key_allowed`
+        (staff-only prefix / non-CSV / not in shared catalog), we
+        DO NOT trust Claude's key. Blank it and demote:
+          existing_match           -> new_build          (no reuse)
+          time_shifted_refresh     -> new_build          (fresh build)
+          derive_cut               -> cut_needs_parent   (build parent first)
+          cut_needs_parent         -> cut_needs_parent   (no parent needed)
+        This closes the "derive from purgatory/Unreleased_Client.csv"
+        prompt-injection surface: the worker never receives a
+        staff-only key as parent_s3_key.
     """
     decision = (draft.get('decision') or 'new_build').strip()
     ex_key = (draft.get('existing_match_s3_key') or '').strip()
@@ -44802,6 +44865,21 @@ def _normalize_v1_decision(draft):
         d_type = ''
     if decision in ('existing_match', 'time_shifted_refresh', 'derive_cut') and not ex_key:
         decision = 'new_build' if decision != 'derive_cut' else 'cut_needs_parent'
+    # PARENT KEY ALLOWLIST — must run AFTER promotion so a legitimate
+    # empty-parent path is not stamped on top of a bogus one.
+    if ex_key and not _partner_parent_key_allowed(ex_key):
+        try:
+            print(f"[partner-parent-block] rejecting non-allowlisted "
+                  f"parent_s3_key={ex_key[:200]!r} for decision={decision!r} — "
+                  f"blanking key and demoting decision")
+        except Exception:
+            pass
+        ex_key = ''
+        if decision in ('existing_match', 'time_shifted_refresh'):
+            decision = 'new_build'
+        elif decision == 'derive_cut':
+            decision = 'cut_needs_parent'
+        # cut_needs_parent stays as-is (worker builds a fresh parent).
     return decision, ex_key, d_type
 
 
@@ -45112,10 +45190,33 @@ def api_v1_profiles_run():
 
     run_id = queue_resp.get('run_id')
 
-    # Record partner ownership of this run_id so /v1/profiles/<run_id>
-    # can enforce partner-scoped polling.
-    if run_id:
-        _record_run_owner(run_id, username)
+    # Queue-returned-200-without-run_id (2026-08-19, Jessie fix #4).
+    # If the queue accepted the POST but did not hand back a run_id,
+    # the partner has no way to poll and no way to receive the
+    # deliverable. Refund and treat as a queue failure - do NOT
+    # pretend it succeeded.
+    if not run_id:
+        try:
+            print(f"[v1_run] queue returned 200 with no run_id "
+                  f"payload={str(queue_resp)[:400]!r} - refunding + 502")
+        except Exception:
+            pass
+        if charged:
+            try:
+                refund_credit(username, credits=price,
+                              reason='v1 queue 200 without run_id')
+            except Exception:
+                traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': 'queue did not return a run_id',
+        }), 502
+
+    # Record partner ownership BEFORE the response goes out so the
+    # first status poll immediately after this call cannot beat the
+    # ownership write. `_record_run_owner` writes both in-memory and
+    # to S3 synchronously.
+    _record_run_owner(run_id, username)
 
     _, credits_left = check_user_credits(username)
 
@@ -45123,7 +45224,7 @@ def api_v1_profiles_run():
     if len(brief_summary) > 300:
         brief_summary = brief_summary[:297] + '...'
 
-    status_url = f"{request.host_url.rstrip('/')}/api/v1/profiles/{run_id}" if run_id else None
+    status_url = f"{request.host_url.rstrip('/')}/api/v1/profiles/{run_id}"
 
     resp_body = {
         'success': True,
@@ -45141,7 +45242,7 @@ def api_v1_profiles_run():
         'status_url': status_url,
         'brief_summary': brief_summary,
     }
-    if idem_key and run_id:
+    if idem_key:
         _idempotency_store(username, idem_key, resp_body)
     return jsonify(resp_body)
 
@@ -45177,16 +45278,21 @@ def api_v1_profiles_status(run_id):
         return _rate_limit_response(retry_after, cur_min, cur_day,
                                      cap_min, cap_day, '/v1/status')
 
-    # Per-partner run_id ownership (2026-08-18 fix #4). If we know who
-    # owns this run_id and it isn't this partner, refuse with 404 (not
-    # 403 - we don't confirm the run's existence to a stranger).
-    # Session-authenticated dashboard users bypass this check because
-    # the dashboard's Select Profile UX shows shared profiles to all
-    # users.
+    # Per-partner run_id ownership. Session-authenticated dashboard
+    # users bypass this check because the dashboard's Select Profile
+    # UX shows shared profiles to all users.
+    #
+    # 2026-08-19 (Jessie fix #3): FAIL CLOSED. If we have no owner
+    # record for the run_id (unknown / not-yet-recorded / cold worker
+    # cache miss), the API key path returns 404 rather than
+    # letting any valid key poll the run. Previously we fell open on
+    # a missing owner record which contradicted the partner-guide
+    # sentence "you can only poll runs your key created". The
+    # dashboard-session path is unaffected.
     if user.get('_auth_via') == 'api_key':
         owner = _lookup_run_owner(run_id)
         current = user.get('username') or 'partner_api'
-        if owner and owner != current:
+        if not owner or owner != current:
             return jsonify({'success': False,
                              'error': 'run not found',
                              'run_id': run_id}), 404
