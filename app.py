@@ -43006,52 +43006,85 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "(the panel is 10M; leave headroom).\n"
         "  * Do NOT default to a round number. Pick a specific value "
         "with a non-zero last digit (see sample-size rule below).\n"
-        "  * FOLLOWERS-ONLY COHORTS: if `audience_type` is 'followers' "
-        "(see AUDIENCE TYPE section below), `subject_raw_tu` MUST also "
-        "satisfy `subject_raw_tu <= follower_ceiling / 32.99`. It is "
-        "physically impossible for a followers-only cohort to project "
-        "up to more than the account's real follower count. Example: "
-        "a creator with 500,000 total followers -> max subject_raw_tu "
-        "~= 15,156. A superstar with 200M followers -> max ~6,062,140 "
-        "(well above typical panel counts, so the follower ceiling is "
-        "usually only binding for small-to-mid creators). The "
-        "`_spec_from_draft` step re-caps defensively but you should "
-        "pick a compliant value up front.\n\n"
+        "  * PUBLIC-METRIC-CAPPED COHORTS: if `audience_type` is "
+        "anything other than 'general' (see AUDIENCE TYPE section "
+        "below), `subject_raw_tu` MUST also satisfy `subject_raw_tu "
+        "<= follower_ceiling / 32.99`. It is physically impossible "
+        "for a followers-only / viewers-only / listeners-only / "
+        "attendees-only cohort to project up to more people than the "
+        "underlying public metric. Examples: a creator with 500,000 "
+        "total followers -> max subject_raw_tu ~= 15,156. A YouTube "
+        "video with 8M views -> max ~242,498. A TV broadcast with "
+        "104M viewers -> max ~3,152,470. A superstar with 200M "
+        "followers -> max ~6,062,140. The `_spec_from_draft` step "
+        "re-caps defensively but you should pick a compliant value "
+        "up front.\n\n"
 
         "AUDIENCE TYPE (MANDATORY - determines physical ceilings):\n"
-        "  * `audience_type`: 'general' (default) OR 'followers' OR "
-        "'subscribers'. Determines whether the follower-count cap "
-        "applies.\n"
-        "  * Set to 'followers' when the user's request narrows the "
-        "audience to ONLY people who follow / subscribe to / are on "
-        "the subject's list. Trigger phrases:\n"
-        "      - 'followers of X', 'X's followers', 'X's fans on "
-        "social', 'her/his Instagram followers', 'TikTok fans of X'\n"
-        "      - 'subscribers of X', 'X's subscribers', "
-        "'X's YouTube subscribers', 'her/his newsletter subscribers'\n"
-        "      - '@handle audience', 'the account that follows X'\n"
-        "      - 'people who follow X on [Instagram|TikTok|X|"
-        "YouTube|Facebook]'\n"
-        "  * Set to 'general' (default) for any TU / avid / demographic "
-        "cut of the SUBJECT'S general audience. 'Taylor Swift audience' "
-        "or 'Taylor Swift fans' or 'Avid Taylor Swift fans' is "
-        "'general' - it means everyone who engages with Taylor Swift "
-        "digitally, not only her direct followers.\n"
+        "  * `audience_type`: one of\n"
+        "      'general'      (default: subject's overall digital audience)\n"
+        "      'followers'    (only people who follow the account)\n"
+        "      'subscribers'  (only subscribers - newsletter / channel / SVOD)\n"
+        "      'viewers'      (only viewers of a specific video / broadcast)\n"
+        "      'listeners'    (only listeners of a specific podcast / release)\n"
+        "      'attendees'    (only attendees of an event)\n"
+        "      'users'        (only MAU/DAU of a specific app / feature)\n"
+        "    Every value other than 'general' triggers the "
+        "public-metric ceiling cap.\n"
+        "  * Set 'followers' when the request narrows to accounts "
+        "that follow the subject: 'followers of X', 'X's followers', "
+        "'X's Instagram followers', 'people who follow X on TikTok', "
+        "'@handle audience'.\n"
+        "  * Set 'subscribers' for: 'subscribers to X's newsletter', "
+        "'X's YouTube subscribers', 'X's Substack subscribers', "
+        "'X's Spotify subscribers'.\n"
+        "  * Set 'viewers' when the request narrows to a SPECIFIC "
+        "piece of video content: 'viewers of MrBeast's [video "
+        "title]', 'people who watched the Super Bowl halftime show', "
+        "'audience of the SNL cold open on [date]', 'viewers of the "
+        "Apple event livestream', 'people who watched [specific "
+        "movie] on Netflix'. Ceiling = the video's public view count "
+        "(YouTube view counter, Netflix top-10 list, Nielsen "
+        "viewership, network press release).\n"
+        "  * Set 'listeners' for a SPECIFIC podcast episode / album / "
+        "song / radio segment: 'listeners of [Joe Rogan episode "
+        "X]', 'audience of [song] on Spotify', 'listeners of the "
+        "[podcast] finale'. Ceiling = published play / listener "
+        "count.\n"
+        "  * Set 'attendees' when the request narrows to a specific "
+        "event: 'attendees of Coachella 2026', 'audience at the "
+        "Taylor Swift Eras Tour Vegas show', 'audience of the "
+        "Beyonce Renaissance opener'. Ceiling = published attendance "
+        "figure (venue capacity if not stated).\n"
+        "  * Set 'users' when the request narrows to a specific "
+        "app's active users: 'BeReal daily active users', 'Duolingo "
+        "MAU', 'Notion power users'. Ceiling = published MAU / DAU.\n"
+        "  * Set 'general' (default) for any TU / avid / demographic "
+        "cut of the SUBJECT'S general audience. 'Taylor Swift "
+        "audience', 'Taylor Swift fans', 'Avid Taylor Swift fans' "
+        "are 'general' — everyone who engages with the subject "
+        "digitally, not only a physically-bounded subset. If in "
+        "doubt whether the cap should apply, default to 'general'.\n"
         "  * `follower_ceiling` (int or null): REQUIRED when "
-        "audience_type='followers'. Your best-researched estimate of "
-        "the subject's TOTAL follower count across the platforms named "
-        "in the request (or across all major platforms if the request "
-        "doesn't name specific ones). Use your training-data knowledge "
-        "of well-known creators; the pipeline's persona-research agent "
-        "will refine this with a live web-search pass. If you truly "
-        "have no signal, leave null and the pipeline will apply a "
-        "conservative fallback ceiling.\n"
+        "audience_type != 'general'. Your best-researched estimate "
+        "of the underlying public metric — total follower count, "
+        "video view count, subscriber count, listener count, "
+        "attendance figure, MAU / DAU — corresponding to the "
+        "audience_type. Use your training-data knowledge of "
+        "well-known accounts / videos / events; the pipeline's "
+        "persona-research agent refines this with a live web-search "
+        "pass. If you truly have no signal, leave null and the "
+        "pipeline will apply a conservative fallback ceiling. "
+        "(Field name is legacy — it holds any capped metric, not "
+        "only follower counts.)\n"
         "  * `follower_platforms` (list of strings or null): the "
-        "platforms the follower_ceiling covers, e.g. "
-        "['instagram', 'tiktok', 'youtube', 'x']. Informational only.\n"
+        "platforms the ceiling covers, e.g. "
+        "['instagram', 'tiktok', 'youtube']. For viewers, use the "
+        "single platform where the video lives ('youtube', "
+        "'netflix', 'nielsen'). Informational only.\n"
         "  * When audience_type='general' (default), leave "
-        "follower_ceiling and follower_platforms as null - the follower "
-        "cap does not apply.\n\n"
+        "follower_ceiling and follower_platforms as null - the cap "
+        "does not apply.\n\n"
 
         "CANONICAL DEMOGRAPHIC BUCKETS (use exactly these labels):\n"
         "  GENDER: MALE, FEMALE, NON-BINARY, TRANS FEMALE, TRANS MALE\n"
@@ -43090,8 +43123,8 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"category_note\": \"if you had to pick a closest match\",\n"
         "  \"subject_raw_tu\": <int>,\n"
         "  \"subject_raw_avid\": <int, ~25% of TU or null if avid not requested>,\n"
-        "  \"audience_type\": \"general|followers|subscribers\",\n"
-        "  \"follower_ceiling\": <int or null - required if audience_type=followers>,\n"
+        "  \"audience_type\": \"general|followers|subscribers|viewers|listeners|attendees|users\",\n"
+        "  \"follower_ceiling\": <int or null - required if audience_type != 'general'; holds any public-metric ceiling>,\n"
         "  \"follower_platforms\": [\"instagram\", \"tiktok\", ...] or null,\n"
         "  \"run_avid\": <true|false>,\n"
         "  \"subject_rows\": [[\"CATEGORY\",\"Value\"], ...],\n"
@@ -44127,30 +44160,39 @@ def _spec_from_draft(draft):
         default_if_missing=2937,
     )
 
-    # ── Followers-only cap (2026-08-19, Jenna directive) ────────────
-    # If audience_type='followers'/'subscribers', US Gen Pop Projection
-    # cannot exceed the subject's real follower count. Since projection
-    # scales linearly with subject_raw (Proj = Raw / 10M * 329.9M for
-    # every row, including SAMPLE SIZE), capping subject_raw here caps
-    # every downstream projection. See migration/follower_ceiling.py
-    # for the math + rationale.
+    # ── Public-metric ceiling cap (2026-08-19, Jenna directive) ─────
+    # If audience_type triggers the cap (followers / subscribers /
+    # viewers / listeners / attendees / users), the US Gen Pop
+    # Projection column cannot exceed the underlying public metric.
+    # Since projection scales linearly with subject_raw (Proj =
+    # Raw / 10M * 329.9M for every row, including SAMPLE SIZE),
+    # capping subject_raw here caps every downstream projection.
+    # See migration/follower_ceiling.py for the full audience_type
+    # catalog + math.
     #
     # Belt-and-suspenders: the Hetzner worker re-applies the cap after
     # the persona-research agent (web-search) refines follower_ceiling,
     # and a post-generation enforcer verifies the final projection.
-    _audience_type = str(draft.get('audience_type') or 'general').strip().lower()
+    _audience_type_raw = str(draft.get('audience_type') or 'general').strip().lower()
     _follower_ceiling_in = draft.get('follower_ceiling')
     audience_type_out = 'general'
     follower_ceiling_out = None
     try:
         from migration.follower_ceiling import (
-            is_followers_only as _fc_is_followers,
+            is_capped_audience as _fc_is_capped,
             cap_subject_raw as _fc_cap,
             normalize_follower_ceiling as _fc_normalize,
             summarize_cap as _fc_summary,
+            CAPPED_AUDIENCE_TYPES as _fc_types,
         )
-        if _fc_is_followers(_audience_type):
-            audience_type_out = 'followers'
+        if _fc_is_capped(_audience_type_raw):
+            # Preserve the specific audience_type variant Claude picked
+            # (viewers vs listeners vs followers etc.) rather than
+            # flattening to 'followers'. The downstream cap math is
+            # identical, but the persona-research agent uses this to
+            # decide which public metric to look up.
+            audience_type_out = _audience_type_raw \
+                if _audience_type_raw in _fc_types else 'followers'
             follower_ceiling_out = _fc_normalize(_follower_ceiling_in)
             capped_tu, meta_tu = _fc_cap(subject_raw_tu, follower_ceiling_out)
             capped_av, meta_av = _fc_cap(subject_raw_avid, follower_ceiling_out)
@@ -44160,11 +44202,11 @@ def _spec_from_draft(draft):
             # ensure_messy_sample_size applies subject-hashed jitter and
             # guarantees a non-zero last digit. Cap FIRST, then jitter.
             subject_raw_tu = ensure_messy_sample_size(
-                f"{subject}|followers|tu", capped_tu,
+                f"{subject}|{audience_type_out}|tu", capped_tu,
                 default_if_missing=capped_tu or 9873,
             )
             subject_raw_avid = ensure_messy_sample_size(
-                f"{subject}|followers|avid", capped_av,
+                f"{subject}|{audience_type_out}|avid", capped_av,
                 default_if_missing=capped_av or 2937,
             )
             # If jitter accidentally re-raised us above the cap, snap
@@ -44297,15 +44339,20 @@ def _spec_from_draft(draft):
         'persona_notes': draft.get('persona_notes') or '',
         'category_lifts': {},
         'brand_overrides': {},
-        # 2026-08-19 (Jenna): followers-only audience metadata. The
-        # worker's persona-research agent will refine follower_ceiling
-        # via web search, then re-cap raw values if the refined number
-        # is more conservative. The post-generation enforcer verifies
-        # the final projection cannot exceed follower_ceiling.
+        # 2026-08-19 (Jenna): public-metric ceiling metadata. Captures
+        # any cohort whose size is publicly measurable — followers,
+        # subscribers, viewers of a video / broadcast, listeners of a
+        # podcast, event attendees, MAU/DAU of an app. The worker's
+        # persona-research agent will refine follower_ceiling via web
+        # search using the metric appropriate to audience_type, then
+        # re-cap raw values if the refined number is more conservative.
+        # The post-generation enforcer verifies the final projection
+        # cannot exceed follower_ceiling. Field name is legacy; the
+        # value stores whichever public metric caps this cohort.
         'audience_type': audience_type_out,
         'follower_ceiling': follower_ceiling_out,
         'follower_platforms': (draft.get('follower_platforms')
-                                if audience_type_out == 'followers' else None),
+                                if audience_type_out != 'general' else None),
     }
     # If Claude proposed clickstream_signals at interpret time (for a
     # platform/retailer behavioral cohort), thread them into a partial
