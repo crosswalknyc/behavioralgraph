@@ -101254,7 +101254,7 @@ https://www.instagram.com/p/..."></textarea>
         async function runSubComparison() {
             const results = document.getElementById('subCompResults');
             if (_subCompSelected.size < 2) {
-                results.innerHTML = '<div class="comparison-empty" style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);"><p style="font-size: 1.1rem;">⚖️ Select at least 2 profiles</p><p style="font-size: 0.85rem; margin-top: 0.5rem;">Check profiles from the sidebar to compare them side-by-side</p></div>';
+                results.innerHTML = '<div class="comparison-empty" style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);"><p style="font-size: 1.1rem; margin: 0;">⚖️ Select at least 2 profiles</p></div>';
                 return;
             }
             results.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading comparison data...</div>';
