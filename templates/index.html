@@ -22781,8 +22781,7 @@ https://www.instagram.com/p/..."></textarea>
                                 <div class="comparison-main" style="flex: 1; overflow: auto;">
                                     <div id="subCompResults">
                                         <div class="comparison-empty" style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);">
-                                            <p style="font-size: 1.1rem;">⚖️ Subscriber IQ Compare</p>
-                                            <p style="font-size: 0.85rem; margin-top: 0.5rem;">Select profiles from the left to compare key metrics, demographics, and platform data side-by-side</p>
+                                            <p style="font-size: 1.1rem; margin: 0;">⚖️ Subscriber IQ Compare</p>
                                         </div>
                                     </div>
                                 </div>
@@ -101243,7 +101242,7 @@ https://www.instagram.com/p/..."></textarea>
             _subCompPlatformDemos = [];
             updateSubCompCount();
             renderSubCompareProfileList((document.getElementById('subCompSearchInput')?.value || '').trim());
-            document.getElementById('subCompResults').innerHTML = '<div class="comparison-empty" style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);"><p style="font-size: 1.1rem;">⚖️ Subscriber IQ Compare</p><p style="font-size: 0.85rem; margin-top: 0.5rem;">Select profiles from the left to compare key metrics, demographics, and platform data side-by-side</p></div>';
+            document.getElementById('subCompResults').innerHTML = '<div class="comparison-empty" style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);"><p style="font-size: 1.1rem; margin: 0;">⚖️ Subscriber IQ Compare</p></div>';
         }
 
         function updateSubCompCount() {
@@ -101472,6 +101471,12 @@ https://www.instagram.com/p/..."></textarea>
                 let t = '<h3 style="margin: 0 0 1rem 0; color: var(--accent-cyan);">👥 Age Demographics</h3>';
                 t += _tblOpen(demoColCount);
                 t += '<thead><tr><th style="text-align: left; padding: 0.6rem; border-bottom: 2px solid var(--border-color);">Age Range</th>' + _demoHeaderCells() + '</tr></thead><tbody>';
+                // Median Age row (top) - weighted median from each column's age distribution.
+                t += '<tr><td style="padding: 0.6rem; border-bottom: 2px solid var(--border-color); font-weight: 700; background: rgba(240,255,0,0.06);">Median Age</td>';
+                demoCols.forEach(function(c) {
+                    var _med = (typeof calculateMedianAgeFromDistribution === 'function') ? calculateMedianAgeFromDistribution(_ageDistForCol(c)) : 0;
+                    t += '<td style="text-align: center; padding: 0.6rem; border-bottom: 2px solid var(--border-color); font-weight: 700; background: rgba(240,255,0,0.06);">' + (_med > 0 ? _med.toFixed(1) + ' yrs' : '-') + '</td>';
+                });
                 ageKeys.forEach(function(key) {
                     t += '<tr><td style="padding: 0.6rem; border-bottom: 1px solid var(--border-color); font-weight: 500;">' + key + '</td>';
                     demoCols.forEach(function(c) {
@@ -101479,12 +101484,6 @@ https://www.instagram.com/p/..."></textarea>
                         t += '<td style="text-align: center; padding: 0.6rem; border-bottom: 1px solid var(--border-color);">' + pct + '</td>';
                     });
                     t += '</tr>';
-                });
-                // Median Age row - weighted median from each column's age distribution.
-                t += '<tr><td style="padding: 0.6rem; border-top: 2px solid var(--border-color); font-weight: 700; background: rgba(240,255,0,0.06);">Median Age</td>';
-                demoCols.forEach(function(c) {
-                    var _med = (typeof calculateMedianAgeFromDistribution === 'function') ? calculateMedianAgeFromDistribution(_ageDistForCol(c)) : 0;
-                    t += '<td style="text-align: center; padding: 0.6rem; border-top: 2px solid var(--border-color); font-weight: 700; background: rgba(240,255,0,0.06);">' + (_med > 0 ? _med.toFixed(1) + ' yrs' : '-') + '</td>';
                 });
                 t += '</tbody></table>';
                 demoHtml += _tblWrap(t, demoColCount);
