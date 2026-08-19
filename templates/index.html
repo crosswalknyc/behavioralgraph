@@ -101509,10 +101509,10 @@ https://www.instagram.com/p/..."></textarea>
                     if (resp.ok) { const j = await resp.json(); jobs = j.jobs || []; }
                 }
                 jobs = jobs || [];
-                // Only streaming video services may be imported here (not the
-                // broader PLATFORMS bucket, which also covers social, search,
-                // music, movie theater, broadcast/cable, FAST/vMVPD, etc.).
-                const STREAMING_SUBCATS = ['STREAMING PLATFORM', 'STREAMING VIDEO', 'STREAMING/PLATFORM'];
+                // Only streaming video / FAST / vMVPD services may be imported
+                // here (not the broader PLATFORMS bucket, which also covers
+                // social, search, music, movie theater, and broadcast/cable).
+                const STREAMING_SUBCATS = ['STREAMING PLATFORM', 'STREAMING VIDEO', 'STREAMING/PLATFORM', 'FAST CHANNEL', 'FAST PLATFORM', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'];
                 const isPlat = function(p) {
                     const isSvod = p.is_svod || (p.key && String(p.key).startsWith('svod-acquisition/')) || (p.bucket === 'svod-acquisition');
                     const master = (typeof getMasterCategory === 'function') ? getMasterCategory(p.category || 'UNCATEGORIZED', isSvod) : '';
