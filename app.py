@@ -42638,6 +42638,123 @@ def _shared_context_from_batch(user_text: str, subjects: list[str]) -> str:
     return tail
 
 
+def _detect_cartesian_batch(user_text: str):
+    """Detect a Cartesian-expansion batch request like
+
+        "make a profile of EST buyers vs. TVOD renters by retailer
+         (Amazon, Apple, Fandango at Home, Google Play/YouTube)"
+
+    which the plain-list batch detector misses because it opens with
+    'make a profile of ...' (which the implicit path deliberately
+    rejects to avoid false positives on free-form sentences).
+
+    Pattern shape: "<lead> ( item, item, item, ... )" at end of text.
+    Within <lead> we look for:
+      - "X vs Y" / "X versus Y"      -> cohorts = [X, Y]
+      - otherwise                    -> cohorts = [<lead>]
+
+    Returns (subjects, shared_context) or None. Subjects is the
+    Cartesian product `retailer + cohort` for each combination, e.g.
+    ['Amazon EST buyers', 'Amazon TVOD renters', 'Apple EST buyers',
+    ...]. shared_context is the full original text, threaded through
+    the per-subject interpret call so each Claude call gets the
+    definitional context of what 'EST buyer' / 'TVOD renter' mean.
+    """
+    import re as _re
+    t = (user_text or '').strip().rstrip('.!?').strip()
+    if len(t) < 15 or len(t) > 1200:
+        return None
+
+    # Trailing parenthetical with comma-separated items (>=2). Uses
+    # .*$ so we grab the LAST paren block if there are multiple.
+    paren_re = _re.compile(r'\(([^()]{4,400})\)\s*$')
+    m = paren_re.search(t)
+    if not m:
+        return None
+    inner = m.group(1)
+    # Comma / semicolon / ' and ' / ' or ' as separators. Note we do
+    # NOT split on '/' so "Google Play/YouTube" stays intact.
+    items = _re.split(r'\s*(?:,|;|\band\b|\bor\b)\s*',
+                        inner, flags=_re.IGNORECASE)
+    items = [it.strip().strip('.').strip() for it in items]
+    items = [it for it in items if it and 2 <= len(it) <= 80]
+    if len(items) < 2:
+        return None
+
+    # Lead text before the paren.
+    lead = t[:m.start()].strip()
+    # Strip the "make a profile of / create a profile for / etc."
+    # preamble so we're left with the cohort description. Allows
+    # optional "individual/separate/distinct/new" between the verb
+    # and "profile(s)".
+    lead = _re.sub(
+        r'^\s*(?:please\s+)?'
+        r'(?:make|create|build|run|generate|do|give\s+me|show\s+me|'
+        r'i\s+want|i\s+need|i\'?d\s+like)\s+'
+        r'(?:a\s+|an\s+|the\s+|me\s+a\s+|us\s+a\s+)?'
+        r'(?:new\s+|individual\s+|separate\s+|distinct\s+)?'
+        r'(?:profile|profiles|iq|iqs|persona|personas|report|analysis)\s+'
+        r'(?:of|for|on|comparing|showing|about)\s+',
+        '', lead, flags=_re.IGNORECASE).strip()
+    # Strip trailing "by/across/for-each/per <segmentation-noun>".
+    # Segmentation nouns are single-word or two-word (retailer,
+    # platform, market, region, category, brand, store, service, etc.)
+    lead = _re.sub(
+        r'\s+(?:by|across|for(?:\s+each)?|per|in|on)\s+'
+        r'(?:the\s+)?[a-z]+(?:\s+[a-z]+)?\s*$',
+        '', lead, flags=_re.IGNORECASE).strip()
+
+    if not lead or len(lead) > 200:
+        return None
+
+    # Safety gate: if the lead still looks like a request-verb sentence
+    # (e.g. "run individual profiles", "build me the personas") the
+    # preamble stripper missed something and we'd emit garbage cohort
+    # names. Defer to the plain-list batch detector instead.
+    if _re.match(
+        r'^\s*(?:please\s+)?'
+        r'(?:make|create|build|run|generate|do|give|show|'
+        r'i\s+(?:want|need)|i\'?d\s+like)\b',
+        lead, _re.IGNORECASE,
+    ):
+        return None
+
+    # "X vs Y" comparison -> two cohorts.
+    vs_re = _re.compile(
+        r'^(.{2,120}?)\s+(?:vs\.?|versus)\s+(.{2,120}?)$',
+        _re.IGNORECASE)
+    vm = vs_re.match(lead)
+    if vm:
+        cohorts = [vm.group(1).strip(), vm.group(2).strip()]
+    else:
+        # Single cohort. Require at least one noun-y token so we don't
+        # explode on nonsense like "profile of x (a, b)". Skip common
+        # low-signal lead phrases.
+        if len(lead.split()) < 2:
+            return None
+        cohorts = [lead]
+
+    cohorts = [c.strip().strip('.').strip() for c in cohorts]
+    cohorts = [c for c in cohorts if 3 <= len(c) <= 120]
+    if not cohorts:
+        return None
+
+    # Cartesian product. Subject shape: "<item> <cohort>". Preserve
+    # original casing so acronyms like EST/TVOD stay uppercase.
+    subjects: list[str] = []
+    for item in items:
+        for cohort in cohorts:
+            subjects.append(f"{item} {cohort}")
+
+    # Guard against overshoot: require at least 2 subjects, cap at
+    # the batch max. If we'd blow the cap, refuse rather than
+    # truncate - the caller will get a clean single-subject fallback.
+    if len(subjects) < 2 or len(subjects) > SYNTH_CHAT_BATCH_MAX:
+        return None
+
+    return subjects, t
+
+
 def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categories=None,
                                     candidate_matches=None):
     """Build the (system, user) prompts that turn free-form user text into a
@@ -43302,14 +43419,24 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
 
 
 def _synth_chat_interpret_batch(user_text: str, subjects: list,
-                                  history: list):
+                                  history: list,
+                                  shared_context_override: str = None):
     """Fan-out interpret across a list of subjects. Runs up to 5 Claude
     calls concurrently (well under our Anthropic key pool ceiling) and
     stitches the results into a single response with a `batch: true`
     flag so the frontend can render N approval cards.
+
+    `shared_context_override` (optional): when the caller has already
+    computed the right per-subject context (e.g. the Cartesian
+    detector pre-baked the definitional context into every subject),
+    use that instead of trying to re-derive it from user_text. Falls
+    back to `_shared_context_from_batch` when not provided.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    shared_context = _shared_context_from_batch(user_text, subjects)
+    if shared_context_override is not None:
+        shared_context = shared_context_override
+    else:
+        shared_context = _shared_context_from_batch(user_text, subjects)
     print(f"[synth-chat interpret batch] subjects={subjects} "
           f"shared_context={shared_context!r}")
 
@@ -43410,6 +43537,39 @@ def api_synth_chat_interpret():
             return jsonify({
                 'success': False,
                 'error': f'batch interpret failed: {_batch_err}',
+            }), 500
+
+    # Cartesian batch (2026-08-18): patterns like
+    #   "make a profile of EST buyers vs. TVOD renters by retailer
+    #    (Amazon, Apple, Fandango at Home, Google Play/YouTube)"
+    # fan out to |cohorts| * |items| profiles. Runs AFTER the plain
+    # list detector so explicit-trigger phrases like "run individual
+    # profiles for TV brands (VIZIO, Samsung, LG)" get the cleaner
+    # ["VIZIO", "Samsung", "LG"] expansion rather than a Cartesian
+    # attempt with a leftover cohort word.
+    _cart = _detect_cartesian_batch(text)
+    if _cart:
+        _cart_subjects, _cart_shared_ctx = _cart
+        if len(_cart_subjects) > SYNTH_CHAT_BATCH_MAX:
+            return jsonify({
+                'success': False,
+                'error': (
+                    f"That expands to {len(_cart_subjects)} profiles. "
+                    f"Batch mode is capped at {SYNTH_CHAT_BATCH_MAX} at "
+                    f"a time - split it up and I'll queue them in "
+                    f"parallel."
+                ),
+            }), 400
+        try:
+            return _synth_chat_interpret_batch(
+                text, _cart_subjects, history=history,
+                shared_context_override=_cart_shared_ctx,
+            )
+        except Exception as _cart_err:
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': f'batch interpret failed: {_cart_err}',
             }), 500
 
     try:
