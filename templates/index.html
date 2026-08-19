@@ -58837,6 +58837,14 @@ https://www.instagram.com/p/..."></textarea>
         // incidence_check payload; we stash it here so a follow-up
         // 'run it' builds the profile locked to the quoted sample.
         let synthChatIncidenceOffer = null;
+        // Guided scoping flow state (2026-08-19). Discovery:
+        // pitch-shaped asks get 2-4 audience framings to pick
+        // from. Clarify: fresh builds walk region -> add-on cuts
+        // questions before the approval card. The draft rides
+        // the clarify round-trips so answers accumulate on it.
+        let synthChatDiscoveryOffer = null;
+        let synthChatClarify = null;
+        let synthChatStashedClarifySteps = null;
 
         function synthChatInit() {
             if (window.__synthChatBooted) return;
@@ -59529,6 +59537,45 @@ https://www.instagram.com/p/..."></textarea>
                 }
             }
 
+            // Discovery-offer follow-through (2026-08-19 guided
+            // flow). If we just proposed audience framings, map this
+            // reply onto one: a number or ordinal picks that option;
+            // anything else is treated as the user's own framing and
+            // interpreted as-is.
+            if (synthChatDiscoveryOffer) {
+                var _dOpts = synthChatDiscoveryOffer.options || [];
+                var _dPick = null;
+                var _dNum = text.trim().match(/^(?:option\s*)?([1-9])\b/);
+                if (_dNum) {
+                    var _dIdx = parseInt(_dNum[1], 10) - 1;
+                    if (_dIdx >= 0 && _dIdx < _dOpts.length) _dPick = _dOpts[_dIdx];
+                } else {
+                    var _dOrd = ['first', 'second', 'third', 'fourth'];
+                    var _dLow = text.trim().toLowerCase();
+                    for (var _dI = 0; _dI < _dOpts.length; _dI++) {
+                        if (_dLow.indexOf(_dOrd[_dI]) === 0 ||
+                            _dLow === String(_dOpts[_dI].label || '').toLowerCase()) {
+                            _dPick = _dOpts[_dI];
+                            break;
+                        }
+                    }
+                }
+                synthChatDiscoveryOffer = null;
+                if (_dPick && (_dPick.audience || _dPick.label)) {
+                    text = _dPick.audience || _dPick.label;
+                }
+            }
+
+            // Clarify-step follow-through (2026-08-19 guided flow):
+            // region question, then add-on cuts. The answer goes to
+            // the clarify endpoint, which updates the draft and says
+            // what to ask next (or releases the approval card).
+            if (synthChatClarify && synthChatClarify.steps &&
+                synthChatClarify.idx < synthChatClarify.steps.length) {
+                await _synthChatClarifyAnswer(text);
+                return;
+            }
+
             // If we're awaiting a date confirmation, handle the
             // reply BEFORE hitting the interpret endpoint. A plain
             // 'ok' releases the stashed draft with no Claude call;
@@ -59546,6 +59593,17 @@ https://www.instagram.com/p/..."></textarea>
                         synthChatCurrentDraft);
                     if (rangeLabel) {
                         summary += '\n\nUsing ' + rangeLabel + '.';
+                    }
+                    var _relSteps = synthChatStashedClarifySteps;
+                    synthChatStashedClarifySteps = null;
+                    if (_relSteps && _relSteps.length) {
+                        synthChatClarify = {
+                            steps: _relSteps.slice(), idx: 0,
+                            draft: synthChatCurrentDraft
+                        };
+                        synthChatPushTurn('agent', summary + '\n\n' +
+                            _synthChatClarifyQuestion(_relSteps[0]));
+                        return;
                     }
                     synthChatPushTurn('agent', summary);
                     _synthChatShowBrief(synthChatCurrentDraft, null);
@@ -59620,6 +59678,16 @@ https://www.instagram.com/p/..."></textarea>
                         'Sample check complete.');
                     return;
                 }
+                if (data.discovery) {
+                    // Guided discovery (2026-08-19): the ask was a
+                    // business goal, not an audience. Show the
+                    // proposed framings; the next reply picks one.
+                    synthChatDiscoveryOffer = data.discovery;
+                    synthChatPushTurn('agent',
+                        data.discovery.message ||
+                        'Which audience should I build?');
+                    return;
+                }
                 if (data.needs_date_clarification) {
                     // Stash the draft and ask about dates. Do NOT
                     // reveal the approval brief yet.
@@ -59627,6 +59695,8 @@ https://www.instagram.com/p/..."></textarea>
                     synthChatStashedOriginalText = text;
                     synthChatStashedProposedRange =
                         data.proposed_date_range || null;
+                    synthChatStashedClarifySteps =
+                        data.clarify_steps || null;
                     synthChatAwaitingDateConfirm = true;
                     var subj = data.subject_label
                         || synthChatStashedDraft.subject
@@ -59663,7 +59733,20 @@ https://www.instagram.com/p/..."></textarea>
                 synthChatCurrentDraft = data.spec_draft || {};
                 synthChatBatchDrafts = null;
                 if (!_lockedSample) synthChatIncidenceOffer = null;
+                synthChatDiscoveryOffer = null;
                 var summary = _synthChatBuildActionSummary(synthChatCurrentDraft);
+                if (data.clarify_steps && data.clarify_steps.length) {
+                    // Guided flow (2026-08-19): fresh builds ask the
+                    // region question, then add-on cuts (3 credits
+                    // per cut), BEFORE the approval card appears.
+                    synthChatClarify = {
+                        steps: data.clarify_steps.slice(), idx: 0,
+                        draft: synthChatCurrentDraft
+                    };
+                    synthChatPushTurn('agent', summary + '\n\n' +
+                        _synthChatClarifyQuestion(data.clarify_steps[0]));
+                    return;
+                }
                 synthChatPushTurn('agent', summary);
                 _synthChatShowBrief(synthChatCurrentDraft, data.model);
             } catch (e) {
@@ -59792,6 +59875,69 @@ https://www.instagram.com/p/..."></textarea>
         // Turn the interpret step's decision into a plain-English sentence
         // the user actually wants to read. No JSON, no 'TU sample /
         // panelists / peer set / anchor rows / estimated run' internals.
+        // Guided-flow clarify helpers (2026-08-19). The first
+        // question of each step is client-side copy; every follow-up
+        // message comes from the clarify endpoint, which also updates
+        // the draft (region_scope / addon_cuts / estimated_credits).
+        function _synthChatClarifyQuestion(step) {
+            if (step === 'cuts') {
+                return 'Want any **additional cuts** beyond the ' +
+                    'standard build? Female only, male only, by ' +
+                    'generation, an age band, or a specific market. ' +
+                    '**3 credits per cut** - name the ones you want, ' +
+                    'or say **none**.';
+            }
+            return 'Quick scoping question: is this for a ' +
+                '**regional business**? Reply **national** for ' +
+                'nationwide, or name the markets to include (e.g. ' +
+                '"LA and San Diego", "Texas only") - the location ' +
+                'mix will then include ONLY those markets.';
+        }
+
+        async function _synthChatClarifyAnswer(answerText) {
+            var st = synthChatClarify;
+            if (!st || !st.steps || st.idx >= st.steps.length) return;
+            var step = st.steps[st.idx];
+            var _endThinking = _synthChatBeginThinking('clarify');
+            try {
+                var r = await fetch('/api/brief-chat/clarify', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        step: step, answer: answerText, draft: st.draft
+                    }),
+                });
+                var data = await r.json();
+                if (!r.ok || !data.success) {
+                    synthChatPushTurn('agent',
+                        'I hit a snag on that question (' +
+                        (data.error || r.statusText) + '). ' +
+                        _synthChatClarifyQuestion(step));
+                    return;
+                }
+                st.draft = data.draft || st.draft;
+                synthChatCurrentDraft = st.draft;
+                var next = String(data.next_step || '').toLowerCase();
+                synthChatPushTurn('agent',
+                    data.message || 'Noted.');
+                if (next === 'approve' || !next) {
+                    synthChatClarify = null;
+                    _synthChatShowBrief(synthChatCurrentDraft, null);
+                    return;
+                }
+                var ni = st.steps.indexOf(next);
+                if (ni >= 0) {
+                    st.idx = ni;
+                } // same step repeats when the server re-asks
+            } catch (e) {
+                synthChatPushTurn('agent',
+                    'That question failed (' + (e && e.message || e) +
+                    '). ' + _synthChatClarifyQuestion(step));
+            } finally {
+                try { _endThinking && _endThinking(); } catch (_) {}
+            }
+        }
+
         function _synthChatBuildActionSummary(s) {
             s = s || {};
             var subject = s.subject || 'this profile';
@@ -59829,6 +59975,18 @@ https://www.instagram.com/p/..."></textarea>
                     line = 'Building a new **' + subject + '** profile' + eta + '.';
                     break;
             }
+            var _rs = s.region_scope;
+            if (_rs && _rs.mode === 'regional' && _rs.dmas && _rs.dmas.length) {
+                line += '\n\n**Markets:** ' + _rs.dmas.join(', ') +
+                    ' (location mix locked to these only).';
+            }
+            var _cuts = s.addon_cuts;
+            if (_cuts && _cuts.length) {
+                line += '\n\n**Add-on cuts** (3 credits each):';
+                for (var _ci = 0; _ci < _cuts.length; _ci++) {
+                    line += '\n- ' + (_cuts[_ci].label || _cuts[_ci].cut_id);
+                }
+            }
             var credits = s.estimated_credits;
             if (typeof credits === 'number') {
                 if (credits === 0) {
@@ -59848,6 +60006,9 @@ https://www.instagram.com/p/..."></textarea>
             var wasBatch = !!(synthChatBatchDrafts && synthChatBatchDrafts.length);
             synthChatCurrentDraft = null;
             synthChatBatchDrafts = null;
+            synthChatClarify = null;
+            synthChatDiscoveryOffer = null;
+            synthChatStashedClarifySteps = null;
             synthChatPushTurn('agent',
                 wasBatch ? 'Batch cancelled. Send another message to try again.'
                          : 'Draft cancelled. Send another message to try again.');
