@@ -42367,6 +42367,34 @@ def _detect_implicit_list_subjects(text: str) -> list[str]:
     if len(t) < 5 or len(t) > 1200:
         return []
 
+    # ---------- CARTESIAN-SHAPE GUARD (2026-08-19) ----------
+    # Prompts like "EST buyers vs. TVOD renters by retailer (Amazon,
+    # Apple, Fandango at Home, Google Play/YouTube)" have no verb
+    # trigger but ARE a Cartesian expansion: the comma-list lives inside
+    # a trailing parenthetical, and everything before the paren is the
+    # cohort description that needs to be crossed with the paren items.
+    # If we let the plain implicit-comma branch below run, it splits the
+    # WHOLE prompt on commas and returns 4 malformed subjects like
+    # "EST Buyers Vs. TVOD Renters by Retailer (Amazon" / "Apple" /
+    # "Fandango at Home" / "Google Play/YouTube)". Bail here so
+    # `_detect_cartesian_batch` (called immediately after this returns
+    # []) gets a clean shot. Guardrails:
+    #   - the paren block must be at end-of-text
+    #   - the paren body must have >= 2 comma/'and'/'or'/';' items
+    #   - there must be >= 4 non-space chars of lead text before the paren
+    _cart_shape_re = _re.compile(r'^(.{4,})\(([^()]{4,400})\)\s*$',
+                                  _re.DOTALL)
+    _cs = _cart_shape_re.match(t)
+    if _cs:
+        _cs_inner = _cs.group(2)
+        _cs_items = _re.split(
+            r'\s*(?:,|;|\band\b|\bor\b)\s*',
+            _cs_inner, flags=_re.IGNORECASE,
+        )
+        _cs_items = [it.strip() for it in _cs_items if it and it.strip()]
+        if len(_cs_items) >= 2:
+            return []
+
     # ---------- NEWLINE-LIST BRANCH ----------
     if '\n' in t:
         raw_lines = [ln.strip() for ln in t.split('\n')]
@@ -42533,9 +42561,22 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
                     '', tail, flags=_re.IGNORECASE).strip()
 
     # Parenthetical wrapper: `TV brands (VIZIO, Samsung, LG)`.
-    paren_wrap = _re.match(r'^[^(]*\(([^)]+)\)\s*$', tail)
+    # 2026-08-19: BUT if the lead text before the paren looks like a
+    # Cartesian cohort description ("X vs Y", "X versus Y", or "... by
+    # <noun>"), refuse to unwrap here so the Cartesian detector below
+    # can pick it up and produce |cohorts| * |items| subjects instead
+    # of |items| malformed ones. Example that used to break:
+    #   "make a profile of EST buyers vs. TVOD renters by retailer
+    #    (Amazon, Apple, Fandango at Home, Google Play/YouTube)"
+    paren_wrap = _re.match(r'^([^(]*)\(([^)]+)\)\s*$', tail)
     if paren_wrap:
-        tail = paren_wrap.group(1).strip()
+        _pw_lead = paren_wrap.group(1).strip()
+        _cart_shape_lead = bool(_re.search(
+            r'\b(?:vs\.?|versus)\b|\bby\s+\w+\s*$',
+            _pw_lead, _re.IGNORECASE))
+        if _cart_shape_lead:
+            return []
+        tail = paren_wrap.group(2).strip()
 
     # ------------------------------------------------------------------
     # NEWLINE-LIST PATH (numbered / bulleted / one-per-line)
