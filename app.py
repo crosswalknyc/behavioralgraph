@@ -43653,6 +43653,53 @@ def _estimate_run_minutes(decision: str, run_avid: bool) -> int:
     return 15
 
 
+def _jitter_draft_est_sample(spec_draft):
+    """Normalize subject_raw_tu / subject_raw_avid IN the draft so the
+    approval card can show the estimated sample size BEFORE approve
+    (2026-08-19 Jenna directive: "have it say the estimated sample
+    size on here so you can choose before you proceed").
+
+    Uses the same idempotent messy-sample helper as _spec_from_draft
+    and the build worker: a messy value passes through every later
+    stage unchanged, so the number shown on the card IS the sample the
+    build runs with. Seeds mirror _spec_from_draft exactly. The
+    follower-ceiling cap (applied at approve + re-applied by the
+    worker) can still lower a capped audience below this estimate,
+    which is why the card labels it "Est."
+    """
+    try:
+        from scripts._sample_size_jitter import ensure_messy_sample_size
+    except Exception:
+        return
+    try:
+        subject = spec_draft.get('subject') or spec_draft.get('name') \
+            or 'Unknown Subject'
+        try:
+            tu = int(round(float(spec_draft.get('subject_raw_tu'))))
+        except (TypeError, ValueError):
+            tu = 0
+        if tu <= 0:
+            return
+        # Clamp just under the 9.5M hard ceiling so the +/-98 jitter
+        # can't push a ceiling-pinned value over it.
+        tu = max(800, min(tu, 9_499_900))
+        tu = ensure_messy_sample_size(subject, tu)
+        try:
+            av = int(round(float(spec_draft.get('subject_raw_avid'))))
+        except (TypeError, ValueError):
+            av = 0
+        if av <= 0 or av >= tu:
+            av = max(801, int(tu * 0.22))
+        av = ensure_messy_sample_size(f"{subject}|avid", av,
+                                      default_if_missing=2937)
+        if av >= tu:
+            av = tu - 13
+        spec_draft['subject_raw_tu'] = tu
+        spec_draft['subject_raw_avid'] = av
+    except Exception as e:
+        print(f"[synth-chat] est-sample jitter skipped: {e}")
+
+
 def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
                                        history: list) -> dict:
     """Run one Claude interpret call for a single subject inside a batch.
@@ -43761,6 +43808,9 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         # _estimate_run_minutes docstring).
         spec_draft['estimated_run_minutes'] = _estimate_run_minutes(
             _dec_norm, bool(spec_draft.get('run_avid')))
+        # Pin the est. sample now so the batch card shows the exact
+        # number the build will use (idempotent through the pipeline).
+        _jitter_draft_est_sample(spec_draft)
 
         return {
             'success': True, 'subject_input': subject,
@@ -44851,6 +44901,11 @@ def api_synth_chat_interpret():
         spec_draft['base_credits'] = estimated_credits
         spec_draft['estimated_run_minutes'] = _estimate_run_minutes(
             _dec_norm, bool(spec_draft.get('run_avid')))
+        # Pin the est. sample now so the approval card shows the exact
+        # number the build will use. Runs AFTER the locked-sample
+        # passthrough above: locked values are already messy, so this
+        # is a no-op for them (idempotent helper).
+        _jitter_draft_est_sample(spec_draft)
         # Guided clarify steps (2026-08-19): every fresh single-subject
         # build asks region (national vs markets-only) then add-on
         # cuts (3 credits each) before the approval card. Derive-cut /

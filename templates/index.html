@@ -59766,7 +59766,12 @@ https://www.instagram.com/p/..."></textarea>
                 else if (decision === 'derive_cut')      action = 'derived cut';
                 else if (decision === 'time_shifted_refresh') action = 'refresh existing';
                 else if (decision === 'cut_needs_parent') action = 'new build + cut';
-                lines.push((i + 1) + '. **' + subj + '** \u2014 ' + action + eta + (cred ? ' \u00b7 ' + cred : ''));
+                var _bTu = d.subject_raw_tu;
+                var _bEst = (typeof _bTu === 'number' && _bTu > 0 &&
+                             decision !== 'existing_match' && decision !== 'derive_cut')
+                    ? ' \u00b7 est. ' + _bTu.toLocaleString('en-US') + ' panelists'
+                    : '';
+                lines.push((i + 1) + '. **' + subj + '** - ' + action + eta + (cred ? ' \u00b7 ' + cred : '') + _bEst);
             }
             if (typeof totalCredits === 'number' && totalCredits >= 0) {
                 lines.push('');
@@ -59953,6 +59958,22 @@ https://www.instagram.com/p/..."></textarea>
                 default:
                     line = 'Building a new **' + subject + '** profile' + eta + '.';
                     break;
+            }
+            var _dec = (s.decision || 'new_build').toLowerCase();
+            var _tuEst = s.subject_raw_tu;
+            if (typeof _tuEst === 'number' && _tuEst > 0 &&
+                (_dec === 'new_build' || _dec === 'time_shifted_refresh' ||
+                 _dec === 'cut_needs_parent' || _dec === '')) {
+                var _incPct = _tuEst / 10000000 * 100;
+                var _incStr = _incPct >= 1 ? _incPct.toFixed(2)
+                    : (_incPct >= 0.01 ? _incPct.toFixed(3) : _incPct.toFixed(4));
+                line += '\n\n**Est. sample:** ' +
+                    _tuEst.toLocaleString('en-US') + ' panelists (' +
+                    _incStr + '% incidence).';
+                var _avEst = s.subject_raw_avid;
+                if (s.run_avid !== false && typeof _avEst === 'number' && _avEst > 0) {
+                    line += ' Avid tier ~' + _avEst.toLocaleString('en-US') + '.';
+                }
             }
             var _rs = s.region_scope;
             if (_rs && _rs.mode === 'regional' && _rs.dmas && _rs.dmas.length) {
