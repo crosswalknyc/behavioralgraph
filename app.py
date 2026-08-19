@@ -43850,6 +43850,243 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
     })
 
 
+# --------------------------------------------------------------------
+# Incidence / sample-size pre-check (2026-08-19, Jenna directive:
+# "add an incidence check piece where you can see what the sample size
+# [is] against a duration ... before running a profile so that you can
+# ensure it is large enough. then if you choose to run it it should
+# use against that sample size ... someone could ask about this in
+# round about ways and it would come back with the sample size.")
+#
+# Flow:
+#   1. User asks a sample-size / incidence question in any phrasing
+#      ("how many panelists would we have for X?", "is the n big
+#      enough for Y over Q1?", "incidence check on Z past 90 days").
+#   2. `_synth_chat_is_incidence_request` catches it BEFORE the normal
+#      interpret path; `_synth_chat_incidence_check` runs one focused
+#      reasoning call that sizes the audience against the requested
+#      window and converts to panel sample (10M panel = 329.9M US).
+#   3. The reply quotes the exact sample the run would use. Both
+#      numbers are pre-jittered with `ensure_messy_sample_size`, which
+#      is idempotent for already-messy values - so when the user says
+#      "run it" the approve path and the Hetzner worker pass the same
+#      numbers through unchanged. Quoted number == built number.
+#   4. The frontend stashes the offer; an affirmative reply ("run it",
+#      "build it", "go") resends the ask with locked_sample_tu/avid,
+#      which the interpret endpoint pins onto the spec draft.
+# --------------------------------------------------------------------
+
+def _synth_chat_is_incidence_request(text):
+    """True when the message is a sample-size / incidence QUESTION,
+    not a build instruction. Tuned for roundabout phrasings.
+    """
+    import re as _re
+    t = (text or '').strip().lower()
+    if not t or len(t) > 600:
+        return False
+    # Negative gates: explicit sample-size INSTRUCTIONS are build
+    # parameters, not questions.
+    #   "use a sample size of 50,000" / "set the sample to 40k" /
+    #   "the sample size should be 25000"
+    if _re.search(r'\b(use|set|with|lock|make)\b[^.?!]{0,40}'
+                  r'\bsample( |-)?size\b', t):
+        return False
+    if _re.search(r'\bsample( |-)?size\b[^.?!]{0,20}'
+                  r'\b(of|should be|=|:)?\s*[\d,]{4,}', t):
+        return False
+    strong = _re.search(
+        r'\bincidence\b'
+        r'|\bsample( |-)?size\b'
+        r'|\bsample check\b|\bcheck (the |a |our )?sample\b'
+        r'|\bhow (many|big|large|much)\b[^.?!]{0,80}'
+        r'\b(panel(ist)?s?|sample|audience|people|respondents|n)\b'
+        r'|\b(do|would|will|did) we have enough\b'
+        r'|\benough (panel(ist)?s?|sample|data|people|respondents)\b'
+        r'|\bis the (sample|panel|n|audience|base) '
+        r'(big |large )?enough\b'
+        r'|\bpanel(ist)? count\b|\bhow many panel(ist)?s\b'
+        r'|\bfeasib(le|ility)\b'
+        r'|\bn( |-)?size\b|\bwhat(\'| i)?s the n\b',
+        t)
+    return bool(strong)
+
+
+def _synth_chat_incidence_check(text, history=None):
+    """Answer a sample-size question with the exact panel sample a run
+    would use. Returns a Flask response (jsonify'd).
+    """
+    from datetime import datetime as _dt
+    from scripts._sample_size_jitter import ensure_messy_sample_size
+
+    today_label = _dt.now().strftime('%B %d, %Y')
+    system_prompt = (
+        "You size audiences for a US digital behavior panel. The panel "
+        "has 10,000,000 panelists representing the 329,900,000-person "
+        "US population (each panelist ~= 33 people).\n\n"
+        "A panelist counts toward an audience if they had at least 1 "
+        "digital touchpoint with it in the requested time window, "
+        "across: search, social, media (read/watch), e-commerce, and "
+        "owned-and-operated channels. Longer windows accumulate more "
+        "one-touch panelists; shorter windows shrink the count. Scale "
+        "your numbers to the window the user asked about.\n\n"
+        "Rules:\n"
+        "  1. subject_raw_tu = panelists in-window for the total "
+        "audience. HARD CEILING 9,500,000. Realistic floor ~800.\n"
+        "  2. subject_raw_avid = the avid/high-intensity subset, "
+        "typically 12-35% of TU depending on fandom intensity. Must "
+        "be < subject_raw_tu.\n"
+        "  3. If the audience is defined by a public metric (social "
+        "followers, video viewers, subscribers, listeners, event "
+        "attendees, app users), the US audience cannot exceed that "
+        "metric. Set audience_type to the matching label and "
+        "follower_ceiling to the public number if you know it; "
+        "otherwise null.\n"
+        "  4. If no time window is given, use 07-01-2025 to "
+        "06-30-2026 (the standard trailing year).\n"
+        "  5. Ground your sizing in real-world knowledge of the "
+        "brand/talent/behavior's actual US reach. Do not inflate "
+        "niche audiences or deflate mass ones.\n\n"
+        "Return STRICT JSON only, no prose, no code fences:\n"
+        "{\n"
+        "  \"subject\": \"<clean audience display name>\",\n"
+        "  \"window_start\": \"MM-DD-YYYY\",\n"
+        "  \"window_end\": \"MM-DD-YYYY\",\n"
+        "  \"window_label\": \"<human label, e.g. 07-01-2025 to "
+        "06-30-2026 or past 90 days>\",\n"
+        "  \"us_audience_estimate\": <int, people in US in window>,\n"
+        "  \"subject_raw_tu\": <int>,\n"
+        "  \"subject_raw_avid\": <int>,\n"
+        "  \"audience_type\": \"general|followers|subscribers|viewers|"
+        "listeners|attendees|users\",\n"
+        "  \"follower_ceiling\": <int or null>,\n"
+        "  \"confidence\": \"high|medium|low\"\n"
+        "}"
+    )
+    user_prompt = (
+        f"Today is {today_label}.\n\n"
+        f"Sample-size question from an operator:\n{text.strip()}\n\n"
+        "Size this audience for the window they asked about (or the "
+        "standard trailing year if unspecified) and return the JSON."
+    )
+    result = _run_nflx_claude_agent(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        max_tokens=2000, temperature=0.3,
+    )
+    if not result.get('success'):
+        try:
+            print(f"[incidence-check] failed: "
+                  f"{str(result.get('error'))[:300]!r}")
+        except Exception:
+            pass
+        return jsonify({
+            'success': False,
+            'error': ('I could not size that audience. Try naming the '
+                      'audience and window more directly, e.g. '
+                      '"sample size for Peloton owners, past 6 months".'),
+        }), result.get('status', 502)
+
+    d = result.get('data') or {}
+    subject = str(d.get('subject') or '').strip() or 'this audience'
+    window_label = str(d.get('window_label') or '').strip() \
+        or '07-01-2025 to 06-30-2026'
+
+    def _to_int(v, default=0):
+        try:
+            return int(round(float(v)))
+        except (TypeError, ValueError):
+            return default
+
+    tu = _to_int(d.get('subject_raw_tu'))
+    avid = _to_int(d.get('subject_raw_avid'))
+    us_aud = _to_int(d.get('us_audience_estimate'))
+    if tu <= 0:
+        return jsonify({
+            'success': False,
+            'error': ('I could not size that audience. Try naming the '
+                      'audience and window more directly.'),
+        }), 502
+    tu = max(800, min(tu, 9_500_000))
+    if avid <= 0 or avid >= tu:
+        avid = max(801, int(tu * 0.22))
+    # Jitter NOW with the same helper the approve path and worker use.
+    # ensure_messy_sample_size is idempotent for already-messy values,
+    # so the numbers quoted here survive the whole pipeline untouched.
+    tu = ensure_messy_sample_size(subject, tu)
+    avid = ensure_messy_sample_size(
+        f"{subject}|avid", avid, default_if_missing=2937)
+    if avid >= tu:
+        avid = tu - 13
+
+    incidence_pct = tu / 10_000_000 * 100.0
+    if incidence_pct >= 1:
+        incidence_str = f"{incidence_pct:.2f}%"
+    elif incidence_pct >= 0.01:
+        incidence_str = f"{incidence_pct:.3f}%"
+    else:
+        incidence_str = f"{incidence_pct:.4f}%"
+
+    if tu < 1_500:
+        verdict, verdict_note = 'too_thin', (
+            'below the reliable-read floor. Widen the window or '
+            'broaden the audience definition before running.')
+    elif tu < 10_000:
+        verdict, verdict_note = 'workable', (
+            'large enough for a directional read; expect wider '
+            'swings on niche categories.')
+    elif tu < 100_000:
+        verdict, verdict_note = 'solid', (
+            'large enough for a reliable read across all categories.')
+    else:
+        verdict, verdict_note = 'strong', (
+            'deep sample; category-level reads will be stable.')
+    verdict_label = verdict.replace('_', ' ').title()
+
+    us_aud_str = f"~{us_aud/1_000_000:.1f}M" if us_aud >= 1_000_000 \
+        else (f"~{us_aud:,}" if us_aud > 0 else 'n/a')
+
+    message_lines = [
+        f"Sample check for **{subject}** ({window_label}):",
+        "",
+        f"- Panel sample: **{tu:,} panelists** "
+        f"({incidence_str} incidence)",
+        f"- Avid tier: {avid:,} panelists",
+        f"- US audience in window: {us_aud_str}",
+        "",
+        f"Verdict: **{verdict_label}** - {verdict_note}",
+        "",
+        "Reply **run it** to build the profile locked to this exact "
+        "sample, or refine the audience / window and ask again.",
+    ]
+    run_prompt = f"{subject}, {window_label}"
+
+    payload = {
+        'subject': subject,
+        'window_label': window_label,
+        'subject_raw_tu': tu,
+        'subject_raw_avid': avid,
+        'us_audience_estimate': us_aud,
+        'incidence_pct': round(incidence_pct, 4),
+        'verdict': verdict,
+        'verdict_label': verdict_label,
+        'message': "\n".join(message_lines),
+        'run_prompt': run_prompt,
+        'audience_type': str(d.get('audience_type') or 'general'),
+        'follower_ceiling': d.get('follower_ceiling'),
+        'confidence': str(d.get('confidence') or 'medium'),
+    }
+    try:
+        print(f"[incidence-check] {subject!r} window={window_label!r} "
+              f"tu={tu:,} avid={avid:,} verdict={verdict}")
+    except Exception:
+        pass
+    return jsonify({
+        'success': True,
+        'incidence_check': payload,
+        'model': result.get('model'),
+    })
+
+
 @app.route('/api/brief-chat/interpret', methods=['POST'])
 @app.route('/api/synth-chat/interpret', methods=['POST'])  # legacy alias
 @requires_auth
@@ -43874,6 +44111,25 @@ def api_synth_chat_interpret():
         return jsonify({'success': False, 'error': 'empty request text'}), 400
 
     history = body.get('history') or []
+
+    # ------------------------------------------------------------------
+    # INCIDENCE / SAMPLE-SIZE PRE-CHECK (2026-08-19): questions like
+    # "how many panelists would we have for X over Y?" get a sample-
+    # size answer instead of an approval card. Runs BEFORE batch and
+    # Cartesian detection because those detectors can misread a
+    # question containing commas as a multi-subject build request.
+    # ------------------------------------------------------------------
+    if _synth_chat_is_incidence_request(text):
+        try:
+            return _synth_chat_incidence_check(text, history)
+        except Exception as _inc_err:
+            traceback.print_exc()
+            return jsonify({
+                'success': False,
+                'error': ('Sample check failed. Try naming the audience '
+                          'and window directly, e.g. "sample size for '
+                          'Peloton owners, past 6 months".'),
+            }), 500
 
     # ------------------------------------------------------------------
     # BATCH MODE (2026-08-18): if the prompt matches
@@ -44049,6 +44305,37 @@ def api_synth_chat_interpret():
         except Exception as _int_err:
             print(f"[synth-chat interpret] intersect-cut error: "
                   f"{_int_err}")
+
+        # Sample-lock passthrough (2026-08-19 incidence check): when
+        # the user ran a sample check and replied "run it", the
+        # frontend resends the ask with the checked sample pinned.
+        # Override the interpret step's own guess so the quoted number
+        # IS the built number. ensure_messy_sample_size downstream
+        # (approve path + Hetzner worker) is idempotent for already-
+        # messy values, so these survive the pipeline untouched. The
+        # follower-ceiling cap still applies after persona research -
+        # a public-metric ceiling always wins over a locked sample.
+        try:
+            _lk_tu = body.get('locked_sample_tu')
+            _lk_av = body.get('locked_sample_avid')
+            if _lk_tu:
+                _lk_tu = int(_lk_tu)
+                if 800 <= _lk_tu <= 9_500_000:
+                    spec_draft['subject_raw_tu'] = _lk_tu
+                    spec_draft['sample_size_locked'] = True
+            if _lk_av:
+                _lk_av = int(_lk_av)
+                _cur_tu = int(spec_draft.get('subject_raw_tu') or 0)
+                if 0 < _lk_av < max(_cur_tu, 9_500_000):
+                    spec_draft['subject_raw_avid'] = _lk_av
+                    spec_draft['sample_size_locked'] = True
+            if spec_draft.get('sample_size_locked'):
+                print(f"[synth-chat interpret] sample locked from "
+                      f"incidence check: tu="
+                      f"{spec_draft.get('subject_raw_tu')} avid="
+                      f"{spec_draft.get('subject_raw_avid')}")
+        except Exception as _lk_err:
+            print(f"[synth-chat interpret] sample-lock error: {_lk_err}")
 
         # Run-Avid default enforcement (2026-08-17 Jenna directive).
         # Default is TRUE for every fresh-build decision (new_build /

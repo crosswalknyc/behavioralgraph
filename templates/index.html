@@ -58832,6 +58832,11 @@ https://www.instagram.com/p/..."></textarea>
         let synthChatStashedDraft = null;
         let synthChatStashedOriginalText = '';
         let synthChatStashedProposedRange = null;
+        // Incidence / sample-size check state (2026-08-19). When
+        // the server answers a sample-size question it returns an
+        // incidence_check payload; we stash it here so a follow-up
+        // 'run it' builds the profile locked to the quoted sample.
+        let synthChatIncidenceOffer = null;
 
         function synthChatInit() {
             if (window.__synthChatBooted) return;
@@ -59474,6 +59479,15 @@ https://www.instagram.com/p/..."></textarea>
                 'Listening... click the mic again to stop');
         }
 
+        function _synthChatIsRunAffirmative(t) {
+            // Matches 'run it', 'yes run it', 'build it', 'go',
+            // 'do it', 'launch', 'queue it', 'proceed', 'yes',
+            // 'ok run it' etc. Only consulted while an incidence
+            // offer is stashed, so plain 'yes' is unambiguous.
+            return /^(ok,?\s*)?(yes,?\s*)?(please\s+)?(run( it| this)?|build( it| this)?|go( ahead)?|do it|launch( it)?|queue( it)?|proceed|approve|yes|yep|yeah)\s*[.!]?$/i
+                .test((t || '').trim());
+        }
+
         async function synthChatSubmit() {
             var input = document.getElementById('synthChatInput');
             var btn = document.getElementById('synthChatSubmitBtn');
@@ -59481,6 +59495,20 @@ https://www.instagram.com/p/..."></textarea>
             if (!text) return;
             input.value = '';
             synthChatPushTurn('user', text);
+
+            // Incidence-offer follow-through (2026-08-19). If the
+            // last agent turn was a sample check and this message
+            // is an affirmative, rebuild the ask from the offer
+            // and pin the quoted sample onto the interpret call so
+            // the run uses exactly the number we quoted.
+            var _lockedSample = null;
+            if (synthChatIncidenceOffer &&
+                _synthChatIsRunAffirmative(text)) {
+                _lockedSample = synthChatIncidenceOffer;
+                synthChatIncidenceOffer = null;
+                text = _lockedSample.run_prompt ||
+                       _lockedSample.subject || text;
+            }
 
             // Status-update short-circuit. See _synthChatIsStatusRequest.
             //
@@ -59541,10 +59569,20 @@ https://www.instagram.com/p/..."></textarea>
                 ? new AbortController() : null;
             _synthChatShowStopButton();
             try {
+                var _interpretBody = {
+                    text: text,
+                    history: synthChatHistory.slice(0, -1)
+                };
+                if (_lockedSample) {
+                    _interpretBody.locked_sample_tu =
+                        _lockedSample.subject_raw_tu;
+                    _interpretBody.locked_sample_avid =
+                        _lockedSample.subject_raw_avid;
+                }
                 var r = await fetch('/api/brief-chat/interpret', {
                     method: 'POST', credentials: 'same-origin',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ text: text, history: synthChatHistory.slice(0, -1) }),
+                    body: JSON.stringify(_interpretBody),
                     signal: synthChatInflightController ? synthChatInflightController.signal : undefined,
                 });
                 var data = await r.json();
@@ -59571,6 +59609,16 @@ https://www.instagram.com/p/..."></textarea>
                 // _synthChatBuildActionSummary can show it in the card.
                 if (data.spec_draft && typeof data.estimated_credits === 'number') {
                     data.spec_draft.estimated_credits = data.estimated_credits;
+                }
+                if (data.incidence_check) {
+                    // Sample-size / incidence answer (2026-08-19).
+                    // No approval card - just the numbers and an
+                    // offer the next affirmative reply can accept.
+                    synthChatIncidenceOffer = data.incidence_check;
+                    synthChatPushTurn('agent',
+                        data.incidence_check.message ||
+                        'Sample check complete.');
+                    return;
                 }
                 if (data.needs_date_clarification) {
                     // Stash the draft and ask about dates. Do NOT
@@ -59614,6 +59662,7 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 synthChatCurrentDraft = data.spec_draft || {};
                 synthChatBatchDrafts = null;
+                if (!_lockedSample) synthChatIncidenceOffer = null;
                 var summary = _synthChatBuildActionSummary(synthChatCurrentDraft);
                 synthChatPushTurn('agent', summary);
                 _synthChatShowBrief(synthChatCurrentDraft, data.model);
