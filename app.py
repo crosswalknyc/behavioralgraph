@@ -42330,62 +42330,96 @@ SYNTH_CHAT_BATCH_MAX = 15
 
 
 def _detect_implicit_list_subjects(text: str) -> list[str]:
-    """Recognize a bare `A, B, and C` (or `A, B, & C`) list of proper
-    nouns as a multi-subject batch request even when no explicit
-    "profiles for" trigger phrase is present.
+    """Recognize a bare list of proper nouns as a multi-subject batch
+    request even when no explicit "profiles for" trigger phrase is
+    present. Accepts either an inline comma-list (`A, B, and C`) or a
+    newline-separated list, including numbered / bulleted lists.
 
     Guardrails to avoid false positives on free-form sentences:
-      - At least 2 comma separators OR 1 comma + a terminal ` and ` /
-        ` & `. (One item is not a list.)
-      - Every item must look like a name/brand (2-50 chars,
+      - Every item must look like a name/brand (2-60 chars,
         starts with a capitalized letter or is fully upper-case,
         no verbs/prepositions/articles as the leading token).
       - Total item count 2..15.
-      - Reject if the text has a sentence-y verb before the first
-        comma (e.g. "I want to build profiles for A, B, and C" -
-        that has the trigger "build profiles for" and should have
-        matched the explicit path).
+      - Comma path: at least 2 commas OR 1 comma + a trailing
+        ` and `/` & `. Also rejects sentence-shape leaders like
+        `I want`, `Please`, etc. (those must use a trigger phrase).
+      - Newline path: at least 2 lines that survive the numbered/
+        bulleted prefix strip and pass the subject-shape check.
     """
     import re as _re
     t = (text or '').strip().rstrip('.!?').strip()
-    if len(t) < 5 or len(t) > 600:
+    if len(t) < 5 or len(t) > 1200:
         return []
-    # Quick reject: obvious sentence starters that mean "please do X".
-    # Those must use an explicit trigger phrase. This helper is only
-    # for the "PAUL ANKA, TONY BENNETT, AND FRANKIE VALLI" case where
-    # the user just pasted a list.
+
+    # ---------- NEWLINE-LIST BRANCH ----------
+    if '\n' in t:
+        raw_lines = [ln.strip() for ln in t.split('\n')]
+        raw_lines = [ln for ln in raw_lines if ln]
+        _shared_context_prefixes = _re.compile(
+            r'^(?:the\s+(?:measurement\s+)?window'
+            r'|window\s+is|dates?\s+are|use\s+(?:the\s+)?window'
+            r'|for\s+(?:the\s+)?past|over\s+(?:the\s+)?past'
+            r'|trailing|during|from\s+\w+\s+\d|between\s+\w+'
+            r'|note[:\s]|thanks|thank\s+you|please\s+use|'
+            r'using\s+the|with\s+the\s+window|w/\s+the\s+window)',
+            _re.IGNORECASE)
+        subjects: list[str] = []
+        for ln in raw_lines:
+            # Reject a leading sentence line like "Lets start over."
+            # or "I need three profiles for:" - those are the trigger
+            # path's job, not the implicit path's. Also stop when we
+            # hit a shared-context tail line.
+            if _shared_context_prefixes.match(ln):
+                break
+            # If line still looks like a sentence (ends with `:` or
+            # has >= 6 words and contains a lowercase verb-y word),
+            # skip it - only bullet lines are subjects.
+            s = _re.sub(r'^\s*\(?\d+\)?\s*[.):\-]\s*', '', ln)
+            s = _re.sub(r'^\s*[\-\*\u2022\u00b7]\s+', '', s)
+            s = s.strip().strip('.').strip(',').strip()
+            if not s or len(s) > 120 or len(s) < 2:
+                continue
+            first_tok = s.split()[0]
+            if not (first_tok[0].isupper() or first_tok.isupper()):
+                # Skip sentence-shape lines (lowercase leader) unless
+                # the raw line was numbered/bulleted (already stripped).
+                if s == ln:
+                    continue
+            if _re.match(r'^(and|or|the|these|those)$', s, _re.IGNORECASE):
+                continue
+            if _re.match(r'^(for|with|during|over|since|in|by)\s',
+                          s, _re.IGNORECASE):
+                continue
+            subjects.append(s)
+        if 2 <= len(subjects) <= SYNTH_CHAT_BATCH_MAX:
+            return subjects
+        # else fall through to comma-list branch
+
+    # ---------- INLINE COMMA-LIST BRANCH ----------
     lead_reject = _re.match(
         r'^(please|can|could|would|will|make|do|run|build|create|'
         r'give|show|help|i\s+want|i\s+need|i\'?d\s+like)\b',
         t, _re.IGNORECASE)
     if lead_reject:
         return []
-    # Must have at least one comma AND (another comma OR a trailing
-    # " and "/" & ").
     if ',' not in t:
         return []
     has_and = bool(_re.search(r'\b(?:and|or)\b|\s&\s', t, _re.IGNORECASE))
     n_commas = t.count(',')
     if not (n_commas >= 2 or (n_commas >= 1 and has_and)):
         return []
-    # Case-insensitive split, same as the trigger path.
     parts = _re.split(r'\s*(?:,|;|\band\b|\bor\b|\b&\b)\s*',
                        t, flags=_re.IGNORECASE)
-    subjects: list[str] = []
+    subjects = []
     for p in parts:
         s = p.strip().strip('.').strip()
         if not s:
             continue
-        # Reject if the token is too long or too short to be a name.
         if len(s) < 2 or len(s) > 60:
             return []
-        # Reject if the leading token is a lowercase word (article /
-        # preposition / verb). Every real name/brand starts either
-        # with a capitalized letter or is fully upper-case.
         first = s.split()[0]
         if not (first[0].isupper() or first.isupper()):
             return []
-        # Reject leftover connector words.
         if _re.match(r'^(and|or|the|these|those)$', s, _re.IGNORECASE):
             continue
         subjects.append(s)
@@ -42398,18 +42432,18 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
     """Return a list of subject strings if the prompt is a batch request,
     otherwise []. See module-header for detection rules.
 
-    2026-08-18: three fixes on top of the original v1
-      (a) The split on `and`/`or` was case-sensitive so ALL-CAPS lists
-          like `PAUL ANKA, TONY BENNETT, AND FRANKIE VALLI` left
-          `AND FRANKIE VALLI` glued as one token. Now case-insensitive.
-      (b) Connector phrases like `the following:` / `the listed
-          individuals:` / `these people:` / `each of these:` are
-          stripped from the front of the tail before splitting so the
-          first subject isn't `the listed individuals: PAUL ANKA`.
-      (c) When no explicit trigger phrase fires but the text is
-          shaped like a bare comma-list of proper nouns
-          `A, B, and C` (2-15 items, each 2-50 chars, each starting
-          with a capitalized token), batch mode fires implicitly.
+    2026-08-18 v3 fixes on top of v2:
+      (a) Case-insensitive split so ALL-CAPS `AND` is a separator.
+      (b) Connector-phrase strip (`the listed individuals:`, etc.).
+      (c) Implicit `A, B, and C` list detection without trigger.
+      (d) NEW: newline-separated + numbered/bulleted list detection
+          so `1. A\\n2. B\\n3. C` and `- A\\n- B\\n- C` fan out.
+      (e) NEW: `Profile IQ(s)` / `they are for:` / `I need N profiles`
+          added as trigger phrases so Jenna's natural phrasing works.
+      (f) NEW: trailing shared-context lines (`The measurement window
+          is ...`, `for the past 60 days`, `Note: ...`) are peeled
+          off the tail before splitting so they don't count as
+          subjects.
     """
     import re as _re
     text = (user_text or '').strip()
@@ -42427,15 +42461,28 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
         r'a\s+profile\s+for\s+each\s+of[:\s]+',
         r'profiles\s+of\s+each[:\s]+',
         r'build\s+profiles\s+for[:\s]+',
-        # 2026-08-18: catch "create a profile for each of..." /
-        # "create profiles for..." style asks.
         r'create\s+(?:a\s+)?profiles?\s+for(?:\s+each\s+of)?[:\s]+',
         r'make\s+(?:a\s+)?profiles?\s+for(?:\s+each\s+of)?[:\s]+',
         r'give\s+me\s+(?:a\s+)?profiles?\s+for(?:\s+each\s+of)?[:\s]+',
+        # 2026-08-18: match Jenna's natural phrasing.
+        r'(?:profile\s+)?iqs?\s+(?:for|of|on)[:\s]+',
+        r'i\s+need\s+(?:\d+\s+|three\s+|two\s+|four\s+|five\s+|'
+        r'six\s+|seven\s+|eight\s+|nine\s+|ten\s+)?'
+        r'(?:individual\s+|separate\s+|distinct\s+)?'
+        r'(?:profile\s+)?(?:iqs?|profiles?)'
+        r'(?:\s+(?:they\s+are\s+for|for)[:\s]+|[.:\s]+they\s+are\s+for[:\s]+|'
+        r'\s+for[:\s]+|[.:\s]+for[:\s]+)',
+        r'they\s+are\s+for[:\s]+',
+        r"here\s+(?:they\s+are|are\s+the\s+(?:subjects?|profiles?|"
+        r"names?|list))[:\s]+",
+        r"here'?s\s+(?:the\s+)?(?:list|subjects?|names?)[:\s]+",
+        r'(?:these|the)\s+subjects?\s+(?:are|is)[:\s]+',
+        r'the\s+(?:subjects?|profiles?|names?|list)\s+(?:are|is)[:\s]+',
         r'profiles\s+for[:\s]+',
     ]
     trigger_re = _re.compile(
-        r'^(?:.*?\b(?:' + '|'.join(triggers) + r'))', _re.IGNORECASE)
+        r'^(?:.*?\b(?:' + '|'.join(triggers) + r'))',
+        _re.IGNORECASE | _re.DOTALL)
     m = trigger_re.search(text)
 
     if m:
@@ -42444,19 +42491,12 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
         # No explicit trigger. Try implicit-list detection below.
         tail = None
 
-    # Fallback: implicit "A, B, and C" list of proper nouns without an
-    # explicit trigger. Handles inputs like
-    #   PAUL ANKA, TONY BENNETT, AND FRANKIE VALLI
-    #   Paul Anka, Tony Bennett, and Frankie Valli
-    #   Amazon, Apple, and Google
-    # while rejecting free-form sentences and single-name prompts.
+    # Fallback: implicit list without an explicit trigger.
     if tail is None:
         _impl = _detect_implicit_list_subjects(text)
-        return _impl  # empty list if not confident
+        return _impl
 
-    # Strip a leading connector phrase like `the following:` /
-    # `these people:` / `the listed individuals:` / `each of these:` /
-    # `the following list:` etc. so the first name isn't prefixed.
+    # Strip leading connector phrases like `the following:` etc.
     tail = _re.sub(
         r'^(?:the\s+)?(?:following|listed|below|above|these|those)'
         r'\s*(?:individuals|people|names?|artists?|brands?|subjects?|'
@@ -42466,28 +42506,83 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
     tail = _re.sub(r'^(?:each\s+of\s+)?(?:these|those|the)\s*:\s*',
                     '', tail, flags=_re.IGNORECASE).strip()
 
-    # Strip a leading parenthetical wrapper if the user wrote
-    # "run profiles for TV brands (VIZIO, Samsung, LG)".
+    # Parenthetical wrapper: `TV brands (VIZIO, Samsung, LG)`.
     paren_wrap = _re.match(r'^[^(]*\(([^)]+)\)\s*$', tail)
     if paren_wrap:
         tail = paren_wrap.group(1).strip()
 
-    # Case-INsensitive split so "AND" (all caps) is a separator too.
-    parts = _re.split(r'\s*(?:,|;|\band\b|\bor\b|\b&\b)\s*',
-                       tail, flags=_re.IGNORECASE)
+    # ------------------------------------------------------------------
+    # NEWLINE-LIST PATH (numbered / bulleted / one-per-line)
+    # ------------------------------------------------------------------
     subjects: list[str] = []
-    for p in parts:
-        s = p.strip().strip('.').strip()
-        if not s or len(s) > 120:
-            continue
-        # Drop tokens that are pure connector words left after the split.
-        if _re.match(r'^(and|or|the|these|those)$', s, _re.IGNORECASE):
-            continue
-        # Reject modifier-style fragments.
-        if _re.match(r'^(for|with|during|over|since|in|by)\s', s,
-                      _re.IGNORECASE):
-            continue
-        subjects.append(s)
+    if '\n' in tail:
+        # Peel off trailing "shared context" lines like `The measurement
+        # window is ...` or `for the past 60 days` so they don't count
+        # as subjects. The _shared_context_from_batch helper reads the
+        # original user_text so we don't need to preserve the context
+        # in `tail` itself.
+        raw_lines = [ln.strip() for ln in tail.split('\n')]
+        raw_lines = [ln for ln in raw_lines if ln]
+
+        _shared_context_prefixes = _re.compile(
+            r'^(?:the\s+(?:measurement\s+)?window'
+            r'|window\s+is|dates?\s+are|use\s+(?:the\s+)?window'
+            r'|for\s+(?:the\s+)?past|over\s+(?:the\s+)?past'
+            r'|trailing|during|from\s+\w+\s+\d|between\s+\w+'
+            r'|note[:\s]|thanks|thank\s+you|please\s+use|'
+            r'using\s+the|with\s+the\s+window|w/\s+the\s+window)',
+            _re.IGNORECASE)
+        cleaned_lines = []
+        for ln in raw_lines:
+            if _shared_context_prefixes.match(ln):
+                # Stop taking lines once we hit shared context - anything
+                # after is context, not more subjects.
+                break
+            cleaned_lines.append(ln)
+
+        for ln in cleaned_lines:
+            # Strip numbered prefix "1. ", "2) ", "3:", "(4)", etc.
+            s = _re.sub(r'^\s*\(?\d+\)?\s*[.):\-]\s*', '', ln)
+            # Strip bulleted prefix "- ", "* ", "• ", "· "
+            s = _re.sub(r'^\s*[\-\*\u2022\u00b7]\s+', '', s)
+            s = s.strip().strip('.').strip(',').strip()
+            if not s or len(s) > 120 or len(s) < 2:
+                continue
+            if _re.match(r'^(and|or|the|these|those)$', s, _re.IGNORECASE):
+                continue
+            if _re.match(r'^(for|with|during|over|since|in|by)\s',
+                          s, _re.IGNORECASE):
+                continue
+            subjects.append(s)
+
+    # If newline-list didn't produce >= 2 items, fall back to the
+    # inline `A, B, and C` split.
+    if len(subjects) < 2:
+        # Case-INsensitive split so "AND" (all caps) is a separator too.
+        parts = _re.split(r'\s*(?:,|;|\band\b|\bor\b|\b&\b|\n)\s*',
+                           tail, flags=_re.IGNORECASE)
+        subjects = []
+        for p in parts:
+            s = p.strip().strip('.').strip()
+            # Strip inline numbered/bulleted prefix.
+            s = _re.sub(r'^\s*\(?\d+\)?\s*[.):\-]\s*', '', s)
+            s = _re.sub(r'^\s*[\-\*\u2022\u00b7]\s+', '', s)
+            s = s.strip().strip('.').strip()
+            if not s or len(s) > 120:
+                continue
+            if _re.match(r'^(and|or|the|these|those)$', s, _re.IGNORECASE):
+                continue
+            if _re.match(r'^(for|with|during|over|since|in|by)\s',
+                          s, _re.IGNORECASE):
+                continue
+            # Drop obvious shared-context fragments.
+            if _re.match(
+                r'^(?:the\s+)?(?:measurement\s+)?window\b'
+                r'|^for\s+the\s+past\b|^over\s+the\s+past\b'
+                r'|^trailing\b|^dates?\s+are\b',
+                s, _re.IGNORECASE):
+                continue
+            subjects.append(s)
 
     # Detach a trailing shared-context modifier from the LAST subject if
     # present. E.g. "profiles for A, B, C for the past 60 days" splits
