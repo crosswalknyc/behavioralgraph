@@ -42872,6 +42872,62 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "CANONICAL BRAND CATEGORY LIST (choose exactly one):\n"
         f"{cat_block}\n\n"
 
+        # ── Content-vs-platform classification (Rule added 2026-08-19
+        # after P-Valley shipped miscategorized as STREAMING PLATFORM).
+        # This is where Claude was reasoning wrong: a TV show that AIRS
+        # on a streaming service is NOT itself a streaming service. It
+        # is a SERIES; the streamer is the home-platform anchor.
+        "CONTENT vs PLATFORM - READ THIS BEFORE PICKING brand_category:\n"
+        "  * A TV series (P-Valley, Landman, Yellowstone, Only Murders "
+        "In The Building, The Bear, Severance, Handmaid's Tale, Real "
+        "Housewives, SNL, any show) is CONTENT. Its brand_category is "
+        "`SERIES` (or a `SERIES - <sub>` variant if the sub is clearly "
+        "canonical). It is NEVER `STREAMING/PLATFORM` even if it only "
+        "airs on a streaming service.\n"
+        "  * A movie (Cocaine Bear, Barbie, Oppenheimer, Wicked) is "
+        "CONTENT. brand_category = `MOVIE`.\n"
+        "  * A streaming SERVICE itself (Netflix, Hulu, Prime Video, "
+        "Disney+, HBO Max, Paramount+, Peacock, Apple TV+, Starz-the-"
+        "service, Crunchyroll) is a PLATFORM. brand_category = "
+        "`STREAMING/PLATFORM`. Use the exact form with the slash - the "
+        "no-slash `STREAMING PLATFORM` is NOT canonical and will be "
+        "rejected downstream.\n"
+        "  * Podcast SHOW (Joe Rogan Experience, Smartless, Serial, "
+        "Call Her Daddy) = `PODCAST`. Podcast APP (Spotify Podcasts, "
+        "Apple Podcasts) = `APP/PLATFORM`.\n"
+        "  * If the subject is a series or a movie, the BRAND INPUT "
+        "convention is DIFFERENT from a talent/brand:\n"
+        "      SERIES  -> subject_rows must include ['SERIES', "
+        "'<Show Name>'] pinned to 100. Include the home platform at "
+        "100 too (see next rule). BRAND INPUT cell downstream will be "
+        "the literal string 'CSV' (not the show name) - do NOT try to "
+        "override that via subject_rows.\n"
+        "      MOVIE   -> subject_rows must include ['MOVIE', "
+        "'<Movie Name>'] pinned to 100. Include distributor/theatrical "
+        "home if applicable.\n"
+        "  * HOME-PLATFORM PIN (mandatory for series/movies with a "
+        "primary distribution home):\n"
+        "      P-Valley -> ['STREAMING/PLATFORM', 'Starz'] at 100\n"
+        "      Landman / Yellowstone / Tulsa King -> "
+        "['STREAMING/PLATFORM', 'Paramount+'] at 100\n"
+        "      Only Murders In The Building -> "
+        "['STREAMING/PLATFORM', 'Hulu'] at 100 (Disney+/Hulu bundle "
+        "row also at 100 if that column exists)\n"
+        "      Severance / The Morning Show / Ted Lasso -> "
+        "['STREAMING/PLATFORM', 'Apple TV+'] at 100\n"
+        "      The Bear -> ['STREAMING/PLATFORM', 'FX'] at 100 AND "
+        "['STREAMING/PLATFORM', 'Hulu'] at 100\n"
+        "      House of the Dragon / The Last of Us -> "
+        "['STREAMING/PLATFORM', 'HBO Max'] at 100\n"
+        "      SNL / Peacock originals -> ['STREAMING/PLATFORM', "
+        "'Peacock'] at 100 AND ['BROADCAST/CABLE', 'NBC'] at 100\n"
+        "      Any Netflix original -> ['STREAMING/PLATFORM', "
+        "'Netflix'] at 100\n"
+        "    General rule: for a series/movie, add the streaming "
+        "service(s) that CARRIES it into subject_rows at 100. The "
+        "audience literally needs that service to watch, so it's the "
+        "same self-pin rule as a sports team + league.\n\n"
+
         "SAMPLE-SIZE HEURISTICS (subject_raw for TU cohort):\n"
         "  KEY INSIGHT: subject_raw is 'how many of the fixed 10,000,000 "
         "panelists engaged with the subject in the window'. This IS the "
@@ -43840,10 +43896,100 @@ def _spec_from_draft(draft):
         default_if_missing=2937,
     )
 
+    # ── Brand-category + subject-row canonicalization ───────────────
+    # Defense in depth against the P-Valley class of defect (2026-08-19)
+    # where Claude tagged a TV show as `STREAMING PLATFORM` and pinned
+    # the show name inside the streaming column at 100%. If any of the
+    # patterns below trip we correct in place - the interpret prompt is
+    # the primary line of defense, this is the safety net.
+    _bc_raw = str(draft.get('brand_category') or 'BRAND').strip()
+    _bc_upper = _bc_raw.upper()
+    _NONCANON_TO_CANON = {
+        'STREAMING PLATFORM': 'STREAMING/PLATFORM',
+        'STREAMING PLATFORMS': 'STREAMING/PLATFORM',
+        'STREAMING SERVICE': 'STREAMING/PLATFORM',
+        'STREAMING SERVICES': 'STREAMING/PLATFORM',
+        'SVOD': 'STREAMING/PLATFORM',
+        'BROADCAST CABLE': 'BROADCAST/CABLE',
+        'SEARCH ENGINE AI': 'SEARCH ENGINE/AI',
+    }
+    if _bc_upper in _NONCANON_TO_CANON:
+        _bc_upper = _NONCANON_TO_CANON[_bc_upper]
+        _bc_raw = _bc_upper
+
+    # If the subject is a TV series / movie / podcast and Claude
+    # tagged it as a streaming platform / broadcaster instead, flip it
+    # to the correct content category. Signal comes from BOTH the
+    # subject name shape AND the subject_rows Claude produced - if any
+    # subject_row anchors it in SERIES / MOVIE / PODCAST, that's the
+    # ground truth.
+    _series_anchor = any(
+        str(c).strip().upper() == 'SERIES' for c, _ in subject_rows
+    )
+    _movie_anchor = any(
+        str(c).strip().upper() == 'MOVIE' for c, _ in subject_rows
+    )
+    _pod_anchor = any(
+        str(c).strip().upper() == 'PODCAST' for c, _ in subject_rows
+    )
+    _platform_cats = {
+        'STREAMING/PLATFORM', 'BROADCAST/CABLE', 'APP/PLATFORM',
+        'STREAMING MUSIC', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS',
+        'STREAMING VIDEO', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST',
+        'VMVPD/FAST', 'VMVPD',
+    }
+    if _series_anchor and _bc_upper in _platform_cats:
+        print(f"[brand_category-normalize] {subject!r}: overriding "
+              f"{_bc_raw!r} -> SERIES (subject_rows anchored to SERIES)")
+        _bc_raw = 'SERIES'
+    elif _movie_anchor and _bc_upper in _platform_cats:
+        print(f"[brand_category-normalize] {subject!r}: overriding "
+              f"{_bc_raw!r} -> MOVIE (subject_rows anchored to MOVIE)")
+        _bc_raw = 'MOVIE'
+    elif _pod_anchor and _bc_upper in _platform_cats:
+        print(f"[brand_category-normalize] {subject!r}: overriding "
+              f"{_bc_raw!r} -> PODCAST (subject_rows anchored to PODCAST)")
+        _bc_raw = 'PODCAST'
+
+    # Rebuild subject_rows: normalize non-canonical streaming column
+    # names. Only strip a subject-name-in-platform-column pin when we
+    # ALSO have a content anchor (SERIES/MOVIE/PODCAST) for that same
+    # subject value - that's the P-Valley shape (miscategorized show).
+    # For a real platform subject (Netflix, Hulu), the self-pin
+    # ['STREAMING/PLATFORM', 'Netflix'] is correct and must be
+    # preserved so downstream reasoning skips scoring it.
+    _norm_subject_key = ''.join(
+        ch for ch in subject.lower() if ch.isalnum()
+    )
+    _subject_has_content_anchor = _series_anchor or _movie_anchor or _pod_anchor
+    _clean_subject_rows = []
+    for col, val in subject_rows:
+        col_raw = str(col).strip()
+        col_up = col_raw.upper()
+        # Canonicalize non-slash streaming column
+        if col_up == 'STREAMING PLATFORM':
+            col_up = 'STREAMING/PLATFORM'
+            col_raw = 'STREAMING/PLATFORM'
+        # Strip miscategorized subject-as-platform pin ONLY when this
+        # is a content subject (has SERIES/MOVIE/PODCAST anchor). A
+        # bare platform subject (Netflix, Hulu) keeps its self-pin.
+        if _subject_has_content_anchor and col_up in _platform_cats:
+            _val_key = ''.join(
+                ch for ch in str(val).lower() if ch.isalnum()
+            )
+            if _val_key == _norm_subject_key:
+                print(f"[subject_rows-normalize] {subject!r}: dropping "
+                      f"content-vs-platform self-pin "
+                      f"({col_up}, {val!r}) - a series/movie/podcast "
+                      f"is not itself a streaming service")
+                continue
+        _clean_subject_rows.append((col_raw, str(val)))
+    subject_rows = _clean_subject_rows
+
     spec = {
         'name': subject,
         'file_stem': stem,
-        'brand_category': draft.get('brand_category') or 'BRAND',
+        'brand_category': _bc_raw,
         'subject_raw_tu': subject_raw_tu,
         'subject_raw_avid': subject_raw_avid,
         'subject_rows': subject_rows,
