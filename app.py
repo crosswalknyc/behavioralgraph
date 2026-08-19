@@ -43336,14 +43336,32 @@ _AVID_INAPPLICABLE_DECISIONS = {'existing_match', 'derive_cut'}
 # confirmation - so a plain "ok" releases the stashed draft to the
 # approval panel without a redundant Claude call.
 _DATE_CONFIRM_PATTERNS = [
-    r'^\s*(y|yes|yeah|yep|yup|sure|ok(ay)?|k|kk|confirm(ed)?|'
-    r'looks good|sounds good|proceed|go|ship it|do it|use (them|those|'
-    r'that|the default|defaults?)|those work|that works|works for me|'
-    r'that\'?s (fine|good)|fine|default|defaults|the default|'
+    r'^\s*(y|yes|yeah|yep|yup|ya|yah|sure|ok(ay|ey)?|k|kk|kay|'
+    r'confirm(ed)?|'
+    r'looks good|sounds good|proceed|go|ship it|do it|run it|run|'
+    r'go ahead|let\'?s go|lets go|go for it|let\'?s do it|'
+    r'use (them|those|that|the default|defaults?)|'
+    r'those work|that works|works( for me)?|'
+    r'(that\'?s|that is|it\'?s|it is) (fine|good|great|perfect)|'
+    r'fine|default|defaults|the default|'
     r'use default|use defaults|keep default|keep defaults|'
-    r'default is fine|defaults are fine|default works|defaults work)'
-    r'\s*[.!]?\s*$',
+    r'default is fine|defaults are fine|default works|defaults work|'
+    r'perfect|great|cool|awesome|alright|all right|good|'
+    r'thumbs up|approved|approve|correct|right|affirmative|'
+    r'\U0001f44d|\U0001f44c|\u2705)'      # 👍 👌 ✅
+    r'\s*$',                              # trailing punctuation stripped upstream
 ]
+
+
+# Confirmation-style phrases that a user might sprinkle around the
+# core token ("yes please", "ok please proceed", "yeah go ahead"). We
+# strip these from the tail before matching so the core regex can stay
+# tight against actual date-range strings.
+_CONFIRM_TAIL_PHRASES = (
+    'please', 'thanks', 'thank you', 'thx', 'ty',
+    'go', 'go ahead', 'proceed', 'do it', 'run it', 'ship it',
+    'for me', 'sounds good', 'looks good',
+)
 
 
 def _is_date_confirmation(user_text):
@@ -43352,13 +43370,57 @@ def _is_date_confirmation(user_text):
     Called ONLY when the frontend has flagged the chat as awaiting a
     date confirmation. Keeps us from burning a Claude call to interpret
     a plain 'ok'.
+
+    Robust to:
+      * markdown wrappers copied from the prompt ("**ok**", "`ok`",
+        "*ok*", "_ok_")
+      * quotes ('"ok"', "'ok'")
+      * trailing punctuation (".", "!", "?")
+      * trailing filler ("ok please", "yes go ahead", "sure thanks")
+      * emoji-only confirms (👍, 👌, ✅)
     """
     import re as _re
-    txt = (user_text or '').strip().lower()
+    txt = (user_text or '').strip()
     if not txt:
         return False
+
+    # Strip markdown wrappers, quotes, and trailing punctuation around
+    # the whole reply. Iterate a few times because the user may nest:
+    # '**ok**!' -> '**ok**' -> 'ok'
+    stripped = txt
+    for _ in range(6):
+        s2 = stripped.strip()
+        s2 = _re.sub(r'^[\*_`"\'\s]+', '', s2)
+        s2 = _re.sub(r'[\*_`"\'\s.!?,;:]+$', '', s2)
+        if s2 == stripped:
+            break
+        stripped = s2
+    if not stripped:
+        return False
+
+    lowered = stripped.lower()
+
+    # First pass: try to match the full lowered text as-is. This
+    # catches multi-word confirms that would be broken by tail-strip,
+    # e.g. "let's go", "lets go", "go for it", "let's do it", where
+    # the trailing 'go' / 'do it' would otherwise be peeled as filler.
     for pattern in _DATE_CONFIRM_PATTERNS:
-        if _re.match(pattern, txt, flags=_re.IGNORECASE):
+        if _re.match(pattern, lowered, flags=_re.IGNORECASE):
+            return True
+
+    # Second pass: peel off trailing filler phrases like
+    # "ok please", "yes go ahead", "sure thanks" and try again.
+    for _ in range(4):
+        changed = False
+        for phrase in _CONFIRM_TAIL_PHRASES:
+            if lowered.endswith(' ' + phrase):
+                lowered = lowered[: -(len(phrase) + 1)].rstrip(' ,.!?')
+                changed = True
+        if not changed:
+            break
+
+    for pattern in _DATE_CONFIRM_PATTERNS:
+        if _re.match(pattern, lowered, flags=_re.IGNORECASE):
             return True
     return False
 
