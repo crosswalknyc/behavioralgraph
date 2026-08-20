@@ -42840,6 +42840,11 @@ def _detect_cartesian_batch(user_text: str):
             r'network|channel|category|title|app|provider|company|'
             r'dma)s?\s*[:,]?\s+(.+)$',
             rest, _re.IGNORECASE | _re.DOTALL)
+        if not seg:
+            # Noun-less variant: "... for each of Amazon, Apple, ..."
+            seg = _re.search(
+                r'\s+for\s+each\s+of\s*[:,]?\s+(.+)$',
+                rest, _re.IGNORECASE | _re.DOTALL)
         if seg:
             items_b = _split_items(seg.group(1))
             lead_b = rest[:seg.start()].strip()
