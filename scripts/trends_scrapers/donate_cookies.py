@@ -140,6 +140,11 @@ DEFAULT_DOMAINS = [
     # required later the same donate flow captures it.
     'britbox.com',
     'mgmplus.com',
+    # 2026-08-20: Starz added to Streaming tab. Auth session isn't
+    # strictly required (public browse catalog ships in-DOM as
+    # __NEXT_DATA__), but a donated session slips past their Segment
+    # / Rokt analytics throttling faster.
+    'starz.com',
 ]
 
 S3_BUCKET = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')

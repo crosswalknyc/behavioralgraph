@@ -264,6 +264,9 @@ _STREAMING_SLUGS = (
     # ceilings live in _STREAMING_PLATFORMS_META below.
     ('britbox',    'BritBox'),
     ('mgmplus',    'MGM+'),
+    # 2026-08-20: Starz (Lionsgate premium, ~12M US subs; Power +
+    # Outlander + Spartacus + Starz Originals). See META entry.
+    ('starz',      'Starz'),
 )
 
 
@@ -894,6 +897,25 @@ _STREAMING_PLATFORMS_META = [
          'Antenna monthly SVOD reports + Nielsen Streaming Content '
          'Ratings originals list.'
      )},
+    {'key': 'starz',
+     'label': 'Starz',
+     'ceiling': 5_000_000,
+     'anchors': (
+         "Starz (Lionsgate's premium subscription streamer, US "
+         'subscribers ~12M as of 2026 - the largest of the "premium '
+         'niche" services after HBO Max). Nielsen Streaming Content '
+         'Ratings: flagship originals reach real scale. Power '
+         'Universe episodes (Power Book II: Ghost, Raising Kanan, '
+         'Force) hit 1.5-3.0M US households/week during a live '
+         'season; Outlander mid-season 1.2-2.5M/week; BMF 800K-1.5M. '
+         'Big Lionsgate theatrical windows (John Wick, Saw, Now You '
+         'See Me back-catalog) briefly spike 1.5-3.5M/week during '
+         'their exclusive window. Steady-state top-10 without a '
+         'flagship air-window 400K-1.0M. Anchor: Lionsgate Q2 2026 '
+         'earnings + Antenna monthly SVOD reports + Nielsen Streaming '
+         'Content Ratings originals list. Audience skews female-adult '
+         'for Outlander, male-25-54 for Power Universe.'
+     )},
 ]
 
 
@@ -1028,11 +1050,12 @@ _CHART_LABEL_TO_PLATFORM = (
     ('prime',            'primevideo'),
     ('espn+',            'espnplus'),
     ('espn',             'espnplus'),
-    # 2026-08-20: BritBox + MGM+ streaming platforms.
+    # 2026-08-20: BritBox + MGM+ + Starz streaming platforms.
     ('britbox',          'britbox'),
     ('mgm+',             'mgmplus'),
     ('mgm plus',         'mgmplus'),
     ('mgmplus',          'mgmplus'),
+    ('starz',            'starz'),
     # FAST-channel platforms (chart-label prefixes from `_FAST_SLUGS`).
     # `amazon live tv` is handled up above alongside `amazon music` to
     # win the match before the bare `amazon` catch-all.

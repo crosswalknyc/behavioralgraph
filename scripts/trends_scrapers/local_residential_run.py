@@ -72,6 +72,10 @@ RESIDENTIAL_SCRAPERS = [
     # keys off <img alt="Title"> poster tiles.
     ('britbox',       'BritBox'),
     ('mgmplus',       'MGM+'),
+    # Starz (2026-08-20): plain-HTTP __NEXT_DATA__ scrape of
+    # /us/en/movies + /us/en/series. Runs residentially because
+    # starz.com's Akamai config fingerprints Hetzner's datacenter IP.
+    ('starz',         'Starz'),
     # Social content scrapers (2026-07): switched from hashtag lists to
     # actual trending posts/videos/tweets. All three need a real logged-in
     # session, so they run from the laptop (where cookies live) rather

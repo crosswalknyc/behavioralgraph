@@ -329,6 +329,13 @@ STREAMING_PLATFORMS = [
     # + /browse.
     ('britbox',    'BritBox',      False),
     ('mgmplus',    'MGM+',         False),
+    # 2026-08-20: Starz (Lionsgate, ~12M US subs, home of Power +
+    # Outlander + Spartacus + Starz Originals). Plain-HTTP scrape of
+    # /us/en/movies + /us/en/series - both pages ship the full browse
+    # catalog inline as __NEXT_DATA__.props.pageProps.<movie|series>
+    # Blocks[N].data.slides[M]. Runs residentially because Starz's
+    # Akamai config fingerprints Hetzner's datacenter IP.
+    ('starz',      'Starz',        False),
 ]
 
 # How old a snapshot can be before we treat the source as unavailable
@@ -2891,6 +2898,7 @@ _STREAMING_PANEL_TO_PLATFORM = {
     'espnplus':   'espnplus',
     'britbox':    'britbox',
     'mgmplus':    'mgmplus',
+    'starz':      'starz',
 }
 # FAST-channel panel slug -> platform key inside
 # `stream_estimates.items[<kind_prefix>:<norm>].by_platform`. See
