@@ -2027,12 +2027,11 @@ def _research_show_viewership(client, show_name):
     )
 
     try:
-        resp = client.chat.completions.create(
-            model='gpt-4o-search-preview',
-            messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=800,
-        )
-        text = (resp.choices[0].message.content or '').strip()
+        # 2026-08-20: gpt-4o-search-preview retired by OpenAI (404).
+        # Shared Responses-API web_search helper with built-in Claude
+        # web-search fallback, so one vendor outage can't kill research.
+        from openai_web_search import openai_web_search_call
+        text = (openai_web_search_call(prompt) or '').strip()
         _show_viewership_cache[cache_key] = text
         if text:
             print(f"🔍 Viewership research for '{search_query}': {len(text)} chars retrieved")
@@ -3698,13 +3697,11 @@ def _validate_total_watchers_with_ai(show_name, platform_name, inflated_total, i
     )
 
     try:
-        print(f"   🌐 Calling gpt-4o-search-preview for viewership data...")
-        resp = client.chat.completions.create(
-            model='gpt-4o-search-preview',
-            messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=600,
-        )
-        raw = (resp.choices[0].message.content or '').strip()
+        print(f"   🌐 Running live web search for viewership data...")
+        # 2026-08-20: search-preview retired; shared helper with Claude
+        # web-search fallback.
+        from openai_web_search import openai_web_search_call
+        raw = (openai_web_search_call(prompt) or '').strip()
         print(f"   🌐 AI raw response ({len(raw)} chars): {raw[:200]}...")
         if raw.startswith('```'):
             raw = raw.split('\n', 1)[-1].rsplit('```', 1)[0].strip()
@@ -4998,12 +4995,10 @@ def ai_align_final_demographics_with_research(df_out, platform_name):
             f'Find reputable sources (Nielsen, Samba TV, YouGov, Morning Consult, platform disclosures, '
             f'major trade press) and summarize likely AGE and GENDER audience tendencies with approximate percentages.'
         )
-        resp = client.chat.completions.create(
-            model="gpt-4o-search-preview",
-            messages=[{"role": "user", "content": research_prompt}],
-            web_search_options={"search_context_size": "medium"},
-        )
-        research = (resp.choices[0].message.content or "").strip() if resp.choices else ""
+        # 2026-08-20: search-preview retired; shared helper with Claude
+        # web-search fallback.
+        from openai_web_search import openai_web_search_call
+        research = (openai_web_search_call(research_prompt) or "").strip()
     except Exception:
         research = ""
     if not research:

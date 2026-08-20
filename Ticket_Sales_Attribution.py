@@ -1187,12 +1187,11 @@ def _research_box_office(client, movie_name):
     )
 
     try:
-        resp = client.chat.completions.create(
-            model="gpt-4o-search-preview",
-            messages=[{"role": "user", "content": prompt}],
-            web_search_options={"search_context_size": "medium"},
-        )
-        text = (resp.choices[0].message.content or "").strip() if resp.choices else ""
+        # 2026-08-20: gpt-4o-search-preview retired by OpenAI (404).
+        # Shared Responses-API web_search helper with built-in Claude
+        # web-search fallback.
+        from openai_web_search import openai_web_search_call
+        text = (openai_web_search_call(prompt) or "").strip()
         _box_office_cache[cache_key] = text
         if text:
             print(f"   🔍 Box office research for '{movie_name}': {len(text)} chars retrieved")

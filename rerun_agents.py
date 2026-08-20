@@ -346,19 +346,19 @@ RULES:
 - category_guidance: cover every major behavioral category. Be specific about which items should rank high vs low for THIS audience.
 """
 
-    print(f"  Calling gpt-4o-search-preview...")
+    print(f"  Running live web search...")
     text = ''
     try:
-        resp = client.chat.completions.create(
-            model='gpt-4o-search-preview',
-            web_search_options={"search_context_size": "high"},
-            messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=4096,
-        )
-        text = (resp.choices[0].message.content or '').strip()
+        # 2026-08-20: gpt-4o-search-preview retired by OpenAI (404).
+        # Shared Responses-API web_search helper with built-in Claude
+        # web-search fallback.
+        from openai_web_search import openai_web_search_call
+        text = (openai_web_search_call(prompt) or '').strip()
         print(f"  Got {len(text)} chars")
     except Exception as e:
-        print(f"  search-preview failed ({e}), trying gpt-4o...")
+        print(f"  web search failed ({e})")
+    if not text:
+        print("  falling back to gpt-4o (no live search)...")
         resp = client.chat.completions.create(
             model='gpt-4o',
             messages=[{'role': 'user', 'content': prompt}],
