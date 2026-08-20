@@ -19081,7 +19081,14 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                             {% if role == 'super_admin' or role == 'admin' or has_analysis_iq_access %}
                             <option value="customAnalysis">🔧 Analysis IQ</option>
                             {% endif %}
-                            <option value="shareOfTimeIQ" disabled>⏱️ Share of Time (Coming Soon)</option>
+                            {# Share of Time removed from dropdown 2026-08-20
+                               per Jenna. Handler (showShareOfTimeIQ),
+                               shareOfTimeIQView, /api/share-of-time/* routes,
+                               admin toggle (DEFAULT_HIDDEN_PRODUCTS + admin.html
+                               hidden-product row), and per-user access controls
+                               are all left intact. Re-enable by uncommenting:
+                            <option value="shareOfTimeIQ">⏱️ Share of Time</option>
+                            #}
                             <option value="workspace" {% if not has_workspace_access %}disabled{% endif %}>🗂️ Workspace</option>
                             <!-- Impact IQ restored 2026-07-23 (was accidentally
                                  stripped by the Jul 10 rollback). Ticket Sales Tracker
@@ -19095,9 +19102,16 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                                so this can be re-enabled by uncommenting the row below.
                             <option value="talentFitIQ">🎭 Talent Fit IQ</option>
                             #}
+                        {# Helm IQ removed from dropdown 2026-08-20 per Jenna.
+                           Handler (initialHandlers.helmIQ), helmIQView,
+                           has_helm_iq_access flag, DEFAULT_HIDDEN_PRODUCTS
+                           entry, admin hidden-product row, and per-user
+                           access controls are all left intact. Re-enable by
+                           uncommenting:
                         {% if has_helm_iq_access %}
                         <option value="helmIQ">⚓ Helm IQ</option>
                         {% endif %}
+                        #}
                         {% if role == 'super_admin' or role == 'admin' %}
                         <option value="admin">🔐 Admin</option>
                         {% endif %}
