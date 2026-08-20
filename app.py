@@ -43240,7 +43240,18 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         f"({_ADDON_AGE_BUCKETS}). '18-24' -> ['18-24']; 'under 35' -> "
         "['18-24','25-34']; '35+' -> ['35-44','45-54','55-64',"
         "'65 OR OLDER']; 'under 18' / '17 and under' / 'teens' -> "
-        "['17 AND UNDER'].\n\n"
+        "['17 AND UNDER'].\n"
+        "  * MULTI-COHORT ASKS: when the request names SEVERAL "
+        "demographic slices of the SAME base audience ('a profile for "
+        "people under 18 who buy protein products and one on people "
+        "18-24 who buy protein products'), that is ONE build, not "
+        "several: one clean subject ('Protein Enthusiasts'), TU + "
+        "Avid on the full universe, and one `addon_cuts` entry PER "
+        "cohort mentioned ([17 AND UNDER] and [18-24] here). NEVER "
+        "merge two cohorts into one mangled subject, and NEVER drop "
+        "one of the cohorts. Only treat them as separate builds when "
+        "the BASE audiences differ ('a Nike profile and a Adidas "
+        "profile').\n\n"
 
         "OUTPUT SHAPE (strict JSON object, no prose outside):\n"
         "{\n"
@@ -43895,6 +43906,9 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         # AFTER the caller-subject override above so the forced batch
         # slice name is what gets decomposed. Reprices the draft.
         _decompose_embedded_subject_cuts(spec_draft)
+        # Multi-cohort recovery: age cohorts named in the raw ask that
+        # the interpreter dropped ride as additional cuts.
+        _augment_multi_cohort_cuts(spec_draft, per_prompt)
         # Cuts-only promoter: existing TU parent -> derive the cuts
         # off it instead of rebuilding (3 x cuts, no base).
         try:
@@ -44809,6 +44823,161 @@ def _decompose_embedded_subject_cuts(draft):
                 base_credits + ADDON_CUT_CREDITS * len(all_cuts))
     except Exception as _e:
         print(f"[subject-decompose] non-fatal: {_e}")
+
+
+_MULTI_COHORT_AUD_NOUN = (
+    r'(?:people|consumers?|buyers?|shoppers?|viewers?|listeners?|'
+    r'fans?|adults?|teens?|teenagers?|kids?|children|men|women|'
+    r'males?|females?|audiences?|users?|subscribers?|panelists?|'
+    r'households?|those|folks|ones?)')
+
+
+def _augment_multi_cohort_cuts(draft, user_text):
+    """Deterministic recovery for MULTI-cohort asks the interpreter
+    collapsed into one draft (Jenna 2026-08-20: 'Run a profile for
+    people under 18 who buy products with added Protein and one on
+    people 18-24 ...' shipped a single mangled build instead of a
+    Protein Enthusiasts TU + two age cuts).
+
+    Scans the RAW user text for every age-cohort token in audience
+    phrasing and merges any cohort the draft is missing into
+    addon_cuts. Runs AFTER _decompose_embedded_subject_cuts (which
+    only sees the draft's subject string, so it can recover at most
+    the one qualifier the interpreter kept). Age tokens only - gender
+    and generation words in free text are too often commentary, not a
+    cohort ask. Reprices base + 3 x cuts. Mutates in place; never
+    raises.
+    """
+    import re as _re
+    try:
+        decision = str(draft.get('decision') or 'new_build').strip().lower()
+        if decision not in ('new_build', 'time_shifted_refresh', ''):
+            return
+        text = str(user_text or '')
+        if not text:
+            return
+
+        def _snap(lo, hi):
+            return [lbl for lbl, b_lo, b_hi in _ADDON_AGE_BUCKET_SPANS
+                    if not (hi < b_lo or lo > b_hi)]
+
+        def _guarded(start):
+            # 'parents of kids 3 to 5' describes AGE_OF_CHILDREN, not
+            # panelist age - skip tokens whose audience noun belongs
+            # to an 'X of/with <noun>' construction.
+            ctx = text[max(0, start - 30):start]
+            return bool(_re.search(
+                r'(?:parents?|moms?|dads?|families|households?|'
+                r'guardians?|caregivers?)\s+(?:of|with|to)\s*$',
+                ctx, _re.IGNORECASE))
+
+        found = []  # (label, buckets)
+
+        def _add_under(n):
+            if n <= 18:
+                found.append(('17 and Under', ['17 AND UNDER']))
+            else:
+                b = _snap(18, n - 1)
+                if b:
+                    found.append((f'under {n}', b))
+
+        def _add_range(lo, hi):
+            if not (0 <= lo < hi <= 99):
+                return
+            b = _snap(lo, hi)
+            if not b:
+                return
+            label = '17 and Under' if b == ['17 AND UNDER'] else f'{lo}-{hi}'
+            found.append((label, b))
+
+        def _add_plus(n):
+            b = _snap(n, 120)
+            if b:
+                found.append((f'{n}+', b))
+
+        aud = _MULTI_COHORT_AUD_NOUN
+        rng = r'(\d{1,2})\s*(?:-|\u2013|\u2014|\s+to\s+)\s*(\d{1,2})'
+        for m in _re.finditer(
+                rf'{aud}\s+(?:aged?\s+|ages?\s+)?(?:under|below)\s+'
+                r'(\d{1,2})\b', text, _re.IGNORECASE):
+            if not _guarded(m.start()):
+                _add_under(int(m.group(1)))
+        for m in _re.finditer(r'\(\s*(?:under|below)\s+(\d{1,2})\s*\)',
+                              text, _re.IGNORECASE):
+            _add_under(int(m.group(1)))
+        for m in _re.finditer(rf'{aud}\s+(?:aged?\s+|ages?\s+)?{rng}\b',
+                              text, _re.IGNORECASE):
+            if not _guarded(m.start()):
+                _add_range(int(m.group(1)), int(m.group(2)))
+        for m in _re.finditer(rf'\bages?\s+{rng}\b', text, _re.IGNORECASE):
+            _add_range(int(m.group(1)), int(m.group(2)))
+        for m in _re.finditer(
+                r'\(\s*(\d{1,2})\s*[-\u2013\u2014]\s*(\d{1,2})\s*\)', text):
+            _add_range(int(m.group(1)), int(m.group(2)))
+        for m in _re.finditer(
+                rf'{rng}\s*[- ]?year[- ]?olds?', text, _re.IGNORECASE):
+            _add_range(int(m.group(1)), int(m.group(2)))
+        for m in _re.finditer(
+                rf'{aud}\s+(?:aged?\s+|ages?\s+)?(\d{{2}})\s*'
+                r'(?:\+|\s+plus\b|\s+(?:and|or)\s+(?:older|over|up)\b)',
+                text, _re.IGNORECASE):
+            if not _guarded(m.start()):
+                _add_plus(int(m.group(1)))
+        for m in _re.finditer(r'\(\s*(\d{2})\s*\+\s*\)', text):
+            _add_plus(int(m.group(1)))
+        for m in _re.finditer(
+                r'\b(1[0-7])\s+(?:and|or|&)\s+(?:under|younger)\b',
+                text, _re.IGNORECASE):
+            found.append(('17 and Under', ['17 AND UNDER']))
+
+        if not found:
+            return
+        items, seen_b = [], set()
+        for label, buckets in found:
+            key = tuple(sorted(buckets))
+            if key in seen_b:
+                continue
+            seen_b.add(key)
+            items.append({'type': 'age_band', 'label': label,
+                          'buckets': buckets})
+        detected = _normalize_cut_items(items)
+        if not detected:
+            return
+        existing = [c for c in (draft.get('addon_cuts') or [])
+                    if isinstance(c, dict) and c.get('cut_id')]
+        # Same buckets under a different label = same cohort; dedupe
+        # on the bucket set, not just cut_id.
+        have_buckets = {tuple(sorted(str(b).upper()
+                                     for b in c.get('pin_buckets') or []))
+                        for c in existing}
+        missing = [c for c in detected
+                   if tuple(sorted(str(b).upper()
+                                   for b in c.get('pin_buckets') or []))
+                   not in have_buckets]
+        if not missing:
+            return
+        merged = _merge_cuts(existing, missing)
+        draft['addon_cuts'] = merged
+        labels = ', '.join(c.get('name_label') or c.get('label')
+                           or c['cut_id'] for c in missing)
+        note = (f'Detected additional age cohort(s) in the request: '
+                f'{labels}. Each rides as a derived cut of the full-'
+                f'universe TU at {ADDON_CUT_CREDITS} credits.')
+        assumptions = draft.get('assumptions')
+        if isinstance(assumptions, list):
+            assumptions.append(note)
+        else:
+            draft['assumptions'] = [note]
+        try:
+            base_credits = int(draft.get('base_credits')
+                               or draft.get('estimated_credits') or 5)
+        except (TypeError, ValueError):
+            base_credits = 5
+        draft['base_credits'] = base_credits
+        draft['estimated_credits'] = (
+            base_credits + ADDON_CUT_CREDITS * len(merged))
+    except Exception as _e:
+        print(f'[multi-cohort-augment] non-fatal: {_e}')
 
 
 def _parse_addon_cuts_answer(answer_text, subject):
@@ -45877,6 +46046,12 @@ def api_synth_chat_interpret():
         # ('Go-GURT - 18-24'). Runs after base_credits is anchored so
         # the repricing (base + 3 x cuts) sticks.
         _decompose_embedded_subject_cuts(spec_draft)
+        # Multi-cohort recovery (2026-08-20 Jenna, Protein
+        # Enthusiasts): a request naming SEVERAL age cohorts of the
+        # same base audience is ONE TU + one cut per cohort. The
+        # interpreter sometimes collapses them into a single mangled
+        # subject - rescan the raw ask and merge any missing cohorts.
+        _augment_multi_cohort_cuts(spec_draft, text)
         # Cuts-only promoter (2026-08-20): if the cleaned subject
         # already has a full-universe TU in the catalog, skip the
         # rebuild - flip to derive_cut/addon_cuts and charge 3 x cuts.
@@ -48201,6 +48376,8 @@ def api_v1_profiles_check():
     # Subject naming + embedded cuts (2026-08-20): full-universe TU +
     # qualifier-as-cut, same as the dashboard chat path.
     _decompose_embedded_subject_cuts(draft)
+    # Multi-cohort recovery: same as the dashboard chat path.
+    _augment_multi_cohort_cuts(draft, prompt)
     # Cuts-only promoter: existing TU parent -> derive the cuts off it
     # instead of rebuilding (3 x cuts, no base). Loads the catalog
     # itself; same behavior as the dashboard chat path.
@@ -48361,6 +48538,9 @@ def api_v1_profiles_run():
     # Subject naming + embedded cuts (2026-08-20): full-universe TU +
     # qualifier-as-cut. Price matches /v1/check: base + 3 per cut.
     _decompose_embedded_subject_cuts(draft)
+    # Multi-cohort recovery: same as /v1/check so quoted price and
+    # charged price always agree.
+    _augment_multi_cohort_cuts(draft, prompt)
     # Cuts-only promoter: existing TU parent -> derive the cuts off it
     # instead of rebuilding (3 x cuts, no base). Same as /v1/check so
     # the quoted price and the charged price always agree.
