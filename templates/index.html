@@ -18279,6 +18279,26 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
         .stat-value.pulsing-number { font-size: 1.3rem !important; }
         .stat-prefix { font-size: 0.9rem !important; }
         .stat-label { font-size: 0.72rem !important; }
+
+        /* ---- 15. Behavioral controls: wrap so the "Eliminate Items Indexed"
+           filter is reachable ------------------------------------------------
+           The .behavioral-controls bar is display:flex with no wrap, so on a
+           phone the index filter (mode dropdown + N input) runs off the right
+           edge and only its label shows. Allow the bar to wrap and give the
+           filter its own full-width line so its controls are visible/usable. */
+        .behavioral-controls {
+            flex-wrap: wrap !important;
+            gap: 0.4rem;
+        }
+        .behavioral-index-filter {
+            flex-wrap: wrap;
+            width: 100%;
+            margin-left: 0;
+            box-sizing: border-box;
+        }
+        .behavioral-index-filter .bif-label {
+            white-space: normal;
+        }
     }
     </style>
 </head>
