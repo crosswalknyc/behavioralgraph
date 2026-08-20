@@ -44713,6 +44713,9 @@ def _decompose_embedded_subject_cuts(draft):
 
             # -- tidy the base + strip implicit audience nouns --------
             if extracted:
+                # Drop parens emptied by qualifier extraction, e.g.
+                # 'Protein Enthusiasts ((18-24))' -> '... ( )' -> '...'
+                base = _re.sub(r'\(\s*\)', ' ', base)
                 base = _re.sub(r'\s{2,}', ' ', base)
                 base = _re.sub(r'^[\s,\-]+|[\s,\-]+$', '', base)
                 base = _re.sub(r'\s+(?:for|of|in)$', '', base,
