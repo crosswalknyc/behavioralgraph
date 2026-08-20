@@ -59967,6 +59967,37 @@ https://www.instagram.com/p/..."></textarea>
         // build is ALWAYS the national total universe + avid; every
         // cut (markets included) is 3 credits derived from it.
         function _synthChatClarifyQuestion(step) {
+            if (step === 'age_breaks') {
+                // 2026-08-20: requested age range doesn't line up
+                // with the panel's age breaks. Suggestion data rides
+                // the draft (stashed by the interpret step).
+                var _abDraft = synthChatCurrentDraft || {};
+                var _abData = _abDraft.age_break_data || {};
+                var _abOpts = _abData.options || [];
+                var _abBreaks = (_abData.canonical_breaks || []).join(', ');
+                var _abLines = ['Our age data comes in these breaks: ' +
+                    '**' + _abBreaks + '**' +
+                    (_abData.under18
+                        ? ' (the panel is 18+, so under-18 ages are ' +
+                          'not represented)'
+                        : '') + '.'];
+                _abLines.push('');
+                _abLines.push('**' + (_abData.requested || 'The requested range') +
+                    '** does not line up. Closest coverage:');
+                for (var _ai = 0; _ai < _abOpts.length; _ai++) {
+                    _abLines.push('  ' + (_ai + 1) + '. **' +
+                        _abOpts[_ai] + '**' +
+                        (_ai === 0 && _abOpts.length > 1
+                            ? ' (tighter)'
+                            : (_ai === _abOpts.length - 1 &&
+                               _abOpts.length > 1 ? ' (wider)' : '')));
+                }
+                _abLines.push('');
+                _abLines.push('Reply with a **number or break** ' +
+                    '(like 18-34) - or say **all ages** to drop the ' +
+                    'age filter.');
+                return _abLines.join('\n');
+            }
             if (step === 'parent_link') {
                 // 2026-08-20: cut intent detected but no parent
                 // auto-linked. Candidates ride the draft (stashed by

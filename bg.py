@@ -298,7 +298,10 @@ import json as _json_mod
 import time as _time
 
 # ── Model tier constants ────────────────────────────────────────────────────
-MODEL_RESEARCH = 'gpt-4o-search-preview'   # web search, persona doc
+# 2026-08-20: gpt-4o-search-preview was deprecated by OpenAI (404).
+# Live web search now goes through migration/openai_web_search.py
+# (Responses API web_search tool, gpt-5.2 -> gpt-4.1 -> gpt-5).
+MODEL_RESEARCH = 'openai-responses-web-search'   # web search, persona doc
 MODEL_QUALITY  = 'gpt-4o'                  # all category agents + location + demos
 MODEL_SCORING  = 'gpt-4o'                  # all category agents + delta sanity (upgraded from gpt-4o-mini)
 MODEL_JUDGE    = 'gpt-4.1-nano'            # mismatch + cap review (ACCEPT/REVISE)
@@ -522,15 +525,15 @@ def _research_brand_demographics(client, subject_name, brand_category):
     )
 
     try:
-        resp = client.chat.completions.create(
-            model='gpt-4o-search-preview',
-            messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=1500,
-        )
-        text = (resp.choices[0].message.content or '').strip()
+        # 2026-08-20: search-preview retired; Responses API web_search
+        # tool via the shared helper (model cascade + failure logging).
+        from migration.openai_web_search import openai_web_search_call
+        text = (openai_web_search_call(prompt) or '').strip()
         _demo_research_cache[cache_key] = text
         if text:
             print(f"🔍 Web research for '{clean_name}': {len(text)} chars retrieved")
+        else:
+            print(f"⚠️  Web research returned nothing for '{clean_name}'")
         return text
     except Exception as e:
         print(f"⚠️  Web research failed for '{clean_name}': {e}")
@@ -17102,25 +17105,21 @@ EXAMPLE category_signals (for a hypothetical athletic-brand audience — adapt t
         except Exception as e:
             print(f"   ⚠️ Claude persona path errored ({e}) — falling through to GPT")
 
-    # Attempt 1: gpt-4o-search-preview (has web search)
+    # Attempt 1: OpenAI live web search (Responses API web_search tool;
+    # the old gpt-4o-search-preview chat model 404s since 2026-08)
     if persona_doc is None:
         try:
-            resp = _timed_completion(
-                client,
-                label="persona/search-preview",
-                model=MODEL_RESEARCH,
-                web_search_options={"search_context_size": "high"},
-                messages=[{'role': 'user', 'content': prompt}],
-                max_tokens=12000,
-            )
-            text = (resp.choices[0].message.content or '').strip()
+            from migration.openai_web_search import openai_web_search_call
+            _t_ws0 = _time.time()
+            text = (openai_web_search_call(prompt) or '').strip()
             if text:
-                print(f"   📡 search-preview returned {len(text)} chars")
+                print(f"   📡 responses web-search returned {len(text)} chars "
+                      f"in {_time.time() - _t_ws0:.1f}s")
                 persona_doc, last_err = _parse_persona_json(text)
                 if persona_doc is None:
-                    print(f"   ⚠️ search-preview JSON unparseable → {last_err[:160]}")
+                    print(f"   ⚠️ responses web-search JSON unparseable → {last_err[:160]}")
         except Exception as e:
-            print(f"   ⚠️ gpt-4o-search-preview failed ({e})")
+            print(f"   ⚠️ OpenAI responses web-search failed ({e})")
 
     # Attempt 2: gpt-4o (no web search) with strict JSON mode
     if persona_doc is None:
@@ -19140,24 +19139,20 @@ Reply with ONLY a JSON array (no markdown, no commentary):
     raw_text_fallback = ''
     last_err = ''
 
-    # Attempt 1: gpt-4o-search-preview (web access for persona-calendar context)
+    # Attempt 1: OpenAI live web search for persona-calendar context
+    # (Responses API web_search tool; search-preview retired 2026-08)
     try:
-        resp = client.chat.completions.create(
-            model='gpt-4o-search-preview',
-            web_search_options={"search_context_size": "medium"},
-            messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=4096,
-        )
-        raw_text_search = (resp.choices[0].message.content or '').strip()
+        from migration.openai_web_search import openai_web_search_call
+        raw_text_search = (openai_web_search_call(prompt) or '').strip()
         decisions = _parse_calibration_decisions(raw_text_search)
         if decisions:
-            print(f"   📡 Audience calibration: search-preview returned {len(raw_text_search)} chars, parsed {len(decisions)} decisions")
+            print(f"   📡 Audience calibration: web-search returned {len(raw_text_search)} chars, parsed {len(decisions)} decisions")
         else:
-            print(f"   📡 Audience calibration: search-preview returned {len(raw_text_search)} chars but parsed 0 decisions")
+            print(f"   📡 Audience calibration: web-search returned {len(raw_text_search)} chars but parsed 0 decisions")
             print(f"      first 400 chars: {raw_text_search[:400]!r}")
     except Exception as e:
         last_err = str(e)
-        print(f"   ⚠️ Audience calibration search-preview failed ({e})")
+        print(f"   ⚠️ Audience calibration web-search failed ({e})")
 
     # Attempt 2: gpt-4o with strict JSON-object response_format (no web search)
     if not decisions:
