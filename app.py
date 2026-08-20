@@ -42416,6 +42416,7 @@ def _detect_implicit_list_subjects(text: str) -> list[str]:
             # skip it - only bullet lines are subjects.
             s = _re.sub(r'^\s*\(?\d+\)?\s*[.):\-]\s*', '', ln)
             s = _re.sub(r'^\s*[\-\*\u2022\u00b7]\s+', '', s)
+            s = _re.sub(r'^both\s+', '', s, flags=_re.IGNORECASE)
             s = s.strip().strip('.').strip(',').strip()
             if not s or len(s) > 120 or len(s) < 2:
                 continue
@@ -42453,6 +42454,7 @@ def _detect_implicit_list_subjects(text: str) -> list[str]:
     subjects = []
     for p in parts:
         s = p.strip().strip('.').strip()
+        s = _re.sub(r'^both\s+', '', s, flags=_re.IGNORECASE).strip()
         if not s:
             continue
         if len(s) < 2 or len(s) > 60:
@@ -42555,6 +42557,11 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
         '', tail, flags=_re.IGNORECASE).strip()
     tail = _re.sub(r'^(?:each\s+of\s+)?(?:these|those|the)\s*:\s*',
                     '', tail, flags=_re.IGNORECASE).strip()
+    # 2026-08-20 (Jenna screenshot): "profiles on both Erin Brooks
+    # (surfer) and Dylan Minnette" leaked the word "Both" into the
+    # first subject name. Strip leading quantifiers before splitting.
+    tail = _re.sub(r'^(?:both|all\s+of|each\s+of|each)\s+',
+                    '', tail, flags=_re.IGNORECASE).strip()
 
     # Parenthetical wrapper: `TV brands (VIZIO, Samsung, LG)`.
     # 2026-08-19: BUT if the lead text before the paren looks like a
@@ -42608,6 +42615,7 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
             s = _re.sub(r'^\s*\(?\d+\)?\s*[.):\-]\s*', '', ln)
             # Strip bulleted prefix "- ", "* ", "• ", "· "
             s = _re.sub(r'^\s*[\-\*\u2022\u00b7]\s+', '', s)
+            s = _re.sub(r'^both\s+', '', s, flags=_re.IGNORECASE)
             s = s.strip().strip('.').strip(',').strip()
             if not s or len(s) > 120 or len(s) < 2:
                 continue
@@ -42630,6 +42638,7 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
             # Strip inline numbered/bulleted prefix.
             s = _re.sub(r'^\s*\(?\d+\)?\s*[.):\-]\s*', '', s)
             s = _re.sub(r'^\s*[\-\*\u2022\u00b7]\s+', '', s)
+            s = _re.sub(r'^both\s+', '', s, flags=_re.IGNORECASE)
             s = s.strip().strip('.').strip()
             if not s or len(s) > 120:
                 continue
@@ -43872,11 +43881,36 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
     total_credits = sum(int(r.get('estimated_credits') or 0)
                         for r in ok_drafts)
 
+    # Batch-level date-clarification gate (2026-08-20, Jenna: "the user
+    # did not specify a time frame so the bot should have prompted in
+    # the chat as well"). Same contract as the single-subject path: if
+    # neither the user's text/history nor any per-subject interpret
+    # flagged the window as explicit, the frontend asks BEFORE showing
+    # the batch approval summary. The proposed range comes from the
+    # first draft (all drafts share the standard default when the ask
+    # had no dates).
+    user_explicit = _user_specified_dates(user_text, chat_history=history)
+    claude_explicit = any(
+        bool((r.get('spec_draft') or {}).get('date_range_explicit'))
+        for r in ok_drafts
+    )
+    needs_date_clarification = bool(ok_drafts) and not (
+        user_explicit or claude_explicit)
+    _dr0 = {}
+    if ok_drafts:
+        _dr0 = (ok_drafts[0].get('spec_draft') or {}).get('date_range') or {}
+    proposed_range = {
+        'start': _dr0.get('start') or '2025-07-01',
+        'end': _dr0.get('end') or '2026-06-30',
+    }
+
     return jsonify({
         'success': True,
         'batch': True,
         'batch_size': len(subjects),
         'subjects': subjects,
+        'needs_date_clarification': needs_date_clarification,
+        'proposed_date_range': proposed_range,
         'spec_drafts': [r.get('spec_draft') for r in ok_drafts],
         'per_subject_meta': [
             {
