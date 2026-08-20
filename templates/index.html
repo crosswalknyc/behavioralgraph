@@ -60219,6 +60219,16 @@ https://www.instagram.com/p/..."></textarea>
                     synthChatPushTurn('agent', msg);
                     return;
                 }
+                // Batch response with zero surviving drafts
+                // (2026-08-20): never fall through to the single-
+                // draft renderer with an undefined draft - that is
+                // what produced the 'Building a new **this profile**
+                // profile' card. Ask for a rephrase instead.
+                if (data.batch && (!Array.isArray(data.spec_drafts) || !data.spec_drafts.length)) {
+                    synthChatPushTurn('agent',
+                        "I couldn't draft any of those profiles. Tell me who each profile is for - one per line works best - and I'll queue one per segment.");
+                    return;
+                }
                 // Batch response (2026-08-18): backend detected
                 // multi-subject prompt and returned an array of
                 // drafts. Render a stacked summary + reveal the

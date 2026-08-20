@@ -42667,6 +42667,27 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
                 continue
             subjects.append(s)
 
+        # Bare-"and" singular guard (2026-08-20): "build a profile on
+        # Joe and the Juice" / "a profile of Ben and Jerry's fans" is
+        # ONE subject whose name contains 'and', not a 2-item batch.
+        # Block the split when the ask used singular "a profile" with
+        # no plural form, no commas/semicolons, and no both/each/all
+        # quantifier. "run profiles on X and Y" (plural) and "a
+        # profile on both X and Y" (quantifier) still fan out.
+        if (subjects and '\n' not in tail
+                and not _re.search(r'[,;]', tail)
+                and not _re.search(
+                    r'\b(?:both|all\s+of|each(?:\s+of)?)\b',
+                    text, _re.IGNORECASE)
+                and _re.search(
+                    r'\b(?:a|an|one)\s+(?:new\s+)?'
+                    r'(?:profile|iq|persona|report|analysis)\b',
+                    text, _re.IGNORECASE)
+                and not _re.search(
+                    r'\b(?:profiles|iqs|personas|reports|analyses)\b',
+                    text, _re.IGNORECASE)):
+            return []
+
     # Detach a trailing shared-context modifier from the LAST subject if
     # present. E.g. "profiles for A, B, C for the past 60 days" splits
     # into ["A", "B", "C for the past 60 days"] on the first pass. The
@@ -42743,12 +42764,15 @@ def _detect_cartesian_batch(user_text: str):
       - "X vs Y" / "X versus Y"      -> cohorts = [X, Y]
       - otherwise                    -> cohorts = [<lead>]
 
-    Returns (subjects, shared_context) or None. Subjects is the
-    Cartesian product `retailer + cohort` for each combination, e.g.
-    ['Amazon EST buyers', 'Amazon TVOD renters', 'Apple EST buyers',
-    ...]. shared_context is the full original text, threaded through
-    the per-subject interpret call so each Claude call gets the
-    definitional context of what 'EST buyer' / 'TVOD renter' mean.
+    Returns (subjects, shared_context, n_cohorts) or None. Subjects is
+    the Cartesian product `retailer + cohort` for each combination,
+    e.g. ['Amazon EST buyers', 'Amazon TVOD renters', 'Apple EST
+    buyers', ...]. shared_context is the full original text, threaded
+    through the per-subject interpret call so each Claude call gets
+    the definitional context of what 'EST buyer' / 'TVOD renter'
+    mean. n_cohorts lets the route rank this detector against the
+    plain list splitter: 2+ cohorts is a real Cartesian product and
+    wins; a degenerate 1-cohort read defers to the plain splitter.
     """
     import re as _re
     t = (user_text or '').strip().rstrip('.!?').strip()
@@ -42781,7 +42805,7 @@ def _detect_cartesian_batch(user_text: str):
         # truncate - the caller gets a clean single-subject fallback.
         if len(subjects) < 2 or len(subjects) > SYNTH_CHAT_BATCH_MAX:
             return None
-        return subjects, t
+        return subjects, t, len(cohorts)
 
     vs_re = _re.compile(
         r'^(.{2,120}?)\s+(?:vs\.?|versus)\s+(.{2,120}?)$',
@@ -42867,7 +42891,7 @@ def _detect_cartesian_batch(user_text: str):
         r'(?:make|create|build|run|generate|do|give\s+me|show\s+me|'
         r'i\s+want|i\s+need|i\'?d\s+like)\s+'
         r'(?:a\s+|an\s+|the\s+|me\s+a\s+|us\s+a\s+)?'
-        r'(?:new\s+|individual\s+|separate\s+|distinct\s+)?'
+        r'(?:new\s+|individual\s+|separate\s+|seperate\s+|distinct\s+)*'
         r'(?:profile|profiles|iq|iqs|persona|personas|report|analysis)\s+'
         r'(?:of|for|on|comparing|showing|about)\s+',
         '', lead, flags=_re.IGNORECASE).strip()
@@ -43884,6 +43908,20 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
             }
         spec_draft = result.get('data') or {}
 
+        # 2026-08-20: chat history from earlier batch turns can prime
+        # the model to return a JSON ARRAY of drafts even for this
+        # single-slice ask. Take the first dict - the caller-subject
+        # override below repairs subject/file_stem deterministically -
+        # instead of crashing on list.get and failing the whole slice.
+        if isinstance(spec_draft, list):
+            spec_draft = next(
+                (d for d in spec_draft if isinstance(d, dict)), {})
+        if not isinstance(spec_draft, dict) or not spec_draft:
+            return {
+                'success': False, 'subject_input': subject,
+                'error': 'interpret returned no usable draft',
+            }
+
         # Force the caller-provided subject name onto the draft so the
         # approval card and file_stem match the specific slice we
         # asked Claude to interpret. When we thread the full original
@@ -44045,6 +44083,26 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
     failures = [r for r in ordered if not r.get('success')]
     total_credits = sum(int(r.get('estimated_credits') or 0)
                         for r in ok_drafts)
+
+    # Zero-drafts guard (2026-08-20): when EVERY per-subject interpret
+    # fails, returning batch:true with an empty spec_drafts array made
+    # the frontend fall through to an empty single-draft card that
+    # read 'Building a new **this profile** profile'. Fail loudly with
+    # a friendly rephrase ask instead; log the real errors server-side.
+    if not ok_drafts:
+        print("[synth-chat interpret batch] ALL subject interprets "
+              "failed: " + "; ".join(
+                  f"{f.get('subject_input')!r}: {f.get('error')}"
+                  for f in failures[:8]))
+        return jsonify({
+            'success': False,
+            'error': (
+                "I couldn't draft any of those profiles from that "
+                "phrasing. Tell me who each profile is for - e.g. "
+                "'Amazon EST buyers' - or list the segments one per "
+                "line and I'll queue one profile per segment."
+            ),
+        }), 502
 
     # Batch-level date-clarification gate (2026-08-20, Jenna: "the user
     # did not specify a time frame so the bot should have prompted in
@@ -45810,8 +45868,22 @@ def api_synth_chat_interpret():
     # frontend renders one approval card per draft + an "Approve all"
     # button. Cap enforced at SYNTH_CHAT_BATCH_MAX so we don't swamp
     # the interpret step or the 10-worker pool.
+    #
+    # PRECEDENCE (2026-08-20 Jenna: "create seperate profiles on EST
+    # buyers and TVOD renters for each platform Amazon, Apple, ..."
+    # was hijacked by the plain splitter into 6 mangled slices like
+    # 'TVOD renters for each platform Amazon'): a Cartesian read with
+    # 2+ real cohorts is strictly more specific than the flat comma
+    # split, so it wins. A degenerate 1-cohort Cartesian read ("TV
+    # brands (VIZIO, Samsung, LG)") still defers to the plain
+    # splitter, which produces cleaner one-entity subjects.
     # ------------------------------------------------------------------
     _batch_subjects = _detect_batch_subjects(text)
+    _cart = _detect_cartesian_batch(text)
+    if _cart and len(_cart) >= 3 and _cart[2] >= 2:
+        _batch_subjects = []
+    elif _batch_subjects:
+        _cart = None
     if _batch_subjects:
         if len(_batch_subjects) > SYNTH_CHAT_BATCH_MAX:
             return jsonify({
@@ -45837,14 +45909,11 @@ def api_synth_chat_interpret():
     # Cartesian batch (2026-08-18): patterns like
     #   "make a profile of EST buyers vs. TVOD renters by retailer
     #    (Amazon, Apple, Fandango at Home, Google Play/YouTube)"
-    # fan out to |cohorts| * |items| profiles. Runs AFTER the plain
-    # list detector so explicit-trigger phrases like "run individual
-    # profiles for TV brands (VIZIO, Samsung, LG)" get the cleaner
-    # ["VIZIO", "Samsung", "LG"] expansion rather than a Cartesian
-    # attempt with a leftover cohort word.
-    _cart = _detect_cartesian_batch(text)
+    # fan out to |cohorts| * |items| profiles. Precedence against the
+    # plain list detector is decided above: 2+ cohorts wins, 1-cohort
+    # reads defer to the plain splitter's cleaner one-entity slices.
     if _cart:
-        _cart_subjects, _cart_shared_ctx = _cart
+        _cart_subjects, _cart_shared_ctx = _cart[0], _cart[1]
         if len(_cart_subjects) > SYNTH_CHAT_BATCH_MAX:
             return jsonify({
                 'success': False,
