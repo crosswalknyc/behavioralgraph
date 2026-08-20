@@ -106878,7 +106878,7 @@ https://www.instagram.com/p/..."></textarea>
                     applyGenPopMode();
                 } else {
                     const msg = response.status === 404
-                        ? 'Profile file not found. It may have been moved (e.g. after release from Purgatory). Click ↻ to refresh the profile list.'
+                        ? 'Profile not found. Click ↻ to refresh the profile list.'
                         : (data.error || 'Unknown error');
                     if (typeof showNotification === 'function') {
                         showNotification(msg, 'error');
@@ -113171,7 +113171,7 @@ https://www.instagram.com/p/..."></textarea>
                 } else {
                     const is404 = response.status === 404;
                     const msg = is404
-                        ? 'Profile file not found. It may have been moved (e.g. after release from Purgatory). Click ↻ to refresh the profile list.'
+                        ? 'Profile not found. Click ↻ to refresh the profile list.'
                         : (data.error || 'Failed to load profile.');
                     if (typeof showNotification === 'function') {
                         showNotification(msg, 'error');
