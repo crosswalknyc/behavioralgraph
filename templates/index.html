@@ -18299,6 +18299,38 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
         .behavioral-index-filter .bif-label {
             white-space: normal;
         }
+
+        /* ---- 16. Location tab ------------------------------------------------
+           The location "tables" are CSS-grid rows (.location-row), not <table>s,
+           so the generic table rule doesn't apply; on a phone the 5-7 fixed
+           columns get crushed and the header labels overlap. Fixes:
+           (1) Make each location module a single horizontal-scroll container and
+               give the rows a min-width so columns keep their size and the header
+               + body scroll together. Stack each module's title and Sort/Search
+               group vertically so the controls stay pinned at the left edge and
+               remain reachable even though the grid content box is wide.
+           (2) Match the Sort <select> height to the Search <input> (which is 16px
+               to avoid iOS zoom).
+           (3) Stack the Over-/Under-Indexing cards (Over on top) instead of the
+               side-by-side 2-up grid. */
+        #tab-location .location-table {
+            overflow: auto !important;
+            max-height: 72vh !important;
+            -webkit-overflow-scrolling: touch;
+        }
+        #tab-location .location-table > [id^="locationList"],
+        #tab-location .location-table > [id^="locationCount"] {
+            max-height: none !important;
+            overflow: visible !important;
+        }
+        #tab-location .location-table > div:first-child {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+        }
+        #tab-location .location-row { min-width: 460px; }
+        #tab-location #allLocationsContainer .location-row { min-width: 620px; }
+        #tab-location select { font-size: 16px !important; }
+        #tab-location .location-grid { grid-template-columns: 1fr !important; }
     }
     </style>
 </head>
