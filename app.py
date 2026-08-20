@@ -13811,7 +13811,7 @@ def get_csv_data(s3_key):
             except Exception:
                 pass
         print(f"❌ Profile not found: {s3_key}")
-        return jsonify({'success': False, 'error': 'Profile file not found. It may have been moved (e.g. after release from Purgatory). Click ↻ to refresh the profile list.', 's3_key': s3_key}), 404
+        return jsonify({'success': False, 'error': 'Profile not found. Click ↻ to refresh the profile list.', 's3_key': s3_key}), 404
     except Exception as e:
         print(f"❌ Error in get_csv_data: {e}")
         import traceback
@@ -13922,9 +13922,9 @@ def submit_rerun():
                     csv_content = response['Body'].read().decode('utf-8')
                     s3_key = s3_key[len(S3_PURGATORY_PREFIX):]
                 except Exception:
-                    return jsonify({'error': 'Profile file not found'}), 404
+                    return jsonify({'error': 'Profile not found. Click ↻ to refresh the profile list.'}), 404
             else:
-                return jsonify({'error': 'Profile file not found'}), 404
+                return jsonify({'error': 'Profile not found. Click ↻ to refresh the profile list.'}), 404
         metadata = parse_metadata_from_csv(csv_content)
         if not metadata:
             return jsonify({'error': 'Could not read run metadata from profile'}), 400
@@ -20713,7 +20713,7 @@ def get_profile_data(filename):
             csv_text = csv_bytes.decode('utf-8')
         except s3_client.exceptions.NoSuchKey:
             print(f"❌ Profile not found: {filename}")
-            return jsonify({'success': False, 'error': f'Profile file not found: {filename}'}), 404
+            return jsonify({'success': False, 'error': 'Profile not found. Click ↻ to refresh the profile list.'}), 404
         except Exception as e:
             print(f"❌ Error reading profile from S3: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
