@@ -45826,12 +45826,18 @@ def api_synth_chat_clarify():
         parent_display = str(picked.get('display_name') or '').strip()
         label = str(draft.get('cut_label')
                     or draft.get('cut_label_guess') or subject).strip()
+        # Recover the FULL cohort label from the subject once the
+        # parent is known (2026-08-20: 'Marvel TVOD Renters -> EST
+        # Buyers' must not collapse to 'EST buyers').
+        label = _upgrade_cut_label_with_residual(
+            label, draft.get('subject') or subject, parent_display)
         new_name = _compose_cut_name(parent_display, label)
         draft['decision'] = 'derive_cut'
         draft['existing_match_s3_key'] = picked.get('s3_key')
         draft['existing_match_display_name'] = parent_display
         draft['parent_display_name'] = parent_display
         draft['cut_label'] = label
+        draft['cut_label_guess'] = label
         draft['subject'] = new_name
         draft['name'] = new_name
         if not (draft.get('derive_type') or '').strip() \
@@ -46844,10 +46850,14 @@ def api_synth_chat_approve():
         # with the cohort description (2026-08-20 lineage directive).
         if draft.get('cut_label'):
             payload['cut_label'] = str(draft.get('cut_label'))[:160]
-        if draft.get('cut_label_guess') or draft.get('cut_label'):
+        if draft.get('cut_label') or draft.get('cut_label_guess'):
+            # cut_label wins: the parent-link/promoter paths upgrade it
+            # with the full residual cohort; the guess can be the
+            # truncated intersect right-operand (2026-08-20 Marvel
+            # TVOD fix).
             payload['cohort_description'] = str(
-                draft.get('cut_label_guess')
-                or draft.get('cut_label'))[:400]
+                draft.get('cut_label')
+                or draft.get('cut_label_guess'))[:400]
     if decision == 'time_shifted_refresh':
         payload['refresh_row_hypothesis'] = draft.get('refresh_row_hypothesis') or ''
 
@@ -48103,6 +48113,60 @@ def _detect_intersect_parent_from_prompt(prompt, candidates,
     return None
 
 
+def _residual_cut_label(subject, parent_display):
+    """Everything in `subject` beyond the parent name - the TRUE cut
+    descriptor when the subject embeds cohort qualifiers that the
+    intersect split absorbed into its left operand.
+
+    2026-08-20 (Jenna: 'Vizio TV Owners - Marvel TVOD renters -> EST
+    buyers' got cut down to just 'EST buyers'): the intersect grammar
+    splits at the FIRST operator, so a multi-stage cohort with an
+    arrow in its NAME leaves its front half stuck inside the left
+    operand. Once the user picks the parent, the residual of the
+    subject minus the parent name recovers the full cohort label.
+    Returns '' when the parent name isn't a prefix of the subject."""
+    import re as _re
+    s = str(subject or '').strip()
+    p = str(parent_display or '').strip()
+    if not s or not p:
+        return ''
+    if s.lower().startswith(p.lower()):
+        resid = s[len(p):]
+    else:
+        st, pt = s.split(), p.split()
+        n = 0
+        while n < len(st) and n < len(pt) \
+                and st[n].lower().strip('.,') == pt[n].lower().strip('.,'):
+            n += 1
+        # Require a real prefix match (at least half the parent's
+        # tokens, minimum 1) before treating the rest as the label.
+        if n < max(1, (len(pt) + 1) // 2):
+            return ''
+        resid = ' '.join(st[n:])
+    resid = resid.strip().strip('-\u2013\u2014:,;').strip()
+    resid = _re.sub(r'^(?:for|of|who|that|the)\s+', '', resid,
+                    flags=_re.IGNORECASE).strip()
+    if len(resid) < 3:
+        return ''
+    return resid
+
+
+def _upgrade_cut_label_with_residual(label, subject, parent_display):
+    """Prefer the subject-minus-parent residual over a truncated
+    intersect right-operand. Upgrades only when the residual clearly
+    extends the current label (contains it, longer) or the current
+    label degenerated to the whole subject."""
+    label = str(label or '').strip()
+    resid = _residual_cut_label(subject, parent_display)
+    if not resid:
+        return label
+    if not label or label.strip().lower() == str(subject or '').strip().lower():
+        return resid
+    if len(resid) > len(label) and label.lower() in resid.lower():
+        return resid
+    return label
+
+
 def _compose_cut_name(parent_display, cut_label):
     """'{Parent} - {Cut Label}', deduped: if the label already leads
     with the parent name ('Vizio TV Owners - Spider-Man ...' or the
@@ -48143,6 +48207,10 @@ def _maybe_promote_intersect_to_derive_cut(draft, prompt, candidates,
     if not hit:
         return draft
     parent_key, parent_display, cut_label = hit
+    # Recover the full cohort label when the intersect split left part
+    # of it inside the left operand (2026-08-20 Marvel TVOD fix).
+    cut_label = _upgrade_cut_label_with_residual(
+        cut_label, draft.get('subject') or prompt, parent_display)
     draft['decision'] = 'derive_cut'
     draft['existing_match_s3_key'] = parent_key
     # `derive_type` is a free-form label Claude usually sets. Give it
@@ -48905,10 +48973,14 @@ def api_v1_profiles_run():
         # '{Parent} - {cut_label}.csv' (2026-08-20 lineage directive).
         if draft.get('cut_label'):
             payload['cut_label'] = str(draft.get('cut_label'))[:160]
-        if draft.get('cut_label_guess') or draft.get('cut_label'):
+        if draft.get('cut_label') or draft.get('cut_label_guess'):
+            # cut_label wins: the parent-link/promoter paths upgrade it
+            # with the full residual cohort; the guess can be the
+            # truncated intersect right-operand (2026-08-20 Marvel
+            # TVOD fix).
             payload['cohort_description'] = str(
-                draft.get('cut_label_guess')
-                or draft.get('cut_label'))[:400]
+                draft.get('cut_label')
+                or draft.get('cut_label_guess'))[:400]
     if decision == 'time_shifted_refresh':
         payload['refresh_row_hypothesis'] = draft.get('refresh_row_hypothesis') or ''
 
