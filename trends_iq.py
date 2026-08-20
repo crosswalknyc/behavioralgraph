@@ -2932,9 +2932,15 @@ _BOOK_PANEL_TO_PLATFORM = {
     'audible':   'audible',
 }
 _LIBBY_PANEL_TO_PLATFORM = {
-    # libby_trends.sources
+    # libby_trends.sources.
+    # Magazines aren't researched by the Claude pass (see
+    # `_collect_books` -> only ebook + audiobook), so magazine rows
+    # get their us_streams entirely from the LA-County-holds fallback
+    # inside `_annotate_books_with_streams`. Adding 'magazine' here
+    # is what unlocks the fallback path.
     'ebook':     'libby_ebook',
     'audiobook': 'libby_audio',
+    'magazine':  'libby_magazine',
 }
 
 
@@ -3172,9 +3178,14 @@ def _libby_fallback_us_estimate(holds: int, platform_key: str) -> dict:
         return {}
     # unit_label matches what the Claude-produced Libby estimates
     # carry, so the frontend badge reads identically.
-    unit = ('weekly US library borrows'
-             if platform_key == 'libby_ebook'
-             else 'weekly US library audiobook borrows')
+    if platform_key == 'libby_ebook':
+        unit = 'weekly US library borrows'
+    elif platform_key == 'libby_audio':
+        unit = 'weekly US library audiobook borrows'
+    elif platform_key == 'libby_magazine':
+        unit = 'weekly US library magazine reads'
+    else:
+        unit = 'weekly US library borrows'
     return {
         'us_estimate':      weekly_us,
         'us_estimate_low':  int(weekly_us * 0.7),

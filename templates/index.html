@@ -51392,6 +51392,15 @@ https://www.instagram.com/p/..."></textarea>
                             meta += '<span style="opacity:0.75;">' + _tiqEsc(it.subjects.slice(0, 2).join(', ')) + '</span>';
                         }
                     }
+                    // Projected-US-audience chip. `us_streams` is stamped on
+                    // every book row by `_annotate_books_with_streams` in
+                    // trends_iq.py - Claude reasoning + a Libby LA->US
+                    // fallback. Same chip idiom used by Streaming + FAST so
+                    // the reading experience is consistent across tabs. The
+                    // unit label ('weekly US buyers' / 'weekly US listeners'
+                    // / 'weekly US library borrows' / etc.) rides on us_streams.
+                    var audience = _tiqAudienceChip(it.us_streams);
+                    if (audience) meta += audience;
                     return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                            '<div class="tiq-row-body">' +
                            '<div class="tiq-row-title">' + titleLine +
