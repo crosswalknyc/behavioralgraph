@@ -114940,9 +114940,15 @@ https://www.instagram.com/p/..."></textarea>
             const chartContainerWidth = ageChartEl?.parentElement?.offsetWidth || 400;
             const vw = typeof window !== 'undefined' ? (window.innerWidth || 1200) : 1200;
             const effectiveWidth = Math.max(chartContainerWidth, Math.floor(vw / 2));
+            // Mobile (<=768px): shrink the axis/data-label fonts and reserve
+            // more right-side padding so the horizontal-bar value labels
+            // ("% GP: % index") stop clipping at the screen edge. Desktop keeps
+            // its original responsive sizing untouched.
+            const _isMobileChart = (typeof window !== 'undefined') && !!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
             const legendFontSize = Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
-            const axisFontSize = Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
-            const dataLabelFontSize = Math.max(10, Math.min(15, axisFontSize));
+            const axisFontSize = _isMobileChart ? 11 : Math.max(11, Math.min(16, Math.floor(effectiveWidth / 20)));
+            const dataLabelFontSize = _isMobileChart ? 10 : Math.max(10, Math.min(15, axisFontSize));
+            const barLayoutPadding = { right: _isMobileChart ? 78 : 50, left: 10, top: 5, bottom: 5 };
             // Legend for donut charts - positioned below for better fit
             const legendAreaWidth = 200;
             const layoutPaddingCircular = { left: 10, right: 10, top: 5, bottom: 5 };
@@ -115033,7 +115039,7 @@ https://www.instagram.com/p/..."></textarea>
                     responsive: true, 
                     maintainAspectRatio: false,
                     cutout: ageIsCircular ? doughnutCutout : 0,
-                    layout: { padding: ageIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
+                    layout: { padding: ageIsCircular ? layoutPaddingCircular : barLayoutPadding },
                     plugins: { 
                         tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Age') } },
                         legend: ageIsCircular ? { ...legendOptionsCircular, display: true, labels: { ...legendOptionsCircular.labels } } : { display: false },
@@ -115101,7 +115107,7 @@ https://www.instagram.com/p/..."></textarea>
                     responsive: true, 
                     maintainAspectRatio: false,
                     cutout: genderIsCircular ? doughnutCutout : 0,
-                    layout: { padding: genderIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
+                    layout: { padding: genderIsCircular ? layoutPaddingCircular : barLayoutPadding },
                     plugins: { 
                         tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Gender') } },
                         legend: genderIsCircular ? {
@@ -115226,7 +115232,7 @@ https://www.instagram.com/p/..."></textarea>
                     responsive: true, 
                     maintainAspectRatio: false,
                     cutout: ethnicityIsCircular ? doughnutCutout : 0,
-                    layout: { padding: ethnicityIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
+                    layout: { padding: ethnicityIsCircular ? layoutPaddingCircular : barLayoutPadding },
                     plugins: { 
                         tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Ethnicity') } },
                         legend: ethnicityIsCircular ? {
@@ -115373,7 +115379,7 @@ https://www.instagram.com/p/..."></textarea>
                     responsive: true, 
                     maintainAspectRatio: false,
                         cutout: incomeIsCircular ? doughnutCutout : 0,
-                        layout: { padding: incomeIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
+                        layout: { padding: incomeIsCircular ? layoutPaddingCircular : barLayoutPadding },
                         plugins: { 
                             tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Income') } },
                             legend: incomeIsCircular ? { ...legendOptionsCircular, display: true, labels: { ...legendOptionsCircular.labels } } : { display: false },
@@ -115460,7 +115466,7 @@ https://www.instagram.com/p/..."></textarea>
                     options: { 
                         indexAxis: educationIsCircular ? 'x' : 'y', responsive: true, maintainAspectRatio: false,
                         cutout: educationIsCircular ? doughnutCutout : 0,
-                        layout: { padding: educationIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
+                        layout: { padding: educationIsCircular ? layoutPaddingCircular : barLayoutPadding },
                         plugins: { 
                             tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Education') } },
                             legend: educationIsCircular ? { ...legendOptionsCircular, display: true, labels: { ...legendOptionsCircular.labels } } : { display: false },
@@ -115566,7 +115572,7 @@ https://www.instagram.com/p/..."></textarea>
                         responsive: true, 
                         maintainAspectRatio: false,
                         cutout: relationshipIsCircular ? doughnutCutout : 0,
-                        layout: { padding: relationshipIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
+                        layout: { padding: relationshipIsCircular ? layoutPaddingCircular : barLayoutPadding },
                         plugins: { 
                             tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Relationship Status') } },
                             legend: relationshipIsCircular ? {
@@ -115685,7 +115691,7 @@ https://www.instagram.com/p/..."></textarea>
                         responsive: true, 
                         maintainAspectRatio: false,
                         cutout: soIsCircular ? doughnutCutout : 0,
-                        layout: { padding: soIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
+                        layout: { padding: soIsCircular ? layoutPaddingCircular : barLayoutPadding },
                         plugins: { 
                             tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Sexual Orientation') } },
                             legend: soIsCircular ? {
@@ -115800,7 +115806,7 @@ https://www.instagram.com/p/..."></textarea>
                         responsive: true, 
                         maintainAspectRatio: false,
                         cutout: psIsCircular ? doughnutCutout : 0,
-                        layout: { padding: psIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
+                        layout: { padding: psIsCircular ? layoutPaddingCircular : barLayoutPadding },
                         plugins: { 
                             tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Parental Status') } },
                             legend: psIsCircular ? {
