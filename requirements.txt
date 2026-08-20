@@ -13,8 +13,15 @@ python-dotenv==1.0.0
 boto3>=1.35.50  # 1.35.50+ adds IfNoneMatch on PutObject for atomic claims
 certifi>=2024.1.0
 pyopenssl>=24.0.0
-openai>=1.12.0
-anthropic>=0.100.0
+# 2026-08-20: anthropic 1.0.0 rewrote its HTTP stack onto httpx2 and
+# stopped pulling in classic httpx, which claude_client.py imports
+# directly - every Claude call on Render died with "No module named
+# 'httpx'". Pin to the proven 0.1xx line (0.102.0 runs everywhere
+# else) and declare httpx explicitly. Same guard for openai: 2.x is
+# the proven line on both prod boxes.
+openai>=1.12.0,<3.0
+anthropic>=0.100.0,<1.0
+httpx>=0.27,<1.0
 reportlab==4.0.4
 weasyprint==60.1
 google-auth==2.27.0

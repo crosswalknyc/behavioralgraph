@@ -65,13 +65,22 @@ def get_claude_client():
 
     try:
         import anthropic
-        import httpx
         # Explicit httpx timeouts so a stalled TCP / TLS read (e.g. Anthropic
         # API black-hole where headers never arrive) is killed instead of
         # blocking the worker forever. Field-tuned against UBG hangs that sat
         # in ssl.recv() for 13+ min with a single 600s wall-timeout that
         # never actually fired through to the underlying socket.
-        _http_timeout = httpx.Timeout(connect=30.0, read=180.0, write=60.0, pool=30.0)
+        #
+        # 2026-08-20: httpx import made optional - anthropic 1.0.0 swapped
+        # its HTTP stack to httpx2, and a missing classic httpx must not
+        # take down the whole client. A plain seconds timeout still bounds
+        # the read through the SDK.
+        try:
+            import httpx
+            _http_timeout = httpx.Timeout(
+                connect=30.0, read=180.0, write=60.0, pool=30.0)
+        except ImportError:
+            _http_timeout = 180.0
         _claude_client = anthropic.Anthropic(api_key=api_key, timeout=_http_timeout)
         return _claude_client
     except Exception as e:
