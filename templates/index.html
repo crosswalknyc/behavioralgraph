@@ -59091,22 +59091,42 @@ https://www.instagram.com/p/..."></textarea>
                 var old = document.getElementById('synthChatWelcomeBubble');
                 if (old && old.parentNode) old.parentNode.removeChild(old);
                 _synthChatWelcomeLastShown = Date.now();
-                // Count builds still moving from history meta (same
-                // run_id/status trail the resume poller uses).
-                var byRun = {};
-                for (var i = 0; i < synthChatHistory.length; i++) {
-                    var m = synthChatHistory[i] && synthChatHistory[i].meta;
-                    if (m && m.run_id) {
-                        byRun[m.run_id] =
-                            String(m.status || 'queued').toLowerCase();
-                    }
+                // In-motion count comes from the live user-scoped queue
+                // (the same source the status-update intent answers from).
+                // History meta goes stale - completed runs keep their last
+                // non-terminal status - so counting it over-reports (the
+                // "3 builds in motion" phantom, 2026-08-20). If the health
+                // fetch fails, render with no count rather than a wrong one.
+                var histLenAtFetch = synthChatHistory.length;
+                fetch('/api/brief-chat/health', { credentials: 'same-origin' })
+                    .then(function(r) { return r.ok ? r.json() : null; })
+                    .catch(function() { return null; })
+                    .then(function(d) {
+                        var running = 0;
+                        var q = d && d.queue && d.queue.queue;
+                        if (q) {
+                            running = (parseInt(q.pending, 10) || 0) +
+                                      (parseInt(q.running, 10) || 0);
+                        }
+                        _synthChatRenderWelcomeBubble(running, histLenAtFetch);
+                    });
+            } catch (_) {}
+        }
+
+        function _synthChatRenderWelcomeBubble(running, histLenAtFetch) {
+            try {
+                var box = document.getElementById('synthChatMessages');
+                if (!box) return;
+                // Conversation moved on while the health fetch was in
+                // flight - don't inject a stale greeting mid-thread.
+                if (synthChatHistory.length !== histLenAtFetch) return;
+                if (synthChatAwaitingDateConfirm || synthChatClarify ||
+                    synthChatCurrentDraft || synthChatDiscoveryOffer ||
+                    (synthChatBatchDrafts && synthChatBatchDrafts.length)) {
+                    return;
                 }
-                var terminal = { completed: 1, complete: 1, failed: 1,
-                                 error: 1, cancelled: 1, canceled: 1 };
-                var running = 0;
-                for (var rid in byRun) {
-                    if (!terminal[byRun[rid]]) running++;
-                }
+                var old = document.getElementById('synthChatWelcomeBubble');
+                if (old && old.parentNode) old.parentNode.removeChild(old);
                 var hr = new Date().getHours();
                 var greet = hr < 12 ? 'Good morning'
                     : (hr < 17 ? 'Good afternoon' : 'Good evening');
