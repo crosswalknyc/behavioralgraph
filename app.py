@@ -42755,19 +42755,104 @@ def _detect_cartesian_batch(user_text: str):
     if len(t) < 15 or len(t) > 1200:
         return None
 
-    # Trailing parenthetical with comma-separated items (>=2). Uses
-    # .*$ so we grab the LAST paren block if there are multiple.
+    def _split_items(raw):
+        # Comma / semicolon / ' and ' / ' or ' as separators. Note we
+        # do NOT split on '/' so "Google Play/YouTube" stays intact.
+        raw = raw.strip()
+        if raw.startswith('(') and raw.endswith(')'):
+            raw = raw[1:-1]
+        its = _re.split(r'\s*(?:,|;|\band\b|\bor\b)\s*',
+                        raw, flags=_re.IGNORECASE)
+        its = [it.strip().strip('.').strip() for it in its]
+        return [it for it in its if it and 2 <= len(it) <= 80]
+
+    def _product(items, cohorts):
+        cohorts = [c.strip().strip('.').strip() for c in cohorts]
+        cohorts = [c for c in cohorts if 3 <= len(c) <= 120]
+        if not cohorts:
+            return None
+        # Cartesian product. Subject shape: "<item> <cohort>".
+        # Preserve original casing so acronyms like EST/TVOD stay
+        # uppercase.
+        subjects = [f"{item} {cohort}"
+                    for item in items for cohort in cohorts]
+        # Guard against overshoot: require at least 2 subjects, cap
+        # at the batch max. If we'd blow the cap, refuse rather than
+        # truncate - the caller gets a clean single-subject fallback.
+        if len(subjects) < 2 or len(subjects) > SYNTH_CHAT_BATCH_MAX:
+            return None
+        return subjects, t
+
+    vs_re = _re.compile(
+        r'^(.{2,120}?)\s+(?:vs\.?|versus)\s+(.{2,120}?)$',
+        _re.IGNORECASE)
+
+    # ---- Shape B (2026-08-20 Jenna): bare comma list after a
+    # segmentation marker, no parentheses. e.g.
+    #   "create separate profiles on EST buyers and TVOD renters for
+    #    each platform Amazon, Apple, Fandango at Home, Google Play,
+    #    YouTube"
+    pre = _re.match(
+        r'^\s*(?:please\s+)?(?:can\s+you\s+)?'
+        r'(?:make|create|build|run|generate|do|give\s+me|show\s+me|'
+        r'i\s+want|i\s+need|i\'?d\s+like)\s+'
+        r'(?:me\s+|us\s+)?(?:a\s+|an\s+|the\s+)?'
+        r'(?:new\s+|individual\s+|separate\s+|seperate\s+|distinct\s+)*'
+        r'(?:profile|profiles|iq|iqs|persona|personas|report|'
+        r'analysis|analyses)\s+'
+        r'(?:of|for|on|comparing|showing|about)\s+(.+)$',
+        t, _re.IGNORECASE | _re.DOTALL)
+    if pre:
+        rest = pre.group(1).strip()
+        seg = _re.search(
+            r'\s+(?:for\s+each|by|across|per)\s+(?:the\s+)?'
+            r'(?:platform|retailer|market|region|brand|store|service|'
+            r'network|channel|category|title|app|provider|company|'
+            r'dma)s?\s*[:,]?\s+(.+)$',
+            rest, _re.IGNORECASE | _re.DOTALL)
+        if seg:
+            items_b = _split_items(seg.group(1))
+            lead_b = rest[:seg.start()].strip()
+            if len(items_b) >= 2 and lead_b and len(lead_b) <= 200:
+                vm = vs_re.match(lead_b)
+                if vm:
+                    cohorts_b = [vm.group(1).strip(),
+                                 vm.group(2).strip()]
+                else:
+                    # 'X and Y' only splits into two cohorts when
+                    # BOTH sides end in an audience noun ('EST buyers
+                    # and TVOD renters' yes; 'Barnes and Noble
+                    # shoppers' no).
+                    noun = (r'(?:buyers?|renters?|owners?|'
+                            r'subscribers?|viewers?|users?|shoppers?|'
+                            r'members?|fans?|listeners?|churners?|'
+                            r'switchers?|purchasers?|customers?|'
+                            r'streamers?|players?|enthusiasts?|'
+                            r'consumers?|households?|gamers?|'
+                            r'readers?|travelers?|adopters?|'
+                            r'upgraders?|cancell?ers?)')
+                    parts = _re.split(r'\s*,\s*|\s+and\s+|\s*&\s*',
+                                      lead_b, flags=_re.IGNORECASE)
+                    parts = [p.strip() for p in parts if p.strip()]
+                    if len(parts) >= 2 and all(
+                            _re.search(noun + r'\s*$', p,
+                                       _re.IGNORECASE)
+                            for p in parts):
+                        cohorts_b = parts
+                    else:
+                        cohorts_b = [lead_b]
+                got = _product(items_b, cohorts_b)
+                if got:
+                    return got
+
+    # ---- Shape A: trailing parenthetical with comma-separated items
+    # (>=2). Uses .*$ so we grab the LAST paren block if there are
+    # multiple.
     paren_re = _re.compile(r'\(([^()]{4,400})\)\s*$')
     m = paren_re.search(t)
     if not m:
         return None
-    inner = m.group(1)
-    # Comma / semicolon / ' and ' / ' or ' as separators. Note we do
-    # NOT split on '/' so "Google Play/YouTube" stays intact.
-    items = _re.split(r'\s*(?:,|;|\band\b|\bor\b)\s*',
-                        inner, flags=_re.IGNORECASE)
-    items = [it.strip().strip('.').strip() for it in items]
-    items = [it for it in items if it and 2 <= len(it) <= 80]
+    items = _split_items(m.group(1))
     if len(items) < 2:
         return None
 
@@ -42810,9 +42895,6 @@ def _detect_cartesian_batch(user_text: str):
         return None
 
     # "X vs Y" comparison -> two cohorts.
-    vs_re = _re.compile(
-        r'^(.{2,120}?)\s+(?:vs\.?|versus)\s+(.{2,120}?)$',
-        _re.IGNORECASE)
     vm = vs_re.match(lead)
     if vm:
         cohorts = [vm.group(1).strip(), vm.group(2).strip()]
@@ -42824,25 +42906,7 @@ def _detect_cartesian_batch(user_text: str):
             return None
         cohorts = [lead]
 
-    cohorts = [c.strip().strip('.').strip() for c in cohorts]
-    cohorts = [c for c in cohorts if 3 <= len(c) <= 120]
-    if not cohorts:
-        return None
-
-    # Cartesian product. Subject shape: "<item> <cohort>". Preserve
-    # original casing so acronyms like EST/TVOD stay uppercase.
-    subjects: list[str] = []
-    for item in items:
-        for cohort in cohorts:
-            subjects.append(f"{item} {cohort}")
-
-    # Guard against overshoot: require at least 2 subjects, cap at
-    # the batch max. If we'd blow the cap, refuse rather than
-    # truncate - the caller will get a clean single-subject fallback.
-    if len(subjects) < 2 or len(subjects) > SYNTH_CHAT_BATCH_MAX:
-        return None
-
-    return subjects, t
+    return _product(items, cohorts)
 
 
 def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categories=None,
@@ -45885,6 +45949,29 @@ def api_synth_chat_interpret():
                 'success': False,
                 'error': 'Could not interpret that request. '
                          'Try rephrasing with the subject name(s).',
+            }), 400
+
+        # Placeholder-subject guard (2026-08-20 Jenna: a Cartesian ask
+        # that slipped past the batch detectors came back with subject
+        # 'this profile' and the card read 'Building a new **this
+        # profile** profile'). A draft whose subject is a generic
+        # pronoun/noun is an interpret failure - ask for a rephrase
+        # instead of shipping a garbage card.
+        _subj_chk = str(spec_draft.get('subject') or '').strip()
+        if re.match(
+                r'^(?:this|that|the|a|an|my|our|your|these|those)?'
+                r'[\s-]*(?:profile|profiles|audience|cohort|subject|'
+                r'persona|personas|request|segment|build|it|them)s?$',
+                _subj_chk, re.IGNORECASE) or len(_subj_chk) < 3:
+            return jsonify({
+                'success': False,
+                'error': (
+                    "I couldn't pin down the audience from that "
+                    "phrasing. Tell me who each profile is for - "
+                    "e.g. 'Amazon EST buyers' or 'Vizio TV owners' - "
+                    "or list the segments and I'll queue one profile "
+                    "per segment."
+                ),
             }), 400
 
         # Parent-selection guardrail (2026-08-18 Reba-2024 regression).
