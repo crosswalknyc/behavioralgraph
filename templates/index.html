@@ -124963,6 +124963,138 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
         
+        // -----------------------------------------------------------------
+        // CSV cut/cohort helpers (2026-08-20).
+        //
+        // Every Profile IQ CSV export should honor the Data Cuts /
+        // comparison cohorts the user currently has selected. When
+        // zero cuts are selected these helpers return [] and the CSV
+        // output is byte-identical to the pre-cuts era.
+        //
+        // Each helper is defensive: if the cohort state module isn't
+        // loaded yet (some IQ tools reuse these export functions
+        // outside the main Profile IQ view) it just no-ops back to []
+        // and the caller writes the plain single-cohort CSV.
+        // -----------------------------------------------------------------
+        function _extraCohortsForCsv() {
+            try {
+                if (typeof _getVisibleCohorts !== 'function') return [];
+                if (!window.currentDashboardData) return [];
+                var all = _getVisibleCohorts(window.currentDashboardData) || [];
+                // Skip 'profile' - that's the base subject the CSV
+                // already writes columns for. Everything else (real
+                // sibling runs + the synthetic Category Norm cohort)
+                // gets its own trailing column pair(s).
+                return all.filter(function (c) {
+                    return c && c.key && c.key !== 'profile';
+                });
+            } catch (e) {
+                console.warn('[csv] _extraCohortsForCsv failed', e);
+                return [];
+            }
+        }
+
+        function _csvSafeHeader(label, suffix) {
+            var base = String(label || 'Cut')
+                .replace(/[\r\n]+/g, ' ')
+                .replace(/"/g, '""')
+                .trim();
+            return '"' + base + (suffix ? ' ' + suffix : '') + '"';
+        }
+
+        function _cohortDemoPct(cohort, catKey, bucketLabel) {
+            try {
+                var p = cohort && cohort.parsed;
+                if (!p || !p.demographics) return null;
+                var raw = (p.demographics[catKey] || {})[bucketLabel];
+                if (raw == null || raw === '') return null;
+                var v = parseFloat(raw);
+                return isFinite(v) ? v : null;
+            } catch (e) { return null; }
+        }
+
+        function _cohortDemoIndex(cohort, catKey, bucketLabel, genPopPct) {
+            try {
+                var p = cohort && cohort.parsed;
+                if (p && p.demographicsIndex && p.demographicsIndex[catKey]) {
+                    var raw = p.demographicsIndex[catKey][bucketLabel];
+                    if (raw != null && raw !== '') {
+                        var v = parseFloat(raw);
+                        if (isFinite(v)) return Math.round(v);
+                    }
+                }
+                // Fallback: compute from cohort pct / gen pop pct.
+                var cp = _cohortDemoPct(cohort, catKey, bucketLabel);
+                if (cp != null && isFinite(genPopPct) && genPopPct > 0) {
+                    return Math.round((cp / genPopPct) * 100);
+                }
+            } catch (e) {}
+            return '';
+        }
+
+        function _cohortBehavioralItem(cohort, category, itemName) {
+            try {
+                var p = cohort && cohort.parsed;
+                if (!p || !p.behavioral) return null;
+                var cat = p.behavioral[category]
+                       || p.behavioral[String(category).toUpperCase()]
+                       || null;
+                if (!cat) return null;
+                if (Array.isArray(cat)) {
+                    for (var i = 0; i < cat.length; i++) {
+                        if (cat[i] && cat[i].name === itemName) return cat[i];
+                    }
+                    return null;
+                }
+                // Dict shape: values may be scalar pct OR object.
+                if (Object.prototype.hasOwnProperty.call(cat, itemName)) {
+                    var raw = cat[itemName];
+                    if (raw && typeof raw === 'object') return raw;
+                    var v = parseFloat(raw);
+                    return isFinite(v) ? { name: itemName, pct: v } : null;
+                }
+                return null;
+            } catch (e) { return null; }
+        }
+
+        function _cohortLocationItem(cohort, locationName) {
+            try {
+                var p = cohort && cohort.parsed;
+                if (!p || !Array.isArray(p.locations)) return null;
+                for (var i = 0; i < p.locations.length; i++) {
+                    if (p.locations[i] && p.locations[i].name === locationName) {
+                        return p.locations[i];
+                    }
+                }
+            } catch (e) {}
+            return null;
+        }
+
+        function _cohortInterestItem(cohort, name) {
+            try {
+                var p = cohort && cohort.parsed;
+                if (!p) return null;
+                if (p.interests && Object.prototype.hasOwnProperty.call(p.interests, name)) {
+                    return p.interests[name];
+                }
+            } catch (e) {}
+            return null;
+        }
+
+        // Round to same precision as base cells; empty string when unknown.
+        function _fmtPct(v) {
+            if (v == null || v === '' || !isFinite(v)) return '';
+            return (Number(v)).toFixed(2);
+        }
+        function _fmtPct4(v) {
+            if (v == null || v === '' || !isFinite(v)) return '';
+            return (Number(v)).toFixed(4);
+        }
+        function _fmtInt(v) {
+            if (v == null || v === '' || !isFinite(v)) return '';
+            return String(Math.round(Number(v)));
+        }
+
         function exportSpotlightCSV(category) {
             if (!currentDashboardData || !currentProfileData) return;
             
@@ -125007,20 +125139,44 @@ https://www.instagram.com/p/..."></textarea>
             }
             
             items.sort((a, b) => b.pct - a.pct);
-            
-            let csvContent = 'Rank,Item,Profile %,Gen Pop %,Index';
+
+            // Cuts / comparison cohorts currently selected in the UI
+            // become trailing column pairs (<Cut> %, <Cut> Index).
+            const _spotlightExtraCohorts = _extraCohortsForCsv();
+            let _spotlightCohortHead = '';
+            _spotlightExtraCohorts.forEach(function (c) {
+                _spotlightCohortHead += ',' + _csvSafeHeader(c.label, '%');
+                _spotlightCohortHead += ',' + _csvSafeHeader(c.label, 'Index');
+            });
+
+            let csvContent = 'Rank,Item,Profile %,Gen Pop %,Index' + _spotlightCohortHead;
             if (items[0] && items[0].subCategory) {
-                csvContent = 'Rank,Item,Sub-Category,Profile %,Gen Pop %,Index';
+                csvContent = 'Rank,Item,Sub-Category,Profile %,Gen Pop %,Index' + _spotlightCohortHead;
             }
             csvContent += '\n';
             
             items.forEach((item, idx) => {
                 const pctStr = (item.pct || 0).toFixed(2);
                 const genPopStr = (item.genPop || 0).toFixed(2);
+                // Per-cut cells: match against the same lookup category
+                // (item.subCategory for aggregated SPORTS/TALENT views,
+                // else the top-level category).
+                const _spotlightLookupCat = item.subCategory || category;
+                let _spotlightCohortCells = '';
+                _spotlightExtraCohorts.forEach(function (c) {
+                    const bi = _cohortBehavioralItem(c, _spotlightLookupCat, item.name);
+                    const cPct = bi ? (bi.pct != null ? Number(bi.pct) : parseFloat(bi)) : null;
+                    let cIdx = (bi && bi.index != null && isFinite(bi.index)) ? Math.round(Number(bi.index)) : '';
+                    if (cIdx === '' && cPct != null && isFinite(cPct) && item.genPop > 0) {
+                        cIdx = Math.round((cPct / item.genPop) * 100);
+                    }
+                    _spotlightCohortCells += ',' + _fmtPct(cPct);
+                    _spotlightCohortCells += ',' + (cIdx === '' ? '' : cIdx);
+                });
                 if (item.subCategory) {
-                    csvContent += `${idx + 1},"${item.name}","${item.subCategory}",${pctStr},${genPopStr},${item.index}\n`;
+                    csvContent += `${idx + 1},"${item.name}","${item.subCategory}",${pctStr},${genPopStr},${item.index}${_spotlightCohortCells}\n`;
                 } else {
-                    csvContent += `${idx + 1},"${item.name}",${pctStr},${genPopStr},${item.index}\n`;
+                    csvContent += `${idx + 1},"${item.name}",${pctStr},${genPopStr},${item.index}${_spotlightCohortCells}\n`;
                 }
             });
             
@@ -125053,28 +125209,64 @@ https://www.instagram.com/p/..."></textarea>
                 const genPop = currentDashboardData.demographicsGenPop[catKey] || {};
                 // Sexual Orientation: use same display labels as dashboard (YES->LGBTQ+, NO->HETEROSEXUAL, other->uppercase)
                 const displayLabel = (catKey === 'sexual_orientation') ? (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO' || upper === 'STRAIGHT / HETEROSEXUAL') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES' || upper === 'GAY OR LESBIAN' || upper === 'LGBTQ+') return 'LGBTQ+'; if (upper === 'OTHER' || upper === 'ANOTHER SEXUAL ORIENTATION') return 'OTHER'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; } : (l) => l;
+                const _demoExtraCohorts = _extraCohortsForCsv();
+                let _demoCohortHead = '';
+                _demoExtraCohorts.forEach(function (c) {
+                    _demoCohortHead += ',' + _csvSafeHeader(c.label, '%');
+                    _demoCohortHead += ',' + _csvSafeHeader(c.label, 'Index');
+                });
                 csvContent = `${profileName} - ${category}\n`;
-                csvContent += `Label,Profile %,Gen Pop %,Index\n`;
+                csvContent += `Label,Profile %,Gen Pop %,Index${_demoCohortHead}\n`;
                 Object.keys(data).forEach(label => {
                     const val = (parseFloat(data[label]) || 0).toFixed(2);
-                    const gp = (parseFloat(genPop[label]) || 0).toFixed(2);
+                    const gpPctNum = parseFloat(genPop[label]) || 0;
+                    const gp = gpPctNum.toFixed(2);
                     const idx = Math.round(parseFloat(index[label]) || 100);
                     const csvLabel = displayLabel(label);
-                    csvContent += `"${csvLabel}",${val}%,${gp}%,${idx}\n`;
+                    let _demoCohortCells = '';
+                    _demoExtraCohorts.forEach(function (c) {
+                        const cPct = _cohortDemoPct(c, catKey, label);
+                        const cIdx = _cohortDemoIndex(c, catKey, label, gpPctNum);
+                        _demoCohortCells += ',' + (cPct == null ? '' : cPct.toFixed(2) + '%');
+                        _demoCohortCells += ',' + (cIdx === '' ? '' : cIdx);
+                    });
+                    csvContent += `"${csvLabel}",${val}%,${gp}%,${idx}${_demoCohortCells}\n`;
                 });
             } else if (type === 'behavioral') {
                 const items = currentDashboardData.behavioral[category] || [];
                 const US_POP = 329900000;
+                const _behExtraCohorts = _extraCohortsForCsv();
+                let _behCohortHead = '';
+                _behExtraCohorts.forEach(function (c) {
+                    _behCohortHead += ',' + _csvSafeHeader(c.label, '%');
+                    _behCohortHead += ',' + _csvSafeHeader(c.label, 'Numbers');
+                    _behCohortHead += ',' + _csvSafeHeader(c.label, 'Index');
+                });
                 // Use same values as dashboard: projection and genPopProjection (not recalculated from %)
                 csvContent = `${profileName} - ${category}\n`;
-                csvContent += `Name,Audience %,Audience Numbers,Gen Pop %,Gen Pop Numbers,Index\n`;
+                csvContent += `Name,Audience %,Audience Numbers,Gen Pop %,Gen Pop Numbers,Index${_behCohortHead}\n`;
                 items.forEach(item => {
                     const audiencePct = (item.pct || 0).toFixed(2);
                     const audienceNumbers = (item.projection != null && item.projection !== '') ? Math.round(Number(item.projection)) : Math.round(((item.pct || 0) / 100) * US_POP);
                     const genPopPct = item.genPopPct || 0;
                     const genPopNumbers = (item.genPopProjection != null && item.genPopProjection !== '') ? Math.round(Number(item.genPopProjection)) : Math.round((genPopPct / 100) * US_POP);
                     const index = item.index || 0;
-                    csvContent += `"${item.name}",${audiencePct}%,${audienceNumbers},${genPopPct.toFixed(2)}%,${genPopNumbers},${index}\n`;
+                    let _behCohortCells = '';
+                    _behExtraCohorts.forEach(function (c) {
+                        const bi = _cohortBehavioralItem(c, category, item.name);
+                        const cPct = bi && bi.pct != null ? Number(bi.pct) : null;
+                        const cProj = bi && bi.projection != null && bi.projection !== ''
+                            ? Math.round(Number(bi.projection))
+                            : (cPct != null ? Math.round((cPct / 100) * US_POP) : null);
+                        let cIdx = bi && bi.index != null && isFinite(bi.index) ? Math.round(Number(bi.index)) : '';
+                        if (cIdx === '' && cPct != null && genPopPct > 0) {
+                            cIdx = Math.round((cPct / genPopPct) * 100);
+                        }
+                        _behCohortCells += ',' + (cPct == null ? '' : cPct.toFixed(2) + '%');
+                        _behCohortCells += ',' + (cProj == null ? '' : cProj);
+                        _behCohortCells += ',' + (cIdx === '' ? '' : cIdx);
+                    });
+                    csvContent += `"${item.name}",${audiencePct}%,${audienceNumbers},${genPopPct.toFixed(2)}%,${genPopNumbers},${index}${_behCohortCells}\n`;
                 });
             } else if (type === 'location') {
                 const locations = currentDashboardData.locations || [];
@@ -125110,11 +125302,29 @@ https://www.instagram.com/p/..."></textarea>
                     });
                 }
 
+                const _locExtraCohorts = _extraCohortsForCsv();
+                let _locCohortHead = '';
+                _locExtraCohorts.forEach(function (c) {
+                    _locCohortHead += ',' + _csvSafeHeader(c.label, '%');
+                    _locCohortHead += ',' + _csvSafeHeader(c.label, 'Index');
+                });
                 csvContent = `${profileName} - ${category}\n`;
-                csvContent += `DMA Rank,DMA,Audience %,Gen Pop %,Index\n`;
+                csvContent += `DMA Rank,DMA,Audience %,Gen Pop %,Index${_locCohortHead}\n`;
                 sorted.forEach(loc => {
                     const rank = getDMARank(loc.name) || '';
-                    csvContent += `${rank},"${normalizeDmaDisplay(loc.name)}",${loc.pct.toFixed(4)}%,${loc.genPopPct?.toFixed(4) || 0}%,${loc.index}\n`;
+                    const gpPctNum = (loc.genPopPct != null) ? Number(loc.genPopPct) : 0;
+                    let _locCohortCells = '';
+                    _locExtraCohorts.forEach(function (c) {
+                        const li = _cohortLocationItem(c, loc.name);
+                        const cPct = (li && li.pct != null) ? Number(li.pct) : null;
+                        let cIdx = (li && li.index != null && isFinite(li.index)) ? Math.round(Number(li.index)) : '';
+                        if (cIdx === '' && cPct != null && gpPctNum > 0) {
+                            cIdx = Math.round((cPct / gpPctNum) * 100);
+                        }
+                        _locCohortCells += ',' + (cPct == null ? '' : cPct.toFixed(4) + '%');
+                        _locCohortCells += ',' + (cIdx === '' ? '' : cIdx);
+                    });
+                    csvContent += `${rank},"${normalizeDmaDisplay(loc.name)}",${loc.pct.toFixed(4)}%,${loc.genPopPct?.toFixed(4) || 0}%,${loc.index}${_locCohortCells}\n`;
                 });
             } else if (type === 'interests') {
                 // Interests: same structure as page - object of name -> { pct, genPopPct, index }; use allInterestsData if populated (matches grid), else currentDashboardData.interests
@@ -125127,14 +125337,31 @@ https://www.instagram.com/p/..."></textarea>
                         index: data.index || 100,
                         category: data.category
                     })) : []);
+                const _intExtraCohorts = _extraCohortsForCsv();
+                let _intCohortHead = '';
+                _intExtraCohorts.forEach(function (c) {
+                    _intCohortHead += ',' + _csvSafeHeader(c.label, '%');
+                    _intCohortHead += ',' + _csvSafeHeader(c.label, 'Index');
+                });
                 csvContent = `${profileName} - ${category}\n`;
-                csvContent += `Interest,Audience %,Gen Pop %,Index\n`;
+                csvContent += `Interest,Audience %,Gen Pop %,Index${_intCohortHead}\n`;
                 interests.forEach(item => {
                     const name = (item && item.name) ? item.name : (typeof item === 'string' ? item : '');
                     const pct = (item && (item.pct != null)) ? Number(item.pct) : 0;
                     const genPopPct = (item && (item.genPopPct != null)) ? Number(item.genPopPct) : 0;
                     const index = (item && (item.index != null)) ? Number(item.index) : 0;
-                    csvContent += `"${String(name).replace(/"/g, '""')}",${pct.toFixed(2)},${genPopPct.toFixed(2)},${index}\n`;
+                    let _intCohortCells = '';
+                    _intExtraCohorts.forEach(function (c) {
+                        const ii = _cohortInterestItem(c, name);
+                        const cPct = (ii && ii.pct != null) ? Number(ii.pct) : null;
+                        let cIdx = (ii && ii.index != null && isFinite(ii.index)) ? Math.round(Number(ii.index)) : '';
+                        if (cIdx === '' && cPct != null && genPopPct > 0) {
+                            cIdx = Math.round((cPct / genPopPct) * 100);
+                        }
+                        _intCohortCells += ',' + (cPct == null ? '' : cPct.toFixed(2));
+                        _intCohortCells += ',' + (cIdx === '' ? '' : cIdx);
+                    });
+                    csvContent += `"${String(name).replace(/"/g, '""')}",${pct.toFixed(2)},${genPopPct.toFixed(2)},${index}${_intCohortCells}\n`;
                 });
             } else if (type === 'affinity') {
                 const elementId = {
@@ -125165,6 +125392,114 @@ https://www.instagram.com/p/..."></textarea>
             link.click();
         }
         
+        // -----------------------------------------------------------------
+        // Global fallback for the "📄 Current Page (CSV)" dropdown link
+        // in the top action bar. Historically this called a name that
+        // was never defined, so the button silently did nothing.
+        //
+        // Now: figure out which Profile IQ tab is active and route to
+        // the right per-module CSV export (which honors cuts). If the
+        // active tab has no dedicated CSV, download a combined
+        // demographics + top-behavioral snapshot of the current
+        // profile so the click never becomes a no-op again.
+        // -----------------------------------------------------------------
+        function exportToCSV() {
+            try {
+                if (!window.currentDashboardData || !window.currentProfileData) {
+                    alert('Please select a profile first');
+                    return;
+                }
+                // Pick a reasonable per-tab default. This keeps the
+                // button useful even when the visible tab doesn't have
+                // its own dedicated download.
+                var activeTab = (typeof getActiveDashboardTab === 'function')
+                    ? getActiveDashboardTab()
+                    : null;
+                var demoCats = ['Age', 'Gender', 'Ethnicity', 'Income',
+                                'Education', 'Relationship Status',
+                                'Sexual Orientation', 'Parental Status',
+                                'Occupation'];
+                var profileName = (currentProfileData && currentProfileData.name) || 'Profile';
+                var stamp = new Date().toISOString().slice(0, 10);
+                var extraCohorts = _extraCohortsForCsv();
+                var head = 'Section,Category,Label,Profile %,Gen Pop %,Index';
+                extraCohorts.forEach(function (c) {
+                    head += ',' + _csvSafeHeader(c.label, '%');
+                    head += ',' + _csvSafeHeader(c.label, 'Index');
+                });
+                var rows = [head];
+                // Demographics
+                var demoKeyByCategory = { 'Age': 'age', 'Gender': 'gender',
+                    'Ethnicity': 'ethnicity', 'Income': 'income',
+                    'Education': 'education', 'Relationship Status': 'relationship',
+                    'Sexual Orientation': 'sexual_orientation',
+                    'Parental Status': 'parental_status',
+                    'Occupation': 'occupation' };
+                demoCats.forEach(function (cat) {
+                    var catKey = demoKeyByCategory[cat];
+                    var data = (currentDashboardData.demographics || {})[catKey] || {};
+                    var idx = (currentDashboardData.demographicsIndex || {})[catKey] || {};
+                    var gp = (currentDashboardData.demographicsGenPop || {})[catKey] || {};
+                    Object.keys(data).forEach(function (label) {
+                        var val = (parseFloat(data[label]) || 0).toFixed(2);
+                        var gpNum = parseFloat(gp[label]) || 0;
+                        var gpStr = gpNum.toFixed(2);
+                        var ix = Math.round(parseFloat(idx[label]) || 100);
+                        var line = ['Demographic', cat, '"' + String(label).replace(/"/g, '""') + '"',
+                                    val + '%', gpStr + '%', ix];
+                        extraCohorts.forEach(function (c) {
+                            var cPct = _cohortDemoPct(c, catKey, label);
+                            var cIx = _cohortDemoIndex(c, catKey, label, gpNum);
+                            line.push(cPct == null ? '' : cPct.toFixed(2) + '%');
+                            line.push(cIx === '' ? '' : cIx);
+                        });
+                        rows.push(line.join(','));
+                    });
+                });
+                // Behavioral (all categories)
+                var behavioral = currentDashboardData.behavioral || {};
+                Object.keys(behavioral).forEach(function (cat) {
+                    var items = behavioral[cat];
+                    if (!Array.isArray(items)) return;
+                    items.forEach(function (it) {
+                        var pctNum = Number(it.pct) || 0;
+                        var gpPctNum = Number(it.genPopPct) || 0;
+                        var line = ['Behavioral', cat,
+                                    '"' + String(it.name || '').replace(/"/g, '""') + '"',
+                                    pctNum.toFixed(2) + '%',
+                                    gpPctNum.toFixed(2) + '%',
+                                    Number(it.index) || 0];
+                        extraCohorts.forEach(function (c) {
+                            var bi = _cohortBehavioralItem(c, cat, it.name);
+                            var cPct = (bi && bi.pct != null) ? Number(bi.pct) : null;
+                            var cIx = (bi && bi.index != null && isFinite(bi.index))
+                                ? Math.round(Number(bi.index))
+                                : ((cPct != null && gpPctNum > 0)
+                                    ? Math.round((cPct / gpPctNum) * 100)
+                                    : '');
+                            line.push(cPct == null ? '' : cPct.toFixed(2) + '%');
+                            line.push(cIx === '' ? '' : cIx);
+                        });
+                        rows.push(line.join(','));
+                    });
+                });
+                var csvContent = rows.join('\n') + '\n';
+                var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                var link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                var safe = String(profileName).replace(/[^a-zA-Z0-9._-]+/g, '_');
+                link.download = safe + '_current_page_' + stamp + '.csv';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+            } catch (err) {
+                console.error('exportToCSV failed', err);
+                alert('CSV export failed: ' + (err && err.message ? err.message : err));
+            }
+        }
+        window.exportToCSV = exportToCSV;
+
         // Export module as PNG
         function exportModulePNG(type, category) {
             if (!currentDashboardData || !currentProfileData) {
