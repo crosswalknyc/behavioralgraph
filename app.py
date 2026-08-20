@@ -42764,15 +42764,21 @@ def _detect_cartesian_batch(user_text: str):
       - "X vs Y" / "X versus Y"      -> cohorts = [X, Y]
       - otherwise                    -> cohorts = [<lead>]
 
-    Returns (subjects, shared_context, n_cohorts) or None. Subjects is
-    the Cartesian product `retailer + cohort` for each combination,
-    e.g. ['Amazon EST buyers', 'Amazon TVOD renters', 'Apple EST
-    buyers', ...]. shared_context is the full original text, threaded
-    through the per-subject interpret call so each Claude call gets
-    the definitional context of what 'EST buyer' / 'TVOD renter'
-    mean. n_cohorts lets the route rank this detector against the
-    plain list splitter: 2+ cohorts is a real Cartesian product and
-    wins; a degenerate 1-cohort read defers to the plain splitter.
+    Returns (subjects, shared_context, n_cohorts, shape) or None.
+    Subjects is the Cartesian product `retailer + cohort` for each
+    combination, e.g. ['Amazon EST buyers', 'Amazon TVOD renters',
+    'Apple EST buyers', ...]. shared_context is the full original
+    text, threaded through the per-subject interpret call so each
+    Claude call gets the definitional context of what 'EST buyer' /
+    'TVOD renter' mean. n_cohorts + shape let the route rank this
+    detector against the plain list splitter:
+      - shape 'B' (segmentation marker like 'for each platform X, Y')
+        ALWAYS wins - the plain splitter demonstrably mangles it (the
+        marker phrase rides inside slice #1: 'EST Buyers for Each
+        Platform Amazon' / bare 'Apple').
+      - shape 'A' (trailing parenthetical) wins with 2+ cohorts; a
+        degenerate 1-cohort read ('TV brands (VIZIO, Samsung, LG)')
+        defers to the plain splitter's cleaner one-entity slices.
     """
     import re as _re
     t = (user_text or '').strip().rstrip('.!?').strip()
@@ -42790,7 +42796,7 @@ def _detect_cartesian_batch(user_text: str):
         its = [it.strip().strip('.').strip() for it in its]
         return [it for it in its if it and 2 <= len(it) <= 80]
 
-    def _product(items, cohorts):
+    def _product(items, cohorts, shape):
         cohorts = [c.strip().strip('.').strip() for c in cohorts]
         cohorts = [c for c in cohorts if 3 <= len(c) <= 120]
         if not cohorts:
@@ -42805,7 +42811,7 @@ def _detect_cartesian_batch(user_text: str):
         # truncate - the caller gets a clean single-subject fallback.
         if len(subjects) < 2 or len(subjects) > SYNTH_CHAT_BATCH_MAX:
             return None
-        return subjects, t, len(cohorts)
+        return subjects, t, len(cohorts), shape
 
     vs_re = _re.compile(
         r'^(.{2,120}?)\s+(?:vs\.?|versus)\s+(.{2,120}?)$',
@@ -42865,7 +42871,7 @@ def _detect_cartesian_batch(user_text: str):
                         cohorts_b = parts
                     else:
                         cohorts_b = [lead_b]
-                got = _product(items_b, cohorts_b)
+                got = _product(items_b, cohorts_b, 'B')
                 if got:
                     return got
 
@@ -42930,7 +42936,7 @@ def _detect_cartesian_batch(user_text: str):
             return None
         cohorts = [lead]
 
-    return _product(items, cohorts)
+    return _product(items, cohorts, 'A')
 
 
 def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categories=None,
@@ -46012,15 +46018,21 @@ def api_synth_chat_interpret():
     # PRECEDENCE (2026-08-20 Jenna: "create seperate profiles on EST
     # buyers and TVOD renters for each platform Amazon, Apple, ..."
     # was hijacked by the plain splitter into 6 mangled slices like
-    # 'TVOD renters for each platform Amazon'): a Cartesian read with
-    # 2+ real cohorts is strictly more specific than the flat comma
-    # split, so it wins. A degenerate 1-cohort Cartesian read ("TV
-    # brands (VIZIO, Samsung, LG)") still defers to the plain
-    # splitter, which produces cleaner one-entity subjects.
+    # 'TVOD renters for each platform Amazon'): shape-B Cartesian
+    # (segmentation marker: 'for each platform X, Y, Z') ALWAYS wins,
+    # even with one cohort - the plain splitter demonstrably mangles
+    # that phrasing ('EST Buyers for Each Platform Amazon' + bare
+    # 'Apple'). Shape-A (trailing parenthetical) wins with 2+ real
+    # cohorts; a degenerate 1-cohort read ("TV brands (VIZIO,
+    # Samsung, LG)") defers to the plain splitter's cleaner
+    # one-entity slices.
     # ------------------------------------------------------------------
     _batch_subjects = _detect_batch_subjects(text)
     _cart = _detect_cartesian_batch(text)
-    if _cart and len(_cart) >= 3 and _cart[2] >= 2:
+    _cart_wins = bool(_cart) and (
+        (len(_cart) >= 4 and _cart[3] == 'B')
+        or (len(_cart) >= 3 and _cart[2] >= 2))
+    if _cart_wins:
         _batch_subjects = []
     elif _batch_subjects:
         _cart = None

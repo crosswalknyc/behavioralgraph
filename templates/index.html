@@ -59157,6 +59157,7 @@ https://www.instagram.com/p/..."></textarea>
         // approve we iterate through it and fire N approve calls in
         // parallel. Cleared on cancel or after successful queue.
         let synthChatBatchDrafts = null;
+        let synthChatBatchClarify = null;
         let synthChatActiveRun = null;
         let synthChatPollTimer = null;
         // Date-clarification state. When the server returns
@@ -59321,6 +59322,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (!synthChatHistory.length) return;
                 // Never stomp a pending approval / question mid-flow.
                 if (synthChatAwaitingDateConfirm || synthChatClarify ||
+                    synthChatBatchClarify ||
                     synthChatCurrentDraft || synthChatDiscoveryOffer ||
                     (synthChatBatchDrafts && synthChatBatchDrafts.length)) {
                     return;
@@ -59358,6 +59360,7 @@ https://www.instagram.com/p/..."></textarea>
                 // flight - don't inject a stale greeting mid-thread.
                 if (synthChatHistory.length !== histLenAtFetch) return;
                 if (synthChatAwaitingDateConfirm || synthChatClarify ||
+                    synthChatBatchClarify ||
                     synthChatCurrentDraft || synthChatDiscoveryOffer ||
                     (synthChatBatchDrafts && synthChatBatchDrafts.length)) {
                     return;
@@ -60037,6 +60040,16 @@ https://www.instagram.com/p/..."></textarea>
             // region question, then add-on cuts. The answer goes to
             // the clarify endpoint, which updates the draft and says
             // what to ask next (or releases the approval card).
+            // Batch scoping follow-through (2026-08-20): one goal
+            // question + one cut-recommendation round for the whole
+            // batch; picked cuts clone to every draft.
+            if (synthChatBatchClarify) {
+                if (synthChatBatchDrafts && synthChatBatchDrafts.length) {
+                    await _synthChatBatchClarifyAnswer(text);
+                    return;
+                }
+                synthChatBatchClarify = null;
+            }
             if (synthChatClarify && synthChatClarify.steps &&
                 synthChatClarify.idx < synthChatClarify.steps.length) {
                 await _synthChatClarifyAnswer(text);
@@ -60065,6 +60078,7 @@ https://www.instagram.com/p/..."></textarea>
                                 _bd.failures || [],
                                 _bd.shared_context || ''));
                         _synthChatShowBrief(null, _bd.model);
+                        _synthChatMaybeStartBatchScoping();
                         return;
                     }
                     var stashed = synthChatStashedDraft || {};
@@ -60245,6 +60259,7 @@ https://www.instagram.com/p/..."></textarea>
                         data.shared_context || '');
                     synthChatPushTurn('agent', batchSummary);
                     _synthChatShowBrief(null, data.model);
+                    _synthChatMaybeStartBatchScoping();
                     return;
                 }
                 synthChatCurrentDraft = data.spec_draft || {};
@@ -60568,6 +60583,145 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
 
+
+        // Batch scoping (2026-08-20 Jenna: batches "should be asking
+        // me my use case (or I can skip) and suggesting cuts"). One
+        // goal question for the whole batch; the strategist runs on
+        // the first fresh draft; picked cuts clone to every fresh
+        // draft at 3 credits per cut per profile.
+        function _synthChatMaybeStartBatchScoping() {
+            var drafts = synthChatBatchDrafts || [];
+            if (!drafts.length) return;
+            var fresh = drafts.filter(function(d) {
+                var dec = String((d && d.decision) || 'new_build').toLowerCase();
+                return dec === 'new_build' || dec === 'time_shifted_refresh' ||
+                       dec === 'cut_needs_parent';
+            });
+            if (!fresh.length) return;
+            synthChatBatchClarify = {
+                phase: 'goal',
+                draft0: JSON.parse(JSON.stringify(fresh[0])),
+                bases: drafts.map(function(d) {
+                    return (d && typeof d.estimated_credits === 'number')
+                        ? d.estimated_credits : 5;
+                })
+            };
+            synthChatPushTurn('agent',
+                'Quick scoping question for the batch: what are these for? ' +
+                'A pitch, media planning, content strategy... one line is ' +
+                'plenty and I will suggest the right cuts for all ' +
+                drafts.length + '. Or say skip and approve whenever you are ready.');
+        }
+
+        async function _synthChatBatchClarifyAnswer(answerText) {
+            var st = synthChatBatchClarify;
+            if (!st) return;
+            var t = String(answerText || '').trim();
+            var skipRe = /^(skip|no thanks?|none|nope|n\/?a|nothing|no cuts?|approve|run (it|them)|go ?ahead|go)\b/i;
+            if (st.phase === 'goal') {
+                if (skipRe.test(t)) {
+                    synthChatBatchClarify = null;
+                    synthChatPushTurn('agent',
+                        'No problem - approve to queue them, or send another message to adjust.');
+                    return;
+                }
+                var _end = _synthChatBeginThinking('clarify');
+                try {
+                    var r = await fetch('/api/brief-chat/clarify', {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ step: 'goal', answer: t, draft: st.draft0 })
+                    });
+                    var data = await r.json();
+                    if (!r.ok || !data.success) {
+                        synthChatBatchClarify = null;
+                        synthChatPushTurn('agent',
+                            'Could not process that (' + (data.error || r.statusText) +
+                            '). Approve to queue the batch as-is.');
+                        return;
+                    }
+                    st.draft0 = data.draft || st.draft0;
+                    st.phase = 'strategy';
+                    synthChatPushTurn('agent', (data.message || 'Noted.') +
+                        '\n\nAny cuts you pick apply to every profile in this batch - ' +
+                        '3 credits per cut per profile. Name the ones you want, or say none.');
+                } catch (e) {
+                    synthChatBatchClarify = null;
+                    synthChatPushTurn('agent',
+                        'That question failed (' + (e && e.message || e) +
+                        '). Approve to queue the batch as-is.');
+                } finally {
+                    try { _end && _end(); } catch (_) {}
+                }
+                return;
+            }
+            if (skipRe.test(t)) {
+                synthChatBatchClarify = null;
+                synthChatPushTurn('agent',
+                    'No cuts added. Approve to queue all ' +
+                    (synthChatBatchDrafts || []).length +
+                    ', or send another message to adjust.');
+                return;
+            }
+            var _end2 = _synthChatBeginThinking('clarify');
+            try {
+                var r2 = await fetch('/api/brief-chat/clarify', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ step: 'strategy', answer: t, draft: st.draft0 })
+                });
+                var d2 = await r2.json();
+                if (!r2.ok || !d2.success) {
+                    synthChatPushTurn('agent',
+                        'I hit a snag on that (' + (d2.error || r2.statusText) +
+                        '). Name the cuts again, or say none.');
+                    return;
+                }
+                st.draft0 = d2.draft || st.draft0;
+                var cuts = (st.draft0 && st.draft0.addon_cuts) || [];
+                if (!cuts.length) {
+                    synthChatBatchClarify = null;
+                    synthChatPushTurn('agent',
+                        (d2.message || 'No cuts recognized.') +
+                        ' Approve to queue the batch as-is.');
+                    return;
+                }
+                var drafts = synthChatBatchDrafts || [];
+                var total = 0;
+                for (var i = 0; i < drafts.length; i++) {
+                    var dd = drafts[i] || {};
+                    var base = (st.bases && typeof st.bases[i] === 'number')
+                        ? st.bases[i] : 5;
+                    var ddDec = String(dd.decision || 'new_build').toLowerCase();
+                    // Cuts only attach to fresh builds - reuse/derive
+                    // lines in a mixed batch ship as-is.
+                    if (ddDec === 'new_build' || ddDec === 'time_shifted_refresh' ||
+                        ddDec === 'cut_needs_parent') {
+                        dd.addon_cuts = JSON.parse(JSON.stringify(cuts));
+                        dd.estimated_credits = base + 3 * cuts.length;
+                    } else {
+                        dd.estimated_credits = base;
+                    }
+                    total += dd.estimated_credits;
+                }
+                synthChatBatchClarify = null;
+                var cutNames = cuts.map(function(c) {
+                    return c.label || c.name_label || c.cut_id;
+                }).join(', ');
+                synthChatPushTurn('agent',
+                    'Locked in ' + cuts.length + ' cut' +
+                    (cuts.length === 1 ? '' : 's') +
+                    ' for every fresh build: ' + cutNames + '.\n\n' +
+                    _synthChatBuildBatchSummary(drafts, total, [], ''));
+            } catch (e) {
+                synthChatPushTurn('agent',
+                    'That failed (' + (e && e.message || e) +
+                    '). Name the cuts again, or say none.');
+            } finally {
+                try { _end2 && _end2(); } catch (_) {}
+            }
+        }
+
         function _synthChatBuildActionSummary(s) {
             s = s || {};
             var subject = s.subject || 'this profile';
@@ -60676,6 +60830,7 @@ https://www.instagram.com/p/..."></textarea>
             synthChatCurrentDraft = null;
             synthChatBatchDrafts = null;
             synthChatClarify = null;
+            synthChatBatchClarify = null;
             synthChatDiscoveryOffer = null;
             synthChatStashedClarifySteps = null;
             synthChatPushTurn('agent',
@@ -60833,6 +60988,7 @@ https://www.instagram.com/p/..."></textarea>
                 var panel = document.getElementById('synthChatBriefPreview');
                 if (panel) panel.style.display = 'none';
                 synthChatBatchDrafts = null;
+                synthChatBatchClarify = null;
                 try { _synthChatRefreshQueueBadge(); } catch (_) {}
                 if (errored.length) {
                     synthChatPushTurn('agent',
