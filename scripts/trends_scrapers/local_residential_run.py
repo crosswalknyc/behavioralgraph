@@ -83,22 +83,13 @@ RESIDENTIAL_SCRAPERS = [
     # residentially because xbox.com's Akamai / Adobe stack is the
     # same family that WAF-blocks Hetzner for BritBox / MGM+ / Starz.
     ('xbox_gamepass', 'Xbox Game Pass Ultimate'),
-    # Social content scrapers (2026-07): switched from hashtag lists to
-    # actual trending posts/videos/tweets. All three need a real logged-in
-    # session, so they run from the laptop (where cookies live) rather
-    # than Hetzner.
-    ('tiktok',        'TikTok'),
-    ('instagram',     'Instagram'),
-    ('x_twitter',     'X'),
-    # Reddit (2026-08-05): moved here so the Playwright shreddit-post
-    # path runs from the Mac's residential IP. Hetzner IPs are on
-    # Reddit's WAF blocklist for BOTH the JSON endpoints and Playwright
-    # renders of /r/<sub>/hot/, which reduces the Hetzner cron to
-    # RSS-only fallback rows - those don't carry `score` or
-    # `comment-count` attrs, so the dashboard renders posts without
-    # upvote/comment chips. Running from the laptop restores the full
-    # engagement stats on every row.
-    ('reddit',        'Reddit'),
+    # Social content scrapers (TikTok, Instagram, X, Reddit) were
+    # removed 2026-08-20 (Jenna: "kill the scrape too"). Social panel
+    # was dropped from the Trends IQ user surface because signal
+    # quality wasn't where it needed to be, and the daily
+    # cookies-required scraping cost is no longer justified. If any
+    # social source comes back, re-add its tuple here and re-wire
+    # `_fetch_social_trending` in trends_iq.py.
     # Film ticketing (2026-07-28): all 5 platforms IP-block the Hetzner
     # datacenter. Fandango serves a "Message To Our Fans" placebo page,
     # Cinemark 403s at the edge, AMC/Regal serve Akamai captcha shells,

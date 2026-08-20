@@ -58,16 +58,14 @@ SCRAPERS = [
     # Kept AFTER all content scrapers so a same-day run picks up
     # today's fresh chart/podcast/etc. items instead of yesterday's.
     ('lens_scores',        'scripts.trends_scrapers.lens_relevance',     'Persona lens scores',  'meta'),
-    ('youtube',   'scripts.trends_scrapers.youtube',    'YouTube',   'social'),
-    # X, TikTok, and Instagram are NOT in this list. As of 2026-07 they
-    # were switched from hashtag/topic lists to real trending posts /
-    # videos / tweets, which require donated cookies + a residential IP
-    # (all three fingerprint Hetzner's datacenter egress). They now run
-    # daily from Jenna's laptop via `local_residential_run.py`.
-    # Reddit was previously fetched live at request time from Render,
-    # but Reddit blocks Render's datacenter egress. Hetzner's residential
-    # egress gets 200s so we run it here daily like every other social.
-    ('reddit',    'scripts.trends_scrapers.reddit',     'Reddit',    'social'),
+    # Social scrapers (Reddit, YouTube trending, TikTok, Instagram, X)
+    # were removed from the daily cron 2026-08-20 (Jenna: "kill the
+    # scrape too"). The social panel was dropped from the Trends IQ
+    # surface because signal quality wasn't where it needed to be, and
+    # the daily API/scraping cost is no longer justified. If we bring
+    # any social source back, add its (source, module, label, 'social')
+    # tuple back here and re-wire `_fetch_social_trending` into
+    # `compute_view` in trends_iq.py.
     ('bestbuy',   'scripts.trends_scrapers.bestbuy',    'Best Buy',  'retailer'),
     ('nike',      'scripts.trends_scrapers.nike',       'Nike',      'retailer'),
     ('lululemon', 'scripts.trends_scrapers.lululemon',  'Lululemon', 'retailer'),
@@ -286,14 +284,11 @@ def main(argv: list[str] | None = None) -> int:
         count = len(r.get('national') or [])
         kind = r.get('kind') or ''
         # Retailers/streaming with 0 items are always cookie-donation
-        # candidates. TikTok specifically is a soft-fail case: the CC
-        # anonymously exposes 3 preview cards, so anything <=5 (rather
-        # than exactly 0) is a signal the operator should donate
-        # ads.tiktok.com cookies to unlock the full list.
+        # candidates. Social sources (including the old TikTok CC
+        # preview-card guardrail) were removed 2026-08-20 when the
+        # scrape was killed.
         if kind in {'retailer', 'streaming'} and count == 0:
             empty_sources.append((r.get('source', ''), kind))
-        elif r.get('source') == 'tiktok' and count <= 5:
-            empty_sources.append(('tiktok', 'social'))
         print(f"{r.get('source', ''):<12} {kind:<9} "
                f"{count:>6}  "
                f"{(r.get('orchestrator_elapsed_s') or r.get('scrape_elapsed_s') or 0):>7.1f}s  "
@@ -316,8 +311,7 @@ def main(argv: list[str] | None = None) -> int:
             # because Bamgrid IP-gates Hetzner)
             'hulu':       'hulu.com',
             'max':        'hbomax.com',    'primevideo': 'amazon.com',
-            # Social - TikTok CC hashtag list is login-gated as of 2026-07
-            'tiktok':     'ads.tiktok.com',
+            # Social sources removed 2026-08-20 (scrape killed).
         }
         need = [domain_map[s] for s, _k in empty_sources if s in domain_map]
         if need:

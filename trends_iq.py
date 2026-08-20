@@ -5786,8 +5786,11 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         tasks = {
             'trending_searches':   lambda: _fetch_trending_searches(state, lookback_days),
             'headlines_pack':      lambda: _fetch_trending_headlines_and_sources(geo_kws),
-            'social_trending':     lambda: _fetch_social_trending(state, lookback_days,
-                                                                     keywords=geo_kws),
+            # social_trending: dropped 2026-08-20 (Jenna: "kill the
+            # scrape too"). Was Reddit + YouTube + TikTok + Instagram +
+            # X. Downstream consumers (mine_trending_people, movers
+            # buzz-mix, cross-platform moment badge) still receive the
+            # kwarg but it's an empty dict so they no-op gracefully.
             'streaming_trending':  lambda: _fetch_streaming_trending(state, lookback_days,
                                                                         keywords=geo_kws),
             'fast_trending':       lambda: _fetch_fast_trending(state, lookback_days,
@@ -6070,7 +6073,10 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'lens_config':                    lens_config,
             'lens_scores':                    lens_scores_map,
             'lens_cutoffs':                   lens_cutoffs,
-            'social_trending':                social_trending,
+            # social_trending: dropped from the shipped payload 2026-08-20.
+            # Reddit / YouTube / TikTok / Instagram / X scrapers are no
+            # longer scheduled, so this key would be an empty {} on every
+            # request anyway. Removed to stop shipping the dead field.
             'streaming_trending':             streaming_trending,
             'fast_trending':                  fast_trending,
             'gaming_trending':                gaming_trending,
