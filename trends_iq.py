@@ -5318,6 +5318,17 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
     snap = _read_snapshot('fast_channels', asof) if asof else _read_snapshot('fast_channels')
     sources = (snap or {}).get('sources') or {}
 
+    # Channel lineups (per-platform micro-channels: e.g. Waypoint TV,
+    # Nick Jr. Pluto TV, Forensic Files 24/7) come from a separate
+    # snapshot seeded by scripts/trends_scrapers/build_fast_channel_
+    # lineups.py from MediaBiz's weekly Stream Metric Schedules dump.
+    # If the snapshot is missing (before the first seed run), the FAST
+    # panel just doesn't render the channel strip - everything else
+    # works unchanged.
+    lineups_snap = _read_snapshot('fast_channel_lineups', asof) if asof \
+        else _read_snapshot('fast_channel_lineups')
+    channel_sources = (lineups_snap or {}).get('sources') or {}
+
     result: dict[str, dict] = {}
     for slug, label, _default_avail in FAST_PLATFORMS:
         block = sources.get(slug) or {}
@@ -5339,13 +5350,34 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
             r['bucket_rank'] = i
         for i, r in enumerate(tv, 1):
             r['bucket_rank'] = i
+
+        # Channel lineup for this platform (top-N by weekly airings).
+        # Cap at 50 - the frontend renders these as a scrollable strip
+        # and 50 covers every channel a viewer would actually see on
+        # the FAST grid; the long-tail placeholder channels aren't
+        # useful for a dashboard reader.
+        lineup_block = channel_sources.get(slug) or {}
+        raw_channels = lineup_block.get('channels') or []
+        channels_out: list[dict] = []
+        for i, ch in enumerate(raw_channels[:50], 1):
+            if not isinstance(ch, dict):
+                continue
+            channels_out.append({
+                'rank':         i,
+                'name':         ch.get('name') or '',
+                'airings':      int(ch.get('airings') or 0),
+                'content_type': ch.get('content_type') or '',
+            })
+
         result[slug] = {
-            'label':      block.get('label') or label,
-            'items':      items,
-            'films':      films,
-            'tv':         tv,
-            'available':  bool(block.get('available') and items),
-            'fetched_at': (snap or {}).get('fetched_at'),
+            'label':          block.get('label') or label,
+            'items':          items,
+            'films':          films,
+            'tv':             tv,
+            'channels':       channels_out,
+            'channels_total': len(raw_channels),
+            'available':      bool(block.get('available') and items),
+            'fetched_at':     (snap or {}).get('fetched_at'),
         }
         if (snap or {}).get('error'):
             result[slug]['note'] = f"latest snapshot: {(snap or {}).get('error')}"
