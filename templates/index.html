@@ -58897,6 +58897,10 @@ https://www.instagram.com/p/..."></textarea>
         let synthChatStashedDraft = null;
         let synthChatStashedOriginalText = '';
         let synthChatStashedProposedRange = null;
+        // Batch variant (2026-08-20): when a batch interpret needs
+        // date clarification the WHOLE batch payload stashes here
+        // and is released on confirmation.
+        let synthChatStashedBatchData = null;
         // Incidence / sample-size check state (2026-08-19). When
         // the server answers a sample-size question it returns an
         // incidence_check payload; we stash it here so a follow-up
@@ -59125,6 +59129,7 @@ https://www.instagram.com/p/..."></textarea>
             synthChatStashedDraft = null;
             synthChatStashedOriginalText = '';
             synthChatStashedProposedRange = null;
+            synthChatStashedBatchData = null;
         }
 
         // Animated 'agent is thinking' indicator.
@@ -59663,6 +59668,22 @@ https://www.instagram.com/p/..."></textarea>
             // shot.
             if (synthChatAwaitingDateConfirm) {
                 if (_synthChatIsDateConfirmation(text)) {
+                    // Batch release (2026-08-20): the whole batch
+                    // was stashed pending the window answer.
+                    if (synthChatStashedBatchData) {
+                        var _bd = synthChatStashedBatchData;
+                        _synthChatClearDateState();
+                        synthChatCurrentDraft = null;
+                        synthChatBatchDrafts = _bd.spec_drafts;
+                        synthChatPushTurn('agent',
+                            _synthChatBuildBatchSummary(
+                                _bd.spec_drafts,
+                                _bd.estimated_credits_total,
+                                _bd.failures || [],
+                                _bd.shared_context || ''));
+                        _synthChatShowBrief(null, _bd.model);
+                        return;
+                    }
                     var stashed = synthChatStashedDraft || {};
                     var rangeLabel = _synthChatFormatRange(
                         synthChatStashedProposedRange);
@@ -59670,7 +59691,8 @@ https://www.instagram.com/p/..."></textarea>
                     synthChatCurrentDraft = stashed;
                     var summary = _synthChatBuildActionSummary(
                         synthChatCurrentDraft);
-                    if (rangeLabel) {
+                    if (rangeLabel &&
+                        summary.indexOf('**Window:**') === -1) {
                         summary += '\n\nUsing ' + rangeLabel + '.';
                     }
                     var _relSteps = synthChatStashedClarifySteps;
@@ -59768,6 +59790,29 @@ https://www.instagram.com/p/..."></textarea>
                     return;
                 }
                 if (data.needs_date_clarification) {
+                    // Batch variant (2026-08-20): stash the whole
+                    // payload; confirmation releases the stacked
+                    // summary with the window shown on it.
+                    if (data.batch && Array.isArray(data.spec_drafts) &&
+                        data.spec_drafts.length) {
+                        synthChatStashedBatchData = data;
+                        synthChatStashedOriginalText = text;
+                        synthChatStashedProposedRange =
+                            data.proposed_date_range || null;
+                        synthChatAwaitingDateConfirm = true;
+                        var bRangeLabel = _synthChatFormatRange(
+                            synthChatStashedProposedRange)
+                            || 'July 1, 2025 to June 30, 2026';
+                        synthChatPushTurn('agent',
+                            'Which time window should I use for these **'
+                            + data.spec_drafts.length + ' profiles**?\n\n'
+                            + 'Default: **' + bRangeLabel
+                            + '** (the last 12 months).\n\n'
+                            + 'Reply **ok** to use that, or tell me a '
+                            + 'different window (e.g. "for 2024", '
+                            + '"trailing 6 months", "Q4 2025").');
+                        return;
+                    }
                     // Stash the draft and ask about dates. Do NOT
                     // reveal the approval brief yet.
                     synthChatStashedDraft = data.spec_draft || {};
@@ -59852,6 +59897,28 @@ https://www.instagram.com/p/..."></textarea>
         // no-modeled-or-source-language.mdc.
         function _synthChatBuildBatchSummary(drafts, totalCredits, failures, sharedCtx) {
             var lines = ['I will queue **' + drafts.length + ' profiles** in parallel:'];
+            // Time frame per draft (2026-08-20 Jenna: the summary
+            // must list the window). Reuse/derive lines skip it -
+            // those ship the parent file's existing window.
+            var _winByIdx = [];
+            var _winSeen = {};
+            var _winDistinct = 0;
+            var _winFirst = '';
+            for (var w = 0; w < drafts.length; w++) {
+                var _wd = drafts[w] || {};
+                var _wDec = String(_wd.decision || 'new_build').toLowerCase();
+                var _wLbl = '';
+                if (_wDec !== 'existing_match' && _wDec !== 'derive_cut') {
+                    _wLbl = _synthChatFormatRange(_wd.date_range)
+                        || 'July 1, 2025 to June 30, 2026';
+                }
+                _winByIdx.push(_wLbl);
+                if (_wLbl && !_winSeen[_wLbl]) {
+                    _winSeen[_wLbl] = 1;
+                    _winDistinct++;
+                    if (!_winFirst) _winFirst = _wLbl;
+                }
+            }
             for (var i = 0; i < drafts.length; i++) {
                 var d = drafts[i] || {};
                 var subj = d.subject || d.name || ('Profile ' + (i + 1));
@@ -59871,7 +59938,14 @@ https://www.instagram.com/p/..."></textarea>
                              decision !== 'existing_match' && decision !== 'derive_cut')
                     ? ' \u00b7 est. ' + _bTu.toLocaleString('en-US') + ' panelists'
                     : '';
-                lines.push((i + 1) + '. **' + subj + '** - ' + action + eta + (cred ? ' \u00b7 ' + cred : '') + _bEst);
+                var _bWin = (_winDistinct > 1 && _winByIdx[i])
+                    ? ' \u00b7 ' + _winByIdx[i]
+                    : '';
+                lines.push((i + 1) + '. **' + subj + '** - ' + action + eta + (cred ? ' \u00b7 ' + cred : '') + _bEst + _bWin);
+            }
+            if (_winDistinct === 1 && _winFirst) {
+                lines.push('');
+                lines.push('**Window:** ' + _winFirst + '.');
             }
             if (typeof totalCredits === 'number' && totalCredits >= 0) {
                 lines.push('');
@@ -60153,6 +60227,15 @@ https://www.instagram.com/p/..."></textarea>
                     break;
             }
             var _dec = (s.decision || 'new_build').toLowerCase();
+            // Time frame (2026-08-20 Jenna: the confirm card must
+            // list the window). Shown for decisions that pull a
+            // fresh window; reuse/derive ship the parent's window.
+            if (_dec === 'new_build' || _dec === 'time_shifted_refresh' ||
+                _dec === 'cut_needs_parent') {
+                var _winLbl = _synthChatFormatRange(s.date_range)
+                    || 'July 1, 2025 to June 30, 2026';
+                line += '\n\n**Window:** ' + _winLbl + '.';
+            }
             var _tuEst = s.subject_raw_tu;
             if (typeof _tuEst === 'number' && _tuEst > 0 &&
                 (_dec === 'new_build' || _dec === 'time_shifted_refresh' ||
