@@ -18223,6 +18223,20 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
         .persistent-sidebar.mobile-collapsible:not(.mobile-collapsed) {
             max-height: 60vh;
         }
+
+        /* ---- 14. Typography scale-down (mobile only) --------------------------
+           Trim overall type a touch for a more compact phone layout, and hard-cap
+           the oversized hero stat numbers (Crosswalk Respondents / US projection)
+           that were wrapping across several lines and dominating the screen.
+           Desktop is untouched (everything here is inside max-width:768px). */
+        html { font-size: 15px; }
+        .stat-value {
+            font-size: 1.3rem !important;
+            line-height: 1.15;
+        }
+        .stat-value.pulsing-number { font-size: 1.3rem !important; }
+        .stat-prefix { font-size: 0.9rem !important; }
+        .stat-label { font-size: 0.72rem !important; }
     }
     </style>
 </head>
