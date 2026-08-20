@@ -43178,6 +43178,49 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "Every bucket in every canonical category MUST appear in demos and "
         "the sum MUST be 100.0 (four decimals fine).\n\n"
 
+        # ── Subject naming + embedded-cut decomposition (2026-08-20,
+        # Jenna directive after Go-GURT shipped as 'Go GURT Consumers
+        # 18 24 - Total Universe' with AGE pinned to 18-24): the TU is
+        # ALWAYS the full universe and is titled with ONLY the entity
+        # name; demographic qualifiers ride as derived add-on cuts.
+        "SUBJECT NAMING + EMBEDDED CUTS (MANDATORY):\n"
+        "  * `subject` must be ONLY the clean entity name: the brand "
+        "name ('Go-GURT'), the person's first + last name ('Reba "
+        "McEntire'), or the content name ('Yellowstone'). The Total "
+        "Universe deliverable is titled with exactly this name - "
+        "never bake demographic qualifiers or generic audience nouns "
+        "into it.\n"
+        "  * If the request embeds a demographic qualifier - an age "
+        "band ('Go-GURT consumers (18-24)'), a gender ('female Nike "
+        "shoppers'), a generation ('Gen Z Chipotle eaters'), or a "
+        "market ('Joe & the Juice in Miami') - the build plan is "
+        "ALWAYS: Total Universe on the FULL universe (all ages, all "
+        "genders, national) + Avid on that same full universe, and "
+        "each qualifier becomes an add-on cut derived from the TU. "
+        "Emit the qualifiers in `addon_cuts` (schema below) and keep "
+        "them OUT of `subject` and `file_stem`.\n"
+        "  * `tu_demos` / `avid_demos` describe the FULL universe, "
+        "NOT the cut. Never pin AGE to one band or GENDER to one "
+        "bucket in tu_demos because the user mentioned a qualifier - "
+        "the cut pin happens downstream in the derived cut file.\n"
+        "  * Generic audience nouns ('consumers', 'shoppers', 'fans', "
+        "'eaters', 'audience of') are implicit in a brand TU - drop "
+        "them from `subject` ('Go-GURT Consumers' -> 'Go-GURT', "
+        "'Chipotle eaters' -> 'Chipotle').\n"
+        "  * KEEP universe-defining behavioral qualifiers that change "
+        "WHO is in the panel: 'Vizio TV Owners', 'EST Buyers', 'TVOD "
+        "Renters', 'Spectrum Churners', 'Amazon Prime Members', 'ISP "
+        "Switchers' stay whole. Those define the universe itself and "
+        "are NOT demographic cuts.\n"
+        "  * Downstream naming is automatic: TU = '{subject}', avid = "
+        "'{subject} - Avid Fan', each cut = '{subject} - {cut}' "
+        "('Go-GURT - 18-24'). You never emit file names - just keep "
+        "`subject` clean.\n"
+        "  * Age bands must snap onto the canonical AGE buckets "
+        f"({_ADDON_AGE_BUCKETS}). '18-24' -> ['18-24']; 'under 35' -> "
+        "['18-24','25-34']; '35+' -> ['35-44','45-54','55-64',"
+        "'65 OR OLDER'].\n\n"
+
         "OUTPUT SHAPE (strict JSON object, no prose outside):\n"
         "{\n"
         "  \"subject\": \"Human-readable subject name\",\n"
@@ -43194,6 +43237,14 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"tu_demos\": { CATEGORY: { BUCKET: pct, ... }, ... },\n"
         "  \"avid_demos\": { ... same schema, sharpened toward Avid ... },\n"
         "  \"extra_rows\": [[\"CATEGORY\",\"Brand or Talent name\"], ...],\n"
+        "  \"addon_cuts\": [\n"
+        "    // demographic qualifiers stripped out of the subject (see\n"
+        "    // SUBJECT NAMING + EMBEDDED CUTS). Empty list when none.\n"
+        "    {\"type\": \"gender\", \"id\": \"female|male\"},\n"
+        "    {\"type\": \"generation\", \"id\": \"gen_z|millennials|gen_x|boomers\"},\n"
+        "    {\"type\": \"age_band\", \"label\": \"18-24\", \"buckets\": [\"18-24\"]},\n"
+        "    {\"type\": \"dma\", \"dma\": \"<canonical Nielsen DMA name>\"}\n"
+        "  ],\n"
         "  \"persona_notes\": \"200-500 words of researched persona shape\",\n"
         "  \"assumptions\": [\"list of assumptions the user should verify\"],\n"
         "  \"estimated_run_minutes\": <int>,\n"
@@ -43817,6 +43868,15 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         # number the build will use (idempotent through the pipeline).
         _jitter_draft_est_sample(spec_draft)
 
+        # Subject naming + embedded cuts (2026-08-20): decompose any
+        # demographic qualifier out of the subject; TU/avid build on
+        # the full universe, qualifier rides as a 3-credit cut. Runs
+        # AFTER the caller-subject override above so the forced batch
+        # slice name is what gets decomposed. Reprices the draft.
+        _decompose_embedded_subject_cuts(spec_draft)
+        est_credits = int(spec_draft.get('estimated_credits')
+                          or est_credits)
+
         return {
             'success': True, 'subject_input': subject,
             'spec_draft': spec_draft,
@@ -44382,20 +44442,30 @@ def _resolve_markets_to_dmas(answer_text):
 # full generation partition can ladder up to the parent cleanly.
 _ADDON_AGE_BUCKETS = ['18-24', '25-34', '35-44', '45-54', '55-64',
                       '65 OR OLDER']
+# `label` is the chat-facing description; `name_label` is what the
+# file/dashboard naming uses: '{Subject} - {name_label}' (Jenna
+# 2026-08-20: TU is just the subject name, then always a dash and the
+# cut - 'Go-GURT', 'Go-GURT - Avid Fan', 'Go-GURT - 18-24').
 _ADDON_CUT_CATALOG = {
-    'female':      {'label': 'Female only', 'kind': 'gender',
+    'female':      {'label': 'Female only', 'name_label': 'Female',
+                    'kind': 'gender',
                     'pin_category': 'GENDER', 'pin_buckets': ['FEMALE']},
-    'male':        {'label': 'Male only', 'kind': 'gender',
+    'male':        {'label': 'Male only', 'name_label': 'Male',
+                    'kind': 'gender',
                     'pin_category': 'GENDER', 'pin_buckets': ['MALE']},
-    'gen_z':       {'label': 'Gen Z (18-24)', 'kind': 'generation',
+    'gen_z':       {'label': 'Gen Z (18-24)', 'name_label': 'Gen Z',
+                    'kind': 'generation',
                     'pin_category': 'AGE', 'pin_buckets': ['18-24']},
-    'millennials': {'label': 'Millennials (25-44)', 'kind': 'generation',
+    'millennials': {'label': 'Millennials (25-44)',
+                    'name_label': 'Millennials', 'kind': 'generation',
                     'pin_category': 'AGE',
                     'pin_buckets': ['25-34', '35-44']},
-    'gen_x':       {'label': 'Gen X (45-64)', 'kind': 'generation',
+    'gen_x':       {'label': 'Gen X (45-64)', 'name_label': 'Gen X',
+                    'kind': 'generation',
                     'pin_category': 'AGE',
                     'pin_buckets': ['45-54', '55-64']},
-    'boomers':     {'label': 'Boomers (65+)', 'kind': 'generation',
+    'boomers':     {'label': 'Boomers (65+)', 'name_label': 'Boomers',
+                    'kind': 'generation',
                     'pin_category': 'AGE',
                     'pin_buckets': ['65 OR OLDER']},
 }
@@ -44446,6 +44516,7 @@ def _normalize_cut_items(raw_items, dma_list=None):
                 continue
             seen.add(cid)
             cuts.append({'cut_id': cid, 'label': f'Ages {label}',
+                         'name_label': label,
                          'kind': 'age_band', 'pin_category': 'AGE',
                          'pin_buckets': buckets,
                          'credits': ADDON_CUT_CREDITS, **extra})
@@ -44458,6 +44529,7 @@ def _normalize_cut_items(raw_items, dma_list=None):
                 continue
             seen.add(cid)
             cuts.append({'cut_id': cid, 'label': f'{dma} only',
+                         'name_label': dma,
                          'kind': 'dma', 'pin_category': 'LOCATION',
                          'pin_buckets': [dma],
                          'credits': ADDON_CUT_CREDITS, **extra})
@@ -44475,6 +44547,216 @@ def _merge_cuts(*cut_lists):
             seen.add(cid)
             merged.append(c)
     return merged
+
+
+# Bucket spans for snapping free-form age ranges onto the panel's
+# canonical AGE breaks (overlap-based, per Jenna 2026-08-20: '15-26'
+# style asks map onto the breaks we have).
+_ADDON_AGE_BUCKET_SPANS = [
+    ('18-24', 18, 24), ('25-34', 25, 34), ('35-44', 35, 44),
+    ('45-54', 45, 54), ('55-64', 55, 64), ('65 OR OLDER', 65, 120),
+]
+
+# Generic audience nouns that are implicit in a brand/entity TU. Only
+# stripped when a demographic qualifier was ALSO extracted (so 'EST
+# Buyers' / 'Vizio TV Owners' / 'ISP Switchers' - universe-defining
+# behavioral cohorts - are never touched).
+_GENERIC_AUDIENCE_NOUN_RE = (
+    r'(?:consumers?|shoppers?|fans?|viewers?|listeners?|eaters?|'
+    r'drinkers?|customers?|audience)'
+)
+
+
+def _decompose_embedded_subject_cuts(draft):
+    """Deterministic backstop for the SUBJECT NAMING + EMBEDDED CUTS
+    prompt rule (Jenna 2026-08-20, after 'Go-GURT Consumers (18-24)'
+    shipped as a TU titled with the whole cohort string and AGE pinned
+    to 18-24).
+
+    If the draft's subject still embeds a demographic qualifier (age
+    band, gender, generation), strip it out of the subject and ride it
+    as an add-on cut: the TU + Avid always build on the FULL universe
+    and every qualifier becomes a 3-credit derived cut named
+    '{subject} - {cut}'. Also normalizes any catalog-format addon_cuts
+    the interpreter emitted ({'type': ..., 'id': ...}) into resolved
+    cut defs, and reprices estimated_credits = base + 3 x cuts.
+
+    Mutates the draft in place. Never raises.
+    """
+    import re as _re
+    try:
+        decision = str(draft.get('decision') or 'new_build').strip().lower()
+        # Only fresh TU builds decompose; derive/existing paths are
+        # already cut-shaped.
+        applies = decision in ('new_build', 'time_shifted_refresh', '')
+
+        # -- normalize whatever is already on the draft ---------------
+        raw_cuts = draft.get('addon_cuts') or []
+        resolved, catalog_fmt = [], []
+        for c in raw_cuts:
+            if not isinstance(c, dict):
+                continue
+            if c.get('cut_id') and c.get('pin_category') \
+                    and c.get('pin_buckets'):
+                resolved.append(c)
+            elif c.get('type'):
+                catalog_fmt.append(c)
+        normalized = _normalize_cut_items(catalog_fmt) if catalog_fmt else []
+
+        extracted = []
+        subject = str(draft.get('subject') or '').strip()
+        base = subject
+        if applies and subject:
+            # -- age bands: '(18-24)', 'ages 18 to 24', '18-24 year
+            #    olds', '35+', '65 or older', 'under 35' -------------
+            def _snap(lo, hi):
+                buckets = [lbl for lbl, b_lo, b_hi
+                           in _ADDON_AGE_BUCKET_SPANS
+                           if not (hi < b_lo or lo > b_hi)]
+                return buckets
+
+            m = _re.search(
+                r'\(?\s*(?:ages?\s+)?(1[89]|[2-5]\d|6[0-4])\s*'
+                r'(?:-|\u2013|\u2014|\s+to\s+)\s*'
+                r'(\d{2})\s*\)?(?:\s*(?:year[\s-]?olds?|yos?|yrs?))?',
+                subject, _re.IGNORECASE)
+            if m:
+                lo, hi = int(m.group(1)), int(m.group(2))
+                if 18 <= lo < hi <= 99:
+                    buckets = _snap(lo, hi)
+                    if buckets:
+                        extracted.append({
+                            'type': 'age_band',
+                            'label': f'{lo}-{hi}',
+                            'buckets': buckets,
+                        })
+                        base = (base[:m.start()] + ' '
+                                + base[m.end():]).strip()
+            else:
+                m = _re.search(
+                    r'\(?\s*(1[89]|[2-5]\d|6[0-9])\s*'
+                    r'(?:\+|\s+plus\b|\s+(?:or|and)\s+'
+                    r'(?:older|up|over)\b)\s*\)?',
+                    subject, _re.IGNORECASE)
+                if m:
+                    lo = int(m.group(1))
+                    buckets = _snap(lo, 120)
+                    if buckets:
+                        extracted.append({
+                            'type': 'age_band',
+                            'label': f'{lo}+',
+                            'buckets': buckets,
+                        })
+                        base = (base[:m.start()] + ' '
+                                + base[m.end():]).strip()
+                else:
+                    m = _re.search(
+                        r'\bunder\s+(2[0-9]|[3-6]\d)\b',
+                        subject, _re.IGNORECASE)
+                    if m:
+                        hi = int(m.group(1)) - 1
+                        buckets = _snap(18, hi)
+                        if buckets:
+                            extracted.append({
+                                'type': 'age_band',
+                                'label': f'under {m.group(1)}',
+                                'buckets': buckets,
+                            })
+                            base = (base[:m.start()] + ' '
+                                    + base[m.end():]).strip()
+
+            # -- gender: leading word or parenthetical ----------------
+            m = _re.match(r"^(female|women|male|men)\b(?!'s)\s+",
+                          base, _re.IGNORECASE)
+            if not m:
+                m = _re.search(
+                    r"\(\s*(female|women|male|men)\s*(?:only)?\s*\)",
+                    base, _re.IGNORECASE)
+            if m:
+                g = m.group(1).lower()
+                extracted.append({
+                    'type': 'gender',
+                    'id': 'female' if g in ('female', 'women') else 'male',
+                })
+                base = (base[:m.start()] + ' ' + base[m.end():]).strip()
+
+            # -- generation: leading word or parenthetical ------------
+            gen_pat = (r'(gen[\s-]?z|millennials?|gen[\s-]?x|'
+                       r'(?:baby\s+)?boomers?)')
+            m = _re.match(r'^' + gen_pat + r'\b\s+', base, _re.IGNORECASE)
+            if not m:
+                m = _re.search(r'\(\s*' + gen_pat + r'\s*\)', base,
+                               _re.IGNORECASE)
+            if m:
+                g = _re.sub(r'[\s-]+', '', m.group(1).lower())
+                gid = {'genz': 'gen_z', 'genx': 'gen_x'}.get(g)
+                if not gid:
+                    gid = ('millennials' if g.startswith('millennial')
+                           else 'boomers' if g.endswith(('boomer',
+                                                          'boomers'))
+                           else None)
+                if gid:
+                    extracted.append({'type': 'generation', 'id': gid})
+                    base = (base[:m.start()] + ' '
+                            + base[m.end():]).strip()
+
+            # -- tidy the base + strip implicit audience nouns --------
+            if extracted:
+                base = _re.sub(r'\s{2,}', ' ', base)
+                base = _re.sub(r'^[\s,\-]+|[\s,\-]+$', '', base)
+                base = _re.sub(r'\s+(?:for|of|in)$', '', base,
+                               flags=_re.IGNORECASE).strip()
+                stripped = _re.sub(
+                    r'\s+' + _GENERIC_AUDIENCE_NOUN_RE + r'$', '',
+                    base, flags=_re.IGNORECASE).strip()
+                if len(stripped) >= 2:
+                    base = stripped
+                if len(base) < 2:
+                    # Subject was ONLY a qualifier ('Boomers') - the
+                    # qualifier IS the universe; do not decompose.
+                    extracted = []
+                    base = subject
+
+        new_cuts = _normalize_cut_items(extracted) if extracted else []
+        all_cuts = _merge_cuts(resolved, normalized, new_cuts)
+        if all_cuts:
+            draft['addon_cuts'] = all_cuts
+        elif 'addon_cuts' in draft:
+            draft['addon_cuts'] = []
+
+        if extracted and base and base != subject:
+            draft['subject'] = base
+            _stem = _re.sub(r'\s+', '_', base)
+            _stem = ''.join(ch for ch in _stem
+                            if ch.isalnum() or ch in '_-')
+            if _stem:
+                draft['file_stem'] = _stem
+            cut_names = ', '.join(
+                c.get('name_label') or c.get('label') or c['cut_id']
+                for c in all_cuts)
+            note = (f"Total Universe + Avid build on the full {base} "
+                    f"universe; {cut_names} ride as derived cut(s) "
+                    f"named '{base} - <cut>' at {ADDON_CUT_CREDITS} "
+                    "credits each.")
+            draft['_decomposition_note'] = note
+            assumptions = draft.get('assumptions')
+            if isinstance(assumptions, list):
+                assumptions.append(note)
+            else:
+                draft['assumptions'] = [note]
+
+        # -- reprice: base always covers national TU + avid -----------
+        if all_cuts:
+            try:
+                base_credits = int(draft.get('base_credits')
+                                   or draft.get('estimated_credits') or 5)
+            except (TypeError, ValueError):
+                base_credits = 5
+            draft['base_credits'] = base_credits
+            draft['estimated_credits'] = (
+                base_credits + ADDON_CUT_CREDITS * len(all_cuts))
+    except Exception as _e:
+        print(f"[subject-decompose] non-fatal: {_e}")
 
 
 def _parse_addon_cuts_answer(answer_text, subject):
@@ -45523,6 +45805,17 @@ def api_synth_chat_interpret():
         # passthrough above: locked values are already messy, so this
         # is a no-op for them (idempotent helper).
         _jitter_draft_est_sample(spec_draft)
+        # Subject naming + embedded cuts (2026-08-20 Jenna): strip any
+        # demographic qualifier out of the subject - the TU + Avid
+        # always build on the FULL universe under the clean entity
+        # name, and the qualifier rides as a 3-credit derived cut
+        # ('Go-GURT - 18-24'). Runs after base_credits is anchored so
+        # the repricing (base + 3 x cuts) sticks.
+        _decompose_embedded_subject_cuts(spec_draft)
+        estimated_credits = int(spec_draft.get('estimated_credits')
+                                or estimated_credits)
+        subject_label = (spec_draft.get('subject')
+                         or spec_draft.get('name') or subject_label)
         # Guided clarify steps (2026-08-19 Cut Strategist): every fresh
         # single-subject build asks the business goal, then the
         # strategist recommends a cut package (3 credits per cut,
@@ -45890,6 +46183,8 @@ def _spec_from_draft(draft):
             _clean_cuts.append({
                 'cut_id': str(c['cut_id']),
                 'label': str(c.get('label') or c['cut_id']),
+                'name_label': str(c.get('name_label')
+                                  or c.get('label') or c['cut_id']),
                 'kind': str(c.get('kind') or 'demo'),
                 'pin_category': str(c['pin_category']).upper(),
                 'pin_buckets': [str(b) for b in c['pin_buckets']],
@@ -47635,8 +47930,15 @@ def api_v1_profiles_check():
     except Exception:
         pass
 
+    # Subject naming + embedded cuts (2026-08-20): full-universe TU +
+    # qualifier-as-cut, same as the dashboard chat path.
+    _decompose_embedded_subject_cuts(draft)
+
     decision, ex_key, d_type = _normalize_v1_decision(draft)
-    price = _V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
+    _v1_cuts = [c for c in (draft.get('addon_cuts') or [])
+                if isinstance(c, dict) and c.get('cut_id')]
+    price = (_V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
+             + ADDON_CUT_CREDITS * len(_v1_cuts))
     resp = {
         'success': True,
         'decision': decision,
@@ -47650,6 +47952,10 @@ def api_v1_profiles_check():
         'credits_would_charge': price,
         'refresh_row_hypothesis': draft.get('refresh_row_hypothesis') or None,
     }
+    if _v1_cuts:
+        resp['addon_cuts'] = [
+            {'label': c.get('name_label') or c.get('label') or c['cut_id'],
+             'credits': ADDON_CUT_CREDITS} for c in _v1_cuts]
     if decision == 'existing_match' and ex_key:
         url = _generate_presigned_profile_url(ex_key, expires_seconds=86400)
         if url:
@@ -47776,9 +48082,16 @@ def api_v1_profiles_run():
     except Exception:
         pass
 
+    # Subject naming + embedded cuts (2026-08-20): full-universe TU +
+    # qualifier-as-cut. Price matches /v1/check: base + 3 per cut.
+    _decompose_embedded_subject_cuts(draft)
+
     decision, ex_key, d_type = _normalize_v1_decision(draft)
 
-    price = _V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
+    _v1_run_cuts = [c for c in (draft.get('addon_cuts') or [])
+                    if isinstance(c, dict) and c.get('cut_id')]
+    price = (_V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
+             + ADDON_CUT_CREDITS * len(_v1_run_cuts))
 
     # Exact-tier credit re-check (some tiers cost more than the median
     # preflight - e.g. cut_needs_parent=8). If interpret picked a
