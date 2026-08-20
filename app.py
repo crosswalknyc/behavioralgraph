@@ -43230,7 +43230,8 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  * Age bands must snap onto the canonical AGE buckets "
         f"({_ADDON_AGE_BUCKETS}). '18-24' -> ['18-24']; 'under 35' -> "
         "['18-24','25-34']; '35+' -> ['35-44','45-54','55-64',"
-        "'65 OR OLDER'].\n\n"
+        "'65 OR OLDER']; 'under 18' / '17 and under' / 'teens' -> "
+        "['17 AND UNDER'].\n\n"
 
         "OUTPUT SHAPE (strict JSON object, no prose outside):\n"
         "{\n"
@@ -44451,8 +44452,8 @@ def _resolve_markets_to_dmas(answer_text):
 # Add-on cut catalog: canonical cut ids -> pin definitions. Generation
 # bands snap to the pipeline's fixed AGE buckets as DISJOINT sets so a
 # full generation partition can ladder up to the parent cleanly.
-_ADDON_AGE_BUCKETS = ['18-24', '25-34', '35-44', '45-54', '55-64',
-                      '65 OR OLDER']
+_ADDON_AGE_BUCKETS = ['17 AND UNDER', '18-24', '25-34', '35-44',
+                      '45-54', '55-64', '65 OR OLDER']
 # `label` is the chat-facing description; `name_label` is what the
 # file/dashboard naming uses: '{Subject} - {name_label}' (Jenna
 # 2026-08-20: TU is just the subject name, then always a dash and the
@@ -44564,6 +44565,7 @@ def _merge_cuts(*cut_lists):
 # canonical AGE breaks (overlap-based, per Jenna 2026-08-20: '15-26'
 # style asks map onto the breaks we have).
 _ADDON_AGE_BUCKET_SPANS = [
+    ('17 AND UNDER', 0, 17),
     ('18-24', 18, 24), ('25-34', 25, 34), ('35-44', 35, 44),
     ('45-54', 45, 54), ('55-64', 55, 64), ('65 OR OLDER', 65, 120),
 ]
@@ -44662,16 +44664,37 @@ def _decompose_embedded_subject_cuts(draft):
                                 + base[m.end():]).strip()
                 else:
                     m = _re.search(
-                        r'\bunder\s+(2[0-9]|[3-6]\d)\b',
+                        r'\(?\s*(?:under|below)\s+(1[3-9]|[2-6]\d)'
+                        r'\s*\)?',
                         subject, _re.IGNORECASE)
                     if m:
-                        hi = int(m.group(1)) - 1
-                        buckets = _snap(18, hi)
+                        n = int(m.group(1))
+                        # 'under 18' = the canonical 17 AND UNDER
+                        # break; 'under 35' keeps the adult reading.
+                        lo_r = 0 if n <= 18 else 18
+                        buckets = _snap(lo_r, n - 1)
                         if buckets:
+                            # any under-18 ask pins the whole 17 AND
+                            # UNDER break, so title it as the break
+                            label = ('17 and Under' if n <= 18
+                                     else f'under {n}')
                             extracted.append({
                                 'type': 'age_band',
-                                'label': f'under {m.group(1)}',
+                                'label': label,
                                 'buckets': buckets,
+                            })
+                            base = (base[:m.start()] + ' '
+                                    + base[m.end():]).strip()
+                    else:
+                        m = _re.search(
+                            r'\(?\s*(1[0-7])\s*(?:and|or|&)\s*'
+                            r'(?:under|younger)\s*\)?',
+                            subject, _re.IGNORECASE)
+                        if m:
+                            extracted.append({
+                                'type': 'age_band',
+                                'label': '17 and Under',
+                                'buckets': ['17 AND UNDER'],
                             })
                             base = (base[:m.start()] + ' '
                                     + base[m.end():]).strip()
@@ -44795,7 +44818,8 @@ def _parse_addon_cuts_answer(answer_text, subject):
         "  - age_band: any subset of the fixed AGE buckets "
         f"{_ADDON_AGE_BUCKETS} (map ranges onto whole buckets, e.g. "
         "'under 35' -> ['18-24','25-34']; '35 plus' -> "
-        "['35-44','45-54','55-64','65 OR OLDER'])\n"
+        "['35-44','45-54','55-64','65 OR OLDER']; 'under 18' / "
+        "'17 and under' -> ['17 AND UNDER'])\n"
         "  - dma: a US market; use the EXACT canonical name from the "
         "DMA list below (Malibu -> Los Angeles Ca)\n"
         "'by generation(s)' or 'generational cuts' means ALL FOUR "
@@ -45173,6 +45197,10 @@ def api_synth_chat_clarify():
         if _re.match(r'^(none|all|all ages|any|anyone|skip|drop|'
                      r'no age|18\s*\+|everyone|adults)\b', low):
             chosen = ''  # drop the age qualifier entirely (18+)
+        elif _re.search(r'\b1[0-7]\s*(?:and|or|&)\s*(?:under|younger)\b'
+                        r'|\b(?:under|below)\s+1[0-8]\b|\bkids?\b'
+                        r'|\bminors?\b|\bteens?\b', low):
+            chosen = '17 and under'
         else:
             m_num = _re.match(r'^(?:option\s*|#\s*)?([1-9])\b', low)
             m_rng = _re.search(
@@ -45184,7 +45212,9 @@ def api_synth_chat_clarify():
                     c_lo, c_hi = int(m_rng.group(3)), 999
                 else:
                     c_lo, c_hi = int(m_rng.group(1)), int(m_rng.group(2))
-                if c_lo >= 18 and _age_range_is_canonical(c_lo, c_hi):
+                if c_lo == 0 and c_hi <= 17:
+                    c_hi = 17  # 0-17 style answers snap to the break
+                if _age_range_is_canonical(c_lo, c_hi):
                     chosen = _fmt_age_range(c_lo, c_hi)
             elif _re.search(r'\b(tight|narrow|first|smaller)\b', low) \
                     and opts:
@@ -45225,6 +45255,8 @@ def api_synth_chat_clarify():
                 r'\(\s*\d{1,2}\s*(?:-|–|—)\s*\d{1,2}\s*\)|'
                 r'(?:ages?|aged)\s*[:\s]?\s*\d{1,2}\s*'
                 r'(?:-|–|—|to|through|thru)\s*\d{1,2}|'
+                r'\(?\s*(?:under|below)\s+\d{1,2}\s*\)?|'
+                r'\(?\s*1[0-7]\s*(?:and|or|&)\s*(?:under|younger)\s*\)?|'
                 r'\b\d{2}\s*\+', rep, s, count=1)
             if s2 != s:
                 return s2
@@ -45235,9 +45267,13 @@ def api_synth_chat_clarify():
         draft['name'] = new_subj
         draft.pop('file_stem', None)  # re-derive from the new subject
         draft.pop('ask_age_breaks', None)
+        # Under-18 audience sits in the panel's canonical 17 AND UNDER
+        # break; only note anything when the pick EXCLUDES it after an
+        # under-18 ask.
         under18_note = (
-            " (the panel is 18+, so under-18 ages aren't represented)"
-            if data.get('under18') else "")
+            " (note: this range excludes the 17 AND UNDER break)"
+            if data.get('under18') and chosen
+            and 'under' not in chosen.lower() else "")
         if chosen:
             head = (f"Locked ages to **{chosen}**{under18_note} - "
                     f"the profile is now **{new_subj}**.")
@@ -47700,14 +47736,21 @@ def _maybe_ask_parent_link(draft, prompt, catalog):
 # read ~0. A range that DOESN'T line up (e.g. 15-26) can't be honored
 # by the data, so the chat suggests the closest canonical coverage
 # instead of silently building something that doesn't match the ask.
-# The panel is 18+; under-18 ages are not represented at all.
-_AGE_BREAK_STARTS = (18, 25, 35, 45, 55, 65)
-_AGE_BREAK_ENDS = (24, 34, 44, 54, 64)          # 65+ is open-ended
-_AGE_BREAK_LABELS = ('18-24', '25-34', '35-44', '45-54', '55-64', '65+')
+# 2026-08-20 (Jenna): 17 AND UNDER is a canonical break - every
+# profile's AGE demo carries it - so 'under 18' asks line up directly
+# (lo=0). Internally the kids break is span (0, 17).
+_AGE_BREAK_STARTS = (0, 18, 25, 35, 45, 55, 65)
+_AGE_BREAK_ENDS = (17, 24, 34, 44, 54, 64)      # 65+ is open-ended
+_AGE_BREAK_LABELS = ('17 AND UNDER', '18-24', '25-34', '35-44',
+                     '45-54', '55-64', '65+')
 
 
 def _fmt_age_range(lo, hi):
-    return f"{lo}+" if hi >= 999 else f"{lo}-{hi}"
+    if hi >= 999:
+        return f"{lo}+"
+    if lo <= 0:
+        return f"{hi} and under"
+    return f"{lo}-{hi}"
 
 
 def _detect_age_range_token(text):
@@ -47731,11 +47774,18 @@ def _detect_age_range_token(text):
             lo, hi = int(m.group(1)), int(m.group(2))
             if 5 <= lo < hi <= 99:
                 return lo, hi, m.group(0)
+    # 'N and under' / 'N or younger' -> the kids break (span 0..N)
+    m = _re.search(r'\b(1[0-7])\s*(?:and|or|&)\s*(?:under|younger)\b',
+                   t, _re.IGNORECASE)
+    if m:
+        return 0, int(m.group(1)), m.group(0)
     m = _re.search(r'\b(?:under|below)\s+(\d{1,2})\b', t, _re.IGNORECASE)
     if m:
         n = int(m.group(1))
         if 13 <= n <= 99:
-            return 18, n - 1, m.group(0)
+            # 'under 18' = the 17 AND UNDER break (lo=0). 'under 35'
+            # keeps the adult reading (18-34).
+            return (0 if n <= 18 else 18), n - 1, m.group(0)
     m = _re.search(r'\b(\d{2})\s*\+|\b(?:over|above)\s+(\d{1,2})\b', t,
                    _re.IGNORECASE)
     if m:
@@ -47758,7 +47808,7 @@ def _age_break_suggestions(lo, hi):
     range: (tight, wide). Tight = largest canonical range fully inside
     the request; wide = smallest canonical range covering it. Either
     may be None when it doesn't exist."""
-    lo_eff = max(lo, 18)
+    lo_eff = max(lo, 0)
     tight = None
     t_start = next((s for s in _AGE_BREAK_STARTS if s >= lo_eff), None)
     if hi >= 65:
@@ -47792,7 +47842,7 @@ def _maybe_ask_age_breaks(draft, prompt):
     if not hit:
         return draft
     lo, hi, matched = hit
-    if lo >= 18 and _age_range_is_canonical(lo, hi):
+    if _age_range_is_canonical(lo, hi):
         return draft
     tight, wide = _age_break_suggestions(lo, hi)
     opts = []
