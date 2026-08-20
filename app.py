@@ -16482,27 +16482,21 @@ def lookup_subscriber_episode_dates():
             f'  {{"dates": {{"1": "M/D/YY" or null, "2": "M/D/YY" or null, ...}}, "source": "short description of the source(s) used", "notes": "optional caveat (or empty)"}}\n'
         )
 
-        model = os.environ.get('HF_ALPHA_RESEARCH_MODEL', 'gpt-4o-search-preview')
+        # 2026-08-20: search-preview retired; live search via the shared
+        # Responses-API helper. Plain-model fallback preserved below.
+        content = ''
         try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[{'role': 'user', 'content': prompt}],
-                web_search_options={'search_context_size': 'medium'},
-            )
+            content = _live_web_search_text(prompt)
         except Exception as model_err:
-            # If the search-preview model is unavailable in this environment,
-            # fall back to a plain chat completion. Still better than nothing —
-            # the model just won't have fresh web context.
-            print(f"⚠️  Episode-date lookup: web-search model failed ({model_err}); falling back to plain chat.")
+            print(f"⚠️  Episode-date lookup: web-search failed ({model_err}); falling back to plain chat.")
+        if not content:
             resp = client.chat.completions.create(
                 model='gpt-4o-mini',
                 messages=[{'role': 'user', 'content': prompt}],
             )
-
-        content = ''
-        if resp and getattr(resp, 'choices', None):
-            msg = resp.choices[0].message
-            content = (getattr(msg, 'content', '') or '').strip()
+            if resp and getattr(resp, 'choices', None):
+                msg = resp.choices[0].message
+                content = (getattr(msg, 'content', '') or '').strip()
 
         # Extract the JSON object. The model is instructed to return only JSON,
         # but in practice we sometimes get a fenced block or trailing prose, so
@@ -17175,8 +17169,22 @@ HF_ALPHA_IDEAS_PREFIX = 'system/hedge_fund_alpha_ideas/'
 HF_ALPHA_MIN_IDEAS = 3
 HF_ALPHA_DEFAULT_IDEAS = 4
 HF_ALPHA_TZ = ZoneInfo('America/New_York')
-HF_ALPHA_RESEARCH_MODEL = os.environ.get('HF_ALPHA_RESEARCH_MODEL', 'gpt-4o-search-preview')
+# 2026-08-20: gpt-4o-search-preview was deprecated by OpenAI (404) -
+# live web search now goes through the Responses API web_search tool.
+HF_ALPHA_RESEARCH_MODEL = os.environ.get('HF_ALPHA_RESEARCH_MODEL', 'gpt-5.2')
 HF_ALPHA_SYNTH_MODEL = os.environ.get('HF_ALPHA_SYNTH_MODEL', 'gpt-4o')
+
+
+def _live_web_search_text(prompt, pinned_model=None):
+    """Live web-search text via the shared Responses-API helper
+    (migration/openai_web_search.py). The chat-completions
+    search-preview models 404 since OpenAI retired them in 2026-08.
+    Returns '' on failure so callers keep their existing fallbacks."""
+    try:
+        from migration.openai_web_search import openai_web_search_call
+    except ImportError:
+        from openai_web_search import openai_web_search_call
+    return (openai_web_search_call(prompt, model=pinned_model) or '').strip()
 
 def _hedge_fund_cache_key(s3_key_or_slug):
     """Create a safe S3 key from s3_key or slug (no slashes)."""
@@ -17952,12 +17960,8 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
             f'Be VERY specific with deal values, counterparties, dates, and states/regions. '
             f'Cite the source (e.g., "per company press release dated X").'
         )
-        cr = client.chat.completions.create(
-            model=HF_ALPHA_RESEARCH_MODEL,
-            messages=[{"role": "user", "content": comprehensive_prompt}],
-            web_search_options={"search_context_size": "high"},
-        )
-        deep_context = (cr.choices[0].message.content or '').strip() if cr.choices else ''
+        deep_context = _live_web_search_text(
+            comprehensive_prompt, pinned_model=HF_ALPHA_RESEARCH_MODEL)
     except Exception as e:
         research_warning = f'Comprehensive research unavailable ({e}). '
 
@@ -17967,12 +17971,8 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
             f'(2) Average price target vs current price, (3) Top 3 debates/concerns among analysts, '
             f'(4) Most recent rating changes. Be specific.'
         )
-        sr = client.chat.completions.create(
-            model=HF_ALPHA_RESEARCH_MODEL,
-            messages=[{"role": "user", "content": street_prompt}],
-            web_search_options={"search_context_size": "medium"},
-        )
-        research = (sr.choices[0].message.content or '').strip() if sr.choices else ''
+        research = _live_web_search_text(
+            street_prompt, pinned_model=HF_ALPHA_RESEARCH_MODEL)
     except Exception as e:
         research_warning += f'Street research unavailable ({e}). '
 
@@ -17982,12 +17982,8 @@ def generate_hf_alpha_ideas_for_ticker(ticker_payload, generation_day=None):
             f'Include: (1) Current quarter/year guidance ranges, (2) How this compares to consensus, '
             f'(3) Any recent guidance changes, (4) Management tone on last earnings call. Numbers please.'
         )
-        gr = client.chat.completions.create(
-            model=HF_ALPHA_RESEARCH_MODEL,
-            messages=[{"role": "user", "content": guidance_prompt}],
-            web_search_options={"search_context_size": "medium"},
-        )
-        guidance_research = (gr.choices[0].message.content or '').strip() if gr.choices else ''
+        guidance_research = _live_web_search_text(
+            guidance_prompt, pinned_model=HF_ALPHA_RESEARCH_MODEL)
     except Exception as e:
         research_warning += f'Guidance research unavailable ({e}).'
 
@@ -44793,7 +44789,8 @@ def api_synth_chat_clarify():
     step = str(body.get('step') or '').strip().lower()
     answer = str(body.get('answer') or '').strip()
     draft = body.get('draft') or {}
-    if step not in ('goal', 'strategy', 'region', 'cuts', 'parent_link') \
+    if step not in ('goal', 'strategy', 'region', 'cuts', 'parent_link',
+                    'age_breaks') \
             or not isinstance(draft, dict):
         return jsonify({'success': False, 'error': 'bad clarify step'}), 400
 
@@ -44835,6 +44832,109 @@ def api_synth_chat_clarify():
                 msg = "Couldn't map: " + ", ".join(real) + ". " + msg
         return jsonify({'success': True, 'draft': draft,
                         'message': msg, 'next_step': 'approve'})
+
+    if step == 'age_breaks':
+        # Requested age range doesn't line up with the panel's breaks
+        # (2026-08-20). Options were stashed by the interpret step.
+        data = draft.get('age_break_data') or {}
+        opts = [str(o) for o in (data.get('options') or []) if o]
+        low = answer.lower().strip()
+        chosen = None
+        if _re.match(r'^(none|all|all ages|any|anyone|skip|drop|'
+                     r'no age|18\s*\+|everyone|adults)\b', low):
+            chosen = ''  # drop the age qualifier entirely (18+)
+        else:
+            m_num = _re.match(r'^(?:option\s*|#\s*)?([1-9])\b', low)
+            m_rng = _re.search(
+                r'(\d{1,2})\s*(?:-|–|—|to)\s*(\d{1,2})|(\d{2})\s*\+', low)
+            if m_num and int(m_num.group(1)) <= len(opts):
+                chosen = opts[int(m_num.group(1)) - 1]
+            elif m_rng:
+                if m_rng.group(3):
+                    c_lo, c_hi = int(m_rng.group(3)), 999
+                else:
+                    c_lo, c_hi = int(m_rng.group(1)), int(m_rng.group(2))
+                if c_lo >= 18 and _age_range_is_canonical(c_lo, c_hi):
+                    chosen = _fmt_age_range(c_lo, c_hi)
+            elif _re.search(r'\b(tight|narrow|first|smaller)\b', low) \
+                    and opts:
+                chosen = opts[0]
+            elif _re.search(r'\b(wide|broad|second|bigger|larger)\b',
+                            low) and opts:
+                chosen = opts[-1]
+            elif _re.match(r'^(yes|yep|yeah|ok|okay|sure|fine)\b', low) \
+                    and len(opts) == 1:
+                chosen = opts[0]
+        if chosen is None:
+            breaks = ", ".join(data.get('canonical_breaks') or
+                               list(_AGE_BREAK_LABELS))
+            opt_lines = "\n".join(f"  {i}. **{o}**"
+                                  for i, o in enumerate(opts, start=1))
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (f"Our age data comes in these breaks: "
+                            f"{breaks}. Closest coverage for "
+                            f"**{data.get('requested')}**:\n{opt_lines}"
+                            f"\n\nReply with a number, a break "
+                            "(like 18-34), or **all ages** to drop "
+                            "the age filter."),
+                'next_step': 'age_breaks',
+            })
+        # Rewrite the subject with the chosen canonical range (or strip
+        # the age qualifier entirely on 'all ages').
+        subj_now = str(draft.get('subject') or draft.get('name') or '')
+        matched = str(data.get('matched_text') or '')
+
+        def _swap_age(s):
+            if not s:
+                return s
+            rep = f'({chosen})' if chosen else ''
+            if matched and matched in s:
+                return s.replace(matched, rep)
+            s2 = _re.sub(
+                r'\(\s*\d{1,2}\s*(?:-|–|—)\s*\d{1,2}\s*\)|'
+                r'(?:ages?|aged)\s*[:\s]?\s*\d{1,2}\s*'
+                r'(?:-|–|—|to|through|thru)\s*\d{1,2}|'
+                r'\b\d{2}\s*\+', rep, s, count=1)
+            if s2 != s:
+                return s2
+            return f'{s} ({chosen})' if chosen else s
+        new_subj = ' '.join(_swap_age(subj_now).split())
+        new_subj = new_subj.strip(' -,') or subj_now
+        draft['subject'] = new_subj
+        draft['name'] = new_subj
+        draft.pop('file_stem', None)  # re-derive from the new subject
+        draft.pop('ask_age_breaks', None)
+        under18_note = (
+            " (the panel is 18+, so under-18 ages aren't represented)"
+            if data.get('under18') else "")
+        if chosen:
+            head = (f"Locked ages to **{chosen}**{under18_note} - "
+                    f"the profile is now **{new_subj}**.")
+        else:
+            head = (f"Dropped the age filter{under18_note} - "
+                    f"the profile is now **{new_subj}**.")
+        # Continue the normal flow: parent_link if queued, else the
+        # fresh-build scoping question, else straight to approve.
+        if draft.get('ask_parent_link') and \
+                draft.get('parent_link_candidates'):
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head, 'next_step': 'parent_link'})
+        if str(draft.get('decision') or '').strip().lower() in (
+                'new_build', 'time_shifted_refresh', 'cut_needs_parent'):
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (head + " Quick scoping question: what's "
+                            "the **business goal** for this one? "
+                            "(One line - a pitch, a renewal, a media "
+                            "plan. Say **skip** to jump straight to "
+                            "the build.)"),
+                'next_step': 'goal',
+            })
+        return jsonify({'success': True, 'draft': draft,
+                        'message': head + " Review the brief below "
+                        "and approve to queue.",
+                        'next_step': 'approve'})
 
     if step == 'parent_link':
         # "Is this a cut of X data we already have?" (2026-08-20).
@@ -45280,6 +45380,16 @@ def api_synth_chat_interpret():
         except Exception as _pl_err:
             print(f"[synth-chat interpret] parent-link error: {_pl_err}")
 
+        # Age-break alignment (2026-08-20 Jenna directive): a request
+        # like "15-26" can't be honored by the panel's age breaks
+        # (18-24 / 25-34 / ... / 65+), so ask the user to pick the
+        # closest canonical coverage BEFORE anything builds. Canonical
+        # ranges (18-24, 18-34, 55+, ...) pass through silently.
+        try:
+            _maybe_ask_age_breaks(spec_draft, text)
+        except Exception as _ab_err:
+            print(f"[synth-chat interpret] age-breaks error: {_ab_err}")
+
         # Sample-lock passthrough (2026-08-19 incidence check): when
         # the user ran a sample check and replied "run it", the
         # frontend resends the ask with the checked sample pinned.
@@ -45395,6 +45505,12 @@ def api_synth_chat_interpret():
         if spec_draft.get('ask_parent_link') and \
                 spec_draft.get('parent_link_candidates'):
             clarify_steps = ['parent_link'] + clarify_steps
+        # Age-break question runs before everything else - the subject
+        # definition (which ages the cohort covers) shapes every
+        # downstream step.
+        if spec_draft.get('ask_age_breaks') and \
+                spec_draft.get('age_break_data'):
+            clarify_steps = ['age_breaks'] + clarify_steps
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
@@ -47229,6 +47345,133 @@ def _maybe_ask_parent_link(draft, prompt, catalog):
         print(f"[parent-link] cut intent without confident parent: "
               f"label={cut_label!r} candidates="
               f"{[c.get('display_name') for c in cands[:3]]}")
+    except Exception:
+        pass
+    return draft
+
+
+# ── Canonical age breaks (2026-08-20 Jenna directive) ──────────────
+# The panel's AGE demo comes in exactly these breaks. A requested
+# range that lines up with a break (or a contiguous union of breaks,
+# e.g. 18-34) builds fine - the AGE rows for the other buckets simply
+# read ~0. A range that DOESN'T line up (e.g. 15-26) can't be honored
+# by the data, so the chat suggests the closest canonical coverage
+# instead of silently building something that doesn't match the ask.
+# The panel is 18+; under-18 ages are not represented at all.
+_AGE_BREAK_STARTS = (18, 25, 35, 45, 55, 65)
+_AGE_BREAK_ENDS = (24, 34, 44, 54, 64)          # 65+ is open-ended
+_AGE_BREAK_LABELS = ('18-24', '25-34', '35-44', '45-54', '55-64', '65+')
+
+
+def _fmt_age_range(lo, hi):
+    return f"{lo}+" if hi >= 999 else f"{lo}-{hi}"
+
+
+def _detect_age_range_token(text):
+    """Find an age-range mention in free text. Returns
+    (lo, hi, matched_text) or None. hi=999 means open-ended ('55+').
+    Bare 'N-M' tokens only count when age context or a parenthetical
+    cohort shape makes the intent unambiguous (avoids matching
+    'top 10-15 brands' or a date fragment)."""
+    import re as _re
+    t = str(text or '')
+    pats = (
+        r'(?:ages?|aged)\s*[:\s]?\s*(\d{1,2})\s*(?:-|–|—|to|through|thru)'
+        r'\s*(\d{1,2})',
+        r'\b(\d{1,2})\s*(?:-|–|—|to)\s*(\d{1,2})\s*(?:-?\s*)?'
+        r'(?:year|yr)s?[\s-]*olds?\b',
+        r'\(\s*(\d{1,2})\s*(?:-|–|—)\s*(\d{1,2})\s*\)',
+    )
+    for p in pats:
+        m = _re.search(p, t, _re.IGNORECASE)
+        if m:
+            lo, hi = int(m.group(1)), int(m.group(2))
+            if 5 <= lo < hi <= 99:
+                return lo, hi, m.group(0)
+    m = _re.search(r'\b(?:under|below)\s+(\d{1,2})\b', t, _re.IGNORECASE)
+    if m:
+        n = int(m.group(1))
+        if 13 <= n <= 99:
+            return 18, n - 1, m.group(0)
+    m = _re.search(r'\b(\d{2})\s*\+|\b(?:over|above)\s+(\d{1,2})\b', t,
+                   _re.IGNORECASE)
+    if m:
+        n = int(m.group(1) or m.group(2))
+        if 13 <= n <= 99:
+            return n, 999, m.group(0)
+    return None
+
+
+def _age_range_is_canonical(lo, hi):
+    """True when [lo, hi] is exactly representable as a contiguous
+    union of panel age breaks (18-24 yes, 18-34 yes, 15-26 no)."""
+    if lo not in _AGE_BREAK_STARTS:
+        return False
+    return hi >= 65 or hi in _AGE_BREAK_ENDS
+
+
+def _age_break_suggestions(lo, hi):
+    """Return up to two canonical suggestions for a non-canonical
+    range: (tight, wide). Tight = largest canonical range fully inside
+    the request; wide = smallest canonical range covering it. Either
+    may be None when it doesn't exist."""
+    lo_eff = max(lo, 18)
+    tight = None
+    t_start = next((s for s in _AGE_BREAK_STARTS if s >= lo_eff), None)
+    if hi >= 65:
+        t_end = 999
+    else:
+        t_end = next((e for e in reversed(_AGE_BREAK_ENDS) if e <= hi),
+                     None)
+    if t_start is not None and t_end is not None and \
+            (t_end >= 999 or t_start < t_end):
+        tight = (t_start, t_end)
+    w_start = next((s for s in reversed(_AGE_BREAK_STARTS)
+                    if s <= lo_eff), 18)
+    if hi >= 65:
+        w_end = 999
+    else:
+        w_end = next((e for e in _AGE_BREAK_ENDS if e >= hi), 999)
+    wide = (w_start, w_end)
+    return tight, wide
+
+
+def _maybe_ask_age_breaks(draft, prompt):
+    """In-place: when the ask carries an age range that doesn't line
+    up with the panel's age breaks (e.g. 15-26), stash the suggestion
+    data so the chat can propose canonical coverage before building.
+    Canonical ranges (18-24, 25-34, 18-34, 55+, ...) pass silently.
+    Chatbot-only: the partner API is one-shot and cannot ask."""
+    if not isinstance(draft, dict):
+        return draft
+    subj = str(draft.get('subject') or draft.get('name') or '')
+    hit = _detect_age_range_token(subj) or _detect_age_range_token(prompt)
+    if not hit:
+        return draft
+    lo, hi, matched = hit
+    if lo >= 18 and _age_range_is_canonical(lo, hi):
+        return draft
+    tight, wide = _age_break_suggestions(lo, hi)
+    opts = []
+    if tight:
+        opts.append(_fmt_age_range(*tight))
+    if wide:
+        w_lbl = _fmt_age_range(*wide)
+        if w_lbl not in opts:
+            opts.append(w_lbl)
+    if not opts:
+        return draft
+    draft['ask_age_breaks'] = True
+    draft['age_break_data'] = {
+        'requested': _fmt_age_range(lo, hi),
+        'matched_text': matched,
+        'options': opts,
+        'canonical_breaks': list(_AGE_BREAK_LABELS),
+        'under18': bool(lo < 18),
+    }
+    try:
+        print(f"[age-breaks] non-canonical age range "
+              f"{_fmt_age_range(lo, hi)!r} in ask; suggesting {opts}")
     except Exception:
         pass
     return draft
