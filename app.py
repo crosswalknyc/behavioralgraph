@@ -43778,12 +43778,12 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
             pass
 
         # Intersect-cut promoter: if the per-subject prompt looks like
-        # "<parent> for <cohort>" / "<parent> → <cohort>" and a strong
+        # "<parent> for <cohort>" / "<parent> -> <cohort>" and a strong
         # candidate matches the left operand, promote from new_build
         # to derive_cut so the cut runs cheap (~$2-4 vs. ~$40).
         try:
             _maybe_promote_intersect_to_derive_cut(
-                spec_draft, per_prompt, candidates)
+                spec_draft, per_prompt, candidates, catalog=catalog)
         except Exception:
             pass
 
@@ -44793,7 +44793,7 @@ def api_synth_chat_clarify():
     step = str(body.get('step') or '').strip().lower()
     answer = str(body.get('answer') or '').strip()
     draft = body.get('draft') or {}
-    if step not in ('goal', 'strategy', 'region', 'cuts') \
+    if step not in ('goal', 'strategy', 'region', 'cuts', 'parent_link') \
             or not isinstance(draft, dict):
         return jsonify({'success': False, 'error': 'bad clarify step'}), 400
 
@@ -44835,6 +44835,106 @@ def api_synth_chat_clarify():
                 msg = "Couldn't map: " + ", ".join(real) + ". " + msg
         return jsonify({'success': True, 'draft': draft,
                         'message': msg, 'next_step': 'approve'})
+
+    if step == 'parent_link':
+        # "Is this a cut of X data we already have?" (2026-08-20).
+        # Candidates were stashed on the draft by the interpret step.
+        cands = draft.get('parent_link_candidates') or []
+        low = answer.lower().strip()
+        declined = bool(_re.match(
+            r'^(no|none|neither|nope|fresh|new|not a cut|'
+            r'no[,\s]+(build|start)\s+fresh|build fresh|'
+            r'start fresh|new build|standalone|its own|skip)\b', low))
+        picked = None
+        if not declined and cands:
+            m_num = _re.match(r'^(?:option\s*|#\s*)?([1-9])\b', low)
+            if m_num:
+                i = int(m_num.group(1)) - 1
+                if 0 <= i < len(cands):
+                    picked = cands[i]
+            elif _re.match(r'^(yes|yep|yeah|correct|right|it is|'
+                           r'that one|exactly|link it)\b', low) \
+                    and len(cands) == 1:
+                picked = cands[0]
+            else:
+                # Name match: candidate whose display tokens best
+                # overlap the answer.
+                ans_tokens = set(
+                    t for t in _normalize_for_match(answer).split()
+                    if len(t) >= 3)
+                best, best_ov = None, 0
+                for c in cands:
+                    dn_tokens = set(
+                        t for t in _normalize_for_match(
+                            c.get('display_name') or '').split()
+                        if len(t) >= 3)
+                    ov = len(ans_tokens & dn_tokens)
+                    if ov > best_ov:
+                        best, best_ov = c, ov
+                if best is not None and best_ov > 0:
+                    picked = best
+        if picked is None and not declined:
+            opts = "\n".join(
+                f"  {i}. {c.get('display_name')}"
+                for i, c in enumerate(cands, start=1))
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': ("Which existing profile is this a cut "
+                            f"of?\n{opts}\n\nReply with the number or "
+                            "name - or say **none** to build it fresh "
+                            "as its own profile."),
+                'next_step': 'parent_link',
+            })
+        if declined:
+            draft.pop('ask_parent_link', None)
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': ("Got it - building this fresh as its own "
+                            "profile. Quick scoping question: what's "
+                            "the **business goal** for this one? "
+                            "(One line - a pitch, a renewal, a media "
+                            "plan. Say **skip** to jump straight to "
+                            "the build.)"),
+                'next_step': 'goal',
+            })
+        # Linked: reroute the whole ask as a 3-credit derived cut of
+        # the chosen parent. Fresh-build scoping (goal/strategy) no
+        # longer applies.
+        parent_display = str(picked.get('display_name') or '').strip()
+        label = str(draft.get('cut_label')
+                    or draft.get('cut_label_guess') or subject).strip()
+        new_name = _compose_cut_name(parent_display, label)
+        draft['decision'] = 'derive_cut'
+        draft['existing_match_s3_key'] = picked.get('s3_key')
+        draft['existing_match_display_name'] = parent_display
+        draft['parent_display_name'] = parent_display
+        draft['cut_label'] = label
+        draft['subject'] = new_name
+        draft['name'] = new_name
+        if not (draft.get('derive_type') or '').strip() \
+                or draft.get('derive_type') == 'other':
+            draft['derive_type'] = 'intersect_cut'
+        draft['run_avid'] = False
+        cut_credits = int(_V1_CREDITS.get('derive_cut', 3))
+        draft['estimated_credits'] = cut_credits
+        draft['base_credits'] = cut_credits
+        try:
+            draft['estimated_run_minutes'] = _estimate_run_minutes(
+                'derive_cut', False)
+        except Exception:
+            pass
+        draft.pop('addon_cuts', None)
+        draft.pop('strategist_recs', None)
+        draft.pop('ask_parent_link', None)
+        return jsonify({
+            'success': True, 'draft': draft,
+            'message': (f"Linked. **{new_name}** will be derived as a "
+                        f"cut of **{parent_display}** "
+                        f"({cut_credits} credits) - the numbers ladder "
+                        "up to that parent. Review the brief below "
+                        "and approve to queue."),
+            'next_step': 'approve',
+        })
 
     if step == 'goal':
         low = answer.lower()
@@ -45156,13 +45256,29 @@ def api_synth_chat_interpret():
         # the batch check path: if the prompt is a cut of an existing
         # profile (e.g. "Vizio for Spider-Man Moviegoers"), promote
         # new_build -> derive_cut so we don't burn ~$40 of Anthropic
-        # on a build that could have run for ~$2-4.
+        # on a build that could have run for ~$2-4. 2026-08-20: passes
+        # the full catalog so the parent is scored against the LEFT
+        # operand (whole-prompt scores buried "Vizio TV Owners" under
+        # the Spider-Man cohort tokens), and renames the deliverable
+        # to '{Parent} - {Cut Label}'.
         try:
             _maybe_promote_intersect_to_derive_cut(
-                spec_draft, text, candidates)
+                spec_draft, text, candidates, catalog=catalog)
         except Exception as _int_err:
             print(f"[synth-chat interpret] intersect-cut error: "
                   f"{_int_err}")
+
+        # Parent-link question (2026-08-20 Jenna directive): if the
+        # ask still looks like a cut of something but no parent was
+        # confidently matched (or several distinct parents plausibly
+        # match), ASK the user "is this a cut of X data we already
+        # have?" instead of silently running a fresh build. Stashes
+        # candidates on the draft; the parent_link clarify step reads
+        # them.
+        try:
+            _maybe_ask_parent_link(spec_draft, text, catalog)
+        except Exception as _pl_err:
+            print(f"[synth-chat interpret] parent-link error: {_pl_err}")
 
         # Sample-lock passthrough (2026-08-19 incidence check): when
         # the user ran a sample check and replied "run it", the
@@ -45268,11 +45384,17 @@ def api_synth_chat_interpret():
         # strategist recommends a cut package (3 credits per cut,
         # every cut derived from the always-national TU + avid base).
         # Derive-cut / existing-match asks skip - no fresh build to
-        # scope.
+        # scope. 2026-08-20: when the ask looks like a cut of existing
+        # data but no parent auto-linked, the parent_link question
+        # runs FIRST - linking to a parent reroutes the whole thing to
+        # a 3-credit derive and skips the fresh-build scoping.
         clarify_steps = []
         if _dec_norm in ('new_build', 'time_shifted_refresh',
                          'cut_needs_parent'):
             clarify_steps = ['goal', 'strategy']
+        if spec_draft.get('ask_parent_link') and \
+                spec_draft.get('parent_link_candidates'):
+            clarify_steps = ['parent_link'] + clarify_steps
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
@@ -45735,6 +45857,15 @@ def api_synth_chat_approve():
         payload['parent_s3_key'] = ex_key or ''
     if decision in ('derive_cut', 'cut_needs_parent'):
         payload['derive_type'] = d_type or ''
+        # Behavioral/intersect cuts: the worker names the output
+        # '{Parent} - {cut_label}.csv' and briefs the reasoning engine
+        # with the cohort description (2026-08-20 lineage directive).
+        if draft.get('cut_label'):
+            payload['cut_label'] = str(draft.get('cut_label'))[:160]
+        if draft.get('cut_label_guess') or draft.get('cut_label'):
+            payload['cohort_description'] = str(
+                draft.get('cut_label_guess')
+                or draft.get('cut_label'))[:400]
     if decision == 'time_shifted_refresh':
         payload['refresh_row_hypothesis'] = draft.get('refresh_row_hypothesis') or ''
 
@@ -46797,28 +46928,12 @@ def _intersect_ops_re():
     return _INTERSECT_OPERATORS_RE
 
 
-def _detect_intersect_parent_from_prompt(prompt, candidates,
-                                          min_score=0.35):
-    """If the prompt is an intersect cut AND the candidate list has a
-    strong-scoring existing profile whose display_name matches the
-    LEFT operand, return (parent_s3_key, parent_display_name).
-
-    Otherwise return None. Never demotes a valid decision; used only
-    to promote `new_build` to `derive_cut`.
-
-    Guardrails:
-      - Requires an intersect operator in the prompt.
-      - Requires >= min_score on the matched candidate (default 0.35).
-      - Left-operand token overlap with parent must be >= 60% of the
-        parent's own token set. This is what prevents "Netflix for
-        Q3 2026" (year-shift) from being read as an intersect cut of
-        "Netflix" and "Q3 2026".
-      - Rejects candidates whose s3_key looks staff-only via
-        `_partner_download_key_allowed` (defense in depth for the
-        partner API surface).
-    """
+def _extract_intersect_operands(prompt):
+    """Parse the intersect grammar out of a prompt. Returns
+    (left, right) or None. Shared by the promoter and the parent-link
+    clarify question so both see the same grammar."""
     import re as _re
-    if not prompt or not candidates:
+    if not prompt:
         return None
     prefix_re = _re.compile(
         r'^(?:please\s+)?'
@@ -46831,18 +46946,13 @@ def _detect_intersect_parent_from_prompt(prompt, candidates,
         r'(?:of|for|on|about)\s+',
         _re.IGNORECASE,
     )
-    # Some intersect phrasings put the left operand mid-sentence after
-    # a preamble like "make a profile of Vizio for Spider-Man". The
-    # intersect regex is [A-Z] anchored to the start, so it would
-    # greedily match the preamble as part of `left`. Strip the
-    # preamble FIRST so `left` is always the actual left operand.
     stripped = prefix_re.sub('', prompt.strip(), count=1)
     m = _intersect_ops_re().match(stripped)
     if not m:
         return None
     left = (m.group('left') or '').strip()
     right = (m.group('right') or '').strip()
-    if not left or len(left) < 3:
+    if not left or len(left) < 3 or not right:
         return None
     # Right-side must NOT be a pure date / time-window expression -
     # those are time_shifted_refresh candidates, not intersect cuts.
@@ -46859,12 +46969,101 @@ def _detect_intersect_parent_from_prompt(prompt, candidates,
         right, _re.IGNORECASE,
     ):
         return None
+    return left, right
+
+
+def _score_parents_for_left_operand(left, catalog, min_score=0.30,
+                                    max_out=3):
+    """Score catalog profiles against the LEFT operand of an intersect
+    prompt, deduped to one (best) entry per distinct subject.
+
+    Why this exists (2026-08-20, Spider-Man/Vizio miss): the shortlist
+    that rides the interpret step scores against the WHOLE prompt, so
+    'Vizio TV Owners' vs 'Vizio for Spider-Man Moviegoers -> Digital
+    Purchasers' overlaps 1 of 7 tokens (0.14) and falls under the 0.15
+    floor - the parent never even reaches the promoter. Scoring the
+    left operand alone ('Vizio') gives full coverage (1.0).
+    """
+    if not left or not catalog:
+        return []
+    try:
+        cands = _shortlist_profile_matches(left, catalog,
+                                           max_candidates=12)
+    except Exception:
+        return []
+    best_by_subject = {}
+    for c in cands:
+        try:
+            score = float(c.get('_score') or 0.0)
+        except Exception:
+            score = 0.0
+        if score < min_score:
+            continue
+        s3_key = (c.get('s3_key') or '').strip()
+        if not s3_key:
+            continue
+        try:
+            if not _partner_download_key_allowed(s3_key):
+                continue
+        except Exception:
+            pass
+        subj_norm = _normalize_for_match(
+            c.get('subject') or c.get('display_name') or '')
+        prev = best_by_subject.get(subj_norm)
+        if prev is None or score > float(prev.get('_score') or 0):
+            best_by_subject[subj_norm] = c
+    ranked = sorted(best_by_subject.values(),
+                    key=lambda x: -float(x.get('_score') or 0))
+    return ranked[:max_out]
+
+
+def _detect_intersect_parent_from_prompt(prompt, candidates,
+                                          min_score=0.35, catalog=None):
+    """If the prompt is an intersect cut AND a strong-scoring existing
+    profile matches the LEFT operand, return
+    (parent_s3_key, parent_display_name, cut_label).
+
+    Otherwise return None. Never demotes a valid decision; used only
+    to promote `new_build` to `derive_cut`.
+
+    Guardrails:
+      - Requires an intersect operator in the prompt.
+      - Requires >= min_score on the matched candidate (default 0.35).
+      - Left-operand token overlap with parent must be >= 60% of the
+        parent's own token set. This is what prevents "Netflix for
+        Q3 2026" (year-shift) from being read as an intersect cut of
+        "Netflix" and "Q3 2026".
+      - Rejects candidates whose s3_key looks staff-only via
+        `_partner_download_key_allowed` (defense in depth for the
+        partner API surface).
+      - 2026-08-20: when `catalog` is provided, candidates are
+        RE-SCORED against the left operand (see
+        _score_parents_for_left_operand) - whole-prompt scores bury
+        the parent under the cut-cohort tokens.
+    """
+    ops = _extract_intersect_operands(prompt)
+    if not ops:
+        return None
+    left, right = ops
     left_norm = _normalize_for_match(left)
     left_tokens = set(t for t in left_norm.split() if len(t) >= 3)
     if not left_tokens:
         return None
 
-    for c in candidates:
+    # Left-operand rescore (2026-08-20): the caller's candidates were
+    # scored against the whole prompt, which drowns the parent in
+    # cut-cohort tokens. Score the left operand alone against the full
+    # catalog and check those FIRST; fall back to the caller's list.
+    scan_lists = []
+    if catalog:
+        left_cands = _score_parents_for_left_operand(
+            left, catalog, min_score=min_score)
+        if left_cands:
+            scan_lists.append(left_cands)
+    if candidates:
+        scan_lists.append(candidates)
+
+    for c in (x for lst in scan_lists for x in lst):
         try:
             score = float(c.get('_score') or 0.0)
         except Exception:
@@ -46897,7 +47096,7 @@ def _detect_intersect_parent_from_prompt(prompt, candidates,
             continue
         # The LEFT operand must be substantially recognized by this
         # candidate. `left_coverage` = fraction of left tokens present
-        # in parent — this is what makes "Vizio" match parent
+        # in parent - this is what makes "Vizio" match parent
         # "Vizio TV Owners" (1/1 = 100% coverage) while rejecting
         # "Netflix subscribers" against "Amazon Prime" (0/2 = 0%).
         left_coverage = len(overlap) / max(len(left_tokens), 1)
@@ -46918,14 +47117,35 @@ def _detect_intersect_parent_from_prompt(prompt, candidates,
                   f"left_coverage={left_coverage:.2f}")
         except Exception:
             pass
-        return s3_key, (c.get('display_name') or '')
+        return s3_key, (c.get('display_name') or ''), right
     return None
 
 
-def _maybe_promote_intersect_to_derive_cut(draft, prompt, candidates):
+def _compose_cut_name(parent_display, cut_label):
+    """'{Parent} - {Cut Label}', deduped: if the label already leads
+    with the parent name ('Vizio TV Owners - Spider-Man ...' or the
+    user typed the full lineage themselves) don't double-prefix."""
+    parent_display = str(parent_display or '').strip()
+    cut_label = str(cut_label or '').strip()
+    if not parent_display:
+        return cut_label
+    if not cut_label:
+        return parent_display
+    p_norm = _normalize_for_match(parent_display)
+    l_norm = _normalize_for_match(cut_label)
+    if p_norm and l_norm.startswith(p_norm):
+        return cut_label
+    return f"{parent_display} - {cut_label}"
+
+
+def _maybe_promote_intersect_to_derive_cut(draft, prompt, candidates,
+                                           catalog=None):
     """In-place: if `draft` decision is `new_build` and the prompt is
     an intersect cut with a good parent candidate, promote to
-    `derive_cut` with that parent key.
+    `derive_cut` with that parent key AND rename the deliverable to
+    '{Parent} - {Cut Label}' so lineage is visible in the dropdown,
+    the completion email, and future parent matching (2026-08-20
+    Jenna directive after the Spider-Man/Vizio miss).
 
     Preserves any decision that isn't `new_build` (Claude already
     picked something explicit). Preserves `existing_match_s3_key`
@@ -46936,17 +47156,81 @@ def _maybe_promote_intersect_to_derive_cut(draft, prompt, candidates):
     decision = (draft.get('decision') or '').strip().lower()
     if decision and decision != 'new_build':
         return draft
-    hit = _detect_intersect_parent_from_prompt(prompt, candidates)
+    hit = _detect_intersect_parent_from_prompt(prompt, candidates,
+                                               catalog=catalog)
     if not hit:
         return draft
-    parent_key, parent_display = hit
+    parent_key, parent_display, cut_label = hit
     draft['decision'] = 'derive_cut'
     draft['existing_match_s3_key'] = parent_key
     # `derive_type` is a free-form label Claude usually sets. Give it
     # a safe default so downstream normalization can identify why we
-    # promoted.
+    # promoted. Demographic types (gender_F etc.) are preserved.
     if not (draft.get('derive_type') or '').strip():
         draft['derive_type'] = 'intersect_cut'
+    # Lineage naming + the label the worker's behavioral-cut engine
+    # uses for the output file ('{Parent} - {label}.csv').
+    draft['cut_label'] = cut_label
+    draft['parent_display_name'] = parent_display
+    new_name = _compose_cut_name(parent_display, cut_label)
+    if new_name:
+        draft['subject'] = new_name
+        draft['name'] = new_name
+    return draft
+
+
+def _maybe_ask_parent_link(draft, prompt, catalog):
+    """In-place: when the ask looks like a CUT but no parent was
+    confidently auto-linked, stash plausible parents on the draft so
+    the chat can ask "is this a cut of X data we already have?"
+    (2026-08-20 Jenna directive - proper linking and routing beats a
+    silent fresh build).
+
+    Fires in two cases:
+      a) Intersect grammar matched but the promoter did NOT promote
+         (left operand only weakly covers every candidate).
+      b) Claude decided `cut_needs_parent` (it read the ask as a cut
+         of something we supposedly don't have) but the catalog has
+         plausible parents anyway.
+
+    Chatbot-only: the partner API is one-shot and cannot ask.
+    """
+    if not isinstance(draft, dict) or not catalog:
+        return draft
+    decision = (draft.get('decision') or '').strip().lower()
+    if decision in ('derive_cut', 'existing_match',
+                    'time_shifted_refresh'):
+        return draft
+    cands = []
+    cut_label = ''
+    ops = _extract_intersect_operands(prompt)
+    if ops:
+        left, right = ops
+        cut_label = right
+        cands = _score_parents_for_left_operand(left, catalog,
+                                                min_score=0.30)
+    if not cands and decision == 'cut_needs_parent':
+        cands = _score_parents_for_left_operand(prompt, catalog,
+                                                min_score=0.30)
+        cut_label = str(draft.get('cut_label')
+                        or draft.get('subject') or '').strip()
+    if not cands:
+        return draft
+    draft['parent_link_candidates'] = [
+        {'s3_key': c.get('s3_key'),
+         'display_name': c.get('display_name'),
+         'days_old': c.get('days_old'),
+         'score': round(float(c.get('_score') or 0), 3)}
+        for c in cands[:3]
+    ]
+    draft['cut_label_guess'] = cut_label
+    draft['ask_parent_link'] = True
+    try:
+        print(f"[parent-link] cut intent without confident parent: "
+              f"label={cut_label!r} candidates="
+              f"{[c.get('display_name') for c in cands[:3]]}")
+    except Exception:
+        pass
     return draft
 
 
@@ -47274,6 +47558,14 @@ def api_v1_profiles_run():
         payload['parent_s3_key'] = ex_key or ''
     if decision in ('derive_cut', 'cut_needs_parent'):
         payload['derive_type'] = d_type or ''
+        # Behavioral/intersect cuts: worker names the output
+        # '{Parent} - {cut_label}.csv' (2026-08-20 lineage directive).
+        if draft.get('cut_label'):
+            payload['cut_label'] = str(draft.get('cut_label'))[:160]
+        if draft.get('cut_label_guess') or draft.get('cut_label'):
+            payload['cohort_description'] = str(
+                draft.get('cut_label_guess')
+                or draft.get('cut_label'))[:400]
     if decision == 'time_shifted_refresh':
         payload['refresh_row_hypothesis'] = draft.get('refresh_row_hypothesis') or ''
 
