@@ -166,6 +166,10 @@ def claude_reason_json(
                     anthropic.APIConnectionError,
                     anthropic.APITimeoutError,
                     anthropic.InternalServerError,
+                    # Wall-clock watchdog raises builtin TimeoutError when a
+                    # black-holed connection outlives the hard wall - always
+                    # worth a retry on a fresh connection (2026-08-20).
+                    TimeoutError,
                 )
                 if not isinstance(e, transient):
                     print(f"⚠️  Claude permanent error ({type(e).__name__}): {e}")
@@ -254,12 +258,46 @@ def claude_messages(
             # need 3-8 min for the model to run 8-12 sub-requests then compose.
             # Per-request override leaves the default 180s read in place for
             # the fast text-only calls.
+            #
+            # 2026-08-20: the override MUST stay a granular httpx.Timeout -
+            # a plain float's read timer resets on every received byte,
+            # which lets a black-holed connection hang recv forever.
             if tools:
                 kwargs["tools"] = tools
-                _request_client = client.with_options(timeout=600.0)
+                try:
+                    import httpx as _hx
+                    _tool_timeout = _hx.Timeout(
+                        connect=30.0, read=600.0, write=60.0, pool=30.0)
+                except ImportError:
+                    _tool_timeout = 600.0
+                _request_client = client.with_options(timeout=_tool_timeout)
             else:
                 _request_client = client
-            resp = _request_client.messages.create(**kwargs)
+            # Wall-clock watchdog (2026-08-20): bound the whole request with
+            # a hard wall so a connection that trickles keepalive bytes
+            # (defeating the per-read timer) cannot freeze this thread. The
+            # hung helper thread is deliberately leaked; the retry loop
+            # reissues on a fresh connection. Mirrors
+            # migration/claude_client.py (Protein addon-cut stall, run
+            # 56saCwlWGl5fAw sat 34 min in ssl.recv).
+            from concurrent.futures import (
+                ThreadPoolExecutor as _WallPool,
+                TimeoutError as _WallTimeout,
+            )
+            _wall_s = 900.0 if tools else 420.0
+            _pool = _WallPool(max_workers=1)
+            try:
+                _fut = _pool.submit(
+                    _request_client.messages.create, **kwargs)
+                try:
+                    resp = _fut.result(timeout=_wall_s)
+                except _WallTimeout:
+                    raise TimeoutError(
+                        f"claude_messages wall-timeout after {_wall_s:.0f}s "
+                        f"(attempt {attempt + 1}/{max_retries}); reissuing "
+                        f"on a fresh connection")
+            finally:
+                _pool.shutdown(wait=False)
             try:
                 _u = getattr(resp, "usage", None)
                 if _u is not None:
@@ -290,6 +328,10 @@ def claude_messages(
                     anthropic.APIConnectionError,
                     anthropic.APITimeoutError,
                     anthropic.InternalServerError,
+                    # Wall-clock watchdog raises builtin TimeoutError when a
+                    # black-holed connection outlives the hard wall - always
+                    # worth a retry on a fresh connection (2026-08-20).
+                    TimeoutError,
                 )
                 if not isinstance(e, transient):
                     print(f"⚠️  Claude permanent error ({type(e).__name__}): {e}")
