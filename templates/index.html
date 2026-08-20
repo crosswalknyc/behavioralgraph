@@ -42103,7 +42103,9 @@ https://www.instagram.com/p/..."></textarea>
                 .trim()
                 .toLowerCase()
                 .replace(/[\u2019\u2018']/g, '')
-                .replace(/\s+/g, ' ');
+                .replace(/[-_]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
         };
 
         function displayDemographicLabel(s) {
