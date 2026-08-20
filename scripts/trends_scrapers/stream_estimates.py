@@ -115,6 +115,11 @@ _MAX_BOOK_ITEMS      = 220
 # little cross-platform overlap. ~$6-7/day added to the daily Claude
 # spend at full 100-row coverage.
 _MAX_FAST_ITEMS      = 350
+# Gaming: 1 platform (Xbox Game Pass Ultimate) x top 25 = 25 gross,
+# no cross-platform dedup needed today. Room to grow when we add
+# PlayStation Plus / Nintendo Switch Online / Steam later without
+# changing the cap.
+_MAX_GAMING_ITEMS    = 30
 
 _WEBSEARCH_MODEL      = (os.environ.get('STREAM_ESTIMATES_MODEL')
                           or 'claude-sonnet-4-5')
@@ -283,6 +288,16 @@ _FAST_SLUGS = (
 )
 
 
+# Gaming platforms. Snapshot layout mirrors streaming's one-file-per-
+# platform pattern (fast_channels uses one merged file; gaming uses
+# one per platform because each backend scraper is bespoke - Xbox
+# hydrates via DisplayCatalog v7, PS Plus would hit a totally
+# different endpoint). Chart labels feed `_CHART_LABEL_TO_PLATFORM`.
+_GAMING_SLUGS = (
+    ('xbox_gamepass', 'Xbox Game Pass Ultimate'),
+)
+
+
 def _collect_streaming(max_items: int = _MAX_STREAMING_ITEMS) -> list[dict]:
     """Union top titles across the 6 streaming platform snapshots,
     keyed by normalized title. Preserves film/tv distinction (from
@@ -365,6 +380,39 @@ def _collect_fast(max_items: int = _MAX_FAST_ITEMS) -> list[dict]:
                 'kind':          item_kind,
                 'display_title': title,
                 'artist':        '',
+                'best_rank':     rank,
+                'chart_labels':  [],
+                'image':         it.get('image'),
+                'url':           it.get('url'),
+            })
+            e['chart_labels'].append(f'{label} #{rank}')
+            if rank < e['best_rank']:
+                e['best_rank'] = rank
+    return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
+
+
+def _collect_gaming(max_items: int = _MAX_GAMING_ITEMS) -> list[dict]:
+    """Union top games across every gaming-platform snapshot (currently
+    just xbox_gamepass), keyed by `game:<norm_title>`. Games don't
+    collide by title the way songs do (there's only one 'Baldur's
+    Gate 3'), so no artist qualifier in the key. Publisher rides
+    along on `artist` for prompt context only."""
+    per: dict[str, dict] = {}
+    for slug, label in _GAMING_SLUGS:
+        snap = _read_snapshot(slug)
+        if not snap:
+            continue
+        items = snap.get('national') or snap.get('items') or []
+        for i, it in enumerate(items[:25]):
+            title = (it.get('title') or '').strip()
+            if not _cp_normalize(title):
+                continue
+            key = f'game:{_cp_normalize(title)}'
+            rank = int(it.get('rank') or (i + 1))
+            e = per.setdefault(key, {
+                'kind':          'game',
+                'display_title': title,
+                'artist':        (it.get('publisher') or ''),
                 'best_rank':     rank,
                 'chart_labels':  [],
                 'image':         it.get('image'),
@@ -474,6 +522,11 @@ def _lookup_key(kind: str, display_title: str, artist: str = '') -> str:
         return f'song:{_cp_normalize(f"{display_title} {artist}")}'
     if kind == 'book':
         return f'book:{_cp_normalize(f"{display_title} {artist}")}'
+    if kind == 'game':
+        # Games don't collide by title (no two AAA releases share a
+        # name in the same window). Publisher rides along on `artist`
+        # for prompt context but isn't part of the key.
+        return f'game:{_cp_normalize(display_title)}'
     if kind in ('film', 'tv', 'title'):
         return f'{kind}:{_cp_normalize(display_title)}'
     return f'{kind}:{_cp_normalize(display_title)}'
@@ -981,6 +1034,38 @@ _FAST_PLATFORMS_META = [
 ]
 
 
+# Gaming platforms. Ceilings + anchor language for Xbox Game Pass
+# Ultimate: Microsoft's cloud + console library subscription (~25M
+# US subs mid-2026 per Ampere Analysis + Microsoft Q4 FY26 supplement).
+# "Weekly US plays" = unique US subscribers who launched the title
+# on Xbox / PC Game Pass / cloud in a rolling 7-day window. Anchor:
+# Microsoft first-party engagement disclosures (rare, opt-in), Xbox
+# Wire / Newzoo Cloud Gaming Insights, Circana US Games Tracker,
+# GamesIndustry.biz weekly Steam+Xbox concurrency reports.
+_GAMING_PLATFORMS_META = [
+    {'key': 'xbox_gamepass',
+     'label': 'Xbox Game Pass Ultimate',
+     'ceiling': 6_000_000,
+     'anchors': (
+         'Xbox Game Pass Ultimate US subscriber base ~25M (mid-2026, '
+         'Ampere Analysis + Microsoft cloud-gaming disclosures). '
+         'Flagship first-party launch weeks (Starfield launch, Diablo '
+         'IV Day-1-on-Game-Pass, Forza Motorsport, Indiana Jones + the '
+         'Great Circle launch) hit 3-5M unique US weekly players. '
+         'Steady-state top-3 typically 500K-2M weekly. Middle of the '
+         'top-25 rail 100K-500K weekly. Long-tail cloud-only Retro / '
+         'EA Play catalog games 15-80K weekly. Big AAA arrivals from '
+         'a third-party publisher (Baldur\'s Gate 3 on GP, Persona 5 '
+         'Royal, Like a Dragon: Infinite Wealth) sit 300K-1.2M in '
+         'their first month, then decay to 80-250K weekly steady state. '
+         '"Recently added" games routinely spike 3-6x their steady '
+         'state in their launch week. Anchor: Microsoft first-party '
+         'engagement disclosures, Newzoo Cloud Gaming Insights, '
+         'Circana US Games Tracker.'
+     )},
+]
+
+
 def _platforms_for_kind(kind: str) -> list[dict]:
     if kind == 'song':
         return _SONG_PLATFORMS
@@ -990,6 +1075,8 @@ def _platforms_for_kind(kind: str) -> list[dict]:
         return _STREAMING_PLATFORMS_META
     if kind in ('fast_film', 'fast_tv'):
         return _FAST_PLATFORMS_META
+    if kind == 'game':
+        return _GAMING_PLATFORMS_META
     if kind == 'book':
         return _BOOK_PLATFORMS
     return []
@@ -1151,6 +1238,19 @@ def _build_prompt(item: dict) -> str:
                  f'Nielsen Gauge TVREV weekly US ad-supported viewers 2026')
         item_line = (f'{noun} TITLE (FAST / ad-supported free tier): '
                      f'{display_title}')
+    elif kind == 'game':
+        # "Weekly US plays" = unique US Game Pass Ultimate subs that
+        # LAUNCHED the title (console, PC, cloud) in the past 7 days.
+        # Anchor Claude to Microsoft first-party engagement, Newzoo
+        # Cloud Gaming Insights, Circana US Games Tracker, and any
+        # Xbox Wire / GamesIndustry.biz weekly-concurrency data.
+        unit  = 'weekly US plays (unique US subscribers who launched the game in the past 7 days)'
+        query = (f'"{display_title}" Xbox Game Pass weekly US players '
+                 f'Newzoo Circana Ampere Analysis 2026')
+        pub_str = f'\nPUBLISHER: {artist}' if artist else ''
+        item_line = (f'GAME TITLE: {display_title}{pub_str}\n'
+                     f'PLATFORM: Xbox Game Pass Ultimate (~25M US subs, '
+                     f'includes console + PC + Xbox Cloud Gaming)')
     elif kind == 'book':
         unit  = ('weekly US audience (readers/listeners/borrowers per '
                  'platform - amazon+apple = readers, audible = '
@@ -1251,6 +1351,10 @@ _MAX_ESTIMATE_BY_KIND = {
     # simultaneously.
     'fast_film': 18_000_000,
     'fast_tv':   18_000_000,
+    # Gaming: Xbox Game Pass Ultimate. Ceiling matches the per-platform
+    # ceiling because there is only one platform today. Bumps once we
+    # add PS Plus / Nintendo Switch Online / Steam.
+    'game':      6_000_000,
 }
 _CLAMP_TO_FRACTION = 0.4         # Bias clamped values conservative (was 0.5)
 
@@ -1268,6 +1372,8 @@ def _default_unit_for_kind(kind: str) -> str:
         # aggregate stays 'weekly US audience' since aggregating
         # across sale + loan units in one label reads awkwardly.
         return 'weekly US audience'
+    if kind == 'game':
+        return 'weekly US plays'
     return 'weekly US views'
 
 
@@ -1634,7 +1740,7 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
     """Read podcast / music / streaming / book / fast snapshots,
     research each unique top item's US audience via Claude +
     web_search, and return the combined snapshot dict."""
-    wanted = only or {'podcast', 'song', 'streaming', 'book', 'fast'}
+    wanted = only or {'podcast', 'song', 'streaming', 'book', 'fast', 'gaming'}
 
     items: list[dict] = []
     if 'podcast' in wanted:
@@ -1647,23 +1753,34 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
         items.extend(_collect_books())
     if 'fast' in wanted:
         items.extend(_collect_fast())
+    if 'gaming' in wanted:
+        items.extend(_collect_gaming())
 
     if not items:
+        # Preserve prior snapshot so a no-op run (e.g. --only gaming
+        # before the residential xbox scrape has landed today) doesn't
+        # clobber the existing podcast / song / book / streaming / fast
+        # estimates. Same incremental-safety principle as the merge
+        # below.
+        prior_snap = _read_snapshot('stream_estimates') or {}
         return {
-            'items': {},
-            'count': 0,
-            'error': 'no upstream snapshots available',
-            'model': _WEBSEARCH_MODEL,
+            'items':        prior_snap.get('items') or {},
+            'count':        len(prior_snap.get('items') or {}),
+            'error':        'no upstream snapshots available',
+            'model':        _WEBSEARCH_MODEL,
+            'preserved_prior': bool(prior_snap.get('items')),
         }
 
     logger.info("stream_estimates: total unique items = %d "
-                "(podcast=%d, song=%d, streaming=%d, book=%d, fast=%d)",
+                "(podcast=%d, song=%d, streaming=%d, book=%d, fast=%d, "
+                "gaming=%d)",
                 len(items),
                 sum(1 for it in items if it['kind'] == 'podcast'),
                 sum(1 for it in items if it['kind'] == 'song'),
                 sum(1 for it in items if it['kind'] in ('film', 'tv', 'title')),
                 sum(1 for it in items if it['kind'] == 'book'),
-                sum(1 for it in items if it['kind'] in ('fast_film', 'fast_tv')))
+                sum(1 for it in items if it['kind'] in ('fast_film', 'fast_tv')),
+                sum(1 for it in items if it['kind'] == 'game'))
 
     # Incremental behavior (two goals):
     #
@@ -1744,7 +1861,7 @@ if __name__ == '__main__':
                          format='%(asctime)s %(levelname)s %(name)s %(message)s')
     parser = argparse.ArgumentParser()
     parser.add_argument('--only', default='',
-                        help='Comma-separated: podcast,song,streaming,book,fast')
+                        help='Comma-separated: podcast,song,streaming,book,fast,gaming')
     args = parser.parse_args()
     only = set()
     for tok in args.only.split(','):

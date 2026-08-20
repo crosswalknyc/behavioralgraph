@@ -52005,6 +52005,14 @@ https://www.instagram.com/p/..."></textarea>
                             ? '<span class="tiq-gaming-new">NEW</span>'
                             : '';
                         var url = it.url || '#';
+                        // Projected-US-plays chip. `us_streams` stamped by
+                        // _annotate_gaming_with_streams in trends_iq.py.
+                        // Reads 'weekly US plays' (unique subs who launched
+                        // this game in the past 7 days).
+                        var audience = _tiqAudienceChip(it.us_streams);
+                        var metaSep = (pub && genre) ? ' · ' : '';
+                        var metaCore = pub + metaSep + genre;
+                        var metaLine = metaCore + (audience || '');
                         return '<div class="tiq-row">' +
                                '<div class="tiq-rank">' + rk + '</div>' +
                                img +
@@ -52013,9 +52021,7 @@ https://www.instagram.com/p/..."></textarea>
                                    '<a href="' + _tiqEsc(url) + '" target="_blank" rel="noopener">' +
                                    _tiqEsc(it.title) + '</a> ' + newBadge +
                                  '</div>' +
-                                 '<div class="tiq-row-meta">' + pub +
-                                   (pub && genre ? ' · ' : '') + genre +
-                                 '</div>' +
+                                 (metaLine ? '<div class="tiq-row-meta">' + metaLine + '</div>' : '') +
                                '</div>' +
                                '</div>';
                     }).join('');

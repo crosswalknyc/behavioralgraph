@@ -2800,6 +2800,11 @@ _DEFAULT_UNIT_BY_KIND = {
     # TVREV data - see stream_estimates._FAST_PLATFORMS_META.
     'fast_film': 'weekly US views',
     'fast_tv':   'weekly US views',
+    # Gaming: Xbox Game Pass Ultimate "plays" = unique US subscribers
+    # who launched the title on console / PC / cloud in the past
+    # 7 days. See stream_estimates._GAMING_PLATFORMS_META for anchor
+    # language + ceiling.
+    'game':      'weekly US plays',
 }
 
 # Per (kind, platform) unit label. Wins over Claude's aggregate
@@ -2920,6 +2925,13 @@ _FAST_PANEL_TO_PLATFORM = {
     'tubi':   'tubi',
     'pluto':  'pluto',
     'amazon': 'amazon',
+}
+# Gaming: currently one platform. Same shape as the other tabs so
+# adding PS Plus / Nintendo Switch Online / Steam later is a
+# one-line addition here (plus a new platform entry in
+# stream_estimates._GAMING_PLATFORMS_META).
+_GAMING_PANEL_TO_PLATFORM = {
+    'xbox_gamepass': 'xbox_gamepass',
 }
 # book_charts panels -> per-platform key. Libby panels come from a
 # separate snapshot (`libby_trends`) but plug into the same book
@@ -3148,6 +3160,29 @@ def _annotate_fast_with_streams(fast_trending: dict,
                 _stamp_stream_estimate(row, entry,
                                          platform_key=platform_key,
                                          kind_hint=kind_hint)
+
+
+def _annotate_gaming_with_streams(gaming_trending: dict,
+                                    estimates: dict) -> None:
+    """Attach per-platform `us_streams` to every game row: a row on
+    the Xbox Game Pass Ultimate panel gets Xbox-only weekly US plays.
+
+    Gaming estimates are keyed `game:<norm_title>` (title-only, no
+    publisher qualifier since AAA game titles don't collide in the
+    same launch window - see stream_estimates._lookup_key)."""
+    if not gaming_trending or not estimates:
+        return
+    items_lookup = estimates.get('items') or {}
+    for panel_slug, panel in (gaming_trending or {}).items():
+        if not panel:
+            continue
+        platform_key = _GAMING_PANEL_TO_PLATFORM.get(panel_slug, '')
+        for row in panel.get('items') or []:
+            title = (row.get('title') or '').strip()
+            key = f'game:{_cp_normalize(title)}'
+            _stamp_stream_estimate(row, items_lookup.get(key),
+                                     platform_key=platform_key,
+                                     kind_hint='game')
 
 
 # Libby local-to-US projection formula. LA County Library serves
@@ -5905,6 +5940,9 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # SVOD estimates for the same title (see stream_estimates
     # ._collect_fast for the split rationale).
     _annotate_fast_with_streams(fast_trending, stream_estimates_snap)
+    # Gaming: Xbox Game Pass Ultimate rows get a weekly-US-plays
+    # estimate. Keyed `game:<norm_title>` in the estimates snapshot.
+    _annotate_gaming_with_streams(gaming_trending, stream_estimates_snap)
     # Books: pass BOTH the book_charts sub-dict (amazon/apple/audible)
     # AND the libby_trends sub-dict (ebook/audiobook) - a single item
     # can appear on both, and both share the same `book:<title
