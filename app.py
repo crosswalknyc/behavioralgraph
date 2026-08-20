@@ -43548,7 +43548,16 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "back a parent's value (refresh / cut). The engine will "
         "jitter zero-ending values anyway, but you should never emit "
         "them in the first place.\n"
-        "  6. Return ONLY a JSON object. No markdown fences, no prose."
+        "  6. Return ONLY JSON. No markdown fences, no prose.\n"
+        "  7. MULTI-PROFILE REQUESTS: if the message clearly asks for "
+        "MULTIPLE distinct profiles (a list of brands / platforms / "
+        "segments, 'X vs Y', 'one for each Z', 'separate profiles "
+        "for ...'), return a JSON ARRAY with one complete spec object "
+        "per profile. Each element gets its own precise `subject` "
+        "(e.g. 'Amazon EST Buyers', 'Apple EST Buyers') - NEVER an "
+        "umbrella label ('EST Buyers by Retailer') and NEVER a "
+        "placeholder ('this profile', 'the audience'). A single "
+        "profile request still returns one JSON object, not an array."
     )
 
     user_prompt = (
@@ -44038,6 +44047,99 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         }
 
 
+_PLACEHOLDER_SUBJECT_RE = re.compile(
+    r'^(?:this|that|the|a|an|my|our|your|these|those)?'
+    r'[\s-]*(?:profile|profiles|audience|audiences|cohort|cohorts|'
+    r'subject|subjects|persona|personas|request|segment|segments|'
+    r'build|builds|it|them)s?$', re.IGNORECASE)
+
+
+def _is_placeholder_subject(subject) -> bool:
+    """True when a draft subject is a generic pronoun/noun (e.g. 'this
+    profile', 'the audience') or too short to be a real entity. Such a
+    draft is an interpret failure, never a renderable card."""
+    s = str(subject or '').strip()
+    return len(s) < 3 or bool(_PLACEHOLDER_SUBJECT_RE.match(s))
+
+
+def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
+                         catalog=None) -> dict:
+    """Standard post-interpret enrichment for one draft dict.
+
+    Shared by the single-path JSON-array branch and the zero-drafts
+    direct retry so Claude-native multi-profile output gets the exact
+    same treatment as regex-detected batches: decision-normalized
+    credits, observed run-minutes, pinned est sample, embedded-cut
+    decomposition, multi-cohort recovery, and the cuts-only parent
+    promoter. Mutates and returns the draft; never raises.
+    """
+    try:
+        try:
+            _dn, _, _ = _normalize_v1_decision(spec_draft)
+        except Exception:
+            _dn = str(spec_draft.get('decision') or 'new_build').strip() \
+                or 'new_build'
+        if _dn in _AVID_INAPPLICABLE_DECISIONS:
+            spec_draft['run_avid'] = _dn != 'derive_cut'
+        elif spec_draft.get('run_avid') is None:
+            spec_draft['run_avid'] = True
+        spec_draft['estimated_credits'] = int(
+            _V1_CREDITS.get(_dn, CREDITS_PROFILE_ANALYSIS))
+        spec_draft['estimated_run_minutes'] = _estimate_run_minutes(
+            _dn, bool(spec_draft.get('run_avid')))
+        _jitter_draft_est_sample(spec_draft)
+        _decompose_embedded_subject_cuts(spec_draft)
+        if prompt_text:
+            _augment_multi_cohort_cuts(spec_draft, prompt_text)
+        if catalog is not None:
+            try:
+                _maybe_promote_embedded_cuts_to_parent(spec_draft, catalog)
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"[synth-chat] draft finisher error: {e}")
+    return spec_draft
+
+
+def _batch_payload_from_drafts(drafts: list, user_text: str, history: list,
+                               model=None, shared_context: str = '',
+                               failures=None):
+    """Assemble the standard batch interpret response from a list of
+    already-finalized draft dicts (Claude-native array output). Applies
+    the same date-clarification gate as the regex-batch path."""
+    user_explicit = _user_specified_dates(user_text, chat_history=history)
+    claude_explicit = any(bool(d.get('date_range_explicit'))
+                          for d in drafts)
+    _dr0 = (drafts[0].get('date_range') or {}) if drafts else {}
+    return jsonify({
+        'success': True,
+        'batch': True,
+        'batch_size': len(drafts),
+        'subjects': [d.get('subject') or d.get('file_stem')
+                     or f'profile {i + 1}'
+                     for i, d in enumerate(drafts)],
+        'needs_date_clarification': bool(drafts) and not (
+            user_explicit or claude_explicit),
+        'proposed_date_range': {
+            'start': _dr0.get('start') or '2025-07-01',
+            'end': _dr0.get('end') or '2026-06-30',
+        },
+        'spec_drafts': drafts,
+        'per_subject_meta': [
+            {
+                'subject_input': d.get('subject'),
+                'estimated_credits': int(d.get('estimated_credits') or 0),
+                'model': model,
+                'candidates': [],
+            } for d in drafts
+        ],
+        'failures': failures or [],
+        'estimated_credits_total': sum(
+            int(d.get('estimated_credits') or 0) for d in drafts),
+        'shared_context': shared_context,
+    })
+
+
 def _synth_chat_interpret_batch(user_text: str, subjects: list,
                                   history: list,
                                   shared_context_override: str = None):
@@ -44094,6 +44196,44 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
               "failed: " + "; ".join(
                   f"{f.get('subject_input')!r}: {f.get('error')}"
                   for f in failures[:8]))
+        # Direct retry (2026-08-20, "make the chatbot smarter"): the
+        # regex splitter demonstrably produced garbage slices, so ask
+        # Claude ONCE on the ORIGINAL text in array mode - it is a far
+        # better splitter than the regexes when phrasing gets creative.
+        try:
+            try:
+                from iq_rankers import MASTER_CATEGORIES as _MC
+            except Exception:
+                _MC = {}
+            _catalog = _profile_catalog_for_chat()
+            _cands = _shortlist_profile_matches(user_text, _catalog)
+            _sp, _up = _synth_chat_interpret_prompts(
+                user_text, chat_history=history,
+                master_categories=_MC, candidate_matches=_cands)
+            _up += ("\n\nIMPORTANT: This request names MULTIPLE "
+                    "profiles. Return a JSON ARRAY with one complete "
+                    "spec object per profile, each with its own "
+                    "precise subject.")
+            _res = _run_nflx_claude_agent(
+                system_prompt=_sp, user_prompt=_up,
+                max_tokens=8192, temperature=0.4)
+            _data = _res.get('data') if _res.get('success') else None
+            if isinstance(_data, dict):
+                _data = [_data]
+            _drafts = [d for d in (_data or []) if isinstance(d, dict)
+                       and not _is_placeholder_subject(d.get('subject'))]
+            if _drafts:
+                print(f"[synth-chat interpret batch] direct retry "
+                      f"recovered {len(_drafts)} drafts")
+                for _d in _drafts:
+                    _finalize_chat_draft(_d, prompt_text=user_text,
+                                         catalog=_catalog)
+                return _batch_payload_from_drafts(
+                    _drafts, user_text, history,
+                    model=_res.get('model'))
+        except Exception as _retry_err:
+            print(f"[synth-chat interpret batch] direct retry failed: "
+                  f"{_retry_err}")
         return jsonify({
             'success': False,
             'error': (
@@ -44349,16 +44489,16 @@ def _synth_chat_incidence_check(text, history=None):
         else (f"~{us_aud:,}" if us_aud > 0 else 'n/a')
 
     message_lines = [
-        f"Sample check for **{subject}** ({window_label}):",
+        f"Sample check for {subject} ({window_label}):",
         "",
-        f"- Panel sample: **{tu:,} panelists** "
+        f"- Panel sample: {tu:,} panelists "
         f"({incidence_str} incidence)",
         f"- Avid tier: {avid:,} panelists",
         f"- US audience in window: {us_aud_str}",
         "",
-        f"Verdict: **{verdict_label}** - {verdict_note}",
+        f"Verdict: {verdict_label} - {verdict_note}",
         "",
-        "Reply **run it** to build the profile locked to this exact "
+        "Reply 'run it' to build the profile locked to this exact "
         "sample, or refine the audience / window and ask again.",
     ]
     run_prompt = f"{subject}, {window_label}"
@@ -44537,9 +44677,9 @@ def _synth_chat_discovery_options(text):
         }), 502
     brand = str(d.get('brand') or '').strip() or 'this pitch'
     lines = [f"Let's make sure we pull the right audience for "
-             f"**{brand}**. A few ways to frame it:", ""]
+             f"{brand}. A few ways to frame it:", ""]
     for i, o in enumerate(options, 1):
-        lines.append(f"**{i}. {o['label']}** - {o['audience']}")
+        lines.append(f"{i}. {o['label']} - {o['audience']}")
         if o['why']:
             lines.append(f"   {o['why']}")
     lines.append("")
@@ -45233,11 +45373,11 @@ def _synth_chat_cut_strategist(draft):
     window = f"{dr.get('start') or '2025-07-01'} to " \
              f"{dr.get('end') or '2026-06-30'}"
     fallback_msg = (
-        "Want any **add-on cuts** beyond the standard build? Female "
+        "Want any add-on cuts beyond the standard build? Female "
         "only, male only, by generation, an age band, or a specific "
-        f"market. **{ADDON_CUT_CREDITS} credits per cut** - every cut "
+        f"market. {ADDON_CUT_CREDITS} credits per cut - every cut "
         "derives from the national total-universe build. Name the "
-        "ones you want, or say **none**.")
+        "ones you want, or say 'none'.")
 
     dma_list = _nielsen_dma_list()
     system_prompt = (
@@ -45349,7 +45489,7 @@ def _synth_chat_cut_strategist(draft):
              + f" (each cut is {ADDON_CUT_CREDITS} credits, derived "
              "from the national build):", ""]
     for i, r in enumerate(recs, 1):
-        ln = f"**{i}. {r.get('label')}** (+{ADDON_CUT_CREDITS})"
+        ln = f"{i}. {r.get('label')} (+{ADDON_CUT_CREDITS})"
         if r.get('est_lo') and r.get('est_hi'):
             ln += (f" - est. {_fmt_est_count(r['est_lo'])}-"
                    f"{_fmt_est_count(r['est_hi'])} panelists")
@@ -45362,10 +45502,10 @@ def _synth_chat_cut_strategist(draft):
             why = f" - {s['why']}" if s.get('why') else ""
             lines.append(f"*Skip {s['label']}*{why}")
     lines.append("")
-    lines.append("Reply with the ones you want (**\"1 and 3\"**, "
-                 "**\"all\"**, or by name), add any market by name "
+    lines.append("Reply with the ones you want (\"1 and 3\", "
+                 "\"all\", or by name), add any market by name "
                  "(each market is its own "
-                 f"{ADDON_CUT_CREDITS}-credit cut), or say **none**. "
+                 f"{ADDON_CUT_CREDITS}-credit cut), or say none. "
                  "The total universe and avid stay national either "
                  "way.")
     return recs, skips, "\n".join(lines)
@@ -45473,9 +45613,9 @@ def api_synth_chat_clarify():
             cut_lines = "\n".join(
                 f"  - {c.get('label') or c.get('cut_id')} "
                 f"(+{ADDON_CUT_CREDITS} credits)" for c in cuts)
-            msg = (f"Locked in **{len(cuts)} cut"
-                   f"{'s' if len(cuts) != 1 else ''}**:\n{cut_lines}\n\n"
-                   f"Total: **{total} credits** (base {base_credits} "
+            msg = (f"Locked in {len(cuts)} cut"
+                   f"{'s' if len(cuts) != 1 else ''}:\n{cut_lines}\n\n"
+                   f"Total: {total} credits (base {base_credits} "
                    f"covers the national total universe + avid; "
                    f"{len(cuts)} x {ADDON_CUT_CREDITS} for the cuts, "
                    "each derived from that national parent so the "
@@ -45534,15 +45674,15 @@ def api_synth_chat_clarify():
         if chosen is None:
             breaks = ", ".join(data.get('canonical_breaks') or
                                list(_AGE_BREAK_LABELS))
-            opt_lines = "\n".join(f"  {i}. **{o}**"
+            opt_lines = "\n".join(f"  {i}. {o}"
                                   for i, o in enumerate(opts, start=1))
             return jsonify({
                 'success': True, 'draft': draft,
                 'message': (f"Our age data comes in these breaks: "
                             f"{breaks}. Closest coverage for "
-                            f"**{data.get('requested')}**:\n{opt_lines}"
+                            f"{data.get('requested')}:\n{opt_lines}"
                             f"\n\nReply with a number, a break "
-                            "(like 18-34), or **all ages** to drop "
+                            "(like 18-34), or all ages to drop "
                             "the age filter."),
                 'next_step': 'age_breaks',
             })
@@ -45581,11 +45721,11 @@ def api_synth_chat_clarify():
             if data.get('under18') and chosen
             and 'under' not in chosen.lower() else "")
         if chosen:
-            head = (f"Locked ages to **{chosen}**{under18_note} - "
-                    f"the profile is now **{new_subj}**.")
+            head = (f"Locked ages to {chosen}{under18_note} - "
+                    f"the profile is now {new_subj}.")
         else:
             head = (f"Dropped the age filter{under18_note} - "
-                    f"the profile is now **{new_subj}**.")
+                    f"the profile is now {new_subj}.")
         # Continue the normal flow: parent_link if queued, else the
         # fresh-build scoping question, else straight to approve.
         if draft.get('ask_parent_link') and \
@@ -45597,9 +45737,9 @@ def api_synth_chat_clarify():
             return jsonify({
                 'success': True, 'draft': draft,
                 'message': (head + " Quick scoping question: what's "
-                            "the **business goal** for this one? "
+                            "the business goal for this one? "
                             "(One line - a pitch, a renewal, a media "
-                            "plan. Say **skip** to jump straight to "
+                            "plan. Say skip to jump straight to "
                             "the build.)"),
                 'next_step': 'goal',
             })
@@ -45653,7 +45793,7 @@ def api_synth_chat_clarify():
                 'success': True, 'draft': draft,
                 'message': ("Which existing profile is this a cut "
                             f"of?\n{opts}\n\nReply with the number or "
-                            "name - or say **none** to build it fresh "
+                            "name - or say none to build it fresh "
                             "as its own profile."),
                 'next_step': 'parent_link',
             })
@@ -45663,9 +45803,9 @@ def api_synth_chat_clarify():
                 'success': True, 'draft': draft,
                 'message': ("Got it - building this fresh as its own "
                             "profile. Quick scoping question: what's "
-                            "the **business goal** for this one? "
+                            "the business goal for this one? "
                             "(One line - a pitch, a renewal, a media "
-                            "plan. Say **skip** to jump straight to "
+                            "plan. Say skip to jump straight to "
                             "the build.)"),
                 'next_step': 'goal',
             })
@@ -45700,8 +45840,8 @@ def api_synth_chat_clarify():
         draft.pop('ask_parent_link', None)
         return jsonify({
             'success': True, 'draft': draft,
-            'message': (f"Linked. **{new_name}** will be derived as a "
-                        f"cut of **{parent_display}** "
+            'message': (f"Linked. {new_name} will be derived as a "
+                        f"cut of {parent_display} "
                         f"({cut_credits} credits) - the numbers ladder "
                         "up to that parent. Review the brief below "
                         "and approve to queue."),
@@ -45729,7 +45869,7 @@ def api_synth_chat_clarify():
                 'message': ("I couldn't parse that. Reply with the "
                             "numbers (\"1 and 3\"), \"all\", cut "
                             "names (\"female\", \"Gen Z\", \"Dallas "
-                            "only\") - or say **none**."),
+                            "only\") - or say none."),
                 'next_step': 'strategy',
             })
         draft['addon_cuts'] = cuts
@@ -45744,11 +45884,11 @@ def api_synth_chat_clarify():
                 r'^(national|nationwide|nation wide|all|whole country|'
                 r'us|usa|everywhere|no|none|skip|not regional)\s*[.!]?$',
                 low):
-            msg = ("Nationwide it is. Want any **additional cuts**? "
+            msg = ("Nationwide it is. Want any additional cuts? "
                    "Female only, male only, by generation, an age "
-                   "band, or a specific market. **"
-                   f"{ADDON_CUT_CREDITS} credits per cut** - name the "
-                   "ones you want, or say **none**.")
+                   "band, or a specific market. "
+                   f"{ADDON_CUT_CREDITS} credits per cut - name the "
+                   "ones you want, or say 'none'.")
             return jsonify({'success': True, 'draft': draft,
                             'message': msg, 'next_step': 'cuts'})
         resolved, unresolved = _resolve_markets_to_dmas(answer)
@@ -45759,7 +45899,7 @@ def api_synth_chat_clarify():
                             f"{', '.join(unresolved) or 'that'} to a "
                             "US media market. Name the metro areas or "
                             "states (e.g. \"LA and San Diego\", "
-                            "\"Texas\"), or say **national**."),
+                            "\"Texas\"), or say national."),
                 'next_step': 'region',
             })
         dma_cuts = _normalize_cut_items(
@@ -45770,18 +45910,18 @@ def api_synth_chat_clarify():
         draft['estimated_credits'] = base_credits \
             + ADDON_CUT_CREDITS * n_cuts
         parts = [
-            "The total universe and avid always build **national** - "
+            "The total universe and avid always build national - "
             "each market you named becomes its own "
-            f"**{ADDON_CUT_CREDITS}-credit cut** from that parent:\n"
+            f"{ADDON_CUT_CREDITS}-credit cut from that parent:\n"
             + "\n".join(f"  - {c['label']} (+{ADDON_CUT_CREDITS} "
                         "credits)" for c in dma_cuts)]
         if unresolved:
             parts.append(f"(Couldn't map: {', '.join(unresolved)} - "
                          "tell me the metro if you want them added.)")
-        parts.append("Want any **other cuts**? Female only, male "
+        parts.append("Want any other cuts? Female only, male "
                      "only, by generation, or an age band - "
                      f"{ADDON_CUT_CREDITS} credits each. Name them, "
-                     "or say **none**.")
+                     "or say none.")
         return jsonify({'success': True, 'draft': draft,
                         'message': "\n\n".join(parts),
                         'next_step': 'cuts'})
@@ -45795,7 +45935,7 @@ def api_synth_chat_clarify():
             'message': ("I couldn't parse that cut list. Try e.g. "
                         "\"female and male\", \"by generation\", "
                         "\"18-34\", \"Los Angeles only\" - or say "
-                        "**none**."),
+                        "none."),
             'next_step': 'cuts',
         })
     draft['addon_cuts'] = _merge_cuts(draft.get('addon_cuts'), cuts)
@@ -45975,50 +46115,31 @@ def api_synth_chat_interpret():
 
         spec_draft = result.get('data') or {}
 
-        # 2026-08-18: If Claude returned a JSON ARRAY (happens when the
-        # chat history primes it for multi-subject: "run all 3 profiles
-        # across ..." after a 3-subject batch), package the array as a
-        # batch response instead of failing back to the frontend as
-        # non-JSON. Each element is treated as an already-interpreted
-        # per-subject draft, so we skip the per-subject Claude fan-out.
+        # Claude-native multi-profile output (prompt rule 7): a JSON
+        # ARRAY means one spec per requested profile. Filter out
+        # placeholder subjects, run every draft through the same
+        # finisher the batch path uses (credits, run-minutes, est
+        # sample, embedded-cut decomposition, cuts-only promoter),
+        # then return the standard batch payload with the date gate.
+        # A 1-element array degrades gracefully to the single-draft
+        # flow below.
         if isinstance(spec_draft, list):
-            drafts = [d for d in spec_draft if isinstance(d, dict)]
-            if drafts:
+            drafts = [d for d in spec_draft if isinstance(d, dict)
+                      and not _is_placeholder_subject(d.get('subject'))]
+            if len(drafts) >= 2:
                 for _d in drafts:
-                    try:
-                        _dn, _, _ = _normalize_v1_decision(_d)
-                    except Exception:
-                        _dn = str(_d.get('decision') or 'new_build').strip() \
-                            or 'new_build'
-                    _d['estimated_run_minutes'] = _estimate_run_minutes(
-                        _dn, bool(_d.get('run_avid')))
+                    _finalize_chat_draft(_d, prompt_text=text,
+                                         catalog=catalog)
+                return _batch_payload_from_drafts(
+                    drafts, text, history, model=result.get('model'))
+            if len(drafts) == 1:
+                spec_draft = drafts[0]
+            else:
                 return jsonify({
-                    'success': True,
-                    'batch': True,
-                    'batch_size': len(drafts),
-                    'subjects': [d.get('subject') or d.get('file_stem')
-                                 or f'subject {i+1}'
-                                 for i, d in enumerate(drafts)],
-                    'spec_drafts': drafts,
-                    'per_subject_meta': [
-                        {
-                            'subject_input': d.get('subject'),
-                            'estimated_credits': d.get('estimated_credits') or 5,
-                            'model': result.get('model'),
-                            'candidates': [],
-                        } for d in drafts
-                    ],
-                    'failures': [],
-                    'estimated_credits_total': sum(
-                        int(d.get('estimated_credits') or 5) for d in drafts),
-                    'shared_context': '',
-                })
-            # Empty array - fall through to error path below.
-            return jsonify({
-                'success': False,
-                'error': 'Could not interpret that request. '
-                         'Try rephrasing with the subject name(s).',
-            }), 400
+                    'success': False,
+                    'error': 'Could not interpret that request. '
+                             'Try rephrasing with the subject name(s).',
+                }), 400
 
         # Placeholder-subject guard (2026-08-20 Jenna: a Cartesian ask
         # that slipped past the batch detectors came back with subject
@@ -46026,12 +46147,7 @@ def api_synth_chat_interpret():
         # profile** profile'). A draft whose subject is a generic
         # pronoun/noun is an interpret failure - ask for a rephrase
         # instead of shipping a garbage card.
-        _subj_chk = str(spec_draft.get('subject') or '').strip()
-        if re.match(
-                r'^(?:this|that|the|a|an|my|our|your|these|those)?'
-                r'[\s-]*(?:profile|profiles|audience|cohort|subject|'
-                r'persona|personas|request|segment|build|it|them)s?$',
-                _subj_chk, re.IGNORECASE) or len(_subj_chk) < 3:
+        if _is_placeholder_subject(spec_draft.get('subject')):
             return jsonify({
                 'success': False,
                 'error': (

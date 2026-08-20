@@ -59267,7 +59267,9 @@ https://www.instagram.com/p/..."></textarea>
             }
             var rows = synthChatHistory.map(function(turn) {
                 var role = (turn.role || 'user').toLowerCase();
-                var text = _synthChatEscapeHtml(turn.text || '');
+                var _rawText = turn.text || '';
+                if (role !== 'user') { _rawText = String(_rawText).replace(/\*\*/g, ''); }
+                var text = _synthChatEscapeHtml(_rawText);
                 var isUser = role === 'user';
                 var bg = isUser ? 'rgba(84, 141, 255, 0.14)' : 'rgba(255,255,255,0.05)';
                 var label = isUser ? '👤 You' : '🤖 Agent';
@@ -59655,7 +59657,7 @@ https://www.instagram.com/p/..."></textarea>
                 var name = subject ||
                     _synthChatSubjectForRun(runId) ||
                     'Your profile';
-                var lines = ['**' + name + '** -> ' + label + '.'];
+                var lines = ['' + name + ' -> ' + label + '.'];
                 if (typeof st.pending_position === 'number' && cur === 'queued') {
                     lines.push('Position ' + st.pending_position + ' in queue.');
                 }
@@ -59736,7 +59738,7 @@ https://www.instagram.com/p/..."></textarea>
                 runs.forEach(function (rn) {
                     var name = rn.subject || rn.run_id || 'Untitled profile';
                     var label = _synthChatStatusLabel(rn.status || 'running');
-                    var head  = '**' + name + '** -> ' + label;
+                    var head  = '' + name + ' -> ' + label;
                     if (typeof rn.step_index === 'number' &&
                         typeof rn.step_total === 'number' &&
                         rn.step_total > 0) {
@@ -60073,7 +60075,7 @@ https://www.instagram.com/p/..."></textarea>
                     var summary = _synthChatBuildActionSummary(
                         synthChatCurrentDraft);
                     if (rangeLabel &&
-                        summary.indexOf('**Window:**') === -1) {
+                        summary.indexOf('Window:') === -1) {
                         summary += '\n\nUsing ' + rangeLabel + '.';
                     }
                     var _relSteps = synthChatStashedClarifySteps;
@@ -60185,11 +60187,11 @@ https://www.instagram.com/p/..."></textarea>
                             synthChatStashedProposedRange)
                             || 'July 1, 2025 to June 30, 2026';
                         synthChatPushTurn('agent',
-                            'Which time window should I use for these **'
-                            + data.spec_drafts.length + ' profiles**?\n\n'
-                            + 'Default: **' + bRangeLabel
-                            + '** (the last 12 months).\n\n'
-                            + 'Reply **ok** to use that, or tell me a '
+                            'Which time window should I use for these '
+                            + data.spec_drafts.length + ' profiles?\n\n'
+                            + 'Default: ' + bRangeLabel
+                            + ' (the last 12 months).\n\n'
+                            + 'Reply ok to use that, or tell me a '
                             + 'different window (e.g. "for 2024", '
                             + '"trailing 6 months", "Q4 2025").');
                         return;
@@ -60209,11 +60211,11 @@ https://www.instagram.com/p/..."></textarea>
                     var rangeLabel = _synthChatFormatRange(
                         synthChatStashedProposedRange)
                         || 'July 1, 2025 to June 30, 2026';
-                    var msg = 'Which time window should I use for **'
-                        + subj + '**?\n\n'
-                        + 'Default: **' + rangeLabel
-                        + '** (the last 12 months).\n\n'
-                        + 'Reply **ok** to use that, or tell me a '
+                    var msg = 'Which time window should I use for '
+                        + subj + '?\n\n'
+                        + 'Default: ' + rangeLabel
+                        + ' (the last 12 months).\n\n'
+                        + 'Reply ok to use that, or tell me a '
                         + 'different window (e.g. "for 2024", '
                         + '"trailing 6 months", "Q4 2025").';
                     synthChatPushTurn('agent', msg);
@@ -60222,7 +60224,7 @@ https://www.instagram.com/p/..."></textarea>
                 // Batch response with zero surviving drafts
                 // (2026-08-20): never fall through to the single-
                 // draft renderer with an undefined draft - that is
-                // what produced the 'Building a new **this profile**
+                // what produced the 'Building a new this profile
                 // profile' card. Ask for a rephrase instead.
                 if (data.batch && (!Array.isArray(data.spec_drafts) || !data.spec_drafts.length)) {
                     synthChatPushTurn('agent',
@@ -60287,7 +60289,7 @@ https://www.instagram.com/p/..."></textarea>
         // and any failure lines. Copy honors the workspace rule on
         // no-modeled-or-source-language.mdc.
         function _synthChatBuildBatchSummary(drafts, totalCredits, failures, sharedCtx) {
-            var lines = ['I will queue **' + drafts.length + ' profiles** in parallel:'];
+            var lines = ['I will queue ' + drafts.length + ' profiles in parallel:'];
             // Time frame per draft (2026-08-20 Jenna: the summary
             // must list the window). Reuse/derive lines skip it -
             // those ship the parent file's existing window.
@@ -60332,19 +60334,19 @@ https://www.instagram.com/p/..."></textarea>
                 var _bWin = (_winDistinct > 1 && _winByIdx[i])
                     ? ' \u00b7 ' + _winByIdx[i]
                     : '';
-                lines.push((i + 1) + '. **' + subj + '** - ' + action + eta + (cred ? ' \u00b7 ' + cred : '') + _bEst + _bWin);
+                lines.push((i + 1) + '. ' + subj + ' - ' + action + eta + (cred ? ' \u00b7 ' + cred : '') + _bEst + _bWin);
             }
             if (_winDistinct === 1 && _winFirst) {
                 lines.push('');
-                lines.push('**Window:** ' + _winFirst + '.');
+                lines.push('Window: ' + _winFirst + '.');
             }
             if (typeof totalCredits === 'number' && totalCredits >= 0) {
                 lines.push('');
-                lines.push('**Total cost:** ' + totalCredits + ' credit' + (totalCredits === 1 ? '' : 's') + ' when you approve.');
+                lines.push('Total cost: ' + totalCredits + ' credit' + (totalCredits === 1 ? '' : 's') + ' when you approve.');
             }
             if (Array.isArray(failures) && failures.length) {
                 lines.push('');
-                lines.push('**Could not interpret:** ' + failures.map(function(f){return f.subject_input;}).join(', ') + ' \u2014 send them again separately if you want to try.');
+                lines.push('Could not interpret: ' + failures.map(function(f){return f.subject_input;}).join(', ') + ' - send them again separately if you want to try.');
             }
             if (sharedCtx) {
                 lines.push('');
@@ -60441,25 +60443,25 @@ https://www.instagram.com/p/..."></textarea>
                 var _abOpts = _abData.options || [];
                 var _abBreaks = (_abData.canonical_breaks || []).join(', ');
                 var _abLines = ['Our age data comes in these breaks: ' +
-                    '**' + _abBreaks + '**' +
+                    '' + _abBreaks + '' +
                     (_abData.under18
                         ? ' (the panel is 18+, so under-18 ages are ' +
                           'not represented)'
                         : '') + '.'];
                 _abLines.push('');
-                _abLines.push('**' + (_abData.requested || 'The requested range') +
-                    '** does not line up. Closest coverage:');
+                _abLines.push('' + (_abData.requested || 'The requested range') +
+                    ' does not line up. Closest coverage:');
                 for (var _ai = 0; _ai < _abOpts.length; _ai++) {
-                    _abLines.push('  ' + (_ai + 1) + '. **' +
-                        _abOpts[_ai] + '**' +
+                    _abLines.push('  ' + (_ai + 1) + '. ' +
+                        _abOpts[_ai] + '' +
                         (_ai === 0 && _abOpts.length > 1
                             ? ' (tighter)'
                             : (_ai === _abOpts.length - 1 &&
                                _abOpts.length > 1 ? ' (wider)' : '')));
                 }
                 _abLines.push('');
-                _abLines.push('Reply with a **number or break** ' +
-                    '(like 18-34) - or say **all ages** to drop the ' +
+                _abLines.push('Reply with a number or break ' +
+                    '(like 18-34) - or say all ages to drop the ' +
                     'age filter.');
                 return _abLines.join('\n');
             }
@@ -60471,55 +60473,55 @@ https://www.instagram.com/p/..."></textarea>
                 var _plCands = _plDraft.parent_link_candidates || [];
                 var _plLabel = String(_plDraft.cut_label_guess || '').trim();
                 var _plLines = ['This looks like it could be a ' +
-                    '**cut of data we already have**' +
+                    'cut of data we already have' +
                     (_plLabel ? ' (' + _plLabel + ')' : '') +
                     ' - linking it keeps the numbers laddering up ' +
-                    'to the parent and runs at **3 credits** ' +
+                    'to the parent and runs at 3 credits ' +
                     'instead of a full build.'];
                 if (_plCands.length) {
                     _plLines.push('');
                     _plLines.push('Is it a cut of one of these?');
                     for (var _pi = 0; _pi < _plCands.length; _pi++) {
-                        _plLines.push('  ' + (_pi + 1) + '. **' +
+                        _plLines.push('  ' + (_pi + 1) + '. ' +
                             (_plCands[_pi].display_name ||
-                             _plCands[_pi].s3_key) + '**' +
+                             _plCands[_pi].s3_key) + '' +
                             (_plCands[_pi].days_old != null
                                 ? ' (' + _plCands[_pi].days_old +
                                   'd old)'
                                 : ''));
                     }
                     _plLines.push('');
-                    _plLines.push('Reply with the **number or name** ' +
-                        '- or say **none** to build it fresh as its ' +
+                    _plLines.push('Reply with the number or name ' +
+                        '- or say none to build it fresh as its ' +
                         'own profile.');
                 }
                 return _plLines.join('\n');
             }
             if (step === 'goal') {
                 return 'Quick context so I can recommend the right ' +
-                    'cuts: **what is this for?** A pitch, media ' +
+                    'cuts: what is this for? A pitch, media ' +
                     'planning, content strategy, competitive ' +
-                    'research... one line is plenty. Or say **skip**.';
+                    'research... one line is plenty. Or say skip.';
             }
             if (step === 'strategy') {
-                return 'Want any **add-on cuts**? Female only, male ' +
+                return 'Want any add-on cuts? Female only, male ' +
                     'only, by generation, an age band, or a specific ' +
-                    'market - **3 credits per cut**, every cut ' +
+                    'market - 3 credits per cut, every cut ' +
                     'derived from the national build. Name them, or ' +
-                    'say **none**.';
+                    'say none.';
             }
             if (step === 'cuts') {
-                return 'Want any **additional cuts** beyond the ' +
+                return 'Want any additional cuts beyond the ' +
                     'standard build? Female only, male only, by ' +
                     'generation, an age band, or a specific market. ' +
-                    '**3 credits per cut** - name the ones you want, ' +
-                    'or say **none**.';
+                    '3 credits per cut - name the ones you want, ' +
+                    'or say none.';
             }
-            return 'Is this for a **regional business**? The total ' +
+            return 'Is this for a regional business? The total ' +
                 'universe and avid always build national - name the ' +
                 'markets you care about (e.g. "LA and San Diego") ' +
-                'and each becomes its own **3-credit cut**, or ' +
-                'reply **national**.';
+                'and each becomes its own 3-credit cut, or ' +
+                'reply national.';
         }
 
         async function _synthChatClarifyAnswer(answerText) {
@@ -60577,7 +60579,7 @@ https://www.instagram.com/p/..."></textarea>
             var line = '';
             switch ((s.decision || '').toLowerCase()) {
                 case 'existing_match':
-                    line = 'I already have **' + parentName + '**' +
+                    line = 'I already have ' + parentName + '' +
                         (s.existing_match_days_old != null
                             ? ' from ' + s.existing_match_days_old + ' days ago'
                             : '') +
@@ -60590,12 +60592,12 @@ https://www.instagram.com/p/..."></textarea>
                     // what it ladders up to.
                     var _dcCutLbl = String(s.cut_label || '').trim();
                     if (subject && parentName && subject !== parentName) {
-                        line = 'Creating **' + subject + '** as a cut ' +
-                            'of the existing **' + parentName +
-                            '** data' + eta + '. The numbers ladder ' +
+                        line = 'Creating ' + subject + ' as a cut ' +
+                            'of the existing ' + parentName +
+                            ' data' + eta + '. The numbers ladder ' +
                             'up to that parent.';
                     } else {
-                        line = 'Creating a cut of the existing **' + parentName + '** data' +
+                        line = 'Creating a cut of the existing ' + parentName + ' data' +
                             (_dcCutLbl ? ' - ' + _dcCutLbl
                                 : (deriveHint && deriveHint !== 'intersect_cut'
                                     ? ' for ' + deriveHint : '')) +
@@ -60603,18 +60605,18 @@ https://www.instagram.com/p/..."></textarea>
                     }
                     break;
                 case 'time_shifted_refresh':
-                    line = 'Refreshing the existing **' + parentName + '** data for the new window' +
+                    line = 'Refreshing the existing ' + parentName + ' data for the new window' +
                         eta + '.';
                     if (refreshHint) line += '\n\n' + refreshHint;
                     break;
                 case 'cut_needs_parent':
-                    line = 'Building **' + subject + '** first, then producing your cut' +
+                    line = 'Building ' + subject + ' first, then producing your cut' +
                         (deriveHint ? ' (' + deriveHint + ')' : '') +
                         eta + '.';
                     break;
                 case 'new_build':
                 default:
-                    line = 'Building a new **' + subject + '** profile' + eta + '.';
+                    line = 'Building a new ' + subject + ' profile' + eta + '.';
                     break;
             }
             var _dec = (s.decision || 'new_build').toLowerCase();
@@ -60625,7 +60627,7 @@ https://www.instagram.com/p/..."></textarea>
                 _dec === 'cut_needs_parent') {
                 var _winLbl = _synthChatFormatRange(s.date_range)
                     || 'July 1, 2025 to June 30, 2026';
-                line += '\n\n**Window:** ' + _winLbl + '.';
+                line += '\n\nWindow: ' + _winLbl + '.';
             }
             var _tuEst = s.subject_raw_tu;
             if (typeof _tuEst === 'number' && _tuEst > 0 &&
@@ -60634,7 +60636,7 @@ https://www.instagram.com/p/..."></textarea>
                 var _incPct = _tuEst / 10000000 * 100;
                 var _incStr = _incPct >= 1 ? _incPct.toFixed(2)
                     : (_incPct >= 0.01 ? _incPct.toFixed(3) : _incPct.toFixed(4));
-                line += '\n\n**Est. sample:** ' +
+                line += '\n\nEst. sample: ' +
                     _tuEst.toLocaleString('en-US') + ' panelists (' +
                     _incStr + '% incidence).';
                 var _avEst = s.subject_raw_avid;
@@ -60644,12 +60646,12 @@ https://www.instagram.com/p/..."></textarea>
             }
             var _rs = s.region_scope;
             if (_rs && _rs.mode === 'regional' && _rs.dmas && _rs.dmas.length) {
-                line += '\n\n**Markets:** ' + _rs.dmas.join(', ') +
+                line += '\n\nMarkets: ' + _rs.dmas.join(', ') +
                     ' (location mix locked to these only).';
             }
             var _cuts = s.addon_cuts;
             if (_cuts && _cuts.length) {
-                line += '\n\n**Add-on cuts** (3 credits each):';
+                line += '\n\nAdd-on cuts (3 credits each):';
                 for (var _ci = 0; _ci < _cuts.length; _ci++) {
                     line += '\n- ' + (_cuts[_ci].label || _cuts[_ci].cut_id);
                 }
@@ -60657,9 +60659,9 @@ https://www.instagram.com/p/..."></textarea>
             var credits = s.estimated_credits;
             if (typeof credits === 'number') {
                 if (credits === 0) {
-                    line += '\n\n**Cost:** 0 credits (reusing an existing file).';
+                    line += '\n\nCost: 0 credits (reusing an existing file).';
                 } else {
-                    line += '\n\n**Cost:** ' + credits +
+                    line += '\n\nCost: ' + credits +
                         ' credit' + (credits === 1 ? '' : 's') +
                         ' when you approve.';
                 }
@@ -60745,7 +60747,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (panel) panel.style.display = 'none';
                 synthChatCurrentDraft = null;
                 _synthChatPushTurnWithMeta('agent',
-                    'Queued **' + data.subject + '**' +
+                    'Queued ' + data.subject + '' +
                     (data.pending_position ? ' (position ' + data.pending_position + ' in queue)' : '') +
                     '. I will update this thread as it progresses.',
                     { run_id: data.run_id, status: 'queued', subject: data.subject });
@@ -60819,7 +60821,7 @@ https://www.instagram.com/p/..."></textarea>
                     if (r && r.success && r.run_id) {
                         queuedNames.push(subj);
                         _synthChatPushTurnWithMeta('agent',
-                            'Queued **' + (r.subject || subj) + '**' +
+                            'Queued ' + (r.subject || subj) + '' +
                                 (r.pending_position ? ' (position ' + r.pending_position + ' in queue)' : '') +
                                 '. I will update this thread as it progresses.',
                             { run_id: r.run_id, status: 'queued', subject: r.subject || subj });
@@ -60893,7 +60895,7 @@ https://www.instagram.com/p/..."></textarea>
                         lastStatus = cur;
                         try { _synthChatPatchLastMetaStatus(runId, cur); } catch (_) {}
                         var label = _synthChatStatusLabel(cur);
-                        var msg = '**' + subject + '** -> ' + label;
+                        var msg = '' + subject + ' -> ' + label;
                         if (cur === 'tu_done' && st.tu_key) msg += '\nFile: ' + st.tu_key;
                         if (cur === 'avid_done' && st.avid_key) msg += '\nAvid file: ' + st.avid_key;
                         if (cur === 'complete') {
