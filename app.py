@@ -43886,6 +43886,12 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         # AFTER the caller-subject override above so the forced batch
         # slice name is what gets decomposed. Reprices the draft.
         _decompose_embedded_subject_cuts(spec_draft)
+        # Cuts-only promoter: existing TU parent -> derive the cuts
+        # off it instead of rebuilding (3 x cuts, no base).
+        try:
+            _maybe_promote_embedded_cuts_to_parent(spec_draft, catalog)
+        except Exception:
+            pass
         est_credits = int(spec_draft.get('estimated_credits')
                           or est_credits)
 
@@ -45862,6 +45868,14 @@ def api_synth_chat_interpret():
         # ('Go-GURT - 18-24'). Runs after base_credits is anchored so
         # the repricing (base + 3 x cuts) sticks.
         _decompose_embedded_subject_cuts(spec_draft)
+        # Cuts-only promoter (2026-08-20): if the cleaned subject
+        # already has a full-universe TU in the catalog, skip the
+        # rebuild - flip to derive_cut/addon_cuts and charge 3 x cuts.
+        try:
+            _maybe_promote_embedded_cuts_to_parent(spec_draft, catalog)
+            _dec_norm, _, _ = _normalize_v1_decision(spec_draft)
+        except Exception:
+            pass
         estimated_credits = int(spec_draft.get('estimated_credits')
                                 or estimated_credits)
         subject_label = (spec_draft.get('subject')
@@ -47674,6 +47688,183 @@ def _maybe_promote_intersect_to_derive_cut(draft, prompt, candidates,
     return draft
 
 
+# --------------------------------------------------------------------
+# Embedded-cut parent promoter (2026-08-20 Jenna directive): "if I ask
+# for a go-gurt consumer under 17 and we already have a go-gurt total
+# universe, realize it and just charge me for a cut and do a cut."
+# Runs AFTER _decompose_embedded_subject_cuts: when the cleaned subject
+# matches an existing TRUE total-universe profile in the catalog, the
+# fresh build is skipped entirely - decision flips to derive_cut with
+# derive_type='addon_cuts', the worker derives each requested cut off
+# that parent, and the price drops from base + 3xN to 3xN.
+# --------------------------------------------------------------------
+
+_CUTLIKE_NAME_RE_CACHE = None
+
+
+def _cutlike_display_name_re():
+    """Names that are themselves cuts/skins - never valid TU parents.
+    Deriving a demo cut off another cut reads ~0 (the Go-GURT 18-24
+    lesson: its AGE is pinned, so an under-17 cut off it is garbage)."""
+    global _CUTLIKE_NAME_RE_CACHE
+    import re as _re
+    if _CUTLIKE_NAME_RE_CACHE is None:
+        _CUTLIKE_NAME_RE_CACHE = _re.compile(
+            r'\bavid\s+fan\b|\bcasual\s+fan\b'
+            r'|\b\d{2}\s*[-\u2013]\s*\d{2}\b'      # 18-24 age band
+            r'|\b1[0-7]\s+(?:and|or)\s+under\b'
+            r'|\bunder\s+\d{1,2}\b'
+            r'|\b(?:female|male|women|men)\s+only\b'
+            r'|\s-\s(?:female|male|gen\s*z|millennials|gen\s*x|'
+            r'boomers)\s*$'
+            r'|->|\u2192',                          # behavioral cuts
+            _re.IGNORECASE)
+    return _CUTLIKE_NAME_RE_CACHE
+
+
+# Generic audience nouns + stopwords a TU display may carry beyond the
+# entity name itself ('Vizio TV Owners' still parents subject 'Vizio').
+_TU_GENERIC_PARENT_TOKENS = {
+    'the', 'and', 'for', 'with', 'from', 'owners', 'owner', 'buyers',
+    'buyer', 'users', 'user', 'subscribers', 'subscriber', 'players',
+    'player', 'watchers', 'watcher', 'shoppers', 'shopper', 'viewers',
+    'viewer', 'fans', 'fan', 'consumers', 'consumer', 'listeners',
+    'listener', 'customers', 'customer', 'audience', 'eaters', 'eater',
+    'drinkers', 'drinker', 'total', 'universe',
+}
+
+
+def _find_tu_parent_for_subject(subject, catalog):
+    """Strict TU-parent match for the cuts-only promoter. Much stricter
+    than the fuzzy shortlist because a hit silently skips a TU build:
+    EVERY subject token must appear in the parent name, and any parent
+    tokens beyond the subject must be generic audience nouns
+    ('Go-GURT' matches 'Go-GURT' but NOT 'Go GURT Protein'). Cut-shaped
+    names never qualify. Returns (s3_key, display_name) or None;
+    prefers the freshest qualifying match.
+    """
+    subj_norm = _normalize_for_match(subject or '')
+    subj_tokens = {t for t in subj_norm.split() if len(t) >= 3}
+    if not subj_tokens:
+        return None
+    best = None  # (days_old, s3_key, display)
+    for c in (catalog or []):
+        if not isinstance(c, dict):
+            continue
+        s3_key = (c.get('s3_key') or '').strip()
+        if not s3_key:
+            continue
+        display = str(c.get('display_name') or c.get('subject') or '')
+        if _cutlike_display_name_re().search(display):
+            continue
+        try:
+            if not _partner_parent_key_allowed(s3_key):
+                continue
+        except Exception:
+            pass
+        p_norm = _normalize_for_match(
+            f"{c.get('subject') or ''} {display}")
+        p_tokens = {t for t in p_norm.split() if len(t) >= 3}
+        if not p_tokens or not subj_tokens <= p_tokens:
+            continue
+        extras = p_tokens - subj_tokens
+        if any(t not in _TU_GENERIC_PARENT_TOKENS for t in extras):
+            continue
+        try:
+            days = float(c.get('days_old'))
+        except (TypeError, ValueError):
+            days = 9e9
+        if best is None or days < best[0]:
+            best = (days, s3_key, display.strip() or str(subject))
+    if best is None:
+        return None
+    return best[1], best[2]
+
+
+def _maybe_promote_embedded_cuts_to_parent(draft, catalog=None):
+    """In-place; runs AFTER _decompose_embedded_subject_cuts. If the
+    draft is a fresh new_build whose demographic add-on cuts are the
+    real deliverable and the catalog already holds a full-universe TU
+    for the cleaned subject, flip to a cuts-only derive:
+    decision='derive_cut', derive_type='addon_cuts', parent=that TU,
+    price = 3 x cuts (no base - the TU + avid were already bought).
+    No qualifying parent -> untouched (fresh TU + cut = base + 3, per
+    the standing pricing rule). Never raises.
+    """
+    try:
+        if not isinstance(draft, dict):
+            return draft
+        decision = str(draft.get('decision')
+                       or 'new_build').strip().lower()
+        if decision not in ('new_build', ''):
+            return draft
+        cuts = [c for c in (draft.get('addon_cuts') or [])
+                if isinstance(c, dict) and c.get('cut_id')
+                and c.get('pin_category') and c.get('pin_buckets')]
+        if not cuts:
+            return draft
+        if catalog is None:
+            try:
+                catalog = _profile_catalog_for_chat()
+            except Exception:
+                catalog = []
+        hit = _find_tu_parent_for_subject(
+            draft.get('subject') or draft.get('name') or '', catalog)
+        if not hit:
+            return draft
+        parent_key, parent_display = hit
+        n = len(cuts)
+        total = ADDON_CUT_CREDITS * n
+        draft['decision'] = 'derive_cut'
+        draft['derive_type'] = 'addon_cuts'
+        draft['existing_match_s3_key'] = parent_key
+        draft['existing_match_display_name'] = parent_display
+        draft['parent_display_name'] = parent_display
+        draft['run_avid'] = False
+        draft['estimated_credits'] = total
+        draft['base_credits'] = total
+        try:
+            draft['estimated_run_minutes'] = (
+                _estimate_run_minutes('derive_cut', False) * max(n, 1))
+        except Exception:
+            pass
+        if n == 1:
+            single = (cuts[0].get('name_label') or cuts[0].get('label')
+                      or cuts[0].get('cut_id'))
+            new_name = _compose_cut_name(parent_display, str(single))
+            draft['subject'] = new_name
+            draft['name'] = new_name
+        else:
+            draft['subject'] = parent_display
+            draft['name'] = parent_display
+        draft.pop('file_stem', None)
+        draft.pop('ask_parent_link', None)
+        draft.pop('parent_link_candidates', None)
+        draft.pop('strategist_recs', None)
+        note = (f"Found existing total universe '{parent_display}' - "
+                f"no rebuild; deriving {n} cut"
+                f"{'s' if n != 1 else ''} off it "
+                f"({ADDON_CUT_CREDITS} credits each)")
+        assumptions = draft.get('assumptions')
+        if isinstance(assumptions, list):
+            assumptions.append(note)
+        else:
+            draft['assumptions'] = [note]
+        try:
+            print(f"[embedded-cut-parent] cuts-only derive: "
+                  f"parent={parent_display!r} key={parent_key!r} "
+                  f"cuts={n} credits={total}")
+        except Exception:
+            pass
+        return draft
+    except Exception:
+        try:
+            traceback.print_exc()
+        except Exception:
+            pass
+        return draft
+
+
 def _maybe_ask_parent_link(draft, prompt, catalog):
     """In-place: when the ask looks like a CUT but no parent was
     confidently auto-linked, stash plausible parents on the draft so
@@ -47783,9 +47974,13 @@ def _detect_age_range_token(text):
     if m:
         n = int(m.group(1))
         if 13 <= n <= 99:
-            # 'under 18' = the 17 AND UNDER break (lo=0). 'under 35'
-            # keeps the adult reading (18-34).
-            return (0 if n <= 18 else 18), n - 1, m.group(0)
+            # 'under 17' / 'under 18' = the 17 AND UNDER break (the
+            # panel's kids bucket IS the closest data - snap silently).
+            # 'under 16' and lower still clarifies. 'under 35' keeps
+            # the adult reading (18-34).
+            if n in (17, 18):
+                return 0, 17, m.group(0)
+            return (0 if n < 17 else 18), n - 1, m.group(0)
     m = _re.search(r'\b(\d{2})\s*\+|\b(?:over|above)\s+(\d{1,2})\b', t,
                    _re.IGNORECASE)
     if m:
@@ -47997,12 +48192,20 @@ def api_v1_profiles_check():
     # Subject naming + embedded cuts (2026-08-20): full-universe TU +
     # qualifier-as-cut, same as the dashboard chat path.
     _decompose_embedded_subject_cuts(draft)
+    # Cuts-only promoter: existing TU parent -> derive the cuts off it
+    # instead of rebuilding (3 x cuts, no base). Loads the catalog
+    # itself; same behavior as the dashboard chat path.
+    _maybe_promote_embedded_cuts_to_parent(draft)
 
     decision, ex_key, d_type = _normalize_v1_decision(draft)
     _v1_cuts = [c for c in (draft.get('addon_cuts') or [])
                 if isinstance(c, dict) and c.get('cut_id')]
-    price = (_V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
-             + ADDON_CUT_CREDITS * len(_v1_cuts))
+    if d_type == 'addon_cuts' and _v1_cuts:
+        # cuts-only derive: the cuts ARE the deliverable - no base fee
+        price = ADDON_CUT_CREDITS * len(_v1_cuts)
+    else:
+        price = (_V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
+                 + ADDON_CUT_CREDITS * len(_v1_cuts))
     resp = {
         'success': True,
         'decision': decision,
@@ -48149,13 +48352,21 @@ def api_v1_profiles_run():
     # Subject naming + embedded cuts (2026-08-20): full-universe TU +
     # qualifier-as-cut. Price matches /v1/check: base + 3 per cut.
     _decompose_embedded_subject_cuts(draft)
+    # Cuts-only promoter: existing TU parent -> derive the cuts off it
+    # instead of rebuilding (3 x cuts, no base). Same as /v1/check so
+    # the quoted price and the charged price always agree.
+    _maybe_promote_embedded_cuts_to_parent(draft)
 
     decision, ex_key, d_type = _normalize_v1_decision(draft)
 
     _v1_run_cuts = [c for c in (draft.get('addon_cuts') or [])
                     if isinstance(c, dict) and c.get('cut_id')]
-    price = (_V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
-             + ADDON_CUT_CREDITS * len(_v1_run_cuts))
+    if d_type == 'addon_cuts' and _v1_run_cuts:
+        # cuts-only derive: the cuts ARE the deliverable - no base fee
+        price = ADDON_CUT_CREDITS * len(_v1_run_cuts)
+    else:
+        price = (_V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
+                 + ADDON_CUT_CREDITS * len(_v1_run_cuts))
 
     # Exact-tier credit re-check (some tiers cost more than the median
     # preflight - e.g. cut_needs_parent=8). If interpret picked a
