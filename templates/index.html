@@ -58873,6 +58873,12 @@ https://www.instagram.com/p/..."></textarea>
                 if (tab) tab.classList.add('active');
                 if (content) content.classList.add('active');
                 if (typeof synthChatInit === 'function') synthChatInit();
+                // 2026-08-20: greet every re-entry to this tab with
+                // clickable starters (no-op on first boot until the
+                // history fetch lands, which calls this again).
+                if (typeof _synthChatShowWelcomeBack === 'function') {
+                    _synthChatShowWelcomeBack();
+                }
             }
         }
 
@@ -58928,6 +58934,7 @@ https://www.instagram.com/p/..."></textarea>
                     // in this user's history so a tab refresh / Render
                     // redeploy doesn't orphan an in-flight run.
                     _synthChatResumeIfInFlight();
+                    _synthChatShowWelcomeBack();
                 })
                 .catch(function(){});
             _synthChatRefreshQueueBadge();
@@ -58943,6 +58950,11 @@ https://www.instagram.com/p/..."></textarea>
             document.addEventListener('visibilitychange', function() {
                 if (document.visibilityState === 'visible') {
                     _synthChatRefreshQueueBadge();
+                    // Coming back after 30+ min away counts as a
+                    // fresh visit - re-offer the day starters.
+                    if (Date.now() - _synthChatWelcomeLastShown > 1800000) {
+                        _synthChatShowWelcomeBack();
+                    }
                     if (!window.__synthChatQueueTimer) {
                         window.__synthChatQueueTimer = setInterval(
                             _synthChatRefreshQueueBadge, 5000);
@@ -59013,6 +59025,90 @@ https://www.instagram.com/p/..."></textarea>
             if (a >= 0 && b > a) {
                 try { input.setSelectionRange(a, b + 1); } catch (_) {}
             }
+        }
+
+        // Fill the input and send immediately - used by welcome-back
+        // chips whose text is already a complete ask (e.g. a status
+        // pull needs no editing).
+        function synthChatChipSend(text) {
+            var input = document.getElementById('synthChatInput');
+            if (!input) return;
+            input.value = text;
+            if (typeof synthChatSubmit === 'function') synthChatSubmit();
+        }
+
+        // Welcome-back strip (2026-08-20 Jenna directive): every time
+        // the chat tab is (re)opened, recognize the return and offer
+        // one-click starters - "what do you need to do today". Shows
+        // a status chip first when builds are still moving. Ephemeral:
+        // NOT written to synthChatHistory, and any rerender (the next
+        // send or reply) clears it. Chip fill strings must not contain
+        // quote characters - they ride inside an onclick attribute.
+        var _synthChatWelcomeLastShown = 0;
+        function _synthChatShowWelcomeBack() {
+            try {
+                var box = document.getElementById('synthChatMessages');
+                if (!box) return;
+                // Brand-new users already get the empty-state starter
+                // chips below the input.
+                if (!synthChatHistory.length) return;
+                // Never stomp a pending approval / question mid-flow.
+                if (synthChatAwaitingDateConfirm || synthChatClarify ||
+                    synthChatCurrentDraft || synthChatDiscoveryOffer ||
+                    (synthChatBatchDrafts && synthChatBatchDrafts.length)) {
+                    return;
+                }
+                var old = document.getElementById('synthChatWelcomeBubble');
+                if (old && old.parentNode) old.parentNode.removeChild(old);
+                _synthChatWelcomeLastShown = Date.now();
+                // Count builds still moving from history meta (same
+                // run_id/status trail the resume poller uses).
+                var byRun = {};
+                for (var i = 0; i < synthChatHistory.length; i++) {
+                    var m = synthChatHistory[i] && synthChatHistory[i].meta;
+                    if (m && m.run_id) {
+                        byRun[m.run_id] =
+                            String(m.status || 'queued').toLowerCase();
+                    }
+                }
+                var terminal = { completed: 1, complete: 1, failed: 1,
+                                 error: 1, cancelled: 1, canceled: 1 };
+                var running = 0;
+                for (var rid in byRun) {
+                    if (!terminal[byRun[rid]]) running++;
+                }
+                var hr = new Date().getHours();
+                var greet = hr < 12 ? 'Good morning'
+                    : (hr < 17 ? 'Good afternoon' : 'Good evening');
+                var lead = greet + ' - welcome back.';
+                if (running > 0) {
+                    lead += ' You have ' + running + ' build' +
+                        (running === 1 ? '' : 's') + ' still in motion.';
+                }
+                lead += ' What do you want to get done today?';
+                var pill = 'background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;';
+                var pillHot = 'background: rgba(84,141,255,0.14); border: 1px solid rgba(84,141,255,0.5); color: #9dc1ff; border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;';
+                var chips = '';
+                if (running > 0) {
+                    chips += '<button type="button" onclick="synthChatChipSend(\'status update\')" style="' + pillHot + '">Status update on my builds</button>';
+                }
+                chips += '<button type="button" onclick="synthChatChipFill(\'Run a profile for [brand or talent]\')" style="' + pill + '">Build a new profile</button>';
+                chips += '<button type="button" onclick="synthChatChipFill(\'Refresh [existing profile] for the latest 12 months\')" style="' + pill + '">Refresh a profile</button>';
+                chips += '<button type="button" onclick="synthChatChipFill(\'Cut [existing profile] by [female, Gen Z, or a market]\')" style="' + pill + '">Cut existing data</button>';
+                chips += '<button type="button" onclick="synthChatChipFill(\'Sample size for [audience], past 12 months\')" style="' + pill + '">Size an audience first</button>';
+                chips += '<button type="button" onclick="synthChatChipFill(\'Pitching [brand] - help me figure out the right audience to profile\')" style="' + pill + '">Prep a pitch</button>';
+                var el = document.createElement('div');
+                el.id = 'synthChatWelcomeBubble';
+                el.style.cssText = 'margin-bottom: 0.55rem; padding: 0.55rem 0.7rem; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 2px solid rgba(84,141,255,0.45);';
+                el.innerHTML =
+                    '<div style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 0.25rem;">\ud83e\udd16 Agent</div>' +
+                    '<div style="font-size: 0.85rem; line-height: 1.4; margin-bottom: 0.5rem;">' +
+                        _synthChatEscapeHtml(lead) + '</div>' +
+                    '<div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">' +
+                        chips + '</div>';
+                box.appendChild(el);
+                box.scrollTop = box.scrollHeight;
+            } catch (_) {}
         }
 
         function synthChatPushTurn(role, text) {
