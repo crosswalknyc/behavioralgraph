@@ -380,3 +380,6 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+# trigger touch: force the validate workflow to run for app.py-only PRs
+# (see fix/profile-image-hyphen-space - profile image hyphen/space lookup)

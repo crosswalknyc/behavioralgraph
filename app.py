@@ -13221,6 +13221,17 @@ def _profile_image_lookup_keys(name):
         if stripped and stripped != base:
             _push(stripped)
     
+    # 3. Hyphen / space / underscore separators get used inconsistently between
+    #    how an image was saved and how the profile is titled (e.g. an image
+    #    saved under "P Valley" but the profile is titled "P-Valley"). Add
+    #    space- and hyphen-normalized variants of every key gathered so far so
+    #    the upload still resolves regardless of which separator was used.
+    for base in list(keys):
+        spaced = re.sub(r'[\s_\-]+', ' ', base).strip()
+        hyphened = re.sub(r'[\s_\-]+', '-', base).strip()
+        _push(spaced)
+        _push(hyphened)
+    
     return keys
 
 
