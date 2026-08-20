@@ -24776,7 +24776,7 @@ https://www.instagram.com/p/..."></textarea>
         <div id="trendsIQView">
             <div class="tiq-header" style="position: relative;">
                 <h2 class="tiq-title">📈 Trends <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Culture Trends tracker</span></h2>
-                <p class="tiq-subtitle">What is trending across search, news, social, and retail right now.</p>
+                <p class="tiq-subtitle">What is trending across search, news, and retail right now.</p>
                 <!--
                     Trends IQ ships its own HOVER ON/OFF toggle in the top-
                     right of the header. Wires to the same global
@@ -24846,7 +24846,7 @@ https://www.instagram.com/p/..."></textarea>
             </div>
             <div id="trendsIQLoading" class="tiq-loading-overlay" style="display: none;">
                 <div class="tiq-spinner"></div>
-                <div>Pulling trending searches, headlines, social, streaming, and gaming rankings...</div>
+                <div>Pulling trending searches, headlines, streaming, and gaming rankings...</div>
             </div>
             <div id="trendsIQTabStrip" class="tiq-tabstrip" style="display: none;"></div>
             <div id="trendsIQPanels"></div>
@@ -49821,8 +49821,6 @@ https://www.instagram.com/p/..."></textarea>
                   tip: 'Podcasts: Trending shows on Apple Podcasts, Spotify, Amazon Music, and Audible.' },
                 { key: 'books',     label: 'Books',            count: counts.books     || 0, icon: '📚',
                   tip: 'Books: Best-selling and trending titles across Amazon, Apple Books, Audible, and Libby (LA County Library eBooks, audiobooks, and magazines).' },
-                { key: 'social',    label: 'Social',           count: 0,                     icon: '💬',
-                  tip: 'Social: Trending posts and videos on Reddit, YouTube, and TikTok. Real content, not hashtag lists.' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺',
                   tip: 'Streaming: Daily Top-10 rankings on Netflix, Disney+, Hulu, Max, Prime Video, and ESPN+, split into Film and TV.' },
                 { key: 'fast',      label: 'FAST',             count: counts.fast      || 0, icon: '📡',
@@ -49860,7 +49858,6 @@ https://www.instagram.com/p/..."></textarea>
                 _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
                 _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
-                _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('fast',      renderTIQFast(cards.fast_trending || {})) +
                 _renderTIQPanel('gaming',    renderTIQGaming(cards.gaming_trending || {})) +
@@ -49904,6 +49901,13 @@ https://www.instagram.com/p/..."></textarea>
             // Products tab was removed 2026-07-28. Returning users with
             // stale session state land on Trending instead of a ghost.
             if (window.__trendsIQ.activeTab === 'products') {
+                window.__trendsIQ.activeTab = 'searches';
+            }
+            // Social tab was removed 2026-08-20 - signal quality wasn't
+            // where we wanted it. Reddit/YouTube/TikTok still feed
+            // Trending People + Movers behind the scenes. Redirect
+            // stale session state to Searches.
+            if (window.__trendsIQ.activeTab === 'social') {
                 window.__trendsIQ.activeTab = 'searches';
             }
             setTrendsIQTab(window.__trendsIQ.activeTab || 'searches');
@@ -52223,7 +52227,6 @@ https://www.instagram.com/p/..."></textarea>
                 _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
                 _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
-                _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('fast',      renderTIQFast(cards.fast_trending || {})) +
                 _renderTIQPanel('gaming',    renderTIQGaming(cards.gaming_trending || {})) +
