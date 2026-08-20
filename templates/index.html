@@ -3988,6 +3988,18 @@
             color: var(--accent-cyan);
         }
 
+        /* Red CLOSE ALL TABS pill in the Subscriber IQ action row (parity with Profile IQ). */
+        .display-mode-toggle.close-all-red {
+            background: rgba(255, 100, 100, 0.1);
+            border-color: rgba(255, 100, 100, 0.3);
+            color: #ff6b6b;
+        }
+        .display-mode-toggle.close-all-red:hover {
+            background: rgba(255, 100, 100, 0.2);
+            border-color: rgba(255, 100, 100, 0.5);
+            color: #ff6b6b;
+        }
+
         .display-mode-toggle.active {
             background: rgba(6, 182, 212, 0.15);
             color: var(--accent-cyan);
@@ -22791,11 +22803,11 @@ https://www.instagram.com/p/..."></textarea>
                                 <div class="display-mode-toggle" onclick="openHowToVideo('{{ url_for('static', filename='videos/subscriber-iq.mp4') }}', 'Subscriber IQ')" title="Watch the Subscriber IQ how-to video">
                                     <span>HELP</span>
                                 </div>
-                                <div class="display-mode-toggle" onclick="closeAllSubscriberTabs()" title="Close all open Subscriber IQ tabs">
-                                    <span>CLOSE ALL TABS</span>
-                                </div>
                                 <div class="display-mode-toggle" id="subscriberHoverToggle" onclick="toggleSubscriberHover()" title="Toggle hover tooltips on/off">
                                     <span id="subscriberHoverToggleLabel">HOVER ON</span>
+                                </div>
+                                <div class="display-mode-toggle close-all-red" onclick="closeAllSubscriberTabs()" title="Close all open Subscriber IQ tabs">
+                                    <span>CLOSE ALL TABS</span>
                                 </div>
                             </div>
                         </div>
