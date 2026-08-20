@@ -145,6 +145,12 @@ DEFAULT_DOMAINS = [
     # __NEXT_DATA__), but a donated session slips past their Segment
     # / Rokt analytics throttling faster.
     'starz.com',
+    # 2026-08-20: Xbox Game Pass Ultimate added to new Gaming tab.
+    # /en-US/play ships the full XGPU catalog inline as
+    # window.__PRELOADED_STATE__. Cookies pull in the real XToken
+    # session (`XBXXtkhttp%3A%2F%2Fxboxlive.com` etc.) so Adobe /
+    # Clarity analytics don't throttle us during hydration.
+    'xbox.com',
 ]
 
 S3_BUCKET = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')

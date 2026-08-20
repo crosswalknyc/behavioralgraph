@@ -338,6 +338,16 @@ STREAMING_PLATFORMS = [
     ('starz',      'Starz',        False),
 ]
 
+# 2026-08-20: Gaming tab. First platform is Xbox Game Pass Ultimate;
+# PlayStation Plus / Nintendo Switch Online / Steam trending can slot
+# in here later without touching the frontend or payload shape - they
+# just need a scraper that writes trends_iq_snapshots/latest/{slug}.json
+# with the same {national: [{title, image, publisher, genre, url}, ...]}
+# structure.
+GAMING_PLATFORMS = [
+    ('xbox_gamepass', 'Xbox Game Pass Ultimate', False),
+]
+
 # How old a snapshot can be before we treat the source as unavailable
 # again. Two days = one missed nightly + one buffer. Bump if a scraper
 # is flaky.
@@ -5343,6 +5353,41 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
 
 
 # ============================================================================
+# Card 5c: Trending games (Xbox Game Pass Ultimate + future providers)
+# ============================================================================
+def _fetch_gaming_trending(state: Optional[str], lookback_days: int,
+                             keywords: Optional[list[str]] = None,
+                             asof: Optional[str] = None) -> dict:
+    """Fan out to every gaming platform's daily snapshot. Same shape as
+    `_fetch_streaming_trending` so the frontend can reuse render
+    helpers.
+
+    Each platform ships an `items` list of up to 25 games with:
+      { rank, title, image, publisher, genre, url, product_id,
+        category_display: 'Game', recently_added: bool }
+    """
+    result: dict[str, dict] = {}
+    for slug, label, _default_avail in GAMING_PLATFORMS:
+        snap = _read_snapshot(slug, asof) if asof else _read_snapshot(slug)
+        if not snap:
+            result[slug] = {'label': label, 'items': [], 'available': False}
+            continue
+        items = _snapshot_items_for_geo(snap, state, keywords=keywords)
+        items = items[:25]
+        for i, it in enumerate(items, 1):
+            it['rank'] = i
+        result[slug] = {
+            'label':      label,
+            'items':      items,
+            'available':  bool(items),
+            'fetched_at': snap.get('fetched_at'),
+        }
+        if snap.get('error'):
+            result[slug]['note'] = f"latest snapshot: {snap['error']}"
+    return result
+
+
+# ============================================================================
 # Card 6: Trending products by retailer
 # ============================================================================
 _AMAZON_ITEM_RE = re.compile(
@@ -5669,6 +5714,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                                                         keywords=geo_kws),
             'fast_trending':       lambda: _fetch_fast_trending(state, lookback_days,
                                                                    keywords=geo_kws),
+            'gaming_trending':     lambda: _fetch_gaming_trending(state, lookback_days,
+                                                                     keywords=geo_kws),
             # Products by retailer removed from the dashboard 2026-07-28.
             # Aggregator + scrapers preserved in code so re-enabling is
             # a one-line change - just re-add the task here and the panel
@@ -5707,6 +5754,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # `items`, `films`, `tv`, `available`) so the frontend can reuse
     # every helper it built for the Streaming panel.
     fast_trending      = results.get('fast_trending') or {}
+    gaming_trending    = results.get('gaming_trending') or {}
     # Products tab retired 2026-07-28; keep an empty list bound so the
     # payload contract (`cards.products_by_retailer` present + list-typed)
     # stays intact for any older cached frontend still deployed.
@@ -5944,6 +5992,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'social_trending':                social_trending,
             'streaming_trending':             streaming_trending,
             'fast_trending':                  fast_trending,
+            'gaming_trending':                gaming_trending,
             'products_by_retailer':           products,
             'movers':                         movers,
         },
@@ -5975,6 +6024,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                     if (p or {}).get('available')),
             'fast':          sum(len(((fast_trending.get(k) or {}).get('items') or []))
                                   for k in ('roku', 'tubi', 'pluto', 'amazon')),
+            'gaming':        sum(len(((gaming_trending.get(k) or {}).get('items') or []))
+                                  for k, _l, _a in GAMING_PLATFORMS),
             'music':         sum(len(((music_charts.get(k) or {}).get('items') or []))
                                   for k in ('spotify', 'apple', 'tiktok', 'shazam', 'amazon')),
             'podcasts':      sum(len(((podcast_charts.get(k) or {}).get('items') or []))

@@ -24846,7 +24846,7 @@ https://www.instagram.com/p/..."></textarea>
             </div>
             <div id="trendsIQLoading" class="tiq-loading-overlay" style="display: none;">
                 <div class="tiq-spinner"></div>
-                <div>Pulling trending searches, headlines, social, and streaming rankings...</div>
+                <div>Pulling trending searches, headlines, social, streaming, and gaming rankings...</div>
             </div>
             <div id="trendsIQTabStrip" class="tiq-tabstrip" style="display: none;"></div>
             <div id="trendsIQPanels"></div>
@@ -49827,6 +49827,8 @@ https://www.instagram.com/p/..."></textarea>
                   tip: 'Streaming: Daily Top-10 rankings on Netflix, Disney+, Hulu, Max, Prime Video, and ESPN+, split into Film and TV.' },
                 { key: 'fast',      label: 'FAST',             count: counts.fast      || 0, icon: '📡',
                   tip: 'FAST channels: Top 100 titles on Roku Channel, Tubi, Pluto TV, and Amazon (ad-supported tier). Ranked by JustWatch US popularity, interleaved Film and TV.' },
+                { key: 'gaming',    label: 'Gaming',           count: counts.gaming    || 0, icon: '🎮',
+                  tip: 'Gaming: Top games on Xbox Game Pass Ultimate right now (ranked by cloud-play popularity). PlayStation Plus, Nintendo Switch Online, and Steam are on the roadmap.' },
                 { key: 'watchlist', label: 'Watchlist',        count: watchCount,            icon: '★',
                   tip: 'Watchlist: The trends you have starred. Populates the daily digest email so you get pinged when anything on this list breaks out, drops off, or crosses a threshold you set.' },
             ];
@@ -49861,6 +49863,7 @@ https://www.instagram.com/p/..."></textarea>
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('fast',      renderTIQFast(cards.fast_trending || {})) +
+                _renderTIQPanel('gaming',    renderTIQGaming(cards.gaming_trending || {})) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
 
             // Persona-lens filter setup.  `cards.lens_config` is the
@@ -51879,6 +51882,102 @@ https://www.instagram.com/p/..."></textarea>
             if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
         };
 
+        // Gaming panel: currently one platform (Xbox Game Pass Ultimate)
+        // but the backend ships every registered gaming provider as its
+        // own key so PlayStation Plus / Nintendo Switch Online / Steam
+        // can slot in later without changing the payload shape or CSS.
+        // Layout follows the same tab-strip pattern as Social + Streaming
+        // for consistency.
+        function renderTIQGaming(gaming) {
+            var allKeys = Object.keys(gaming || {});
+            if (!allKeys.length) {
+                return '<div class="tiq-empty">Gaming rankings are warming up.</div>';
+            }
+            var order = ['xbox_gamepass'];
+            var keys = order.filter(function(k) { return gaming[k]; })
+                .concat(allKeys.filter(function(k) { return order.indexOf(k) === -1; }));
+
+            if (!window.__trendsIQ.activeGaming ||
+                !gaming[window.__trendsIQ.activeGaming]) {
+                window.__trendsIQ.activeGaming = keys.find(function(k) {
+                    return (gaming[k] || {}).available;
+                }) || keys[0];
+            }
+
+            var tabs = keys.map(function(k) {
+                var s = gaming[k] || {};
+                var active = (k === window.__trendsIQ.activeGaming) ? ' active' : '';
+                var unavail = !s.available ? ' unavailable' : '';
+                return '<div class="tiq-social-tab' + active + unavail + '" onclick="setTrendsIQGaming(\'' + k + '\')">' + _tiqEsc(s.label || k) + '</div>';
+            }).join('');
+
+            var panels = keys.map(function(k) {
+                var s = gaming[k] || {};
+                var active = (k === window.__trendsIQ.activeGaming) ? ' active' : '';
+                var body;
+                if (!s.available) {
+                    body = '<div class="tiq-placeholder">' +
+                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
+                           '<div>Loading.</div>' +
+                           '</div>';
+                } else if (!(s.items || []).length) {
+                    body = '<div class="tiq-empty">No trending games right now.</div>';
+                } else {
+                    var subtitle = 'Top ' + (s.items || []).length +
+                                    ' games on ' + _tiqEsc(s.label || k) +
+                                    ' (US cloud-play popularity).';
+                    var lis = (s.items || []).map(function(it, i) {
+                        var rk = it.rank || (i + 1);
+                        var img = _tiqPosterCell(it.image);
+                        var pub = it.publisher
+                            ? '<span class="tiq-gaming-pub">' + _tiqEsc(it.publisher) + '</span>'
+                            : '';
+                        var genre = it.genre
+                            ? '<span class="tiq-gaming-genre">' + _tiqEsc(it.genre) + '</span>'
+                            : '';
+                        var newBadge = it.recently_added
+                            ? '<span class="tiq-gaming-new">NEW</span>'
+                            : '';
+                        var url = it.url || '#';
+                        return '<div class="tiq-row">' +
+                               '<div class="tiq-rank">' + rk + '</div>' +
+                               img +
+                               '<div class="tiq-row-body">' +
+                                 '<div class="tiq-row-title">' +
+                                   '<a href="' + _tiqEsc(url) + '" target="_blank" rel="noopener">' +
+                                   _tiqEsc(it.title) + '</a> ' + newBadge +
+                                 '</div>' +
+                                 '<div class="tiq-row-meta">' + pub +
+                                   (pub && genre ? ' · ' : '') + genre +
+                                 '</div>' +
+                               '</div>' +
+                               '</div>';
+                    }).join('');
+                    body = '<div class="tiq-panel-subtitle">' + subtitle + '</div>' +
+                           '<div class="tiq-rows">' + lis + '</div>';
+                }
+                return '<div class="tiq-social-panel' + active + '" data-tiq-gaming="' + k + '">' + body + '</div>';
+            }).join('');
+
+            return '<div class="tiq-social-tabs">' + tabs + '</div>' +
+                   '<div class="tiq-social-panels">' + panels + '</div>';
+        }
+        window.setTrendsIQGaming = function(key) {
+            window.__trendsIQ.activeGaming = key;
+            var gaming = (window.__trendsIQ.lastData &&
+                          window.__trendsIQ.lastData.cards &&
+                          window.__trendsIQ.lastData.cards.gaming_trending) || {};
+            document.querySelectorAll('#trendsIQPanels [data-tiq-panel="gaming"] .tiq-social-tab').forEach(function(el) {
+                var s = gaming[key] || {};
+                var isActive = el.textContent.trim().toLowerCase() === (s.label || key).toLowerCase();
+                el.classList.toggle('active', isActive);
+            });
+            document.querySelectorAll('#trendsIQPanels [data-tiq-gaming]').forEach(function(el) {
+                el.classList.toggle('active', el.getAttribute('data-tiq-gaming') === key);
+            });
+            if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
+        };
+
         function renderTIQProducts(retailers) {
             if (!retailers.length) return '<div class="tiq-empty">No retailer feeds returned data.</div>';
             var tabs = retailers.map(function(r) {
@@ -52055,6 +52154,7 @@ https://www.instagram.com/p/..."></textarea>
                 _renderTIQPanel('social',    renderTIQSocial(cards.social_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('fast',      renderTIQFast(cards.fast_trending || {})) +
+                _renderTIQPanel('gaming',    renderTIQGaming(cards.gaming_trending || {})) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
             // Re-run lens filter after the star-toggle repaint so rows
             // stay hidden/visible per the active lens.

@@ -76,6 +76,13 @@ RESIDENTIAL_SCRAPERS = [
     # /us/en/movies + /us/en/series. Runs residentially because
     # starz.com's Akamai config fingerprints Hetzner's datacenter IP.
     ('starz',         'Starz'),
+    # Xbox Game Pass Ultimate (2026-08-20): Gaming tab. Parses
+    # window.__PRELOADED_STATE__ on /en-US/play for the "Most popular
+    # on cloud" SIGL rail, then hydrates the top 25 product IDs via
+    # the public DisplayCatalog API (no auth needed there). Runs
+    # residentially because xbox.com's Akamai / Adobe stack is the
+    # same family that WAF-blocks Hetzner for BritBox / MGM+ / Starz.
+    ('xbox_gamepass', 'Xbox Game Pass Ultimate'),
     # Social content scrapers (2026-07): switched from hashtag lists to
     # actual trending posts/videos/tweets. All three need a real logged-in
     # session, so they run from the laptop (where cookies live) rather
