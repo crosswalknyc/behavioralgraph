@@ -59888,6 +59888,38 @@ https://www.instagram.com/p/..."></textarea>
         // build is ALWAYS the national total universe + avid; every
         // cut (markets included) is 3 credits derived from it.
         function _synthChatClarifyQuestion(step) {
+            if (step === 'parent_link') {
+                // 2026-08-20: cut intent detected but no parent
+                // auto-linked. Candidates ride the draft (stashed by
+                // the interpret step).
+                var _plDraft = synthChatCurrentDraft || {};
+                var _plCands = _plDraft.parent_link_candidates || [];
+                var _plLabel = String(_plDraft.cut_label_guess || '').trim();
+                var _plLines = ['This looks like it could be a ' +
+                    '**cut of data we already have**' +
+                    (_plLabel ? ' (' + _plLabel + ')' : '') +
+                    ' - linking it keeps the numbers laddering up ' +
+                    'to the parent and runs at **3 credits** ' +
+                    'instead of a full build.'];
+                if (_plCands.length) {
+                    _plLines.push('');
+                    _plLines.push('Is it a cut of one of these?');
+                    for (var _pi = 0; _pi < _plCands.length; _pi++) {
+                        _plLines.push('  ' + (_pi + 1) + '. **' +
+                            (_plCands[_pi].display_name ||
+                             _plCands[_pi].s3_key) + '**' +
+                            (_plCands[_pi].days_old != null
+                                ? ' (' + _plCands[_pi].days_old +
+                                  'd old)'
+                                : ''));
+                    }
+                    _plLines.push('');
+                    _plLines.push('Reply with the **number or name** ' +
+                        '- or say **none** to build it fresh as its ' +
+                        'own profile.');
+                }
+                return _plLines.join('\n');
+            }
             if (step === 'goal') {
                 return 'Quick context so I can recommend the right ' +
                     'cuts: **what is this for?** A pitch, media ' +
@@ -59977,9 +60009,23 @@ https://www.instagram.com/p/..."></textarea>
                         '. You can grab it now, no credits.';
                     break;
                 case 'derive_cut':
-                    line = 'Creating a cut of the existing **' + parentName + '** data' +
-                        (deriveHint ? ' for ' + deriveHint : '') +
-                        eta + '.';
+                    // 2026-08-20 lineage naming: when the deliverable
+                    // was renamed '{Parent} - {Cut}', lead with that
+                    // so the user sees exactly what gets built and
+                    // what it ladders up to.
+                    var _dcCutLbl = String(s.cut_label || '').trim();
+                    if (subject && parentName && subject !== parentName) {
+                        line = 'Creating **' + subject + '** as a cut ' +
+                            'of the existing **' + parentName +
+                            '** data' + eta + '. The numbers ladder ' +
+                            'up to that parent.';
+                    } else {
+                        line = 'Creating a cut of the existing **' + parentName + '** data' +
+                            (_dcCutLbl ? ' - ' + _dcCutLbl
+                                : (deriveHint && deriveHint !== 'intersect_cut'
+                                    ? ' for ' + deriveHint : '')) +
+                            eta + '.';
+                    }
                     break;
                 case 'time_shifted_refresh':
                     line = 'Refreshing the existing **' + parentName + '** data for the new window' +
