@@ -46301,6 +46301,11 @@ def api_synth_chat_interpret():
         claude_explicit = bool(spec_draft.get('date_range_explicit'))
         user_explicit = _user_specified_dates(text, chat_history=history)
         needs_date_clarification = not (claude_explicit or user_explicit)
+        # Reuse/derive decisions ship the parent file's window - asking
+        # which window to use is noise (2026-08-20 Spider-Man TVOD ask
+        # got a window question on a 3-credit derive).
+        if decision_str in ('existing_match', 'derive_cut'):
+            needs_date_clarification = False
 
         dr = spec_draft.get('date_range') or {}
         proposed_range = {
@@ -47944,6 +47949,12 @@ def _extract_intersect_operands(prompt):
         return None
     left = (m.group('left') or '').strip()
     right = (m.group('right') or '').strip()
+    # Trailing request-noise nouns leak into the right operand when the
+    # user phrases the ask as '... -> EST Buyers profile' (2026-08-20).
+    right = _re.sub(
+        r'\s+(?:profile|profiles|iq|iqs|persona|personas|report|'
+        r'analysis|build|builds|cut|cuts|file|files)\s*$',
+        '', right, flags=_re.IGNORECASE).strip()
     if not left or len(left) < 3 or not right:
         return None
     # Right-side must NOT be a pure date / time-window expression -
@@ -47962,6 +47973,20 @@ def _extract_intersect_operands(prompt):
     ):
         return None
     return left, right
+
+
+def _parent_is_token_prefix(parent_name, left):
+    """True when the parent's normalized token sequence is a leading
+    prefix of the left operand's - e.g. parent 'Vizio TV Owners' vs
+    left 'Vizio TV Owners - Spider-Man TVOD Renters'. This is the
+    strongest possible parent signal: the user literally typed the
+    parent name first, then the cohort (2026-08-20 Spider-Man TVOD
+    fix - cohort tokens dilute overlap scores below every floor)."""
+    pt = _normalize_for_match(parent_name).split()
+    lt = _normalize_for_match(left).split()
+    if not pt or len(pt) > len(lt):
+        return False
+    return lt[:len(pt)] == pt
 
 
 def _score_parents_for_left_operand(left, catalog, min_score=0.30,
@@ -47989,6 +48014,19 @@ def _score_parents_for_left_operand(left, catalog, min_score=0.30,
             score = float(c.get('_score') or 0.0)
         except Exception:
             score = 0.0
+        # Token-prefix parents outrank overlap scores: cohort tokens
+        # in the left operand dilute overlap below any sane floor
+        # ('Vizio TV Owners - Spider-Man TVOD Renters' vs parent
+        # 'Vizio TV Owners' reads 0.33), but the user literally led
+        # with the parent name (2026-08-20).
+        try:
+            if score < 0.95 and _parent_is_token_prefix(
+                    c.get('display_name') or c.get('subject') or '',
+                    left):
+                c = dict(c)
+                c['_score'] = score = 0.95
+        except Exception:
+            pass
         if score < min_score:
             continue
         s3_key = (c.get('s3_key') or '').strip()
@@ -47996,6 +48034,17 @@ def _score_parents_for_left_operand(left, catalog, min_score=0.30,
             continue
         try:
             if not _partner_download_key_allowed(s3_key):
+                continue
+        except Exception:
+            pass
+        # Cut/skin profiles never parent an intersect cut - deriving a
+        # behavioral cut off '... - Avid Fan' or another '->' cut
+        # breaks the ladder-to-TU model (2026-08-20 Spider-Man TVOD
+        # mangle: the Avid cut outscored the true TU on token overlap
+        # and got picked as the parent).
+        try:
+            if _cutlike_display_name_re().search(
+                    str(c.get('display_name') or '')):
                 continue
         except Exception:
             pass
@@ -48075,6 +48124,15 @@ def _detect_intersect_parent_from_prompt(prompt, candidates,
             # If the helper doesn't exist in this build (e.g. chatbot-
             # only surface), fall back to a permissive check.
             pass
+        # Never promote onto a cut/skin parent (2026-08-20): '... -
+        # Avid Fan' and arrow-named behavioral cuts are themselves
+        # derivatives; intersect cuts must ladder to the true TU.
+        try:
+            if _cutlike_display_name_re().search(
+                    str(c.get('display_name') or '')):
+                continue
+        except Exception:
+            pass
         subject_norm = _normalize_for_match(c.get('subject') or '')
         display_norm = _normalize_for_match(c.get('display_name') or '')
         parent_tokens = set(
@@ -48091,8 +48149,19 @@ def _detect_intersect_parent_from_prompt(prompt, candidates,
         # in parent - this is what makes "Vizio" match parent
         # "Vizio TV Owners" (1/1 = 100% coverage) while rejecting
         # "Netflix subscribers" against "Amazon Prime" (0/2 = 0%).
+        # Exception (2026-08-20): when the parent name is a token-
+        # PREFIX of the left operand ('Vizio TV Owners - Spider-Man
+        # TVOD Renters'), trailing cohort tokens dilute coverage below
+        # the floor even though the user literally led with the
+        # parent name - prefix evidence beats the coverage gate.
         left_coverage = len(overlap) / max(len(left_tokens), 1)
-        if left_coverage < 0.6:
+        _is_prefix_parent = False
+        try:
+            _is_prefix_parent = _parent_is_token_prefix(
+                c.get('display_name') or c.get('subject') or '', left)
+        except Exception:
+            pass
+        if left_coverage < 0.6 and not _is_prefix_parent:
             continue
         # Additionally: at least one overlap token must be a
         # non-generic proper noun (>= 4 chars, not a stopword). Guards
@@ -48146,6 +48215,10 @@ def _residual_cut_label(subject, parent_display):
     resid = resid.strip().strip('-\u2013\u2014:,;').strip()
     resid = _re.sub(r'^(?:for|of|who|that|the)\s+', '', resid,
                     flags=_re.IGNORECASE).strip()
+    resid = _re.sub(
+        r'\s+(?:profile|profiles|iq|iqs|persona|personas|report|'
+        r'analysis|build|builds|cut|cuts|file|files)\s*$',
+        '', resid, flags=_re.IGNORECASE).strip()
     if len(resid) < 3:
         return ''
     return resid
