@@ -51603,11 +51603,23 @@ https://www.instagram.com/p/..."></textarea>
                             // still render the placeholder so the row's
                             // vertical rhythm matches the ones with art.
                             var img = _tiqPosterCell(it.image);
+                            // Projected weekly US views chip - same
+                            // helper the FAST tab uses. Populated from
+                            // stream_estimates.by_platform[<platform>]
+                            // via _annotate_streaming_with_streams so
+                            // each row shows the platform-specific
+                            // weekly-viewer count for that title (a
+                            // Netflix row shows Netflix-only viewers,
+                            // a Disney+ row shows Disney+-only, etc).
+                            // Empty string when we have no estimate
+                            // yet - the row still renders cleanly.
+                            var views = _tiqAudienceChip(it.us_streams);
                             return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
                                    img +
                                    '<div class="tiq-row-body">' +
                                    '<div class="tiq-row-title">' + _tiqEsc(it.title) +
                                    _tiqActions('streaming', k, streamKey, streamKey, 'National') + '</div>' +
+                                   (views ? '<div class="tiq-row-meta">' + views + '</div>' : '') +
                                    '</div></div>';
                         }).join('');
                         return '<div class="tiq-card"><h4>' + _tiqEsc(label) + '</h4>' +
