@@ -18207,6 +18207,15 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
             justify-content: flex-start;
             gap: 0.6rem;
             margin: 0;
+            /* Match the "Data & Analysis Tools" pill: full-width filled bar
+               with a subtle border + rounded corners. */
+            box-sizing: border-box;
+            width: 100%;
+            background-color: var(--bg-input, #0d1a2a);
+            border: 1px solid var(--border-color, #2a3a4a);
+            border-radius: 8px;
+            padding: 0.65rem 0.85rem;
+            font-size: 1.05rem;
         }
         .persistent-sidebar.mobile-collapsible .sidebar-header-section h3::after {
             content: '\25BE'; /* down chevron, right after the label */
@@ -18218,6 +18227,21 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
         /* Collapsed (default) points down; expanded flips it up. */
         .persistent-sidebar.mobile-collapsible:not(.mobile-collapsed) .sidebar-header-section h3::after {
             transform: rotate(180deg);
+        }
+        /* Drop the sidebar's own card chrome so the pill reads as a standalone
+           bar (like the tools bar) instead of a pill nested inside a box. */
+        .persistent-sidebar.mobile-collapsible {
+            background: transparent !important;
+            border: none !important;
+            border-radius: 0 !important;
+            padding: 0 !important;
+        }
+        .persistent-sidebar.mobile-collapsible .sidebar-header-section {
+            margin-bottom: 0;
+        }
+        /* When expanded, add a small gap between the bar and the search box. */
+        .persistent-sidebar.mobile-collapsible:not(.mobile-collapsed) .sidebar-header-section h3 {
+            margin-bottom: 0.6rem;
         }
         .persistent-sidebar.mobile-collapsed > *:not(.sidebar-header-section) {
             display: none !important;
