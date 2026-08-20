@@ -49977,9 +49977,9 @@ https://www.instagram.com/p/..."></textarea>
             'Apple Books Top 100 (US)':          'Apple Books: The top-paid chart in the Apple Books store.',
             'Audible Best-Sellers':              'Audible Best-Sellers: The top-selling audiobooks on Audible right now.',
             // ---------- Libby (folded into the Books tab as three sibling cards) ----------
-            'Libby: Popular eBooks':             'Libby: Popular eBooks: The most-borrowed eBooks on Libby (LA County Library) right now.',
-            'Libby: Popular Audiobooks':         'Libby: Popular Audiobooks: The most-borrowed audiobooks on Libby (LA County Library) right now.',
-            'Libby: Popular Magazines':          'Libby: Popular Magazines: The most-read magazines on Libby (LA County Library) right now.',
+            'Libby: eBooks':                     'Libby: eBooks: The most-borrowed eBooks on Libby (LA County Library) right now.',
+            'Libby: Audiobooks':                 'Libby: Audiobooks: The most-borrowed audiobooks on Libby (LA County Library) right now.',
+            'Libby: Magazines':                  'Libby: Magazines: The most-read magazines on Libby (LA County Library) right now.',
             // ---------- Social ----------
             'Reddit - trending in the USA':      'Reddit: Top posts today across the US.',
             'YouTube - trending in the USA':     'YouTube: Videos trending in the US right now.',
@@ -51433,9 +51433,9 @@ https://www.instagram.com/p/..."></textarea>
             // Libby folds in as three additional cards. Prefix the label
             // with "Libby:" so it reads clearly next to the store cards.
             var libbyLabelMap = {
-                ebook:     'Libby: Popular eBooks',
-                audiobook: 'Libby: Popular Audiobooks',
-                magazine:  'Libby: Popular Magazines',
+                ebook:     'Libby: eBooks',
+                audiobook: 'Libby: Audiobooks',
+                magazine:  'Libby: Magazines',
             };
             var libbyCards = libbyPresent.map(function(k) {
                 return cardFor(libby[k] || {}, 'libby', 'libby-' + k, libbyLabelMap[k]);
