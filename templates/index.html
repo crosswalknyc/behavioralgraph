@@ -51332,13 +51332,23 @@ https://www.instagram.com/p/..."></textarea>
                                    ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
                                    : _tiqEsc(it.title);
                                var podKey = it.title + ' - ' + (it.artist || '');
+                               // Projected-US-listener chip. `us_streams` is
+                               // stamped on every podcast row by
+                               // _annotate_podcasts_with_streams in
+                               // trends_iq.py. Same chip idiom as Streaming
+                               // + FAST + Books. unit_label reads
+                               // 'weekly US listeners'.
+                               var audience = _tiqAudienceChip(it.us_streams);
+                               var metaBits = '';
+                               if (it.artist) metaBits += '<span>' + _tiqEsc(it.artist) + '</span>';
+                               if (audience)  metaBits += audience;
                                return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                                       '<div class="tiq-row-body">' +
                                       '<div class="tiq-row-title">' + titleLine +
                                       _tiqCrossPlatformBadge(it) +
                                       _tiqActions('podcast', k, podKey, podKey, 'National') +
                                       '</div>' +
-                                      (it.artist ? '<div class="tiq-row-meta">' + _tiqEsc(it.artist) + '</div>' : '') +
+                                      (metaBits ? '<div class="tiq-row-meta">' + metaBits + '</div>' : '') +
                                       '</div></div>';
                            }).join('') +
                            '</div>';
