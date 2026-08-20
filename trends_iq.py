@@ -320,6 +320,15 @@ STREAMING_PLATFORMS = [
     ('max',        'HBO Max',      False),
     ('primevideo', 'Prime Video',  False),
     ('espnplus',   'ESPN+',        False),
+    # 2026-08-20: BritBox (BBC + ITV joint venture, US premium British
+    # TV catalog) and MGM+ (Amazon-owned premium, formerly Epix). Both
+    # run residentially from Jenna's laptop via local_residential_run
+    # because their WAFs fingerprint Hetzner's datacenter IP. BritBox
+    # is a plain-HTTP scrape of /us/home (title anchors in-DOM); MGM+
+    # needs Playwright to hydrate the React SPA on /movies + /series
+    # + /browse.
+    ('britbox',    'BritBox',      False),
+    ('mgmplus',    'MGM+',         False),
 ]
 
 # How old a snapshot can be before we treat the source as unavailable
@@ -2880,6 +2889,8 @@ _STREAMING_PANEL_TO_PLATFORM = {
     'max':        'max',
     'primevideo': 'primevideo',
     'espnplus':   'espnplus',
+    'britbox':    'britbox',
+    'mgmplus':    'mgmplus',
 }
 # FAST-channel panel slug -> platform key inside
 # `stream_estimates.items[<kind_prefix>:<norm>].by_platform`. See

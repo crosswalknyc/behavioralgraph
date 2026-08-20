@@ -132,6 +132,14 @@ DEFAULT_DOMAINS = [
     # cookies from a residential IP, so only these two are gated.
     'amctheatres.com',
     'regmovies.com',
+    # 2026-08-20: BritBox + MGM+ added to the Streaming tab. BritBox
+    # uses a real `bbuser` session cookie so an authenticated donation
+    # unlocks the full trending-rail catalog on /us/home. MGM+ works
+    # anonymously (their aws-waf-token is enough to slip past the WAF
+    # challenge in headless Chrome), but if a full login is ever
+    # required later the same donate flow captures it.
+    'britbox.com',
+    'mgmplus.com',
 ]
 
 S3_BUCKET = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')

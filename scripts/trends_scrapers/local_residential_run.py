@@ -64,6 +64,14 @@ RESIDENTIAL_SCRAPERS = [
     # residential IP with the same cookies, Playwright gets a full
     # 60-title homepage back on first try.
     ('hulu',          'Hulu'),
+    # BritBox + MGM+ (2026-08-20): premium British / MGM library
+    # streamers. Both WAF-block Hetzner's datacenter IP. BritBox
+    # runs plain curl_cffi against /us/home with a donated bbuser
+    # session (~50 title anchors inline in the HTML). MGM+ uses
+    # Playwright to hydrate the React SPA on /movies + /series and
+    # keys off <img alt="Title"> poster tiles.
+    ('britbox',       'BritBox'),
+    ('mgmplus',       'MGM+'),
     # Social content scrapers (2026-07): switched from hashtag lists to
     # actual trending posts/videos/tweets. All three need a real logged-in
     # session, so they run from the laptop (where cookies live) rather

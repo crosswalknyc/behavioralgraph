@@ -259,6 +259,11 @@ _STREAMING_SLUGS = (
     ('max',        'Max'),
     ('primevideo', 'Prime Video'),
     ('espnplus',   'ESPN+'),
+    # 2026-08-20: BritBox (BBC + ITV premium British TV) and MGM+
+    # (Amazon-owned premium, formerly Epix). Anchors + per-platform
+    # ceilings live in _STREAMING_PLATFORMS_META below.
+    ('britbox',    'BritBox'),
+    ('mgmplus',    'MGM+'),
 )
 
 
@@ -858,6 +863,37 @@ _STREAMING_PLATFORMS_META = [
          'driven). Big UFC PPV weekend: 1-2.5M US buyers. Non-event '
          'programming <0.5M weekly US.'
      )},
+    {'key': 'britbox',
+     'label': 'BritBox',
+     'ceiling': 1_500_000,
+     'anchors': (
+         "BritBox US is BBC + ITV's joint premium subscription "
+         'streamer. Antenna / Parrot Analytics US subscriber estimates '
+         '~2.5-3.5M as of 2026; that is the ADDRESSABLE ceiling. Weekly '
+         'per-title reach is much lower: top flagship series '
+         '(Shetland, Father Brown, Death in Paradise, Doctor Who back '
+         'catalog) hit 300K-700K US households/week. Steady-state '
+         'top-10 typically 100K-350K. Anchor: ITV Q2 2026 investor '
+         'update + Antenna monthly SVOD engagement reports. British-'
+         'skewed audience: older-female Anglophile fan, extremely '
+         'loyal but small absolute base.'
+     )},
+    {'key': 'mgmplus',
+     'label': 'MGM+',
+     'ceiling': 2_000_000,
+     'anchors': (
+         'MGM+ (formerly Epix, rebranded Jan 2023, Amazon-owned since '
+         'the MGM acquisition closed 2022). Antenna / Nielsen: US '
+         'subscribers ~4.0-4.8M as of 2026 (majority via cable-'
+         'bundle carriage, minority direct-to-consumer). Top original '
+         'series (FROM, Godfather of Harlem, American Rust) reach '
+         '400K-900K US households/week. Big theatrical windows (Mission '
+         'Impossible, Gladiator II, Bond back-catalog on MGM+) briefly '
+         'spike 1.0-1.8M/week during their exclusive window. Steady-'
+         'state top-10 300K-700K. Anchor: Amazon Q2 2026 earnings + '
+         'Antenna monthly SVOD reports + Nielsen Streaming Content '
+         'Ratings originals list.'
+     )},
 ]
 
 
@@ -992,6 +1028,11 @@ _CHART_LABEL_TO_PLATFORM = (
     ('prime',            'primevideo'),
     ('espn+',            'espnplus'),
     ('espn',             'espnplus'),
+    # 2026-08-20: BritBox + MGM+ streaming platforms.
+    ('britbox',          'britbox'),
+    ('mgm+',             'mgmplus'),
+    ('mgm plus',         'mgmplus'),
+    ('mgmplus',          'mgmplus'),
     # FAST-channel platforms (chart-label prefixes from `_FAST_SLUGS`).
     # `amazon live tv` is handled up above alongside `amazon music` to
     # win the match before the bare `amazon` catch-all.
