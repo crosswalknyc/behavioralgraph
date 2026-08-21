@@ -9009,10 +9009,18 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
             model=chosen_model,
             max_tokens=max_tokens,
             temperature=temperature,
+            raise_on_error=True,
         )
     except Exception as exc:
         return {'success': False, 'status': 502,
                 'error': 'Reasoning request failed: {0}'.format(exc)}
+
+    # raise_on_error should make an empty return impossible, but keep a
+    # distinct error anyway - "" used to masquerade as "non-JSON output"
+    # and blocked model-fallback chains (2026-08-21 Prometheus analyze).
+    if not (raw or '').strip():
+        return {'success': False, 'status': 502,
+                'error': 'Reasoning service returned empty output.'}
 
     parsed = _extract_json_object(raw)
     if parsed is None and salvage_arrays:
@@ -9035,6 +9043,7 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
                 model=chosen_model,
                 max_tokens=max_tokens,
                 temperature=0.2,
+                raise_on_error=True,
             )
             parsed = _extract_json_object(raw2)
             if parsed is None and salvage_arrays:
@@ -9044,10 +9053,14 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
                           f"objects from truncated retry array")
                     return {'success': True, 'data': salvaged,
                             'model': chosen_model, 'salvaged': True}
-        except Exception:
+        except Exception as _retry_exc:
+            print(f"[claude-agent] self-heal retry errored on "
+                  f"{chosen_model}: {_retry_exc}")
             parsed = None
     if parsed is None:
         snippet = (raw or '')[:600]
+        print(f"[claude-agent] non-JSON from {chosen_model} "
+              f"({len(raw or '')} chars): {snippet[:200]!r}")
         return {'success': False, 'status': 502,
                 'error': 'Reasoning service returned non-JSON output.',
                 'raw_excerpt': snippet}
@@ -47491,10 +47504,14 @@ def api_synth_chat_health():
 
 _PM_ANALYZE_MODEL_ENV = (os.environ.get('PROMETHEUS_ANALYZE_MODEL')
                          or '').strip()
+# Candidate IDs verified against the live Anthropic models list
+# 2026-08-21 (client.models.list): opus-5 / opus-4-8 / opus-4-7 all
+# exist. The chain tail is always the interpret sonnet, so analysis
+# degrades gracefully when the deploy key has no Opus access.
 _PM_ANALYZE_CANDIDATES = (
     ([_PM_ANALYZE_MODEL_ENV] if _PM_ANALYZE_MODEL_ENV else [])
-    + ['claude-opus-4-7', 'claude-opus-4-6', 'claude-opus-4-5',
-       'claude-opus-4-1'])
+    + ['claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-7',
+       'claude-opus-4-6'])
 _pm_model_lock = threading.Lock()
 _pm_resolved_model = {'name': None}
 _PM_DECK_PREFIX = 'system/prometheus_decks/'
@@ -47510,10 +47527,17 @@ def _pm_model_chain():
 def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
                     temperature=0.5):
     """JSON reasoning pass on the strongest model that answers. Walks
-    the Opus candidate chain once (404/not-found advances to the next
-    candidate, anything else surfaces), caches the winner for the
-    process lifetime, and always keeps the interpret sonnet as the
-    final fallback so analysis never hard-fails on model naming."""
+    the Opus candidate chain once, caches the winner for the process
+    lifetime, and always keeps the interpret sonnet as the final
+    fallback so analysis never hard-fails on model naming.
+
+    2026-08-21: advance on ANY failure, not just 404s. The original
+    404-only advance never fired because claude_reason_json swallowed
+    permanent API errors into "" (surfaced as 'non-JSON output', which
+    matched neither 'not_found' nor '404'), so the first unusable Opus
+    candidate hard-failed every Prometheus analyze call. The tail
+    sonnet is proven on this deploy's key, so walking the whole chain
+    is always safe and at worst costs a few failed cheap requests."""
     last = None
     for m in _pm_model_chain():
         result = _run_nflx_claude_agent(
@@ -47525,11 +47549,9 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
                     print(f"[prometheus] analysis model resolved: {m}")
                     _pm_resolved_model['name'] = m
             return result
-        err = str(result.get('error') or '')
+        print(f"[prometheus] model {m} failed "
+              f"({str(result.get('error') or '')[:160]}); trying next")
         last = result
-        if 'not_found' in err or '404' in err:
-            continue
-        return result
     return last or {'success': False, 'status': 503,
                     'error': 'no reasoning model available'}
 
