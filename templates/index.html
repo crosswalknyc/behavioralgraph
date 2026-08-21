@@ -62018,6 +62018,11 @@ https://www.instagram.com/p/..."></textarea>
                 // sees the new pending/running counts jump right
                 // away instead of waiting up to 5s for the tick.
                 try { _synthChatRefreshQueueBadge(); } catch (_) {}
+                // Chatbot runs are charged like every other pull; sync
+                // the top-bar credits badge with the fresh balance.
+                if (typeof data.credits_remaining !== 'undefined' && data.credits_remaining !== null) {
+                    try { updateCreditsDisplay(data.credits_remaining); } catch (_) {}
+                }
                 var panel = document.getElementById('synthChatBriefPreview');
                 if (panel) panel.style.display = 'none';
                 synthChatCurrentDraft = null;
@@ -62110,6 +62115,19 @@ https://www.instagram.com/p/..."></textarea>
                 synthChatBatchDrafts = null;
                 synthChatBatchClarify = null;
                 try { _synthChatRefreshQueueBadge(); } catch (_) {}
+                // Sync the credits badge from the batch charges: all
+                // values are -1 for unlimited accounts, otherwise take
+                // the lowest (= freshest) remaining balance returned.
+                try {
+                    var _crVals = results
+                        .map(function(r){ return r && r.credits_remaining; })
+                        .filter(function(v){ return typeof v === 'number'; });
+                    if (_crVals.length) {
+                        var _crNew = _crVals.indexOf(-1) !== -1
+                            ? -1 : Math.min.apply(null, _crVals);
+                        updateCreditsDisplay(_crNew);
+                    }
+                } catch (_) {}
                 if (errored.length) {
                     synthChatPushTurn('agent',
                         'Some profiles could not be queued: ' +
@@ -151132,6 +151150,28 @@ https://www.instagram.com/p/..."></textarea>
                 requestBtn.disabled = false;
                 requestBtn.textContent = '🛒 Request More Credits';
             }
+            // Live-refresh the counters so usage recorded since page
+            // load (chatbot runs, analyses, decks) shows immediately -
+            // unlimited accounts track usage the same as everyone else.
+            creditUsageCache = null;
+            fetch('/api/credit-usage')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data || !data.success) return;
+                    creditUsageCache = data.usage || [];
+                    const usedEl = document.getElementById('modalCreditsUsed');
+                    if (usedEl && typeof data.credits_used === 'number') {
+                        usedEl.textContent = data.credits_used;
+                    }
+                    const availEl = document.getElementById('modalCreditsAvailable');
+                    if (availEl && typeof data.credits_left === 'number') {
+                        availEl.textContent = data.credits_left === -1 ? 'Unlimited' : data.credits_left;
+                    }
+                    if (typeof data.credits_left === 'number') {
+                        try { updateCreditsDisplay(data.credits_left); } catch (_) {}
+                    }
+                })
+                .catch(() => {});
         }
         
         function closeCreditsModal() {
