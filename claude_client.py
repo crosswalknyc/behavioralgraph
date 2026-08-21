@@ -179,8 +179,18 @@ def claude_reason_json(
             )
             if not _model_omits_temperature(model_id):
                 _kwargs["temperature"] = temperature
+
+            def _issue(_kw):
+                # 2026-08-21: the SDK refuses non-streaming create when
+                # max_tokens implies >10 min runtime (~24k on Sonnet);
+                # stream + accumulate for big budgets, same response.
+                if int(_kw.get("max_tokens") or 0) >= 12000:
+                    with client.messages.stream(**_kw) as _s:
+                        return _s.get_final_message()
+                return client.messages.create(**_kw)
+
             try:
-                resp = client.messages.create(**_kwargs)
+                resp = _issue(_kwargs)
             except Exception as _te:
                 # Newer models 400 on `temperature`. Strip, memoize the
                 # model, retry once immediately (2026-08-21: opus-5 /
@@ -192,7 +202,7 @@ def claude_reason_json(
                           f"retrying without it")
                     _temp_rejecting_models.add(model_id)
                     _kwargs.pop("temperature", None)
-                    resp = client.messages.create(**_kwargs)
+                    resp = _issue(_kwargs)
                 else:
                     raise
             try:
@@ -343,10 +353,19 @@ def claude_messages(
                 TimeoutError as _WallTimeout,
             )
             _wall_s = 900.0 if tools else 420.0
+
+            def _issue_request():
+                # 2026-08-21: SDK raises ValueError("Streaming is
+                # required...") client-side for large max_tokens (~24k
+                # on Sonnet). Stream + accumulate for big budgets.
+                if not tools and int(kwargs.get("max_tokens") or 0) >= 12000:
+                    with _request_client.messages.stream(**kwargs) as _s:
+                        return _s.get_final_message()
+                return _request_client.messages.create(**kwargs)
+
             _pool = _WallPool(max_workers=1)
             try:
-                _fut = _pool.submit(
-                    _request_client.messages.create, **kwargs)
+                _fut = _pool.submit(_issue_request)
                 try:
                     resp = _fut.result(timeout=_wall_s)
                 except _WallTimeout:
@@ -363,8 +382,7 @@ def claude_messages(
                               f"retrying without it")
                         _temp_rejecting_models.add(model_id)
                         kwargs.pop("temperature", None)
-                        _fut2 = _pool.submit(
-                            _request_client.messages.create, **kwargs)
+                        _fut2 = _pool.submit(_issue_request)
                         resp = _fut2.result(timeout=_wall_s)
                     else:
                         raise
