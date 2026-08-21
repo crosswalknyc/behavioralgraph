@@ -46126,6 +46126,25 @@ def api_synth_chat_interpret():
                 'error': f'batch interpret failed: {_cart_err}',
             }), 500
 
+    # Claude-as-splitter fallback (2026-08-20, Jenna: "does the agent
+    # need to be smarter?"). When BOTH regex detectors miss but the
+    # text plainly asks for multiple profiles ("for each platform
+    # (A, B, C so that ...", unclosed parens, trailing clauses), don't
+    # run a mangled single interpret - hand the ORIGINAL text to the
+    # array-mode Claude interpret inside _synth_chat_interpret_batch
+    # (empty subject list routes straight to its direct-retry path,
+    # which finalizes each draft and returns the standard batch
+    # payload).
+    if re.search(r'\bfor each\b|\bone (?:profile )?per\b'
+                 r'|\bprofiles? for each\b|\bper (?:platform|retailer'
+                 r'|brand|market|title)\b', text, re.IGNORECASE):
+        try:
+            return _synth_chat_interpret_batch(text, [], history=history)
+        except Exception as _marker_err:
+            traceback.print_exc()
+            print(f"[synth-chat interpret] marker-batch fallback "
+                  f"failed, continuing to single interpret: {_marker_err}")
+
     try:
         try:
             from iq_rankers import MASTER_CATEGORIES
