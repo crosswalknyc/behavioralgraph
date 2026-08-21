@@ -109652,25 +109652,50 @@ https://www.instagram.com/p/..."></textarea>
             
             const searchTerm = (document.getElementById('dashProfileSearchInput')?.value || '').toLowerCase().trim();
 
-            // Direct (literal) substring match only - per user 2026-06-23:
-            // "make the profile selector search find direct matches based on
-            // what you type in not like". The previous vowel-fuzzy regex
-            // (turning every char into [aeiou]? wildcards so "rosanne"
-            // matched "roseanne", "stephan" matched "stephen", etc.) was
-            // producing too many false positives where the typed string
-            // wasn't actually present in the result. Now we only match
-            // when the literal lowercased searchTerm appears as a
-            // substring of fullName / subject / category.
+            // MASTER-SUBJECT MATCH ONLY - per user 2026-08-21:
+            // "when you search it should only pull up main profiles not
+            // cuts. so like it shouldn't pull reba - youtube but just all
+            // things that the master profile is YouTube so like YouTube TV,
+            // YouTube Music, YouTube make sense".
+            //
+            // We match against the canonical (master) subject name from
+            // getProfileSuffixInfo, NOT the full display name. That
+            // automatically excludes cohort cuts because their canonical
+            // name is the parent subject:
+            //   "Reba McEntire - YouTube Fans" -> canonical "Reba McEntire"
+            //   "Mark Rober - YouTube"         -> canonical "Mark Rober"
+            //   "Shark Tank - YouTube Watchers"-> canonical "Shark Tank"
+            //   "The Promised Land - YouTube"  -> canonical "The Promised Land"
+            //   "Dwayne Johnson - Avid Fan"    -> canonical "Dwayne Johnson"
+            //   "Yellowstone 2023"             -> canonical "Yellowstone"
+            // So "youtube" finds only "YouTube", "YouTube TV",
+            // "YouTube Music", etc. - profiles whose master subject IS
+            // YouTube. Category / master-category / subcategory matches
+            // are kept so typing "streaming", "talent", "creator" still
+            // browses by group.
+            //
+            // Edge case: a display name without a " - " dash (e.g.
+            // "Elton John YouTube Watchers", "Unlikely Collaborators
+            // YouTube") is not recognised as a cut by getProfileSuffixInfo,
+            // so its canonical == full name and it will still match
+            // "youtube". Rename such profiles with an explicit " - " in
+            // the admin display-name field to correctly hide them from
+            // parent-subject searches.
+            //
+            // Previous behavior kept in git history: matched fullName and
+            // profile_subject substrings too, which surfaced every cohort
+            // cut whose descriptor contained the typed word.
             if (searchTerm) {
                 const matchingProfiles = profiles.filter(p => {
-                    const fullName = getProfileFullName(p).toLowerCase();
-                    const subj = (getProfileSubject(p) || fullName.replace(/\s+/g, '_')).toLowerCase();
+                    const info = (typeof getProfileSuffixInfo === 'function')
+                        ? getProfileSuffixInfo(p)
+                        : { canonicalName: getProfileFullName(p) };
+                    const canonicalName = (info.canonicalName || getProfileFullName(p) || '').toLowerCase();
                     const cat = (p.category || 'UNCATEGORIZED').toLowerCase();
                     const catDisplay = getCategoryDisplayLabel(p.category || 'UNCATEGORIZED').toLowerCase();
                     const isSvod = p.is_svod || (p.key && p.key.startsWith('svod-acquisition/')) || (p.s3_key && p.bucket === 'svod-acquisition');
                     const masterCat = getMasterCategory(p.category || 'UNCATEGORIZED', isSvod).toLowerCase();
-                    if (fullName.includes(searchTerm)) return true;
-                    if (subj.replace(/_/g, ' ').includes(searchTerm)) return true;
+                    if (canonicalName.includes(searchTerm)) return true;
                     if (cat.includes(searchTerm)) return true;
                     if (catDisplay.includes(searchTerm)) return true;
                     if (masterCat.includes(searchTerm)) return true;
