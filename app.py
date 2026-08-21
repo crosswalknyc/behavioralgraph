@@ -16356,14 +16356,9 @@ def get_subscriber_iq_data(s3_key):
         platform_key = (parsed['metadata'].get('platform') or '').strip().lower().replace(' ', '')
         if not platform_key and 'platform' in parsed['metadata']:
             platform_key = str(parsed['metadata']['platform']).strip().lower().replace(' ', '')
-        # Resolve platform key for pricing (e.g. "paramount+" -> same key in svod_pricing)
-        svod_pricing = load_svod_pricing()
-        pricing_for_platform = {}
-        if platform_key:
-            for key, val in svod_pricing.items():
-                if key.strip().lower().replace(' ', '') == platform_key:
-                    pricing_for_platform = val if isinstance(val, dict) else {}
-                    break
+        # Resolve pricing for this platform: baseline tier defaults (incl. the
+        # ad-tier launch date) overlaid with any admin overrides from Settings.
+        pricing_for_platform = svod_pricing_for(parsed['metadata'].get('platform'))
         
         print(f"✅ Returning subscriber IQ data for show: {show_name.upper()}")
         print(f"   Data keys: {list(parsed.keys())}")
@@ -23781,13 +23776,95 @@ def save_svod_pricing(pricing):
     except:
         return False
 
+# Baseline SVOD tier pricing + ad-tier launch dates (crosswalk pricing table).
+# ad_launch_date gates ad-supported revenue projections in Subscriber IQ: a
+# show whose analysis window ENDS before this date gets its ad-supported rows
+# suppressed (the platform had no ad model yet). Admin -> Settings -> SVOD
+# Pricing can override any of these fields per platform (values are archived
+# to system/svod_pricing.json).
+SVOD_TIER_DEFAULTS = {
+    'peacock':    {'ad_supported': 10.99, 'premium': 16.99, 'ad_launch_date': '2020-07-15'},
+    'netflix':    {'ad_supported': 8.99,  'premium': 19.99, 'ad_launch_date': '2022-11-03'},
+    'hulu':       {'ad_supported': 11.99, 'premium': 18.99, 'ad_launch_date': '2010-11-17'},
+    'hbomax':     {'ad_supported': 10.99, 'premium': 18.49, 'ad_launch_date': '2021-06-02'},
+    'disney+':    {'ad_supported': 11.99, 'premium': 18.99, 'ad_launch_date': '2022-12-08'},
+    'paramount+': {'ad_supported': 8.99,  'premium': 13.99, 'ad_launch_date': '2021-06-07'},
+    'primevideo': {'ad_supported': 8.99,  'premium': 11.99, 'ad_launch_date': '2024-01-29'},
+    'discovery+': {'ad_supported': 5.99,  'premium': 9.99,  'ad_launch_date': '2021-01-04'},
+    'espn+':      {'ad_supported': 11.99, 'ad_launch_date': '2018-04-12'},
+    'amc+':       {'ad_supported': 4.99,  'premium': 8.99,  'ad_launch_date': '2023-09-28'},
+    'bet+':       {'ad_supported': 5.99,  'premium': 9.99,  'ad_launch_date': '2023-06-25'},
+    # Ad-free-only services (no ad-supported tier).
+    'appletv':    {'premium': 12.99},
+    'starz':      {'premium': 11.99},
+    'mgm+':       {'premium': 6.99},
+    'shudder':    {'premium': 6.99},
+    'britbox':    {'premium': 8.99},
+    'acorntv':    {'premium': 8.99},
+}
+
+# Normalized (lower, no-space) aliases -> canonical SVOD_TIER_DEFAULTS key.
+SVOD_PLATFORM_ALIASES = {
+    'max': 'hbomax', 'hbo': 'hbomax',
+    'disney': 'disney+', 'disneyplus': 'disney+',
+    'paramount': 'paramount+', 'paramountplus': 'paramount+',
+    'amazonprimevideo': 'primevideo', 'amazon': 'primevideo', 'primevideowithads': 'primevideo',
+    'appletv+': 'appletv', 'appletvplus': 'appletv', 'apple': 'appletv',
+    'espnplus': 'espn+', 'espn': 'espn+',
+    'discoveryplus': 'discovery+', 'discovery': 'discovery+',
+    'betplus': 'bet+',
+    'amcplus': 'amc+',
+}
+
+def _svod_norm_key(name):
+    return (name or '').strip().lower().replace(' ', '')
+
+def _svod_canon_key(name):
+    nk = _svod_norm_key(name)
+    return SVOD_PLATFORM_ALIASES.get(nk, nk)
+
+def svod_pricing_for(platform_raw):
+    """Baseline tier defaults for a platform, overlaid with admin overrides."""
+    canon = _svod_canon_key(platform_raw)
+    out = dict(SVOD_TIER_DEFAULTS.get(canon, {}))
+    admin = load_svod_pricing() or {}
+    for k, v in admin.items():
+        if not isinstance(v, dict):
+            continue
+        if _svod_canon_key(k) != canon:
+            continue
+        for fld in ('ad_supported', 'premium', 'ad_launch_date'):
+            val = v.get(fld)
+            if val is not None and str(val).strip() != '':
+                out[fld] = val
+    return out
+
+def merged_svod_pricing_for_editor():
+    """Baseline defaults + admin overrides (admin wins), keyed by canonical
+    platform, so the Settings editor shows the full reference table."""
+    merged = {k: dict(v) for k, v in SVOD_TIER_DEFAULTS.items()}
+    admin = load_svod_pricing() or {}
+    for k, v in admin.items():
+        ck = _svod_canon_key(k)
+        if not isinstance(v, dict):
+            merged[ck] = v
+            continue
+        out = dict(merged.get(ck, {}))
+        for fld in ('ad_supported', 'premium', 'ad_launch_date'):
+            val = v.get(fld)
+            if val is not None and str(val).strip() != '':
+                out[fld] = val
+        merged[ck] = out
+    return merged
+
+
 @app.route('/api/settings/svod-pricing', methods=['GET', 'POST'])
 @requires_auth
 def svod_pricing_api():
     """GET: return SVOD pricing for all platforms. POST: save (admin only)."""
     if request.method == 'GET':
         try:
-            pricing = load_svod_pricing()
+            pricing = merged_svod_pricing_for_editor()
             return jsonify({'success': True, 'pricing': pricing})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
