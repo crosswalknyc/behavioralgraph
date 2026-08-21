@@ -6294,17 +6294,17 @@
                 }
                 platforms.forEach(platformKey => {
                     const row = pricing[platformKey] || {};
-                    listEl.appendChild(createSvodPricingRow(platformKey, row.ad_supported, row.premium));
+                    listEl.appendChild(createSvodPricingRow(platformKey, row.ad_supported, row.premium, row.ad_launch_date));
                 });
             } catch (e) {
                 listEl.innerHTML = '<p style="color: #ef4444;">Error loading: ' + (e.message || 'Unknown') + '</p>';
             }
         }
         
-        function createSvodPricingRow(platformKey, adSupported, premium) {
+        function createSvodPricingRow(platformKey, adSupported, premium, adLaunch) {
             const div = document.createElement('div');
             div.className = 'svod-pricing-row';
-            div.style.cssText = 'display: grid; grid-template-columns: 1fr auto auto auto; gap: 0.75rem; align-items: center; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);';
+            div.style.cssText = 'display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 0.75rem; align-items: center; padding: 0.75rem; background: var(--bg-dark); border-radius: 8px; border: 1px solid var(--border-color);';
             const keyId = 'svod_key_' + (platformKey || '').replace(/\W/g, '_') + '_' + Math.random().toString(36).slice(2, 8);
             const adId = 'svod_ad_' + keyId;
             const premId = 'svod_prem_' + keyId;
@@ -6318,6 +6318,10 @@
                     <span>Premium $/mo</span>
                     <input type="number" step="0.01" min="0" id="${premId}" value="${premium != null && premium !== '' ? Number(premium) : ''}" placeholder="11.99" style="width: 5rem; padding: 0.35rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" title="Monthly price per subscriber">
                 </label>
+                <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
+                    <span>Ad tier launched</span>
+                    <input type="text" class="svod-ad-launch" value="${adLaunch != null && adLaunch !== '' ? String(adLaunch).replace(/"/g, '&quot;') : ''}" placeholder="2022-11-03" style="width: 7rem; padding: 0.35rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary);" title="Date the ad-supported tier launched (YYYY-MM-DD). Ad-supported revenue is suppressed for analysis windows that end before this date.">
+                </label>
                 <button type="button" class="btn btn-small" onclick="this.closest('.svod-pricing-row').remove()" style="background: rgba(239,68,68,0.2); color: #ef4444;">Remove</button>
             `;
             return div;
@@ -6328,7 +6332,7 @@
             if (!listEl) return;
             const first = listEl.querySelector('.svod-pricing-row');
             if (first && listEl.querySelector('p')) listEl.innerHTML = '';
-            listEl.appendChild(createSvodPricingRow('', '', ''));
+            listEl.appendChild(createSvodPricingRow('', '', '', ''));
         }
         
         async function saveSvodPricing() {
@@ -6343,7 +6347,9 @@
                 if (!key) return;
                 const ad = numInputs[0] && numInputs[0].value !== '' ? parseFloat(numInputs[0].value) : null;
                 const prem = numInputs[1] && numInputs[1].value !== '' ? parseFloat(numInputs[1].value) : null;
-                pricing[key] = { ad_supported: ad, premium: prem };
+                const launchInput = row.querySelector('.svod-ad-launch');
+                const launch = launchInput && launchInput.value.trim() !== '' ? launchInput.value.trim() : null;
+                pricing[key] = { ad_supported: ad, premium: prem, ad_launch_date: launch };
             });
             try {
                 const res = await fetch('/api/settings/svod-pricing', {

@@ -104424,6 +104424,15 @@ https://www.instagram.com/p/..."></textarea>
                 ? (parse_number(attributedSignupsGenPop) || attributedSignups)
                 : attributedSignups;
             const hasPricing = (pricing.ad_supported != null && pricing.ad_supported !== '') || (pricing.premium != null && pricing.premium !== '');
+            // Ad-supported tier timing gate: suppress ad-supported revenue
+            // when the platform's ad tier launched after this analysis window.
+            const _adLaunch = pricing.ad_launch_date || '';
+            const _analysisRange = (data.metadata && data.metadata.date_range) || data.date_range || '';
+            const adTierActive = _svodAdTierActiveForWindow(_adLaunch, _analysisRange);
+            const _adLaunchLabel = (function() { const d = _svodParseFlexibleDate(_adLaunch); return d ? d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : ''; })();
+            const adSuppressedNote = (!adTierActive)
+                ? `<p class="section-description" style="margin:0.25rem 0 0.75rem 0; color: var(--text-secondary); font-size:0.8rem;">⚠️ ${subscriberPlatformName || 'This platform'}&rsquo;s ad-supported tier launched ${_adLaunchLabel || 'after this window'} — after this analysis window, so ad-supported projections are omitted and the blended rate reflects Premium only.</p>`
+                : '';
             if (subscriptionRevenueContainer) {
                 if (hasPricing && signupsForRevenue > 0) {
                     const ad = Number(pricing.ad_supported) || 0;
@@ -104457,12 +104466,13 @@ https://www.instagram.com/p/..."></textarea>
                     const yearlyBlend = monthlyBlend * 12;
                     const blendedRateLabel = `$${blendedRate.toFixed(2)}/mo blended`;
                     const blendedModelText = `${formatNumber(activatedForRevenue)} new subscribers @ ${blendedRateLabel}`;
-                    const hasBlendedRow = hasActivatedRow && blendedRate > 0 && ad > 0;
+                    const hasBlendedRow = adTierActive && hasActivatedRow && blendedRate > 0 && ad > 0;
                     subscriptionRevenueContainer.innerHTML = `
                         <div class="executive-summary-card">
                             <div class="exec-summary-header">
                                 <h2 class="has-tooltip" data-tooltip="Estimated revenue from every account whose activity was driven by this show - both newly acquired subscribers and previously dormant accounts that were reactivated.">💰 Total Reactivated and Activated Accounts</h2>
                             </div>
+                            ${adSuppressedNote}
                             <div class="exec-summary-grid">
                                 <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from premium-tier subscribers (acquired + reactivated).">
                                     <div class="exec-metric-label">Premium<br>Monthly</div>
@@ -104474,7 +104484,7 @@ https://www.instagram.com/p/..."></textarea>
                                     <div class="exec-metric-value">${fmt(yearlyPrem)}</div>
                                     <div class="exec-metric-desc">${subscriberModelText} @ $${prem}/mo</div>
                                 </div>
-                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from ad-supported-tier subscribers (acquired + reactivated).">
+                                ${adTierActive ? `<div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from ad-supported-tier subscribers (acquired + reactivated).">
                                     <div class="exec-metric-label">Ad-Supported<br>Monthly</div>
                                     <div class="exec-metric-value">${fmt(monthlyAd)}</div>
                                     <div class="exec-metric-desc">${subscriberModelText} @ $${ad}/mo</div>
@@ -104483,7 +104493,7 @@ https://www.instagram.com/p/..."></textarea>
                                     <div class="exec-metric-label">Ad-Supported<br>Yearly</div>
                                     <div class="exec-metric-value">${fmt(yearlyAd)}</div>
                                     <div class="exec-metric-desc">${subscriberModelText} @ $${ad}/mo</div>
-                                </div>
+                                </div>` : ''}
                             </div>
                             ${hasActivatedRow ? `
                             <div class="exec-summary-subheader" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.08);">
@@ -104500,7 +104510,7 @@ https://www.instagram.com/p/..."></textarea>
                                     <div class="exec-metric-value">${fmt(yearlyPremAct)}</div>
                                     <div class="exec-metric-desc">${activatedModelText} @ $${prem}/mo</div>
                                 </div>
-                                <div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from ad-supported-tier NEWLY ACQUIRED subscribers only (excludes reactivations).">
+                                ${adTierActive ? `<div class="exec-summary-metric has-tooltip" data-tooltip="Monthly revenue from ad-supported-tier NEWLY ACQUIRED subscribers only (excludes reactivations).">
                                     <div class="exec-metric-label">Ad-Supported<br>Monthly</div>
                                     <div class="exec-metric-value">${fmt(monthlyAdAct)}</div>
                                     <div class="exec-metric-desc">${activatedModelText} @ $${ad}/mo</div>
@@ -104509,7 +104519,7 @@ https://www.instagram.com/p/..."></textarea>
                                     <div class="exec-metric-label">Ad-Supported<br>Yearly</div>
                                     <div class="exec-metric-value">${fmt(yearlyAdAct)}</div>
                                     <div class="exec-metric-desc">${activatedModelText} @ $${ad}/mo</div>
-                                </div>
+                                </div>` : ''}
                             </div>
                             ` : ''}
                             ${hasBlendedRow ? `
@@ -104542,6 +104552,32 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
         
+        function _svodParseFlexibleDate(s) {
+            if (!s) return null;
+            const t = String(s).trim();
+            let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+            m = t.match(/^(\d{4})-(\d{2})$/);
+            if (m) return new Date(+m[1], +m[2] - 1, 1);
+            m = t.match(/^(\d{4})$/);
+            if (m) return new Date(+m[1], 0, 1);
+            const d = new Date(t);
+            return isNaN(d.getTime()) ? null : d;
+        }
+        function _svodWindowEndDate(range) {
+            if (!range) return null;
+            const parts = String(range).split(/\s+to\s+/i);
+            return _svodParseFlexibleDate(parts[parts.length - 1]);
+        }
+        // Returns false ONLY when the ad tier launched after the analysis window
+        // ended (so projecting ad-supported revenue would be anachronistic).
+        function _svodAdTierActiveForWindow(adLaunch, analysisRange) {
+            const ld = _svodParseFlexibleDate(adLaunch);
+            if (!ld) return true;
+            const end = _svodWindowEndDate(analysisRange);
+            if (!end) return true;
+            return ld <= end;
+        }
         function parse_number(s) {
             if (s == null || s === '') return null;
             if (typeof s === 'number' && !isNaN(s)) return s;
