@@ -59304,7 +59304,12 @@ https://www.instagram.com/p/..."></textarea>
         // Collapsed circular launcher + expandable chat widget, both draggable.
         // Positions, size, and open-state persist per device in localStorage.
         (function() {
-            var LKEY = 'prometheusLauncherPos', WKEY = 'prometheusWidgetPos',
+            // v2 position keys (2026-08-21 Jenna): the default position
+            // is ALWAYS the bottom right corner; only an explicit user
+            // drag persists a position. v1 keys (including legacy pixel
+            // saves) are wiped on init so every device resets to the
+            // corner once.
+            var LKEY = 'prometheusLauncherPos2', WKEY = 'prometheusWidgetPos2',
                 OKEY = 'prometheusOpen', SKEY = 'prometheusWidgetSize';
             function _el(id) { return document.getElementById(id); }
             // Dynamic anchoring (2026-08-21 Jenna: "placement should be
@@ -59345,17 +59350,12 @@ https://www.instagram.com/p/..."></textarea>
                 var fx, fy;
                 if (typeof p.fx === 'number' && typeof p.fy === 'number') {
                     fx = p.fx; fy = p.fy;
-                } else if (typeof p.x === 'number' && typeof p.y === 'number') {
-                    // Legacy absolute-pixel save: convert once.
-                    fx = a.w > 0 ? (p.x - PM_MARGIN) / a.w : 1;
-                    fy = a.h > 0 ? (p.y - PM_MARGIN) / a.h : 1;
                 } else { return; }
                 fx = Math.min(1, Math.max(0, fx));
                 fy = Math.min(1, Math.max(0, fy));
                 el.style.left = Math.round(PM_MARGIN + fx * a.w) + 'px';
                 el.style.top = Math.round(PM_MARGIN + fy * a.h) + 'px';
                 el.style.right = 'auto'; el.style.bottom = 'auto';
-                if (typeof p.fx !== 'number') _savePos(el, key);
             }
             // Pointer-drag helper. A press that travels under 6px counts as a
             // tap (onTap); anything further moves the element.
@@ -59433,7 +59433,20 @@ https://www.instagram.com/p/..."></textarea>
                         localStorage.setItem(SKEY, JSON.stringify(
                             { w: el.offsetWidth, h: el.offsetHeight }));
                     } catch (_) {}
-                    _savePos(el, WKEY);
+                    // Resizing is not moving (2026-08-21 Jenna: default
+                    // stays bottom right unless the user MOVES it).
+                    // Persist position only when a drag already saved
+                    // one; otherwise re-glue the widget to the corner
+                    // at its new size.
+                    var hasDragPos = null;
+                    try { hasDragPos = localStorage.getItem(WKEY); } catch (_) {}
+                    if (hasDragPos) {
+                        _savePos(el, WKEY);
+                        _applyPos(el, WKEY);
+                    } else {
+                        el.style.left = 'auto'; el.style.top = 'auto';
+                        el.style.right = '22px'; el.style.bottom = '22px';
+                    }
                 }
                 var hs = el.querySelectorAll('.pm-rs');
                 for (var i = 0; i < hs.length; i++) {
@@ -59468,6 +59481,12 @@ https://www.instagram.com/p/..."></textarea>
             function _initPrometheus() {
                 var l = _el('prometheusLauncher'), w = _el('prometheusWidget');
                 if (!l || !w) return;
+                // One-time reset to the bottom-right default: drop any
+                // v1 position saves (absolute-pixel era).
+                try {
+                    localStorage.removeItem('prometheusLauncherPos');
+                    localStorage.removeItem('prometheusWidgetPos');
+                } catch (_) {}
                 try {
                     var s = JSON.parse(localStorage.getItem(SKEY) || 'null');
                     if (s && s.w >= 360 && s.h >= 440) {
