@@ -52218,19 +52218,29 @@ https://www.instagram.com/p/..."></textarea>
         // 2026-08-21: FAST panel mode toggle (Titles vs Channel
         // Ranker). Mode is a single global setting shared across
         // platforms - flipping to Channel Ranker on Roku keeps
-        // Channel Ranker active when you switch to Tubi. We call
-        // _renderTIQPanel directly to force a re-render of the FAST
-        // panel body since the mode changes what's inside, not just
-        // an active class.
+        // Channel Ranker active when you switch to Tubi.
+        //
+        // Bugfix 2026-08-21 (Jenna: "nothing happens when I click
+        // channel ranker"): the original impl called
+        // `_renderTIQPanel('fast', ...)` which is a pure string
+        // builder - the returned HTML was thrown away and the DOM
+        // never repainted. We now locate the live `[data-tiq-panel
+        // ="fast"]` container and replace its innerHTML directly.
+        // Preserves the outer panel wrapper (which carries the
+        // active-tab class) and only swaps the panel body.
         window.setTrendsIQFastMode = function(mode) {
             if (mode !== 'titles' && mode !== 'channels') return;
             window.__trendsIQ.activeFastMode = mode;
             var fast = (window.__trendsIQ.lastData &&
                          window.__trendsIQ.lastData.cards &&
                          window.__trendsIQ.lastData.cards.fast_trending) || {};
-            if (typeof _renderTIQPanel === 'function' &&
-                typeof renderTIQFast === 'function') {
-                _renderTIQPanel('fast', renderTIQFast(fast));
+            var panel = document.querySelector(
+                '#trendsIQPanels [data-tiq-panel="fast"]');
+            if (panel && typeof renderTIQFast === 'function') {
+                panel.innerHTML = renderTIQFast(fast);
+                if (typeof _tiqApplyTooltips === 'function') {
+                    _tiqApplyTooltips();
+                }
             }
             if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
         };
