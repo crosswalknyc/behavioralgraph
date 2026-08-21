@@ -21150,11 +21150,25 @@ https://www.instagram.com/p/..."></textarea>
             position: fixed; right: 22px; bottom: 22px; width: 58px; height: 58px;
             border-radius: 50%; background: #15252A; border: 1px solid #27393D;
             display: none; align-items: center; justify-content: center;
-            cursor: grab; z-index: 99000; box-shadow: 0 6px 22px rgba(0,0,0,0.45);
+            cursor: grab; z-index: 99000;
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.30),
+                        0 0 16px 4px rgba(255,255,255,0.35),
+                        0 6px 22px rgba(0,0,0,0.45);
             touch-action: none; user-select: none; -webkit-user-select: none;
             transition: background 120ms ease-out;
         }
-        #prometheusLauncher.pm-on { display: flex; }
+        #prometheusLauncher.pm-on {
+            display: flex;
+            animation: pmGlowPulse 2.6s ease-in-out infinite;
+        }
+        @keyframes pmGlowPulse {
+            0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,0.28),
+                                   0 0 14px 3px rgba(255,255,255,0.30),
+                                   0 6px 22px rgba(0,0,0,0.45); }
+            50% { box-shadow: 0 0 0 2px rgba(255,255,255,0.55),
+                              0 0 28px 9px rgba(255,255,255,0.55),
+                              0 6px 22px rgba(0,0,0,0.45); }
+        }
         #prometheusLauncher:hover { background: #1B2F35; }
         #prometheusLauncher:active { cursor: grabbing; }
         #prometheusLauncher:focus-visible { outline: 2px solid #3358FF; outline-offset: 2px; }
@@ -21167,15 +21181,30 @@ https://www.instagram.com/p/..."></textarea>
             height: min(660px, calc(100vh - 44px));
             min-width: 360px; min-height: 440px; max-width: 94vw; max-height: 94vh;
             background: #0C1618; border: 1px solid #27393D; border-radius: 14px;
-            box-shadow: 0 14px 44px rgba(0,0,0,0.55);
+            box-shadow: 0 0 0 1px rgba(255,255,255,0.30),
+                        0 0 22px 5px rgba(255,255,255,0.32),
+                        0 14px 44px rgba(0,0,0,0.55);
             display: none; flex-direction: column; overflow: hidden;
             z-index: 99000;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
-        #prometheusWidget.pm-on { display: flex; animation: pmEnter 320ms cubic-bezier(0.16, 1, 0.3, 1); }
+        #prometheusWidget.pm-on {
+            display: flex;
+            animation: pmEnter 320ms cubic-bezier(0.16, 1, 0.3, 1),
+                       pmGlowPulseW 3s ease-in-out 320ms infinite;
+        }
         @keyframes pmEnter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pmGlowPulseW {
+            0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,0.28),
+                                   0 0 18px 4px rgba(255,255,255,0.26),
+                                   0 14px 44px rgba(0,0,0,0.55); }
+            50% { box-shadow: 0 0 0 2px rgba(255,255,255,0.50),
+                              0 0 34px 10px rgba(255,255,255,0.45),
+                              0 14px 44px rgba(0,0,0,0.55); }
+        }
         @media (prefers-reduced-motion: reduce) {
             #prometheusWidget.pm-on { animation: pmFade 200ms ease-out; }
+            #prometheusLauncher.pm-on { animation: none; }
         }
         @keyframes pmFade { from { opacity: 0; } to { opacity: 1; } }
         #prometheusHeader {
@@ -59278,27 +59307,55 @@ https://www.instagram.com/p/..."></textarea>
             var LKEY = 'prometheusLauncherPos', WKEY = 'prometheusWidgetPos',
                 OKEY = 'prometheusOpen', SKEY = 'prometheusWidgetSize';
             function _el(id) { return document.getElementById(id); }
-            function _clampToViewport(el) {
-                var r = el.getBoundingClientRect();
-                var x = Math.min(Math.max(r.left, 8), Math.max(8, window.innerWidth - r.width - 8));
-                var y = Math.min(Math.max(r.top, 8), Math.max(8, window.innerHeight - r.height - 8));
-                el.style.left = x + 'px'; el.style.top = y + 'px';
-                el.style.right = 'auto'; el.style.bottom = 'auto';
-            }
-            function _restorePos(el, key) {
-                try {
-                    var p = JSON.parse(localStorage.getItem(key) || 'null');
-                    if (p && typeof p.x === 'number' && typeof p.y === 'number') {
-                        el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
-                        el.style.right = 'auto'; el.style.bottom = 'auto';
-                    }
-                } catch (_) {}
+            // Dynamic anchoring (2026-08-21 Jenna: "placement should be
+            // dynamic and if you drag your window bigger/smaller it
+            // should move with that"). Positions persist as FRACTIONS of
+            // the available viewport space, not absolute pixels: an
+            // element parked in a corner stays glued to that corner at
+            // any window size, and one parked mid-edge scales
+            // proportionally. Fractions are clamped to [0,1] so an
+            // applied position is always fully in-viewport.
+            var PM_MARGIN = 8;
+            function _availSpace(r) {
+                return {
+                    w: Math.max(0, window.innerWidth - r.width - PM_MARGIN * 2),
+                    h: Math.max(0, window.innerHeight - r.height - PM_MARGIN * 2)
+                };
             }
             function _savePos(el, key) {
                 try {
                     var r = el.getBoundingClientRect();
-                    localStorage.setItem(key, JSON.stringify({ x: r.left, y: r.top }));
+                    var a = _availSpace(r);
+                    var fx = a.w > 0 ? (r.left - PM_MARGIN) / a.w : 1;
+                    var fy = a.h > 0 ? (r.top - PM_MARGIN) / a.h : 1;
+                    fx = Math.min(1, Math.max(0, fx));
+                    fy = Math.min(1, Math.max(0, fy));
+                    localStorage.setItem(key, JSON.stringify({ fx: fx, fy: fy }));
                 } catch (_) {}
+            }
+            // Apply the saved fractional position for the current window
+            // size. No-op when nothing was ever saved: the default CSS
+            // right/bottom anchoring already tracks the window natively.
+            function _applyPos(el, key) {
+                var p = null;
+                try { p = JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) {}
+                if (!p) return;
+                var r = el.getBoundingClientRect();
+                var a = _availSpace(r);
+                var fx, fy;
+                if (typeof p.fx === 'number' && typeof p.fy === 'number') {
+                    fx = p.fx; fy = p.fy;
+                } else if (typeof p.x === 'number' && typeof p.y === 'number') {
+                    // Legacy absolute-pixel save: convert once.
+                    fx = a.w > 0 ? (p.x - PM_MARGIN) / a.w : 1;
+                    fy = a.h > 0 ? (p.y - PM_MARGIN) / a.h : 1;
+                } else { return; }
+                fx = Math.min(1, Math.max(0, fx));
+                fy = Math.min(1, Math.max(0, fy));
+                el.style.left = Math.round(PM_MARGIN + fx * a.w) + 'px';
+                el.style.top = Math.round(PM_MARGIN + fy * a.h) + 'px';
+                el.style.right = 'auto'; el.style.bottom = 'auto';
+                if (typeof p.fx !== 'number') _savePos(el, key);
             }
             // Pointer-drag helper. A press that travels under 6px counts as a
             // tap (onTap); anything further moves the element.
@@ -59325,7 +59382,7 @@ https://www.instagram.com/p/..."></textarea>
                     if (pid === null || ev.pointerId !== pid) return;
                     try { handle.releasePointerCapture(pid); } catch (_) {}
                     pid = null;
-                    if (moved) { _clampToViewport(el); _savePos(el, key); }
+                    if (moved) { _savePos(el, key); _applyPos(el, key); }
                     else if (onTap) { onTap(); }
                 }
                 handle.addEventListener('pointerup', _end);
@@ -59394,8 +59451,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (l) l.classList.remove('pm-on');
                 if (!w.classList.contains('pm-on')) {
                     w.classList.add('pm-on');
-                    _restorePos(w, WKEY);
-                    _clampToViewport(w);
+                    _applyPos(w, WKEY);
                 }
                 try { localStorage.setItem(OKEY, '1'); } catch (_) {}
                 if (typeof synthChatInit === 'function') synthChatInit();
@@ -59406,7 +59462,7 @@ https://www.instagram.com/p/..."></textarea>
             window.prometheusCollapse = function() {
                 var l = _el('prometheusLauncher'), w = _el('prometheusWidget');
                 if (w) w.classList.remove('pm-on');
-                if (l) { l.classList.add('pm-on'); _clampToViewport(l); }
+                if (l) { l.classList.add('pm-on'); _applyPos(l, LKEY); }
                 try { localStorage.setItem(OKEY, '0'); } catch (_) {}
             };
             function _initPrometheus() {
@@ -59418,7 +59474,7 @@ https://www.instagram.com/p/..."></textarea>
                         w.style.width = s.w + 'px'; w.style.height = s.h + 'px';
                     }
                 } catch (_) {}
-                _restorePos(l, LKEY);
+                _applyPos(l, LKEY);
                 _makeDraggable(l, l, LKEY, function() { window.prometheusExpand(); });
                 _makeDraggable(w, _el('prometheusHeader') || w, WKEY, null);
                 _makeResizable(w);
@@ -59430,10 +59486,13 @@ https://www.instagram.com/p/..."></textarea>
                 var open = null;
                 try { open = localStorage.getItem(OKEY); } catch (_) {}
                 if (open === '1') { window.prometheusExpand(); }
-                else { l.classList.add('pm-on'); _clampToViewport(l); }
+                else { l.classList.add('pm-on'); _applyPos(l, LKEY); }
+                // Reposition on every window resize so the widget and
+                // launcher track their anchor as the window grows or
+                // shrinks (fractional anchoring above).
                 window.addEventListener('resize', function() {
-                    if (l.classList.contains('pm-on')) _clampToViewport(l);
-                    if (w.classList.contains('pm-on')) _clampToViewport(w);
+                    if (l.classList.contains('pm-on')) _applyPos(l, LKEY);
+                    if (w.classList.contains('pm-on')) _applyPos(w, WKEY);
                 });
                 if (window.ResizeObserver) {
                     var _rt = null;
