@@ -136358,6 +136358,23 @@ https://www.instagram.com/p/..."></textarea>
                 // intended "reba" -> "reba mcentire" collapse because
                 // "mcentire" is not a region qualifier.
                 if (_isRegionQualifierExtension(stub, target)) return;
+                // 2026-08-20: a stub group that contains its own BASE/TU
+                // file is a real standalone subject, not a shortened
+                // cohort alias. "Fandango" (the ticketing service, with
+                // its own TU + Avid) was folding into "Fandango At Home"
+                // and "YouTube" into "YouTube TV", so those profiles'
+                // Data Cuts popovers showed a second identical
+                // "2025 AVID" row belonging to a different product. The
+                // intended collapse (Reba_4Plus -> "reba" -> "reba
+                // mcentire") only ever involves cohort-suffixed stubs,
+                // so requiring the stub group to be cohort-only keeps
+                // that behavior intact.
+                const stubHasBaseFile = (bySubject[stub] || []).some(p => {
+                    try {
+                        return getProfileSuffixInfo(p).suffixType === 'none';
+                    } catch (_) { return false; }
+                });
+                if (stubHasBaseFile) return;
                 bySubject[target] = bySubject[target].concat(bySubject[stub]);
                 delete bySubject[stub];
                 // displayNames[target] is already the longer canonical
