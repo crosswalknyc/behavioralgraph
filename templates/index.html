@@ -60485,7 +60485,236 @@ https://www.instagram.com/p/..."></textarea>
             return false;
         }
 
-        async function _pmAnalyze(text, ctx) {
+        // ===================== ANALYSIS MODE MENU (2026-08-21) =====================
+        // Jenna: "if you click analyze it should give you chips under
+        // with things it could analyze for. like exec summary of the
+        // data, create a persona(s), find the whitespace in a market,
+        // identify new consumers" plus cross-profile convergence hunts
+        // that compare across open tabs or pull in other profiles.
+        var _pmCompareArmed = false;
+        var _pmCompareCandidates = null;
+
+        function _pmIsAnalyzeMenuAsk(text) {
+            return /^analy[sz]e (this|the) (data|open profile|profile)[.!]?$/i
+                .test(String(text || '').trim());
+        }
+
+        function _pmIsOpenTabsCompareAsk(text) {
+            var t = String(text || '').trim();
+            return /^compare\b/i.test(t) && /\b(open|tabs)\b/i.test(t) &&
+                !/\bselected cuts\b/i.test(t);
+        }
+
+        function _pmIsCompareOthersAsk(text) {
+            return /^compare (this |it )?(against|vs\.?|with|to) other (profiles?|data|audiences?)[.!?]?$/i
+                .test(String(text || '').trim());
+        }
+
+        // Map a message to an analysis mode the backend has tailored
+        // instructions for. Explicit mode args win over this.
+        function _pmModeForText(text) {
+            var t = String(text || '');
+            if (/\bexec(utive)? summary\b/i.test(t)) return 'exec_summary';
+            if (/\bwhite\s?space\b/i.test(t)) return 'whitespace';
+            if (/\bnew (consumers?|customers?|buyers?)\b/i.test(t)) return 'new_consumers';
+            if (/\bpersonas?\b/i.test(t)) return 'personas';
+            if (/\b(easter eggs?|surprising|unexpected|convergences?)\b/i.test(t)) return 'easter_eggs';
+            if (/\bfull read\b/i.test(t)) return 'full';
+            return null;
+        }
+
+        // Other profiles open as dashboard tabs (beyond the active one).
+        function _pmOtherOpenTabs(ctx) {
+            var out = [];
+            try {
+                var pk = ctx && ctx.primary && ctx.primary.s3_key;
+                var tabs = (typeof openProfileTabs !== 'undefined' && openProfileTabs) || [];
+                tabs.forEach(function(t) {
+                    if (!t || !t.id || t.id === pk) return;
+                    out.push({ s3_key: t.id, name: t.name || t.id });
+                });
+            } catch (_) {}
+            return out.slice(0, 3);
+        }
+
+        function _pmShowAnalyzeMenu(ctx) {
+            if (!ctx) {
+                synthChatPushTurn('agent',
+                    'Nothing is open to analyze yet. Open a profile from ' +
+                    'Select Profile (and check any Data Cuts you want ' +
+                    'included), then ask me again.');
+                return;
+            }
+            var opts = [
+                { label: 'Exec summary', send: 'Give me an exec summary of this data' },
+                { label: 'Build personas', send: 'Create personas from this audience' },
+                { label: 'Find market whitespace', send: 'Find the market whitespace for this audience' },
+                { label: 'Identify new consumers', send: 'Identify new consumers this brand should go get' },
+                { label: 'Surprising convergences', send: 'Surface the surprising convergences hiding in this data' }
+            ];
+            var tabs = _pmOtherOpenTabs(ctx);
+            if (tabs.length) {
+                opts.push({ label: 'Compare my open tabs',
+                            send: 'Compare the profiles I have open in tabs' });
+            }
+            if (ctx.cuts && ctx.cuts.length) {
+                opts.push({ label: 'Compare the checked cuts',
+                            send: 'Compare the selected cuts against the base profile' });
+            }
+            opts.push({ label: 'Compare vs another profile',
+                        send: 'Compare this against other profiles' });
+            opts.push({ label: 'Full read', send: 'Give me the full read on this data' });
+            var name = (ctx.primary && ctx.primary.name) || 'the open profile';
+            var lead = 'I have ' + name + ' on screen';
+            if (ctx.cuts && ctx.cuts.length) {
+                lead += ' with ' + ctx.cuts.length + ' cut' +
+                    (ctx.cuts.length > 1 ? 's' : '') + ' checked';
+            }
+            if (tabs.length) {
+                lead += ', plus ' + tabs.length + ' other open tab' +
+                    (tabs.length > 1 ? 's' : '');
+            }
+            lead += '. What should I dig into? Tap one, or type your own question.';
+            _synthChatPushTurnWithMeta('agent', lead, { options: opts });
+        }
+
+        async function _pmCompareOpenTabs(text, ctx) {
+            if (!ctx) {
+                synthChatPushTurn('agent',
+                    'Nothing is open to analyze yet. Open a profile from ' +
+                    'Select Profile, then ask me again.');
+                return;
+            }
+            var tabs = _pmOtherOpenTabs(ctx);
+            if (!tabs.length) {
+                _pmShowComparePicker(ctx);
+                return;
+            }
+            var ctx2 = { view: ctx.view, primary: ctx.primary,
+                         cuts: ctx.cuts, extras: tabs };
+            var names = tabs.map(function(t) { return t.name; }).join(' and ');
+            await _pmAnalyze(
+                'Compare ' + ((ctx.primary && ctx.primary.name) || 'the open profile') +
+                ' against ' + names +
+                ' for convergences, whitespace between the audiences, and shared consumers.',
+                ctx2, 'cross_profile');
+        }
+
+        function _pmShowComparePicker(ctx) {
+            if (!ctx) {
+                synthChatPushTurn('agent',
+                    'Nothing is open to analyze yet. Open a profile from ' +
+                    'Select Profile, then ask me again.');
+                return;
+            }
+            var jobs = [];
+            try {
+                var cached = (typeof getSessionJobsCache === 'function')
+                    ? getSessionJobsCache() : null;
+                jobs = (cached && cached.jobs) || [];
+            } catch (_) {}
+            var pk = ctx.primary && ctx.primary.s3_key;
+            var cutKeys = {};
+            (ctx.cuts || []).forEach(function(c) { cutKeys[c.s3_key] = 1; });
+            var candidates = [];
+            jobs.forEach(function(j) {
+                var k = j && (j.s3_key || j.job_id);
+                var nm = j && (j.display_name || j.name);
+                if (!k || !nm || k === pk || cutKeys[k]) return;
+                candidates.push({ s3_key: k, name: nm });
+            });
+            if (!candidates.length) {
+                synthChatPushTurn('agent',
+                    'I could not find any other profiles in your list to ' +
+                    'compare against. Reload the Select Profile dropdown ' +
+                    'and try again.');
+                return;
+            }
+            _pmCompareCandidates = candidates;
+            _pmCompareArmed = true;
+            var opts = candidates.slice(0, 6).map(function(c) {
+                return { label: c.name, send: 'Compare with: ' + c.name };
+            });
+            _synthChatPushTurnWithMeta('agent',
+                'Which profile should I bring in? Tap one, or type ' +
+                '"compare with NAME" (up to 3 names, comma separated). ' +
+                'I will hunt for convergences, whitespace, and shared ' +
+                'consumers between the audiences.',
+                { options: opts });
+        }
+
+        // Resolve a compare reply while the picker is armed. Returns
+        // true when the message was consumed here.
+        async function _pmHandleCompareReply(text, ctx) {
+            var t = String(text || '').trim();
+            var looksCompare = /^compare with\b/i.test(t);
+            // Rebuild candidates if the armed state was lost (e.g. a
+            // page reload between the picker and the click).
+            if (!_pmCompareCandidates || !_pmCompareCandidates.length) {
+                try {
+                    var _cached = (typeof getSessionJobsCache === 'function')
+                        ? getSessionJobsCache() : null;
+                    _pmCompareCandidates = ((_cached && _cached.jobs) || [])
+                        .map(function(j) {
+                            return { s3_key: j.s3_key || j.job_id,
+                                     name: j.display_name || j.name };
+                        })
+                        .filter(function(c) { return c.s3_key && c.name; });
+                } catch (_) { _pmCompareCandidates = []; }
+            }
+            var raw = looksCompare
+                ? t.replace(/^compare with[:\s]+/i, '') : t;
+            var names = raw.split(/\s*(?:,|\band\b|&)\s*/i)
+                .map(function(s) { return s.trim(); })
+                .filter(Boolean).slice(0, 3);
+            var found = [];
+            var cands = _pmCompareCandidates || [];
+            names.forEach(function(n) {
+                var nl = n.toLowerCase();
+                var hit = null;
+                for (var i = 0; i < cands.length; i++) {
+                    var cl = String(cands[i].name || '').toLowerCase();
+                    if (cl === nl) { hit = cands[i]; break; }
+                    if (!hit && (cl.indexOf(nl) !== -1 || nl.indexOf(cl) !== -1)) hit = cands[i];
+                }
+                if (hit && found.indexOf(hit) === -1) found.push(hit);
+            });
+            if (found.length && ctx) {
+                _pmCompareArmed = false;
+                _pmCompareCandidates = null;
+                var ctx2 = { view: ctx.view, primary: ctx.primary,
+                             cuts: ctx.cuts, extras: found.slice(0, 3) };
+                var fnames = found.map(function(f) { return f.name; }).join(' and ');
+                await _pmAnalyze(
+                    'Compare ' + ((ctx.primary && ctx.primary.name) || 'the open profile') +
+                    ' against ' + fnames +
+                    ' for convergences, whitespace between the audiences, and shared consumers.',
+                    ctx2, 'cross_profile');
+                return true;
+            }
+            if (looksCompare) {
+                var close = cands.filter(function(c) {
+                    var cl = String(c.name || '').toLowerCase();
+                    return names.some(function(n) {
+                        return cl.indexOf(n.toLowerCase().slice(0, 4)) !== -1;
+                    });
+                }).slice(0, 4);
+                var opts = (close.length ? close : cands.slice(0, 4)).map(function(c) {
+                    return { label: c.name, send: 'Compare with: ' + c.name };
+                });
+                _synthChatPushTurnWithMeta('agent',
+                    'I could not match that name to a profile in your ' +
+                    'list. Closest options:', { options: opts });
+                return true;
+            }
+            // User moved on to something else: disarm and let the
+            // normal routing handle the message.
+            _pmCompareArmed = false;
+            _pmCompareCandidates = null;
+            return false;
+        }
+
+        async function _pmAnalyze(text, ctx, mode) {
             if (!ctx) {
                 synthChatPushTurn('agent',
                     'Nothing is open to analyze yet. Open a profile from ' +
@@ -60501,7 +60730,8 @@ https://www.instagram.com/p/..."></textarea>
                 var _fr = await _synthChatFetchJson('/api/brief-chat/analyze', {
                     text: text,
                     page_context: ctx,
-                    history: synthChatHistory.slice(0, -1).slice(-12)
+                    history: synthChatHistory.slice(0, -1).slice(-12),
+                    mode: mode || _pmModeForText(text) || ''
                 });
                 var data = _fr.data;
                 if (!data || !_fr.r.ok || !data.success) {
@@ -60768,6 +60998,30 @@ https://www.instagram.com/p/..."></textarea>
                 return;
             }
             var _pmCtx = _pmCollectPageContext();
+            // Analysis mode menu (2026-08-21 Jenna): the bare "Analyze
+            // this data" chip opens a menu of analysis modes instead of
+            // firing one generic read. Specific asks still flow straight
+            // through.
+            if (_pmIsAnalyzeMenuAsk(text)) {
+                _pmShowAnalyzeMenu(_pmCtx);
+                return;
+            }
+            if (_pmCompareArmed || /^compare with[:\s]/i.test(text)) {
+                if (await _pmHandleCompareReply(text, _pmCtx)) return;
+            }
+            if (_pmIsOpenTabsCompareAsk(text)) {
+                await _pmCompareOpenTabs(text, _pmCtx);
+                return;
+            }
+            if (_pmIsCompareOthersAsk(text)) {
+                _pmShowComparePicker(_pmCtx);
+                return;
+            }
+            var _pmMode = _pmModeForText(text);
+            if (_pmMode && _pmCtx) {
+                var _pmOutcomeM = await _pmAnalyze(text, _pmCtx, _pmMode);
+                if (_pmOutcomeM !== 'reroute') return;
+            }
             if (_pmShouldAnalyze(text, _pmCtx)) {
                 var _pmOutcome = await _pmAnalyze(text, _pmCtx);
                 if (_pmOutcome !== 'reroute') return;

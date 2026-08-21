@@ -323,6 +323,31 @@ def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
         except Exception as e:
             parts.append(f"CUT: {cut.get('name') or c_key} "
                          f"(failed to load: {e})")
+    # Comparison profiles (2026-08-21): independent audiences pulled in
+    # for cross-profile convergence / whitespace hunts (other open tabs
+    # or picker selections). Full digest each, same cache as primary.
+    for ex in (page_context.get('extras') or [])[:3]:
+        e_key = ex.get('s3_key')
+        if not e_key or e_key == p_key:
+            continue
+        try:
+            e_df, e_etag = load_profile_df(s3_client, bucket, e_key)
+            e_meta = _profile_meta(e_df, ex.get('name'))
+            with _cache_lock:
+                e_cached = _digest_cache.get(e_key)
+            if e_cached and e_cached[0] == e_etag:
+                e_digest = e_cached[2]
+            else:
+                e_digest = build_profile_digest(e_df, e_meta, genpop)
+                with _cache_lock:
+                    _digest_cache[e_key] = (e_etag, time.time(),
+                                            e_digest, e_meta)
+            parts.append(
+                "COMPARISON PROFILE (independent audience, NOT a cut of "
+                "the primary; shares do not sum with it):\n" + e_digest)
+        except Exception as e:
+            parts.append(f"COMPARISON PROFILE: {ex.get('name') or e_key} "
+                         f"(failed to load: {e})")
     return '\n\n'.join(parts), p_meta
 
 
@@ -341,9 +366,15 @@ THE DATA
 
 WHAT USERS ASK YOU (handle all of these)
 - Summarize: what stands out, who this audience is, the 3 to 5 non-obvious signals.
+- Exec summary: the 60-second CMO read - who, where, what, the sharpest numbers, one action.
+- Personas: distinct marketing personas carved from the demo splits and behavioral over-indexes, each with reach channels and a message hook.
+- Whitespace: where the market gap is - fragmented categories with no owner, conquest targets weak here but big in gen pop, under-served demo or geo pockets, unoccupied partnership slots.
+- New consumers: segments the brand does not currently own but shows appetite signals for, lookalike pools inside co-consumed brands, and the entry message per segment.
+- Easter eggs: surprising convergences - brand and behavior pairs that co-occur far above what the demo shape predicts, with the receipts.
 - Monetization: how to make money with the audience, which brand categories to sell against, sponsorship and partnership targets, what a media seller should pitch and to whom.
 - Pitch prep: the story a seller should walk into a specific brand meeting with, framed as finding then number.
 - Cut comparison: what actually separates the cuts from the parent and from each other, and what to do with that.
+- Cross-profile comparison: when the digest carries COMPARISON PROFILE blocks, these are INDEPENDENT audiences (other open tabs or picked profiles), not cuts. Find convergence (strong in both), whitespace (strong in one, weak in the other, both directions), and the positioning play. Show numbers side by side; never treat shares as summing across profiles.
 - Media planning: where to reach them (platforms, streaming, social, retail media), what over-indexes enough to matter.
 - Audience strategy: gaps worth a NEW profile pull to validate (you can route that, see ACTIONS).
 - Metric explanations: define penetration, index, projection, sample plainly if asked.
@@ -397,7 +428,79 @@ Return strict JSON only:
 }"""
 
 
-def build_analysis_user_prompt(digest_bundle, history, user_message):
+# Tailored instruction blocks per analysis mode (2026-08-21 Jenna:
+# analyze chips - exec summary, personas, whitespace, new consumers,
+# easter-egg convergences, cross-profile). The mode rides in from the
+# frontend chip; free-text asks map by keyword. Every mode is still
+# bound by the system prompt: digest numbers are the only evidence.
+MODE_INSTRUCTIONS = {
+    'exec_summary': (
+        "EXEC SUMMARY MODE. Produce a summary a CMO reads in 60 seconds. "
+        "Sections: WHO (audience size, projection, demo shape in one "
+        "breath), WHERE THEY LIVE (top platforms and media with idx), "
+        "WHAT THEY BUY (the brand and category signals that matter), "
+        "THE 3 SHARPEST SIGNALS (highest-leverage over-indexes with "
+        "numbers), ONE GAP (the weakest read that needs attention), DO "
+        "THIS NOW (one concrete action). Keep every line anchored to a "
+        "number from the digest."),
+    'personas': (
+        "PERSONA MODE. Build 2 or 3 distinct marketing personas from the "
+        "demographic splits and behavioral over-indexes. Each persona "
+        "gets: a two-word name and one-line identity, a demo sketch "
+        "pulled from the digest (age, gender, income, geo if present), "
+        "3 or 4 behaviors with the numbers that prove them, the brands "
+        "they already buy, where to reach them (platforms with idx), "
+        "and one message hook in their language. Personas must carve up "
+        "the audience, not restate it three times. Close with which "
+        "persona to prioritize first and why."),
+    'whitespace': (
+        "WHITESPACE MODE. The user is hunting for market whitespace "
+        "this audience opens up. Look for: categories where the "
+        "audience over-indexes but penetrations are fragmented across "
+        "brands (no owner), brands big in gen pop but weak here "
+        "(conquest targets), demo or geo pockets the category leaders "
+        "under-serve, and partnership or sponsorship slots nobody "
+        "occupies. Every whitespace claim needs the numbers that prove "
+        "the gap (their reach here vs gen pop, or leader vs field). "
+        "Rank the 3 best plays by size of prize and say who should "
+        "move on each."),
+    'new_consumers': (
+        "NEW CONSUMER MODE. The user is the brand on screen looking for "
+        "consumers they do NOT already have. From the digest: which "
+        "adjacent segments show appetite signals but weak current "
+        "engagement, which co-consumed brands' audiences are natural "
+        "lookalike pools to fish in, and what the entry message per "
+        "segment is. Separate 'grow share with people you already "
+        "reach' from 'genuinely new consumers'. Quantify each pool "
+        "where the data allows (penetration x projection)."),
+    'easter_eggs': (
+        "EASTER EGG MODE. Hunt the digest for surprising convergences: "
+        "brand or behavior pairs that co-occur far above what the demo "
+        "shape would predict, affinities with idx 250 or higher in "
+        "categories unrelated to the subject, odd geo or demo pockets, "
+        "anything a client would not believe without the number. Return "
+        "4 to 6 findings. Each: the surprise in one line, the numbers, "
+        "one hypothesis for why it is real, and how to exploit it "
+        "commercially. Skip anything obvious for this audience."),
+    'cross_profile': (
+        "CROSS-PROFILE MODE. The digest contains the primary profile "
+        "plus one or more COMPARISON PROFILE blocks. These are "
+        "independent audiences, NOT cuts; never treat their shares as "
+        "summing. Deliver three sections: CONVERGENCE (brands and "
+        "behaviors strong in both audiences, the shared-consumer "
+        "story), WHITESPACE (strong in one and weak in the other, both "
+        "directions, and who should conquest whom), and THE PLAY (the "
+        "sharpest positioning or partnership implication). Every claim "
+        "shows the numbers side by side, format 'A 44.0 vs B 12.3'."),
+    'full': (
+        "FULL READ MODE. Walk the whole digest: audience shape, media, "
+        "brands, the non-obvious signals, monetization angles, and the "
+        "single sharpest takeaway. Default length rules apply."),
+}
+
+
+def build_analysis_user_prompt(digest_bundle, history, user_message,
+                               mode=None):
     """Assemble the user prompt for one analysis call."""
     hist_lines = []
     for turn in (history or [])[-10:]:
@@ -406,6 +509,14 @@ def build_analysis_user_prompt(digest_bundle, history, user_message):
         if txt:
             hist_lines.append(f"{role}: {txt}")
     hist_block = '\n'.join(hist_lines) or '(none)'
+    mode_block = ''
+    instr = MODE_INSTRUCTIONS.get(mode or '')
+    if instr:
+        mode_block = (
+            "ANALYSIS MODE\n"
+            "=============\n"
+            f"{instr}\n\n"
+        )
     return (
         "FIRST-PARTY DATA ON SCREEN\n"
         "==========================\n"
@@ -413,6 +524,7 @@ def build_analysis_user_prompt(digest_bundle, history, user_message):
         "RECENT CONVERSATION\n"
         "===================\n"
         f"{hist_block}\n\n"
+        f"{mode_block}"
         "USER'S MESSAGE\n"
         "==============\n"
         f"{user_message}\n\n"

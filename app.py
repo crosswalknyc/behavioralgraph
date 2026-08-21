@@ -47701,9 +47701,25 @@ def _pm_validate_page_context(page_context):
             continue
         clean_cuts.append({'s3_key': ck,
                            'name': str((c or {}).get('name') or '')[:200]})
+    # Extras (2026-08-21): independent profiles pulled in for
+    # cross-profile convergence / whitespace analysis (other open tabs
+    # or picker selections). Same access gate as everything else.
+    clean_extras = []
+    seen_extra = set()
+    for c in (page_context.get('extras') or [])[:3]:
+        ck = str((c or {}).get('s3_key') or '').strip()
+        if not ck or ck == p_key or ck in seen_extra:
+            continue
+        c_ok, _c_err = _require_profile_run_access(ck)
+        if not c_ok:
+            continue
+        seen_extra.add(ck)
+        clean_extras.append({'s3_key': ck,
+                             'name': str((c or {}).get('name') or '')[:200]})
     return {'primary': {'s3_key': p_key,
                         'name': str(primary.get('name') or '')[:200]},
-            'cuts': clean_cuts}, None
+            'cuts': clean_cuts,
+            'extras': clean_extras}, None
 
 
 @app.route('/api/brief-chat/analyze', methods=['POST'])
@@ -47744,9 +47760,15 @@ def api_synth_chat_analyze():
                         'error': ('I could not load the on-screen data '
                                   f'({e}). Nothing was lost. Try again in '
                                   'a few seconds.')}), 502
-    user_prompt = pma.build_analysis_user_prompt(digest, history, text)
+    mode = str(body.get('mode') or '').strip().lower()
+    if mode not in pma.MODE_INSTRUCTIONS:
+        mode = ''
+    user_prompt = pma.build_analysis_user_prompt(digest, history, text,
+                                                 mode=mode or None)
+    _max_tok = 7500 if mode in ('cross_profile', 'personas',
+                                'whitespace') else 6000
     result = _pm_claude_json(pma.ANALYSIS_SYSTEM_PROMPT, user_prompt,
-                             max_tokens=6000, temperature=0.5)
+                             max_tokens=_max_tok, temperature=0.5)
     if not result.get('success'):
         return jsonify({'success': False,
                         'error': result.get('error', 'analysis failed')}),             result.get('status', 502)
