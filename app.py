@@ -8969,7 +8969,8 @@ the 79.4M projected base; every absolute count is the panel n times 32.99.
 
 
 def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
-                           temperature=0.4, model=None):
+                           temperature=0.4, model=None,
+                           salvage_arrays=False):
     """
     Run a single Claude reasoning pass, parse the response as a JSON object,
     and return either {'success': True, 'data': {...}, 'model': '...'} or
@@ -8978,6 +8979,12 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
     Hard-codes high reasoning ceiling (max_tokens=8192) so the agent has
     headroom for a full deck payload. Caller is expected to be inside a
     Flask handler and can do `return jsonify(result), result.get('status', 200)`.
+
+    `salvage_arrays=True` (2026-08-20): callers expecting a JSON ARRAY
+    (multi-profile interprets) get truncation recovery - when the full
+    parse fails, complete leading `{...}` elements are salvaged from
+    the cut-off array via `_salvage_json_array` instead of failing the
+    whole call. Result carries `'salvaged': True` in that case.
     """
     try:
         from claude_client import is_claude_reasoning_enabled, claude_reason_json
@@ -9008,6 +9015,13 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
                 'error': 'Reasoning request failed: {0}'.format(exc)}
 
     parsed = _extract_json_object(raw)
+    if parsed is None and salvage_arrays:
+        salvaged = _salvage_json_array(raw)
+        if salvaged:
+            print(f"[claude-agent] salvaged {len(salvaged)} complete "
+                  f"objects from truncated array ({len(raw or '')} chars)")
+            return {'success': True, 'data': salvaged,
+                    'model': chosen_model, 'salvaged': True}
     if parsed is None:
         # One self-heal retry (2026-08-20): a long chat history can
         # prime the model into prose around the JSON. Re-ask once with
@@ -9023,6 +9037,13 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
                 temperature=0.2,
             )
             parsed = _extract_json_object(raw2)
+            if parsed is None and salvage_arrays:
+                salvaged = _salvage_json_array(raw2)
+                if salvaged:
+                    print(f"[claude-agent] salvaged {len(salvaged)} "
+                          f"objects from truncated retry array")
+                    return {'success': True, 'data': salvaged,
+                            'model': chosen_model, 'salvaged': True}
         except Exception:
             parsed = None
     if parsed is None:
@@ -17550,6 +17571,63 @@ def _extract_json_object(text):
     if arr_valid:
         return _try(arr_start, arr_end)
     return None
+
+
+def _salvage_json_array(text):
+    """Recover complete objects from a TRUNCATED JSON array response.
+
+    Root cause this exists for (2026-08-20, Jenna's 5-platform batch):
+    a multi-spec interpret reply hit the max_tokens ceiling and got cut
+    mid-object, so `_extract_json_object` returned None and the whole
+    batch failed even though 3-4 complete specs were sitting in the
+    text. This walks the first top-level `[` with a string-aware
+    brace-depth scan and json.loads each complete `{...}` element
+    individually. Returns a list of dicts (possibly empty).
+    """
+    text = (text or '')
+    if '```' in text:
+        # Strip a leading fence if present; a truncated reply usually
+        # has no closing fence, so split() is enough.
+        try:
+            text = text.split('```json', 1)[1] if '```json' in text \
+                else text.split('```', 1)[1]
+        except Exception:
+            pass
+    start = text.find('[')
+    if start < 0:
+        return []
+    out = []
+    depth = 0
+    obj_start = -1
+    in_str = False
+    esc = False
+    for i in range(start + 1, len(text)):
+        ch = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == '\\':
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == '{':
+            if depth == 0:
+                obj_start = i
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0 and obj_start >= 0:
+                try:
+                    out.append(json.loads(text[obj_start:i + 1]))
+                except Exception:
+                    pass
+                obj_start = -1
+        elif ch == ']' and depth == 0:
+            break
+    return [o for o in out if isinstance(o, dict)]
 
 
 def _normalize_hf_alpha_ideas(raw_ideas):
@@ -43404,6 +43482,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"existing_match_display_name\": \"<display name of the match>\",\n"
         "  \"existing_match_days_old\": <int or null>,\n"
         "  \"derive_type\": \"<if derive_cut: avid|casual|avid_F|avid_M|casual_F|casual_M|gender_F|gender_M|generation_millennials|generation_gen_z|generation_gen_x|generation_boomer|other>\",\n"
+        "  \"cut_label\": \"<if derive_cut/cut_needs_parent: the cohort being cut, e.g. 'EST Buyers', 'TVOD Renters', 'Marvel TVOD Renters -> EST Buyers'. The deliverable is named '{parent} - {cut_label}'.>\",\n"
         "  \"refresh_row_hypothesis\": \"<if time_shifted_refresh: 3-6 sentences on what would have realistically changed for each behavioral surface (brands, talent, platforms, retail, QSR, etc.) between the parent's last_modified date and today. Cite specific events, tour dates, product launches, controversies, macro trends. NOT a generic 'things change over time' - be concrete.>\",\n"
         "  \"clickstream_signals\": [\n"
         "    {\"host\": \"amazon.com\", \"path_pattern\": \"/gp/video/detail/\", \"param_hint\": \"buy-intent ref\", \"evidence\": \"...\"}\n"
@@ -43585,7 +43664,29 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "(e.g. 'Amazon EST Buyers', 'Apple EST Buyers') - NEVER an "
         "umbrella label ('EST Buyers by Retailer') and NEVER a "
         "placeholder ('this profile', 'the audience'). A single "
-        "profile request still returns one JSON object, not an array."
+        "profile request still returns one JSON object, not an array. "
+        "The list may be sloppy - unclosed parentheses, trailing "
+        "clauses, an example tacked on the end ('like Amazon Prime "
+        "Video - EST Buyers') - parse out the real items anyway.\n"
+        "  7a. ARRAY ELEMENTS RUN THE FULL DECISION LOGIC EACH: check "
+        "CANDIDATE PROFILES for every element independently. If the "
+        "user asks for a cohort of each item as 'a cut of X if it "
+        "already exists' (or the item has an existing base profile "
+        "and the request is a behavioral/demo slice of it), that "
+        "element's decision is `derive_cut` with "
+        "`existing_match_s3_key` copied EXACTLY from CANDIDATE "
+        "PROFILES (never invent or alter a key), `cut_label` set to "
+        "the cohort (e.g. 'EST Buyers'), and `subject` = '<Parent "
+        "Display Name> - <Cut Label>' (e.g. 'Amazon Prime Video - "
+        "EST Buyers'). Elements with no existing base profile in "
+        "CANDIDATE PROFILES fall back to `new_build` with the full "
+        "combined subject. Never pick an 'Avid Fan' or other cut/skin "
+        "file as the parent - only base (Total Universe) profiles.\n"
+        "  7b. ARRAY LEANNESS: when returning an ARRAY, keep every "
+        "element compact so the whole array always fits: `extra_rows` "
+        "capped at 10 items, `persona_notes` under 300 characters. "
+        "NEVER drop or truncate array elements - trim fields, not "
+        "profiles. Emit the array only, no prose."
     )
 
     user_prompt = (
@@ -43944,7 +44045,7 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         )
         result = _run_nflx_claude_agent(
             system_prompt=system_prompt, user_prompt=user_prompt,
-            max_tokens=8192, temperature=0.4,
+            max_tokens=16000, temperature=0.4,
             model=_SYNTH_CHAT_INTERPRET_MODEL,
         )
         if not result.get('success'):
@@ -44125,6 +44226,26 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
         spec_draft['estimated_run_minutes'] = _estimate_run_minutes(
             _dn, bool(spec_draft.get('run_avid')))
         _jitter_draft_est_sample(spec_draft)
+        # cut_label fallback (2026-08-20, 5-platform batch): Claude
+        # sometimes omits cut_label on array-mode derive_cut elements
+        # even though the subject is 'Parent - Cohort'. The worker
+        # needs it for output naming and the reasoning brief, so
+        # derive it deterministically: residual of subject minus the
+        # parent display name, else the part after the first ' - '.
+        if _dn in ('derive_cut', 'cut_needs_parent') \
+                and not spec_draft.get('cut_label'):
+            _subj = str(spec_draft.get('subject') or '')
+            _lbl = ''
+            try:
+                _lbl = _residual_cut_label(
+                    _subj,
+                    spec_draft.get('existing_match_display_name') or '')
+            except Exception:
+                _lbl = ''
+            if not _lbl and ' - ' in _subj:
+                _lbl = _subj.split(' - ', 1)[1].strip()
+            if _lbl:
+                spec_draft['cut_label'] = _lbl[:160]
         _decompose_embedded_subject_cuts(spec_draft)
         if prompt_text:
             _augment_multi_cohort_cuts(spec_draft, prompt_text)
@@ -44175,6 +44296,66 @@ def _batch_payload_from_drafts(drafts: list, user_text: str, history: list,
             int(d.get('estimated_credits') or 0) for d in drafts),
         'shared_context': shared_context,
     })
+
+
+def _union_shortlist_for_multi(user_text: str, catalog) -> list:
+    """Candidate shortlist for MULTI-profile prompts.
+
+    A whole-text shortlist buries per-item parents: Jenna's 5-platform
+    ask scored only ONE candidate ('Amazon Prime Video' at 0.15) while
+    per-item lookups find every base profile at 1.3. This extracts the
+    list items (parenthetical content - tolerating an unclosed paren -
+    or comma runs), trims trailing clause noise ('YouTube so that it
+    would be...' -> 'YouTube'), and merges each item's own top matches
+    into the whole-text shortlist so array-mode Claude can link every
+    element to its existing base profile (rule 7a cut-if-exists).
+    """
+    merged = {}
+
+    def _add(matches, cap, skip_cutlike=False):
+        n = 0
+        for m in matches:
+            if n >= cap:
+                break
+            k = m.get('s3_key') or m.get('display_name')
+            if not k or k in merged:
+                continue
+            if skip_cutlike:
+                try:
+                    if _cutlike_display_name_re().search(
+                            str(m.get('display_name') or '')):
+                        continue
+                except Exception:
+                    pass
+            merged[k] = m
+            n += 1
+
+    try:
+        _add(_shortlist_profile_matches(user_text, catalog), 6)
+    except Exception:
+        pass
+    paren = re.search(r'\(([^)]{3,400})\)?', user_text)
+    seg = paren.group(1) if paren else user_text
+    for it in re.split(r',|/|\n|\band\b|\bvs\.?\b|&', seg):
+        it = (it or '').strip(' .;:-')
+        if not it:
+            continue
+        it = re.split(r'\bso that\b|\bif (?:they|it)\b|\blike\b'
+                      r'|\bwhich\b|\.\s', it)[0].strip(' .;:-')
+        if not (1 <= len(it.split()) <= 6):
+            continue
+        try:
+            # Top-3 per item: score ties are common ('Apple TV+' ties
+            # Apple Pay / Apple Podcasts / Apple TV at 1.3) and cap=2
+            # crowded out the real parent.
+            _add(_shortlist_profile_matches(it, catalog), 3,
+                 skip_cutlike=True)
+        except Exception:
+            continue
+        if len(merged) >= 24:
+            break
+    return sorted(merged.values(),
+                  key=lambda c: -(c.get('_score') or 0))
 
 
 def _synth_chat_interpret_batch(user_text: str, subjects: list,
@@ -44243,18 +44424,27 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
             except Exception:
                 _MC = {}
             _catalog = _profile_catalog_for_chat()
-            _cands = _shortlist_profile_matches(user_text, _catalog)
+            # Union shortlist (2026-08-20): per-item parent candidates,
+            # not just whole-text matches, so rule 7a cut-if-exists can
+            # link every element to its base profile.
+            _cands = _union_shortlist_for_multi(user_text, _catalog)
             _sp, _up = _synth_chat_interpret_prompts(
                 user_text, chat_history=history,
                 master_categories=_MC, candidate_matches=_cands)
             _up += ("\n\nIMPORTANT: This request names MULTIPLE "
                     "profiles. Return a JSON ARRAY with one complete "
                     "spec object per profile, each with its own "
-                    "precise subject.")
+                    "precise subject. Follow rules 7a (per-element "
+                    "decision logic, cut-if-exists) and 7b (lean "
+                    "elements, never drop a profile).")
+            # 32k output ceiling (2026-08-20): 5 full specs need
+            # ~20-25k tokens; the old 8192 cap truncated the array
+            # mid-object EVERY time and failed the whole batch.
             _res = _run_nflx_claude_agent(
                 system_prompt=_sp, user_prompt=_up,
-                max_tokens=8192, temperature=0.4,
-                model=_SYNTH_CHAT_INTERPRET_MODEL)
+                max_tokens=32000, temperature=0.4,
+                model=_SYNTH_CHAT_INTERPRET_MODEL,
+                salvage_arrays=True)
             _data = _res.get('data') if _res.get('success') else None
             if isinstance(_data, dict):
                 _data = [_data]
@@ -46170,11 +46360,15 @@ def api_synth_chat_interpret():
             text, chat_history=history, master_categories=MASTER_CATEGORIES,
             candidate_matches=candidates,
         )
+        # 32k ceiling + array salvage (2026-08-20): rule 7 lets this
+        # call return a multi-spec ARRAY, which needs far more than
+        # 8192 output tokens and must survive truncation.
         result = _run_nflx_claude_agent(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            max_tokens=8192, temperature=0.4,
+            max_tokens=32000, temperature=0.4,
             model=_SYNTH_CHAT_INTERPRET_MODEL,
+            salvage_arrays=True,
         )
         if not result.get('success'):
             return jsonify({
