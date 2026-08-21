@@ -1354,6 +1354,15 @@ CREDITS_ECOMMERCE_IQ = 5
 CREDITS_FLYWHEEL_CONVERSION = 25
 CREDITS_BRAND_PARTNERSHIP_IQ = 15
 CREDITS_JOURNEY_IQ = 10
+# Chatbot (Prometheus / Brief Chat) surfaces. 2026-08-21 Jenna directive:
+# every pull is charged and recorded on ALL surfaces (dashboard, partner
+# API, chatbot) - including unlimited-credit users, whose credits_used +
+# usage history still increment even though their balance never depletes.
+# Profile builds launched from the chatbot price off _V1_CREDITS (same
+# tier table as the partner API); these two cover the lighter Claude-
+# backed chatbot deliverables.
+CREDITS_CHATBOT_ANALYZE = 1   # "Analyze this data" reasoning pass
+CREDITS_CHATBOT_DECK = 1      # PPTX deck build from on-screen data
 
 # Pricing settings S3 key
 PRICING_SETTINGS_KEY = 'system/pricing_settings.json'
@@ -8035,12 +8044,21 @@ def update_user_profile():
 @app.route('/api/credit-usage')
 @requires_auth
 def get_credit_usage():
-    """Return current user's credit usage history (what each credit was used for). Newest first."""
+    """Return current user's credit usage history (what each credit was
+    used for), newest first, plus live counters so the credits modal can
+    refresh without a page reload. Unlimited users (credits == -1) get
+    the same full history + credits_used tracking as everyone else."""
     user = get_current_user()
     if not user:
         return jsonify({'success': False, 'error': 'Not logged in'})
     history = user.get('credit_usage_history', [])
-    return jsonify({'success': True, 'usage': history})
+    _, credits_left = check_user_credits(session.get('username') or '')
+    return jsonify({
+        'success': True,
+        'usage': history,
+        'credits_used': user.get('credits_used', 0),
+        'credits_left': credits_left,
+    })
 
 
 @app.route('/api/admin/credit-usage-export')
@@ -47310,6 +47328,33 @@ def api_synth_chat_approve():
             'run_id': None,
         })
 
+    # ---- Credit pricing + preflight (2026-08-21 Jenna directive: the
+    # chatbot must charge and record usage like the dashboard and the
+    # partner API do - including for unlimited users, whose history and
+    # credits_used still increment). Price uses the SAME tier table as
+    # the v1 API (_V1_CREDITS + ADDON_CUT_CREDITS per embedded cut), so
+    # the charge always matches the estimate shown on the approve card.
+    _charge_user = (session.get('username') or user.get('username')
+                    or '').strip()
+    _billable_cuts = [c for c in (draft.get('addon_cuts') or [])
+                      if isinstance(c, dict) and c.get('cut_id')]
+    if d_type == 'addon_cuts' and _billable_cuts:
+        # cuts-only derive: the cuts ARE the deliverable - no base fee
+        price = ADDON_CUT_CREDITS * len(_billable_cuts)
+    else:
+        price = (_V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
+                 + ADDON_CUT_CREDITS * len(_billable_cuts))
+    if price > 0 and _charge_user and not has_credits_for(_charge_user, price):
+        _, _left = check_user_credits(_charge_user)
+        return jsonify({
+            'success': False,
+            'error': (f'Not enough credits for this run ({price} needed, '
+                      f'{_left} remaining). Use the credits button in the '
+                      'top bar to request more.'),
+            'credits_required': price,
+            'credits_remaining': _left,
+        }), 402
+
     payload = {
         'user_email': user.get('email') or user.get('username') or 'unknown',
         'run_avid': run_avid,
@@ -47377,6 +47422,26 @@ def api_synth_chat_approve():
             'error': 'queue did not return a run_id',
         }), 502
 
+    # Charge AFTER the queue accepted the run so the usage-history entry
+    # carries the real run_id (same check -> queue -> charge order the
+    # dashboard IQ routes use). consume_credit records credits_used +
+    # credit_usage_history even for unlimited users.
+    if price > 0 and _charge_user:
+        try:
+            if not consume_credit(
+                    _charge_user,
+                    description=(f"Chatbot Profile IQ [{decision}] - "
+                                 f"{spec.get('name', 'profile')}"),
+                    job_id=str(_session_run_id),
+                    pull_type=f'Chatbot Profile IQ ({decision})',
+                    credits_used=price):
+                print(f"[synth_chat_run] WARNING: post-queue credit charge "
+                      f"failed user={_charge_user} run={_session_run_id} "
+                      f"price={price} - run continues, usage NOT recorded")
+        except Exception:
+            traceback.print_exc()
+    _, _credits_left = check_user_credits(_charge_user)
+
     return jsonify({
         'success': True,
         'decision': decision,
@@ -47388,6 +47453,8 @@ def api_synth_chat_approve():
         'parent_s3_key': ex_key or None,
         'derive_type': d_type or None,
         'email_to': email_to,
+        'credits_charged': price,
+        'credits_remaining': _credits_left,
     })
 
 
@@ -47751,6 +47818,16 @@ def api_synth_chat_analyze():
                       'from Select Profile (and check any Data Cuts you '
                       'want included), then ask me again.'),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
+    # Credit preflight (2026-08-21): chatbot analyses are tracked usage
+    # like every other pull. Unlimited users always pass; the charge
+    # itself lands after a successful analysis so failures cost nothing.
+    _pm_user = (session.get('username') or user.get('username') or '').strip()
+    if _pm_user and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
+        return jsonify({
+            'success': False,
+            'error': ('No credits remaining for analysis. Use the credits '
+                      'button in the top bar to request more.'),
+        }), 402
     try:
         import prometheus_analysis as pma
         digest, p_meta = pma.get_digest_bundle(s3_client, S3_BUCKET, ctx)
@@ -47784,6 +47861,20 @@ def api_synth_chat_analyze():
                  for f in (data.get('followups') or [])
                  if str(f).strip()][:4]
     deck_angle = data.get('deck_angle')
+    # Record the successful analysis as tracked usage (unlimited users
+    # included - their history + credits_used counters still move).
+    if _pm_user:
+        try:
+            consume_credit(
+                _pm_user,
+                description=(f"Chatbot Analysis"
+                             f"{' [' + mode + ']' if mode else ''} - "
+                             f"{p_meta.get('name') or 'open profile'}"),
+                job_id='',
+                pull_type='Chatbot Analysis',
+                credits_used=CREDITS_CHATBOT_ANALYZE)
+        except Exception:
+            traceback.print_exc()
     return jsonify({
         'success': True, 'action': action, 'reply': reply,
         'followups': followups,
@@ -47800,10 +47891,12 @@ def _pm_deck_status_write(job_id, payload):
         ContentType='application/json')
 
 
-def _pm_run_deck_job(job_id, username, ctx, history, angle):
+def _pm_run_deck_job(job_id, username, ctx, history, angle,
+                     charge_user=''):
     """Background deck build: digest -> slide plan -> PPTX -> S3 ->
     presigned URL. Status written to S3 at every phase so any worker
-    can serve the poll."""
+    can serve the poll. `charge_user` is the billing username charged
+    at kickoff; refunded here if the build fails."""
     import tempfile
     base = {'job_id': job_id, 'user': username, 'angle': angle,
             'started_at': time.time()}
@@ -47860,6 +47953,12 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle):
         traceback.print_exc()
         _pm_deck_status_write(job_id, {**base, 'status': 'error',
                                        'error': str(e)[:400]})
+        if charge_user:
+            try:
+                refund_credit(charge_user, credits=CREDITS_CHATBOT_DECK,
+                              reason=f'deck build {job_id} failed')
+            except Exception:
+                traceback.print_exc()
 
 
 @app.route('/api/brief-chat/deck', methods=['POST'])
@@ -47888,11 +47987,34 @@ def api_synth_chat_deck():
                                   'the deck again.')}), 400
     job_id = uuid.uuid4().hex[:12]
     username = (user.get('username') or user.get('email') or '').strip()
+    # Credit preflight + charge (2026-08-21): deck builds are tracked
+    # usage on every account including unlimited ones. Charged up front
+    # with the deck job id; the background job refunds on failure.
+    _charge_user = (session.get('username') or user.get('username')
+                    or '').strip()
+    if _charge_user and not has_credits_for(_charge_user,
+                                            CREDITS_CHATBOT_DECK):
+        return jsonify({
+            'success': False,
+            'error': ('No credits remaining for a deck build. Use the '
+                      'credits button in the top bar to request more.'),
+        }), 402
+    if _charge_user:
+        try:
+            consume_credit(
+                _charge_user,
+                description=f'Chatbot Deck - {angle[:120]}',
+                job_id=job_id,
+                pull_type='Chatbot Deck',
+                credits_used=CREDITS_CHATBOT_DECK)
+        except Exception:
+            traceback.print_exc()
     _pm_deck_status_write(job_id, {
         'job_id': job_id, 'user': username, 'status': 'queued',
         'angle': angle, 'started_at': time.time()})
     t = threading.Thread(target=_pm_run_deck_job,
-                         args=(job_id, username, ctx, history[-14:], angle),
+                         args=(job_id, username, ctx, history[-14:], angle,
+                               _charge_user),
                          daemon=True)
     t.start()
     return jsonify({'success': True, 'job_id': job_id})
