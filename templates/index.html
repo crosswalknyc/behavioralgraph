@@ -21169,7 +21169,7 @@ https://www.instagram.com/p/..."></textarea>
             background: #0C1618; border: 1px solid #27393D; border-radius: 14px;
             box-shadow: 0 14px 44px rgba(0,0,0,0.55);
             display: none; flex-direction: column; overflow: hidden;
-            z-index: 99000; resize: both;
+            z-index: 99000;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
         #prometheusWidget.pm-on { display: flex; animation: pmEnter 320ms cubic-bezier(0.16, 1, 0.3, 1); }
@@ -21201,12 +21201,31 @@ https://www.instagram.com/p/..."></textarea>
         }
         #prometheusBody #synthChatMessages { min-height: 120px !important; }
         #prometheusBody #synthChatBriefPreview { max-height: 46%; overflow-y: auto; }
+        /* Drag-resize handles on every edge + corner (2026-08-20).
+           Kept inside the widget bounds because overflow is hidden. */
+        #prometheusWidget .pm-rs { position: absolute; z-index: 6; touch-action: none; }
+        #prometheusWidget .pm-rs:hover { background: rgba(199,242,62,0.14); }
+        .pm-rs-n { top: 0; left: 18px; right: 18px; height: 6px; cursor: ns-resize; }
+        .pm-rs-s { bottom: 0; left: 18px; right: 18px; height: 7px; cursor: ns-resize; }
+        .pm-rs-e { right: 0; top: 18px; bottom: 18px; width: 7px; cursor: ew-resize; }
+        .pm-rs-w { left: 0; top: 18px; bottom: 18px; width: 7px; cursor: ew-resize; }
+        .pm-rs-ne { top: 0; right: 0; width: 18px; height: 18px; cursor: nesw-resize; }
+        .pm-rs-nw { top: 0; left: 0; width: 18px; height: 18px; cursor: nwse-resize; }
+        .pm-rs-se { bottom: 0; right: 0; width: 18px; height: 18px; cursor: nwse-resize; }
+        .pm-rs-sw { bottom: 0; left: 0; width: 18px; height: 18px; cursor: nesw-resize; }
+        .pm-rs-se::after {
+            content: ''; position: absolute; right: 4px; bottom: 4px;
+            width: 8px; height: 8px; border-right: 2px solid #5C6466;
+            border-bottom: 2px solid #5C6466; border-radius: 0 0 3px 0;
+            pointer-events: none;
+        }
         @media (max-width: 767px) {
             #prometheusWidget {
                 right: 10px !important; left: 10px !important; bottom: 10px !important;
                 top: auto !important; width: auto !important;
                 height: min(72vh, calc(100vh - 60px)) !important; resize: none;
             }
+            #prometheusWidget .pm-rs { display: none; }
         }
         </style>
         <div id="prometheusLauncher" role="button" tabindex="0" aria-label="Open Prometheus" title="Prometheus">
@@ -21214,6 +21233,14 @@ https://www.instagram.com/p/..."></textarea>
             <span id="prometheusLauncherDot" aria-hidden="true"></span>
         </div>
         <div id="prometheusWidget" role="dialog" aria-label="Prometheus">
+            <div class="pm-rs pm-rs-n" data-rs="n" aria-hidden="true"></div>
+            <div class="pm-rs pm-rs-s" data-rs="s" aria-hidden="true"></div>
+            <div class="pm-rs pm-rs-e" data-rs="e" aria-hidden="true"></div>
+            <div class="pm-rs pm-rs-w" data-rs="w" aria-hidden="true"></div>
+            <div class="pm-rs pm-rs-ne" data-rs="ne" aria-hidden="true"></div>
+            <div class="pm-rs pm-rs-nw" data-rs="nw" aria-hidden="true"></div>
+            <div class="pm-rs pm-rs-se" data-rs="se" aria-hidden="true"></div>
+            <div class="pm-rs pm-rs-sw" data-rs="sw" aria-hidden="true"></div>
             <div id="prometheusHeader">
                 <div style="display:flex; align-items:center; gap:0.6rem; min-width:0;">
                     <svg width="17" height="17" viewBox="0 0 64 64" aria-hidden="true" style="flex:0 0 auto;"><g transform="skewX(-14)" fill="#C7F23E"><rect x="24" y="10" width="8.5" height="44" rx="1.75"/><rect x="37" y="10" width="8.5" height="44" rx="1.75"/><rect x="50" y="10" width="8.5" height="44" rx="1.75"/></g></svg>
@@ -59304,6 +59331,63 @@ https://www.instagram.com/p/..."></textarea>
                 handle.addEventListener('pointerup', _end);
                 handle.addEventListener('pointercancel', function() { pid = null; });
             }
+            // Edge/corner drag-resize (2026-08-20 Jenna: "if you want to
+            // drag the box bigger you can resize it"). Dragging the west
+            // or north sides moves the opposite edge's anchor so the far
+            // edge stays put, exactly like a desktop window. Size and
+            // position persist the same way drags do.
+            function _makeResizable(el) {
+                var MIN_W = 360, MIN_H = 440;
+                var pid = null, dir = null, sx = 0, sy = 0, s0 = null;
+                function down(ev) {
+                    if (ev.button !== undefined && ev.button !== 0) return;
+                    dir = ev.currentTarget.getAttribute('data-rs') || '';
+                    pid = ev.pointerId; sx = ev.clientX; sy = ev.clientY;
+                    var r = el.getBoundingClientRect();
+                    s0 = { x: r.left, y: r.top, w: r.width, h: r.height };
+                    el.style.left = r.left + 'px'; el.style.top = r.top + 'px';
+                    el.style.right = 'auto'; el.style.bottom = 'auto';
+                    try { ev.currentTarget.setPointerCapture(pid); } catch (_) {}
+                    ev.preventDefault(); ev.stopPropagation();
+                }
+                function move(ev) {
+                    if (pid === null || ev.pointerId !== pid || !s0) return;
+                    var dx = ev.clientX - sx, dy = ev.clientY - sy;
+                    var maxW = Math.floor(window.innerWidth * 0.94);
+                    var maxH = Math.floor(window.innerHeight * 0.94);
+                    var w = s0.w, h = s0.h, x = s0.x, y = s0.y;
+                    if (dir.indexOf('e') !== -1) w = s0.w + dx;
+                    if (dir.indexOf('w') !== -1) w = s0.w - dx;
+                    if (dir.indexOf('s') !== -1) h = s0.h + dy;
+                    if (dir.indexOf('n') !== -1) h = s0.h - dy;
+                    w = Math.min(Math.max(w, MIN_W), maxW);
+                    h = Math.min(Math.max(h, MIN_H), maxH);
+                    if (dir.indexOf('w') !== -1) x = s0.x + (s0.w - w);
+                    if (dir.indexOf('n') !== -1) y = s0.y + (s0.h - h);
+                    el.style.width = w + 'px'; el.style.height = h + 'px';
+                    el.style.left = Math.max(0, x) + 'px';
+                    el.style.top = Math.max(0, y) + 'px';
+                }
+                function end(ev) {
+                    if (pid === null || ev.pointerId !== pid) return;
+                    try { ev.currentTarget.releasePointerCapture(pid); } catch (_) {}
+                    pid = null; dir = null; s0 = null;
+                    try {
+                        localStorage.setItem(SKEY, JSON.stringify(
+                            { w: el.offsetWidth, h: el.offsetHeight }));
+                    } catch (_) {}
+                    _savePos(el, WKEY);
+                }
+                var hs = el.querySelectorAll('.pm-rs');
+                for (var i = 0; i < hs.length; i++) {
+                    hs[i].addEventListener('pointerdown', down);
+                    hs[i].addEventListener('pointermove', move);
+                    hs[i].addEventListener('pointerup', end);
+                    hs[i].addEventListener('pointercancel', function() {
+                        pid = null; dir = null; s0 = null;
+                    });
+                }
+            }
             window.prometheusExpand = function() {
                 var l = _el('prometheusLauncher'), w = _el('prometheusWidget');
                 if (!w) return;
@@ -59337,6 +59421,7 @@ https://www.instagram.com/p/..."></textarea>
                 _restorePos(l, LKEY);
                 _makeDraggable(l, l, LKEY, function() { window.prometheusExpand(); });
                 _makeDraggable(w, _el('prometheusHeader') || w, WKEY, null);
+                _makeResizable(w);
                 l.addEventListener('keydown', function(ev) {
                     if (ev.key === 'Enter' || ev.key === ' ') {
                         ev.preventDefault(); window.prometheusExpand();
@@ -59995,7 +60080,7 @@ https://www.instagram.com/p/..."></textarea>
                 try { _synthChatPatchLastMetaStatus(runId, cur); } catch (_) {}
             } catch (e) {
                 synthChatPushTurn('agent',
-                    "Status check failed: " + (e && e.message || e));
+                    "Status check failed: " + _synthChatFriendlyError(e));
             }
         }
 
@@ -60078,7 +60163,7 @@ https://www.instagram.com/p/..."></textarea>
                 return true;
             } catch (e) {
                 synthChatPushTurn('agent',
-                    "Status check failed: " + (e && e.message || e));
+                    "Status check failed: " + _synthChatFriendlyError(e));
                 return false;
             }
         }
@@ -60814,7 +60899,7 @@ https://www.instagram.com/p/..."></textarea>
                         'Stopped. Nothing was queued. Send another message when you want to try again.');
                 } else {
                     synthChatPushTurn('agent',
-                        'Request failed: ' + (e && e.message || e));
+                        'Request failed: ' + _synthChatFriendlyError(e));
                 }
             } finally {
                 try { _endThinking && _endThinking(); } catch (_) {}
@@ -61043,6 +61128,21 @@ https://www.instagram.com/p/..."></textarea>
         // 502/503/504 - i.e. a Render deploy cutover or proxy drop
         // killed the in-flight request (2026-08-20: these surfaced
         // to the user as "Unexpected token '<' ... not valid JSON").
+        // Human-friendly error text (2026-08-20): JSON-parse and
+        // network gibberish ("Unexpected token '<' ... not valid JSON")
+        // must never reach the chat. Those mean an HTML error page
+        // landed mid-deploy or the connection dropped.
+        function _synthChatFriendlyError(e) {
+            var m = String((e && e.message) || e || '');
+            if (/unexpected token|not valid json|json\.parse|doctype/i.test(m)) {
+                return 'the service hiccuped mid-request (likely a redeploy landing). Ask for a status update in a minute to confirm what went through, then try again.';
+            }
+            if (/failed to fetch|networkerror|load failed|network request/i.test(m)) {
+                return 'the network dropped mid-request. Ask for a status update in a minute to confirm what went through, then try again.';
+            }
+            return m;
+        }
+
         async function _synthChatFetchJson(url, body, signal) {
             async function _once() {
                 var r = await fetch(url, {
@@ -61532,7 +61632,7 @@ https://www.instagram.com/p/..."></textarea>
                         'Stopped. Nothing was queued. Send another message when you want to try again.');
                 } else {
                     synthChatPushTurn('agent',
-                        'Approve failed: ' + (e && e.message || e));
+                        'Approve failed: ' + _synthChatFriendlyError(e));
                 }
             } finally {
                 try { _endThinking && _endThinking(); } catch (_) {}
