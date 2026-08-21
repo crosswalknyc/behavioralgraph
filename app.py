@@ -43686,7 +43686,13 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "element compact so the whole array always fits: `extra_rows` "
         "capped at 10 items, `persona_notes` under 300 characters. "
         "NEVER drop or truncate array elements - trim fields, not "
-        "profiles. Emit the array only, no prose."
+        "profiles. Emit the array only, no prose. Leanness NEVER "
+        "means omitting required fields: every `new_build` or "
+        "`cut_needs_parent` element MUST still carry a non-empty "
+        "`subject_rows` (2-6 anchor rows tying the cohort to its "
+        "defining platform/brands, e.g. [[\"APP/PLATFORM\",\"Google "
+        "Play\"]]) plus full `tu_demos` and `subject_raw_tu` - the "
+        "queue rejects build specs without them."
     )
 
     user_prompt = (
@@ -46646,6 +46652,25 @@ def api_synth_chat_interpret():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+def _clean_queue_error_text(text):
+    """Extract the human-readable message from a queue error response.
+
+    Flask aborts return a full HTML error page; echoing that raw into
+    the chat showed Jenna '<!doctype html><title>400 Bad Request'
+    gibberish (2026-08-20). Pull the <p> body (Flask puts the abort
+    description there), else the <title>, else the trimmed raw text.
+    """
+    t = (text or '').strip()
+    low = t.lower()
+    if '<html' in low or '<!doctype' in low:
+        m = re.search(r'<p>(.*?)</p>', t, re.S | re.I)
+        if not m:
+            m = re.search(r'<title>(.*?)</title>', t, re.S | re.I)
+        if m:
+            return re.sub(r'<[^>]+>', '', m.group(1)).strip()[:400]
+    return t[:400]
+
+
 def _spec_from_draft(draft):
     """Convert the Claude-emitted draft into the exact spec dict shape that
     synth_engine_row_by_row.synthesize_from_spec expects on Hetzner."""
@@ -46728,6 +46753,26 @@ def _spec_from_draft(draft):
             continue
         _clean_subject_rows_v3.append((col, val))
     subject_rows = _clean_subject_rows_v3
+
+    # ── subject_rows backstop (2026-08-20, Jenna's 5-platform batch:
+    # Apple TV+ / Google Play got 'queue returned 400: subject_rows
+    # must be a non-empty list'). Array-mode Claude sometimes omits
+    # subject_rows on individual elements. The queue hard-requires it
+    # for build decisions, and the worker's hostmap augment benefits
+    # from at least the entity anchor. Synthesize the minimal anchor
+    # the healthy specs all share: [[brand_category, entity]] where
+    # entity is the parent part of a 'Parent - Cohort' subject.
+    # Harmless for derive_cut (worker ignores spec.subject_rows).
+    if not subject_rows:
+        _bc = str(draft.get('brand_category') or '').strip()
+        _entity = subject.split(' - ', 1)[0].strip() or subject
+        if _bc:
+            subject_rows = [(_bc, _entity)]
+            try:
+                print(f"[spec-backstop] {subject!r}: subject_rows was "
+                      f"empty - anchored with [[{_bc!r}, {_entity!r}]]")
+            except Exception:
+                pass
 
     # Enforce the "no round sample sizes" rule from the workspace rule
     # `.cursor/rules/no-round-sample-sizes.mdc`. Every subject_raw_* that
@@ -47118,7 +47163,8 @@ def api_synth_chat_approve():
         if resp.status_code != 200:
             return jsonify({
                 'success': False,
-                'error': f'queue returned {resp.status_code}: {resp.text[:400]}',
+                'error': f'queue returned {resp.status_code}: '
+                         f'{_clean_queue_error_text(resp.text)}',
             }), 502
         queue_resp = resp.json()
     except Exception as e:
@@ -47188,7 +47234,8 @@ def api_synth_chat_status(run_id):
         if resp.status_code != 200:
             return jsonify({
                 'success': False,
-                'error': f'status returned {resp.status_code}: {resp.text[:400]}',
+                'error': f'status returned {resp.status_code}: '
+                         f'{_clean_queue_error_text(resp.text)}',
             }), 502
         return jsonify({'success': True, 'status': resp.json()})
     except Exception as e:
@@ -47274,7 +47321,7 @@ def api_synth_chat_active_runs():
             return jsonify({
                 'success': False,
                 'error': f'active-runs returned {resp.status_code}: '
-                         f'{resp.text[:400]}',
+                         f'{_clean_queue_error_text(resp.text)}',
             }), 502
         raw = resp.json() or []
     except Exception as e:
