@@ -42902,6 +42902,29 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
             if head and len(head) <= 60:
                 subjects[-1] = head
 
+    # Mangled-split guard (2026-08-21, Jenna's TVOD Renters batch):
+    # "create individual profiles of TVOD renters on each platform
+    # (Amazon Prime Video, Apple TV+, ...so that it would be a cut..."
+    # comma-split into garbage like 'TVOD renters on each platform
+    # (Amazon Prime Video' plus a sentence-length tail, and two junk
+    # builds got queued. A well-formed subject never contains an
+    # unclosed parenthesis, a segmentation-marker phrase, or a full
+    # sentence. If ANY slice looks mangled, void the whole batch -
+    # the route then falls through to shape-B Cartesian or the
+    # Claude-as-splitter fallback, both of which handle the phrasing.
+    def _mangled(s):
+        if s.count('(') != s.count(')'):
+            return True
+        if _re.search(
+                r'\b(?:for|on|of|across|per)\s+(?:each|every)\s+\w+',
+                s, _re.IGNORECASE):
+            return True
+        if len(s) > 60 and '. ' in s:
+            return True
+        return False
+    if any(_mangled(s) for s in subjects):
+        return []
+
     # Need at least 2 real subjects and no more than the cap.
     if len(subjects) < 2:
         return []
@@ -42978,8 +43001,23 @@ def _detect_cartesian_batch(user_text: str):
             raw = raw[1:-1]
         its = _re.split(r'\s*(?:,|;|\band\b|\bor\b)\s*',
                         raw, flags=_re.IGNORECASE)
-        its = [it.strip().strip('.').strip() for it in its]
-        return [it for it in its if it and 2 <= len(it) <= 80]
+        out = []
+        for it in its:
+            it = it.strip().strip('.').strip()
+            # Unclosed-paren salvage (2026-08-21): "...on each platform
+            # (Amazon Prime Video, Apple TV+, ..." never closes the
+            # paren, so item #1 arrives as "(Amazon Prime Video". Strip
+            # stray paren edges per item instead of requiring a closed
+            # wrapper.
+            it = it.lstrip('(').rstrip(')').strip()
+            # Trailing-clause peel: "YouTube so that it would be a cut
+            # of the platforms if they already exist" -> "YouTube".
+            it = _re.split(r'\s+(?:so\s+that|such\s+that)\b', it,
+                           flags=_re.IGNORECASE)[0].strip()
+            it = it.strip('.').strip()
+            if it and 2 <= len(it) <= 80:
+                out.append(it)
+        return out
 
     def _product(items, cohorts, shape):
         cohorts = [c.strip().strip('.').strip() for c in cohorts]
@@ -43015,12 +43053,19 @@ def _detect_cartesian_batch(user_text: str):
         r'(?:new\s+|individual\s+|separate\s+|seperate\s+|distinct\s+|single\s+|one\s+|quick\s+)*'
         r'(?:profile|profiles|iq|iqs|persona|personas|report|'
         r'analysis|analyses)\s+'
-        r'(?:of|for|on|comparing|showing|about)\s+(.+)$',
+        r'(?:(?:of|for|on|comparing|showing|about)\s+)?(.+)$',
         t, _re.IGNORECASE | _re.DOTALL)
     if pre:
         rest = pre.group(1).strip()
+        # 2026-08-21: marker accepts on/of/for each|every (Jenna wrote
+        # "TVOD renters on each platform (...)" and shape B missed it,
+        # letting the plain splitter mangle the batch). The preposition
+        # after profile(s) is optional for the same reason ("create
+        # individual Profile EST buyers for each platform ..." has
+        # none).
         seg = _re.search(
-            r'\s+(?:for\s+each|by|across|per)\s+(?:the\s+)?'
+            r'\s+(?:(?:for|on|of|across)\s+(?:each|every)|by|across|per)'
+            r'\s+(?:the\s+)?'
             r'(?:platform|retailer|market|region|brand|store|service|'
             r'network|channel|category|title|app|provider|company|'
             r'dma)s?\s*[:,]?\s+(.+)$',
