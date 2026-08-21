@@ -59737,6 +59737,18 @@ https://www.instagram.com/p/..."></textarea>
             }
             window.__synthChatQueueTimer = setInterval(
                 _synthChatRefreshQueueBadge, 5000);
+            // Idle chips: after 2 min with no turns / typing, re-offer
+            // the starter chips (guards inside the tick).
+            if (window.__synthChatIdleTimer) {
+                clearInterval(window.__synthChatIdleTimer);
+            }
+            window.__synthChatIdleTimer = setInterval(
+                _synthChatIdleChipsTick, 15000);
+            var _idleInput = document.getElementById('synthChatInput');
+            if (_idleInput) {
+                _idleInput.addEventListener('input', _synthChatBumpActivity);
+                _idleInput.addEventListener('focus', _synthChatBumpActivity);
+            }
             document.addEventListener('visibilitychange', function() {
                 if (document.visibilityState === 'visible') {
                     _synthChatRefreshQueueBadge();
@@ -59885,6 +59897,37 @@ https://www.instagram.com/p/..."></textarea>
         // send or reply) clears it. Chip fill strings must not contain
         // quote characters - they ride inside an onclick attribute.
         var _synthChatWelcomeLastShown = 0;
+        // Idle repopulate (2026-08-21 Jenna directive): if the chat
+        // sits idle for 2+ minutes, re-offer the starter chips so the
+        // next action is always one click away. Any turn, typing, or
+        // chip send counts as activity and resets the clock.
+        var _synthChatLastActivityTs = Date.now();
+        var _SYNTH_CHAT_IDLE_CHIPS_MS = 120000;
+        function _synthChatBumpActivity() {
+            _synthChatLastActivityTs = Date.now();
+        }
+        function _synthChatIdleChipsTick() {
+            try {
+                if (document.visibilityState !== 'visible') return;
+                var box = document.getElementById('synthChatMessages');
+                if (!box) return;
+                if (!synthChatHistory.length) return;
+                if (Date.now() - _synthChatLastActivityTs <
+                        _SYNTH_CHAT_IDLE_CHIPS_MS) return;
+                // Already offering, or a reply is streaming in.
+                if (document.getElementById('synthChatWelcomeBubble')) return;
+                if (document.querySelector('.synth-thinking-bubble')) return;
+                // Never stomp a pending approval / question mid-flow
+                // (same guard set as the welcome-back renderer).
+                if (synthChatAwaitingDateConfirm || synthChatClarify ||
+                    synthChatBatchClarify ||
+                    synthChatCurrentDraft || synthChatDiscoveryOffer ||
+                    (synthChatBatchDrafts && synthChatBatchDrafts.length)) {
+                    return;
+                }
+                _synthChatShowWelcomeBack();
+            } catch (_) {}
+        }
         function _synthChatShowWelcomeBack() {
             try {
                 var box = document.getElementById('synthChatMessages');
@@ -59990,13 +60033,19 @@ https://www.instagram.com/p/..."></textarea>
                         _synthChatEscapeHtml(lead) + '</div>' +
                     '<div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">' +
                         chips + '</div>';
+                // Only follow to the bottom if the user was already
+                // there - the idle repopulate must not yank the scroll
+                // away from someone reading an earlier reply.
+                var nearBottom = (box.scrollHeight - box.scrollTop -
+                                  box.clientHeight) < 120;
                 box.appendChild(el);
-                box.scrollTop = box.scrollHeight;
+                if (nearBottom) box.scrollTop = box.scrollHeight;
             } catch (_) {}
         }
 
         function synthChatPushTurn(role, text) {
             synthChatHistory.push({ role: role, text: text, ts: new Date().toISOString() });
+            _synthChatBumpActivity();
             synthChatRerender();
             try {
                 fetch('/api/brief-chat/history', {
@@ -60013,6 +60062,7 @@ https://www.instagram.com/p/..."></textarea>
         function _synthChatPushTurnWithMeta(role, text, meta) {
             var turn = { role: role, text: text, ts: new Date().toISOString(), meta: meta || {} };
             synthChatHistory.push(turn);
+            _synthChatBumpActivity();
             synthChatRerender();
             try {
                 fetch('/api/brief-chat/history', {
