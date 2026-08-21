@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
     <link rel="icon" type="image/png" sizes="192x192" href="/static/favicon-192.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Poppins:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;800;900&family=Space+Mono:wght@400;700&family=Poppins:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@400;600;700&family=Montserrat:wght@400;600;700&family=Playfair+Display:wght@400;600;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
@@ -19544,7 +19544,7 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                     {% endif %}
                     {% if has_chatbot_profile_iq_access or role == 'super_admin' %}
                     <button class="custom-analysis-tab" onclick="switchCustomAnalysisTab('chatbot-profile-iq')" id="customAnalysisTabChatbotProfileIQ">
-                        💬 Chatbot Profile IQ <span style="font-size: 0.7em; opacity: 0.9;">(5 credits)</span>
+                        💬 Prometheus <span style="font-size: 0.7em; opacity: 0.9;">(5 credits)</span>
                     </button>
                     {% endif %}
                 </div>
@@ -21117,19 +21117,119 @@ https://www.instagram.com/p/..."></textarea>
                     </div>
                 </div>
 
-                <!-- Chatbot Profile IQ Tab Content (2026-08-17) -->
+                <!-- Prometheus Tab Content (2026-08-20): the chat itself lives in the
+                     floating Prometheus widget (bottom-right launcher). This tab is a
+                     landing stub that opens the widget. -->
                 <div id="customAnalysisTabContentChatbotProfileIQ" class="custom-analysis-tab-content">
-                    <div class="main-grid" style="grid-template-columns: 1fr; max-width: 1100px; margin: 0 auto;">
-                        <div class="card" style="display: flex; flex-direction: column; height: calc(100vh - 220px); min-height: 500px;">
-                            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 0.5rem;">
-                                <h2 style="margin:0;">💬 Chatbot Profile IQ</h2>
-                                <span id="synthChatQueueBadge" style="font-size: 0.72rem; color: var(--text-secondary);"></span>
+                    <div class="main-grid" style="grid-template-columns: 1fr; max-width: 720px; margin: 0 auto;">
+                        <div class="card" style="text-align: center; padding: 2.4rem 1.6rem;">
+                            <div style="display:flex; justify-content:center; margin-bottom: 1rem;">
+                                <svg width="38" height="38" viewBox="0 0 64 64" aria-hidden="true"><g transform="skewX(-14)" fill="#C7F23E"><rect x="24" y="10" width="8.5" height="44" rx="1.75"/><rect x="37" y="10" width="8.5" height="44" rx="1.75"/><rect x="50" y="10" width="8.5" height="44" rx="1.75"/></g></svg>
                             </div>
-                            <p style="margin: 0 0 0.75rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">
-                                Describe the profile you want. The agent will draft a structured brief. Review it, tweak if needed, then approve to run it. The finished profile lands in your Select Profile dropdown the same way any other profile does.
+                            <h2 style="margin: 0 0 0.45rem 0;">Prometheus</h2>
+                            <p style="margin: 0 auto 1.2rem auto; max-width: 460px; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">
+                                Prometheus floats in the corner of every page. Describe the profile you want, review the brief it drafts, approve it, and the finished profile lands in Select Profile.
                             </p>
+                            <button class="btn btn-primary" onclick="prometheusExpand()" style="width: auto; padding: 0.55rem 1.5rem;">Open Prometheus</button>
+                        </div>
+                    </div>
+                </div>
 
-                            <div id="synthChatMessages" style="flex: 1; overflow-y: auto; padding: 0.5rem; background: var(--bg-input, #1a1a1a); border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 0.5rem; min-height: 260px;">
+            </div><!-- End tab content area -->
+        </div><!-- End customAnalysisView -->
+
+        <!-- ===== PROMETHEUS floating chat (2026-08-20) =====
+             Collapsed: draggable circular launcher with the Crosswalk slash
+             mark, bottom right. Click expands the draggable chat widget.
+             The chat internals are the original synthChat* elements moved
+             here wholesale, so every existing handler works unchanged.
+             Styling follows Crosswalk Brand System v1.0 dashboard tokens. -->
+        <style>
+        #prometheusLauncher {
+            position: fixed; right: 22px; bottom: 22px; width: 58px; height: 58px;
+            border-radius: 50%; background: #15252A; border: 1px solid #27393D;
+            display: none; align-items: center; justify-content: center;
+            cursor: grab; z-index: 99000; box-shadow: 0 6px 22px rgba(0,0,0,0.45);
+            touch-action: none; user-select: none; -webkit-user-select: none;
+            transition: background 120ms ease-out;
+        }
+        #prometheusLauncher.pm-on { display: flex; }
+        #prometheusLauncher:hover { background: #1B2F35; }
+        #prometheusLauncher:active { cursor: grabbing; }
+        #prometheusLauncher:focus-visible { outline: 2px solid #3358FF; outline-offset: 2px; }
+        #prometheusLauncherDot {
+            position: absolute; right: 2px; top: 2px; width: 11px; height: 11px;
+            border-radius: 50%; background: #C7F23E; border: 2px solid #0C1618;
+        }
+        #prometheusWidget {
+            position: fixed; right: 22px; bottom: 22px; width: 440px;
+            height: min(660px, calc(100vh - 44px));
+            min-width: 360px; min-height: 440px; max-width: 94vw; max-height: 94vh;
+            background: #0C1618; border: 1px solid #27393D; border-radius: 14px;
+            box-shadow: 0 14px 44px rgba(0,0,0,0.55);
+            display: none; flex-direction: column; overflow: hidden;
+            z-index: 99000; resize: both;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        #prometheusWidget.pm-on { display: flex; animation: pmEnter 320ms cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes pmEnter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @media (prefers-reduced-motion: reduce) {
+            #prometheusWidget.pm-on { animation: pmFade 200ms ease-out; }
+        }
+        @keyframes pmFade { from { opacity: 0; } to { opacity: 1; } }
+        #prometheusHeader {
+            display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+            padding: 0.65rem 0.85rem; background: #15252A; border-bottom: 1px solid #27393D;
+            cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+            flex: 0 0 auto;
+        }
+        #prometheusHeader:active { cursor: grabbing; }
+        #prometheusTitle { font-size: 14px; font-weight: 700; color: #E9E8E1; line-height: 1.15; }
+        #prometheusSub { font-size: 10.5px; color: #9AA09B; line-height: 1.2; margin-top: 1px; }
+        #prometheusCollapseBtn {
+            width: 28px; height: 28px; border-radius: 8px; background: transparent;
+            border: 1px solid #27393D; color: #9AA09B; display: inline-flex;
+            align-items: center; justify-content: center; cursor: pointer; padding: 0;
+            transition: background 120ms ease-out, color 120ms ease-out; flex: 0 0 auto;
+        }
+        #prometheusCollapseBtn:hover { background: #1B2F35; color: #E9E8E1; }
+        #prometheusCollapseBtn:focus-visible { outline: 2px solid #3358FF; outline-offset: 2px; }
+        #prometheusBody {
+            flex: 1; display: flex; flex-direction: column; min-height: 0;
+            padding: 0.6rem 0.7rem 0.7rem 0.7rem;
+        }
+        #prometheusBody #synthChatMessages { min-height: 120px !important; }
+        #prometheusBody #synthChatBriefPreview { max-height: 46%; overflow-y: auto; }
+        @media (max-width: 767px) {
+            #prometheusWidget {
+                right: 10px !important; left: 10px !important; bottom: 10px !important;
+                top: auto !important; width: auto !important;
+                height: min(72vh, calc(100vh - 60px)) !important; resize: none;
+            }
+        }
+        </style>
+        <div id="prometheusLauncher" role="button" tabindex="0" aria-label="Open Prometheus" title="Prometheus">
+            <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true"><g transform="skewX(-14)" fill="#E9E8E1"><rect x="24" y="10" width="8.5" height="44" rx="1.75"/><rect x="37" y="10" width="8.5" height="44" rx="1.75"/><rect x="50" y="10" width="8.5" height="44" rx="1.75"/></g></svg>
+            <span id="prometheusLauncherDot" aria-hidden="true"></span>
+        </div>
+        <div id="prometheusWidget" role="dialog" aria-label="Prometheus">
+            <div id="prometheusHeader">
+                <div style="display:flex; align-items:center; gap:0.6rem; min-width:0;">
+                    <svg width="17" height="17" viewBox="0 0 64 64" aria-hidden="true" style="flex:0 0 auto;"><g transform="skewX(-14)" fill="#C7F23E"><rect x="24" y="10" width="8.5" height="44" rx="1.75"/><rect x="37" y="10" width="8.5" height="44" rx="1.75"/><rect x="50" y="10" width="8.5" height="44" rx="1.75"/></g></svg>
+                    <div style="min-width:0;">
+                        <div id="prometheusTitle">Prometheus</div>
+                        <div id="prometheusSub">Profile IQ assistant</div>
+                    </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:0.5rem; flex:0 0 auto;">
+                    <span id="synthChatQueueBadge" style="font-size: 0.72rem; color: var(--text-secondary);"></span>
+                    <button type="button" id="prometheusCollapseBtn" onclick="prometheusCollapse()" aria-label="Collapse Prometheus" title="Collapse">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                </div>
+            </div>
+            <div id="prometheusBody">
+                <div id="synthChatMessages" style="flex: 1; overflow-y: auto; padding: 0.5rem; background: var(--bg-input, #1a1a1a); border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 0.5rem; min-height: 260px;">
                                 <div class="brief-chat-empty" style="text-align: center; color: var(--text-secondary); padding: 3rem 1rem; font-size: 0.9rem;">
                                     Start by typing what you're looking for below.<br>
                                     <span style="font-size:0.8em; opacity:0.75;">Examples: "K-pop fans in the US", "cancelled Netflix, signed up for Max in the last 12 months", "Sephora shoppers who bought at Ulta in the same window", "moms of tweens who buy Prime Video".</span>
@@ -21330,12 +21430,8 @@ https://www.instagram.com/p/..."></textarea>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-
-            </div><!-- End tab content area -->
-        </div><!-- End customAnalysisView -->
+            </div>
+        </div>
 
         <!-- TALENT FIT IQ VIEW - Dashboard with Sidebar -->
         <div id="talentFitIQView" style="display: none; flex-direction: row; flex: 1; overflow: hidden;">
@@ -59137,15 +59233,137 @@ https://www.instagram.com/p/..."></textarea>
                 const content = document.getElementById('customAnalysisTabContentChatbotProfileIQ');
                 if (tab) tab.classList.add('active');
                 if (content) content.classList.add('active');
-                if (typeof synthChatInit === 'function') synthChatInit();
-                // 2026-08-20: greet every re-entry to this tab with
-                // clickable starters (no-op on first boot until the
-                // history fetch lands, which calls this again).
-                if (typeof _synthChatShowWelcomeBack === 'function') {
-                    _synthChatShowWelcomeBack();
-                }
+                // 2026-08-20: the chat lives in the floating Prometheus
+                // widget; opening this tab pops the widget (expand also
+                // runs synthChatInit + the welcome-back greeting).
+                if (typeof prometheusExpand === 'function') prometheusExpand();
             }
         }
+
+        // ===================== PROMETHEUS FLOATING WIDGET (2026-08-20) =====================
+        // Collapsed circular launcher + expandable chat widget, both draggable.
+        // Positions, size, and open-state persist per device in localStorage.
+        (function() {
+            var LKEY = 'prometheusLauncherPos', WKEY = 'prometheusWidgetPos',
+                OKEY = 'prometheusOpen', SKEY = 'prometheusWidgetSize';
+            function _el(id) { return document.getElementById(id); }
+            function _clampToViewport(el) {
+                var r = el.getBoundingClientRect();
+                var x = Math.min(Math.max(r.left, 8), Math.max(8, window.innerWidth - r.width - 8));
+                var y = Math.min(Math.max(r.top, 8), Math.max(8, window.innerHeight - r.height - 8));
+                el.style.left = x + 'px'; el.style.top = y + 'px';
+                el.style.right = 'auto'; el.style.bottom = 'auto';
+            }
+            function _restorePos(el, key) {
+                try {
+                    var p = JSON.parse(localStorage.getItem(key) || 'null');
+                    if (p && typeof p.x === 'number' && typeof p.y === 'number') {
+                        el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+                        el.style.right = 'auto'; el.style.bottom = 'auto';
+                    }
+                } catch (_) {}
+            }
+            function _savePos(el, key) {
+                try {
+                    var r = el.getBoundingClientRect();
+                    localStorage.setItem(key, JSON.stringify({ x: r.left, y: r.top }));
+                } catch (_) {}
+            }
+            // Pointer-drag helper. A press that travels under 6px counts as a
+            // tap (onTap); anything further moves the element.
+            function _makeDraggable(el, handle, key, onTap) {
+                var sx = 0, sy = 0, ox = 0, oy = 0, moved = false, pid = null;
+                handle.addEventListener('pointerdown', function(ev) {
+                    if (ev.button !== undefined && ev.button !== 0) return;
+                    if (ev.target && ev.target.closest &&
+                        ev.target.closest('button, a, input, textarea, select, label')) return;
+                    var r = el.getBoundingClientRect();
+                    sx = ev.clientX; sy = ev.clientY; ox = r.left; oy = r.top;
+                    moved = false; pid = ev.pointerId;
+                    try { handle.setPointerCapture(pid); } catch (_) {}
+                });
+                handle.addEventListener('pointermove', function(ev) {
+                    if (pid === null || ev.pointerId !== pid) return;
+                    var dx = ev.clientX - sx, dy = ev.clientY - sy;
+                    if (!moved && (dx * dx + dy * dy) < 36) return;
+                    moved = true;
+                    el.style.left = (ox + dx) + 'px'; el.style.top = (oy + dy) + 'px';
+                    el.style.right = 'auto'; el.style.bottom = 'auto';
+                });
+                function _end(ev) {
+                    if (pid === null || ev.pointerId !== pid) return;
+                    try { handle.releasePointerCapture(pid); } catch (_) {}
+                    pid = null;
+                    if (moved) { _clampToViewport(el); _savePos(el, key); }
+                    else if (onTap) { onTap(); }
+                }
+                handle.addEventListener('pointerup', _end);
+                handle.addEventListener('pointercancel', function() { pid = null; });
+            }
+            window.prometheusExpand = function() {
+                var l = _el('prometheusLauncher'), w = _el('prometheusWidget');
+                if (!w) return;
+                if (l) l.classList.remove('pm-on');
+                if (!w.classList.contains('pm-on')) {
+                    w.classList.add('pm-on');
+                    _restorePos(w, WKEY);
+                    _clampToViewport(w);
+                }
+                try { localStorage.setItem(OKEY, '1'); } catch (_) {}
+                if (typeof synthChatInit === 'function') synthChatInit();
+                if (typeof _synthChatShowWelcomeBack === 'function') _synthChatShowWelcomeBack();
+                var m = _el('synthChatMessages');
+                if (m) m.scrollTop = m.scrollHeight;
+            };
+            window.prometheusCollapse = function() {
+                var l = _el('prometheusLauncher'), w = _el('prometheusWidget');
+                if (w) w.classList.remove('pm-on');
+                if (l) { l.classList.add('pm-on'); _clampToViewport(l); }
+                try { localStorage.setItem(OKEY, '0'); } catch (_) {}
+            };
+            function _initPrometheus() {
+                var l = _el('prometheusLauncher'), w = _el('prometheusWidget');
+                if (!l || !w) return;
+                try {
+                    var s = JSON.parse(localStorage.getItem(SKEY) || 'null');
+                    if (s && s.w >= 360 && s.h >= 440) {
+                        w.style.width = s.w + 'px'; w.style.height = s.h + 'px';
+                    }
+                } catch (_) {}
+                _restorePos(l, LKEY);
+                _makeDraggable(l, l, LKEY, function() { window.prometheusExpand(); });
+                _makeDraggable(w, _el('prometheusHeader') || w, WKEY, null);
+                l.addEventListener('keydown', function(ev) {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                        ev.preventDefault(); window.prometheusExpand();
+                    }
+                });
+                var open = null;
+                try { open = localStorage.getItem(OKEY); } catch (_) {}
+                if (open === '1') { window.prometheusExpand(); }
+                else { l.classList.add('pm-on'); _clampToViewport(l); }
+                window.addEventListener('resize', function() {
+                    if (l.classList.contains('pm-on')) _clampToViewport(l);
+                    if (w.classList.contains('pm-on')) _clampToViewport(w);
+                });
+                if (window.ResizeObserver) {
+                    var _rt = null;
+                    new ResizeObserver(function() {
+                        if (!w.classList.contains('pm-on')) return;
+                        clearTimeout(_rt);
+                        _rt = setTimeout(function() {
+                            try {
+                                localStorage.setItem(SKEY, JSON.stringify(
+                                    { w: w.offsetWidth, h: w.offsetHeight }));
+                            } catch (_) {}
+                        }, 250);
+                    }).observe(w);
+                }
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', _initPrometheus);
+            } else { _initPrometheus(); }
+        })();
 
         // ===================== CHATBOT PROFILE IQ (2026-08-17) =====================
         // Natural-language chat surface that produces an approvable brief, then
@@ -59276,7 +59494,7 @@ https://www.instagram.com/p/..."></textarea>
                 var text = _synthChatEscapeHtml(_rawText);
                 var isUser = role === 'user';
                 var bg = isUser ? 'rgba(84, 141, 255, 0.14)' : 'rgba(255,255,255,0.05)';
-                var label = isUser ? '👤 You' : '🤖 Agent';
+                var label = isUser ? 'You' : 'Prometheus';
                 // Quick-reply chips (2026-08-20 Jenna: every keyword
                 // prompt should be clickable like the opening
                 // questions). Only the NEWEST agent turn renders its
@@ -59591,7 +59809,7 @@ https://www.instagram.com/p/..."></textarea>
             el.className = 'synth-thinking-bubble';
             el.id = bubbleId;
             el.innerHTML =
-                '<div class="synth-thinking-label">🤖 Agent</div>' +
+                '<div class="synth-thinking-label">Prometheus</div>' +
                 '<div class="synth-thinking-status">' +
                     '<span class="synth-thinking-dots">' +
                         '<span class="synth-dot"></span>' +
