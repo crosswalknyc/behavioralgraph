@@ -2805,6 +2805,12 @@ _DEFAULT_UNIT_BY_KIND = {
     # 7 days. See stream_estimates._GAMING_PLATFORMS_META for anchor
     # language + ceiling.
     'game':      'weekly US plays',
+    # FAST channels (Channel Ranker sub-tab, 2026-08-21): unique US
+    # households tuning to a 24/7 linear channel on Roku Channel /
+    # Tubi / Pluto TV / Amazon Live TV for >=1 minute in the past
+    # 7 days. Not to be confused with `fast_film` / `fast_tv` which
+    # are per-title reach on the same platforms.
+    'fast_channel': 'weekly US viewers',
 }
 
 # Per (kind, platform) unit label. Wins over Claude's aggregate
@@ -3160,6 +3166,72 @@ def _annotate_fast_with_streams(fast_trending: dict,
                 _stamp_stream_estimate(row, entry,
                                          platform_key=platform_key,
                                          kind_hint=kind_hint)
+
+
+def _annotate_fast_channels_with_views(fast_trending: dict,
+                                          estimates: dict) -> None:
+    """Attach `us_streams` (weekly US viewers) to every micro-channel
+    row inside every FAST platform, then re-sort each platform's
+    channel list by view estimate desc so the Channel Ranker sub-tab
+    ranks channels by real audience instead of raw airings.
+
+    Keys are `fast_channel:<platform_slug>:<norm_name>` - the same
+    key format `stream_estimates._collect_fast_channels` writes AND
+    `stream_estimates._lookup_key('fast_channel', name, slug)`
+    produces. Same channel on Pluto vs Roku vs Amazon = three
+    separate rows with three separate keys and three distinct view
+    estimates.
+
+    Channels with no view estimate (never got a Claude call, or the
+    call failed) keep their original airings-based order at the tail
+    of the sorted list so the ranker still shows every channel.
+
+    Added 2026-08-21 (Jenna: Channel Ranker sub-tab, "ranks based on
+    views and give an estimate of how many views each channel had").
+    """
+    if not fast_trending:
+        return
+    items_lookup = ((estimates or {}).get('items') or {})
+    for panel_slug, panel in (fast_trending or {}).items():
+        if not panel:
+            continue
+        channels = panel.get('channels') or []
+        if not channels:
+            continue
+        # Stamp us_streams on every channel row.
+        for row in channels:
+            name = (row.get('name') or '').strip()
+            norm = _cp_normalize(name)
+            if not norm:
+                continue
+            key = f'fast_channel:{panel_slug}:{norm}'
+            entry = items_lookup.get(key)
+            # Stream estimates keep the fast_channel entry's number
+            # inside `by_platform[<platform_slug>]` where
+            # <platform_slug> matches the panel slug (roku/tubi/
+            # pluto/amazon). Same platform_key semantics as the
+            # other FAST annotator so `_stamp_stream_estimate`
+            # sees the right per-platform block.
+            _stamp_stream_estimate(row, entry,
+                                     platform_key=panel_slug,
+                                     kind_hint='fast_channel')
+
+        # Re-sort by view estimate desc. Channels without an
+        # estimate (`us_streams` missing or 0) sink to the tail but
+        # keep their relative airings-based order via the secondary
+        # sort key. Re-stamp `rank` so the frontend renders 1..N
+        # matching the new order.
+        def _sort_key(row: dict) -> tuple:
+            us = (row.get('us_streams') or {})
+            v  = us.get('us_estimate') or 0
+            # Sort direction: primary desc by views (0 -> last), then
+            # secondary asc by original airings-based rank so the
+            # untracked tail stays in a deterministic order.
+            return (0 if v > 0 else 1, -v, row.get('rank') or 10_000)
+
+        channels.sort(key=_sort_key)
+        for i, row in enumerate(channels, 1):
+            row['rank'] = i
 
 
 def _annotate_gaming_with_streams(gaming_trending: dict,
@@ -5943,6 +6015,13 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # SVOD estimates for the same title (see stream_estimates
     # ._collect_fast for the split rationale).
     _annotate_fast_with_streams(fast_trending, stream_estimates_snap)
+    # FAST-channel ranker (2026-08-21): attach weekly-US-viewers to
+    # every micro-channel inside each FAST platform + re-sort each
+    # platform's channel list by views desc so the "Channel Ranker"
+    # sub-tab reads top-audience-first. Keyed
+    # `fast_channel:<platform>:<norm_name>` per platform (no cross-
+    # platform dedup).
+    _annotate_fast_channels_with_views(fast_trending, stream_estimates_snap)
     # Gaming: Xbox Game Pass Ultimate rows get a weekly-US-plays
     # estimate. Keyed `game:<norm_title>` in the estimates snapshot.
     _annotate_gaming_with_streams(gaming_trending, stream_estimates_snap)

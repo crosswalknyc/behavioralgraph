@@ -129,6 +129,17 @@ _MAX_FAST_ITEMS      = 350
 # PlayStation Plus / Nintendo Switch Online / Steam later without
 # changing the cap.
 _MAX_GAMING_ITEMS    = 30
+# FAST-CHANNEL RANKER: micro-channels inside each FAST platform
+# (LaurenZSide, Mythical 24/7, Nick Jr. Pluto TV, Forensic Files
+# 24/7, ...). Roku ships ~619, Amazon ~655, Pluto ~410, Tubi ~169
+# = ~1,850 total, so we cap at top-100 by airings/wk per platform
+# and DO NOT cross-platform dedup: the same channel name on Pluto
+# vs Roku vs Amazon represents entirely different audiences on
+# different distribution rails, so each platform's copy gets its
+# own Claude call. Added 2026-08-21 (Jenna: "channel ranker" sub-
+# tab, "ranks based on views and give an estimate of how many
+# views each channel had"). ~$8/day added spend at 400 items.
+_MAX_FAST_CHANNEL_ITEMS = 400
 
 _WEBSEARCH_MODEL      = (os.environ.get('STREAM_ESTIMATES_MODEL')
                           or 'claude-sonnet-4-5')
@@ -436,6 +447,81 @@ def _collect_gaming(max_items: int = _MAX_GAMING_ITEMS) -> list[dict]:
     return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
 
 
+def _collect_fast_channels(max_items: int = _MAX_FAST_CHANNEL_ITEMS) -> list[dict]:
+    """Collect the top-N-by-airings micro-channels on each FAST
+    platform. Keyed by `fast_channel:<platform_slug>:<norm_name>`
+    with NO cross-platform dedup: the same channel name on Pluto vs.
+    Roku vs. Amazon represents distinct audiences on distinct
+    distribution rails, so each copy earns its own Claude call.
+
+    Snapshot layout (from build_fast_channel_lineups):
+        sources.<platform>.channels = [
+          {name, airings, content_type}, ...
+        ]
+
+    `airings` is the raw signal we pass to Claude as an intra-
+    platform popularity hint - a channel with 631 airings/wk on
+    Amazon is clearly a top-tier channel; one with 12 airings/wk
+    is fringe. Claude reasons from airings + channel prominence +
+    platform MAU to a weekly-viewers number."""
+    snap = _read_snapshot('fast_channel_lineups')
+    if not snap:
+        return []
+    sources = (snap.get('sources') or {})
+
+    # Per-platform cap: divide the budget across platforms so no
+    # single platform (Amazon at 655 channels) starves the others.
+    # Roku ~619 / Amazon ~655 / Pluto ~410 / Tubi ~169. Cap at
+    # top-100 per platform so the ranker still surfaces the whole
+    # top page of each platform.
+    per_platform_cap = max(50, max_items // 4)
+
+    out: list[dict] = []
+    for slug, label in _FAST_SLUGS:
+        block = sources.get(slug) or {}
+        channels = (block.get('channels') or [])
+        # Assume the scraper already emits channels sorted by
+        # airings desc (build_fast_channel_lineups does this
+        # explicitly). Cap defensively.
+        for i, ch in enumerate(channels[:per_platform_cap]):
+            name = (ch.get('name') or '').strip()
+            if not _cp_normalize(name):
+                continue
+            airings = int(ch.get('airings') or 0)
+            content_type = (ch.get('content_type') or '').strip()
+            rank = i + 1
+            # Encode platform in the key so cross-platform
+            # duplicates DON'T collapse. Also stash the platform
+            # on the item so the prompt can call it out and the
+            # sanitizer knows which platform's ceiling applies.
+            key_hint = f'{slug}:{_cp_normalize(name)}'
+            out.append({
+                'kind':           'fast_channel',
+                'display_title':  name,
+                # `artist` carries the platform slug so
+                # `_lookup_key('fast_channel', name, slug)` produces
+                # a platform-scoped key that both this collector AND
+                # `trends_iq._annotate_fast_channels_with_views` will
+                # emit for lookup. See `_lookup_key` for the
+                # exact format.
+                'artist':         slug,
+                'fast_platform':  slug,
+                'airings':        airings,
+                'content_type':   content_type,
+                'best_rank':      rank,
+                'chart_labels':   [f'{label} channel rank #{rank} '
+                                    f'({airings:,} airings/wk)'],
+                'image':          '',
+                'url':            '',
+            })
+    # Sort by airings desc across all platforms so the highest-
+    # signal channels get researched first (parallelism doesn't
+    # care about order, but the caller's log is more informative
+    # this way).
+    out.sort(key=lambda e: e.get('airings') or 0, reverse=True)
+    return out[:max_items]
+
+
 def _collect_books(max_items: int = _MAX_BOOK_ITEMS) -> list[dict]:
     """Union top items across the book_charts snapshot (Amazon /
     Apple / Audible) AND the libby_trends snapshot (LA County
@@ -540,6 +626,14 @@ def _lookup_key(kind: str, display_title: str, artist: str = '') -> str:
         # name in the same window). Publisher rides along on `artist`
         # for prompt context but isn't part of the key.
         return f'game:{_cp_normalize(display_title)}'
+    if kind == 'fast_channel':
+        # Platform-scoped: 'Mythical 24/7' on Pluto vs Roku vs Tubi
+        # are three separate rows with three separate weekly view
+        # numbers. `artist` carries the platform slug (roku/tubi/
+        # pluto/amazon) - both sides (collector + trends_iq
+        # annotator) pass it in the same slot.
+        plat = (artist or '').strip().lower()
+        return f'fast_channel:{plat}:{_cp_normalize(display_title)}'
     if kind in ('film', 'tv', 'title'):
         return f'{kind}:{_cp_normalize(display_title)}'
     return f'{kind}:{_cp_normalize(display_title)}'
@@ -1047,6 +1141,75 @@ _FAST_PLATFORMS_META = [
 ]
 
 
+# FAST-channel platforms. Unlike the FAST-title anchors above
+# (which reason about weekly-viewers-per-title on the platform),
+# these are anchors for weekly-viewers-per-CHANNEL. A channel is a
+# 24/7 linear feed inside the platform (Nick Jr. Pluto TV, Mythical
+# 24/7, Forensic Files 24/7, ...). Ceilings are the historical
+# weekly-viewers peak for a top-tier channel on that platform per
+# Nielsen FAST Gauge / TVREV monthly channel-ranker reports /
+# Antenna FAST engagement.
+_FAST_CHANNEL_PLATFORMS_META = [
+    {'key': 'roku',
+     'label': 'Roku Channel',
+     'ceiling': 4_000_000,
+     'anchors': (
+         "Roku Channel channel-level weekly viewership. Roku is a "
+         'top-3 FAST platform with ~85M weekly US actives across its '
+         'FAST grid. Top channels (Roku Originals hub, ABC News Live, '
+         'Fox Weather, Reuters Now, live sports pop-ups) get '
+         '1.5-3.5M US weekly viewers. Mid-tier IP channels (Judge '
+         'Faith, The Bernie Mac Show 24/7, Personal Injury Court) '
+         '200K-700K. Long-tail niche channels (Cougar Town, single-'
+         'show reruns) 30-120K weekly. Anchor: Roku Inc. Q2 2026 '
+         'earnings + TVREV monthly channel rankings + Antenna FAST '
+         'engagement reports.'
+     )},
+    {'key': 'tubi',
+     'label': 'Tubi',
+     'ceiling': 4_000_000,
+     'anchors': (
+         "Tubi channel-level weekly viewership. Fox Corp. Q2 2026: "
+         'Tubi ~97M MAU. Top channels (Forensic Files, Cheaters, '
+         'Game Show Central, Euronews Live) 1.5-3M US weekly '
+         'viewers. Mid-tier (Mythical 24/7, MasterChef 24/7) '
+         '250K-800K. Long-tail 40-150K. Tubi has fewer channels '
+         '(~170) so each channel gets meaningfully more traffic '
+         'than Amazon/Roku equivalents. Anchor: Fox Q2 2026 '
+         'earnings + Nielsen FAST Gauge + TVREV Tubi channel '
+         'rankings.'
+     )},
+    {'key': 'pluto',
+     'label': 'Pluto TV',
+     'ceiling': 3_500_000,
+     'anchors': (
+         "Pluto TV channel-level weekly viewership. Paramount Q2 "
+         '2026: Pluto ~80M MAU global / ~50M US. Top channels '
+         '(Nick Jr. Pluto TV, MTV, CBS News, Star Trek, Home '
+         'Cooking, PowerNation) 1-2.5M US weekly viewers. Mid-'
+         'tier IP channels (Judge Faith 24/7, LEGO Channel, CSI '
+         '24/7) 200K-700K. Long-tail niche channels 30-120K weekly. '
+         'Anchor: Paramount Q2 2026 earnings + Nielsen FAST Gauge '
+         '+ S&P Ampere Analysis + Antenna Pluto channel rankings.'
+     )},
+    {'key': 'amazon',
+     'label': 'Amazon Live TV',
+     'ceiling': 2_500_000,
+     'anchors': (
+         "Amazon Live TV (formerly Freevee-branded FAST channels, "
+         'now inside Prime Video ad-tier navigation). Amazon FAST '
+         'is smaller per-channel than Roku/Tubi/Pluto because most '
+         'Prime audience defaults to on-demand. Top channels '
+         '(Mr. Bean 24/7, The Three Stooges+, LaurenZSide branded '
+         'channel, ABC News Live, curated pop-ups) 800K-1.8M US '
+         'weekly viewers. Mid-tier 150K-500K. Long-tail 20-80K. '
+         'Anchor: Amazon Q2 2026 shareholder letter + TVREV '
+         'monthly rankings. Do NOT reason from Prime paid-catalog '
+         'numbers.'
+     )},
+]
+
+
 # Gaming platforms. Ceilings + anchor language for Xbox Game Pass
 # Ultimate: Microsoft's cloud + console library subscription (~25M
 # US subs mid-2026 per Ampere Analysis + Microsoft Q4 FY26 supplement).
@@ -1088,6 +1251,8 @@ def _platforms_for_kind(kind: str) -> list[dict]:
         return _STREAMING_PLATFORMS_META
     if kind in ('fast_film', 'fast_tv'):
         return _FAST_PLATFORMS_META
+    if kind == 'fast_channel':
+        return _FAST_CHANNEL_PLATFORMS_META
     if kind == 'game':
         return _GAMING_PLATFORMS_META
     if kind == 'book':
@@ -1264,6 +1429,48 @@ def _build_prompt(item: dict) -> str:
         item_line = (f'GAME TITLE: {display_title}{pub_str}\n'
                      f'PLATFORM: Xbox Game Pass Ultimate (~25M US subs, '
                      f'includes console + PC + Xbox Cloud Gaming)')
+    elif kind == 'fast_channel':
+        # "Weekly US viewers" = unique US TVs / households that tuned
+        # to this 24/7 linear channel on this specific FAST platform
+        # for at least one minute in the past 7 days. Airings/week is
+        # the strongest intra-platform signal we have -- Claude
+        # reasons from airings + channel-IP recognizability + the
+        # platform's total weekly actives to a defensible number.
+        # `artist` carries the platform slug (roku/tubi/pluto/amazon).
+        plat_slug = (item.get('fast_platform') or artist or '').lower()
+        plat_label_map = {
+            'roku':   'Roku Channel',
+            'tubi':   'Tubi',
+            'pluto':  'Pluto TV',
+            'amazon': 'Amazon Live TV',
+        }
+        plat_label = plat_label_map.get(plat_slug, plat_slug or '(unknown)')
+        unit = ('weekly US viewers (unique US households tuning to '
+                'this 24/7 linear FAST channel for at least one '
+                'minute in the past 7 days)')
+        query = (f'"{display_title}" "{plat_label}" FAST channel '
+                 f'weekly US viewers Nielsen Gauge TVREV 2026')
+        airings   = int(item.get('airings') or 0)
+        ctype     = item.get('content_type') or ''
+        ctype_str = f'\nCONTENT TYPE: {ctype}' if ctype else ''
+        item_line = (
+            f'FAST CHANNEL NAME: {display_title}\n'
+            f'FAST PLATFORM: {plat_label}\n'
+            f'INTRA-PLATFORM AIRINGS/WEEK (raw signal, higher = more '
+            f'popular within this platform): {airings:,}'
+            f'{ctype_str}\n'
+            f'REASONING GUIDANCE: airings/wk is an intra-platform '
+            f'popularity signal only - use it to rank this channel '
+            f'RELATIVE to other channels on {plat_label}, but the '
+            f'absolute weekly-viewers number comes from '
+            f"{plat_label}'s total weekly US actives times a share "
+            f'that reflects the channel\'s prominence + IP '
+            f'recognition + programming appeal. A no-name single-'
+            f'show reruns channel with 400 airings/wk gets far '
+            f'fewer viewers than a branded flagship (Nick Jr., '
+            f'CBS News, Fox Weather, Mr. Bean) even at the same '
+            f'airings count.'
+        )
     elif kind == 'book':
         unit  = ('weekly US audience (readers/listeners/borrowers per '
                  'platform - amazon+apple = readers, audible = '
@@ -1290,6 +1497,15 @@ def _build_prompt(item: dict) -> str:
         item_line = f'TITLE: {display_title}'
 
     platforms = _platforms_for_kind(kind)
+    # For FAST channels, restrict the prompt to the ONE platform the
+    # channel actually lives on - the same channel name on Pluto vs
+    # Roku vs Tubi are three separate items with three separate keys,
+    # so each Claude call should reason about exactly one platform.
+    # This also cuts prompt cost by ~3x on this kind.
+    if kind == 'fast_channel':
+        plat_slug = (item.get('fast_platform') or artist or '').lower()
+        platforms = [p for p in platforms if p['key'] == plat_slug]
+        focus_keys = {plat_slug} if platforms else set()
     if not platforms:
         # Fallback - shouldn't happen with current callers but keep
         # graceful degrade.
@@ -1368,6 +1584,11 @@ _MAX_ESTIMATE_BY_KIND = {
     # ceiling because there is only one platform today. Bumps once we
     # add PS Plus / Nintendo Switch Online / Steam.
     'game':      6_000_000,
+    # FAST channel: aggregate ceiling matches the highest per-platform
+    # ceiling (Roku 4M) because each channel row lives on exactly ONE
+    # platform - there's no cross-platform aggregation for channels
+    # the way there is for a title that runs on Roku + Tubi + Pluto.
+    'fast_channel': 4_000_000,
 }
 _CLAMP_TO_FRACTION = 0.4         # Bias clamped values conservative (was 0.5)
 
@@ -1387,6 +1608,8 @@ def _default_unit_for_kind(kind: str) -> str:
         return 'weekly US audience'
     if kind == 'game':
         return 'weekly US plays'
+    if kind == 'fast_channel':
+        return 'weekly US viewers'
     return 'weekly US views'
 
 
@@ -1753,7 +1976,8 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
     """Read podcast / music / streaming / book / fast snapshots,
     research each unique top item's US audience via Claude +
     web_search, and return the combined snapshot dict."""
-    wanted = only or {'podcast', 'song', 'streaming', 'book', 'fast', 'gaming'}
+    wanted = only or {'podcast', 'song', 'streaming', 'book',
+                       'fast', 'fast_channel', 'gaming'}
 
     items: list[dict] = []
     if 'podcast' in wanted:
@@ -1766,6 +1990,8 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
         items.extend(_collect_books())
     if 'fast' in wanted:
         items.extend(_collect_fast())
+    if 'fast_channel' in wanted:
+        items.extend(_collect_fast_channels())
     if 'gaming' in wanted:
         items.extend(_collect_gaming())
 
@@ -1786,13 +2012,14 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
 
     logger.info("stream_estimates: total unique items = %d "
                 "(podcast=%d, song=%d, streaming=%d, book=%d, fast=%d, "
-                "gaming=%d)",
+                "fast_channel=%d, gaming=%d)",
                 len(items),
                 sum(1 for it in items if it['kind'] == 'podcast'),
                 sum(1 for it in items if it['kind'] == 'song'),
                 sum(1 for it in items if it['kind'] in ('film', 'tv', 'title')),
                 sum(1 for it in items if it['kind'] == 'book'),
                 sum(1 for it in items if it['kind'] in ('fast_film', 'fast_tv')),
+                sum(1 for it in items if it['kind'] == 'fast_channel'),
                 sum(1 for it in items if it['kind'] == 'game'))
 
     # Incremental behavior (two goals):
@@ -1874,7 +2101,8 @@ if __name__ == '__main__':
                          format='%(asctime)s %(levelname)s %(name)s %(message)s')
     parser = argparse.ArgumentParser()
     parser.add_argument('--only', default='',
-                        help='Comma-separated: podcast,song,streaming,book,fast,gaming')
+                        help='Comma-separated: podcast,song,streaming,book,'
+                              'fast,fast_channel,gaming')
     args = parser.parse_args()
     only = set()
     for tok in args.only.split(','):

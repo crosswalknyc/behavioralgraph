@@ -51991,10 +51991,22 @@ https://www.instagram.com/p/..."></textarea>
                              !(s.tv    || []).length) {
                     body = '<div class="tiq-empty">No trending titles right now.</div>';
                 } else {
-                    // Backend ships `films` + `tv` splits with per-bucket
-                    // rank. Fall back to client-side bucketing on
-                    // `category_display` if a legacy cached payload
-                    // doesn't have the split.
+                    // FAST panel splits into TWO modes (2026-08-21,
+                    // Jenna: "move to a tab under the main tab called
+                    // channel ranker where it doesn't say how many
+                    // airings/week it has but ranks based on views
+                    // and give an estimate of how many views each
+                    // channel had"):
+                    //   'titles'   -> Film/TV columns of trending
+                    //                 titles on this FAST platform
+                    //                 (the original view).
+                    //   'channels' -> Micro-channel ranker for this
+                    //                 platform, ranked by weekly US
+                    //                 viewers (backend-annotated via
+                    //                 stream_estimates.fast_channel).
+                    var mode = window.__trendsIQ.activeFastMode || 'titles';
+
+                    // ---- Titles view -------------------------------------------
                     var filmRows = s.films || [];
                     var tvRows   = s.tv    || [];
                     if (!filmRows.length && !tvRows.length) {
@@ -52008,7 +52020,7 @@ https://www.instagram.com/p/..."></textarea>
                         });
                     }
                     var totalCount = (filmRows.length + tvRows.length) || (s.items || []).length;
-                    var subtitle = 'Top ' + totalCount + ' titles on ' +
+                    var titlesSubtitle = 'Top ' + totalCount + ' titles on ' +
                                     _tiqEsc(s.label || k) +
                                     ' (US popularity, ad-supported tier).';
                     var renderCol = function(label, rows) {
@@ -52020,10 +52032,6 @@ https://www.instagram.com/p/..."></textarea>
                                 ? '<div class="tiq-fast-genres">' + _tiqEsc(it.genres.slice(0, 3).join(' · ')) + '</div>'
                                 : '';
                             var views = _tiqAudienceChip(it.us_streams);
-                            // bucket_rank is the row's position inside
-                            // its Film or TV column (1..N). Falls back
-                            // to the paint-order index when a cached
-                            // payload doesn't have it.
                             var rk = it.bucket_rank || (i + 1);
                             return '<div class="tiq-row"><div class="tiq-rank">' + rk + '</div>' +
                                    img +
@@ -52037,55 +52045,84 @@ https://www.instagram.com/p/..."></textarea>
                         return '<div class="tiq-card"><h4>' + _tiqEsc(label) + '</h4>' +
                                '<div class="tiq-headline-list">' + (lis || '<div class="tiq-empty">No data.</div>') + '</div></div>';
                     };
-                    // Collapse to a single column if one side is empty
-                    // (rare on FAST but happens on niche channels).
                     var hasFilm = (filmRows || []).length > 0;
                     var hasTV   = (tvRows   || []).length > 0;
                     var cols    = (hasFilm && hasTV) ? '1fr 1fr' : '1fr';
-                    var gridInner = '';
-                    if (hasFilm) gridInner += renderCol('Film', filmRows);
-                    if (hasTV)   gridInner += renderCol('TV',   tvRows);
-                    // Channel lineup strip: FAST platforms are made of
-                    // named micro-channels (Waypoint TV, Nick Jr. Pluto TV,
-                    // Forensic Files 24/7, etc). Show the top-N by weekly
-                    // airings so viewers can see what actually programs
-                    // each platform, not just the trending titles. Data
-                    // comes from the fast_channel_lineups snapshot.
+                    var titlesGrid = '';
+                    if (hasFilm) titlesGrid += renderCol('Film', filmRows);
+                    if (hasTV)   titlesGrid += renderCol('TV',   tvRows);
+                    var titlesHtml =
+                        '<div class="tiq-card-sub" style="margin-bottom:12px;">' + titlesSubtitle + '</div>' +
+                        '<div class="tiq-cards-grid" style="grid-template-columns: ' + cols + ';">' +
+                        titlesGrid +
+                        '</div>';
+
+                    // ---- Channel Ranker view -----------------------------------
+                    // Backend already re-sorts channels by weekly US
+                    // viewers desc (see trends_iq._annotate_fast_
+                    // channels_with_views); we just render 1..N in
+                    // arrival order. Falls back to the airings-based
+                    // order for channels without a view estimate,
+                    // stamped last in the sorted list.
                     var channels = s.channels || [];
                     var channelsTotal = s.channels_total || channels.length;
-                    var channelsHtml = '';
-                    if (channels.length) {
+                    var channelsHtml;
+                    if (!channels.length) {
+                        channelsHtml = '<div class="tiq-empty">Channel ranker is warming up.</div>';
+                    } else {
                         var chLis = channels.map(function(ch, i) {
                             var ct = ch.content_type
                                 ? '<span style="margin-left:8px; padding:1px 6px; background:#eef2ff; color:#4338ca; border-radius:9999px; font-size:10px; font-weight:600; letter-spacing:.02em;">' + _tiqEsc(ch.content_type) + '</span>'
                                 : '';
-                            var airings = (ch.airings != null)
-                                ? '<span style="color:#64748b; font-size:12px; font-variant-numeric:tabular-nums; margin-left:auto; white-space:nowrap;">' +
-                                  _tiqCompactNum(ch.airings) + ' airings/wk</span>'
+                            // Weekly US viewers chip replaces the
+                            // airings/wk pill. Same helper as every
+                            // other panel so the styling stays
+                            // consistent across FAST / streaming /
+                            // music / etc.
+                            var viewsChip = _tiqAudienceChip(ch.us_streams);
+                            var viewsHtml = viewsChip
+                                ? '<span style="margin-left:auto; white-space:nowrap;">' + viewsChip + '</span>'
                                 : '';
                             return '<div style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:#fff; border:1px solid #e5e7eb; border-radius:8px;">' +
                                    '<span style="color:#94a3b8; font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; min-width:22px; text-align:right;">' + (ch.rank || (i+1)) + '</span>' +
                                    '<span style="color:#0f172a; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + _tiqEsc(ch.name) + '</span>' +
                                    ct +
-                                   airings +
+                                   viewsHtml +
                                    '</div>';
                         }).join('');
                         channelsHtml =
-                            '<div style="margin-top:24px; padding-top:16px; border-top:1px solid #e5e7eb;">' +
-                              '<h4 style="margin:0 0 4px 0; font-size:14px; font-weight:600; color:#0f172a;">Channels on ' +
-                                _tiqEsc(s.label || k) + '</h4>' +
-                              '<div style="margin:0 0 12px 0; color:#64748b; font-size:12px;">' +
-                                'Showing top ' + channels.length + ' of ' + channelsTotal +
-                                ' micro-channels, ranked by weekly airings.' +
-                              '</div>' +
-                              '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:6px;">' + chLis + '</div>' +
-                            '</div>';
+                            '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
+                              'Ranking the ' + channels.length + ' most-watched channels on ' +
+                              _tiqEsc(s.label || k) + ' by weekly US viewers.' +
+                            '</div>' +
+                            '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:6px;">' + chLis + '</div>';
                     }
-                    body = '<div class="tiq-card-sub" style="margin-bottom:12px;">' + subtitle + '</div>' +
-                           '<div class="tiq-cards-grid" style="grid-template-columns: ' + cols + ';">' +
-                           gridInner +
-                           '</div>' +
-                           channelsHtml;
+
+                    // ---- Mode toggle ------------------------------------------
+                    // Two pill-shaped buttons above the grid. Active
+                    // pill sets background to the accent; inactive
+                    // stays subdued.
+                    var mkPill = function(m, label) {
+                        var isOn = (mode === m);
+                        var bg  = isOn ? '#6366f1' : '#fff';
+                        var col = isOn ? '#fff'    : '#334155';
+                        var bd  = isOn ? '#6366f1' : '#e5e7eb';
+                        return '<button type="button" ' +
+                               'onclick="setTrendsIQFastMode(\'' + m + '\')" ' +
+                               'style="background:' + bg + '; color:' + col + '; ' +
+                               'border:1px solid ' + bd + '; border-radius:9999px; ' +
+                               'padding:6px 14px; font-size:12px; font-weight:600; ' +
+                               'cursor:pointer; letter-spacing:.02em;">' +
+                               label + '</button>';
+                    };
+                    var modeStrip =
+                        '<div style="display:flex; gap:8px; margin-bottom:16px;">' +
+                          mkPill('titles',   'Titles') +
+                          mkPill('channels', 'Channel Ranker') +
+                        '</div>';
+
+                    var modeBody = (mode === 'channels') ? channelsHtml : titlesHtml;
+                    body = modeStrip + modeBody;
                 }
                 return '<div class="tiq-social-panel' + active + '" data-tiq-fast="' + k + '">' + body + '</div>';
             }).join('');
@@ -52105,6 +52142,26 @@ https://www.instagram.com/p/..."></textarea>
             document.querySelectorAll('#trendsIQPanels [data-tiq-fast]').forEach(function(el) {
                 el.classList.toggle('active', el.getAttribute('data-tiq-fast') === key);
             });
+            if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
+        };
+
+        // 2026-08-21: FAST panel mode toggle (Titles vs Channel
+        // Ranker). Mode is a single global setting shared across
+        // platforms - flipping to Channel Ranker on Roku keeps
+        // Channel Ranker active when you switch to Tubi. We call
+        // _renderTIQPanel directly to force a re-render of the FAST
+        // panel body since the mode changes what's inside, not just
+        // an active class.
+        window.setTrendsIQFastMode = function(mode) {
+            if (mode !== 'titles' && mode !== 'channels') return;
+            window.__trendsIQ.activeFastMode = mode;
+            var fast = (window.__trendsIQ.lastData &&
+                         window.__trendsIQ.lastData.cards &&
+                         window.__trendsIQ.lastData.cards.fast_trending) || {};
+            if (typeof _renderTIQPanel === 'function' &&
+                typeof renderTIQFast === 'function') {
+                _renderTIQPanel('fast', renderTIQFast(fast));
+            }
             if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
         };
 
