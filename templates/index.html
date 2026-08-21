@@ -788,6 +788,18 @@
             background: rgba(255,255,255,0.07);
             color: var(--text-primary);
         }
+        /* Non-interactive section subtitles inside Video Tutorials */
+        .user-dropdown-subheader {
+            padding: 0.5rem 1rem 0.25rem 2.4rem;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            opacity: 0.8;
+            cursor: default;
+            user-select: none;
+        }
         /* "Soon" tag for resource items whose content is not yet available */
         .user-dropdown-soon {
             float: right;
@@ -18999,12 +19011,13 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-ic
                                     <div class="user-dropdown-submenu" id="resourceCenterSubmenu">
                                         <button type="button" class="user-dropdown-subitem" id="btnVideoTutorials" aria-expanded="false">Video Tutorials<span class="user-dropdown-caret">&#9662;</span></button>
                                         <div class="user-dropdown-submenu user-dropdown-submenu-2" id="videoTutorialsSubmenu">
+                                            <div class="user-dropdown-subheader">Product Walk-Throughs</div>
                                             <button type="button" class="user-dropdown-subitem2" data-howto-video="{{ url_for('static', filename='videos/profile-iq.mp4') }}" data-howto-title="Profile IQ">Profile IQ</button>
                                             <button type="button" class="user-dropdown-subitem2" data-howto-video="{{ url_for('static', filename='videos/subscriber-iq.mp4') }}" data-howto-title="Subscriber IQ">Subscriber IQ</button>
+                                            <div class="user-dropdown-subheader">Task How-To Guides<span class="user-dropdown-soon">Soon</span></div>
                                         </div>
                                         <button type="button" class="user-dropdown-subitem" id="btnOpenMethodology">Methodology</button>
                                         <button type="button" class="user-dropdown-subitem user-dropdown-subitem-disabled" disabled>Metric Glossary<span class="user-dropdown-soon">Soon</span></button>
-                                        <button type="button" class="user-dropdown-subitem user-dropdown-subitem-disabled" disabled>How-To Guides<span class="user-dropdown-soon">Soon</span></button>
                                         <button type="button" class="user-dropdown-subitem user-dropdown-subitem-disabled" disabled>FAQs<span class="user-dropdown-soon">Soon</span></button>
                                     </div>
                                     <div class="user-dropdown-divider"></div>
