@@ -125669,114 +125669,6 @@ https://www.instagram.com/p/..."></textarea>
             link.click();
         }
         
-        // -----------------------------------------------------------------
-        // Global fallback for the "📄 Current Page (CSV)" dropdown link
-        // in the top action bar. Historically this called a name that
-        // was never defined, so the button silently did nothing.
-        //
-        // Now: figure out which Profile IQ tab is active and route to
-        // the right per-module CSV export (which honors cuts). If the
-        // active tab has no dedicated CSV, download a combined
-        // demographics + top-behavioral snapshot of the current
-        // profile so the click never becomes a no-op again.
-        // -----------------------------------------------------------------
-        function exportToCSV() {
-            try {
-                if (!window.currentDashboardData || !window.currentProfileData) {
-                    alert('Please select a profile first');
-                    return;
-                }
-                // Pick a reasonable per-tab default. This keeps the
-                // button useful even when the visible tab doesn't have
-                // its own dedicated download.
-                var activeTab = (typeof getActiveDashboardTab === 'function')
-                    ? getActiveDashboardTab()
-                    : null;
-                var demoCats = ['Age', 'Gender', 'Ethnicity', 'Income',
-                                'Education', 'Relationship Status',
-                                'Sexual Orientation', 'Parental Status',
-                                'Occupation'];
-                var profileName = (currentProfileData && currentProfileData.name) || 'Profile';
-                var stamp = new Date().toISOString().slice(0, 10);
-                var extraCohorts = _extraCohortsForCsv();
-                var head = 'Section,Category,Label,Profile %,Gen Pop %,Index';
-                extraCohorts.forEach(function (c) {
-                    head += ',' + _csvSafeHeader(c.label, '%');
-                    head += ',' + _csvSafeHeader(c.label, 'Index');
-                });
-                var rows = [head];
-                // Demographics
-                var demoKeyByCategory = { 'Age': 'age', 'Gender': 'gender',
-                    'Ethnicity': 'ethnicity', 'Income': 'income',
-                    'Education': 'education', 'Relationship Status': 'relationship',
-                    'Sexual Orientation': 'sexual_orientation',
-                    'Parental Status': 'parental_status',
-                    'Occupation': 'occupation' };
-                demoCats.forEach(function (cat) {
-                    var catKey = demoKeyByCategory[cat];
-                    var data = (currentDashboardData.demographics || {})[catKey] || {};
-                    var idx = (currentDashboardData.demographicsIndex || {})[catKey] || {};
-                    var gp = (currentDashboardData.demographicsGenPop || {})[catKey] || {};
-                    Object.keys(data).forEach(function (label) {
-                        var val = (parseFloat(data[label]) || 0).toFixed(2);
-                        var gpNum = parseFloat(gp[label]) || 0;
-                        var gpStr = gpNum.toFixed(2);
-                        var ix = Math.round(parseFloat(idx[label]) || 100);
-                        var line = ['Demographic', cat, '"' + String(label).replace(/"/g, '""') + '"',
-                                    val + '%', gpStr + '%', ix];
-                        extraCohorts.forEach(function (c) {
-                            var cPct = _cohortDemoPct(c, catKey, label);
-                            var cIx = _cohortDemoIndex(c, catKey, label, gpNum);
-                            line.push(cPct == null ? '' : cPct.toFixed(2) + '%');
-                            line.push(cIx === '' ? '' : cIx);
-                        });
-                        rows.push(line.join(','));
-                    });
-                });
-                // Behavioral (all categories)
-                var behavioral = currentDashboardData.behavioral || {};
-                Object.keys(behavioral).forEach(function (cat) {
-                    var items = behavioral[cat];
-                    if (!Array.isArray(items)) return;
-                    items.forEach(function (it) {
-                        var pctNum = Number(it.pct) || 0;
-                        var gpPctNum = Number(it.genPopPct) || 0;
-                        var line = ['Behavioral', cat,
-                                    '"' + String(it.name || '').replace(/"/g, '""') + '"',
-                                    pctNum.toFixed(2) + '%',
-                                    gpPctNum.toFixed(2) + '%',
-                                    Number(it.index) || 0];
-                        extraCohorts.forEach(function (c) {
-                            var bi = _cohortBehavioralItem(c, cat, it.name);
-                            var cPct = (bi && bi.pct != null) ? Number(bi.pct) : null;
-                            var cIx = (bi && bi.index != null && isFinite(bi.index))
-                                ? Math.round(Number(bi.index))
-                                : ((cPct != null && gpPctNum > 0)
-                                    ? Math.round((cPct / gpPctNum) * 100)
-                                    : '');
-                            line.push(cPct == null ? '' : cPct.toFixed(2) + '%');
-                            line.push(cIx === '' ? '' : cIx);
-                        });
-                        rows.push(line.join(','));
-                    });
-                });
-                var csvContent = rows.join('\n') + '\n';
-                var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                var link = document.createElement('a');
-                link.href = URL.createObjectURL(blob);
-                var safe = String(profileName).replace(/[^a-zA-Z0-9._-]+/g, '_');
-                link.download = safe + '_current_page_' + stamp + '.csv';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
-            } catch (err) {
-                console.error('exportToCSV failed', err);
-                alert('CSV export failed: ' + (err && err.message ? err.message : err));
-            }
-        }
-        window.exportToCSV = exportToCSV;
-
         // Export module as PNG
         function exportModulePNG(type, category) {
             if (!currentDashboardData || !currentProfileData) {
@@ -133429,19 +133321,33 @@ https://www.instagram.com/p/..."></textarea>
                 csvContent = `${profileName} - Demographics\n\n`;
                 const demoCategoryList = [{ key: 'age', title: 'Age' }, { key: 'gender', title: 'Gender' }, { key: 'ethnicity', title: 'Ethnicity' }, { key: 'income', title: 'Income' }, { key: 'education', title: 'Education' }, { key: 'relationship', title: 'Relationship Status' }, { key: 'sexual_orientation', title: 'Sexual Orientation' }, { key: 'parental_status', title: 'Parental Status' }, { key: 'occupation', title: 'Occupation' }];
                 const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO' || upper === 'STRAIGHT / HETEROSEXUAL') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES' || upper === 'GAY OR LESBIAN' || upper === 'LGBTQ+') return 'LGBTQ+'; if (upper === 'OTHER' || upper === 'ANOTHER SEXUAL ORIENTATION') return 'OTHER'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
+                const _pageDemoCohorts = _extraCohortsForCsv();
+                let _pageDemoCohortHead = '';
+                _pageDemoCohorts.forEach(function (c) {
+                    _pageDemoCohortHead += ',' + _csvSafeHeader(c.label, '%');
+                    _pageDemoCohortHead += ',' + _csvSafeHeader(c.label, 'Index');
+                });
                 demoCategoryList.forEach(({ key: catKey, title: catTitle }) => {
                     const data = currentDashboardData.demographics[catKey] || {};
                     const index = currentDashboardData.demographicsIndex[catKey] || {};
                     const genPop = currentDashboardData.demographicsGenPop[catKey] || {};
                     if (Object.keys(data).length > 0) {
                         csvContent += `${catTitle.toUpperCase()}\n`;
-                        csvContent += `Label,Profile %,Gen Pop %,Index\n`;
+                        csvContent += `Label,Profile %,Gen Pop %,Index${_pageDemoCohortHead}\n`;
                         const labelFn = (catKey === 'sexual_orientation') ? soDisplayLabel : (l) => l;
                         Object.keys(data).forEach(label => {
                             const val = (parseFloat(data[label]) || 0).toFixed(2);
-                            const gp = (parseFloat(genPop[label]) || 0).toFixed(2);
+                            const gpNum = parseFloat(genPop[label]) || 0;
+                            const gp = gpNum.toFixed(2);
                             const idx = Math.round(parseFloat(index[label]) || 100);
-                            csvContent += `"${labelFn(label)}",${val}%,${gp}%,${idx}\n`;
+                            let _pageDemoCohortCells = '';
+                            _pageDemoCohorts.forEach(function (c) {
+                                const cPct = _cohortDemoPct(c, catKey, label);
+                                const cIdx = _cohortDemoIndex(c, catKey, label, gpNum);
+                                _pageDemoCohortCells += ',' + (cPct == null ? '' : cPct.toFixed(2) + '%');
+                                _pageDemoCohortCells += ',' + (cIdx === '' ? '' : cIdx);
+                            });
+                            csvContent += `"${labelFn(label)}",${val}%,${gp}%,${idx}${_pageDemoCohortCells}\n`;
                         });
                         csvContent += `\n`;
                     }
@@ -133452,19 +133358,41 @@ https://www.instagram.com/p/..."></textarea>
                 // Export all visible behavioral categories (use same values as dashboard: projection and genPopProjection)
                 csvContent = `${profileName} - Behavioral\n\n`;
                 const behavioral = currentDashboardData.behavioral || {};
-                
+                const _pageBehCohorts = _extraCohortsForCsv();
+                let _pageBehCohortHead = '';
+                _pageBehCohorts.forEach(function (c) {
+                    _pageBehCohortHead += ',' + _csvSafeHeader(c.label, '%');
+                    _pageBehCohortHead += ',' + _csvSafeHeader(c.label, 'Numbers');
+                    _pageBehCohortHead += ',' + _csvSafeHeader(c.label, 'Index');
+                });
+
                 Object.keys(behavioral).forEach(category => {
                     const items = behavioral[category] || [];
                     if (items.length > 0) {
                         csvContent += `${category.toUpperCase()}\n`;
-                        csvContent += `Name,Audience %,Audience Numbers,Gen Pop %,Gen Pop Numbers,Index\n`;
+                        csvContent += `Name,Audience %,Audience Numbers,Gen Pop %,Gen Pop Numbers,Index${_pageBehCohortHead}\n`;
                         items.forEach(item => {
                             const audiencePct = (item.pct || 0).toFixed(2);
                             const audienceNumbers = (item.projection != null && item.projection !== '') ? Math.round(Number(item.projection)) : Math.round(((item.pct || 0) / 100) * US_POP);
                             const genPopPct = item.genPopPct || 0;
                             const genPopNumbers = (item.genPopProjection != null && item.genPopProjection !== '') ? Math.round(Number(item.genPopProjection)) : Math.round((genPopPct / 100) * US_POP);
                             const index = item.index || 0;
-                            csvContent += `"${item.name}",${audiencePct}%,${audienceNumbers},${genPopPct.toFixed(2)}%,${genPopNumbers},${index}\n`;
+                            let _pageBehCohortCells = '';
+                            _pageBehCohorts.forEach(function (c) {
+                                const bi = _cohortBehavioralItem(c, category, item.name);
+                                const cPct = (bi && bi.pct != null) ? Number(bi.pct) : null;
+                                const cProj = (bi && bi.projection != null && bi.projection !== '')
+                                    ? Math.round(Number(bi.projection))
+                                    : (cPct != null ? Math.round((cPct / 100) * US_POP) : null);
+                                let cIdx = (bi && bi.index != null && isFinite(bi.index)) ? Math.round(Number(bi.index)) : '';
+                                if (cIdx === '' && cPct != null && genPopPct > 0) {
+                                    cIdx = Math.round((cPct / genPopPct) * 100);
+                                }
+                                _pageBehCohortCells += ',' + (cPct == null ? '' : cPct.toFixed(2) + '%');
+                                _pageBehCohortCells += ',' + (cProj == null ? '' : cProj);
+                                _pageBehCohortCells += ',' + (cIdx === '' ? '' : cIdx);
+                            });
+                            csvContent += `"${item.name}",${audiencePct}%,${audienceNumbers},${genPopPct.toFixed(2)}%,${genPopNumbers},${index}${_pageBehCohortCells}\n`;
                         });
                         csvContent += `\n`;
                     }
@@ -133475,12 +133403,31 @@ https://www.instagram.com/p/..."></textarea>
                 // Export interests data (flat object: name -> { pct, genPopPct, index })
                 csvContent = `${profileName} - Interests\n\n`;
                 const interests = currentDashboardData.interests || {};
-                csvContent += `Interest,Audience %,Gen Pop %,Index\n`;
+                const _pageIntCohorts = _extraCohortsForCsv();
+                let _pageIntCohortHead = '';
+                _pageIntCohorts.forEach(function (c) {
+                    _pageIntCohortHead += ',' + _csvSafeHeader(c.label, '%');
+                    _pageIntCohortHead += ',' + _csvSafeHeader(c.label, 'Index');
+                });
+                csvContent += `Interest,Audience %,Gen Pop %,Index${_pageIntCohortHead}\n`;
                 Object.entries(interests).forEach(([name, vals]) => {
-                    const pct = (vals.pct != null ? vals.pct : 0).toFixed(2);
-                    const genPopPct = (vals.genPopPct != null ? vals.genPopPct : 0).toFixed(2);
+                    const pctNum = (vals.pct != null ? Number(vals.pct) : 0);
+                    const pct = pctNum.toFixed(2);
+                    const gpPctNum = (vals.genPopPct != null ? Number(vals.genPopPct) : 0);
+                    const genPopPct = gpPctNum.toFixed(2);
                     const index = vals.index != null ? vals.index : 0;
-                    csvContent += `"${String(name).replace(/"/g, '""')}",${pct},${genPopPct},${index}\n`;
+                    let _pageIntCohortCells = '';
+                    _pageIntCohorts.forEach(function (c) {
+                        const ii = _cohortInterestItem(c, name);
+                        const cPct = (ii && ii.pct != null) ? Number(ii.pct) : null;
+                        let cIdx = (ii && ii.index != null && isFinite(ii.index)) ? Math.round(Number(ii.index)) : '';
+                        if (cIdx === '' && cPct != null && gpPctNum > 0) {
+                            cIdx = Math.round((cPct / gpPctNum) * 100);
+                        }
+                        _pageIntCohortCells += ',' + (cPct == null ? '' : cPct.toFixed(2));
+                        _pageIntCohortCells += ',' + (cIdx === '' ? '' : cIdx);
+                    });
+                    csvContent += `"${String(name).replace(/"/g, '""')}",${pct},${genPopPct},${index}${_pageIntCohortCells}\n`;
                 });
                 filename = `${profileName}_Interests.csv`;
                 
@@ -133510,10 +133457,28 @@ https://www.instagram.com/p/..."></textarea>
                     });
                 }
                 csvContent = `${profileName} - Location\n\n`;
-                csvContent += `DMA Rank,DMA,Audience %,Gen Pop %,Index\n`;
+                const _pageLocCohorts = _extraCohortsForCsv();
+                let _pageLocCohortHead = '';
+                _pageLocCohorts.forEach(function (c) {
+                    _pageLocCohortHead += ',' + _csvSafeHeader(c.label, '%');
+                    _pageLocCohortHead += ',' + _csvSafeHeader(c.label, 'Index');
+                });
+                csvContent += `DMA Rank,DMA,Audience %,Gen Pop %,Index${_pageLocCohortHead}\n`;
                 sorted.forEach(loc => {
                     const rank = getDMARank(loc.name) || '';
-                    csvContent += `${rank},"${normalizeDmaDisplay(loc.name)}",${(loc.pct || 0).toFixed(4)}%,${(loc.genPopPct || 0).toFixed(4)}%,${loc.index || 0}\n`;
+                    const gpPctNum = (loc.genPopPct != null) ? Number(loc.genPopPct) : 0;
+                    let _pageLocCohortCells = '';
+                    _pageLocCohorts.forEach(function (c) {
+                        const li = _cohortLocationItem(c, loc.name);
+                        const cPct = (li && li.pct != null) ? Number(li.pct) : null;
+                        let cIdx = (li && li.index != null && isFinite(li.index)) ? Math.round(Number(li.index)) : '';
+                        if (cIdx === '' && cPct != null && gpPctNum > 0) {
+                            cIdx = Math.round((cPct / gpPctNum) * 100);
+                        }
+                        _pageLocCohortCells += ',' + (cPct == null ? '' : cPct.toFixed(4) + '%');
+                        _pageLocCohortCells += ',' + (cIdx === '' ? '' : cIdx);
+                    });
+                    csvContent += `${rank},"${normalizeDmaDisplay(loc.name)}",${(loc.pct || 0).toFixed(4)}%,${(loc.genPopPct || 0).toFixed(4)}%,${loc.index || 0}${_pageLocCohortCells}\n`;
                 });
                 filename = `${profileName}_Location.csv`;
                 
