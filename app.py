@@ -47183,6 +47183,286 @@ def api_synth_chat_health():
 
 
 # ============================================================================
+# PROMETHEUS PAGE-AWARE ANALYSIS + DECK BUILD (2026-08-20)
+# ============================================================================
+# The floating Prometheus widget can analyze the data OPEN ON THE PAGE:
+# the primary profile plus any Data Cuts the user has checked. The
+# frontend sends a page_context {primary: {s3_key, name}, cuts: [...]};
+# we access-gate every key with _require_profile_run_access, build a
+# compact numeric digest (prometheus_analysis), and reason over it on
+# the strongest available model (Opus preferred, resolved at runtime,
+# sonnet fallback). First-party clickstream-derived data is the primary
+# evidence; outside knowledge is context only (Jenna 2026-08-20).
+#
+# Deck builds run async in a thread; status + the presigned download
+# URL live in S3 (system/prometheus_decks/) so any gunicorn worker can
+# answer the poll.
+
+_PM_ANALYZE_MODEL_ENV = (os.environ.get('PROMETHEUS_ANALYZE_MODEL')
+                         or '').strip()
+_PM_ANALYZE_CANDIDATES = (
+    ([_PM_ANALYZE_MODEL_ENV] if _PM_ANALYZE_MODEL_ENV else [])
+    + ['claude-opus-4-7', 'claude-opus-4-6', 'claude-opus-4-5',
+       'claude-opus-4-1'])
+_pm_model_lock = threading.Lock()
+_pm_resolved_model = {'name': None}
+_PM_DECK_PREFIX = 'system/prometheus_decks/'
+
+
+def _pm_model_chain():
+    with _pm_model_lock:
+        if _pm_resolved_model['name']:
+            return [_pm_resolved_model['name'], _SYNTH_CHAT_INTERPRET_MODEL]
+    return _PM_ANALYZE_CANDIDATES + [_SYNTH_CHAT_INTERPRET_MODEL]
+
+
+def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
+                    temperature=0.5):
+    """JSON reasoning pass on the strongest model that answers. Walks
+    the Opus candidate chain once (404/not-found advances to the next
+    candidate, anything else surfaces), caches the winner for the
+    process lifetime, and always keeps the interpret sonnet as the
+    final fallback so analysis never hard-fails on model naming."""
+    last = None
+    for m in _pm_model_chain():
+        result = _run_nflx_claude_agent(
+            system_prompt=system_prompt, user_prompt=user_prompt,
+            max_tokens=max_tokens, temperature=temperature, model=m)
+        if result.get('success'):
+            with _pm_model_lock:
+                if _pm_resolved_model['name'] != m:
+                    print(f"[prometheus] analysis model resolved: {m}")
+                    _pm_resolved_model['name'] = m
+            return result
+        err = str(result.get('error') or '')
+        last = result
+        if 'not_found' in err or '404' in err:
+            continue
+        return result
+    return last or {'success': False, 'status': 503,
+                    'error': 'no reasoning model available'}
+
+
+def _pm_validate_page_context(page_context):
+    """Access-gate every s3 key in the page context. Returns
+    (clean_ctx_or_None, err_response_or_None). A missing/keyless
+    context is not an error; it means nothing is open."""
+    if not isinstance(page_context, dict):
+        return None, None
+    primary = page_context.get('primary') or {}
+    p_key = str(primary.get('s3_key') or '').strip()
+    if not p_key:
+        return None, None
+    ok, err = _require_profile_run_access(p_key)
+    if not ok:
+        return None, err
+    clean_cuts = []
+    for c in (page_context.get('cuts') or [])[:3]:
+        ck = str((c or {}).get('s3_key') or '').strip()
+        if not ck or ck == p_key:
+            continue
+        c_ok, _c_err = _require_profile_run_access(ck)
+        if not c_ok:
+            continue
+        clean_cuts.append({'s3_key': ck,
+                           'name': str((c or {}).get('name') or '')[:200]})
+    return {'primary': {'s3_key': p_key,
+                        'name': str(primary.get('name') or '')[:200]},
+            'cuts': clean_cuts}, None
+
+
+@app.route('/api/brief-chat/analyze', methods=['POST'])
+@requires_auth
+def api_synth_chat_analyze():
+    """Analyze the data open on the dashboard (primary profile + any
+    checked Data Cuts). First-party digest is the primary evidence.
+
+    Session-authenticated dashboard users only."""
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+    text = (body.get('text') or '').strip()
+    if not text:
+        return jsonify({'success': False,
+                        'error': 'empty request text'}), 400
+    history = body.get('history') or []
+    ctx, ctx_err = _pm_validate_page_context(body.get('page_context'))
+    if ctx_err:
+        return ctx_err
+    if not ctx:
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': ('Nothing is open to analyze yet. Open a profile '
+                      'from Select Profile (and check any Data Cuts you '
+                      'want included), then ask me again.'),
+            'followups': [], 'offer_deck': False, 'deck_angle': None})
+    try:
+        import prometheus_analysis as pma
+        digest, p_meta = pma.get_digest_bundle(s3_client, S3_BUCKET, ctx)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False,
+                        'error': ('I could not load the on-screen data '
+                                  f'({e}). Nothing was lost. Try again in '
+                                  'a few seconds.')}), 502
+    user_prompt = pma.build_analysis_user_prompt(digest, history, text)
+    result = _pm_claude_json(pma.ANALYSIS_SYSTEM_PROMPT, user_prompt,
+                             max_tokens=6000, temperature=0.5)
+    if not result.get('success'):
+        return jsonify({'success': False,
+                        'error': result.get('error', 'analysis failed')}),             result.get('status', 502)
+    data = result.get('data') or {}
+    if isinstance(data, list):
+        data = next((d for d in data if isinstance(d, dict)), {})
+    action = str(data.get('action') or 'answer')
+    reply = str(data.get('reply') or '').strip()
+    if action != 'build_profile' and not reply:
+        return jsonify({'success': False,
+                        'error': 'analysis returned an empty reply'}), 502
+    followups = [str(f).strip()[:160]
+                 for f in (data.get('followups') or [])
+                 if str(f).strip()][:4]
+    deck_angle = data.get('deck_angle')
+    return jsonify({
+        'success': True, 'action': action, 'reply': reply,
+        'followups': followups,
+        'offer_deck': bool(data.get('offer_deck')),
+        'deck_angle': (str(deck_angle)[:400] if deck_angle else None),
+        'model': result.get('model'),
+        'profile': p_meta.get('name')})
+
+
+def _pm_deck_status_write(job_id, payload):
+    s3_client.put_object(
+        Bucket=S3_BUCKET, Key=f"{_PM_DECK_PREFIX}{job_id}.json",
+        Body=json.dumps(payload).encode('utf-8'),
+        ContentType='application/json')
+
+
+def _pm_run_deck_job(job_id, username, ctx, history, angle):
+    """Background deck build: digest -> slide plan -> PPTX -> S3 ->
+    presigned URL. Status written to S3 at every phase so any worker
+    can serve the poll."""
+    import tempfile
+    base = {'job_id': job_id, 'user': username, 'angle': angle,
+            'started_at': time.time()}
+    try:
+        import prometheus_analysis as pma
+        import prometheus_deck as pmd
+        _pm_deck_status_write(job_id, {**base, 'status': 'planning'})
+        digest, p_meta = pma.get_digest_bundle(s3_client, S3_BUCKET, ctx)
+        plan_result = _pm_claude_json(
+            pma.DECK_PLAN_SYSTEM_PROMPT,
+            pma.build_deck_user_prompt(digest, history, angle),
+            max_tokens=7000, temperature=0.4)
+        if not plan_result.get('success'):
+            raise RuntimeError(plan_result.get('error')
+                               or 'slide plan failed')
+        plan = plan_result.get('data') or {}
+        if isinstance(plan, list):
+            plan = next((d for d in plan if isinstance(d, dict)), {})
+        if not plan.get('slides'):
+            raise RuntimeError('slide plan came back empty')
+        _pm_deck_status_write(job_id, {**base, 'status': 'rendering'})
+        stem = re.sub(r'[^A-Za-z0-9_]+', '_',
+                      str(plan.get('filename_stem')
+                          or p_meta.get('name')
+                          or 'Profile_IQ')).strip('_')[:60] or 'Profile_IQ'
+        fname = f"{stem}_Profile_IQ_Deck.pptx"
+        local = os.path.join(tempfile.gettempdir(),
+                             f"pm_deck_{job_id}.pptx")
+        static_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), 'static')
+        pmd.render_deck(plan, local, static_dir=static_dir)
+        s3_key = f"{_PM_DECK_PREFIX}{job_id}/{fname}"
+        with open(local, 'rb') as fh:
+            s3_client.put_object(
+                Bucket=S3_BUCKET, Key=s3_key, Body=fh.read(),
+                ContentType=('application/vnd.openxmlformats-officedocument'
+                             '.presentationml.presentation'))
+        try:
+            os.remove(local)
+        except OSError:
+            pass
+        url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': S3_BUCKET, 'Key': s3_key,
+                    'ResponseContentDisposition':
+                        f'attachment; filename="{fname}"'},
+            ExpiresIn=7 * 24 * 3600)
+        _pm_deck_status_write(job_id, {
+            **base, 'status': 'done', 'url': url, 'filename': fname,
+            'title': plan.get('title'),
+            'slides': len(plan.get('slides') or [])})
+        print(f"[prometheus] deck {job_id} done for {username}: {fname}")
+    except Exception as e:
+        traceback.print_exc()
+        _pm_deck_status_write(job_id, {**base, 'status': 'error',
+                                       'error': str(e)[:400]})
+
+
+@app.route('/api/brief-chat/deck', methods=['POST'])
+@requires_auth
+def api_synth_chat_deck():
+    """Kick off an async deck build from the open page's data.
+    Returns a job_id the frontend polls via deck-status."""
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+    angle = ((body.get('angle') or '').strip()
+             or 'The strongest commercial story in this data.')[:400]
+    history = body.get('history') or []
+    if not isinstance(history, list):
+        history = []
+    ctx, ctx_err = _pm_validate_page_context(body.get('page_context'))
+    if ctx_err:
+        return ctx_err
+    if not ctx:
+        return jsonify({'success': False,
+                        'error': ('Open a profile first, then ask for '
+                                  'the deck again.')}), 400
+    job_id = uuid.uuid4().hex[:12]
+    username = (user.get('username') or user.get('email') or '').strip()
+    _pm_deck_status_write(job_id, {
+        'job_id': job_id, 'user': username, 'status': 'queued',
+        'angle': angle, 'started_at': time.time()})
+    t = threading.Thread(target=_pm_run_deck_job,
+                         args=(job_id, username, ctx, history[-14:], angle),
+                         daemon=True)
+    t.start()
+    return jsonify({'success': True, 'job_id': job_id})
+
+
+@app.route('/api/brief-chat/deck-status/<job_id>', methods=['GET'])
+@requires_auth
+def api_synth_chat_deck_status(job_id):
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    if not re.fullmatch(r'[0-9a-f]{12}', str(job_id or '')):
+        return jsonify({'success': False, 'error': 'bad job id'}), 400
+    try:
+        resp = s3_client.get_object(
+            Bucket=S3_BUCKET, Key=f"{_PM_DECK_PREFIX}{job_id}.json")
+        payload = json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception:
+        return jsonify({'success': False, 'error': 'unknown job'}), 404
+    uname = (user.get('username') or user.get('email') or '').strip()
+    if (payload.get('user') and payload.get('user') != uname
+            and user.get('role') != 'super_admin'):
+        return jsonify({'success': False, 'error': 'not your job'}), 403
+    return jsonify({'success': True, **payload})
+
+
+# ============================================================================
 # PARTNER API v1 — external programmatic access to Chatbot Profile IQ
 # ============================================================================
 # These endpoints let a partner's software integrate with the profile

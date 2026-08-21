@@ -21138,6 +21138,7 @@ https://www.instagram.com/p/..."></textarea>
             </div><!-- End tab content area -->
         </div><!-- End customAnalysisView -->
 
+        {% if has_chatbot_profile_iq_access or role == 'super_admin' %}
         <!-- ===== PROMETHEUS floating chat (2026-08-20) =====
              Collapsed: draggable circular launcher with the Crosswalk slash
              mark, bottom right. Click expands the draggable chat widget.
@@ -21408,6 +21409,7 @@ https://www.instagram.com/p/..."></textarea>
 
                             <div style="display:flex; flex-direction: column; gap: 0.4rem;">
                                 <div id="synthChatStarterChips" style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                                    <button type="button" onclick="synthChatChipSend('Analyze this data')" style="background: rgba(199,242,62,0.10); border: 1px solid rgba(199,242,62,0.40); color: var(--text-primary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Analyze the open profile</button>
                                     <button type="button" onclick="synthChatChipFill('Pitching [brand] - help me figure out the right audience to profile')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Prep a pitch</button>
                                     <button type="button" onclick="synthChatChipFill('Run a profile for [brand or talent]')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Build a profile</button>
                                     <button type="button" onclick="synthChatChipFill('Sample size for [audience], past 12 months')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Size an audience first</button>
@@ -21432,6 +21434,8 @@ https://www.instagram.com/p/..."></textarea>
                             </div>
             </div>
         </div>
+
+        {% endif %}
 
         <!-- TALENT FIT IQ VIEW - Dashboard with Sidebar -->
         <div id="talentFitIQView" style="display: none; flex-direction: row; flex: 1; overflow: hidden;">
@@ -59513,9 +59517,24 @@ https://www.instagram.com/p/..."></textarea>
                                 'font-size: 0.75rem; cursor: pointer; font-family: inherit;">' + lbl + '</button>';
                         }).join('') + '</div>';
                 }
+                // Download-link pill (2026-08-20): deck builds attach a
+                // presigned URL via turn.meta.link. https-only, escaped.
+                var linkHtml = '';
+                if (!isUser && turn.meta && turn.meta.link && turn.meta.link.url) {
+                    var _lu = String(turn.meta.link.url);
+                    if (/^https:\/\//i.test(_lu)) {
+                        linkHtml = '<div style="margin-top:0.55rem;">' +
+                            '<a href="' + _lu.replace(/"/g, '&quot;') + '" target="_blank" rel="noopener" ' +
+                            'style="display:inline-block; background: rgba(199,242,62,0.12); border: 1px solid rgba(199,242,62,0.45); ' +
+                            'color: #C7F23E; border-radius: 999px; padding: 0.35rem 0.9rem; font-size: 0.78rem; ' +
+                            'font-weight: 700; text-decoration: none;">' +
+                            _synthChatEscapeHtml(String(turn.meta.link.label || 'Download')) + '</a></div>';
+                    }
+                }
                 return '<div style="margin-bottom: 0.55rem; padding: 0.55rem 0.7rem; background: ' + bg + '; border-radius: 8px;">' +
                     '<div style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 0.25rem;">' + label + '</div>' +
                     '<div style="font-size: 0.85rem; white-space: pre-wrap; line-height: 1.4;">' + text + '</div>' +
+                    linkHtml +
                     chipsHtml +
                     '</div>';
             }).join('');
@@ -59631,6 +59650,28 @@ https://www.instagram.com/p/..."></textarea>
                 var pill = 'background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;';
                 var pillHot = 'background: rgba(84,141,255,0.14); border: 1px solid rgba(84,141,255,0.5); color: #9dc1ff; border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;';
                 var chips = '';
+                // Page-aware starters (2026-08-20): when a profile is
+                // open on the dashboard, analysis leads the greeting.
+                var _pmCtxW = null;
+                try { _pmCtxW = _pmCollectPageContext(); } catch (_) {}
+                if (_pmCtxW) {
+                    var _pmNm = (_pmCtxW.primary && _pmCtxW.primary.name) || 'A profile';
+                    var _pmCutsN = (_pmCtxW.cuts || []).length;
+                    lead = greet + ' - ' + _pmNm +
+                        (_pmCutsN ? ' is open with ' + _pmCutsN + ' cut' +
+                            (_pmCutsN === 1 ? '' : 's') + ' selected.' : ' is open.');
+                    if (running > 0) {
+                        lead += ' You have ' + running + ' build' +
+                            (running === 1 ? '' : 's') + ' still in motion.';
+                    }
+                    lead += ' Want me to dig into the data?';
+                    chips += '<button type="button" onclick="synthChatChipSend(\'Analyze this data\')" style="' + pillHot + '">Analyze this data</button>';
+                    chips += '<button type="button" onclick="synthChatChipSend(\'How can I make money with this audience?\')" style="' + pill + '">How can I make money with this?</button>';
+                    if (_pmCutsN > 0) {
+                        chips += '<button type="button" onclick="synthChatChipSend(\'Compare the selected cuts against the base profile\')" style="' + pill + '">Compare the selected cuts</button>';
+                    }
+                    chips += '<button type="button" onclick="synthChatChipSend(\'Build a deck from this data\')" style="' + pill + '">Build a deck from this data</button>';
+                }
                 if (running > 0) {
                     chips += '<button type="button" onclick="synthChatChipSend(\'status update\')" style="' + pillHot + '">Status update on my builds</button>';
                 }
@@ -59643,7 +59684,7 @@ https://www.instagram.com/p/..."></textarea>
                 el.id = 'synthChatWelcomeBubble';
                 el.style.cssText = 'margin-bottom: 0.55rem; padding: 0.55rem 0.7rem; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 2px solid rgba(84,141,255,0.45);';
                 el.innerHTML =
-                    '<div style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 0.25rem;">\ud83e\udd16 Agent</div>' +
+                    '<div style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 0.25rem;">Prometheus</div>' +
                     '<div style="font-size: 0.85rem; line-height: 1.4; margin-bottom: 0.5rem;">' +
                         _synthChatEscapeHtml(lead) + '</div>' +
                     '<div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">' +
@@ -59791,6 +59832,23 @@ https://www.instagram.com/p/..."></textarea>
                     'Sending your ask over...',
                     'Reserving a spot...',
                     'Confirming...',
+                ];
+            } else if (kind === 'analyze') {
+                stages = [
+                    'Reading the data on this page...',
+                    'Lining up penetrations and indexes...',
+                    'Comparing against US gen pop...',
+                    'Checking the cuts against the base...',
+                    'Working out what it means commercially...',
+                    'Writing it up...',
+                ];
+            } else if (kind === 'deck') {
+                stages = [
+                    'Framing the story...',
+                    'Picking the numbers that carry it...',
+                    'Laying out slides in the Crosswalk system...',
+                    'Rendering the deck...',
+                    'Uploading and signing the link...',
                 ];
             } else {
                 stages = [
@@ -60218,6 +60276,193 @@ https://www.instagram.com/p/..."></textarea>
                 .test((t || '').trim());
         }
 
+        // ===================== PROMETHEUS PAGE-AWARE ANALYSIS (2026-08-20) =====================
+        // Prometheus reads the data OPEN ON THE DASHBOARD (the primary
+        // profile plus any Data Cuts checked in the compare popover) and
+        // analyzes it on request: summaries, monetization angles, cut
+        // comparisons, media planning, pitch prep, and deck builds. The
+        // first-party clickstream-derived data is the primary evidence;
+        // outside knowledge is context only (Jenna 2026-08-20).
+        var _pmAnalysisActive = false;
+        var _pmPendingDeckAngle = null;
+        var _pmDeckInFlight = false;
+
+        function _pmCollectPageContext() {
+            try {
+                var primaryKey = (typeof currentS3Key !== 'undefined' && currentS3Key) || null;
+                var primaryName = null;
+                if (typeof currentProfileData !== 'undefined' && currentProfileData) {
+                    primaryName = currentProfileData.name || null;
+                    if (!primaryKey) primaryKey = currentProfileData.s3Key || null;
+                }
+                if (!primaryKey) return null;
+                var cuts = [];
+                try {
+                    var st = (typeof _comparisonRunsState !== 'undefined') ? _comparisonRunsState : null;
+                    if (st && st.selectedKeys && st.selectedKeys.length) {
+                        st.selectedKeys.forEach(function(k) {
+                            if (!k || k === primaryKey) return;
+                            var meta = (st.runsByKey && st.runsByKey[k]) || {};
+                            var nm = meta.label ||
+                                (meta.profile && (meta.profile.display_name || meta.profile.name)) ||
+                                String(k).replace(/\.csv$/i, '').replace(/_/g, ' ');
+                            cuts.push({ s3_key: k, name: nm });
+                        });
+                    }
+                } catch (_) {}
+                return {
+                    view: 'profile-iq',
+                    primary: { s3_key: primaryKey, name: primaryName },
+                    cuts: cuts.slice(0, 3)
+                };
+            } catch (_) { return null; }
+        }
+
+        function _pmLooksLikeDeckAsk(text) {
+            var t = String(text || '').trim();
+            if (!t || _pmDeckInFlight) return false;
+            if (/\b(build|make|create|generate|put together|spin up)\b[^.]{0,40}\b(deck|slides|presentation)\b/i.test(t)) return true;
+            if (_pmPendingDeckAngle &&
+                /^(y(es|ep|eah)?|sure|ok(ay)?|do it|go ahead|please( do)?|build it|make it|lets do it|let's do it)\b/i.test(t)) return true;
+            return false;
+        }
+
+        function _pmShouldAnalyze(text, ctx) {
+            var t = String(text || '').trim();
+            if (!t) return false;
+            // Build / pipeline asks always go to the interpret flow.
+            if (/\b(run|build|pull|create|queue|start|launch|generate)\b[^.]{0,60}\bprofiles?\b/i.test(t)) return false;
+            if (/\b(cut|slice)\b[^.]{0,40}\bby\b/i.test(t)) return false;
+            if (/\brefresh\b|\bsample size\b|\bincidence\b|\bstatus\b|\bcredits?\b/i.test(t)) return false;
+            var analytic = /\banaly[sz]|\binsight|\bsummar|\bcompare|\bmoneti[sz]|\bmoney\b|\brevenue\b|\bsponsor|\bpitch\b|\bsell\b|\bmedia plan|\breach\b|\bwhat (stands|does|do|is|are|should)\b|\bhow (can|do|would|should|does|is)\b|\bwhy\b|\bwho (is|are|should|would)\b|\bwhich\b|\btop \d|\bexplain|\bmean(s|ing)?\b|\btakeaway|\bopportunit|\btell me about\b|\bstands? out\b|\binteresting\b/i.test(t);
+            if (analytic) return true;
+            if (ctx && _pmAnalysisActive) return true;
+            if (ctx && /\?\s*$/.test(t)) return true;
+            return false;
+        }
+
+        async function _pmAnalyze(text, ctx) {
+            if (!ctx) {
+                synthChatPushTurn('agent',
+                    'Nothing is open to analyze yet. Open a profile from ' +
+                    'Select Profile (and check any Data Cuts you want ' +
+                    'included), then ask me again.');
+                return 'done';
+            }
+            var btn = document.getElementById('synthChatSubmitBtn');
+            var prevLabel = btn ? btn.textContent : null;
+            if (btn) { btn.disabled = true; btn.textContent = 'Working...'; }
+            var _end = _synthChatBeginThinking('analyze');
+            try {
+                var _fr = await _synthChatFetchJson('/api/brief-chat/analyze', {
+                    text: text,
+                    page_context: ctx,
+                    history: synthChatHistory.slice(0, -1).slice(-12)
+                });
+                var data = _fr.data;
+                if (!data || !_fr.r.ok || !data.success) {
+                    synthChatPushTurn('agent',
+                        'I could not finish that analysis. ' +
+                        String((data && data.error) ||
+                            'The service hiccuped. Nothing was lost; ask again in a few seconds.'));
+                    return 'done';
+                }
+                if (data.action === 'build_profile') {
+                    _pmAnalysisActive = false;
+                    return 'reroute';
+                }
+                _pmAnalysisActive = true;
+                var opts = (data.followups || []).map(function(f) {
+                    return { label: f, send: f };
+                });
+                if (data.offer_deck) {
+                    _pmPendingDeckAngle = data.deck_angle || null;
+                    opts.push({ label: 'Build a deck from this',
+                                send: 'Build a deck from this' });
+                }
+                if (opts.length) {
+                    _synthChatPushTurnWithMeta('agent', data.reply, { options: opts });
+                } else {
+                    synthChatPushTurn('agent', data.reply);
+                }
+                return 'done';
+            } catch (e) {
+                synthChatPushTurn('agent',
+                    'I could not finish that analysis. Nothing was lost. ' +
+                    'Ask again in a few seconds.');
+                return 'done';
+            } finally {
+                _end();
+                if (btn) { btn.disabled = false; btn.textContent = prevLabel || 'Send'; }
+            }
+        }
+
+        async function _pmStartDeck(text) {
+            var ctx = _pmCollectPageContext();
+            if (!ctx) {
+                synthChatPushTurn('agent',
+                    'Open a profile first (Select Profile), then ask for ' +
+                    'the deck again.');
+                return;
+            }
+            var angle = _pmPendingDeckAngle ||
+                String(text || 'The strongest commercial story in this data.');
+            _pmPendingDeckAngle = null;
+            _pmDeckInFlight = true;
+            synthChatPushTurn('agent',
+                'Building the deck now. It renders in the Crosswalk deck ' +
+                'system from the data on this page. This takes a minute or ' +
+                'two; the download link lands here when it is ready.');
+            var _end = _synthChatBeginThinking('deck');
+            try {
+                var _fr = await _synthChatFetchJson('/api/brief-chat/deck', {
+                    angle: angle,
+                    page_context: ctx,
+                    history: synthChatHistory.slice(-14)
+                });
+                var data = _fr.data;
+                if (!data || !_fr.r.ok || !data.success || !data.job_id) {
+                    synthChatPushTurn('agent',
+                        'Deck build failed to start. ' +
+                        String((data && data.error) || 'Try again in a few seconds.'));
+                    return;
+                }
+                var job = data.job_id;
+                var waited = 0;
+                while (waited < 360000) {
+                    await new Promise(function(res) { setTimeout(res, 5000); });
+                    waited += 5000;
+                    var st = null;
+                    try {
+                        var r2 = await fetch('/api/brief-chat/deck-status/' + job,
+                            { credentials: 'same-origin' });
+                        st = r2.ok ? await r2.json() : null;
+                    } catch (_) { st = null; }
+                    if (!st) continue;
+                    if (st.status === 'done' && st.url) {
+                        _synthChatPushTurnWithMeta('agent',
+                            'Deck ready: ' + (st.title || st.filename || 'Profile IQ deck') +
+                            ' (' + (st.slides || '?') + ' slides). The link is good for 7 days.',
+                            { link: { url: st.url, label: 'Download the deck' } });
+                        return;
+                    }
+                    if (st.status === 'error') {
+                        synthChatPushTurn('agent',
+                            'The deck build hit an error: ' +
+                            String(st.error || 'unknown') +
+                            '. Nothing was lost. Ask again and I will retry.');
+                        return;
+                    }
+                }
+                synthChatPushTurn('agent',
+                    'The deck is taking longer than expected. It may still ' +
+                    'finish; ask me again in a minute.');
+            } finally {
+                _end();
+                _pmDeckInFlight = false;
+            }
+        }
+
         async function synthChatSubmit() {
             var input = document.getElementById('synthChatInput');
             var btn = document.getElementById('synthChatSubmitBtn');
@@ -60368,6 +60613,22 @@ https://www.instagram.com/p/..."></textarea>
                         + '. Date range: ' + text;
                 }
                 _synthChatClearDateState();
+            }
+
+            // ===== PROMETHEUS PAGE-AWARE ROUTING (2026-08-20) =====
+            // Deck follow-through first, then analysis questions about
+            // the data open on the dashboard. Build / cut / refresh asks
+            // fall through to the interpret pipeline below.
+            if (_pmLooksLikeDeckAsk(text)) {
+                await _pmStartDeck(text);
+                return;
+            }
+            var _pmCtx = _pmCollectPageContext();
+            if (_pmShouldAnalyze(text, _pmCtx)) {
+                var _pmOutcome = await _pmAnalyze(text, _pmCtx);
+                if (_pmOutcome !== 'reroute') return;
+                // reroute: the analyst says this is a build ask; fall
+                // through to interpret with the same text.
             }
 
             btn.disabled = true;
