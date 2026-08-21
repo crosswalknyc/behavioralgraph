@@ -9009,6 +9009,23 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
 
     parsed = _extract_json_object(raw)
     if parsed is None:
+        # One self-heal retry (2026-08-20): a long chat history can
+        # prime the model into prose around the JSON. Re-ask once with
+        # a hard JSON-only nudge before surfacing an error to the user.
+        try:
+            raw2 = claude_reason_json(
+                system=system_prompt,
+                user=(user_prompt +
+                      "\n\nCRITICAL: Respond with ONLY the JSON value. "
+                      "No prose, no markdown fences, no explanation."),
+                model=chosen_model,
+                max_tokens=max_tokens,
+                temperature=0.2,
+            )
+            parsed = _extract_json_object(raw2)
+        except Exception:
+            parsed = None
+    if parsed is None:
         snippet = (raw or '')[:600]
         return {'success': False, 'status': 502,
                 'error': 'Reasoning service returned non-JSON output.',
@@ -42827,7 +42844,7 @@ def _detect_cartesian_batch(user_text: str):
         r'(?:make|create|build|run|generate|do|give\s+me|show\s+me|'
         r'i\s+want|i\s+need|i\'?d\s+like)\s+'
         r'(?:me\s+|us\s+)?(?:a\s+|an\s+|the\s+)?'
-        r'(?:new\s+|individual\s+|separate\s+|seperate\s+|distinct\s+)*'
+        r'(?:new\s+|individual\s+|separate\s+|seperate\s+|distinct\s+|single\s+|one\s+|quick\s+)*'
         r'(?:profile|profiles|iq|iqs|persona|personas|report|'
         r'analysis|analyses)\s+'
         r'(?:of|for|on|comparing|showing|about)\s+(.+)$',
@@ -42902,7 +42919,7 @@ def _detect_cartesian_batch(user_text: str):
         r'(?:make|create|build|run|generate|do|give\s+me|show\s+me|'
         r'i\s+want|i\s+need|i\'?d\s+like)\s+'
         r'(?:a\s+|an\s+|the\s+|me\s+a\s+|us\s+a\s+)?'
-        r'(?:new\s+|individual\s+|separate\s+|seperate\s+|distinct\s+)*'
+        r'(?:new\s+|individual\s+|separate\s+|seperate\s+|distinct\s+|single\s+|one\s+|quick\s+)*'
         r'(?:profile|profiles|iq|iqs|persona|personas|report|analysis)\s+'
         r'(?:of|for|on|comparing|showing|about)\s+',
         '', lead, flags=_re.IGNORECASE).strip()
@@ -43682,6 +43699,14 @@ def _user_optout_of_avid(user_text, chat_history=None):
 # built, so run_avid is a no-op).
 _AVID_INAPPLICABLE_DECISIONS = {'existing_match', 'derive_cut'}
 
+# Chat interpret reasoning model (2026-08-20 Jenna: 'does the agent
+# need to be smarter?'). The chat brief-drafting calls run on the
+# stronger Sonnet line than the deck agents' default; override via
+# env without a deploy.
+_SYNTH_CHAT_INTERPRET_MODEL = (
+    os.environ.get('SYNTH_CHAT_INTERPRET_MODEL')
+    or 'claude-sonnet-4-6')
+
 
 # Free-text patterns that mean "yes proceed with the defaults you
 # suggested". Used ONLY when the chatbot is awaiting a date
@@ -43920,6 +43945,7 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         result = _run_nflx_claude_agent(
             system_prompt=system_prompt, user_prompt=user_prompt,
             max_tokens=8192, temperature=0.4,
+            model=_SYNTH_CHAT_INTERPRET_MODEL,
         )
         if not result.get('success'):
             return {
@@ -44227,7 +44253,8 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
                     "precise subject.")
             _res = _run_nflx_claude_agent(
                 system_prompt=_sp, user_prompt=_up,
-                max_tokens=8192, temperature=0.4)
+                max_tokens=8192, temperature=0.4,
+                model=_SYNTH_CHAT_INTERPRET_MODEL)
             _data = _res.get('data') if _res.get('success') else None
             if isinstance(_data, dict):
                 _data = [_data]
@@ -46128,6 +46155,7 @@ def api_synth_chat_interpret():
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             max_tokens=8192, temperature=0.4,
+            model=_SYNTH_CHAT_INTERPRET_MODEL,
         )
         if not result.get('success'):
             return jsonify({
@@ -47937,7 +47965,7 @@ def _extract_intersect_operands(prompt):
         r'(?:make|create|build|run|generate|do|give\s+me|'
         r'show\s+me|i\s+want|i\'?d\s+like|i\s+need)\s+'
         r'(?:a\s+|an\s+|the\s+|me\s+a\s+|us\s+a\s+)?'
-        r'(?:new\s+|individual\s+|separate\s+|distinct\s+)?'
+        r'(?:new\s+|individual\s+|separate\s+|seperate\s+|distinct\s+|single\s+|one\s+|quick\s+)?'
         r'(?:profile|profiles|iq|iqs|persona|personas|report|'
         r'analysis|cut|derivative)\s+'
         r'(?:of|for|on|about)\s+',
