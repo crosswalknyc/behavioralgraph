@@ -61646,6 +61646,38 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         function _synthChatClarifyQuestion(step) {
+            if (step === 'ip_scope') {
+                // 2026-08-21: IP content (series/movie/book/podcast/
+                // game) must pick its universe - broad engagers or
+                // consumers only. Data rides the draft (stashed by
+                // the interpret step).
+                var _ipDraft = synthChatCurrentDraft || {};
+                var _ipData = _ipDraft.ip_scope_data || {};
+                var _ipVerb = String(_ipData.verb || 'viewers');
+                var _ipPlats = (_ipData.platforms || []).join(', ');
+                var _ipSubj = String(_ipDraft.subject ||
+                    _ipDraft.name || 'this title');
+                var _ipLines = [_ipSubj + ' can build two ways:'];
+                _ipLines.push('');
+                _ipLines.push('  1. Broad - anyone who engaged ' +
+                    'with it anywhere: social, search, fan ' +
+                    'content, shopping. The standard profile.');
+                _ipLines.push('  2. ' +
+                    _ipVerb.charAt(0).toUpperCase() +
+                    _ipVerb.slice(1) + ' only - just the people ' +
+                    'who actually ' +
+                    ({viewers: 'watched it', watchers: 'watched it',
+                      readers: 'read it',
+                      listeners: 'listened to it',
+                      players: 'played it'}[_ipVerb] ||
+                     'consumed it') +
+                    (_ipPlats ? ' (' + _ipPlats + ' locks at 100% ' +
+                        'since every one of them needs it)' : '') +
+                    '.');
+                _ipLines.push('');
+                _ipLines.push('Reply broad or ' + _ipVerb + '.');
+                return _ipLines.join('\n');
+            }
             if (step === 'age_breaks') {
                 // 2026-08-20: requested age range doesn't line up
                 // with the panel's age breaks. Suggestion data rides
