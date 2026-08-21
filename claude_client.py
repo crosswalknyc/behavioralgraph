@@ -25,6 +25,32 @@ from typing import Optional
 _claude_client = None
 _claude_init_failed = False
 
+# Model families that reject the `temperature` param (Anthropic began
+# deprecating it on newer models; sending it returns a 400
+# "temperature is deprecated for this model"). Checked upfront to skip
+# a wasted roundtrip; the dynamic 400-retry below self-learns any new
+# family and memoizes it here for the process lifetime.
+_TEMP_UNSUPPORTED_FAMILIES = {"opus-5", "opus-4-8", "opus-4-7", "opus-4-6",
+                              "thinking", "mythos"}
+_temp_rejecting_models: set = set()
+
+
+def _model_omits_temperature(model_id: str) -> bool:
+    m = (model_id or "").lower()
+    if model_id in _temp_rejecting_models:
+        return True
+    return any(f in m for f in _TEMP_UNSUPPORTED_FAMILIES)
+
+
+def _is_temperature_rejected_error(e: Exception) -> bool:
+    try:
+        import anthropic
+        if not isinstance(e, anthropic.BadRequestError):
+            return False
+    except Exception:
+        return False
+    return "temperature" in str(e).lower()
+
 
 def is_claude_reasoning_enabled() -> bool:
     """True iff USE_CLAUDE_REASONING is truthy AND anthropic key is set.
@@ -97,15 +123,28 @@ def claude_reason_json(
     max_tokens: int = 1024,
     temperature: float = 0.2,
     max_retries: int = 3,
+    raise_on_error: bool = False,
 ) -> str:
     """Send a single-shot reasoning prompt to Claude; return the raw text.
 
     Returns "" on any failure so callers can fall back to GPT or the panel
     default. The prompt should ask for JSON output; the caller is responsible
     for parsing.
+
+    raise_on_error=True (2026-08-21): surface the underlying API error to
+    the caller instead of returning "". The silent-"" contract made model
+    fallback chains impossible - a permanent error (model not available to
+    the key, bad request, auth) looked identical to a model that answered
+    with unparseable prose, so callers reported "non-JSON output" and never
+    advanced to their next candidate model. Existing callers that want the
+    quiet fallback keep the default.
     """
     client = get_claude_client()
     if client is None:
+        if raise_on_error:
+            raise RuntimeError(
+                "Claude client unavailable (anthropic not installed or "
+                "ANTHROPIC_API_KEY missing)")
         return ""
 
     model_id = (
@@ -132,13 +171,30 @@ def claude_reason_json(
                 }]
             else:
                 _system_param = system
-            resp = client.messages.create(
+            _kwargs = dict(
                 model=model_id,
                 max_tokens=max_tokens,
-                temperature=temperature,
                 system=_system_param,
                 messages=[{"role": "user", "content": user}],
             )
+            if not _model_omits_temperature(model_id):
+                _kwargs["temperature"] = temperature
+            try:
+                resp = client.messages.create(**_kwargs)
+            except Exception as _te:
+                # Newer models 400 on `temperature`. Strip, memoize the
+                # model, retry once immediately (2026-08-21: opus-5 /
+                # opus-4-8 / opus-4-7 all reject it, which silently
+                # broke the Prometheus analyze model chain).
+                if ("temperature" in _kwargs
+                        and _is_temperature_rejected_error(_te)):
+                    print(f"⚠️  {model_id} rejects `temperature`; "
+                          f"retrying without it")
+                    _temp_rejecting_models.add(model_id)
+                    _kwargs.pop("temperature", None)
+                    resp = client.messages.create(**_kwargs)
+                else:
+                    raise
             try:
                 _u = getattr(resp, "usage", None)
                 if _u is not None:
@@ -173,14 +229,22 @@ def claude_reason_json(
                 )
                 if not isinstance(e, transient):
                     print(f"⚠️  Claude permanent error ({type(e).__name__}): {e}")
+                    if raise_on_error:
+                        raise
                     return ""
-            except Exception:
-                pass
+            except Exception as _cls_err:
+                # The transient-classification itself failed (anthropic
+                # import error etc.) - treat as transient unless the
+                # caller wants errors surfaced.
+                if raise_on_error and _cls_err is e:
+                    raise
             wait = 2 ** attempt
             print(f"⚠️  Claude transient error (attempt {attempt+1}/{max_retries}, retry in {wait}s): {e}")
             time.sleep(wait)
 
     print(f"⚠️  Claude exhausted retries: {last_err}")
+    if raise_on_error and last_err is not None:
+        raise last_err
     return ""
 
 
@@ -217,13 +281,7 @@ def claude_messages(
         or "claude-sonnet-4-5"
     )
 
-    _model_lc = (model_id or "").lower()
-    _omit_temperature = (
-        "opus-4-7" in _model_lc
-        or "opus-4-6" in _model_lc
-        or "thinking" in _model_lc
-        or "mythos" in _model_lc
-    )
+    _omit_temperature = _model_omits_temperature(model_id)
 
     # Prompt caching: explicit cache_control on the system block caches the
     # tools+system prefix for 5 min. Hits pay ~10% input cost vs 125% on first
@@ -296,6 +354,20 @@ def claude_messages(
                         f"claude_messages wall-timeout after {_wall_s:.0f}s "
                         f"(attempt {attempt + 1}/{max_retries}); reissuing "
                         f"on a fresh connection")
+                except Exception as _te:
+                    # Self-learn `temperature` deprecation on models the
+                    # static family list doesn't know yet (2026-08-21).
+                    if ("temperature" in kwargs
+                            and _is_temperature_rejected_error(_te)):
+                        print(f"⚠️  {model_id} rejects `temperature`; "
+                              f"retrying without it")
+                        _temp_rejecting_models.add(model_id)
+                        kwargs.pop("temperature", None)
+                        _fut2 = _pool.submit(
+                            _request_client.messages.create, **kwargs)
+                        resp = _fut2.result(timeout=_wall_s)
+                    else:
+                        raise
             finally:
                 _pool.shutdown(wait=False)
             try:
