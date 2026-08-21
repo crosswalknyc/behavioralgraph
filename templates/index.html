@@ -111633,7 +111633,7 @@ https://www.instagram.com/p/..."></textarea>
                     const lbl = document.createElement('span');
                     lbl.setAttribute('data-cmp-label', '');
                     lbl.textContent = item.label;
-                    lbl.style.cssText = 'color:var(--text-primary, #e6e6e6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+                    lbl.style.cssText = 'color:var(--text-primary, #e6e6e6);white-space:normal;overflow-wrap:anywhere;word-break:break-word;';
                     if (/\bavid\b/i.test(item.label)) {
                         var profileName = (_comparisonRunsState.subject || 'this profile').toUpperCase();
                         row.title = 'The AVID FAN audience is composed of panelists who have 4 or more digital touchpoints to ' + profileName + ' within the stated timeframe.';
