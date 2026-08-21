@@ -138959,6 +138959,15 @@ https://www.instagram.com/p/..."></textarea>
             // Capture display mode so row renderers use the same value (avoids stale closure)
             const compDisplayMode = displayMode;
 
+            // One-off: the "Spider-Man Universe" profile is auto-tagged with its
+            // dominant streaming platform ("- Netflix") like other series, but it
+            // should display without a platform suffix in the compare columns.
+            profiles.forEach(p => {
+                if (p && typeof p.name === 'string') {
+                    p.name = p.name.replace(/^(SPIDER-MAN UNIVERSE)\s*[-\u2013\u2014]\s*NETFLIX\s*$/i, '$1');
+                }
+            });
+
             // Build category list (preserve selection if already built)
             const isFirstRender = availableCategories.behavioral.length === 0;
             buildCategoryList(profiles, !isFirstRender);
