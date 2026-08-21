@@ -49979,6 +49979,8 @@ https://www.instagram.com/p/..."></textarea>
                   tip: 'Books: Best-selling and trending titles across Amazon, Apple Books, Audible, and Libby (LA County Library eBooks, audiobooks, and magazines).' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺',
                   tip: 'Streaming: Daily Top-10 rankings on Netflix, Disney+, Hulu, Max, Prime Video, and ESPN+, split into Film and TV.' },
+                { key: 'films',     label: 'Films',            count: counts.films     || 0, icon: '🎬',
+                  tip: 'Films: Top titles in theaters right now across Fandango, Cinemark, AMC, and Regal. Ranking on each platform reflects that platform\'s own front-page merchandising and sales density.' },
                 { key: 'fast',      label: 'FAST',             count: counts.fast      || 0, icon: '📡',
                   tip: 'FAST channels: Top 100 titles on Roku Channel, Tubi, Pluto TV, and Amazon (ad-supported tier). Ranked by JustWatch US popularity, interleaved Film and TV.' },
                 { key: 'gaming',    label: 'Gaming',           count: counts.gaming    || 0, icon: '🎮',
@@ -50015,6 +50017,7 @@ https://www.instagram.com/p/..."></textarea>
                 _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
+                _renderTIQPanel('films',     renderTIQFilms(cards.films_ticketing || {})) +
                 _renderTIQPanel('fast',      renderTIQFast(cards.fast_trending || {})) +
                 _renderTIQPanel('gaming',    renderTIQGaming(cards.gaming_trending || {})) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
@@ -51951,6 +51954,59 @@ https://www.instagram.com/p/..."></textarea>
         // popularity ranking already interleaves both, and that mixed
         // ranking is what makes the FAST tab feel distinct from the
         // subscription-Streaming tab.
+        // Films (theatrical ticketing) panel. Per-source cards - one
+        // each for Fandango, Cinemark, AMC, and Regal. Ranking on each
+        // platform reflects that platform's own front-page merchandising
+        // and sales density. Atom Tickets was retired after the Regal
+        // Next.js parser landed (Jenna 2026-07-29). Restored 2026-08-21
+        // after the July 19 rollback removed the tab.
+        function renderTIQFilms(sources) {
+            var keys = ['fandango', 'cinemark', 'amc', 'regal'];
+            var present = keys.filter(function(k) { return sources[k]; });
+            if (!present.length) {
+                return '<div class="tiq-empty">Film ticketing data is warming up. Check back later.</div>';
+            }
+            var subheader =
+                '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
+                'Ticketing Demand Rank by Site' +
+                '</div>';
+            var cards = present.map(function(k) {
+                var s = sources[k] || {};
+                var items = s.items || [];
+                var body;
+                if (!s.available || !items.length) {
+                    body = '<div class="tiq-placeholder">' +
+                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
+                           '<div>Loading&hellip;</div>' +
+                           '</div>';
+                } else {
+                    body = '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
+                           items.map(function(it, i) {
+                               var img = _tiqPosterCell(it.image);
+                               var titleLine = it.url
+                                   ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
+                                   : _tiqEsc(it.title);
+                               var filmKey = it.title;
+                               return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                                      '<div class="tiq-row-body">' +
+                                      '<div class="tiq-row-title">' + titleLine +
+                                      _tiqCrossPlatformBadge(it) +
+                                      _tiqActions('film', k, filmKey, filmKey, 'National') +
+                                      '</div>' +
+                                      '</div></div>';
+                           }).join('') +
+                           '</div>';
+                }
+                return '<div class="tiq-card">' +
+                       '<h4>' + _tiqEsc(s.label || k) + '</h4>' +
+                       body +
+                       '</div>';
+            }).join('');
+            return subheader +
+                   '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' +
+                   cards + '</div>';
+        }
+
         var _tiqFastOrder = ['roku', 'tubi', 'pluto', 'amazon'];
 
         function renderTIQFast(fast) {
@@ -52441,6 +52497,7 @@ https://www.instagram.com/p/..."></textarea>
                 _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
+                _renderTIQPanel('films',     renderTIQFilms(cards.films_ticketing || {})) +
                 _renderTIQPanel('fast',      renderTIQFast(cards.fast_trending || {})) +
                 _renderTIQPanel('gaming',    renderTIQGaming(cards.gaming_trending || {})) +
                 _renderTIQPanel('watchlist', renderTIQWatchlist());
