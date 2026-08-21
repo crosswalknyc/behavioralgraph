@@ -209,6 +209,33 @@ def _collect_headlines(max_items: int = _MAX_HEADLINE_ITEMS) -> list[dict]:
             'chart_labels':  [f'philanthropy #{rank + 1}'],
         }
 
+    # 3. Business snapshot (NYT + WSJ business sections). Added
+    #    2026-08-20 to close the last gap in the Headlines tab -
+    #    the Business sub-tab was rendering 40 rows with no US-
+    #    readers chip because this collector ignored the snapshot.
+    try:
+        obj = _s3().get_object(Bucket=_S3_BUCKET,
+                                Key=f'{_S3_LATEST}business_news.json')
+        biz = json.loads(obj['Body'].read().decode('utf-8'))
+    except Exception:
+        biz = {}
+    for rank, art in enumerate((biz.get('national') or [])[:40]):
+        title = (art.get('title') or '').strip()
+        key = _cp_normalize(title)
+        if not key or key in per:
+            continue
+        per[key] = {
+            'kind':          'headline',
+            'display_title': title[:200],
+            'source':        art.get('source_label') or art.get('source') or '',
+            'domain':        '',
+            'url':           art.get('url') or '',
+            'image':         art.get('image') or '',
+            'seendate':      art.get('published') or '',
+            'best_rank':     rank + 1,
+            'chart_labels':  [f'business #{rank + 1}'],
+        }
+
     ranked = sorted(per.values(),
                      key=lambda e: (e['best_rank'], e['display_title']))
     return ranked[:max_items]

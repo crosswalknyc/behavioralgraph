@@ -105,10 +105,19 @@ _S3_DATED  = 'trends_iq_snapshots/{date}/'
 #              the previous cap only surfaced the top ~30 of each panel;
 #              rows below that rendered without a reader-count badge).
 # -------------------------------------------------------------------------
-_MAX_PODCAST_ITEMS   = 150
-_MAX_SONG_ITEMS      = 100
-_MAX_STREAMING_ITEMS = 200
-_MAX_BOOK_ITEMS      = 220
+# Bumped 2026-08-20 (Jenna: "ensuring there are metrics for all") to
+# match the dashboard's rendered row count per panel. Prior caps were
+# leaving ranks 30-100 of each Music / Podcast / Book / Streaming
+# panel without a chip, which read as "why does the top row have a
+# number and the rest don't?" Coverage on the top-N of each panel is
+# now the SLA rather than "top-N cross-platform after global dedup".
+_MAX_PODCAST_ITEMS   = 300   # was 150 - 4 panels x top ~60 unique
+_MAX_SONG_ITEMS      = 250   # was 100 - 4 panels x top ~60 unique
+_MAX_STREAMING_ITEMS = 300   # was 200 - 9 platforms (netflix, disneyplus,
+                              # hulu, max, primevideo, espnplus, britbox,
+                              # mgmplus, starz) x top ~30-40 unique
+_MAX_BOOK_ITEMS      = 400   # was 220 - 3 book + 3 libby panels each
+                              # ship 30-100 unique-per-panel
 # FAST-channels: 4 platforms x top 100 = 400 gross, ~250-300 after
 # cross-platform dedup (Alone / Everybody Loves Raymond / etc. appear
 # on 2-3 platforms). Cap at 350 for safety headroom on days there is
@@ -199,11 +208,12 @@ def _collect_podcasts(max_items: int = _MAX_PODCAST_ITEMS) -> list[dict]:
         return []
     per: dict[str, dict] = {}
     for src_slug, panel in (snap.get('sources') or {}).items():
-        # Bumped 2026-08-07 from [:30] to [:50] so podcast panels
-        # that ship 100 rows (Apple, Spotify, Audible) surface their
-        # ranks 31-50 with estimates too. Post-dedup + best-rank sort
-        # still tops out at _MAX_PODCAST_ITEMS.
-        for i, it in enumerate((panel.get('items') or [])[:50]):
+        # Bumped 2026-08-20 from [:50] to [:80] to cover every visible
+        # row on the dashboard (each podcast panel renders up to
+        # 80-100 rows and Jenna wants a US-listeners chip on all of
+        # them). Post-dedup + best-rank sort still tops out at
+        # _MAX_PODCAST_ITEMS (300 as of the same day).
+        for i, it in enumerate((panel.get('items') or [])[:80]):
             title = (it.get('title') or '').strip()
             key   = _cp_normalize(title)
             if not key:
@@ -234,7 +244,10 @@ def _collect_songs(max_items: int = _MAX_SONG_ITEMS) -> list[dict]:
         return []
     per: dict[str, dict] = {}
     for src_slug, panel in (snap.get('sources') or {}).items():
-        for i, it in enumerate((panel.get('items') or [])[:30]):
+        # Bumped 2026-08-20 from [:30] to [:80] so ranks 31-80 of each
+        # music panel (Spotify, Apple, YouTube, Shazam ship 100 rows
+        # each) surface with a US-streams chip.
+        for i, it in enumerate((panel.get('items') or [])[:80]):
             title  = (it.get('title')  or '').strip()
             artist = (it.get('artist') or '').strip()
             key = _cp_normalize(f'{title} {artist}')
@@ -314,13 +327,12 @@ def _collect_streaming(max_items: int = _MAX_STREAMING_ITEMS) -> list[dict]:
             buckets.append(('tv',   snap.get('us_tv')    or []))
         else:
             buckets.append(('mixed', snap.get('national') or []))
-        # Bumped 2026-08-05 from 15 to 30 per bucket so the dashboard's
-        # top-20 films + top-20 tv per platform is fully covered with
-        # estimates (previously the row below rank 15 rendered without
-        # a stream badge, most visibly on Disney+ where the whole TV
-        # rail below rank 5 was blank).
+        # Bumped 2026-08-20 from 30 to 40 per bucket so the full
+        # dashboard rail (up to 20 films + 20 tv shown per platform,
+        # plus the historic "sustained" second-page rows) is covered.
+        # Was 15 -> 30 (2026-08-05) -> 40 (2026-08-20).
         for kind, items in buckets:
-            for i, it in enumerate(items[:30]):
+            for i, it in enumerate(items[:40]):
                 title  = (it.get('title') or '').strip()
                 cat    = (it.get('category_display') or kind or '').lower()
                 item_kind = 'film' if cat == 'film' else ('tv' if 'tv' in cat else 'title')
@@ -440,10 +452,11 @@ def _collect_books(max_items: int = _MAX_BOOK_ITEMS) -> list[dict]:
     per: dict[str, dict] = {}
 
     # 1. Book stores (Amazon, Apple, Audible).
-    # Bumped 2026-08-07 from [:30] to [:50] so Apple (100 rows) and
-    # Audible (78 rows) surface their mid-chart entries with estimates.
+    # Bumped 2026-08-20 from [:50] to [:100] so every visible row on
+    # the Books tab (Apple ships 100, Audible ships 77-78) gets an
+    # estimate, not just the top half.
     for src_slug, panel in (book_snap.get('sources') or {}).items():
-        for i, it in enumerate((panel.get('items') or [])[:50]):
+        for i, it in enumerate((panel.get('items') or [])[:100]):
             title  = (it.get('title')  or '').strip()
             artist = (it.get('artist') or '').strip()
             if not title:
