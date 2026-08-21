@@ -59169,6 +59169,7 @@ https://www.instagram.com/p/..."></textarea>
         let synthChatStashedDraft = null;
         let synthChatStashedOriginalText = '';
         let synthChatStashedProposedRange = null;
+        let _synthChatActiveOptions = null;   // quick-reply chips on the newest agent turn
         // Batch variant (2026-08-20): when a batch interpret needs
         // date clarification the WHOLE batch payload stashes here
         // and is released on confirmation.
@@ -59266,7 +59267,9 @@ https://www.instagram.com/p/..."></textarea>
                 box.innerHTML = '<div class="brief-chat-empty" style="text-align:center; color: var(--text-secondary); padding: 3rem 1rem; font-size: 0.9rem;">Start by typing what you\'re looking for below.</div>';
                 return;
             }
-            var rows = synthChatHistory.map(function(turn) {
+            _synthChatActiveOptions = null;
+            var _lastTurnIdx = synthChatHistory.length - 1;
+            var rows = synthChatHistory.map(function(turn, _ti) {
                 var role = (turn.role || 'user').toLowerCase();
                 var _rawText = turn.text || '';
                 if (role !== 'user') { _rawText = String(_rawText).replace(/\*\*/g, ''); }
@@ -59274,12 +59277,43 @@ https://www.instagram.com/p/..."></textarea>
                 var isUser = role === 'user';
                 var bg = isUser ? 'rgba(84, 141, 255, 0.14)' : 'rgba(255,255,255,0.05)';
                 var label = isUser ? '👤 You' : '🤖 Agent';
+                // Quick-reply chips (2026-08-20 Jenna: every keyword
+                // prompt should be clickable like the opening
+                // questions). Only the NEWEST agent turn renders its
+                // options so stale chips disappear as the
+                // conversation moves on.
+                var chipsHtml = '';
+                var _opts = (turn.meta && turn.meta.options) || null;
+                if (!isUser && _ti === _lastTurnIdx && _opts && _opts.length) {
+                    _synthChatActiveOptions = _opts;
+                    chipsHtml = '<div style="display:flex; flex-wrap:wrap; gap:0.35rem; margin-top:0.55rem;">' +
+                        _opts.map(function(o, oi) {
+                            var lbl = _synthChatEscapeHtml(String((o && o.label) || o));
+                            return '<button type="button" data-synth-opt="' + oi + '" ' +
+                                'style="background: var(--bg-input); border: 1px solid var(--border-color); ' +
+                                'color: var(--text-primary); border-radius: 999px; padding: 0.3rem 0.8rem; ' +
+                                'font-size: 0.75rem; cursor: pointer; font-family: inherit;">' + lbl + '</button>';
+                        }).join('') + '</div>';
+                }
                 return '<div style="margin-bottom: 0.55rem; padding: 0.55rem 0.7rem; background: ' + bg + '; border-radius: 8px;">' +
                     '<div style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 0.25rem;">' + label + '</div>' +
                     '<div style="font-size: 0.85rem; white-space: pre-wrap; line-height: 1.4;">' + text + '</div>' +
+                    chipsHtml +
                     '</div>';
             }).join('');
             box.innerHTML = rows;
+            if (!box._synthOptWired) {
+                box._synthOptWired = true;
+                box.addEventListener('click', function(ev) {
+                    var b = ev.target && ev.target.closest
+                        ? ev.target.closest('[data-synth-opt]') : null;
+                    if (!b) return;
+                    var o = (_synthChatActiveOptions || [])[
+                        parseInt(b.getAttribute('data-synth-opt'), 10)];
+                    if (o == null) return;
+                    synthChatChipSend(String((o && o.send) || (o && o.label) || o));
+                });
+            }
             box.scrollTop = box.scrollHeight;
         }
 
@@ -60099,8 +60133,9 @@ https://www.instagram.com/p/..."></textarea>
                             steps: _relSteps.slice(), idx: 0,
                             draft: synthChatCurrentDraft
                         };
-                        synthChatPushTurn('agent', summary + '\n\n' +
-                            _synthChatClarifyQuestion(_relSteps[0]));
+                        _synthChatPushQuestion(summary + '\n\n' +
+                            _synthChatClarifyQuestion(_relSteps[0]),
+                            _relSteps[0], synthChatCurrentDraft);
                         return;
                     }
                     synthChatPushTurn('agent', summary);
@@ -60200,14 +60235,17 @@ https://www.instagram.com/p/..."></textarea>
                         var bRangeLabel = _synthChatFormatRange(
                             synthChatStashedProposedRange)
                             || 'July 1, 2025 to June 30, 2026';
-                        synthChatPushTurn('agent',
+                        _synthChatPushTurnWithMeta('agent',
                             'Which time window should I use for these '
                             + data.spec_drafts.length + ' profiles?\n\n'
                             + 'Default: ' + bRangeLabel
                             + ' (the last 12 months).\n\n'
                             + 'Reply ok to use that, or tell me a '
                             + 'different window (e.g. "for 2024", '
-                            + '"trailing 6 months", "Q4 2025").');
+                            + '"trailing 6 months", "Q4 2025").', { options: [
+                                {label: 'Use ' + bRangeLabel, send: 'ok'},
+                                {label: 'Trailing 6 months', send: 'trailing 6 months'}
+                            ]});
                         return;
                     }
                     // Stash the draft and ask about dates. Do NOT
@@ -60232,7 +60270,10 @@ https://www.instagram.com/p/..."></textarea>
                         + 'Reply ok to use that, or tell me a '
                         + 'different window (e.g. "for 2024", '
                         + '"trailing 6 months", "Q4 2025").';
-                    synthChatPushTurn('agent', msg);
+                    _synthChatPushTurnWithMeta('agent', msg, { options: [
+                        {label: 'Use ' + rangeLabel, send: 'ok'},
+                        {label: 'Trailing 6 months', send: 'trailing 6 months'}
+                    ]});
                     return;
                 }
                 // Batch response with zero surviving drafts
@@ -60275,8 +60316,9 @@ https://www.instagram.com/p/..."></textarea>
                         steps: data.clarify_steps.slice(), idx: 0,
                         draft: synthChatCurrentDraft
                     };
-                    synthChatPushTurn('agent', summary + '\n\n' +
-                        _synthChatClarifyQuestion(data.clarify_steps[0]));
+                    _synthChatPushQuestion(summary + '\n\n' +
+                        _synthChatClarifyQuestion(data.clarify_steps[0]),
+                        data.clarify_steps[0], synthChatCurrentDraft);
                     return;
                 }
                 synthChatPushTurn('agent', summary);
@@ -60448,6 +60490,81 @@ https://www.instagram.com/p/..."></textarea>
         // (business_goal / addon_cuts / estimated_credits). The base
         // build is ALWAYS the national total universe + avid; every
         // cut (markets included) is 3 credits derived from it.
+        // Quick-reply options per clarify step (2026-08-20 Jenna:
+        // "all of these should be clickable like the opening
+        // questions not type x"). Each option is {label, send}; send
+        // is submitted exactly as if the user typed it, so the
+        // existing parsers need no changes.
+        function _synthChatClarifyOptions(step, draft) {
+            var d = draft || synthChatCurrentDraft || {};
+            if (step === 'goal') {
+                return [
+                    {label: 'Pitch', send: 'pitch'},
+                    {label: 'Media planning', send: 'media planning'},
+                    {label: 'Content strategy', send: 'content strategy'},
+                    {label: 'Competitive research', send: 'competitive research'},
+                    {label: 'Skip', send: 'skip'}
+                ];
+            }
+            if (step === 'strategy') {
+                var recs = (d && d.strategist_recs) || [];
+                var opts = [];
+                for (var i = 0; i < recs.length && i < 6; i++) {
+                    var lbl = String((recs[i] && (recs[i].label ||
+                        recs[i].cut_id)) || '').trim();
+                    if (lbl) opts.push({label: lbl, send: String(i + 1)});
+                }
+                if (opts.length > 1) opts.push({label: 'All of them', send: 'all'});
+                opts.push({label: 'No cuts', send: 'none'});
+                return opts;
+            }
+            if (step === 'cuts') {
+                return [
+                    {label: 'Female only', send: 'female'},
+                    {label: 'Male only', send: 'male'},
+                    {label: 'By generation', send: 'by generation'},
+                    {label: 'Ages 18-34', send: '18-34'},
+                    {label: 'No cuts', send: 'none'}
+                ];
+            }
+            if (step === 'region') {
+                return [{label: 'National', send: 'national'}];
+            }
+            if (step === 'parent_link') {
+                var cands = (d && d.parent_link_candidates) || [];
+                var po = [];
+                for (var pi = 0; pi < cands.length && pi < 5; pi++) {
+                    var nm = String(cands[pi].display_name ||
+                        cands[pi].s3_key || '').trim();
+                    if (nm.length > 58) nm = nm.slice(0, 55) + '...';
+                    if (nm) po.push({label: nm, send: String(pi + 1)});
+                }
+                po.push({label: 'None - build it fresh', send: 'none'});
+                return po;
+            }
+            if (step === 'age_breaks') {
+                var abOpts = (((d && d.age_break_data) || {}).options) || [];
+                var ao = [];
+                for (var ai = 0; ai < abOpts.length && ai < 5; ai++) {
+                    ao.push({label: String(abOpts[ai]), send: String(ai + 1)});
+                }
+                ao.push({label: 'All ages', send: 'all ages'});
+                return ao;
+            }
+            return null;
+        }
+
+        // Push an agent question with its clickable options attached.
+        function _synthChatPushQuestion(text, step, draft) {
+            var opts = null;
+            try { opts = _synthChatClarifyOptions(step, draft); } catch (_) {}
+            if (opts && opts.length) {
+                _synthChatPushTurnWithMeta('agent', text, { options: opts });
+            } else {
+                synthChatPushTurn('agent', text);
+            }
+        }
+
         function _synthChatClarifyQuestion(step) {
             if (step === 'age_breaks') {
                 // 2026-08-20: requested age range doesn't line up
@@ -60554,17 +60671,17 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 var data = await r.json();
                 if (!r.ok || !data.success) {
-                    synthChatPushTurn('agent',
+                    _synthChatPushQuestion(
                         'I hit a snag on that question (' +
                         (data.error || r.statusText) + '). ' +
-                        _synthChatClarifyQuestion(step));
+                        _synthChatClarifyQuestion(step), step, st.draft);
                     return;
                 }
                 st.draft = data.draft || st.draft;
                 synthChatCurrentDraft = st.draft;
                 var next = String(data.next_step || '').toLowerCase();
-                synthChatPushTurn('agent',
-                    data.message || 'Noted.');
+                _synthChatPushQuestion(data.message || 'Noted.',
+                    next, st.draft);
                 if (next === 'approve' || !next) {
                     synthChatClarify = null;
                     _synthChatShowBrief(synthChatCurrentDraft, null);
@@ -60575,9 +60692,9 @@ https://www.instagram.com/p/..."></textarea>
                     st.idx = ni;
                 } // same step repeats when the server re-asks
             } catch (e) {
-                synthChatPushTurn('agent',
+                _synthChatPushQuestion(
                     'That question failed (' + (e && e.message || e) +
-                    '). ' + _synthChatClarifyQuestion(step));
+                    '). ' + _synthChatClarifyQuestion(step), step, st.draft);
             } finally {
                 try { _endThinking && _endThinking(); } catch (_) {}
             }
@@ -60606,11 +60723,12 @@ https://www.instagram.com/p/..."></textarea>
                         ? d.estimated_credits : 5;
                 })
             };
-            synthChatPushTurn('agent',
+            _synthChatPushQuestion(
                 'Quick scoping question for the batch: what are these for? ' +
                 'A pitch, media planning, content strategy... one line is ' +
                 'plenty and I will suggest the right cuts for all ' +
-                drafts.length + '. Or say skip and approve whenever you are ready.');
+                drafts.length + '. Or say skip and approve whenever you are ready.',
+                'goal', null);
         }
 
         async function _synthChatBatchClarifyAnswer(answerText) {
@@ -60642,9 +60760,10 @@ https://www.instagram.com/p/..."></textarea>
                     }
                     st.draft0 = data.draft || st.draft0;
                     st.phase = 'strategy';
-                    synthChatPushTurn('agent', (data.message || 'Noted.') +
+                    _synthChatPushQuestion((data.message || 'Noted.') +
                         '\n\nAny cuts you pick apply to every profile in this batch - ' +
-                        '3 credits per cut per profile. Name the ones you want, or say none.');
+                        '3 credits per cut per profile. Name the ones you want, or say none.',
+                        'strategy', st.draft0);
                 } catch (e) {
                     synthChatBatchClarify = null;
                     synthChatPushTurn('agent',
@@ -60672,9 +60791,10 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 var d2 = await r2.json();
                 if (!r2.ok || !d2.success) {
-                    synthChatPushTurn('agent',
+                    _synthChatPushQuestion(
                         'I hit a snag on that (' + (d2.error || r2.statusText) +
-                        '). Name the cuts again, or say none.');
+                        '). Name the cuts again, or say none.',
+                        'strategy', st.draft0);
                     return;
                 }
                 st.draft0 = d2.draft || st.draft0;
@@ -60706,9 +60826,10 @@ https://www.instagram.com/p/..."></textarea>
                     ' for every profile: ' + cutNames + '.\n\n' +
                     _synthChatBuildBatchSummary(drafts, total, [], ''));
             } catch (e) {
-                synthChatPushTurn('agent',
+                _synthChatPushQuestion(
                     'That failed (' + (e && e.message || e) +
-                    '). Name the cuts again, or say none.');
+                    '). Name the cuts again, or say none.',
+                    'strategy', st.draft0);
             } finally {
                 try { _end2 && _end2(); } catch (_) {}
             }
