@@ -43387,28 +43387,86 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "      MOVIE   -> subject_rows must include ['MOVIE', "
         "'<Movie Name>'] pinned to 100. Include distributor/theatrical "
         "home if applicable.\n"
-        "  * HOME-PLATFORM PIN (mandatory for series/movies with a "
-        "primary distribution home):\n"
-        "      P-Valley -> ['STREAMING/PLATFORM', 'Starz'] at 100\n"
-        "      Landman / Yellowstone / Tulsa King -> "
+        "  * IP AUDIENCE SCOPE (mandatory whenever the subject is IP "
+        "content: a series, movie, book, podcast show, game, album, "
+        "or franchise). Two very different universes exist and the "
+        "user MUST pick one:\n"
+        "      'broad'     -> anyone who ENGAGED with the IP across "
+        "any digital touchpoint (search, social, fan content, media "
+        "coverage, merch/commerce). This is the STANDARD profile. "
+        "Engagers do NOT all have the distribution platform, so the "
+        "home platform is NOT pinned at 100 - list it in "
+        "`extra_rows` (unpinned) and the per-row engine will reason "
+        "a realistically high value.\n"
+        "      'consumers' -> ONLY people who actually consumed the "
+        "IP: viewers of a show/movie, readers of a book, listeners "
+        "of a podcast/album, players of a game. Every consumer "
+        "physically needs the place they consume it, so the home "
+        "platform(s) DO pin at 100 in subject_rows (same logic as a "
+        "sports team + league).\n"
+        "    Emit these fields on every draft:\n"
+        "      `is_ip_content`: true|false. True for any series, "
+        "movie, book, podcast show, game, album, franchise. False "
+        "for talent, brands, platforms, behavioral cohorts.\n"
+        "      `ip_scope`: 'broad' | 'consumers' | null. Set "
+        "'consumers' ONLY when the user's words narrow to actual "
+        "consumption ('viewers of', 'people who watched/streamed', "
+        "'readers of', 'played', 'listened to'). Set 'broad' ONLY "
+        "when the user explicitly asks for the wide engager "
+        "universe ('anyone who engaged with', 'the full audience', "
+        "'broad'). Otherwise null - the flow will ASK the user. "
+        "Always null when is_ip_content is false.\n"
+        "      `consumer_verb`: the consumption noun matching the "
+        "medium - 'viewers' (series/movie), 'readers' (book), "
+        "'listeners' (podcast/album), 'players' (game) - or null "
+        "when not IP.\n"
+        "      `consumers_sample_fraction`: reasoned fraction "
+        "(0.15-0.90) of the broad engager universe that actually "
+        "consumed the IP, used to scale the sample if the user picks "
+        "consumers-only. A buzzy prestige show many talk about but "
+        "fewer stream (e.g. heavy social footprint, single premium "
+        "platform) sits low (0.30-0.50); an accessible mass show on "
+        "a big platform sits high (0.60-0.85). Null when not IP.\n"
+        "      `home_platform_rows`: the [CATEGORY, Value] pairs for "
+        "the IP's distribution home(s), e.g. P-Valley -> "
+        "[['STREAMING/PLATFORM','Starz']]; SNL -> "
+        "[['STREAMING/PLATFORM','Peacock'],['BROADCAST/CABLE','NBC']]; "
+        "The Bear -> [['STREAMING/PLATFORM','FX'],"
+        "['STREAMING/PLATFORM','Hulu']]; a book -> retailer/platform "
+        "homes like [['WHERE THEY SHOP','Amazon']] only if truly "
+        "canonical, else []. Null/[] when not IP.\n"
+        "  * HOME-PLATFORM PIN (applies ONLY when ip_scope = "
+        "'consumers'; never when 'broad'):\n"
+        "      P-Valley viewers -> ['STREAMING/PLATFORM', 'Starz'] "
+        "at 100\n"
+        "      Landman / Yellowstone / Tulsa King viewers -> "
         "['STREAMING/PLATFORM', 'Paramount+'] at 100\n"
-        "      Only Murders In The Building -> "
+        "      Only Murders In The Building viewers -> "
         "['STREAMING/PLATFORM', 'Hulu'] at 100 (Disney+/Hulu bundle "
         "row also at 100 if that column exists)\n"
-        "      Severance / The Morning Show / Ted Lasso -> "
+        "      Severance / The Morning Show / Ted Lasso viewers -> "
         "['STREAMING/PLATFORM', 'Apple TV+'] at 100\n"
-        "      The Bear -> ['STREAMING/PLATFORM', 'FX'] at 100 AND "
-        "['STREAMING/PLATFORM', 'Hulu'] at 100\n"
-        "      House of the Dragon / The Last of Us -> "
+        "      The Bear viewers -> ['STREAMING/PLATFORM', 'FX'] at "
+        "100 AND ['STREAMING/PLATFORM', 'Hulu'] at 100\n"
+        "      House of the Dragon / The Last of Us viewers -> "
         "['STREAMING/PLATFORM', 'HBO Max'] at 100\n"
-        "      SNL / Peacock originals -> ['STREAMING/PLATFORM', "
-        "'Peacock'] at 100 AND ['BROADCAST/CABLE', 'NBC'] at 100\n"
-        "      Any Netflix original -> ['STREAMING/PLATFORM', "
-        "'Netflix'] at 100\n"
-        "    General rule: for a series/movie, add the streaming "
-        "service(s) that CARRIES it into subject_rows at 100. The "
-        "audience literally needs that service to watch, so it's the "
-        "same self-pin rule as a sports team + league.\n\n"
+        "      SNL / Peacock-original viewers -> "
+        "['STREAMING/PLATFORM', 'Peacock'] at 100 AND "
+        "['BROADCAST/CABLE', 'NBC'] at 100\n"
+        "      Any Netflix-original viewers -> "
+        "['STREAMING/PLATFORM', 'Netflix'] at 100\n"
+        "    When ip_scope='consumers': copy home_platform_rows into "
+        "subject_rows (pinned 100), title the subject "
+        "'{IP Name} {consumer_verb Capitalized}' ('Gilmore Girls "
+        "Viewers'), and size subject_raw_tu to the CONSUMER "
+        "universe. When ip_scope='broad': keep the clean IP name, "
+        "put the platform(s) in extra_rows unpinned, size to the "
+        "broad engager universe. When ip_scope is null: emit "
+        "subject_rows WITH the pins (the clarify step strips them "
+        "if the user picks broad), keep the clean IP name, and size "
+        "subject_raw_tu to the BROAD engager universe (the clarify "
+        "step scales it down by consumers_sample_fraction if the "
+        "user narrows).\n\n"
 
         "SAMPLE-SIZE HEURISTICS (subject_raw for TU cohort):\n"
         "  KEY INSIGHT: subject_raw is 'how many of the fixed 10,000,000 "
@@ -43611,6 +43669,11 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"audience_type\": \"general|followers|subscribers|viewers|listeners|attendees|users\",\n"
         "  \"follower_ceiling\": <int or null - required if audience_type != 'general'; holds any public-metric ceiling>,\n"
         "  \"follower_platforms\": [\"instagram\", \"tiktok\", ...] or null,\n"
+        "  \"is_ip_content\": <true|false - series/movie/book/podcast/game/album/franchise>,\n"
+        "  \"ip_scope\": \"broad|consumers\" or null (null = ask the user; see IP AUDIENCE SCOPE),\n"
+        "  \"consumer_verb\": \"viewers|readers|listeners|players\" or null,\n"
+        "  \"consumers_sample_fraction\": <float 0.15-0.90 or null - consumed-share of the broad engager universe>,\n"
+        "  \"home_platform_rows\": [[\"STREAMING/PLATFORM\",\"Starz\"], ...] or [],\n"
         "  \"run_avid\": <true|false>,\n"
         "  \"subject_rows\": [[\"CATEGORY\",\"Value\"], ...],\n"
         "  \"tu_demos\": { CATEGORY: { BUCKET: pct, ... }, ... },\n"
@@ -46027,7 +46090,7 @@ def api_synth_chat_clarify():
     answer = str(body.get('answer') or '').strip()
     draft = body.get('draft') or {}
     if step not in ('goal', 'strategy', 'region', 'cuts', 'parent_link',
-                    'age_breaks') \
+                    'age_breaks', 'ip_scope') \
             or not isinstance(draft, dict):
         return jsonify({'success': False, 'error': 'bad clarify step'}), 400
 
@@ -46069,6 +46132,103 @@ def api_synth_chat_clarify():
                 msg = "Couldn't map: " + ", ".join(real) + ". " + msg
         return jsonify({'success': True, 'draft': draft,
                         'message': msg, 'next_step': 'approve'})
+
+    if step == 'ip_scope':
+        # IP audience scope (2026-08-21 Jenna directive): broad
+        # engagers vs consumers-only. Question data was stashed by the
+        # interpret step (_maybe_ask_ip_scope).
+        data = draft.get('ip_scope_data') or {}
+        verb = str(data.get('verb') or 'viewers').strip().lower()
+        if verb not in _IP_CONSUMER_VERBS:
+            verb = 'viewers'
+        platforms = [str(p) for p in (data.get('platforms') or []) if p]
+        low = answer.lower().strip()
+        verb_stem = verb.rstrip('s')  # viewer / reader / listener / player
+        chose_consumers = bool(_re.search(
+            r'\b(consum|viewer|watch|stream|binge|reader|read|listen|'
+            r'player|play|narrow|limit)\w*\b|'
+            r'^(?:just|only)\b|\b(?:just|only)\s+(?:the\s+)?'
+            + verb_stem, low)) or verb_stem in low
+        chose_broad = bool(_re.search(
+            r'\b(broad|engag|anyone|everyone|every one|all|standard|'
+            r'wide|full|both|general)\w*\b', low))
+        if chose_broad and not chose_consumers:
+            _apply_ip_scope_to_draft(draft, 'broad')
+            head = (f"Broad it is - the profile covers everyone who "
+                    f"engaged with {draft.get('subject') or subject} "
+                    "(search, social, fan content, commerce), the "
+                    "standard build."
+                    + (f" {', '.join(platforms)} will read "
+                       "realistically high but not 100% - not every "
+                       "engager has it." if platforms else ""))
+        elif chose_consumers and not chose_broad:
+            _apply_ip_scope_to_draft(draft, 'consumers')
+            frac = data.get('fraction')
+            try:
+                frac = float(frac)
+            except (TypeError, ValueError):
+                frac = None
+            if not frac or not (0.10 <= frac <= 0.95):
+                frac = 0.55
+            try:
+                tu_now = int(draft.get('subject_raw_tu') or 0)
+                if tu_now > 0:
+                    draft['subject_raw_tu'] = max(800, int(tu_now * frac))
+                av_now = int(draft.get('subject_raw_avid') or 0)
+                if av_now > 0:
+                    draft['subject_raw_avid'] = max(
+                        400, int(av_now * frac))
+                _jitter_draft_est_sample(draft)
+            except Exception as _sc_err:
+                print(f"[ip-scope] consumer sample scale skipped: "
+                      f"{_sc_err}")
+            head = (f"Locked to {verb} only - the profile is now "
+                    f"{draft.get('subject') or subject}."
+                    + (f" {', '.join(platforms)} pins at 100% since "
+                       f"every {verb_stem} needs it."
+                       if platforms else "")
+                    + " Audience sized to the consumer universe.")
+        else:
+            past = {'viewers': 'watched', 'watchers': 'watched',
+                    'readers': 'read', 'listeners': 'listened to',
+                    'players': 'played'}.get(verb, 'consumed')
+            plat_txt = (f" Its home ({', '.join(platforms)}) would be "
+                        "locked at 100% in that case." if platforms
+                        else "")
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (f"Two ways to build this: broad - anyone "
+                            f"who engaged with it anywhere (social, "
+                            f"search, fan content, shopping) - or "
+                            f"{verb} only, just the people who "
+                            f"actually {past} it.{plat_txt} "
+                            f"Reply broad or {verb}."),
+                'next_step': 'ip_scope',
+            })
+        draft.pop('ip_scope_data', None)
+        # Continue the normal flow, same chaining as age_breaks.
+        if draft.get('ask_age_breaks') and draft.get('age_break_data'):
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head, 'next_step': 'age_breaks'})
+        if draft.get('ask_parent_link') and \
+                draft.get('parent_link_candidates'):
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head, 'next_step': 'parent_link'})
+        if str(draft.get('decision') or '').strip().lower() in (
+                'new_build', 'time_shifted_refresh', 'cut_needs_parent'):
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (head + " Quick scoping question: what's "
+                            "the business goal for this one? "
+                            "(One line - a pitch, a renewal, a media "
+                            "plan. Say skip to jump straight to "
+                            "the build.)"),
+                'next_step': 'goal',
+            })
+        return jsonify({'success': True, 'draft': draft,
+                        'message': head + " Review the brief below "
+                        "and approve to queue.",
+                        'next_step': 'approve'})
 
     if step == 'age_breaks':
         # Requested age range doesn't line up with the panel's breaks
@@ -46685,6 +46845,17 @@ def api_synth_chat_interpret():
         except Exception as _ab_err:
             print(f"[synth-chat interpret] age-breaks error: {_ab_err}")
 
+        # IP audience scope (2026-08-21 Jenna directive): a series /
+        # movie / book / podcast / game ask must pick its universe -
+        # broad engagers (standard profile, no home-platform pin) or
+        # consumers-only (viewers / readers / listeners / players,
+        # home platform pinned at 100). If the words already said,
+        # normalize silently; otherwise stash the question.
+        try:
+            _maybe_ask_ip_scope(spec_draft, text)
+        except Exception as _ip_err:
+            print(f"[synth-chat interpret] ip-scope error: {_ip_err}")
+
         # Sample-lock passthrough (2026-08-19 incidence check): when
         # the user ran a sample check and replied "run it", the
         # frontend resends the ask with the checked sample pinned.
@@ -46836,6 +47007,11 @@ def api_synth_chat_interpret():
         if spec_draft.get('ask_age_breaks') and \
                 spec_draft.get('age_break_data'):
             clarify_steps = ['age_breaks'] + clarify_steps
+        # IP-scope question runs FIRST - broad engagers vs consumers
+        # defines the universe itself (pins, naming, sample) before
+        # any other refinement makes sense.
+        if spec_draft.get('ask_ip_scope'):
+            clarify_steps = ['ip_scope'] + clarify_steps
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
@@ -49584,6 +49760,135 @@ def _maybe_ask_age_breaks(draft, prompt):
     try:
         print(f"[age-breaks] non-canonical age range "
               f"{_fmt_age_range(lo, hi)!r} in ask; suggesting {opts}")
+    except Exception:
+        pass
+    return draft
+
+
+# Columns that carry an IP's distribution home. Used to find/strip the
+# home-platform pins when the user picks the broad engager universe.
+_IP_PLATFORM_COLS = {
+    'STREAMING/PLATFORM', 'BROADCAST/CABLE', 'VIRTUAL MVPD/FAST',
+    'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD', 'MOVIE THEATER',
+    'APP/PLATFORM', 'STREAMING MUSIC', 'STREAMING/MUSIC',
+}
+
+_IP_CONTENT_CATEGORY_PREFIXES = ('SERIES', 'MOVIE', 'PODCAST', 'GAMES')
+
+_IP_CONSUMER_VERBS = ('viewers', 'readers', 'listeners', 'players',
+                      'watchers')
+
+
+def _draft_is_ip_content(draft):
+    """IP = series / movie / book / podcast show / game / album.
+    Claude sets `is_ip_content`; the category prefix is the fallback
+    for drafts from before the field existed (or when Claude forgets)."""
+    if draft.get('is_ip_content') is True:
+        return True
+    if draft.get('is_ip_content') is False:
+        return False
+    cat = str(draft.get('brand_category') or '').strip().upper()
+    return cat.startswith(_IP_CONTENT_CATEGORY_PREFIXES)
+
+
+def _apply_ip_scope_to_draft(draft, scope):
+    """In-place: reshape subject_rows / extra_rows / subject name for
+    the chosen IP audience scope. 'broad' = engager universe, no
+    home-platform pin. 'consumers' = viewers/readers/listeners/players
+    only, home platform(s) pinned at 100 (a consumer physically needs
+    the place they consume it). Sample scaling is NOT done here - the
+    clarify handler owns it because Claude already sizes correctly
+    when the user's original words carried the scope."""
+    def _pairs(rows):
+        out = []
+        for row in (rows or []):
+            if isinstance(row, (list, tuple)) and len(row) >= 2:
+                c, v = str(row[0]).strip(), str(row[1]).strip()
+                if c and v:
+                    out.append([c, v])
+        return out
+
+    home = _pairs(draft.get('home_platform_rows'))
+    home_keys = {(c.upper(), v.upper()) for c, v in home}
+    subject_rows = _pairs(draft.get('subject_rows'))
+    verb = str(draft.get('consumer_verb') or 'viewers').strip().lower()
+    if verb not in _IP_CONSUMER_VERBS:
+        verb = 'viewers'
+    subj = str(draft.get('subject') or draft.get('name') or '').strip()
+
+    if scope == 'broad':
+        keep, stripped = [], []
+        for c, v in subject_rows:
+            is_home = ((c.upper(), v.upper()) in home_keys or
+                       (not home_keys and c.upper() in _IP_PLATFORM_COLS))
+            (stripped if is_home else keep).append([c, v])
+        draft['subject_rows'] = keep
+        if stripped:
+            extra = _pairs(draft.get('extra_rows'))
+            have = {(c.upper(), v.upper()) for c, v in extra}
+            for c, v in stripped:
+                if (c.upper(), v.upper()) not in have:
+                    extra.append([c, v])
+            draft['extra_rows'] = extra
+        # broad keeps the clean IP name - drop a trailing consumer verb
+        for w in _IP_CONSUMER_VERBS:
+            if subj.lower().endswith(' ' + w):
+                subj = subj[:-(len(w) + 1)].strip(' -,')
+                draft['subject'] = subj
+                draft['name'] = subj
+                draft.pop('file_stem', None)
+                break
+    elif scope == 'consumers':
+        have = {(c.upper(), v.upper()) for c, v in subject_rows}
+        for c, v in home:
+            if (c.upper(), v.upper()) not in have:
+                subject_rows.append([c, v])
+        draft['subject_rows'] = subject_rows
+        if subj and not any(subj.lower().endswith(' ' + w)
+                            for w in _IP_CONSUMER_VERBS):
+            subj = f'{subj} {verb.title()}'
+            draft['subject'] = subj
+            draft['name'] = subj
+            draft.pop('file_stem', None)
+    draft['ip_scope'] = scope
+    draft.pop('ask_ip_scope', None)
+    return draft
+
+
+def _maybe_ask_ip_scope(draft, prompt):
+    """In-place: when the subject is IP content (series / movie / book /
+    podcast / game) and the ask didn't say whether the universe is the
+    broad engager audience or consumers-only, stash the question data so
+    the chat asks BEFORE building (2026-08-21 Jenna directive: 'they
+    will have to select if they want it to be engagers or broad').
+    When the words already carried the scope, normalize the draft
+    silently. Chatbot-only: the partner API is one-shot and keeps the
+    pinned default."""
+    if not isinstance(draft, dict) or not _draft_is_ip_content(draft):
+        return draft
+    decision = str(draft.get('decision') or 'new_build').strip().lower()
+    if decision in ('existing_match', 'derive_cut'):
+        return draft  # parent's universe semantics already fixed
+    scope = str(draft.get('ip_scope') or '').strip().lower()
+    if scope in ('broad', 'consumers'):
+        _apply_ip_scope_to_draft(draft, scope)
+        return draft
+    draft['ip_scope'] = None
+    draft['ask_ip_scope'] = True
+    verb = str(draft.get('consumer_verb') or 'viewers').strip().lower()
+    if verb not in _IP_CONSUMER_VERBS:
+        verb = 'viewers'
+    platforms = [v for _c, v in (draft.get('home_platform_rows') or [])
+                 if str(v).strip()]
+    draft['ip_scope_data'] = {
+        'verb': verb,
+        'platforms': platforms,
+        'fraction': draft.get('consumers_sample_fraction'),
+    }
+    try:
+        print(f"[ip-scope] IP subject "
+              f"{draft.get('subject')!r} with no scope in ask - "
+              f"asking broad vs {verb}-only")
     except Exception:
         pass
     return draft
