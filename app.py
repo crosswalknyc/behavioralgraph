@@ -43654,7 +43654,12 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "applies whether you're guessing (new subject) or echoing "
         "back a parent's value (refresh / cut). The engine will "
         "jitter zero-ending values anyway, but you should never emit "
-        "them in the first place.\n"
+        "them in the first place. In MULTI-PROFILE (array) responses, "
+        "subject_raw_tu MUST be independently reasoned PER ELEMENT "
+        "from THAT subject's real audience scale - NEVER copy the "
+        "same number across two elements (Amazon Prime Video's "
+        "audience is not YouTube's; identical samples across subjects "
+        "are an instant defect).\n"
         "  6. Return ONLY JSON. No markdown fences, no prose.\n"
         "  7. MULTI-PROFILE REQUESTS: if the message clearly asks for "
         "MULTIPLE distinct profiles (a list of brands / platforms / "
@@ -44265,12 +44270,57 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
     return spec_draft
 
 
+def _despread_duplicate_samples(drafts: list) -> int:
+    """Cross-element sample-identity guard (2026-08-20 EST Buyers
+    batch: array-mode Claude reused subject_raw_tu=15156 for THREE
+    different platforms and the trio shipped with pinned-identical
+    samples). Rule #1: no two subjects may share an identical sample.
+    Keeps the first occurrence; re-spreads later duplicates by a
+    subject-salted +/-7-18% factor, re-messied so the last digit stays
+    1-9. Returns the number of drafts adjusted."""
+    import hashlib as _hl
+    seen: dict = {}
+    n_fixed = 0
+    for d in drafts:
+        if not isinstance(d, dict):
+            continue
+        for field in ('subject_raw_tu', 'subject_raw_avid'):
+            try:
+                v = int(d.get(field) or 0)
+            except Exception:
+                continue
+            if v <= 0:
+                continue
+            key = (field, v)
+            if key not in seen:
+                seen[key] = d.get('subject') or ''
+                continue
+            subj = str(d.get('subject') or d.get('file_stem') or '')
+            h = int(_hl.sha256(
+                f'{subj}|{field}|despread'.encode()).hexdigest()[:8], 16)
+            frac = 0.07 + (h % 1000) / 1000.0 * 0.11   # 7-18%
+            sign = 1 if (h >> 12) % 2 == 0 else -1
+            nv = max(500, int(round(v * (1 + sign * frac))))
+            while nv % 10 == 0 or (field, nv) in seen:
+                nv += 1 + (h % 7)
+            print(f"[synth-chat despread] {subj!r} {field} {v} -> {nv} "
+                  f"(duplicate of {seen[key]!r})")
+            d[field] = nv
+            seen[(field, nv)] = subj
+            n_fixed += 1
+    return n_fixed
+
+
 def _batch_payload_from_drafts(drafts: list, user_text: str, history: list,
                                model=None, shared_context: str = '',
                                failures=None):
     """Assemble the standard batch interpret response from a list of
     already-finalized draft dicts (Claude-native array output). Applies
     the same date-clarification gate as the regex-batch path."""
+    try:
+        _despread_duplicate_samples(drafts)
+    except Exception as _ds_err:
+        print(f"[synth-chat despread] failed (non-fatal): {_ds_err}")
     user_explicit = _user_specified_dates(user_text, chat_history=history)
     claude_explicit = any(bool(d.get('date_range_explicit'))
                           for d in drafts)
@@ -48857,7 +48907,11 @@ def _maybe_promote_intersect_to_derive_cut(draft, prompt, candidates,
     # `derive_type` is a free-form label Claude usually sets. Give it
     # a safe default so downstream normalization can identify why we
     # promoted. Demographic types (gender_F etc.) are preserved.
-    if not (draft.get('derive_type') or '').strip():
+    # 2026-08-20: 'other' also remaps - the worker's behavioral engine
+    # accepts it now, but keeping the canonical label here means status
+    # displays and future routing don't depend on the catch-all.
+    if not (draft.get('derive_type') or '').strip() \
+            or draft.get('derive_type') == 'other':
         draft['derive_type'] = 'intersect_cut'
     # Lineage naming + the label the worker's behavioral-cut engine
     # uses for the output file ('{Parent} - {label}.csv').
