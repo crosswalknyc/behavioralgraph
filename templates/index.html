@@ -60170,13 +60170,18 @@ https://www.instagram.com/p/..."></textarea>
                     _interpretBody.locked_sample_avid =
                         _lockedSample.subject_raw_avid;
                 }
-                var r = await fetch('/api/brief-chat/interpret', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(_interpretBody),
-                    signal: synthChatInflightController ? synthChatInflightController.signal : undefined,
-                });
-                var data = await r.json();
+                var _fr = await _synthChatFetchJson(
+                    '/api/brief-chat/interpret', _interpretBody,
+                    synthChatInflightController ? synthChatInflightController.signal : undefined);
+                var r = _fr.r;
+                var data = _fr.data;
+                if (data == null) {
+                    synthChatPushTurn('agent',
+                        'The service hiccuped mid-request (likely a ' +
+                        'redeploy landing). Nothing was queued - send ' +
+                        'that message again and it should go through.');
+                    return;
+                }
                 if (!r.ok || !data.success) {
                     // Never surface raw model output to the user. Log
                     // the raw excerpt to the console for debugging and
@@ -60554,6 +60559,32 @@ https://www.instagram.com/p/..."></textarea>
             return null;
         }
 
+        // POST JSON and parse the reply, retrying ONCE (after 4s)
+        // when the platform hands back a non-JSON error page or a
+        // 502/503/504 - i.e. a Render deploy cutover or proxy drop
+        // killed the in-flight request (2026-08-20: these surfaced
+        // to the user as "Unexpected token '<' ... not valid JSON").
+        async function _synthChatFetchJson(url, body, signal) {
+            async function _once() {
+                var r = await fetch(url, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body),
+                    signal: signal
+                });
+                var data = null, parseFailed = false;
+                try { data = await r.json(); }
+                catch (_) { parseFailed = true; }
+                return { r: r, data: data,
+                         retriable: parseFailed || r.status === 502 ||
+                                    r.status === 503 || r.status === 504 };
+            }
+            var first = await _once();
+            if (!first.retriable) return first;
+            await new Promise(function(res) { setTimeout(res, 4000); });
+            return await _once();
+        }
+
         // Push an agent question with its clickable options attached.
         function _synthChatPushQuestion(text, step, draft) {
             var opts = null;
@@ -60662,14 +60693,11 @@ https://www.instagram.com/p/..."></textarea>
             var step = st.steps[st.idx];
             var _endThinking = _synthChatBeginThinking('clarify');
             try {
-                var r = await fetch('/api/brief-chat/clarify', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        step: step, answer: answerText, draft: st.draft
-                    }),
-                });
-                var data = await r.json();
+                var _fr = await _synthChatFetchJson(
+                    '/api/brief-chat/clarify',
+                    { step: step, answer: answerText, draft: st.draft });
+                var r = _fr.r;
+                var data = _fr.data || {};
                 if (!r.ok || !data.success) {
                     _synthChatPushQuestion(
                         'I hit a snag on that question (' +
@@ -60745,12 +60773,11 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 var _end = _synthChatBeginThinking('clarify');
                 try {
-                    var r = await fetch('/api/brief-chat/clarify', {
-                        method: 'POST', credentials: 'same-origin',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ step: 'goal', answer: t, draft: st.draft0 })
-                    });
-                    var data = await r.json();
+                    var _fr = await _synthChatFetchJson(
+                        '/api/brief-chat/clarify',
+                        { step: 'goal', answer: t, draft: st.draft0 });
+                    var r = _fr.r;
+                    var data = _fr.data || {};
                     if (!r.ok || !data.success) {
                         synthChatBatchClarify = null;
                         synthChatPushTurn('agent',
@@ -60784,12 +60811,11 @@ https://www.instagram.com/p/..."></textarea>
             }
             var _end2 = _synthChatBeginThinking('clarify');
             try {
-                var r2 = await fetch('/api/brief-chat/clarify', {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ step: 'strategy', answer: t, draft: st.draft0 })
-                });
-                var d2 = await r2.json();
+                var _fr2 = await _synthChatFetchJson(
+                    '/api/brief-chat/clarify',
+                    { step: 'strategy', answer: t, draft: st.draft0 });
+                var r2 = _fr2.r;
+                var d2 = _fr2.data || {};
                 if (!r2.ok || !d2.success) {
                     _synthChatPushQuestion(
                         'I hit a snag on that (' + (d2.error || r2.statusText) +
