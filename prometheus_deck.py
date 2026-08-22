@@ -251,6 +251,187 @@ def _slide_recs(slide, prs, plan_slide, dark, page_num, logos):
             color=BODY_DARK if dark else BODY_LIGHT, line_spacing=1.35)
 
 
+def _slide_quadrant(slide, prs, plan_slide, dark, page_num, logos):
+    """2x2 map: points plotted on two metrics (typically x = penetration
+    for scale, y = index for efficiency) with median split lines and
+    corner labels. Used for target maps / prioritization reads."""
+    _bg(slide, prs, GRAPHITE if dark else OFFWHITE)
+    _chrome(slide, dark, page_num, plan_slide.get('eyebrow'), *logos)
+    _title_block(slide, dark, plan_slide.get('title') or '')
+    pts = [p for p in (plan_slide.get('points') or [])
+           if p.get('x') is not None and p.get('y') is not None][:10]
+    if not pts:
+        return
+    px, py = MARGIN + 0.55, CONTENT_TOP + 0.30
+    pw, ph = BAND_W - 0.75, (SOURCE_Y - 0.95) - py
+    xs = [float(p['x']) for p in pts]
+    ys = [float(p['y']) for p in pts]
+
+    def _rng(vals, split):
+        lo, hi = min(vals + ([split] if split is not None else [])), \
+            max(vals + ([split] if split is not None else []))
+        pad = (hi - lo) * 0.15 or 1.0
+        return lo - pad, hi + pad
+
+    sx = plan_slide.get('x_split')
+    sy = plan_slide.get('y_split')
+    sx = float(sx) if sx is not None else sorted(xs)[len(xs) // 2]
+    sy = float(sy) if sy is not None else sorted(ys)[len(ys) // 2]
+    x0, x1 = _rng(xs, sx)
+    y0, y1 = _rng(ys, sy)
+    track_c = PAVEMENT if dark else TRACK_LIGHT
+    accent = SIGNAL_GREEN if dark else SIGNAL_OLIVE
+    body_c = BODY_DARK if dark else BODY_LIGHT
+    # Plot frame + median split lines
+    _rect(slide, px, py, pw, 0.014, track_c)
+    _rect(slide, px, py + ph, pw, 0.014, track_c)
+    _rect(slide, px, py, 0.014, ph, track_c)
+    _rect(slide, px + pw, py, 0.014, ph, track_c)
+    fx = px + pw * (sx - x0) / (x1 - x0)
+    fy = py + ph * (1 - (sy - y0) / (y1 - y0))
+    _rect(slide, fx, py, 0.014, ph, track_c)
+    _rect(slide, px, fy, pw, 0.014, track_c)
+    # Quadrant corner labels
+    q = plan_slide.get('q_labels') or {}
+    muted = MUTED_DARK if dark else MUTED_LIGHT
+    for key, (qx, qy, al) in {
+            'tl': (px + 0.10, py + 0.06, PP_ALIGN.LEFT),
+            'tr': (px + pw - 2.60, py + 0.06, PP_ALIGN.RIGHT),
+            'bl': (px + 0.10, py + ph - 0.34, PP_ALIGN.LEFT),
+            'br': (px + pw - 2.60, py + ph - 0.34, PP_ALIGN.RIGHT)}.items():
+        if q.get(key):
+            _tb(slide, qx, qy, 2.5, 0.28, str(q[key]).upper(), size=9,
+                bold=True, color=muted, align=al)
+    # Points
+    d = 0.16
+    for p in pts:
+        cx = px + pw * (float(p['x']) - x0) / (x1 - x0)
+        cy = py + ph * (1 - (float(p['y']) - y0) / (y1 - y0))
+        _circle(slide, cx - d / 2, cy - d / 2, d, accent)
+        _tb(slide, cx + d / 2 + 0.04, cy - 0.11, 2.2, 0.26,
+            str(p.get('label') or ''), size=9.5, bold=True,
+            color=TITLE_DARK if dark else TITLE_LIGHT)
+    # Axis labels
+    _tb(slide, px, py + ph + 0.10, pw, 0.25,
+        str(plan_slide.get('x_label') or ''), size=9.5, bold=True,
+        color=body_c, align=PP_ALIGN.CENTER)
+    ybox = _tb(slide, px - 1.62, py + ph / 2 - 0.14, 3.0, 0.28,
+               str(plan_slide.get('y_label') or ''), size=9.5, bold=True,
+               color=body_c, align=PP_ALIGN.CENTER)
+    ybox.rotation = -90
+    read = plan_slide.get('read')
+    if read:
+        _tb(slide, MARGIN, SOURCE_Y - 0.42, BAND_W, 0.4, read, size=11,
+            color=body_c, line_spacing=1.3)
+    _tb(slide, MARGIN, SOURCE_Y + 0.1, BAND_W, 0.25,
+        'Crosswalk Profile IQ, trailing 12 months.', size=9, color=muted)
+
+
+def _slide_personas(slide, prs, plan_slide, dark, page_num, logos):
+    """2-3 persona cards: name, sized share, identity line, stat
+    receipts, message hook. Cards must carve the audience MECE."""
+    _bg(slide, prs, GRAPHITE if dark else OFFWHITE)
+    _chrome(slide, dark, page_num, plan_slide.get('eyebrow'), *logos)
+    _title_block(slide, dark, plan_slide.get('title') or '')
+    cards = (plan_slide.get('cards') or [])[:3]
+    if not cards:
+        return
+    gap = 0.28
+    card_w = (BAND_W - gap * (len(cards) - 1)) / len(cards)
+    card_y = CONTENT_TOP + 0.15
+    card_h = SOURCE_Y - card_y - 0.30
+    card_fill = SLATE if dark else RGBColor(0xF7, 0xF6, 0xF0)
+    accent = SIGNAL_GREEN if dark else SIGNAL_OLIVE
+    title_c = TITLE_DARK if dark else TITLE_LIGHT
+    body_c = BODY_DARK if dark else BODY_LIGHT
+    for i, c in enumerate(cards):
+        x = MARGIN + i * (card_w + gap)
+        _rect(slide, x, card_y, card_w, card_h, card_fill,
+              rounded=True, radius=0.055)
+        pad = 0.26
+        cx, cw = x + pad, card_w - 2 * pad
+        _tb(slide, cx, card_y + 0.26, cw, 0.62,
+            str(c.get('name') or ''), size=16, bold=True, color=title_c,
+            line_spacing=1.1)
+        _tb(slide, cx, card_y + 0.88, cw, 0.28,
+            str(c.get('share') or '').upper(), size=9.5, bold=True,
+            color=accent)
+        _tb(slide, cx, card_y + 1.22, cw, 0.85,
+            str(c.get('identity') or ''), size=10.5, color=body_c,
+            line_spacing=1.3)
+        sy = card_y + 2.15
+        for st in (c.get('stats') or [])[:4]:
+            _circle(slide, cx, sy + 0.055, 0.07, accent)
+            _tb(slide, cx + 0.17, sy, cw - 0.17, 0.3, str(st),
+                size=10, bold=True, color=title_c)
+            sy += 0.34
+        hook = str(c.get('hook') or '').strip()
+        if hook:
+            _tb(slide, cx, card_y + card_h - 0.85, cw, 0.72,
+                f'\u201c{hook}\u201d', size=10.5, color=body_c,
+                line_spacing=1.25)
+    _tb(slide, MARGIN, SOURCE_Y, BAND_W, 0.25,
+        'Crosswalk Profile IQ, trailing 12 months.', size=9,
+        color=MUTED_DARK if dark else MUTED_LIGHT)
+
+
+def _slide_benchmark(slide, prs, plan_slide, dark, page_num, logos):
+    """Paired bars: this audience vs US gen pop per row. Used when the
+    contrast against the average American IS the story."""
+    _bg(slide, prs, GRAPHITE if dark else OFFWHITE)
+    _chrome(slide, dark, page_num, plan_slide.get('eyebrow'), *logos)
+    _title_block(slide, dark, plan_slide.get('title') or '')
+    rows = (plan_slide.get('rows') or [])[:5]
+    if not rows:
+        return
+    unit = plan_slide.get('unit') or '% pen'
+    label_w, val_w = 2.30, 1.85
+    track_x = MARGIN + label_w + 0.15
+    track_w = BAND_W - label_w - val_w - 0.30
+    bar_h = 0.135
+    pair_h = bar_h * 2 + 0.05
+    avail = (SOURCE_Y - 0.95) - CONTENT_TOP
+    row_gap = min(0.45, max(0.22, avail / max(len(rows), 1) - pair_h))
+    maxv = max([float(r.get('aud') or 0) for r in rows]
+               + [float(r.get('gp') or 0) for r in rows] + [0.0001])
+    track_c = PAVEMENT if dark else TRACK_LIGHT
+    accent = SIGNAL_GREEN if dark else SIGNAL_OLIVE
+    title_c = TITLE_DARK if dark else TITLE_LIGHT
+    body_c = BODY_DARK if dark else BODY_LIGHT
+    y = CONTENT_TOP + 0.35
+    for r in rows:
+        aud = float(r.get('aud') or 0)
+        gp = float(r.get('gp') or 0)
+        _tb(slide, MARGIN, y + 0.02, label_w, 0.3,
+            str(r.get('label') or ''), size=11, bold=True, color=title_c)
+        _rect(slide, track_x, y, max(track_w * aud / maxv, bar_h), bar_h,
+              accent, rounded=True, radius=0.5)
+        _rect(slide, track_x, y + bar_h + 0.05,
+              max(track_w * gp / maxv, bar_h), bar_h, track_c,
+              rounded=True, radius=0.5)
+        idx_txt = f"  idx {round(aud / gp * 100)}" if gp >= 0.01 else ''
+        _tb(slide, track_x + track_w + 0.12, y - 0.01, val_w, 0.3,
+            f"{aud:.1f} vs {gp:.1f}{idx_txt}", size=10.5, bold=True,
+            color=title_c)
+        y += pair_h + row_gap
+    legend_y = CONTENT_TOP - 0.02
+    _rect(slide, BAND_RIGHT - 3.55, legend_y + 0.05, 0.28, 0.10, accent,
+          rounded=True, radius=0.5)
+    _tb(slide, BAND_RIGHT - 3.20, legend_y - 0.04, 1.35, 0.25,
+        'This audience', size=9, bold=True, color=body_c)
+    _rect(slide, BAND_RIGHT - 1.85, legend_y + 0.05, 0.28, 0.10, track_c,
+          rounded=True, radius=0.5)
+    _tb(slide, BAND_RIGHT - 1.50, legend_y - 0.04, 1.30, 0.25,
+        'US gen pop', size=9, bold=True, color=body_c)
+    read = plan_slide.get('read')
+    if read:
+        _tb(slide, MARGIN, SOURCE_Y - 0.62, BAND_W, 0.5, read, size=11.5,
+            color=body_c, line_spacing=1.35)
+    _tb(slide, MARGIN, SOURCE_Y, BAND_W, 0.25,
+        f'Crosswalk Profile IQ, trailing 12 months. Values in {unit}.',
+        size=9, color=MUTED_DARK if dark else MUTED_LIGHT)
+
+
 def _slide_close(slide, prs, plan_slide, page_num, logos):
     _bg(slide, prs, GRAPHITE)
     _chrome(slide, True, page_num, plan_slide.get('eyebrow') or 'PROFILE IQ',
@@ -312,6 +493,12 @@ def render_deck(plan, out_path, static_dir=None):
             _slide_chart(slide, prs, ps, dark, page_num, logos)
         elif stype == 'recs':
             _slide_recs(slide, prs, ps, dark, page_num, logos)
+        elif stype == 'quadrant':
+            _slide_quadrant(slide, prs, ps, dark, page_num, logos)
+        elif stype == 'personas':
+            _slide_personas(slide, prs, ps, dark, page_num, logos)
+        elif stype == 'benchmark':
+            _slide_benchmark(slide, prs, ps, dark, page_num, logos)
         else:
             _slide_stats(slide, prs, ps, dark, page_num, logos)
 

@@ -36,12 +36,15 @@ DEMO_COLS = {
     'RELATIONSHIP STATUS', 'SEXUAL ORIENTATION', 'SEXUAL_ORIENTATION',
 }
 
-_digest_cache = {}       # {s3_key: (etag, built_ts, digest_str, meta)}
+_digest_cache = {}       # {s3_key: (etag+norms_ver, built_ts, digest_str, meta)}
 _genpop_cache = {'ts': 0.0, 'map': None}
+_norms_cache = {'ts': 0.0, 'etag': None, 'data': None}
 _cache_lock = threading.Lock()
 
 GENPOP_KEY = 'Gen_Pop_2026.csv'
 GENPOP_TTL_S = 3600
+NORMS_KEY = 'system/brand_norms.json.gz'
+NORMS_TTL_S = 6 * 3600
 
 
 def _norm_cat(c):
@@ -89,6 +92,7 @@ def _profile_meta(df, fallback_name):
     raw_c = _fuzzy_col(df, 'raw')
     proj_c = _fuzzy_col(df, 'proj')
     name, sample, proj, window = fallback_name, None, None, None
+    brand_category = None
     dates = []
     for _, row in df.iterrows():
         cat = _norm_cat(row.get('Column'))
@@ -97,6 +101,8 @@ def _profile_meta(df, fallback_name):
         val = str(row.get('Value') or '')
         if cat == 'SUBJECT' and val and not name:
             name = val
+        if cat == 'BRAND CATEGORY' and val.strip():
+            brand_category = _norm_cat(val)
         if cat == 'BRAND INPUT':
             if raw_c is not None:
                 try:
@@ -115,7 +121,7 @@ def _profile_meta(df, fallback_name):
         window = f"{dates[0]} to {dates[1]}"
     return {'name': name or fallback_name or 'Audience',
             'sample': sample, 'proj': proj, 'window': window,
-            'bp_col': bp}
+            'bp_col': bp, 'brand_category': brand_category}
 
 
 def load_genpop_map(s3_client, bucket):
@@ -144,6 +150,54 @@ def load_genpop_map(s3_client, bucket):
     return gp
 
 
+def load_norms(s3_client, bucket):
+    """Cross-profile brand norms grouped by the profiles' BRAND CATEGORY
+    (built by scripts/build_profile_norms.py). ETag-checked cache with a
+    6h TTL. Returns the payload dict or None when absent."""
+    now = time.time()
+    with _cache_lock:
+        if (_norms_cache['data'] is not None
+                and now - _norms_cache['ts'] < NORMS_TTL_S):
+            return _norms_cache['data']
+    data = None
+    try:
+        import gzip as _gzip
+        import json as _json
+        head = s3_client.head_object(Bucket=bucket, Key=NORMS_KEY)
+        etag = (head.get('ETag') or '').strip('"')
+        with _cache_lock:
+            if _norms_cache['etag'] == etag and _norms_cache['data']:
+                _norms_cache['ts'] = now
+                return _norms_cache['data']
+        body = s3_client.get_object(Bucket=bucket, Key=NORMS_KEY)['Body'].read()
+        data = _json.loads(_gzip.decompress(body).decode('utf-8'))
+        with _cache_lock:
+            _norms_cache.update(ts=now, etag=etag, data=data)
+    except Exception as e:
+        print(f"[prometheus] norms load skipped: {e}")
+        with _cache_lock:
+            _norms_cache.update(ts=now, data=_norms_cache['data'])
+            data = _norms_cache['data']
+    return data
+
+
+def _norm_lookup(norms, group, catU, brand_norm, min_n=5):
+    """Norm entry for a brand, preferring the subject-category group and
+    falling back to the global '*' pool. Returns (entry, group_used).
+    Table is nested norms[group][category][brand_norm] (see
+    scripts/build_profile_norms.py)."""
+    if not norms:
+        return None, None
+    table = norms.get('norms') or {}
+    groups = norms.get('groups') or {}
+    for g in ((group, '*') if group and groups.get(group, 0) >= min_n
+              else ('*',)):
+        e = (table.get(g) or {}).get(catU, {}).get(brand_norm)
+        if e and e[0] >= min_n:
+            return e, g
+    return None, None
+
+
 def _fmt_row(brand, bp, gp_bp):
     s = f"{brand} {bp:.1f}"
     if gp_bp is not None and gp_bp >= 0.01:
@@ -152,10 +206,13 @@ def _fmt_row(brand, bp, gp_bp):
 
 
 def build_profile_digest(df, meta, genpop_map, subject_name=None,
-                         max_rows=12, max_chars=26000):
+                         max_rows=12, max_chars=32000, norms=None):
     """Compact text digest of one profile CSV: metadata line, full
     demographics, then top rows per behavioral category with index vs
-    US gen pop (100 = average)."""
+    US gen pop (100 = average), per-category math (leader, median,
+    concentration, conquest gaps), and a PEER NORMS section comparing
+    this audience against every other audience of the same BRAND
+    CATEGORY in the Crosswalk corpus."""
     bp_c = meta.get('bp_col') or _bp_col(df)
     if bp_c is None:
         return f"PROFILE: {meta['name']}\n(no penetration column found)"
@@ -171,6 +228,7 @@ def build_profile_digest(df, meta, genpop_map, subject_name=None,
     lines.append('  ' + '; '.join(bits))
 
     demo_lines, cat_lines = [], []
+    demo_rows_all, beh_rows_all = [], []
     for cat, grp in df.groupby('Column', sort=False):
         catU = _norm_cat(cat)
         if catU in METADATA_COLS:
@@ -185,31 +243,128 @@ def build_profile_digest(df, meta, genpop_map, subject_name=None,
             continue
         rows.sort(key=lambda r: -r[1])
         if catU in DEMO_COLS:
+            demo_rows_all.extend((catU, b, v) for b, v in rows)
             demo_lines.append(
                 f"  {catU}: " + ' | '.join(
                     f"{b} {v:.1f}" for b, v in rows))
             continue
         shown, pinned = [], 0
-        for b, v in rows:
-            if v >= 99.99 or _norm_brand(b) == subj_norm:
-                pinned += 1
-                continue
+        free = [(b, v) for b, v in rows
+                if v < 99.99 and _norm_brand(b) != subj_norm]
+        beh_rows_all.extend((catU, b, v) for b, v in free)
+        for b, v in free:
             if len(shown) < max_rows:
                 gp = genpop_map.get((catU, _norm_brand(b)))
                 shown.append(_fmt_row(b, v, gp))
         if not shown:
             continue
         suffix = f" [{len(rows)} rows]" if len(rows) > max_rows else ""
-        cat_lines.append(f"  {catU}{suffix}: " + '; '.join(shown))
+        # Deterministic category math (2026-08-21): leader, median row,
+        # concentration (leader's share of the top-5 total), and the
+        # conquest gaps (big in gen pop, weak in this audience). Gives
+        # whitespace/fragmentation claims real numbers to stand on.
+        math_bits = []
+        if len(free) >= 3:
+            pens = [v for _, v in free]
+            top5 = pens[:5]
+            conc = top5[0] / sum(top5) if sum(top5) > 0 else 0
+            shape = ('CONCENTRATED' if conc >= 0.45
+                     else 'SPLIT' if conc <= 0.30 else 'MIXED')
+            med = pens[len(pens) // 2]
+            math_bits.append(
+                f"math: n{len(free)}, leader {free[0][0]} {free[0][1]:.1f}, "
+                f"median row {med:.1f}, top1-of-top5 {conc * 100:.0f}% "
+                f"({shape})")
+            gaps = []
+            for b, v in free:
+                gp = genpop_map.get((catU, _norm_brand(b)))
+                if gp and gp >= 8 and (v / gp * 100) <= 75:
+                    gaps.append((gp, b, v))
+            gaps.sort(reverse=True)
+            if gaps:
+                math_bits.append(
+                    "conquest gaps (big in gen pop, weak here): " + ', '.join(
+                        f"{b} {v:.1f} (idx {round(v / g * 100)}, gp {g:.1f})"
+                        for g, b, v in gaps[:3]))
+        cat_lines.append(f"  {catU}{suffix}: " + '; '.join(shown)
+                         + (' || ' + ' | '.join(math_bits)
+                            if math_bits else ''))
 
     lines.append("DEMOGRAPHICS (% of audience):")
     lines.extend(demo_lines)
     lines.append("BEHAVIORAL CATEGORIES (top rows, % penetration of this "
-                 "audience; idx = index vs US gen pop, 100 = average):")
+                 "audience; idx = index vs US gen pop, 100 = average; "
+                 "'math:' block = full-category calculations):")
     lines.extend(cat_lines)
+    # PEER NORMS is the rarity evidence; truncation must never eat it,
+    # so cap the category body first and append the peer section after.
+    peer = _peer_norms_section(meta, genpop_map, norms,
+                               demo_rows_all, beh_rows_all)
+    peer_txt = ('\n' + '\n'.join(peer)) if peer else ''
     out = '\n'.join(lines)
-    if len(out) > max_chars:
-        out = out[:max_chars] + "\n  [digest truncated]"
+    budget = max_chars - len(peer_txt)
+    if len(out) > budget:
+        out = out[:budget] + "\n  [digest truncated]"
+    return out + peer_txt
+
+
+def _peer_norms_section(meta, genpop_map, norms, demo_rows, beh_rows):
+    """PEER NORMS lines: rarity receipts vs other audiences of the same
+    BRAND CATEGORY (Jenna 2026-08-21: norms group on the BRAND CATEGORY
+    value in the CSV). Returns [] when the norms file is unavailable."""
+    if not norms:
+        return []
+    group = _norm_cat(meta.get('brand_category') or '')
+    groups = norms.get('groups') or {}
+    n_group = groups.get(group, 0)
+    highs, lows, demo_out = [], [], []
+    for catU, b, v in beh_rows:
+        bn = _norm_brand(b)
+        entry, g_used = _norm_lookup(norms, group, catU, bn)
+        if not entry:
+            continue
+        n, med_p, p90_p, max_p, med_i, p90_i, max_i, max_prof = entry
+        gp = genpop_map.get((catU, bn))
+        if gp and med_i and p90_i:
+            idx = v / gp * 100
+            if idx > p90_i and idx >= 115:
+                highs.append((idx / p90_i, catU, b, idx, v, entry, g_used))
+            elif idx < med_i * 0.6 and gp >= 5 and med_i >= 60:
+                lows.append((med_i / max(idx, 1), catU, b, idx, entry,
+                             g_used))
+        elif v > p90_p * 1.15 and v >= 3:
+            highs.append((v / p90_p, catU, b, None, v, entry, g_used))
+    for catU, b, v in demo_rows:
+        entry, g_used = _norm_lookup(norms, group, catU, _norm_brand(b))
+        if entry and abs(v - entry[1]) >= 8:
+            demo_out.append((abs(v - entry[1]), catU, b, v, entry[1]))
+    if not (highs or lows or demo_out):
+        return []
+    label = (f"{n_group} other {group} audiences" if n_group >= 5
+             else f"{norms.get('n_profiles', 0)} audiences (all types)")
+    out = [f"PEER NORMS (this audience vs {label} in the Crosswalk "
+           f"corpus; use as rarity receipts):"]
+    highs.sort(key=lambda t: -t[0])
+    for _, catU, b, idx, v, e, g_used in highs[:8]:
+        n, med_p, p90_p, max_p, med_i, p90_i, max_i, max_prof = e
+        pool = f"{n} {g_used} profiles" if g_used != '*' else f"{n} profiles"
+        if idx is not None:
+            out.append(f"  RARE HIGH {catU} / {b}: idx {round(idx)} vs "
+                       f"peers med {med_i}, p90 {p90_i}, max {max_i} "
+                       f"({pool}; max seen on {max_prof})")
+        else:
+            out.append(f"  RARE HIGH {catU} / {b}: pen {v:.1f} vs peers "
+                       f"med {med_p}, p90 {p90_p}, max {max_p} ({pool})")
+    lows.sort(key=lambda t: -t[0])
+    for _, catU, b, idx, e, g_used in lows[:4]:
+        n = e[0]
+        out.append(f"  NOTABLY WEAK {catU} / {b}: idx {round(idx)} vs "
+                   f"peers med {e[4]} ({n} profiles)")
+    demo_out.sort(key=lambda t: -t[0])
+    for dev, catU, b, v, med_p in demo_out[:4]:
+        sign = '+' if v > med_p else '-'
+        out.append(f"  DEMO OUTLIER {catU} / {b}: {v:.1f} vs peer med "
+                   f"{med_p:.1f} ({sign}{dev:.1f}pp)")
     return out
 
 
@@ -262,6 +417,20 @@ def build_cut_divergence(parent_df, parent_meta, cut_df, cut_meta,
     over = [d for d in deltas if d[1] > 0][:top_n]
     under = [d for d in deltas if d[1] < 0][:top_n]
 
+    # Two-proportion significance guard (2026-08-21): with a small cut
+    # sample, modest pp gaps sit inside sampling error. Flag those so
+    # the model never builds a story on noise. Pooled z at 99% (2.58).
+    n1 = parent_meta.get('sample') or 0
+    n2 = cut_meta.get('sample') or 0
+
+    def _noise(v, pv):
+        if n1 < 50 or n2 < 50:
+            return False
+        p1, p2 = pv / 100.0, v / 100.0
+        pool = (p1 * n1 + p2 * n2) / (n1 + n2)
+        se = (pool * (1 - pool) * (1 / n1 + 1 / n2)) ** 0.5
+        return se > 0 and abs(p2 - p1) / se < 2.58
+
     lines = [f"CUT: {cut_meta['name']} (vs parent {parent_meta['name']})"]
     bits = []
     if cut_meta.get('sample'):
@@ -272,12 +441,18 @@ def build_cut_divergence(parent_df, parent_meta, cut_df, cut_meta,
         lines.append('  ' + '; '.join(bits))
     lines.append("  DEMOGRAPHICS:")
     lines.extend(['  ' + dl for dl in demo_lines])
-    lines.append("  BIGGEST OVER-INDEXES vs parent (pp = percentage points):")
+    lines.append("  BIGGEST OVER-INDEXES vs parent (pp = percentage "
+                 "points; [within noise] = gap smaller than sampling "
+                 "error at these sample sizes, do not build on it):")
     for _, dlt, catU, b, v, pv in over:
-        lines.append(f"    {catU} / {b}: {v:.1f} vs {pv:.1f} (+{dlt:.1f}pp)")
+        flag = ' [within noise]' if _noise(v, pv) else ''
+        lines.append(f"    {catU} / {b}: {v:.1f} vs {pv:.1f} "
+                     f"(+{dlt:.1f}pp){flag}")
     lines.append("  BIGGEST UNDER-INDEXES vs parent:")
     for _, dlt, catU, b, v, pv in under:
-        lines.append(f"    {catU} / {b}: {v:.1f} vs {pv:.1f} ({dlt:.1f}pp)")
+        flag = ' [within noise]' if _noise(v, pv) else ''
+        lines.append(f"    {catU} / {b}: {v:.1f} vs {pv:.1f} "
+                     f"({dlt:.1f}pp){flag}")
     out = '\n'.join(lines)
     if len(out) > max_chars:
         out = out[:max_chars] + "\n  [cut digest truncated]"
@@ -289,21 +464,25 @@ def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
     {primary: {s3_key, name}, cuts: [{s3_key, name}, ...]}.
     Returns (bundle_text, primary_meta). Caches per (key, etag)."""
     genpop = load_genpop_map(s3_client, bucket)
+    norms = load_norms(s3_client, bucket)
+    norms_ver = (norms or {}).get('built_at') or ''
     primary = page_context.get('primary') or {}
     p_key = primary.get('s3_key')
     if not p_key:
         raise ValueError('page context has no primary profile key')
 
     p_df, p_etag = load_profile_df(s3_client, bucket, p_key)
+    p_cache_key = f"{p_etag}|{norms_ver}"
     p_meta = _profile_meta(p_df, primary.get('name'))
     with _cache_lock:
         cached = _digest_cache.get(p_key)
-    if cached and cached[0] == p_etag:
+    if cached and cached[0] == p_cache_key:
         p_digest = cached[2]
     else:
-        p_digest = build_profile_digest(p_df, p_meta, genpop)
+        p_digest = build_profile_digest(p_df, p_meta, genpop, norms=norms)
         with _cache_lock:
-            _digest_cache[p_key] = (p_etag, time.time(), p_digest, p_meta)
+            _digest_cache[p_key] = (p_cache_key, time.time(), p_digest,
+                                    p_meta)
             if len(_digest_cache) > 40:
                 oldest = sorted(_digest_cache.items(),
                                 key=lambda kv: kv[1][1])[:10]
@@ -332,15 +511,17 @@ def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
             continue
         try:
             e_df, e_etag = load_profile_df(s3_client, bucket, e_key)
+            e_cache_key = f"{e_etag}|{norms_ver}"
             e_meta = _profile_meta(e_df, ex.get('name'))
             with _cache_lock:
                 e_cached = _digest_cache.get(e_key)
-            if e_cached and e_cached[0] == e_etag:
+            if e_cached and e_cached[0] == e_cache_key:
                 e_digest = e_cached[2]
             else:
-                e_digest = build_profile_digest(e_df, e_meta, genpop)
+                e_digest = build_profile_digest(e_df, e_meta, genpop,
+                                                norms=norms)
                 with _cache_lock:
-                    _digest_cache[e_key] = (e_etag, time.time(),
+                    _digest_cache[e_key] = (e_cache_key, time.time(),
                                             e_digest, e_meta)
             parts.append(
                 "COMPARISON PROFILE (independent audience, NOT a cut of "
@@ -371,7 +552,9 @@ THE DATA
 - Crosswalk data is first-party, T+1, derived from observed clickstream behavior of a US panel. It reflects what panelists did, not what they claim.
 - An Engager had at least 1 digital touchpoint with the subject over the trailing 12 months across search, social, media, ecommerce, or owned-and-operated channels.
 - Penetration = share of THIS audience active with a brand in the window. idx = index vs US general population, 100 = average, 683 means 6.83x the average.
-- pp = percentage points. Cut rows show cut vs parent values.
+- pp = percentage points. Cut rows show cut vs parent values. A cut row marked [within noise] has a gap smaller than sampling error at those sample sizes; never build a finding on it.
+- PEER NORMS is your rarity evidence: it compares this audience against every other audience of the same subject type in the Crosswalk corpus. RARE HIGH rows are reads above the 90th percentile of peers (med / p90 / max shown, with the profile that holds the max). Use them for sentences like "idx 412 is the highest we have measured across 34 ACTOR audiences" - this is the single most persuasive framing the data supports, so use it whenever a RARE HIGH backs your point. NOTABLY WEAK and DEMO OUTLIER rows work the same way in the other direction.
+- Each behavioral category carries a "math:" block computed from the full category (not just the rows shown): row count, leader, median row, concentration (the leader's share of the top-5 total, tagged CONCENTRATED / MIXED / SPLIT), and conquest gaps (brands big in gen pop but weak in this audience). Use concentration for fragmentation and whitespace claims and conquest gaps for acquisition targets; do not re-derive these by eye.
 - The digest is your PRIMARY evidence. Every claim you make must be anchored to numbers in it. You may add outside market knowledge (deal sizes, category dynamics, who sponsors what) as supporting context, never as a substitute, and never invent numbers that look like they came from the data.
 
 HOW TO THINK (partner discipline, every reply)
@@ -431,7 +614,7 @@ Return strict JSON only:
 DECK_PLAN_SYSTEM_PROMPT = """You are Prometheus, building a slide plan for a client-facing Crosswalk deck from Profile IQ data. You get the data digest, the recent analysis conversation, and the requested angle. Return a JSON slide plan that a renderer will lay out in the Crosswalk deck system.
 
 RULES
-- 5 to 8 slides. Open with cover, close with close. Vary the middle: stats, chart, recs.
+- 5 to 9 slides. Open with cover, close with close. Vary the middle: stats, chart, benchmark, quadrant, personas, recs. Never use the same middle type three times in a row.
 - Every number must come from the digest or the conversation. Never invent data.
 - Titles are sentences in sentence case and they end with a period. They state the finding: "Streaming is where this audience already lives." not "Streaming Overview".
 - The read line under a chart is one sentence stating what the chart proves, with the key number.
@@ -440,6 +623,9 @@ RULES
 - Chart rows: 4 to 6 rows max, ranked descending, values are penetration percentages (numbers only, no % sign in the value field).
 - Stats slides: 3 or 4 stat blocks, big value short ("3.6M", "212", "44.0%"), label sentence case under 8 words.
 - Recs: 3 or 4, each an action the client team (media, creative, partnerships, development, or research) can take this quarter, with the size of the prize where the data allows.
+- benchmark: use when the contrast against the average American IS the story. 4 or 5 rows, aud and gp are penetration numbers for this audience and US gen pop (gp = pen/(idx/100)). Skip rows where you do not have both.
+- quadrant: use for a prioritization or target map. 6 to 10 points, x and y are two metrics from the digest (default x = penetration for scale, y = index for efficiency). q_labels name the four corners as actions ("Own", "Grow", "Defend", "Skip"). Points must spread across at least 3 quadrants or use a chart instead.
+- personas: use when the ask is persona or segmentation shaped. 2 or 3 cards, MECE, each with name (two words), share (sized: share of audience and pool), identity (one sentence), stats (2 to 4 receipts like "Ariat idx 412"), hook (message in the persona's language).
 
 Return strict JSON only:
 {
@@ -449,6 +635,9 @@ Return strict JSON only:
     {"type": "cover", "eyebrow": "PROFILE IQ", "title": "...", "meta": "Subject; window; sample"},
     {"type": "stats", "eyebrow": "THE AUDIENCE", "title": "...", "read": "...", "stats": [{"big": "3.6M", "label": "projected US audience"}]},
     {"type": "chart", "eyebrow": "WHERE THEY ARE", "title": "...", "read": "...", "unit": "% pen", "rows": [{"label": "Hulu", "value": 44.0, "note": "idx 212"}]},
+    {"type": "benchmark", "eyebrow": "VS AVERAGE", "title": "...", "read": "...", "unit": "% pen", "rows": [{"label": "Hulu", "aud": 44.0, "gp": 20.8}]},
+    {"type": "quadrant", "eyebrow": "TARGET MAP", "title": "...", "read": "...", "x_label": "% penetration (scale)", "y_label": "index vs gen pop (efficiency)", "points": [{"label": "Hulu", "x": 44.0, "y": 212}], "q_labels": {"tr": "Own", "tl": "Grow", "br": "Defend", "bl": "Skip"}},
+    {"type": "personas", "eyebrow": "WHO THEY ARE", "title": "...", "cards": [{"name": "Arena Loyalist", "share": "38% of audience, 24.4M", "identity": "...", "stats": ["Ariat idx 412"], "hook": "..."}]},
     {"type": "recs", "eyebrow": "WHAT TO DO", "title": "...", "recs": [{"head": "...", "body": "..."}]},
     {"type": "close", "big": "683", "line": "One sentence close."}
   ]
