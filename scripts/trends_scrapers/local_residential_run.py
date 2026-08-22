@@ -132,8 +132,12 @@ def _refresh_cookies() -> int:
     cookies are currently in S3.
     """
     logger.info("refreshing donated cookies from local Chrome ...")
+    # --no-refresh: this batch runs every residential scraper itself
+    # right after donating, so donate_cookies' own post-donation
+    # auto-refresh would double-run everything (and kick a redundant
+    # Hetzner run an hour before its cron).
     cmd = [sys.executable, '-m',
-           'scripts.trends_scrapers.donate_cookies']
+           'scripts.trends_scrapers.donate_cookies', '--no-refresh']
     proc = subprocess.run(cmd, capture_output=True, text=True,
                            cwd=str(Path(__file__).resolve().parents[2]))
     if proc.stdout:

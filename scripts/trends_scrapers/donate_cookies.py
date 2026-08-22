@@ -30,6 +30,14 @@ Usage
     # Dry-run (write to /tmp instead of S3)
     python3 scripts/trends_scrapers/donate_cookies.py --dry-run
 
+After a successful donation the script automatically refreshes the
+data for whatever the donated domain feeds: residential-only scrapers
+re-run right here in this terminal, Hetzner-run sources are kicked off
+over SSH in the background, and the dashboard cache is purged + the
+default view re-warmed so the new data shows on the next page load.
+Pass --no-refresh to skip that (the daily residential batch does,
+since it runs every scraper itself right after donating).
+
 Setup (one-time)
 ----------------
     pip3 install --user --break-system-packages browser-cookie3 boto3
@@ -156,6 +164,99 @@ DEFAULT_DOMAINS = [
 S3_BUCKET = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs')
 S3_PREFIX = 'trends_iq_cookies/'
 
+# Where the datacenter-side scrapers live. After a donation for a
+# Hetzner-run source (retailers, Prime Video, music/podcast/book
+# charts) we SSH here and kick a detached refresh so the data updates
+# within minutes instead of waiting for the next cron.
+HETZNER_HOST     = os.environ.get('TRENDS_HETZNER_HOST', 'root@168.119.215.48')
+HETZNER_REPO     = '/root/finished_codes/bg-webapp'
+HETZNER_ENV_FILE = '/root/finished_codes/.env.trends_scrapers'
+
+
+def _load_refresh_module():
+    """Load refresh_after_donation.py from this directory via importlib
+    so this script keeps working when run as a plain file (no package
+    on sys.path)."""
+    import importlib.util
+    path = Path(__file__).resolve().parent / 'refresh_after_donation.py'
+    spec = importlib.util.spec_from_file_location('refresh_after_donation', path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _auto_refresh(donated_domains: list[str]) -> None:
+    """Re-scrape whatever the donated domains feed, right now.
+
+    Residential-only scrapers run locally in this terminal (the donated
+    cookies came from this machine's Chrome, and these sites IP-block
+    the datacenter anyway). Hetzner-run sources are triggered over SSH
+    as a detached job so slow retailer warm-ups don't block the
+    operator. Both paths end by purging today's live dashboard cache
+    and re-warming the default view, so the dashboard shows the fresh
+    data on the next load.
+    """
+    import subprocess
+
+    try:
+        refresh = _load_refresh_module()
+    except Exception as e:
+        print(f"auto-refresh unavailable ({e}); data will update on the "
+              f"next scheduled run.")
+        return
+
+    local_mods, runall_sources, unmapped = refresh.plan_refresh(donated_domains)
+    for domain in unmapped:
+        print(f"  {domain:<20s} no auto-refresh target - picked up on the "
+              f"next scheduled run")
+    if not local_mods and not runall_sources:
+        return
+
+    repo_root = Path(__file__).resolve().parents[2]
+
+    # Hetzner first (fire-and-forget) so it works in parallel with the
+    # local scrapers below. The remote chain re-purges + re-warms when
+    # it finishes, so it always gets the last word on the cache.
+    if runall_sources:
+        remote_cmd = (
+            f"cd {HETZNER_REPO} && "
+            f"[ -f {HETZNER_ENV_FILE} ] && set -a && . {HETZNER_ENV_FILE} && set +a; "
+            f"nohup /usr/bin/python3 -m scripts.trends_scrapers.refresh_after_donation "
+            f"--runall-sources {','.join(runall_sources)} --warm "
+            f">> /var/log/trends_donate_refresh.log 2>&1 & echo TRIGGERED"
+        )
+        print(f"\nTriggering refresh on the scraper box for: "
+              f"{', '.join(runall_sources)} ...")
+        try:
+            proc = subprocess.run(
+                ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
+                 HETZNER_HOST, remote_cmd],
+                capture_output=True, text=True, timeout=30,
+            )
+            if proc.returncode == 0 and 'TRIGGERED' in (proc.stdout or ''):
+                print("  scraper box refresh started (runs in the background; "
+                      "dashboard updates when it lands).")
+            else:
+                print(f"  scraper box trigger failed "
+                      f"(rc={proc.returncode} {proc.stderr.strip()}); those "
+                      f"sources will update on the next scheduled run.")
+        except Exception as e:
+            print(f"  scraper box unreachable ({e}); those sources will "
+                  f"update on the next scheduled run.")
+
+    # Residential scrapers run here, synchronously, with live output.
+    # Warm the dashboard locally only when Hetzner isn't also running -
+    # otherwise its chain finishes later and would be undone by a stale
+    # local warm.
+    if local_mods:
+        print(f"\nRe-running local scrapers now: {', '.join(local_mods)} ...")
+        cmd = [sys.executable, '-m',
+               'scripts.trends_scrapers.refresh_after_donation',
+               '--local-modules', ','.join(local_mods)]
+        if not runall_sources:
+            cmd.append('--warm')
+        subprocess.run(cmd, cwd=str(repo_root))
+
 
 def _cookie_applies_to_target(cookie_domain: str, target: str) -> bool:
     """Return True iff a cookie with `Domain=cookie_domain` would be
@@ -273,6 +374,10 @@ def main() -> int:
                           'Common alternatives: "Profile 1", "Profile 2".')
     ap.add_argument('--dry-run', action='store_true',
                      help='Write to /tmp instead of S3.')
+    ap.add_argument('--no-refresh', action='store_true',
+                     help='Skip the automatic post-donation data refresh '
+                          '(used by local_residential_run, which runs the '
+                          'full scraper batch itself right after donating).')
     args = ap.parse_args()
 
     domains = args.domains or DEFAULT_DOMAINS
@@ -298,6 +403,7 @@ def main() -> int:
         'x.com':         ('twitter.com',  'https://x.com/'),
     }
 
+    donated_ok: list[str] = []
     for domain in domains:
         cookies = _read_chrome_cookies(domain, profile=args.profile)
         if not cookies:
@@ -321,9 +427,17 @@ def main() -> int:
             print(f"  {domain:<20s} upload failed: {e}")
             continue
         print(f"  {domain:<20s} {len(cookies):>3d} cookies -> {uri}")
+        donated_ok.append(domain)
 
     print()
-    print("Done. Scrapers on Hetzner will pick these up on the next run.")
+    if args.dry_run or args.no_refresh or not donated_ok:
+        print("Done. Scrapers will pick these up on their next run.")
+        return 0
+
+    _auto_refresh(donated_ok)
+    print()
+    print("Done. Donated sources were refreshed (or are refreshing in the "
+          "background) - the dashboard shows the new data on its next load.")
     return 0
 
 

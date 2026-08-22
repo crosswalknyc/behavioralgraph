@@ -142,7 +142,10 @@ def notify_cookie_gap(source: str, domain: str,
         f"state today because the donated cookie session for "
         f"'{domain}' is stale or was rejected by the site.\n\n"
         f"To restore the tile, sign into {domain} in your laptop's "
-        f"Chrome, then run either action below.\n\n"
+        f"Chrome, then run either action below. The donation "
+        f"automatically re-runs the affected scraper and refreshes the "
+        f"dashboard, so the tile comes back within minutes - no waiting "
+        f"for the next scheduled run.\n\n"
         f"[1] One-click (macOS Mail.app, requires one-time setup):\n"
         f"    {cwcookie_url}\n\n"
         f"[2] Copy-paste into any Terminal on your Mac:\n"
@@ -174,6 +177,10 @@ def notify_cookie_gap(source: str, domain: str,
      <i>warming-up</i> state today because the donated cookie
      session for <code>{domain}</code> is stale or was rejected
      by the site.</p>
+
+  <p>Donating automatically re-runs the affected scraper and
+     refreshes the dashboard - the tile comes back within minutes,
+     no waiting for the next scheduled run.</p>
 
   <p style="margin:16px 0 6px;font-weight:600;">Fix in one click
      (Apple Mail on your Mac):</p>
