@@ -21483,6 +21483,7 @@ https://www.instagram.com/p/..."></textarea>
                                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
                                     <span id="synthChatInputHint" style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.7;">Enter to send &middot; Shift + Enter for new line</span>
                                     <div style="display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto;">
+                                        <button type="button" id="synthChatSuggestBtn" onclick="synthChatSuggestionsShow()" title="Show suggestion chips" aria-label="Show suggestion chips" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap; flex: 0 0 auto;">Suggestions</button>
                                         <button type="button" id="synthChatMicBtn" onclick="synthChatMicToggle()" title="Talk to text" aria-label="Talk to text">
                                             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                                 <rect x="9" y="2" width="6" height="12" rx="3"></rect>
@@ -60080,7 +60081,7 @@ https://www.instagram.com/p/..."></textarea>
                 _synthChatShowWelcomeBack();
             } catch (_) {}
         }
-        function _synthChatShowWelcomeBack() {
+        function _synthChatShowWelcomeBack(force) {
             try {
                 var box = document.getElementById('synthChatMessages');
                 if (!box) return;
@@ -60114,18 +60115,18 @@ https://www.instagram.com/p/..."></textarea>
                             running = (parseInt(q.pending, 10) || 0) +
                                       (parseInt(q.running, 10) || 0);
                         }
-                        _synthChatRenderWelcomeBubble(running, histLenAtFetch);
+                        _synthChatRenderWelcomeBubble(running, histLenAtFetch, force);
                     });
             } catch (_) {}
         }
 
-        function _synthChatRenderWelcomeBubble(running, histLenAtFetch) {
+        function _synthChatRenderWelcomeBubble(running, histLenAtFetch, force) {
             try {
                 var box = document.getElementById('synthChatMessages');
                 if (!box) return;
                 // Conversation moved on while the health fetch was in
                 // flight - don't inject a stale greeting mid-thread.
-                if (synthChatHistory.length !== histLenAtFetch) return;
+                if (!force && synthChatHistory.length !== histLenAtFetch) return;
                 if (synthChatAwaitingDateConfirm || synthChatClarify ||
                     synthChatBatchClarify ||
                     synthChatCurrentDraft || synthChatDiscoveryOffer ||
@@ -60191,7 +60192,33 @@ https://www.instagram.com/p/..."></textarea>
                 var nearBottom = (box.scrollHeight - box.scrollTop -
                                   box.clientHeight) < 120;
                 box.appendChild(el);
-                if (nearBottom) box.scrollTop = box.scrollHeight;
+                if (force || nearBottom) box.scrollTop = box.scrollHeight;
+            } catch (_) {}
+        }
+
+        // On-demand Suggestions button (2026-08-21): the pill next to
+        // the mic pops the same chip bubble the idle flow renders, any
+        // time. Calls the welcome-back path with force so the reopen
+        // cooldown and the near-bottom scroll check never block an
+        // explicit click. Pending draft / clarify cards keep priority.
+        function synthChatSuggestionsShow() {
+            try {
+                _synthChatBumpActivity();
+                if (!synthChatHistory.length) {
+                    // Empty thread: the starter chips under the input
+                    // are already the suggestion surface.
+                    var chips = document.getElementById('synthChatStarterChips');
+                    if (chips) chips.style.display = 'flex';
+                    return;
+                }
+                var box = document.getElementById('synthChatMessages');
+                var bub = document.getElementById('synthChatWelcomeBubble');
+                if (box && bub && box.lastElementChild === bub) {
+                    box.scrollTop = box.scrollHeight;
+                    return;
+                }
+                _synthChatWelcomeLastShown = 0;
+                _synthChatShowWelcomeBack(true);
             } catch (_) {}
         }
 
