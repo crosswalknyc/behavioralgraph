@@ -7,7 +7,7 @@ Requires=profile-norms-refresh.service
 # US business hours so the dashboard's Prometheus analysis reads
 # fresh peer norms every morning. Persistent=true so a missed window
 # (host down) fires on boot; the build is idempotent.
-OnCalendar=*-*-* 03:30:00
+OnCalendar=*-*-* 03:30:00 UTC
 Persistent=true
 Unit=profile-norms-refresh.service
 
