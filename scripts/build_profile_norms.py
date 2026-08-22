@@ -19,12 +19,13 @@ Entries with n < 5 are dropped (n < 8 for the '*' global pool) because
 the lookup in prometheus_analysis requires n >= 5 anyway; nesting +
 the n floor keeps the in-memory footprint web-service safe (~4,182
 profiles produce ~15 MB gz flat vs a much lighter nested table).
-Output is gzipped JSON at s3://dashboard-inputs/system/brand_norms.json.gz,
+Output is gzipped JSON at s3://dashboard-inputs/system/profile_norms.json.gz,
 which prometheus_analysis.load_norms() consumes with an ETag-checked
 cache.
 
 Run:  python3 scripts/build_profile_norms.py [--dry-run]
-Refresh cadence: weekly cron on Hetzner (see crontab).
+Refresh cadence: daily systemd timer on Hetzner
+(systemd/profile-norms-refresh.timer in this repo).
 """
 
 import gzip
@@ -40,7 +41,7 @@ import boto3
 import pandas as pd
 
 BUCKET = 'dashboard-inputs'
-OUT_KEY = 'system/brand_norms.json.gz'
+OUT_KEY = 'system/profile_norms.json.gz'
 GENPOP_KEY = 'Gen_Pop_2026.csv'
 MIN_N = 5
 MIN_N_GLOBAL = 8

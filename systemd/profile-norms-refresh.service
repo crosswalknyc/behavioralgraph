@@ -1,0 +1,19 @@
+[Unit]
+Description=Daily cross-profile norms rebuild (Prometheus peer norms by BRAND CATEGORY)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/finished_codes/bg-webapp
+EnvironmentFile=-/etc/synth-queue.env
+ExecStart=/usr/bin/python3 -u /root/finished_codes/bg-webapp/scripts/build_profile_norms.py
+StandardOutput=append:/var/log/profile-norms-refresh.log
+StandardError=append:/var/log/profile-norms-refresh.log
+
+# Full scan of ~4,200 profile CSVs takes ~8 min. Bail out if it hangs.
+TimeoutStartSec=3600
+
+[Install]
+WantedBy=multi-user.target

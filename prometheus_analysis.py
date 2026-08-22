@@ -43,7 +43,7 @@ _cache_lock = threading.Lock()
 
 GENPOP_KEY = 'Gen_Pop_2026.csv'
 GENPOP_TTL_S = 3600
-NORMS_KEY = 'system/brand_norms.json.gz'
+NORMS_KEY = 'system/profile_norms.json.gz'
 NORMS_TTL_S = 6 * 3600
 
 
@@ -344,27 +344,35 @@ def _peer_norms_section(meta, genpop_map, norms, demo_rows, beh_rows):
              else f"{norms.get('n_profiles', 0)} audiences (all types)")
     out = [f"PEER NORMS (this audience vs {label} in the Crosswalk "
            f"corpus; use as rarity receipts):"]
-    highs.sort(key=lambda t: -t[0])
-    for _, catU, b, idx, v, e, g_used in highs[:8]:
-        n, med_p, p90_p, max_p, med_i, p90_i, max_i, max_prof = e
-        pool = f"{n} {g_used} profiles" if g_used != '*' else f"{n} profiles"
-        if idx is not None:
-            out.append(f"  RARE HIGH {catU} / {b}: idx {round(idx)} vs "
-                       f"peers med {med_i}, p90 {p90_i}, max {max_i} "
-                       f"({pool}; max seen on {max_prof})")
-        else:
-            out.append(f"  RARE HIGH {catU} / {b}: pen {v:.1f} vs peers "
-                       f"med {med_p}, p90 {p90_p}, max {max_p} ({pool})")
-    lows.sort(key=lambda t: -t[0])
-    for _, catU, b, idx, e, g_used in lows[:4]:
-        n = e[0]
-        out.append(f"  NOTABLY WEAK {catU} / {b}: idx {round(idx)} vs "
-                   f"peers med {e[4]} ({n} profiles)")
-    demo_out.sort(key=lambda t: -t[0])
-    for dev, catU, b, v, med_p in demo_out[:4]:
-        sign = '+' if v > med_p else '-'
-        out.append(f"  DEMO OUTLIER {catU} / {b}: {v:.1f} vs peer med "
-                   f"{med_p:.1f} ({sign}{dev:.1f}pp)")
+    if highs:
+        out.append("  RAREST SIGNALS (above the 90th percentile of "
+                   "peers for the same brand):")
+        highs.sort(key=lambda t: -t[0])
+        for _, catU, b, idx, v, e, g_used in highs[:8]:
+            n, med_p, p90_p, max_p, med_i, p90_i, max_i, max_prof = e
+            pool = (f"{n} {g_used} profiles" if g_used != '*'
+                    else f"{n} profiles")
+            if idx is not None:
+                out.append(f"    {catU} / {b}: idx {round(idx)} vs "
+                           f"peers med {med_i}, p90 {p90_i}, max {max_i} "
+                           f"({pool}; max seen on {max_prof})")
+            else:
+                out.append(f"    {catU} / {b}: pen {v:.1f} vs peers "
+                           f"med {med_p}, p90 {p90_p}, max {max_p} "
+                           f"({pool})")
+    if lows:
+        out.append("  WEAKEST VS PEERS:")
+        lows.sort(key=lambda t: -t[0])
+        for _, catU, b, idx, e, g_used in lows[:4]:
+            out.append(f"    {catU} / {b}: idx {round(idx)} vs "
+                       f"peers med {e[4]} ({e[0]} profiles)")
+    if demo_out:
+        out.append("  DEMO OUTLIERS (over 8pp from peer median):")
+        demo_out.sort(key=lambda t: -t[0])
+        for dev, catU, b, v, med_p in demo_out[:4]:
+            sign = '+' if v > med_p else '-'
+            out.append(f"    {catU} / {b}: {v:.1f} vs peer med "
+                       f"{med_p:.1f} ({sign}{dev:.1f}pp)")
     return out
 
 
@@ -553,7 +561,7 @@ THE DATA
 - An Engager had at least 1 digital touchpoint with the subject over the trailing 12 months across search, social, media, ecommerce, or owned-and-operated channels.
 - Penetration = share of THIS audience active with a brand in the window. idx = index vs US general population, 100 = average, 683 means 6.83x the average.
 - pp = percentage points. Cut rows show cut vs parent values. A cut row marked [within noise] has a gap smaller than sampling error at those sample sizes; never build a finding on it.
-- PEER NORMS is your rarity evidence: it compares this audience against every other audience of the same subject type in the Crosswalk corpus. RARE HIGH rows are reads above the 90th percentile of peers (med / p90 / max shown, with the profile that holds the max). Use them for sentences like "idx 412 is the highest we have measured across 34 ACTOR audiences" - this is the single most persuasive framing the data supports, so use it whenever a RARE HIGH backs your point. NOTABLY WEAK and DEMO OUTLIER rows work the same way in the other direction.
+- PEER NORMS is your rarity evidence: it compares this audience against every other audience of the same subject type in the Crosswalk corpus. RAREST SIGNALS rows are reads above the 90th percentile of peers (med / p90 / max shown, with the profile that holds the max). Use them for sentences like "idx 412 is the highest we have measured across 34 ACTOR audiences" - this is the single most persuasive framing the data supports, so use it whenever a RAREST SIGNALS row backs your point. WEAKEST VS PEERS and DEMO OUTLIERS rows work the same way in the other direction.
 - Each behavioral category carries a "math:" block computed from the full category (not just the rows shown): row count, leader, median row, concentration (the leader's share of the top-5 total, tagged CONCENTRATED / MIXED / SPLIT), and conquest gaps (brands big in gen pop but weak in this audience). Use concentration for fragmentation and whitespace claims and conquest gaps for acquisition targets; do not re-derive these by eye.
 - The digest is your PRIMARY evidence. Every claim you make must be anchored to numbers in it. You may add outside market knowledge (deal sizes, category dynamics, who sponsors what) as supporting context, never as a substitute, and never invent numbers that look like they came from the data.
 

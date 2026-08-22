@@ -1,0 +1,17 @@
+[Unit]
+Description=Trigger daily profile norms rebuild at 03:30 UTC
+Requires=profile-norms-refresh.service
+
+[Timer]
+# 03:30 UTC daily, ahead of the 04:00 genpop-hostmap sync and before
+# US business hours so the dashboard's Prometheus analysis reads
+# fresh peer norms every morning. Persistent=true so a missed window
+# (host down) fires on boot; the build is idempotent.
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+Unit=profile-norms-refresh.service
+
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
