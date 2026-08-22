@@ -43466,7 +43466,18 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "if the user picks broad), keep the clean IP name, and size "
         "subject_raw_tu to the BROAD engager universe (the clarify "
         "step scales it down by consumers_sample_fraction if the "
-        "user narrows).\n\n"
+        "user narrows).\n"
+        "  * USER-FACING LANGUAGE (hard rule, applies to EVERY "
+        "subject, IP or not): the free-text fields a person may read "
+        "(decision_reason, assumptions, category_note, "
+        "refresh_row_hypothesis, cut_label, persona_notes) must NEVER "
+        "describe build mechanics. Never write '100%', 'locked', "
+        "'pinned', 'pins at', 'will be set to', platform "
+        "percentages, or which rows anchor the build. For the IP "
+        "scope say 'built on viewers only' (or listeners/players/"
+        "readers) or 'built on the broad audience' and stop there - "
+        "no parentheticals about platforms or values. Pins belong in "
+        "subject_rows and nowhere in prose.\n\n"
 
         "SAMPLE-SIZE HEURISTICS (subject_raw for TU cohort):\n"
         "  KEY INSIGHT: subject_raw is 'how many of the fixed 10,000,000 "
@@ -46136,12 +46147,14 @@ def api_synth_chat_clarify():
     if step == 'ip_scope':
         # IP audience scope (2026-08-21 Jenna directive): broad
         # engagers vs consumers-only. Question data was stashed by the
-        # interpret step (_maybe_ask_ip_scope).
+        # interpret step (_maybe_ask_ip_scope). Every string here is
+        # user-facing: plain audience language only, zero build
+        # mechanics (2026-08-21 Jenna: never anything that sounds
+        # constructed - no percentages, no locking/pinning talk).
         data = draft.get('ip_scope_data') or {}
         verb = str(data.get('verb') or 'viewers').strip().lower()
         if verb not in _IP_CONSUMER_VERBS:
             verb = 'viewers'
-        platforms = [str(p) for p in (data.get('platforms') or []) if p]
         low = answer.lower().strip()
         verb_stem = verb.rstrip('s')  # viewer / reader / listener / player
         chose_consumers = bool(_re.search(
@@ -46157,10 +46170,7 @@ def api_synth_chat_clarify():
             head = (f"Broad it is - the profile covers everyone who "
                     f"engaged with {draft.get('subject') or subject} "
                     "(search, social, fan content, commerce), the "
-                    "standard build."
-                    + (f" {', '.join(platforms)} will read "
-                       "realistically high but not 100% - not every "
-                       "engager has it." if platforms else ""))
+                    "standard build.")
         elif chose_consumers and not chose_broad:
             _apply_ip_scope_to_draft(draft, 'consumers')
             frac = data.get('fraction')
@@ -46182,26 +46192,19 @@ def api_synth_chat_clarify():
             except Exception as _sc_err:
                 print(f"[ip-scope] consumer sample scale skipped: "
                       f"{_sc_err}")
-            head = (f"Locked to {verb} only - the profile is now "
-                    f"{draft.get('subject') or subject}."
-                    + (f" {', '.join(platforms)} pins at 100% since "
-                       f"every {verb_stem} needs it."
-                       if platforms else "")
-                    + " Audience sized to the consumer universe.")
+            head = (f"Got it - building on {verb} only. The profile "
+                    f"is now {draft.get('subject') or subject}.")
         else:
             past = {'viewers': 'watched', 'watchers': 'watched',
                     'readers': 'read', 'listeners': 'listened to',
                     'players': 'played'}.get(verb, 'consumed')
-            plat_txt = (f" Its home ({', '.join(platforms)}) would be "
-                        "locked at 100% in that case." if platforms
-                        else "")
             return jsonify({
                 'success': True, 'draft': draft,
                 'message': (f"Two ways to build this: broad - anyone "
                             f"who engaged with it anywhere (social, "
                             f"search, fan content, shopping) - or "
                             f"{verb} only, just the people who "
-                            f"actually {past} it.{plat_txt} "
+                            f"actually {past} it. "
                             f"Reply broad or {verb}."),
                 'next_step': 'ip_scope',
             })

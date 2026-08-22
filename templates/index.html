@@ -61765,6 +61765,19 @@ https://www.instagram.com/p/..."></textarea>
         // existing parsers need no changes.
         function _synthChatClarifyOptions(step, draft) {
             var d = draft || synthChatCurrentDraft || {};
+            if (step === 'ip_scope') {
+                // 2026-08-21: broad vs consumers-only must be
+                // clickable like every other clarify step. The
+                // second chip carries the medium noun (Viewers/
+                // Listeners/Players/Readers only).
+                var _ioVerb = String((d.ip_scope_data || {}).verb ||
+                    'viewers');
+                return [
+                    {label: 'Broad audience', send: 'broad'},
+                    {label: _ioVerb.charAt(0).toUpperCase() +
+                        _ioVerb.slice(1) + ' only', send: _ioVerb}
+                ];
+            }
             if (step === 'goal') {
                 return [
                     {label: 'Pitch', send: 'pitch'},
@@ -61877,20 +61890,21 @@ https://www.instagram.com/p/..."></textarea>
         function _synthChatClarifyQuestion(step) {
             if (step === 'ip_scope') {
                 // 2026-08-21: IP content (series/movie/book/podcast/
-                // game) must pick its universe - broad engagers or
+                // game) must pick its universe - broad audience or
                 // consumers only. Data rides the draft (stashed by
-                // the interpret step).
+                // the interpret step). Copy stays plain audience
+                // language: no build mechanics, no platform names,
+                // no percentages, ever (2026-08-21 Jenna).
                 var _ipDraft = synthChatCurrentDraft || {};
                 var _ipData = _ipDraft.ip_scope_data || {};
                 var _ipVerb = String(_ipData.verb || 'viewers');
-                var _ipPlats = (_ipData.platforms || []).join(', ');
                 var _ipSubj = String(_ipDraft.subject ||
                     _ipDraft.name || 'this title');
                 var _ipLines = [_ipSubj + ' can build two ways:'];
                 _ipLines.push('');
-                _ipLines.push('  1. Broad - anyone who engaged ' +
-                    'with it anywhere: social, search, fan ' +
-                    'content, shopping. The standard profile.');
+                _ipLines.push('  1. Broad audience - anyone who ' +
+                    'engaged with it anywhere: social, search, ' +
+                    'fan content, shopping. The standard profile.');
                 _ipLines.push('  2. ' +
                     _ipVerb.charAt(0).toUpperCase() +
                     _ipVerb.slice(1) + ' only - just the people ' +
@@ -61899,12 +61913,10 @@ https://www.instagram.com/p/..."></textarea>
                       readers: 'read it',
                       listeners: 'listened to it',
                       players: 'played it'}[_ipVerb] ||
-                     'consumed it') +
-                    (_ipPlats ? ' (' + _ipPlats + ' locks at 100% ' +
-                        'since every one of them needs it)' : '') +
-                    '.');
+                     'consumed it') + '.');
                 _ipLines.push('');
-                _ipLines.push('Reply broad or ' + _ipVerb + '.');
+                _ipLines.push('Pick one below, or reply broad or ' +
+                    _ipVerb + '.');
                 return _ipLines.join('\n');
             }
             if (step === 'age_breaks') {
