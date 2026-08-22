@@ -13528,6 +13528,21 @@ def send_profile_complete_email(project_name, s3_bucket, s3_key, elapsed_min,
         recipients = [r.strip() for r in env.split(',') if r.strip()]
     if not recipients:
         return False
+    # Anthropic usage cost for this run (2026-08-22 Jenna: "tell me how
+    # much each run cost in anthropic usage"). One runner process = one
+    # profile run, so the process-scoped ledger IS this run's usage;
+    # popping keeps back-to-back runs in one process attributed per run.
+    # Missing tracker / empty ledger omits the line (never $0.00).
+    cost_value = ''
+    try:
+        try:
+            from migration import usage_tracker as _usage_tracker
+        except Exception:
+            import usage_tracker as _usage_tracker  # type: ignore
+        cost_value = _usage_tracker.format_cost_value(
+            _usage_tracker.get_process_report(pop=True))
+    except Exception:
+        cost_value = ''
     try:
         import boto3 as _boto3
         ses = _boto3.client('ses', region_name='us-east-2')
@@ -13536,6 +13551,9 @@ def send_profile_complete_email(project_name, s3_bucket, s3_key, elapsed_min,
         cat_line = (f"<tr><td style='padding:6px 12px;border:1px solid #ddd;'>Category</td>"
                     f"<td style='padding:6px 12px;border:1px solid #ddd;'>{brand_category}</td></tr>"
                     if brand_category else "")
+        cost_line = (f"<tr><td style='padding:6px 12px;border:1px solid #ddd;'>Anthropic cost</td>"
+                     f"<td style='padding:6px 12px;border:1px solid #ddd;'>{cost_value}</td></tr>"
+                     if cost_value else "")
         body_html = (
             f"<p>A new profile finished and was uploaded to S3.</p>"
             f"<table style='border-collapse:collapse;border:1px solid #ddd;font-size:14px;margin:12px 0;'>"
@@ -13547,15 +13565,17 @@ def send_profile_complete_email(project_name, s3_bucket, s3_key, elapsed_min,
             f"          s3://{s3_bucket}/{s3_key}</td></tr>"
             f"  <tr><td style='padding:6px 12px;border:1px solid #ddd;'>Wall time</td>"
             f"      <td style='padding:6px 12px;border:1px solid #ddd;'>{elapsed_min:.1f} min</td></tr>"
+            f"  {cost_line}"
             f"</table>"
             f"<p>It will appear in the dashboard automatically (if your profile category subscription includes it).</p>"
-            f"<p style='color:#888;font-size:12px;'>— BehavioralGraph batch runner</p>"
+            f"<p style='color:#888;font-size:12px;'>- BehavioralGraph batch runner</p>"
         )
         body_text = (
             f"Profile complete: {project_name}\n"
             + (f"Category: {brand_category}\n" if brand_category else "")
             + f"S3:       s3://{s3_bucket}/{s3_key}\n"
             f"Wall time: {elapsed_min:.1f} min\n"
+            + (f"Anthropic cost: {cost_value}\n" if cost_value else "")
         )
         ses.send_email(
             Source='BehavioralGraph <jenna@crosswalknyc.com>',
