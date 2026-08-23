@@ -63,6 +63,7 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
         "LOYALTY PROGRAMS",
         "MEMBERSHIP",
         "NON PROFIT/CHARITY", "PHARMA", "QSR", "RETAILERS", "SECURITY",
+        "SHOPPING INTENT",
         "SWEEPSTAKES",
         "TELECOM", "TICKETING", "TOY", "TRAVEL", "VENUE", "WHERE THEY SHOP",
         "WORKOUT FACILITY",
@@ -99,7 +100,7 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
     # digital-health brands + subjects that don't cleanly belong under
     # BRAND (retail) or PLATFORMS (media / digital services).
     "HEALTHCARE": ["HEALTHCARE"],
-    "TRENDS": ["TRENDS", "SHOPPING INTENT"],
+    "TRENDS": ["TRENDS"],
 }
 
 

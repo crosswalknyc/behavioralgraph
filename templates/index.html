@@ -110658,8 +110658,25 @@ https://www.instagram.com/p/..."></textarea>
                         }
                     });
                 } else {
-                    Object.keys(subcats).sort().forEach(cat => {
-                        const items = subcats[cat];
+                    // Sub-bucket registry: some sub-categories render under
+                    // an intermediate collapsible header (a "sub-bucket")
+                    // rather than as direct siblings. See CATEGORY_SUB_BUCKETS
+                    // near MASTER_CATEGORIES. Data-driven so new buckets
+                    // (e.g. INTENT > SHOPPING INTENT / PURCHASE INTENT)
+                    // slot in without changing this render code.
+                    const _bucketsForMaster = (typeof CATEGORY_SUB_BUCKETS !== 'undefined' && CATEGORY_SUB_BUCKETS[master]) || {};
+                    const _catToBucket = {};
+                    Object.keys(_bucketsForMaster).forEach(bname => {
+                        (_bucketsForMaster[bname] || []).forEach(leaf => {
+                            _catToBucket[(leaf || '').toUpperCase()] = bname;
+                        });
+                    });
+
+                    // Renders one leaf sub-category (existing behavior
+                    // factored into a closure so a bucket wrapper can
+                    // call it too). Returns { html, subjectCount } so
+                    // the caller can roll counts into a parent bucket.
+                    const _emitLeafCatBlock = (cat, items) => {
                         const catId = 'dash_' + cat.replace(/[^a-zA-Z0-9]/g, '_');
                         const isExpanded = expandedDashCategories.has(catId);
                         const sortedItems = [...items].sort((a, b) => {
@@ -110751,7 +110768,7 @@ https://www.instagram.com/p/..."></textarea>
                         // tree (post-mergeStubGroupsIntoCanonical), not
                         // file count. Matches the per-row grouping.
                         const _subcatCount = Object.keys(bySubject).length;
-                        html += `
+                        const _leafHtml = `
                             <div class="profile-cat-item ${isExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleDashCategory('${catId}')">
                                 <span class="cat-arrow">▸</span>
                                 <span class="profile-cat-label">${getCategoryDisplayLabel(cat)}</span>
@@ -110761,6 +110778,74 @@ https://www.instagram.com/p/..."></textarea>
                                 ${itemsHtml}
                             </div>
                         `;
+                        return { html: _leafHtml, subjectCount: _subcatCount };
+                    };
+
+                    // Partition present categories into standalone leaves
+                    // vs bucket members, then build a unified render list
+                    // sorted by display label so buckets interleave
+                    // alphabetically with unbucketed leaves.
+                    const _bucketedByBucket = {};
+                    const _standaloneCats = [];
+                    Object.keys(subcats).forEach(cat => {
+                        const bname = _catToBucket[(cat || '').toUpperCase()];
+                        if (bname) {
+                            if (!_bucketedByBucket[bname]) _bucketedByBucket[bname] = {};
+                            _bucketedByBucket[bname][cat] = subcats[cat];
+                        } else {
+                            _standaloneCats.push(cat);
+                        }
+                    });
+                    const _renderables = [];
+                    _standaloneCats.forEach(cat => {
+                        _renderables.push({
+                            kind: 'leaf',
+                            sortKey: (getCategoryDisplayLabel(cat) || cat || '').toString().toUpperCase(),
+                            cat: cat
+                        });
+                    });
+                    Object.keys(_bucketedByBucket).forEach(bname => {
+                        _renderables.push({
+                            kind: 'bucket',
+                            sortKey: (bname || '').toString().toUpperCase(),
+                            bucketName: bname,
+                            leafCats: _bucketedByBucket[bname]
+                        });
+                    });
+                    _renderables.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
+                    _renderables.forEach(r => {
+                        if (r.kind === 'leaf') {
+                            html += _emitLeafCatBlock(r.cat, subcats[r.cat]).html;
+                        } else {
+                            const bucketId = 'dash_bucket_' + master.replace(/[^a-zA-Z0-9]/g, '_') + '_' + r.bucketName.replace(/[^a-zA-Z0-9]/g, '_');
+                            const isBucketExpanded = expandedDashCategories.has(bucketId);
+                            let _bucketInnerHtml = '';
+                            const _uniqueBucketSubjects = new Set();
+                            Object.keys(r.leafCats).sort().forEach(leafCat => {
+                                const emitted = _emitLeafCatBlock(leafCat, r.leafCats[leafCat]);
+                                _bucketInnerHtml += emitted.html;
+                                // Count distinct subjects across all leaf
+                                // cats in this bucket for the bucket
+                                // header count, matching how master count
+                                // is computed above.
+                                (r.leafCats[leafCat] || []).forEach(p => {
+                                    const subj = getProfileGroupKey(p) || (getProfileFullName(p) || '').toLowerCase();
+                                    _uniqueBucketSubjects.add(subj);
+                                });
+                            });
+                            const _bucketCount = _uniqueBucketSubjects.size;
+                            html += `
+                                <div class="profile-cat-item ${isBucketExpanded ? 'open' : ''}" onclick="event.stopPropagation(); toggleDashCategory('${bucketId}')">
+                                    <span class="cat-arrow">▸</span>
+                                    <span class="profile-cat-label">${escapeAttr(r.bucketName)}</span>
+                                    <span class="profile-cat-count">(${_bucketCount})</span>
+                                </div>
+                                <div class="profile-cat-children ${isBucketExpanded ? 'open' : ''}" id="cat-${bucketId}" style="padding-left: 0.5rem;">
+                                    ${_bucketInnerHtml}
+                                </div>
+                            `;
+                        }
                     });
                 }
                 
@@ -136087,12 +136172,12 @@ https://www.instagram.com/p/..."></textarea>
             // stamped that way. Without 'BANK' here, those profiles fall
             // through to the 'OTHER' master and get hidden because OTHER
             // isn't in masterOrder.
-            'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANK', 'BANKS', 'BANKING', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CPG', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FESTIVAL', 'FOOTWEAR', 'FRANCHISE', 'GROCERY', 'INTIMATES', 'JEWELRY', 'LOYALTY PROGRAMS', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'SECURITY', 'SWEEPSTAKES', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
+            'BRAND': ['ACCESSORIES', 'ACTIVEWEAR', 'AMUSEMENT PARKS', 'APPAREL', 'AUTOMOBILE', 'B2B', 'BANK', 'BANKS', 'BANKING', 'BEAUTY', 'BETTING', 'BEVERAGE', 'CASUAL DINING', 'CPG', 'CREDIT PROVIDERS', 'CREDIT PROVIDER', 'DIGITAL BANKING', 'EVENTS', 'FESTIVAL', 'FOOTWEAR', 'FRANCHISE', 'GROCERY', 'INTIMATES', 'JEWELRY', 'LOYALTY PROGRAMS', 'MEMBERSHIP', 'NON PROFIT/CHARITY', 'PHARMA', 'QSR', 'RETAILERS', 'SECURITY', 'SHOPPING INTENT', 'SWEEPSTAKES', 'TELECOM', 'TICKETING', 'TOY', 'TRAVEL', 'VENUE', 'WORKOUT FACILITY'],
             'CONTENT': ['GAME PLAYERS', 'GAMES', 'GAMES - PLAYERS', 'MOVIE', 'PODCAST', 'VERTICAL SHORTS', 'VERTICAL SHORT', 'VIDEO GAME', 'SERIES - AMAZON / MGM STUDIOS', 'SERIES - APPLE', 'SERIES - CBS STUDIOS', 'SERIES - 20TH CENTURY', 'SERIES - FXP', 'SERIES - HBO ENTERTAINMENT', 'SERIES - HBO MAX', 'SERIES - HULU', 'SERIES - LIONSGATE TELEVISION', 'SERIES - NETFLIX', 'SERIES - PARAMOUNT TV STUDIOS', 'SERIES - SONY', 'SERIES - UNIVERSAL TV', 'SERIES - WBD'],
             'GEN POP': ['GEN POP'],
             'PLATFORMS': ['APP/PLATFORM', 'BROADCAST/CABLE', 'FAST CHANNEL', 'FAST PLATFORM', 'MEDIA', 'MOVIE THEATER', 'PLATFORMS', 'SEARCH ENGINE', 'SEARCH ENGINE/AI', 'SOCIAL MEDIA', 'STREAMING MUSIC', 'STREAMING PLATFORM', 'STREAMING VIDEO', 'STREAMING/PLATFORM', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD/FAST', 'VMVPD'],
             'SPORT': ['MILB', 'MLB', 'NBA', 'NFL', 'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION', 'SPORTS TEAM', 'WNBA'],
-            'TRENDS': ['TRENDS', 'SHOPPING INTENT'],
+            'TRENDS': ['TRENDS'],
             'TALENT': ['ACTOR', 'ATHLETE', 'COMEDIAN', 'CREATOR/INFLUENCER', 'INFLUENCER/CREATOR', 'EMERGING TALENT', 'HOST/PERSONALITY', 'MUSICIAN/BAND', 'PODCASTER', 'POLITICIAN', 'POLITICS/ACTIVIST', 'WRITER/DIRECTOR/AUTHOR/ARTIST'],
             'SVOD ACQUISITION': ['SVOD ACQUISITION']  // SVOD files are always in their own master category
         };
@@ -136106,6 +136191,26 @@ https://www.instagram.com/p/..."></textarea>
             'TALENT': '⭐',
             'TRENDS': '📈',
             'SVOD ACQUISITION': '📺'  // TV icon for SVOD
+        };
+
+        // Sub-bucket registry: categories under a master that render under
+        // an intermediate collapsible header (a "sub-bucket") rather than
+        // as direct siblings of other leaf sub-categories. Data-driven so
+        // additional sub-buckets slot in without touching render code.
+        //
+        // Shape: { <master>: { <bucket display name>: [ <leaf category>, ... ] } }
+        //
+        // 2026-08-23 (Jenna): "add intent as a category under brands on
+        // profile selector and put shopping intent in it as a subcategory".
+        // SHOPPING INTENT now renders as:
+        //   📦 BRAND > INTENT > SHOPPING INTENT > profiles
+        // Prior placement was under TRENDS master; moved into BRAND to
+        // keep intent audiences alongside brand pulls where operators
+        // browse them.
+        const CATEGORY_SUB_BUCKETS = {
+            'BRAND': {
+                'INTENT': ['SHOPPING INTENT']
+            }
         };
         
         // Display labels for sub-categories. 2026-06-15 (Jenna): standardize
