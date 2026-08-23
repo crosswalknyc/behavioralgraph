@@ -44548,6 +44548,15 @@ def _batch_payload_from_drafts(drafts: list, user_text: str, history: list,
         _despread_duplicate_samples(drafts)
     except Exception as _ds_err:
         print(f"[synth-chat despread] failed (non-fatal): {_ds_err}")
+    if failures:
+        _chatbot_error_email(
+            'brief-chat/interpret',
+            f'batch interpret failed for {len(failures)} subject(s): '
+            + '; '.join(
+                f"{str(f.get('subject_input'))[:80]}: "
+                f"{str(f.get('error'))[:160]}"
+                for f in failures[:6]),
+            tb='(per-subject batch interpret failures)')
     user_explicit = _user_specified_dates(user_text, chat_history=history)
     claude_explicit = any(bool(d.get('date_range_explicit'))
                           for d in drafts)
@@ -44745,15 +44754,16 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
         except Exception as _retry_err:
             print(f"[synth-chat interpret batch] direct retry failed: "
                   f"{_retry_err}")
-        return jsonify({
-            'success': False,
-            'error': (
-                "I couldn't draft any of those profiles from that "
-                "phrasing. Tell me who each profile is for - e.g. "
-                "'Amazon EST buyers' - or list the segments one per "
-                "line and I'll queue one profile per segment."
-            ),
-        }), 502
+        _chatbot_error_email(
+            'brief-chat/interpret',
+            'batch interpret failed for every subject: '
+            + '; '.join(
+                f"{str(f.get('subject_input'))[:80]}: "
+                f"{str(f.get('error'))[:160]}"
+                for f in failures[:6]),
+            tb='(all per-subject interprets and the direct retry '
+               'failed)')
+        return jsonify(_chatbot_calm_payload())
 
     # Batch-level date-clarification gate (2026-08-20, Jenna: "the user
     # did not specify a time frame so the bot should have prompted in
@@ -44778,6 +44788,16 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
         'end': _dr0.get('end') or '2026-06-30',
     }
 
+    if failures:
+        _chatbot_error_email(
+            'brief-chat/interpret',
+            f'batch interpret failed for {len(failures)} of '
+            f'{len(subjects)} subject(s): '
+            + '; '.join(
+                f"{str(f.get('subject_input'))[:80]}: "
+                f"{str(f.get('error'))[:160]}"
+                for f in failures[:6]),
+            tb='(per-subject batch interpret failures)')
     return jsonify({
         'success': True,
         'batch': True,
@@ -44933,12 +44953,12 @@ def _synth_chat_incidence_check(text, history=None):
                   f"{str(result.get('error'))[:300]!r}")
         except Exception:
             pass
-        return jsonify({
-            'success': False,
-            'error': ('I could not size that audience. Try naming the '
-                      'audience and window more directly, e.g. '
-                      '"sample size for Peloton owners, past 6 months".'),
-        }), result.get('status', 502)
+        _chatbot_error_email(
+            'brief-chat/interpret',
+            'incidence sizing model call failed: '
+            + str(result.get('error') or 'unknown')[:400],
+            tb='(sizing model call failed)')
+        return jsonify(_chatbot_calm_payload())
 
     d = result.get('data') or {}
     subject = str(d.get('subject') or '').strip() or 'this audience'
@@ -44955,11 +44975,12 @@ def _synth_chat_incidence_check(text, history=None):
     avid = _to_int(d.get('subject_raw_avid'))
     us_aud = _to_int(d.get('us_audience_estimate'))
     if tu <= 0:
-        return jsonify({
-            'success': False,
-            'error': ('I could not size that audience. Try naming the '
-                      'audience and window more directly.'),
-        }), 502
+        _chatbot_error_email(
+            'brief-chat/interpret',
+            f'incidence sizing returned unusable size for '
+            f'{subject!r}',
+            tb='(sizing reply had no usable audience count)')
+        return jsonify(_chatbot_calm_payload())
     tu = max(800, min(tu, 9_500_000))
     if avid <= 0 or avid >= tu:
         avid = max(801, int(tu * 0.22))
@@ -46072,8 +46093,184 @@ def _parse_strategy_answer(answer, subject, draft):
     return picked, []
 
 
+# ============================================================================
+# CHATBOT CALM-FAILURE CONTRACT (2026-08-23 Jenna directive)
+# ============================================================================
+# "dont ever show an error in the chatbot. just say working on it and
+# you'll receive an email when completed then email the error to me and
+# Jessie."
+#
+# Every session chatbot route (/api/brief-chat/*, /api/synth-chat/*,
+# and the page-aware analysis/deck endpoints) resolves failures as
+# HTTP 200 + the calm line below; the real error (route, user, payload,
+# traceback) goes to ops by email via _chatbot_error_email. Conversational
+# guidance the user must act on (credit balance, "open a profile first",
+# rephrase asks) is NOT an error: those returns carry `guidance: True`
+# and keep their text. The partner API v1 surface is untouched - its
+# generic error strings are documented partner behavior
+# (see partner-api-no-internal-terms.mdc).
+
+_CHATBOT_CALM_MESSAGE = ("Working on it - you'll receive an email "
+                         "when it's completed.")
+_CHATBOT_ERROR_EMAIL_TO = ('jenna@crosswalknyc.com',
+                           'jessie@crosswalknyc.com')
+_CHATBOT_ERROR_EMAIL_COOLDOWN_S = 900  # per route+signature, 15 minutes
+_CHATBOT_ERROR_STAMP_FILE = '/tmp/chatbot_error_email_stamps.json'
+_chatbot_error_email_stamps = {}
+_chatbot_error_email_lock = threading.Lock()
+
+
+def _chatbot_calm_payload(**extra):
+    """Body for a failed chatbot turn: calm user-visible message, no
+    internal detail. Callers jsonify it and return it with HTTP 200."""
+    body = {'success': False, 'error': _CHATBOT_CALM_MESSAGE}
+    body.update(extra)
+    return body
+
+
+def _chatbot_error_email(route, err, user_email=None, payload=None,
+                         tb=None):
+    """Email chatbot failure detail to ops (Jenna + Jessie). SES
+    us-east-2, sender BehavioralGraph <jenna@crosswalknyc.com>.
+
+    Body carries timestamp, route, logged-in user, the request payload
+    (truncated) and the full traceback. Deduped per route+exception
+    signature with a 15-minute cooldown (module dict + /tmp stamp file
+    so repeat identical failures cannot storm the inbox across gunicorn
+    workers). Safe without a request context (background threads pass
+    user_email/payload explicitly). Never raises; the SES send itself
+    runs on a daemon thread so a slow send cannot delay the response.
+    """
+    try:
+        route = str(route or 'unknown')[:160]
+        err_name = (type(err).__name__
+                    if isinstance(err, BaseException) else 'failure')
+        err_text = str(err)[:800]
+        sig = hashlib.md5(
+            f"{route}|{err_name}|{err_text[:200]}".encode(
+                'utf-8', 'replace')).hexdigest()
+        now = time.time()
+        with _chatbot_error_email_lock:
+            stamps = dict(_chatbot_error_email_stamps)
+            try:
+                with open(_CHATBOT_ERROR_STAMP_FILE,
+                          encoding='utf-8') as fh:
+                    on_disk = json.load(fh) or {}
+                for k, v in on_disk.items():
+                    if float(v) > float(stamps.get(k, 0)):
+                        stamps[k] = float(v)
+            except Exception:
+                pass
+            if now - float(stamps.get(sig, 0)) <                     _CHATBOT_ERROR_EMAIL_COOLDOWN_S:
+                return False
+            stamps[sig] = now
+            fresh = {k: v for k, v in stamps.items()
+                     if now - float(v) < 4 * _CHATBOT_ERROR_EMAIL_COOLDOWN_S}
+            _chatbot_error_email_stamps.clear()
+            _chatbot_error_email_stamps.update(fresh)
+            try:
+                with open(_CHATBOT_ERROR_STAMP_FILE, 'w',
+                          encoding='utf-8') as fh:
+                    json.dump(fresh, fh)
+            except Exception:
+                pass
+        if tb is None:
+            tb = traceback.format_exc()
+            if not tb or tb.strip() in ('None', 'NoneType: None'):
+                tb = '(no traceback available)'
+        if user_email is None:
+            try:
+                user_email = (session.get('username')
+                              or session.get('email') or '')
+            except Exception:
+                user_email = ''
+        if payload is None:
+            try:
+                payload = request.get_json(silent=True) if request                     else None
+            except Exception:
+                payload = None
+        try:
+            payload_str = (json.dumps(payload, default=str)[:2000]
+                           if payload else '(none)')
+        except Exception:
+            payload_str = str(payload)[:2000]
+        ts = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+        subject_line = f"Chatbot error: {route}"
+        body_text = (
+            f"Timestamp: {ts}\n"
+            f"Route: {route}\n"
+            f"User: {user_email or '(unknown)'}\n"
+            f"Error: {err_name}: {err_text}\n\n"
+            f"Request payload (truncated):\n{payload_str}\n\n"
+            f"Traceback:\n{str(tb)[:12000]}\n"
+        )
+
+        def _send():
+            try:
+                ses = boto3.client('ses', region_name='us-east-2')
+                ses.send_email(
+                    Source='BehavioralGraph <jenna@crosswalknyc.com>',
+                    Destination={'ToAddresses':
+                                 list(_CHATBOT_ERROR_EMAIL_TO)},
+                    Message={'Subject': {'Data': subject_line},
+                             'Body': {'Text': {'Data': body_text}}})
+                print(f"[chatbot-error-email] sent for {route} "
+                      f"sig={sig[:8]}")
+            except Exception as send_err:
+                print(f"[chatbot-error-email] SES send failed: "
+                      f"{send_err}")
+
+        threading.Thread(target=_send, daemon=True).start()
+        return True
+    except Exception as helper_err:
+        try:
+            print(f"[chatbot-error-email] helper failed: {helper_err}")
+        except Exception:
+            pass
+        return False
+
+
+def _chatbot_route_guard(route_label):
+    """Final catch-all for session chatbot routes: any unhandled
+    exception is emailed to ops and the user gets the calm line with
+    HTTP 200 so the chat UI never renders an error."""
+    def _wrap(fn):
+        @wraps(fn)
+        def _inner(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:
+                traceback.print_exc()
+                _chatbot_error_email(route_label, e)
+                return jsonify(_chatbot_calm_payload())
+        return _inner
+    return _wrap
+
+
+@app.route('/api/chatbot-client-error', methods=['POST'])
+@requires_auth
+def api_chatbot_client_error():
+    """Client-side beacon: the chatbot UI hit a failure the backend
+    never saw (network drop mid-request, unparseable reply). Fires the
+    same ops email as a server-side failure, with the same dedupe.
+    Always answers 200 so the beacon itself can never surface anything;
+    the frontend also drops beacon failures silently."""
+    try:
+        body = request.get_json(silent=True) or {}
+        route = str(body.get('route') or 'client')[:120]
+        message = str(body.get('message') or '')[:1000]
+        _chatbot_error_email(
+            f'client:{route}', message,
+            tb='(client-side beacon; the failure happened in the '
+               'browser before a backend response landed)')
+    except Exception:
+        traceback.print_exc()
+    return jsonify({'success': True})
+
+
 @app.route('/api/brief-chat/clarify', methods=['POST'])
 @requires_auth
+@_chatbot_route_guard('brief-chat/clarify')
 def api_synth_chat_clarify():
     """One clarify step of the guided flow. Stateless: the draft rides
     the request and the updated draft rides the response, exactly like
@@ -46096,14 +46293,18 @@ def api_synth_chat_clarify():
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
-        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+        _chatbot_error_email('brief-chat/clarify', e)
+        return jsonify(_chatbot_calm_payload())
     step = str(body.get('step') or '').strip().lower()
     answer = str(body.get('answer') or '').strip()
     draft = body.get('draft') or {}
     if step not in ('goal', 'strategy', 'region', 'cuts', 'parent_link',
                     'age_breaks', 'ip_scope') \
             or not isinstance(draft, dict):
-        return jsonify({'success': False, 'error': 'bad clarify step'}), 400
+        _chatbot_error_email('brief-chat/clarify',
+                             f'bad clarify step: {step!r}',
+                             tb='(request validation)')
+        return jsonify(_chatbot_calm_payload())
 
     import re as _re
     subject = str(draft.get('subject') or draft.get('name')
@@ -46551,6 +46752,7 @@ def api_synth_chat_clarify():
 @app.route('/api/brief-chat/interpret', methods=['POST'])
 @app.route('/api/synth-chat/interpret', methods=['POST'])  # legacy alias
 @requires_auth
+@_chatbot_route_guard('brief-chat/interpret')
 def api_synth_chat_interpret():
     """Free-form text -> draft spec JSON. Non-destructive: does NOT queue
     the run. Front-end shows the returned draft as an approvable brief.
@@ -46565,11 +46767,15 @@ def api_synth_chat_interpret():
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
-        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+        _chatbot_error_email('brief-chat/interpret', e)
+        return jsonify(_chatbot_calm_payload())
 
     text = (body.get('text') or '').strip()
     if not text:
-        return jsonify({'success': False, 'error': 'empty request text'}), 400
+        _chatbot_error_email('brief-chat/interpret',
+                             'empty request text from chat UI',
+                             tb='(request validation)')
+        return jsonify(_chatbot_calm_payload())
 
     history = body.get('history') or []
 
@@ -46585,12 +46791,8 @@ def api_synth_chat_interpret():
             return _synth_chat_incidence_check(text, history)
         except Exception as _inc_err:
             traceback.print_exc()
-            return jsonify({
-                'success': False,
-                'error': ('Sample check failed. Try naming the audience '
-                          'and window directly, e.g. "sample size for '
-                          'Peloton owners, past 6 months".'),
-            }), 500
+            _chatbot_error_email('brief-chat/interpret', _inc_err)
+            return jsonify(_chatbot_calm_payload())
 
     # ------------------------------------------------------------------
     # DISCOVERY (2026-08-19): pitch-shaped asks without an audience
@@ -46640,6 +46842,7 @@ def api_synth_chat_interpret():
         if len(_batch_subjects) > SYNTH_CHAT_BATCH_MAX:
             return jsonify({
                 'success': False,
+                'guidance': True,
                 'error': (
                     f"That looks like {len(_batch_subjects)} subjects. "
                     f"Batch mode is capped at {SYNTH_CHAT_BATCH_MAX} at "
@@ -46653,10 +46856,8 @@ def api_synth_chat_interpret():
             )
         except Exception as _batch_err:
             traceback.print_exc()
-            return jsonify({
-                'success': False,
-                'error': f'batch interpret failed: {_batch_err}',
-            }), 500
+            _chatbot_error_email('brief-chat/interpret', _batch_err)
+            return jsonify(_chatbot_calm_payload())
 
     # Cartesian batch (2026-08-18): patterns like
     #   "make a profile of EST buyers vs. TVOD renters by retailer
@@ -46669,6 +46870,7 @@ def api_synth_chat_interpret():
         if len(_cart_subjects) > SYNTH_CHAT_BATCH_MAX:
             return jsonify({
                 'success': False,
+                'guidance': True,
                 'error': (
                     f"That expands to {len(_cart_subjects)} profiles. "
                     f"Batch mode is capped at {SYNTH_CHAT_BATCH_MAX} at "
@@ -46683,10 +46885,8 @@ def api_synth_chat_interpret():
             )
         except Exception as _cart_err:
             traceback.print_exc()
-            return jsonify({
-                'success': False,
-                'error': f'batch interpret failed: {_cart_err}',
-            }), 500
+            _chatbot_error_email('brief-chat/interpret', _cart_err)
+            return jsonify(_chatbot_calm_payload())
 
     # Claude-as-splitter fallback (2026-08-20, Jenna: "does the agent
     # need to be smarter?"). When BOTH regex detectors miss but the
@@ -46743,11 +46943,14 @@ def api_synth_chat_interpret():
             salvage_arrays=True,
         )
         if not result.get('success'):
-            return jsonify({
-                'success': False,
-                'error': result.get('error', 'brief-interpret failed'),
-                'raw_excerpt': result.get('raw_excerpt'),
-            }), result.get('status', 502)
+            _chatbot_error_email(
+                'brief-chat/interpret',
+                'interpret model call failed: '
+                + str(result.get('error') or 'unknown')[:400],
+                tb=('raw excerpt:\n'
+                    + str(result.get('raw_excerpt') or '')[:2000])
+                if result.get('raw_excerpt') else '(no raw excerpt)')
+            return jsonify(_chatbot_calm_payload())
 
         spec_draft = result.get('data') or {}
 
@@ -46771,11 +46974,12 @@ def api_synth_chat_interpret():
             if len(drafts) == 1:
                 spec_draft = drafts[0]
             else:
-                return jsonify({
-                    'success': False,
-                    'error': 'Could not interpret that request. '
-                             'Try rephrasing with the subject name(s).',
-                }), 400
+                _chatbot_error_email(
+                    'brief-chat/interpret',
+                    'interpret returned zero usable drafts for '
+                    f'prompt: {text[:300]!r}',
+                    tb='(array salvage produced no valid spec drafts)')
+                return jsonify(_chatbot_calm_payload())
 
         # Placeholder-subject guard (2026-08-20 Jenna: a Cartesian ask
         # that slipped past the batch detectors came back with subject
@@ -46786,6 +46990,7 @@ def api_synth_chat_interpret():
         if _is_placeholder_subject(spec_draft.get('subject')):
             return jsonify({
                 'success': False,
+                'guidance': True,
                 'error': (
                     "I couldn't pin down the audience from that "
                     "phrasing. Tell me who each profile is for - "
@@ -47031,7 +47236,8 @@ def api_synth_chat_interpret():
         })
     except Exception as e:
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        _chatbot_error_email('brief-chat/interpret', e)
+        return jsonify(_chatbot_calm_payload())
 
 
 def _clean_queue_error_text(text):
@@ -47437,6 +47643,7 @@ def _spec_from_draft(draft):
 @app.route('/api/brief-chat/approve', methods=['POST'])
 @app.route('/api/synth-chat/approve', methods=['POST'])  # legacy alias
 @requires_auth
+@_chatbot_route_guard('brief-chat/approve')
 def api_synth_chat_approve():
     """User-approved spec + run params -> POSTs to Hetzner queue. Returns run_id.
 
@@ -47447,19 +47654,24 @@ def api_synth_chat_approve():
     if err:
         return err
     if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
-        return jsonify({
-            'success': False,
-            'error': 'profile engine unavailable',
-        }), 503
+        _chatbot_error_email('brief-chat/approve',
+                             'profile engine not configured '
+                             '(queue URL/secret missing)',
+                             tb='(configuration check)')
+        return jsonify(_chatbot_calm_payload())
 
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
-        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+        _chatbot_error_email('brief-chat/approve', e)
+        return jsonify(_chatbot_calm_payload())
 
     draft = body.get('spec_draft') or {}
     if not draft:
-        return jsonify({'success': False, 'error': 'spec_draft required'}), 400
+        _chatbot_error_email('brief-chat/approve',
+                             'approve called without a spec_draft',
+                             tb='(request validation)')
+        return jsonify(_chatbot_calm_payload())
 
     spec = _spec_from_draft(draft)
     run_avid = bool(body.get('run_avid', True))
@@ -47527,6 +47739,7 @@ def api_synth_chat_approve():
         _, _left = check_user_credits(_charge_user)
         return jsonify({
             'success': False,
+            'guidance': True,
             'error': (f'Not enough credits for this run ({price} needed, '
                       f'{_left} remaining). Use the credits button in the '
                       'top bar to request more.'),
@@ -47570,17 +47783,17 @@ def api_synth_chat_approve():
                      'Content-Type': 'application/json'},
         )
         if resp.status_code != 200:
-            return jsonify({
-                'success': False,
-                'error': f'queue returned {resp.status_code}: '
-                         f'{_clean_queue_error_text(resp.text)}',
-            }), 502
+            _chatbot_error_email(
+                'brief-chat/approve',
+                f'queue returned {resp.status_code}: '
+                f'{_clean_queue_error_text(resp.text)[:400]}',
+                tb=str(resp.text or '')[:2000] or '(empty queue reply)')
+            return jsonify(_chatbot_calm_payload())
         queue_resp = resp.json()
     except Exception as e:
         traceback.print_exc()
-        return jsonify({
-            'success': False, 'error': f'queue POST failed: {e}',
-        }), 502
+        _chatbot_error_email('brief-chat/approve', e)
+        return jsonify(_chatbot_calm_payload())
 
     # Queue-returned-200-without-run_id parity fix (2026-08-19, Jessie
     # fix #4 applied to session route). If the queue accepted the POST
@@ -47596,10 +47809,12 @@ def api_synth_chat_approve():
                   f"payload={str(queue_resp)[:400]!r} - returning 502")
         except Exception:
             pass
-        return jsonify({
-            'success': False,
-            'error': 'queue did not return a run_id',
-        }), 502
+        _chatbot_error_email(
+            'brief-chat/approve',
+            'queue accepted the run but returned no run_id: '
+            + str(queue_resp)[:400],
+            tb='(queue reply inspection)')
+        return jsonify(_chatbot_calm_payload())
 
     # Charge AFTER the queue accepted the run so the usage-history entry
     # carries the real run_id (same check -> queue -> charge order the
@@ -47640,6 +47855,7 @@ def api_synth_chat_approve():
 @app.route('/api/brief-chat/status/<run_id>', methods=['GET'])
 @app.route('/api/synth-chat/status/<run_id>', methods=['GET'])  # legacy alias
 @requires_auth
+@_chatbot_route_guard('brief-chat/status')
 def api_synth_chat_status(run_id):
     """Poll Hetzner queue for run status.
 
@@ -47651,8 +47867,11 @@ def api_synth_chat_status(run_id):
     if err:
         return err
     if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
-        return jsonify({'success': False,
-                         'error': 'profile engine unavailable'}), 503
+        _chatbot_error_email('brief-chat/status',
+                             'profile engine not configured '
+                             '(queue URL/secret missing)',
+                             tb='(configuration check)')
+        return jsonify(_chatbot_calm_payload())
     try:
         import requests as _requests
         resp = _requests.get(
@@ -47663,20 +47882,37 @@ def api_synth_chat_status(run_id):
             return jsonify({'success': True,
                              'status': {'run_id': run_id, 'status': 'unknown'}})
         if resp.status_code != 200:
-            return jsonify({
-                'success': False,
-                'error': f'status returned {resp.status_code}: '
-                         f'{_clean_queue_error_text(resp.text)}',
-            }), 502
-        return jsonify({'success': True, 'status': resp.json()})
+            _chatbot_error_email(
+                'brief-chat/status',
+                f'status returned {resp.status_code}: '
+                f'{_clean_queue_error_text(resp.text)[:400]}',
+                tb=str(resp.text or '')[:2000] or '(empty status reply)')
+            return jsonify(_chatbot_calm_payload())
+        doc = resp.json() or {}
+        # Terminal run failure: the chat renders the calm line; the
+        # real failure detail goes to ops by email (deduped per run
+        # via the signature hash) and is scrubbed from the response.
+        if str(doc.get('status') or '').strip().lower() in ('error',
+                                                            'failed'):
+            _chatbot_error_email(
+                'brief-chat/status',
+                f"run {run_id} finished with status="
+                f"{doc.get('status')}: "
+                f"{str(doc.get('error') or '')[:400]}",
+                tb='(run failure reported by the engine status feed)')
+            doc = dict(doc)
+            doc['error'] = ''
+        return jsonify({'success': True, 'status': doc})
     except Exception as e:
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 502
+        _chatbot_error_email('brief-chat/status', e)
+        return jsonify(_chatbot_calm_payload())
 
 
 @app.route('/api/brief-chat/history', methods=['GET', 'POST'])
 @app.route('/api/synth-chat/history', methods=['GET', 'POST'])  # legacy alias
 @requires_auth
+@_chatbot_route_guard('brief-chat/history')
 def api_synth_chat_history():
     """Per-user chat message history persistence (S3-backed).
 
@@ -47693,11 +47929,14 @@ def api_synth_chat_history():
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
-        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+        _chatbot_error_email('brief-chat/history', e)
+        return jsonify(_chatbot_calm_payload())
     history = body.get('history') or []
     if not isinstance(history, list):
-        return jsonify({'success': False,
-                         'error': 'history must be a list'}), 400
+        _chatbot_error_email('brief-chat/history',
+                             'history payload is not a list',
+                             tb='(request validation)')
+        return jsonify(_chatbot_calm_payload())
     ok = _save_synth_chat_history(uname, history)
     return jsonify({'success': ok})
 
@@ -47705,6 +47944,7 @@ def api_synth_chat_history():
 @app.route('/api/brief-chat/active-runs', methods=['GET'])
 @app.route('/api/synth-chat/active-runs', methods=['GET'])  # legacy alias
 @requires_auth
+@_chatbot_route_guard('brief-chat/active-runs')
 def api_synth_chat_active_runs():
     """Return the caller's in-flight profile runs with step progress.
 
@@ -47729,8 +47969,11 @@ def api_synth_chat_active_runs():
     if err:
         return err
     if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
-        return jsonify({'success': False,
-                         'error': 'profile engine unavailable'}), 503
+        _chatbot_error_email('brief-chat/active-runs',
+                             'profile engine not configured '
+                             '(queue URL/secret missing)',
+                             tb='(configuration check)')
+        return jsonify(_chatbot_calm_payload())
 
     scope_arg = (request.args.get('scope') or '').strip().lower()
     is_super = user.get('role') == 'super_admin'
@@ -47749,15 +47992,17 @@ def api_synth_chat_active_runs():
             timeout=15,
         )
         if resp.status_code != 200:
-            return jsonify({
-                'success': False,
-                'error': f'active-runs returned {resp.status_code}: '
-                         f'{_clean_queue_error_text(resp.text)}',
-            }), 502
+            _chatbot_error_email(
+                'brief-chat/active-runs',
+                f'active-runs returned {resp.status_code}: '
+                f'{_clean_queue_error_text(resp.text)[:400]}',
+                tb=str(resp.text or '')[:2000] or '(empty reply)')
+            return jsonify(_chatbot_calm_payload())
         raw = resp.json() or []
     except Exception as e:
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 502
+        _chatbot_error_email('brief-chat/active-runs', e)
+        return jsonify(_chatbot_calm_payload())
 
     # Shape each entry into a compact chat-friendly summary. Progress
     # percent is computed on the read side so old status.json files
@@ -47803,6 +48048,7 @@ def api_synth_chat_active_runs():
 @app.route('/api/brief-chat/health', methods=['GET'])
 @app.route('/api/synth-chat/health', methods=['GET'])  # legacy alias
 @requires_auth
+@_chatbot_route_guard('brief-chat/health')
 def api_synth_chat_health():
     """Health check + queue counts scoped to the current user.
 
@@ -47821,8 +48067,11 @@ def api_synth_chat_health():
     if err:
         return err
     if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
-        return jsonify({'success': False, 'configured': False,
-                         'error': 'profile engine unavailable'}), 503
+        _chatbot_error_email('brief-chat/health',
+                             'profile engine not configured '
+                             '(queue URL/secret missing)',
+                             tb='(configuration check)')
+        return jsonify(_chatbot_calm_payload(configured=False))
 
     scope_arg = (request.args.get('scope') or '').strip().lower()
     is_super = user.get('role') == 'super_admin'
@@ -47846,12 +48095,16 @@ def api_synth_chat_health():
             body['scope'] = 'global' if (want_global or not user_id) else 'user'
             return jsonify({'success': True, 'configured': True,
                              'queue': body})
-        return jsonify({'success': False, 'configured': True,
-                         'error': f'queue health {resp.status_code}'}), 502
-    except Exception:
+        _chatbot_error_email('brief-chat/health',
+                             f'queue health check returned '
+                             f'{resp.status_code}',
+                             tb=str(resp.text or '')[:1200]
+                             or '(empty reply)')
+        return jsonify(_chatbot_calm_payload(configured=True))
+    except Exception as _hc_err:
         traceback.print_exc()
-        return jsonify({'success': False, 'configured': True,
-                         'error': 'queue temporarily unavailable'}), 502
+        _chatbot_error_email('brief-chat/health', _hc_err)
+        return jsonify(_chatbot_calm_payload(configured=True))
 
 
 # ============================================================================
@@ -47970,6 +48223,7 @@ def _pm_validate_page_context(page_context):
 
 @app.route('/api/brief-chat/analyze', methods=['POST'])
 @requires_auth
+@_chatbot_route_guard('brief-chat/analyze')
 def api_synth_chat_analyze():
     """Analyze the data open on the dashboard (primary profile + any
     checked Data Cuts). First-party digest is the primary evidence.
@@ -47981,11 +48235,14 @@ def api_synth_chat_analyze():
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
-        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+        _chatbot_error_email('brief-chat/analyze', e)
+        return jsonify(_chatbot_calm_payload())
     text = (body.get('text') or '').strip()
     if not text:
-        return jsonify({'success': False,
-                        'error': 'empty request text'}), 400
+        _chatbot_error_email('brief-chat/analyze',
+                             'empty request text from chat UI',
+                             tb='(request validation)')
+        return jsonify(_chatbot_calm_payload())
     history = body.get('history') or []
     ctx, ctx_err = _pm_validate_page_context(body.get('page_context'))
     if ctx_err:
@@ -48004,6 +48261,7 @@ def api_synth_chat_analyze():
     if _pm_user and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
         return jsonify({
             'success': False,
+            'guidance': True,
             'error': ('No credits remaining for analysis. Use the credits '
                       'button in the top bar to request more.'),
         }), 402
@@ -48012,10 +48270,8 @@ def api_synth_chat_analyze():
         digest, p_meta = pma.get_digest_bundle(s3_client, S3_BUCKET, ctx)
     except Exception as e:
         traceback.print_exc()
-        return jsonify({'success': False,
-                        'error': ('I could not load the on-screen data '
-                                  f'({e}). Nothing was lost. Try again in '
-                                  'a few seconds.')}), 502
+        _chatbot_error_email('brief-chat/analyze', e)
+        return jsonify(_chatbot_calm_payload())
     mode = str(body.get('mode') or '').strip().lower()
     if mode not in pma.MODE_INSTRUCTIONS:
         mode = ''
@@ -48026,16 +48282,22 @@ def api_synth_chat_analyze():
     result = _pm_claude_json(pma.ANALYSIS_SYSTEM_PROMPT, user_prompt,
                              max_tokens=_max_tok, temperature=0.5)
     if not result.get('success'):
-        return jsonify({'success': False,
-                        'error': result.get('error', 'analysis failed')}),             result.get('status', 502)
+        _chatbot_error_email(
+            'brief-chat/analyze',
+            'analysis model call failed: '
+            + str(result.get('error') or 'unknown')[:400],
+            tb='(model chain exhausted without a usable reply)')
+        return jsonify(_chatbot_calm_payload())
     data = result.get('data') or {}
     if isinstance(data, list):
         data = next((d for d in data if isinstance(d, dict)), {})
     action = str(data.get('action') or 'answer')
     reply = str(data.get('reply') or '').strip()
     if action != 'build_profile' and not reply:
-        return jsonify({'success': False,
-                        'error': 'analysis returned an empty reply'}), 502
+        _chatbot_error_email('brief-chat/analyze',
+                             'analysis returned an empty reply',
+                             tb='(model returned no reply text)')
+        return jsonify(_chatbot_calm_payload())
     followups = [str(f).strip()[:160]
                  for f in (data.get('followups') or [])
                  if str(f).strip()][:4]
@@ -48130,6 +48392,10 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
         print(f"[prometheus] deck {job_id} done for {username}: {fname}")
     except Exception as e:
         traceback.print_exc()
+        _chatbot_error_email('brief-chat/deck-job', e,
+                             user_email=username,
+                             payload={'job_id': job_id,
+                                      'angle': str(angle)[:200]})
         _pm_deck_status_write(job_id, {**base, 'status': 'error',
                                        'error': str(e)[:400]})
         if charge_user:
@@ -48142,6 +48408,7 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
 
 @app.route('/api/brief-chat/deck', methods=['POST'])
 @requires_auth
+@_chatbot_route_guard('brief-chat/deck')
 def api_synth_chat_deck():
     """Kick off an async deck build from the open page's data.
     Returns a job_id the frontend polls via deck-status."""
@@ -48151,7 +48418,8 @@ def api_synth_chat_deck():
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
-        return jsonify({'success': False, 'error': f'bad json: {e}'}), 400
+        _chatbot_error_email('brief-chat/deck', e)
+        return jsonify(_chatbot_calm_payload())
     angle = ((body.get('angle') or '').strip()
              or 'The strongest commercial story in this data.')[:400]
     history = body.get('history') or []
@@ -48162,6 +48430,7 @@ def api_synth_chat_deck():
         return ctx_err
     if not ctx:
         return jsonify({'success': False,
+                        'guidance': True,
                         'error': ('Open a profile first, then ask for '
                                   'the deck again.')}), 400
     job_id = uuid.uuid4().hex[:12]
@@ -48175,6 +48444,7 @@ def api_synth_chat_deck():
                                             CREDITS_CHATBOT_DECK):
         return jsonify({
             'success': False,
+            'guidance': True,
             'error': ('No credits remaining for a deck build. Use the '
                       'credits button in the top bar to request more.'),
         }), 402
@@ -48201,6 +48471,7 @@ def api_synth_chat_deck():
 
 @app.route('/api/brief-chat/deck-status/<job_id>', methods=['GET'])
 @requires_auth
+@_chatbot_route_guard('brief-chat/deck-status')
 def api_synth_chat_deck_status(job_id):
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
@@ -48217,6 +48488,11 @@ def api_synth_chat_deck_status(job_id):
     if (payload.get('user') and payload.get('user') != uname
             and user.get('role') != 'super_admin'):
         return jsonify({'success': False, 'error': 'not your job'}), 403
+    if str(payload.get('status') or '').strip().lower() == 'error':
+        # The deck worker already emailed the failure to ops; the
+        # poll reply carries no failure detail (calm-failure contract).
+        payload = dict(payload)
+        payload['error'] = ''
     return jsonify({'success': True, **payload})
 
 

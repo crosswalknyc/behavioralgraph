@@ -60490,8 +60490,8 @@ https://www.instagram.com/p/..."></textarea>
                     encodeURIComponent(runId), { credentials: 'same-origin' });
                 var data = await r.json();
                 if (!r.ok || !data.success) {
-                    synthChatPushTurn('agent',
-                        "I can't reach the queue right now. Try again in a few seconds.");
+                    console.error('[brief-chat] status reply not ok');
+                    synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
                     return;
                 }
                 var st = data.status || {};
@@ -60516,7 +60516,7 @@ https://www.instagram.com/p/..."></textarea>
                     lines.push('Reload the Select Profile dropdown to see them.');
                 }
                 if (cur === 'error' || cur === 'failed') {
-                    lines.push('Error: ' + (st.error || 'unknown'));
+                    lines = [SYNTH_CHAT_CALM_MSG];
                 }
                 if (cur !== 'complete' && cur !== 'error' && cur !== 'failed') {
                     lines.push("I'll keep updating this thread as it progresses.");
@@ -60524,8 +60524,9 @@ https://www.instagram.com/p/..."></textarea>
                 synthChatPushTurn('agent', lines.join('\n'));
                 try { _synthChatPatchLastMetaStatus(runId, cur); } catch (_) {}
             } catch (e) {
-                synthChatPushTurn('agent',
-                    "Status check failed: " + _synthChatFriendlyError(e));
+                console.error('[brief-chat] status check failed', e);
+                _synthChatReportClientError('brief-chat/status', e);
+                synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
             }
         }
 
@@ -60557,8 +60558,8 @@ https://www.instagram.com/p/..."></textarea>
                     { credentials: 'same-origin' });
                 var data = await r.json();
                 if (!r.ok || !data.success) {
-                    synthChatPushTurn('agent',
-                        "I can't reach the queue right now. Try again in a few seconds.");
+                    console.error('[brief-chat] active-runs reply not ok');
+                    synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
                     return false;
                 }
                 var runs = (data.runs || []).filter(function (x) {
@@ -60607,8 +60608,9 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 return true;
             } catch (e) {
-                synthChatPushTurn('agent',
-                    "Status check failed: " + _synthChatFriendlyError(e));
+                console.error('[brief-chat] active-runs check failed', e);
+                _synthChatReportClientError('brief-chat/active-runs', e);
+                synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
                 return false;
             }
         }
@@ -61121,10 +61123,15 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 var data = _fr.data;
                 if (!data || !_fr.r.ok || !data.success) {
+                    console.error('[brief-chat] analyze reply not ok');
+                    if (!data) {
+                        _synthChatReportClientError('brief-chat/analyze',
+                            'no parseable reply (status ' + (_fr.r && _fr.r.status) + ')');
+                    }
                     synthChatPushTurn('agent',
-                        'I could not finish that analysis. ' +
-                        String((data && data.error) ||
-                            'The service hiccuped. Nothing was lost; ask again in a few seconds.'));
+                        (data && data.guidance && data.error)
+                            ? String(data.error)
+                            : SYNTH_CHAT_CALM_MSG);
                     return 'done';
                 }
                 if (data.action === 'build_profile') {
@@ -61147,9 +61154,9 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 return 'done';
             } catch (e) {
-                synthChatPushTurn('agent',
-                    'I could not finish that analysis. Nothing was lost. ' +
-                    'Ask again in a few seconds.');
+                console.error('[brief-chat] analyze failed', e);
+                _synthChatReportClientError('brief-chat/analyze', e);
+                synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
                 return 'done';
             } finally {
                 _end();
@@ -61182,9 +61189,15 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 var data = _fr.data;
                 if (!data || !_fr.r.ok || !data.success || !data.job_id) {
+                    console.error('[brief-chat] deck start reply not ok');
+                    if (!data) {
+                        _synthChatReportClientError('brief-chat/deck',
+                            'no parseable reply (status ' + (_fr.r && _fr.r.status) + ')');
+                    }
                     synthChatPushTurn('agent',
-                        'Deck build failed to start. ' +
-                        String((data && data.error) || 'Try again in a few seconds.'));
+                        (data && data.guidance && data.error)
+                            ? String(data.error)
+                            : SYNTH_CHAT_CALM_MSG);
                     return;
                 }
                 var job = data.job_id;
@@ -61207,10 +61220,8 @@ https://www.instagram.com/p/..."></textarea>
                         return;
                     }
                     if (st.status === 'error') {
-                        synthChatPushTurn('agent',
-                            'The deck build hit an error: ' +
-                            String(st.error || 'unknown') +
-                            '. Nothing was lost. Ask again and I will retry.');
+                        console.error('[brief-chat] deck job errored');
+                        synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
                         return;
                     }
                 }
@@ -61439,29 +61450,29 @@ https://www.instagram.com/p/..."></textarea>
                 var r = _fr.r;
                 var data = _fr.data;
                 if (data == null) {
-                    synthChatPushTurn('agent',
-                        'The service hiccuped mid-request (likely a ' +
-                        'redeploy landing). Nothing was queued - send ' +
-                        'that message again and it should go through.');
+                    console.error('[brief-chat] interpret reply unparseable');
+                    _synthChatReportClientError('brief-chat/interpret',
+                        'no parseable reply (status ' + (r && r.status) + ')');
+                    synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
                     return;
                 }
                 if (!r.ok || !data.success) {
-                    // Never surface raw model output to the user. Log
-                    // the raw excerpt to the console for debugging and
-                    // show a friendly message. If the error string
-                    // itself looks JSON-y (starts with '{' or '['),
-                    // replace it with a generic phrasing so partial
-                    // model output cannot leak into the chat either.
+                    // Calm-failure contract (2026-08-23): the backend
+                    // already emailed ops the real failure. Guidance
+                    // payloads (credit balance, cap notices, rephrase
+                    // asks) keep their text; every other failure
+                    // renders the calm line. Raw model output still
+                    // goes to the console only, never the chat.
                     if (data.raw_excerpt) {
                         try { console.warn('[brief-chat] raw model excerpt:', data.raw_excerpt); } catch(e) {}
                     }
-                    var _errMsg = String(data.error || 'I had trouble understanding that. Could you rephrase?');
-                    var _errLead = _errMsg.trim().slice(0, 5);
-                    if (_errLead.indexOf('{') === 0 || _errLead.indexOf('[') === 0 || _errLead.indexOf('```') === 0) {
-                        _errMsg = 'I had trouble understanding that. Could you rephrase with the subject name(s)?';
+                    console.error('[brief-chat] interpret reply not ok');
+                    var _gMsg = String((data.guidance && data.error) || '');
+                    var _gLead = _gMsg.trim().slice(0, 5);
+                    if (_gLead.indexOf('{') === 0 || _gLead.indexOf('[') === 0 || _gLead.indexOf('```') === 0) {
+                        _gMsg = '';
                     }
-                    synthChatPushTurn('agent',
-                        "Sorry, I couldn't interpret that. " + _errMsg);
+                    synthChatPushTurn('agent', _gMsg || SYNTH_CHAT_CALM_MSG);
                     return;
                 }
                 // Echo estimated_credits onto spec_draft so
@@ -61550,8 +61561,10 @@ https://www.instagram.com/p/..."></textarea>
                 // what produced the 'Building a new this profile
                 // profile' card. Ask for a rephrase instead.
                 if (data.batch && (!Array.isArray(data.spec_drafts) || !data.spec_drafts.length)) {
-                    synthChatPushTurn('agent',
-                        "I couldn't draft any of those profiles. Tell me who each profile is for - one per line works best - and I'll queue one per segment.");
+                    console.error('[brief-chat] batch reply had no drafts');
+                    _synthChatReportClientError('brief-chat/interpret',
+                        'batch reply arrived with zero drafts');
+                    synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
                     return;
                 }
                 // Batch response (2026-08-18): backend detected
@@ -61597,8 +61610,9 @@ https://www.instagram.com/p/..."></textarea>
                     synthChatPushTurn('agent',
                         'Stopped. Nothing was queued. Send another message when you want to try again.');
                 } else {
-                    synthChatPushTurn('agent',
-                        'Request failed: ' + _synthChatFriendlyError(e));
+                    console.error('[brief-chat] interpret failed', e);
+                    _synthChatReportClientError('brief-chat/interpret', e);
+                    synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
                 }
             } finally {
                 try { _endThinking && _endThinking(); } catch (_) {}
@@ -61671,7 +61685,7 @@ https://www.instagram.com/p/..."></textarea>
             }
             if (Array.isArray(failures) && failures.length) {
                 lines.push('');
-                lines.push('Could not interpret: ' + failures.map(function(f){return f.subject_input;}).join(', ') + ' - send them again separately if you want to try.');
+                lines.push(SYNTH_CHAT_CALM_MSG);
             }
             if (sharedCtx) {
                 lines.push('');
@@ -61876,6 +61890,25 @@ https://www.instagram.com/p/..."></textarea>
             return await _once();
         }
 
+        // Calm-failure contract (2026-08-23 Jenna): the chat never
+        // renders an error. Failures show this line; the real detail
+        // reaches ops by email (server-side, or via the beacon below
+        // when the backend never saw the failure).
+        var SYNTH_CHAT_CALM_MSG = "Working on it - you'll receive an email when it's completed.";
+        function _synthChatReportClientError(route, err) {
+            // Backend-unreachable / unparseable-reply beacon: fires
+            // the same ops email as a server-side failure. Dropped
+            // silently when the beacon itself cannot get through.
+            try {
+                var msg = String((err && err.message) || err || '').slice(0, 900);
+                fetch('/api/chatbot-client-error', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ route: route, message: msg })
+                }).catch(function(){});
+            } catch (_) {}
+        }
+
         // Push an agent question with its clickable options attached.
         function _synthChatPushQuestion(text, step, draft) {
             var opts = null;
@@ -62021,10 +62054,14 @@ https://www.instagram.com/p/..."></textarea>
                 var r = _fr.r;
                 var data = _fr.data || {};
                 if (!r.ok || !data.success) {
-                    _synthChatPushQuestion(
-                        'I hit a snag on that question (' +
-                        (data.error || r.statusText) + '). ' +
-                        _synthChatClarifyQuestion(step), step, st.draft);
+                    console.error('[brief-chat] clarify reply not ok');
+                    synthChatClarify = null;
+                    synthChatCurrentDraft = (st && st.draft) || synthChatCurrentDraft;
+                    synthChatPushTurn('agent',
+                        (data.guidance && data.error)
+                            ? String(data.error)
+                            : SYNTH_CHAT_CALM_MSG);
+                    _synthChatShowBrief(synthChatCurrentDraft, null);
                     return;
                 }
                 st.draft = data.draft || st.draft;
@@ -62042,9 +62079,12 @@ https://www.instagram.com/p/..."></textarea>
                     st.idx = ni;
                 } // same step repeats when the server re-asks
             } catch (e) {
-                _synthChatPushQuestion(
-                    'That question failed (' + (e && e.message || e) +
-                    '). ' + _synthChatClarifyQuestion(step), step, st.draft);
+                console.error('[brief-chat] clarify failed', e);
+                _synthChatReportClientError('brief-chat/clarify', e);
+                synthChatClarify = null;
+                synthChatCurrentDraft = (st && st.draft) || synthChatCurrentDraft;
+                synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
+                _synthChatShowBrief(synthChatCurrentDraft, null);
             } finally {
                 try { _endThinking && _endThinking(); } catch (_) {}
             }
@@ -62101,10 +62141,12 @@ https://www.instagram.com/p/..."></textarea>
                     var r = _fr.r;
                     var data = _fr.data || {};
                     if (!r.ok || !data.success) {
+                        console.error('[brief-chat] batch clarify reply not ok');
                         synthChatBatchClarify = null;
                         synthChatPushTurn('agent',
-                            'Could not process that (' + (data.error || r.statusText) +
-                            '). Approve to queue the batch as-is.');
+                            (data.guidance && data.error)
+                                ? String(data.error)
+                                : SYNTH_CHAT_CALM_MSG);
                         return;
                     }
                     st.draft0 = data.draft || st.draft0;
@@ -62114,10 +62156,10 @@ https://www.instagram.com/p/..."></textarea>
                         '3 credits per cut per profile. Name the ones you want, or say none.',
                         'strategy', st.draft0);
                 } catch (e) {
+                    console.error('[brief-chat] batch clarify failed', e);
+                    _synthChatReportClientError('brief-chat/clarify', e);
                     synthChatBatchClarify = null;
-                    synthChatPushTurn('agent',
-                        'That question failed (' + (e && e.message || e) +
-                        '). Approve to queue the batch as-is.');
+                    synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
                 } finally {
                     try { _end && _end(); } catch (_) {}
                 }
@@ -62139,10 +62181,12 @@ https://www.instagram.com/p/..."></textarea>
                 var r2 = _fr2.r;
                 var d2 = _fr2.data || {};
                 if (!r2.ok || !d2.success) {
-                    _synthChatPushQuestion(
-                        'I hit a snag on that (' + (d2.error || r2.statusText) +
-                        '). Name the cuts again, or say none.',
-                        'strategy', st.draft0);
+                    console.error('[brief-chat] batch strategy reply not ok');
+                    synthChatBatchClarify = null;
+                    synthChatPushTurn('agent',
+                        (d2.guidance && d2.error)
+                            ? String(d2.error)
+                            : SYNTH_CHAT_CALM_MSG);
                     return;
                 }
                 st.draft0 = d2.draft || st.draft0;
@@ -62174,10 +62218,10 @@ https://www.instagram.com/p/..."></textarea>
                     ' for every profile: ' + cutNames + '.\n\n' +
                     _synthChatBuildBatchSummary(drafts, total, [], ''));
             } catch (e) {
-                _synthChatPushQuestion(
-                    'That failed (' + (e && e.message || e) +
-                    '). Name the cuts again, or say none.',
-                    'strategy', st.draft0);
+                console.error('[brief-chat] batch strategy failed', e);
+                _synthChatReportClientError('brief-chat/clarify', e);
+                synthChatBatchClarify = null;
+                synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
             } finally {
                 try { _end2 && _end2(); } catch (_) {}
             }
@@ -62351,7 +62395,11 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 var data = await r.json();
                 if (!r.ok || !data.success) {
-                    synthChatPushTurn('agent', 'Queue failed: ' + (data.error || r.statusText));
+                    console.error('[brief-chat] approve reply not ok');
+                    synthChatPushTurn('agent',
+                        (data.guidance && data.error)
+                            ? String(data.error)
+                            : SYNTH_CHAT_CALM_MSG);
                     return;
                 }
                 synthChatActiveRun = data.run_id;
@@ -62379,8 +62427,9 @@ https://www.instagram.com/p/..."></textarea>
                     synthChatPushTurn('agent',
                         'Stopped. Nothing was queued. Send another message when you want to try again.');
                 } else {
-                    synthChatPushTurn('agent',
-                        'Approve failed: ' + _synthChatFriendlyError(e));
+                    console.error('[brief-chat] approve failed', e);
+                    _synthChatReportClientError('brief-chat/approve', e);
+                    synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
                 }
             } finally {
                 try { _endThinking && _endThinking(); } catch (_) {}
@@ -62448,7 +62497,9 @@ https://www.instagram.com/p/..."></textarea>
                             { run_id: r.run_id, status: 'queued', subject: r.subject || subj });
                         _synthChatStartPolling(r.run_id, r.subject || subj);
                     } else {
-                        errored.push({ subject: subj, error: (r && r.error) || 'queue failed' });
+                        errored.push({ subject: subj,
+                                       error: (r && r.error) || 'queue failed',
+                                       guidance: !!(r && r.guidance) });
                     }
                 }
                 var panel = document.getElementById('synthChatBriefPreview');
@@ -62470,13 +62521,22 @@ https://www.instagram.com/p/..."></textarea>
                     }
                 } catch (_) {}
                 if (errored.length) {
-                    synthChatPushTurn('agent',
-                        'Some profiles could not be queued: ' +
-                        errored.map(function(e){return e.subject + ' (' + e.error + ')';}).join('; '));
+                    console.error('[brief-chat] batch approve failures', errored);
+                    var _gErr = null;
+                    for (var _gi = 0; _gi < errored.length; _gi++) {
+                        if (errored[_gi].guidance) { _gErr = errored[_gi].error; break; }
+                    }
+                    if (!_gErr) {
+                        _synthChatReportClientError('brief-chat/approve',
+                            'batch queue failures: ' +
+                            errored.map(function(e){return e.subject + ' (' + e.error + ')';}).join('; '));
+                    }
+                    synthChatPushTurn('agent', _gErr ? String(_gErr) : SYNTH_CHAT_CALM_MSG);
                 }
             } catch (e) {
-                synthChatPushTurn('agent',
-                    'Batch approve failed: ' + (e && e.message || e));
+                console.error('[brief-chat] batch approve failed', e);
+                _synthChatReportClientError('brief-chat/approve', e);
+                synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
             } finally {
                 try { _endThinking && _endThinking(); } catch (_) {}
                 approveBtn.disabled = false;
@@ -62538,9 +62598,11 @@ https://www.instagram.com/p/..."></textarea>
                             if (st.tu_key) msg += '\nFile: ' + st.tu_key;
                             if (st.avid_key) msg += '\nAvid file: ' + st.avid_key;
                         }
-                        if (cur === 'error') msg += '\nError: ' + (st.error || 'unknown');
+                        if (cur === 'error' || cur === 'failed') {
+                            msg = SYNTH_CHAT_CALM_MSG;
+                        }
                         synthChatPushTurn('agent', msg);
-                        if (cur === 'complete' || cur === 'error') {
+                        if (cur === 'complete' || cur === 'error' || cur === 'failed') {
                             clearInterval(synthChatPollTimer);
                             synthChatPollTimer = null;
                         }
