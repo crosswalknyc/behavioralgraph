@@ -23796,7 +23796,7 @@ def enforce_brand_category_row(df, brand_category, force=False):
 # Per workspace rule #3 ("Only demographic categories sum to 100%"):
 # this is one of the legitimately-hard mathematical invariants — demos
 # MUST sum to 100 by definition, no audience-reasoning carve-out.
-def _demo_safe_to_csv(df, path, subject_label='', tag=''):
+def _demo_safe_to_csv(df, path, subject_label='', tag='', append_genpop=False):
     """Renormalize demographics + hard-validate sum-to-100, then write
     df to path. If validation still fails after renormalize (would
     indicate a structural bug in the renormalize itself, not drift),
@@ -23805,6 +23805,13 @@ def _demo_safe_to_csv(df, path, subject_label='', tag=''):
     Also rank-orders rows within each category by BP descending (per
     Jenna 2026-06-10: analysts proof CSVs faster when each category is
     in rank order). Returns the (possibly-renormalized + sorted) df.
+
+    append_genpop (Jenna 2026-08-22): pass True ONLY at the terminal
+    save of the run so the local raw file also carries the Gen Pop
+    baseline columns. Intermediate saves keep False so no enforcer or
+    re-read step ever sees the extra columns; the S3 upload path
+    (migration.profile_writer.write_profile_csv) appends them fresh
+    regardless.
     """
     try:
         import sys as _sys_dc
@@ -23982,6 +23989,25 @@ def _demo_safe_to_csv(df, path, subject_label='', tag=''):
                 print(f"   ⚠ G12 bump-file write skipped: {_g12_we}")
     except Exception as _g12_err:
         print(f"   ⚠ G12 raw>gp_raw soft-gate skipped: {_g12_err}")
+    # Gen Pop baseline columns (Jenna 2026-08-22): only at the terminal
+    # save (append_genpop=True), after every gate above, immediately
+    # before serialization. Non-fatal on any failure.
+    if append_genpop:
+        try:
+            import sys as _sys_gp
+            import os as _os_gp
+            _migration_dir_gp = _os_gp.path.join(
+                _os_gp.path.dirname(_os_gp.path.abspath(__file__)),
+                'migration',
+            )
+            if _migration_dir_gp not in _sys_gp.path:
+                _sys_gp.path.insert(0, _migration_dir_gp)
+            from genpop_baseline import (
+                append_genpop_columns as _append_gp_cols,
+            )
+            df = _append_gp_cols(df)
+        except Exception as _gp_err:
+            print(f"   [genpop_baseline] append skipped: {_gp_err}")
     df.to_csv(path, index=False)
     return df
 
@@ -36446,6 +36472,7 @@ def main():
                     subject_label=str(globals().get('CURRENT_SUBJECT_NAME', '') or
                                        (brands[0] if brands else '')),
                     tag='save-6-final-audit-playbook',
+                    append_genpop=True,
                 )
                 print(f"✅ Audit playbook applied (final pass): {final_file_path}")
     except Exception as _ap_err2:

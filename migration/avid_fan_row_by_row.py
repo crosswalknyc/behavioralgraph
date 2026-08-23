@@ -802,6 +802,18 @@ def _load_source_df(source: str, source_kind: str = "auto"):
                          on_bad_lines="skip")
     else:
         df = pd.read_csv(source, low_memory=False, on_bad_lines="skip")
+    # Gen Pop baseline columns (Jenna 2026-08-22): parents written after
+    # the rollout carry two terminal baseline columns. Strip them here so
+    # cut synthesis never sees unexpected columns; the cut's own write
+    # path re-appends them fresh against its own BPs.
+    try:
+        try:
+            from migration.genpop_baseline import strip_genpop_columns
+        except ImportError:
+            from genpop_baseline import strip_genpop_columns  # type: ignore
+        df = strip_genpop_columns(df)
+    except Exception as _gp_err:
+        print(f"   [genpop_baseline] source strip skipped: {_gp_err}")
     return df, kind
 
 
@@ -1272,6 +1284,18 @@ def synthesize_avid_fan(
         )
     except Exception as _sn_err:
         print(f"   ⚠ write-safety-net raised (non-fatal): {_sn_err}")
+
+    # Gen Pop baseline columns (Jenna 2026-08-22): terminal append after
+    # every enforcer / safety net so the raw file ships with the current
+    # Gen Pop value + index per matched row. Non-fatal.
+    try:
+        try:
+            from migration.genpop_baseline import append_genpop_columns
+        except ImportError:
+            from genpop_baseline import append_genpop_columns  # type: ignore
+        df_avid = append_genpop_columns(df_avid)
+    except Exception as _gp_err:
+        print(f"   [genpop_baseline] append skipped: {_gp_err}")
 
     if dry_run:
         return {

@@ -1066,6 +1066,18 @@ def synthesize_audience_cut(
     except Exception as _sn_err:
         print(f"   ⚠ write-safety-net raised (non-fatal): {_sn_err}")
 
+    # Gen Pop baseline columns (Jenna 2026-08-22): terminal append after
+    # every enforcer / safety net so the raw file ships with the current
+    # Gen Pop value + index per matched row. Non-fatal.
+    try:
+        try:
+            from migration.genpop_baseline import append_genpop_columns
+        except ImportError:
+            from genpop_baseline import append_genpop_columns  # type: ignore
+        df_cut = append_genpop_columns(df_cut)
+    except Exception as _gp_err:
+        print(f"   [genpop_baseline] append skipped: {_gp_err}")
+
     if dry_run:
         return {
             "out_key": out_key, "status": "dry-run",

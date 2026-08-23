@@ -807,8 +807,20 @@ def _load_source(source: str, source_kind: str = 'auto'):
         s3 = boto3.client('s3', region_name='us-east-2')
         obj = s3.get_object(Bucket='dashboard-inputs', Key=source)
         df = pd.read_csv(io.BytesIO(obj['Body'].read()), low_memory=False)
-        return df
-    return pd.read_csv(source, low_memory=False)
+    else:
+        df = pd.read_csv(source, low_memory=False)
+    # Gen Pop baseline columns (Jenna 2026-08-22): strip from the parent
+    # read so cut synthesis never sees unexpected columns; re-appended
+    # fresh against the cut's own BPs at write time.
+    try:
+        try:
+            from migration.genpop_baseline import strip_genpop_columns
+        except ImportError:
+            from genpop_baseline import strip_genpop_columns  # type: ignore
+        df = strip_genpop_columns(df)
+    except Exception as _gp_err:
+        print(f"  [genpop_baseline] source strip skipped: {_gp_err}")
+    return df
 
 
 def _run_enforcer_chain(df, subject_label: str):
@@ -904,6 +916,18 @@ def synthesize_and_upload_super_fan(source: str, subject_label: str,
         df, _sn_stats = run_write_safety_net(df, new_label, verbose=True)
     except Exception as _sn_err:
         print(f"   ⚠ write-safety-net raised (non-fatal): {_sn_err}")
+
+    # Gen Pop baseline columns (Jenna 2026-08-22): terminal append after
+    # every enforcer / safety net so the raw file ships with the current
+    # Gen Pop value + index per matched row. Non-fatal.
+    try:
+        try:
+            from migration.genpop_baseline import append_genpop_columns
+        except ImportError:
+            from genpop_baseline import append_genpop_columns  # type: ignore
+        df = append_genpop_columns(df)
+    except Exception as _gp_err:
+        print(f"   [genpop_baseline] append skipped: {_gp_err}")
 
     # Upload
     import boto3

@@ -225,6 +225,19 @@ def write_profile_csv(
     n_coherence_changes = 0
     gate_defects: list = []
 
+    # Gen Pop baseline columns (Jenna 2026-08-22): strip any copies from
+    # the input df so no enforcer / gate sees unexpected columns;
+    # re-appended fresh right before upload (step 6.5 below).
+    try:
+        try:
+            from migration.genpop_baseline import strip_genpop_columns
+        except ImportError:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from genpop_baseline import strip_genpop_columns  # type: ignore
+        df = strip_genpop_columns(df)
+    except Exception as e:
+        print(f"  [profile_writer] genpop-column strip skipped: {e}")
+
     # 1. Enforcer chain (canonical set from run_all_enforcers). If
     #    year is provided, run_all_enforcers threads it to the
     #    anachronism check as its first step.
@@ -346,6 +359,21 @@ def write_profile_csv(
     backup_key = None
     if backup:
         backup_key = _backup_prior(s3, s3_key, "write")
+
+    # 6.5 Gen Pop baseline columns (Jenna 2026-08-22): appended as the
+    # very last transform, after every enforcer / safety net / gate, so
+    # the raw file ships with the current Gen Pop value and index for
+    # every matched row and nothing upstream ever sees the extra
+    # columns. Non-fatal on any failure.
+    try:
+        try:
+            from migration.genpop_baseline import append_genpop_columns
+        except ImportError:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from genpop_baseline import append_genpop_columns  # type: ignore
+        df = append_genpop_columns(df, s3_client=s3, verbose=verbose)
+    except Exception as e:
+        print(f"  [profile_writer] genpop baseline append skipped: {e}")
 
     # 7. Upload
     buf = io.StringIO()
