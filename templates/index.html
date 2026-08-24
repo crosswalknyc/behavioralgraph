@@ -110484,39 +110484,74 @@ https://www.instagram.com/p/..."></textarea>
             return `<div class="${cls}"${onclick} title="${escapeAttr(plainTitle)}">${lockIcon}${labelHtml}</div>`;
         }
 
-        // Pick the run that represents the BASE / Casual Fan profile out of
-        // a subject's cluster of cuts. The profile selector tree shows the
+        // True pull recency for a run. Returns a [tier, isoTimestamp] pair:
+        //   tier 1 - the pipeline timestamp embedded in the s3_key
+        //            (Subject_MM_DD_YYYY_HH_MM.csv, minutes optional).
+        //            Immutable: survives bulk S3 maintenance sweeps that
+        //            re-stamp LastModified / created_at on every touched
+        //            file (2026-08-24 census: all 4,175 cache entries
+        //            carried a same-day created_at after one such sweep).
+        //   tier 0 - created_at (mirrors S3 LastModified in the cache) for
+        //            files without an embedded timestamp (e.g. admin-renamed
+        //            CSVs like "X - 2025 Total Universe.csv").
+        // A tier-1 entry ALWAYS outranks a tier-0 entry so a bulk-touched
+        // rename can never masquerade as the newest pull.
+        function _trueRunRecencyKey(p) {
+            const key = (p && (p.s3_key || p.job_id)) || '';
+            const m = String(key).match(/_(\d{2})_(\d{2})_(\d{4})(?:_(\d{2})_(\d{2}))?\.csv$/i);
+            if (m) {
+                return [1, m[3] + '-' + m[1] + '-' + m[2] + 'T' + (m[4] || '00') + ':' + (m[5] || '00')];
+            }
+            return [0, (p && p.created_at) || ''];
+        }
+
+        // Newest-first comparator over _trueRunRecencyKey with a
+        // deterministic s3_key tiebreak so repeated renders are stable.
+        function _compareRunRecencyDesc(a, b) {
+            const ka = _trueRunRecencyKey(a);
+            const kb = _trueRunRecencyKey(b);
+            if (ka[0] !== kb[0]) return kb[0] - ka[0];
+            if (ka[1] !== kb[1]) return ka[1] < kb[1] ? 1 : -1;
+            const sa = (a && (a.s3_key || a.job_id)) || '';
+            const sb = (b && (b.s3_key || b.job_id)) || '';
+            return String(sb).localeCompare(String(sa));
+        }
+
+        // Pick the run that represents the subject's MAIN entry out of a
+        // subject's cluster of runs. The profile selector tree shows the
         // subject name ONCE (no dropdown / no children) and clicking it
-        // should load the broader audience - i.e. the unsuffixed file, not
-        // a specific cohort cut like "Mark Rober - Avid Fan" or "Reba
-        // McEntire - 4+ Touchpoints". All cohort cuts remain accessible
-        // through the Data Cuts popover.
+        // must load the subject's most current TOTAL UNIVERSE profile
+        // (Jenna 2026-08-24: "only the total universe should display most
+        // recent"). All cohort cuts remain accessible through the Data
+        // Cuts popover.
         //
         // Resolution order:
-        //   1. The first run whose name has no recognised suffix
-        //      (getProfileSuffixInfo.suffixType === 'none'). That's the
-        //      true Casual Fan base - e.g. just "Mark Rober".
-        //   2. Otherwise fall back to sortRunsForGroup's preferred order
-        //      (newest year / canonical sort), so the click still does
-        //      something sensible for subjects that ONLY have suffixed
-        //      files (e.g. avid-only backfills).
+        //   1. TU-role runs only (getProfileSuffixInfo.suffixType ===
+        //      'none': an unsuffixed name, or an explicit trailing
+        //      "- Total Universe" suffix). Among them the newest by TRUE
+        //      pull recency (_compareRunRecencyDesc) wins. Cuts and
+        //      year-labeled TU variants ("X - 2025 Total Universe",
+        //      "X 2024") parse as dash/cohort/year suffixes and can NEVER
+        //      displace the TU, no matter how recently they were run -
+        //      recency competition is TU vs TU only.
+        //   2. Parentless edge (subject has ONLY cuts, e.g. avid-only
+        //      backfills): the newest cut by true pull recency heads the
+        //      group; it keeps its own cut label wherever it renders.
         function _pickBaseRun(runs) {
             if (!runs || !runs.length) return null;
             try {
-                const base = runs.find(p => {
+                const tuRuns = runs.filter(p => {
                     try {
                         const info = (typeof getProfileSuffixInfo === 'function')
                             ? getProfileSuffixInfo(p) : null;
-                        return info && info.suffixType === 'none';
+                        return !!(info && info.suffixType === 'none');
                     } catch (_) { return false; }
                 });
-                if (base) return base;
+                if (tuRuns.length === 1) return tuRuns[0];
+                if (tuRuns.length > 1) return tuRuns.slice().sort(_compareRunRecencyDesc)[0];
             } catch (_) {}
             try {
-                if (typeof sortRunsForGroup === 'function') {
-                    const sorted = sortRunsForGroup(runs);
-                    if (sorted && sorted.length) return sorted[0];
-                }
+                return runs.slice().sort(_compareRunRecencyDesc)[0];
             } catch (_) {}
             return runs[0];
         }
@@ -112973,7 +113008,12 @@ https://www.instagram.com/p/..."></textarea>
             try {
                 if (typeof getRunDateLabel === 'function') {
                     const d = getRunDateLabel(profile && (profile.s3_key || ''));
-                    if (d) return _baseCohortLabel() + ' ' + d;
+                    // Comma-free date ("Aug 23 2026"): the multi-year prefix
+                    // pass reorders a trailing year to the front ("2026
+                    // Total Universe Aug 23") and a comma inside the date
+                    // would otherwise be stranded at the end of the label
+                    // ("2026 TOTAL UNIVERSE AUG 23,").
+                    if (d) return _baseCohortLabel() + ' ' + String(d).replace(/,/g, '');
                 }
             } catch (_) {}
             return _baseCohortLabel();
@@ -113210,7 +113250,11 @@ https://www.instagram.com/p/..."></textarea>
                 if (/^20\d{2}\b/.test(lbl)) return;
                 const trailing = lbl.match(/^(.*\S)\s+(20\d{2}(?:-\d{2})?)\s*$/);
                 if (trailing) {
-                    it.label = trailing[2] + ' ' + trailing[1];
+                    // Strip punctuation stranded by the reorder (defense in
+                    // depth for labels built before the comma-free date fix:
+                    // "Total Universe Aug 23, 2026" must become "2026 Total
+                    // Universe Aug 23", never "... Aug 23,").
+                    it.label = trailing[2] + ' ' + trailing[1].replace(/[,;]+\s*$/, '');
                     return;
                 }
                 it.label = yr + ' ' + lbl;
