@@ -3472,6 +3472,21 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
                 except (ValueError, TypeError):
                     pass
 
+    # Final-pass count hygiene (shared implementation with the shipped-corpus
+    # sweep in scripts/sweep_svod_round_reconcile.py): exact touchpoint
+    # reconciliation, no trailing-zero displayed counts or projections, and
+    # compensating nudges so every printed sum stays exact. Deterministic per
+    # title and idempotent. Fail-safe: a hygiene error never blocks the write.
+    try:
+        from svod_output_hygiene import apply_to_dataframe as _hygiene_apply
+        df_out, _hygiene_changes = _hygiene_apply(df_out)
+        if _hygiene_changes:
+            print(f"   🧹 Output hygiene: {len(_hygiene_changes)} adjustment(s)")
+            for _hc in _hygiene_changes:
+                print(f"      {_hc}")
+    except Exception as _hyg_err:
+        print(f"   ⚠ Output hygiene pass skipped: {_hyg_err}")
+
     output_folder = Path(p['output_dir']) if p.get('output_dir') else Path.home() / "Desktop" / "attribution"
     output_folder = output_folder if isinstance(output_folder, Path) else Path(output_folder)
     output_folder.mkdir(parents=True, exist_ok=True)
