@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# Reject pushes that would ship a broken templates/index.html to origin.
+#
+# The pre-commit hook can be bypassed with `git commit --no-verify` and
+# does not fire when templates/index.html is not staged (a bulk commit
+# made via `git add -A` in another session can slip through with a
+# stale index.html). This hook fires on every `git push`, validates the
+# tip of every branch being pushed, and blocks any push that would
+# degrade templates/index.html on origin.
+#
+# What this catches:
+#   - anchor-missing / <script>-imbalance / tail-truncation regressions
+#     that snuck past pre-commit (--no-verify, or committed in another
+#     clone without the hooks installed)
+#   - stale-working-tree clobbers: the pushed tip's templates/index.html
+#     is > 5% smaller than origin/main's version (2026-08-24 commit
+#     8c746970 "Publish pending work to main" pattern)
+#
+# Bypass with `git push --no-verify` ONLY in a documented emergency
+# (e.g. rolling back to a known-good tip and you know the shrink is
+# intentional). The GitHub Actions `validate` check is still a required
+# merge gate as a final backstop.
+
+set -eu
+
+remote="$1"
+url="$2"
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Read pushed refs from stdin. Format (one per line):
+#   <local ref> <local sha> <remote ref> <remote sha>
+while read -r local_ref local_sha remote_ref remote_sha; do
+    # Skip deletions.
+    if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+        continue
+    fi
+
+    # Find templates/index.html at the pushed sha. Handle both
+    # submodule-root ("templates/index.html") and parent-repo-relative
+    # ("bg-webapp/templates/index.html") shapes so this works if the
+    # hook ever gets copied into the parent repo too.
+    html_path=""
+    for candidate in "templates/index.html" "bg-webapp/templates/index.html"; do
+        if git cat-file -e "${local_sha}:${candidate}" 2>/dev/null; then
+            html_path="$candidate"
+            break
+        fi
+    done
+    if [ -z "$html_path" ]; then
+        continue
+    fi
+
+    echo "[pre-push] validating $html_path at $local_ref ($local_sha)..."
+
+    # -- Layer 1: shrink-vs-origin/main hard block ------------------------
+    # Only meaningful for pushes to main / dev. For feature-branch pushes
+    # we still run the structural validator below but skip the shrink
+    # gate (feature branches routinely diverge from main).
+    case "$remote_ref" in
+        refs/heads/main|refs/heads/dev)
+            # Refresh origin/main so the comparison uses the truly-live
+            # size, not a stale cached one. Silent + short timeout so
+            # this doesn't slow pushes when the network is fine.
+            git fetch --quiet origin main 2>/dev/null || true
+
+            pushed_size=$(git cat-file -s "${local_sha}:${html_path}" 2>/dev/null || echo 0)
+            origin_size=$(git cat-file -s "origin/main:${html_path}" 2>/dev/null || echo 0)
+
+            if [ "$origin_size" -gt 0 ] && [ "$pushed_size" -lt "$origin_size" ]; then
+                shrink=$(( (origin_size - pushed_size) * 100 / origin_size ))
+                if [ "$shrink" -gt 5 ]; then
+                    echo ""
+                    echo "[pre-push] PUSH BLOCKED: shrink-vs-origin/main."
+                    echo ""
+                    echo "  ref:         $local_ref -> $remote_ref"
+                    echo "  pushed sha:  $local_sha"
+                    echo "  pushed size: $pushed_size bytes"
+                    echo "  origin/main: $origin_size bytes"
+                    echo "  shrink:      ${shrink}% smaller"
+                    echo ""
+                    echo "  This is the classic 'stale working tree clobber'"
+                    echo "  pattern. Someone else pushed to origin/main while"
+                    echo "  your session was open, and your commit would revert"
+                    echo "  their work."
+                    echo ""
+                    echo "  Recover:"
+                    echo "    git fetch origin main"
+                    echo "    git log --oneline HEAD..origin/main -- $html_path"
+                    echo "        # shows what you'd clobber"
+                    echo "    git rebase origin/main"
+                    echo "        # replay your work on top of theirs"
+                    echo ""
+                    echo "  If INTENTIONAL (large deletion refactor):"
+                    echo "    git push --no-verify"
+                    exit 1
+                fi
+            fi
+            ;;
+    esac
+
+    # -- Layer 2: structural validator on the pushed tip ------------------
+    # Extract the pushed index.html to a scratch dir and run the
+    # validator there. The validator's find_index_html() discovers
+    # the extracted file. The freshness check inside the validator
+    # silently skips there (no git context) - we already did the shrink
+    # check above with the full repo context.
+    tmp_dir="$(mktemp -d)"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$tmp_dir'" EXIT INT TERM
+
+    mkdir -p "$tmp_dir/templates"
+    git show "${local_sha}:${html_path}" > "$tmp_dir/templates/index.html"
+
+    # Use the tip's validator so any new anchors added in this push are
+    # enforced against it (self-consistent check).
+    if git cat-file -e "${local_sha}:scripts/validate_index_html.py" 2>/dev/null; then
+        git show "${local_sha}:scripts/validate_index_html.py" > "$tmp_dir/validate_index_html.py"
+    else
+        cp scripts/validate_index_html.py "$tmp_dir/"
+    fi
+
+    if ! (cd "$tmp_dir" && python3 validate_index_html.py); then
+        echo ""
+        echo "[pre-push] PUSH BLOCKED: templates/index.html at $local_ref"
+        echo "[pre-push] fails structural validation. Fix the errors above,"
+        echo "[pre-push] commit the fix, and push again."
+        echo ""
+        echo "[pre-push] To bypass (not recommended), rerun with --no-verify."
+        exit 1
+    fi
+
+    rm -rf "$tmp_dir"
+    trap - EXIT INT TERM
+done
+
+exit 0

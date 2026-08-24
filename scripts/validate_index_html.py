@@ -49,6 +49,12 @@ Checks performed
     previous HEAD version. Big deletions in a single commit are
     almost always accidental; small trims are legitimate. Only warns
     because deliberate large refactors do happen.
+7.  Optional (warn, or fail if ``VALIDATE_STRICT_SHRINK=1``): file
+    shrunk by more than 5% vs ``origin/main``. Catches the specific
+    "stale working tree about to clobber newer work" pattern that hit
+    us on 2026-08-24 with commit 8c746970. Uses the LOCAL refs cache
+    only (no ``git fetch``) so pre-commit stays fast; pre-push fetches
+    origin/main itself before invoking the validator with strict mode.
 
 Exit codes
 ----------
@@ -340,6 +346,67 @@ def check_shrink_vs_head(cur_bytes: int, head_bytes: int) -> str | None:
     return None
 
 
+def origin_main_size_bytes(path: Path) -> int | None:
+    """Return the size of the file at ``origin/main`` (local refs only).
+
+    Uses the LOCAL refs cache only - does NOT ``git fetch`` so
+    pre-commit stays fast (< 500 ms). Callers who need up-to-date
+    origin should fetch first (the pre-push hook does).
+
+    Returns None if origin/main is not in the local refs, or if git
+    isn't reachable.
+    """
+    try:
+        rel = str(path)
+        # Try both possible prefixes so this works from the submodule
+        # root (templates/index.html) or from the parent repo
+        # (bg-webapp/templates/index.html).
+        for git_path in (rel, rel.replace("bg-webapp/", "", 1)):
+            try:
+                out = subprocess.run(
+                    ["git", "cat-file", "-s", f"origin/main:{git_path}"],
+                    capture_output=True, check=True, text=True, timeout=5,
+                )
+                return int(out.stdout.strip())
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
+                    ValueError):
+                continue
+        return None
+    except Exception:
+        return None
+
+
+def check_shrink_vs_origin_main(cur_bytes: int, origin_bytes: int) -> str | None:
+    """Return a WARNING message if the file shrank sharply vs origin/main.
+
+    Distinct from ``check_shrink_vs_head`` because HEAD is the LAST
+    LOCAL commit - if your session has been open for a while, HEAD is
+    stale and comparing against it hides clobbers. origin/main is
+    "what is actually live" and comparing against it catches the
+    stale-working-tree clobber pattern that hit us on 2026-08-24 with
+    commit 8c746970 ("Publish pending work to main") which reverted
+    9,158 lines of newer work because the committing session had a
+    stale index.html.
+
+    When ``VALIDATE_STRICT_SHRINK=1`` is set in the environment, the
+    caller (e.g. the pre-push hook) should treat this as a hard error
+    instead of a warning. The caller decides - this function only
+    returns the message.
+    """
+    if origin_bytes <= 0:
+        return None
+    shrink = 1.0 - (cur_bytes / origin_bytes)
+    if shrink > MAX_SHRINK_FRACTION:
+        return (f"file is {shrink*100:.1f}% smaller than origin/main "
+                f"({origin_bytes:,} -> {cur_bytes:,} bytes). This is the "
+                f"'stale working tree about to clobber newer work' "
+                f"signature. Run `git fetch && git status` and confirm "
+                f"your tree is up to date before committing. If this is "
+                f"an intentional large deletion, document it in the "
+                f"commit message.")
+    return None
+
+
 def main() -> int:
     path = find_index_html()
     if path is None:
@@ -386,6 +453,20 @@ def main() -> int:
         warn = check_shrink_vs_head(len(src_bytes), head_bytes)
         if warn:
             warnings.append(warn)
+
+    # Freshness check vs origin/main. Pre-commit runs this as a warning
+    # (fast, best-effort, no fetch). Pre-push runs the validator with
+    # VALIDATE_STRICT_SHRINK=1 to promote the warning to a hard error,
+    # because at push time we KNOW what's about to land on the remote
+    # and a materially smaller tree is a clobber, not a refactor.
+    origin_bytes = origin_main_size_bytes(path)
+    if origin_bytes is not None:
+        msg = check_shrink_vs_origin_main(len(src_bytes), origin_bytes)
+        if msg:
+            if os.environ.get("VALIDATE_STRICT_SHRINK") == "1":
+                errors.append("(strict-shrink) " + msg)
+            else:
+                warnings.append(msg)
 
     if warnings:
         print("[validate] WARNINGS (not blocking):")

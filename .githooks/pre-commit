@@ -8,27 +8,68 @@
 #   - tail truncation (file no longer ends with </html>)
 #   - <script> tag imbalance (dashboard freeze at 0%)
 #   - missing critical DOM ids / function names that have been silently
-#     dropped by past feature commits (mobile layer, boot handlers, etc.)
+#     dropped by past feature commits (mobile layer, boot handlers,
+#     Prometheus chatbot, story-mode panels, etc.)
+#   - working-tree shrunk materially vs origin/main (warning only in
+#     pre-commit; hard block in pre-push - see .githooks/pre-push)
 #
-# Bypass in emergencies with `git commit --no-verify`, but the CI Action
-# (.github/workflows/validate-index-html.yml) will still catch it on push.
+# Bypass in emergencies with `git commit --no-verify`, but the pre-push
+# hook (.githooks/pre-push) and the CI Action
+# (.github/workflows/validate-index-html.yml) will still catch it before
+# any bad content reaches origin.
 
 set -eu
 
-# Only fire when templates/index.html is actually staged.
-if ! git diff --cached --name-only | grep -qE '^templates/index\.html$'; then
+STAGED=""
+if git diff --cached --name-only | grep -qE '^templates/index\.html$'; then
+    STAGED=1
+fi
+
+# Case A: templates/index.html IS staged. Run the full validator and
+# hard-block on any error. This is the original behavior.
+if [ -n "$STAGED" ]; then
+    echo "[pre-commit] templates/index.html is staged; running validator..."
+    if ! python3 scripts/validate_index_html.py; then
+        echo ""
+        echo "[pre-commit] COMMIT BLOCKED."
+        echo "[pre-commit] Fix the errors above, re-stage, and commit again."
+        echo "[pre-commit] To bypass (not recommended), rerun with --no-verify."
+        echo "[pre-commit] Note: pre-push will still validate before pushing."
+        exit 1
+    fi
     exit 0
 fi
 
-echo "[pre-commit] templates/index.html is staged; running validator..."
-
-# The validator prints its own errors; we just need to propagate exit.
-if ! python3 scripts/validate_index_html.py; then
+# Case B: templates/index.html is DIRTY in the working tree but NOT
+# staged for this commit. Warn (do not block) - a subsequent
+# `git add -A`, `git commit -am`, or "Publish pending work" bulk commit
+# will sweep it up, and if the working tree is stale (behind origin/main)
+# it will clobber whoever pushed to main while your session was open.
+#
+# This is the exact pattern behind commit 8c746970 on 2026-08-24 which
+# deleted 9,158 lines from templates/index.html by publishing a stale
+# working tree that had never been rebased on origin/main.
+if ! git diff --quiet -- templates/index.html 2>/dev/null; then
+    cur_bytes=$(wc -c < templates/index.html 2>/dev/null || echo 0)
+    origin_bytes=$(git cat-file -s origin/main:templates/index.html 2>/dev/null || echo 0)
     echo ""
-    echo "[pre-commit] COMMIT BLOCKED."
-    echo "[pre-commit] Fix the errors above, re-stage, and commit again."
-    echo "[pre-commit] To bypass (not recommended), rerun with --no-verify."
-    exit 1
+    echo "[pre-commit] WARNING: templates/index.html has UNSTAGED changes."
+    echo "[pre-commit]   working tree: $cur_bytes bytes"
+    if [ "$origin_bytes" -gt 0 ]; then
+        echo "[pre-commit]   origin/main:  $origin_bytes bytes"
+        if [ "$origin_bytes" -gt 0 ] && [ "$cur_bytes" -lt "$origin_bytes" ]; then
+            shrink=$(( (origin_bytes - cur_bytes) * 100 / origin_bytes ))
+            if [ "$shrink" -gt 5 ]; then
+                echo "[pre-commit]   working tree is ${shrink}% SMALLER than origin/main."
+                echo "[pre-commit]   This is the stale-working-tree clobber signature."
+                echo "[pre-commit]   Run: git fetch origin main && git status"
+                echo "[pre-commit]   before any subsequent 'git add -A' or 'git commit -am'."
+            fi
+        fi
+    fi
+    echo "[pre-commit] This commit is going through because index.html is"
+    echo "[pre-commit] not staged. But a future bulk commit will pick it up."
+    echo ""
 fi
 
 exit 0
