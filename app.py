@@ -45476,6 +45476,16 @@ def _normalize_cut_items(raw_items, dma_list=None):
             if cid in seen:
                 continue
             seen.add(cid)
+            # Explicit requested range rides on the cut def so the
+            # synthesis engine can allocate partially-covered panel
+            # buckets proportionally (Jenna 2026-08-24; e.g. '18-30'
+            # takes all of 18-24 plus 6/10 of 25-34 for sizing).
+            _m_rng = _re.match(r'^\s*(\d{1,2})\s*-\s*(\d{1,3})\s*$',
+                               label)
+            if _m_rng and 0 <= int(_m_rng.group(1)) \
+                    < int(_m_rng.group(2)) <= 120:
+                extra['age_range'] = [int(_m_rng.group(1)),
+                                      int(_m_rng.group(2))]
             cuts.append({'cut_id': cid, 'label': f'Ages {label}',
                          'name_label': label,
                          'kind': 'age_band', 'pin_category': 'AGE',
@@ -45973,6 +45983,59 @@ def _fmt_est_count(n):
     return str(n)
 
 
+# Archetype-neutral prior fractions for pre-build cut estimate chips
+# (Jenna 2026-08-24: cut estimates must derive from expected cohort
+# fractions applied to the TU estimate, never generic bands - a male
+# cut of a 31,847-individual TU quotes ~13-18K, not 27K-40K). The
+# strategist's est_share (its read of THIS audience) wins when it is
+# plausible for the cut type; otherwise these US-adult-mix priors
+# apply. Post-build, the deterministic parent-row fraction governs
+# (migration/addon_cut_synthesis.deterministic_cut_fraction).
+_CUT_PRIOR_GENDER = {'female': 0.52, 'male': 0.48}
+_CUT_PRIOR_AGE_BUCKET = {
+    '17 AND UNDER': 0.021, '18-24': 0.117, '25-34': 0.179,
+    '35-44': 0.168, '45-54': 0.157, '55-64': 0.161, '65 OR OLDER': 0.197,
+}
+_CUT_PRIOR_DMA = 0.031  # one large market's share; strategist read wins
+
+
+def _expected_cut_fraction(rec):
+    """Expected cohort fraction for one cut rec, pre-build.
+
+    Order: the strategist's est_share when plausible for the cut type,
+    else the archetype-neutral prior for that type. Behavioral cuts
+    with no usable est_share return None (no chip - there is no
+    parent row or prior to size them from). The POST-build guarantee
+    is the deterministic parent-row fraction; this only shapes the
+    estimated chip so it lands in the same ballpark.
+    """
+    kind = str(rec.get('kind') or '').strip().lower()
+    est = rec.get('est_share')
+    try:
+        est = float(est) if est is not None else None
+    except (TypeError, ValueError):
+        est = None
+    if kind == 'gender':
+        prior = _CUT_PRIOR_GENDER.get(
+            str(rec.get('cut_id') or '').strip().lower(), 0.50)
+        lo_c, hi_c = 0.20, 0.80
+    elif kind in ('generation', 'age_band'):
+        prior = sum(_CUT_PRIOR_AGE_BUCKET.get(str(b).strip().upper(), 0.0)
+                    for b in (rec.get('pin_buckets') or []))
+        prior = prior or 0.25
+        lo_c, hi_c = max(0.02, prior * 0.35), min(0.90, prior * 2.6)
+    elif kind == 'dma':
+        prior = _CUT_PRIOR_DMA
+        lo_c, hi_c = 0.004, 0.30
+    else:
+        # Behavioral / unknown: no prior exists; only a plausible
+        # strategist estimate can size the chip.
+        return est if (est and 0 < est <= 0.95) else None
+    if est is not None and lo_c <= est <= hi_c:
+        return est
+    return prior
+
+
 def _soften_precise_stats(text):
     """Make any percentage quoted in generated copy read as
     approximate (2026-08-19 Jenna: 'if we say female skews 67% we
@@ -46127,15 +46190,19 @@ def _synth_chat_cut_strategist(draft):
             skips.append({'label': str(s['label']).strip(),
                           'why': _soften_precise_stats(
                               str(s.get('why') or '').strip())})
-    # Thinness guard: drop recs whose implied cut sample is too thin
-    # to read reliably; be honest about it in the skips. Sizes are
-    # carried as a RANGE (est_share is an estimate - the real cut
-    # sample derives from the finished parent's actual mix, so we
-    # never quote a point the data would have to hit).
+    # Thinness guard + estimate chips. Sizes are carried as a RANGE
+    # derived from an EXPECTED cohort fraction applied to the TU
+    # estimate (Jenna 2026-08-24) - the strategist's est_share when
+    # plausible, else archetype-neutral priors (_expected_cut_fraction)
+    # - then banded by the same _estimated_audience_range helper every
+    # other estimate surface uses (13-17% band, messy endpoints). The
+    # real cut sample derives post-build from the finished parent's
+    # actual cohort rows, so we never quote a point the data would
+    # have to hit.
     if tu > 0:
         kept = []
         for r in recs:
-            share = r.get('est_share') or 0
+            share = _expected_cut_fraction(r)
             est_n = int(tu * share) if share else None
             if est_n is not None and est_n < 1500:
                 skips.append({
@@ -46145,8 +46212,10 @@ def _synth_chat_cut_strategist(draft):
                             "read at this audience size")})
                 continue
             if est_n is not None:
-                r['est_lo'] = int(est_n * 0.8)
-                r['est_hi'] = int(est_n * 1.2)
+                _rng = _estimated_audience_range(est_n)
+                if _rng:
+                    r['est_lo'] = _rng['low']
+                    r['est_hi'] = _rng['high']
             kept.append(r)
         recs = kept
     recs = recs[:4]
@@ -48056,7 +48125,7 @@ def _spec_from_draft(draft):
             if not c.get('cut_id') or not c.get('pin_category') \
                     or not c.get('pin_buckets'):
                 continue
-            _clean_cuts.append({
+            _cc = {
                 'cut_id': str(c['cut_id']),
                 'label': str(c.get('label') or c['cut_id']),
                 'name_label': str(c.get('name_label')
@@ -48064,7 +48133,19 @@ def _spec_from_draft(draft):
                 'kind': str(c.get('kind') or 'demo'),
                 'pin_category': str(c['pin_category']).upper(),
                 'pin_buckets': [str(b) for b in c['pin_buckets']],
-            })
+            }
+            # Explicit age range rides through so the engine can size
+            # partially-covered AGE buckets proportionally
+            # (Jenna 2026-08-24 deterministic cut sample fractions).
+            _ar = c.get('age_range')
+            if (isinstance(_ar, (list, tuple)) and len(_ar) == 2):
+                try:
+                    _lo, _hi = int(_ar[0]), int(_ar[1])
+                    if 0 <= _lo < _hi <= 120:
+                        _cc['age_range'] = [_lo, _hi]
+                except (TypeError, ValueError):
+                    pass
+            _clean_cuts.append(_cc)
         if _clean_cuts:
             spec['addon_cuts'] = _clean_cuts
     # If Claude proposed clickstream_signals at interpret time (for a
