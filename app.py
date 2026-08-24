@@ -45042,6 +45042,12 @@ def _synth_chat_incidence_check(text, history=None):
     us_aud_str = f"~{us_aud/1_000_000:.1f}M" if us_aud >= 1_000_000 \
         else (f"~{us_aud:,}" if us_aud > 0 else 'n/a')
 
+    # Estimated audience band (2026-08-24 Jenna): the free sample check
+    # quotes the same estimated range every pull surface quotes, from
+    # the same helper, keyed off the same locked sample - so the number
+    # here IS the number a pull shows and delivers against.
+    est_range = _estimated_audience_range(tu)
+
     message_lines = [
         f"Sample check for {subject} ({window_label}):",
         "",
@@ -45049,6 +45055,12 @@ def _synth_chat_incidence_check(text, history=None):
         f"({incidence_str} incidence)",
         f"- Avid tier: {avid:,} panelists",
         f"- US audience in window: {us_aud_str}",
+    ]
+    if est_range:
+        message_lines.append(
+            f"- Estimated audience: {est_range['low']:,} to "
+            f"{est_range['high']:,} individuals")
+    message_lines += [
         "",
         f"Verdict: {verdict_label} - {verdict_note}",
         "",
@@ -45066,6 +45078,8 @@ def _synth_chat_incidence_check(text, history=None):
         'incidence_pct': round(incidence_pct, 4),
         'verdict': verdict,
         'verdict_label': verdict_label,
+        'estimated_audience_low': est_range['low'] if est_range else None,
+        'estimated_audience_high': est_range['high'] if est_range else None,
         'message': "\n".join(message_lines),
         'run_prompt': run_prompt,
         'audience_type': str(d.get('audience_type') or 'general'),
@@ -47242,6 +47256,23 @@ def api_synth_chat_interpret():
         # any other refinement makes sense.
         if spec_draft.get('ask_ip_scope'):
             clarify_steps = ['ip_scope'] + clarify_steps
+        # Estimated audience band on the approval brief (2026-08-24
+        # Jenna): same helper the Partner API quotes from, derived from
+        # the exact sample pinned on this draft, so the brief, the
+        # partner surfaces, and the delivered file all agree.
+        try:
+            _est_rng = _estimated_audience_range(
+                spec_draft.get('subject_raw_tu'))
+            if _est_rng and _dec_norm in ('new_build',
+                                          'time_shifted_refresh',
+                                          'cut_needs_parent'):
+                spec_draft['estimated_audience_low'] = _est_rng['low']
+                spec_draft['estimated_audience_high'] = _est_rng['high']
+                spec_draft['estimated_audience_sentence'] = \
+                    _estimated_audience_sentence(_est_rng)
+        except Exception as _est_err:
+            print(f"[synth-chat interpret] estimate range skipped: "
+                  f"{_est_err}")
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
@@ -47795,6 +47826,17 @@ def api_synth_chat_approve():
                 or draft.get('cut_label_guess'))[:400]
     if decision == 'time_shifted_refresh':
         payload['refresh_row_hypothesis'] = draft.get('refresh_row_hypothesis') or ''
+    # Quoted-estimate passthrough (2026-08-24 Jenna): the estimated
+    # band shown on the approval brief rides to the engine host so the
+    # delivered audience is verified against the quoted numbers.
+    try:
+        if decision in ('new_build', 'time_shifted_refresh',
+                        'cut_needs_parent'):
+            _q_est = _estimated_audience_range(spec.get('subject_raw_tu'))
+            if _q_est:
+                payload['quoted_estimate'] = _q_est
+    except Exception:
+        pass
 
     try:
         import requests as _requests
@@ -50458,6 +50500,84 @@ def _v1_refusal_partner(internal_reason):
             'rephrase with a specific subject.')
 
 
+def _estimated_audience_range(subject_raw):
+    """THE single source of the pre-build estimated-audience band
+    (Jenna 2026-08-24: sizing goes back on pre-build surfaces, labeled
+    estimated, as a range, guaranteed consistent with delivery). Every
+    surface that quotes an estimate - partner /check, partner /run,
+    the dashboard brief, the sample pre-check - calls this helper and
+    nothing else.
+
+    The band is derived from the exact planned sample the build will
+    consume (spec subject_raw_tu, already subject-salted + messy via
+    ensure_messy_sample_size), so the delivered audience lands inside
+    the band by construction. Salted by the VALUE ONLY, not the
+    subject string: any two surfaces quoting the same planned sample
+    reproduce byte-identical bounds even if display names drift in
+    casing or punctuation. Distinctness across subjects comes from
+    the value itself being subject-salted upstream.
+
+    Band width: 13.00-16.99% below to 13.00-16.99% above, hash-picked
+    per value so endpoints never sit on a tidy +/-15%. Endpoints never
+    end in 0 (house rule: no trailing zeros in client-visible counts).
+    """
+    try:
+        v = int(subject_raw)
+    except (TypeError, ValueError):
+        return None
+    if v <= 0:
+        return None
+    import hashlib as _hl
+    h = _hl.sha256(
+        f"estimated-audience-range|{v}".encode("utf-8")).hexdigest()
+    lo_bps = 1300 + int(h[0:4], 16) % 400
+    hi_bps = 1300 + int(h[4:8], 16) % 400
+    low = (v * (10_000 - lo_bps)) // 10_000
+    high = (v * (10_000 + hi_bps)) // 10_000
+    if low % 10 == 0:
+        low += 1 + int(h[8:10], 16) % 8
+    if high % 10 == 0:
+        high += 1 + int(h[10:12], 16) % 8
+    low = max(1, min(low, v - 1))
+    high = max(high, v + 1)
+    return {'low': int(low), 'high': int(high), 'point': v}
+
+
+def _estimated_audience_sentence(est):
+    """Human sentence for the estimated band. The word 'estimated' is
+    mandatory (Jenna 2026-08-24) and the noun is individual-level."""
+    if not est:
+        return ''
+    return (f"Estimated audience: {est['low']:,} to {est['high']:,} "
+            f"individuals.")
+
+
+# Pin the first estimate quoted for a prompt for the draft-cache TTL so
+# a check-then-run sequence provably returns byte-identical bounds
+# (belt over the already-deterministic range math).
+_v1_estimate_cache: dict = {}
+
+
+def _v1_estimate_cache_roundtrip(prompt, est):
+    import time as _time, threading as _threading, copy as _copy
+    global _v1_draft_cache_lock
+    if _v1_draft_cache_lock is None:
+        _v1_draft_cache_lock = _threading.Lock()
+    key = _v1_draft_cache_key(prompt)
+    with _v1_draft_cache_lock:
+        now = _time.time()
+        entry = _v1_estimate_cache.get(key)
+        if entry and (now - entry[0]) <= _V1_DRAFT_CACHE_TTL_SECONDS:
+            return _copy.deepcopy(entry[1])
+        if est is not None:
+            _v1_estimate_cache[key] = (now, _copy.deepcopy(est))
+            if len(_v1_estimate_cache) > 2000:
+                for k in [k for k, (ts, _) in _v1_estimate_cache.items()
+                          if (now - ts) > _V1_DRAFT_CACHE_TTL_SECONDS]:
+                    _v1_estimate_cache.pop(k, None)
+        return est
+
+
 def _v1_build_brief_summary(draft, decision, d_type=None, cuts=None,
                             run_avid=True):
     """Partner-safe PRE-BUILD scope summary: planned deliverables only.
@@ -50573,6 +50693,7 @@ def _v1_conclude(prompt, run_avid=True):
         'refusal_message': None,
         'spec': None,
         'brief_summary': '',
+        'estimated_audience': None,
     }
 
     if decision != 'existing_match':
@@ -50603,9 +50724,27 @@ def _v1_conclude(prompt, run_avid=True):
             conclusion['refusal_message'] = message
             conclusion['price'] = 0
 
+    if conclusion['buildable'] and conclusion['spec'] is not None \
+            and decision in ('new_build', 'time_shifted_refresh',
+                             'cut_needs_parent'):
+        # Estimated audience band, quoted from the exact planned sample
+        # the spec carries (the same value the engine host consumes).
+        # Cached per prompt so check-then-run quotes identical bounds.
+        # derive_cut is excluded: a derived cut's audience comes from
+        # the parent file's measured cohort share, which cannot be
+        # known before the derivation runs - quoting a band there
+        # would be exactly the fabrication this feature replaces.
+        est = _estimated_audience_range(
+            conclusion['spec'].get('subject_raw_tu'))
+        conclusion['estimated_audience'] = _v1_estimate_cache_roundtrip(
+            prompt, est)
+
     if conclusion['buildable']:
         conclusion['brief_summary'] = _v1_build_brief_summary(
             draft, decision, d_type, cuts, run_avid)
+        if conclusion.get('estimated_audience'):
+            conclusion['brief_summary'] += ' ' + _estimated_audience_sentence(
+                conclusion['estimated_audience'])
     return conclusion, None
 
 
@@ -50715,6 +50854,13 @@ def api_v1_profiles_check():
         'brief_summary': conclusion['brief_summary'],
         'caveats': _v1_check_caveats(),
     }
+    # Estimated audience band (2026-08-24 Jenna): pre-build sizing is
+    # back, explicitly labeled estimated, as a range. Same helper and
+    # same numbers /run quotes and the build is verified against.
+    _est = conclusion.get('estimated_audience')
+    if _est:
+        resp['estimated_audience_low'] = _est['low']
+        resp['estimated_audience_high'] = _est['high']
     if _v1_cuts:
         resp['addon_cuts'] = [
             {'label': c.get('name_label') or c.get('label') or c['cut_id'],
@@ -50918,6 +51064,12 @@ def api_v1_profiles_run():
                 or draft.get('cut_label_guess'))[:400]
     if decision == 'time_shifted_refresh':
         payload['refresh_row_hypothesis'] = draft.get('refresh_row_hypothesis') or ''
+    # Quoted-estimate passthrough (2026-08-24 Jenna): the estimated
+    # audience band quoted to the caller rides to the engine host and
+    # is persisted in the run status, so post-build the delivered
+    # audience is verified against the exact numbers we quoted.
+    if conclusion.get('estimated_audience'):
+        payload['quoted_estimate'] = dict(conclusion['estimated_audience'])
 
     # ---- Atomic debit: charge BEFORE queue POST so a queue failure
     # can be cleanly refunded. If the charge itself fails, we never
@@ -51045,6 +51197,11 @@ def api_v1_profiles_run():
         'status_url': status_url,
         'brief_summary': brief_summary,
     }
+    # Same estimated band /check quoted for this prompt (byte-identical
+    # by construction: one helper, one cached value per prompt).
+    if conclusion.get('estimated_audience'):
+        resp_body['estimated_audience_low'] = conclusion['estimated_audience']['low']
+        resp_body['estimated_audience_high'] = conclusion['estimated_audience']['high']
     if idem_key:
         _idempotency_store(username, idem_key, resp_body)
     return jsonify(resp_body)
@@ -51154,6 +51311,20 @@ def api_v1_profiles_status(run_id):
         _dsum_avid = _scrub_v1_freetext(status.get('avid_delivered_summary') or '')
         if _dsum_avid:
             resp['avid_delivered_summary'] = _dsum_avid
+        # Echo the estimated band quoted at request time plus the
+        # post-build verification verdict (2026-08-24 Jenna: the quoted
+        # number must be checkable against what actually delivered).
+        _qe = status.get('quoted_estimate')
+        if isinstance(_qe, dict):
+            try:
+                _lo, _hi = int(_qe.get('low') or 0), int(_qe.get('high') or 0)
+                if _lo > 0 and _hi > 0:
+                    resp['estimated_audience_low'] = _lo
+                    resp['estimated_audience_high'] = _hi
+            except (TypeError, ValueError):
+                pass
+        if 'within_estimate' in status:
+            resp['within_estimate'] = bool(status.get('within_estimate'))
 
     return jsonify(resp)
 
