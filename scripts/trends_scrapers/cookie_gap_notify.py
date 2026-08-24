@@ -133,6 +133,14 @@ def notify_cookie_gap(source: str, domain: str,
         f'cd "{repo_root}" && '
         f"python3 scripts/trends_scrapers/donate_cookies.py {domain}"
     )
+    # One-time assisted auto-login: opens a visible browser, auto-fills
+    # the Keychain-stored credentials, and lets the operator finish any
+    # 2FA/CAPTCHA by hand. After that the persistent profile keeps the
+    # session alive and the daily job re-donates it with no interaction.
+    setup_cmd = (
+        f'cd "{repo_root}" && '
+        f"python3 -m scripts.trends_scrapers.trends_auto_login --setup {domain}"
+    )
     install_cmd = f'cd "{repo_root}" && bash scripts/trends_scrapers/macos_url_handler/install.sh'
 
     subject = f"Re-donate cookies for {domain} ({source} dark)"
@@ -150,6 +158,10 @@ def notify_cookie_gap(source: str, domain: str,
         f"    {cwcookie_url}\n\n"
         f"[2] Copy-paste into any Terminal on your Mac:\n"
         f"    {terminal_cmd}\n\n"
+        f"[3] Or, if this site keeps logging you out, do a one-time "
+        f"assisted sign-in so the login persists and refreshes itself "
+        f"from then on:\n"
+        f"    {setup_cmd}\n\n"
     )
     if reason:
         body_text += f"Detail: {reason}\n\n"
@@ -199,6 +211,14 @@ def notify_cookie_gap(source: str, domain: str,
               border-radius:6px;padding:10px 12px;font-size:12.5px;
               overflow-x:auto;user-select:all;margin:0 0 14px;"
 ><code>{terminal_cmd}</code></pre>
+
+  <p style="margin:16px 0 4px;font-weight:600;">If this site keeps
+     logging you out, do a one-time assisted sign-in so the login
+     persists and refreshes itself from then on:</p>
+  <pre style="background:#f4f4f5;border:1px solid #e4e4e7;
+              border-radius:6px;padding:10px 12px;font-size:12.5px;
+              overflow-x:auto;user-select:all;margin:0 0 14px;"
+><code>{setup_cmd}</code></pre>
 
   {reason_html}
 

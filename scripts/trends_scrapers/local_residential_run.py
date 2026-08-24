@@ -150,11 +150,36 @@ def _refresh_cookies() -> int:
     return proc.returncode
 
 
+def _auto_login_refresh() -> int:
+    """Best-effort: sign into the Keychain-stored sites (reusing the
+    persistent login profile) and donate those sessions. Runs AFTER
+    the real-Chrome donation so a managed/confirmed session wins over a
+    possibly-stale Chrome cookie for the same domain. --no-refresh
+    because this batch runs every scraper itself right after. Never
+    blocks the run: a missing Keychain, no stored creds, or a login
+    wall just means those domains fall back to whatever cookies are
+    already in S3 (and the engine emails the operator to re-setup)."""
+    logger.info("auto-login: refreshing Keychain-stored sessions ...")
+    cmd = [sys.executable, '-m',
+           'scripts.trends_scrapers.trends_auto_login', '--no-refresh']
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                           cwd=str(Path(__file__).resolve().parents[2]))
+    if proc.stdout:
+        logger.info("[auto_login stdout] %s", proc.stdout.strip())
+    if proc.stderr:
+        logger.info("[auto_login stderr] %s", proc.stderr.strip())
+    if proc.returncode != 0:
+        logger.info("auto-login exited %d; continuing with existing cookies",
+                    proc.returncode)
+    return proc.returncode
+
+
 def _run_all() -> int:
     """Refresh donated cookies from local Chrome, then run every
     RESIDENTIAL_SCRAPERS entry. Returns 0 if at least one scraper
     succeeded, 1 if all failed."""
     _refresh_cookies()
+    _auto_login_refresh()
     ok_count = 0
     for module_name, label in RESIDENTIAL_SCRAPERS:
         rc = _run_scraper(module_name, label)

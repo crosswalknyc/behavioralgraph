@@ -378,7 +378,32 @@ def main() -> int:
                      help='Skip the automatic post-donation data refresh '
                           '(used by local_residential_run, which runs the '
                           'full scraper batch itself right after donating).')
+    ap.add_argument('--auto-login', action='store_true',
+                     help='Sign in automatically using credentials stored in '
+                          'the macOS Keychain and donate the resulting '
+                          'session, instead of reading your live Chrome. See '
+                          'trends_auto_login / trends_login_store.')
+    ap.add_argument('--setup', action='store_true',
+                     help='With --auto-login: open a visible browser so you '
+                          'can finish any 2FA / CAPTCHA once; the persistent '
+                          'profile keeps the session afterward.')
     args = ap.parse_args()
+
+    # Auto-login path delegates to the Keychain-backed engine. Run via
+    # `-m` so its package-relative imports resolve regardless of whether
+    # THIS script was launched as a file or a module.
+    if args.auto_login or args.setup:
+        import subprocess
+        cmd = [sys.executable, '-m', 'scripts.trends_scrapers.trends_auto_login']
+        if args.setup:
+            cmd.append('--setup')
+        if args.dry_run:
+            cmd.append('--dry-run')
+        if args.no_refresh:
+            cmd.append('--no-refresh')
+        cmd += args.domains
+        return subprocess.run(
+            cmd, cwd=str(Path(__file__).resolve().parents[2])).returncode
 
     domains = args.domains or DEFAULT_DOMAINS
     print(f"Donating cookies for {len(domains)} domain(s) "
