@@ -112,6 +112,37 @@ REQUIRED_ANCHORS: list[tuple[str, str]] = [
      "parses profile filenames into base + cohort/year suffix"),
     ('function _baseCohortLabel',
      "single chokepoint for Total Universe / Casual Fan labeling"),
+    # Prometheus floating chatbot (2026-08-20). Wiped 2026-08-24 by commit
+    # 8c746970 ("resource center UI rework with payload cleanup") which
+    # bulk-published a stale working-tree state that deleted 9,158 lines
+    # from this file. User-visible failure: "I dont see the chatbot on my
+    # screen" (Jenna, 2026-08-24 11:08 PDT). Fixed in 8e87a691. Adding
+    # these anchors so any future commit that drops the widget or its
+    # entry points gets blocked at pre-commit + CI.
+    ('id="prometheusLauncher"',
+     "Prometheus chatbot floating launcher (bottom-right on every page)"),
+    ('id="prometheusWidget"',
+     "Prometheus chatbot expanded chat widget"),
+    ('id="prometheusCollapseBtn"',
+     "Prometheus chatbot header collapse button"),
+    ('prometheusExpand(',
+     "prometheusExpand() JS entry point - opens the chat widget"),
+    ('id="customAnalysisTabContentChatbotProfileIQ"',
+     "Chatbot Profile IQ tab under Analysis IQ (landing stub for the widget)"),
+    # Story-mode Journey IQ panels (SPE Cross-Window, UFC x Paramount+,
+    # AMC). Same 2026-08-24 wipe. One anchor per major panel is enough
+    # to catch a full-block deletion; individual card-level renames
+    # inside a panel are legit and should not fire the check.
+    ('id="jiqUfcTabBar"',
+     "UFC x Paramount+ story-mode tab bar (Journey IQ)"),
+    ('id="jiqUfcCaseCard"',
+     "UFC x Paramount+ story-mode case card (Journey IQ)"),
+    ('id="jiqSpeTabBar"',
+     "SPE Cross-Window story-mode tab bar (Journey IQ)"),
+    ('id="jiqSpeCaseCard"',
+     "SPE Cross-Window story-mode case card (Journey IQ)"),
+    ('id="jiqAmcCaseCard"',
+     "AMC story-mode case card (Journey IQ)"),
 ]
 
 # Anchors we DO NOT want in the file (false negatives). Left empty for
