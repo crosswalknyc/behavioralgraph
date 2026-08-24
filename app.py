@@ -49244,14 +49244,20 @@ def _partner_credit_preflight(username: str, min_credits: int):
 # /run that follows a /check rides the SAME draft and therefore reaches
 # the SAME conclusion (and saves the second interpret call).
 #
-# In-memory per server instance, same trade-off as the idempotency
-# cache: a cross-instance miss just falls back to a fresh interpret
-# (pre-fix behavior). Not an override surface - callers cannot see or
-# influence the cache.
+# In-memory per server process, PLUS a best-effort S3 layer (one small
+# object per prompt hash under system/v1_interpret_cache/) so the
+# check-then-run guarantee holds across server processes and instances.
+# Live probe 2026-08-24 proved the in-memory layer alone does not span
+# processes: two /check calls for the same prompt landed on different
+# processes, re-interpreted, and quoted different audience estimates -
+# exactly the inconsistency the cache exists to prevent. The S3 layer
+# closes that gap; an S3 failure just falls back to a fresh interpret.
+# Not an override surface - callers cannot see or influence the cache.
 # --------------------------------------------------------------------
 _v1_draft_cache: dict = {}   # {prompt_sha: (ts_epoch, draft, candidates)}
 _v1_draft_cache_lock = None
 _V1_DRAFT_CACHE_TTL_SECONDS = 900
+_V1_DRAFT_CACHE_S3_PREFIX = 'system/v1_interpret_cache/'
 
 
 def _v1_draft_cache_key(prompt: str) -> str:
@@ -49267,15 +49273,34 @@ def _v1_draft_cache_get(prompt: str):
     key = _v1_draft_cache_key(prompt)
     with _v1_draft_cache_lock:
         entry = _v1_draft_cache.get(key)
-        if not entry:
-            return None
-        ts, draft, candidates = entry
-        if (_time.time() - ts) > _V1_DRAFT_CACHE_TTL_SECONDS:
-            _v1_draft_cache.pop(key, None)
-            return None
-        # Deep-copy on the way out: the promoters and _spec_from_draft
-        # mutate the draft in place and must never dirty the cache.
-        return _copy.deepcopy(draft), _copy.deepcopy(candidates)
+        if entry:
+            ts, draft, candidates = entry
+            if (_time.time() - ts) > _V1_DRAFT_CACHE_TTL_SECONDS:
+                _v1_draft_cache.pop(key, None)
+            else:
+                # Deep-copy on the way out: the promoters and
+                # _spec_from_draft mutate the draft in place and must
+                # never dirty the cache.
+                return _copy.deepcopy(draft), _copy.deepcopy(candidates)
+    # Process-local miss - consult the S3 layer so a /run that follows
+    # a /check served by a different process still rides the same
+    # interpretation.
+    try:
+        obj = s3_client.get_object(
+            Bucket=S3_BUCKET, Key=_V1_DRAFT_CACHE_S3_PREFIX + key + '.json')
+        payload = json.loads(obj['Body'].read().decode('utf-8') or '{}')
+        ts = float(payload.get('ts') or 0)
+        draft = payload.get('draft')
+        candidates = payload.get('candidates') or []
+        if isinstance(draft, dict) and \
+                (_time.time() - ts) <= _V1_DRAFT_CACHE_TTL_SECONDS:
+            with _v1_draft_cache_lock:
+                _v1_draft_cache[key] = (ts, _copy.deepcopy(draft),
+                                        _copy.deepcopy(candidates))
+            return _copy.deepcopy(draft), _copy.deepcopy(candidates)
+    except Exception:
+        pass
+    return None
 
 
 def _v1_draft_cache_put(prompt: str, draft, candidates):
@@ -49286,15 +49311,29 @@ def _v1_draft_cache_put(prompt: str, draft, candidates):
     if not isinstance(draft, dict):
         return
     key = _v1_draft_cache_key(prompt)
+    now = _time.time()
     with _v1_draft_cache_lock:
-        _v1_draft_cache[key] = (_time.time(), _copy.deepcopy(draft),
+        _v1_draft_cache[key] = (now, _copy.deepcopy(draft),
                                 _copy.deepcopy(candidates or []))
         if len(_v1_draft_cache) > 2000:
-            now = _time.time()
             expired = [k for k, (ts, _, _) in _v1_draft_cache.items()
                        if (now - ts) > _V1_DRAFT_CACHE_TTL_SECONDS]
             for k in expired:
                 _v1_draft_cache.pop(k, None)
+    # Best-effort S3 mirror (one object per prompt hash - no
+    # read-modify-write contention). Drafts come from the interpret
+    # step's JSON, so they are JSON-serializable by construction.
+    try:
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=_V1_DRAFT_CACHE_S3_PREFIX + key + '.json',
+            Body=json.dumps({'ts': now, 'draft': draft,
+                             'candidates': candidates or []},
+                            default=str).encode('utf-8'),
+            ContentType='application/json',
+        )
+    except Exception:
+        traceback.print_exc()
 
 
 def _v1_interpret(prompt):
