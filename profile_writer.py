@@ -182,6 +182,7 @@ def write_profile_csv(
     gate_raise_on_fail: bool = False,
     verbose: bool = True,
     s3_client=None,
+    keep_avid_row: Optional[bool] = None,
 ) -> dict:
     """Canonical write path for any profile CSV heading to
     `s3://dashboard-inputs/<s3_key>`.
@@ -239,9 +240,18 @@ def write_profile_csv(
                 print(f"  [profile_writer] run_all_enforcers subject="
                       f"{subject!r} category={category!r} "
                       f"year={year!r}")
+            # AVID FAN keep/strip (2026-08-24 reasoned-era reversal):
+            # TUs keep their reasoned AVID FAN row; derived cuts never
+            # carry one. Cut deliverables are always named
+            # '{Subject} - {Cut}' (avid-and-cut-skin rule 6b), so a
+            # ' - ' in the s3_key basename is the cut signature.
+            # Callers can override explicitly.
+            if keep_avid_row is None:
+                keep_avid_row = " - " not in os.path.basename(s3_key or "")
             df, n_enforcer_changes = run_all_enforcers(
                 df, subject, brand_category=category, verbose=verbose,
                 target_year=(year if apply_anachronism else None),
+                keep_avid_row=keep_avid_row,
             )
         except Exception as e:
             print(f"  [profile_writer] run_all_enforcers raised "

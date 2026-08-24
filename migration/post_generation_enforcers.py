@@ -3643,10 +3643,33 @@ def strip_url_variant_seed_rows(df, subject, verbose=True):
 # SUBJECT). Idempotent -- no-op on files that already lack the rows.
 # ============================================================================
 
-def strip_avid_casual_fan_rows(df, subject, verbose=True):
-    """Drop rows where Column is 'AVID FAN' or 'CASUAL FAN'. Also handles
-    close variants ('SUPER FAN', 'SUPERFAN', 'CORE FAN') for hygiene --
-    matches the ``fan_cols`` set BG.py has referenced since inception.
+def strip_avid_casual_fan_rows(df, subject, verbose=True,
+                                 keep_avid_row=False):
+    """Drop retired fan rows. CASUAL FAN (plus SUPER FAN / SUPERFAN /
+    CORE FAN hygiene variants) is stripped ALWAYS, everywhere: by the
+    data model the TU IS the casual cohort, so a casual row is
+    definitionally redundant.
+
+    AVID FAN semantics REVERSED 2026-08-24 (Jenna, verbatim approval
+    "Go with what you recommend", consciously reversing her 2026-07-20
+    "remove the avid fan/casual fan rows" directive): TUs carry a
+    reasoned AVID FAN row again (migration/avid_share_reasoner.py,
+    one Claude call per fresh TU) so avid cuts get the same
+    deterministic TU anchor mandated for gender/age/geo cuts
+    (deterministic_avid_fraction = parent row BP / 100). Every
+    hash-era row was stripped from S3 the same day, so any AVID FAN
+    row on a current file is reasoned-era.
+
+    ``keep_avid_row``:
+      * True  -- TU write paths. profile_writer auto-detects TU keys
+                 (no ' - ' cut suffix in the basename); the BG.py
+                 save-gate passes True explicitly (BG.py builds TUs).
+                 The AVID FAN row is preserved (deduped to one row).
+      * False (default) -- derived cuts and every unthreaded legacy
+                 caller: AVID FAN is stripped alongside CASUAL FAN. A
+                 cut carrying its own AVID FAN row is meaningless (the
+                 cut IS the avid slice, or reads its anchor from the
+                 parent TU at derive time).
 
     Returns (df, n_rows_removed).
     """
@@ -3655,18 +3678,27 @@ def strip_avid_casual_fan_rows(df, subject, verbose=True):
     if 'Column' not in df.columns:
         return df, 0
 
-    FAN_ROW_COLUMNS = {'AVID FAN', 'CASUAL FAN', 'SUPER FAN', 'SUPERFAN',
-                       'CORE FAN'}
+    ALWAYS_STRIP = {'CASUAL FAN', 'SUPER FAN', 'SUPERFAN', 'CORE FAN'}
     col_upper = df['Column'].astype(str).str.strip().str.upper()
-    fan_mask = col_upper.isin(FAN_ROW_COLUMNS)
+    fan_mask = col_upper.isin(ALWAYS_STRIP)
+    if keep_avid_row:
+        # Keep exactly ONE AVID FAN row -- extra copies are an
+        # ingestion defect; keep the first.
+        avid_idx = list(df.index[col_upper == 'AVID FAN'])
+        if len(avid_idx) > 1:
+            fan_mask = fan_mask | df.index.isin(avid_idx[1:])
+    else:
+        fan_mask = fan_mask | (col_upper == 'AVID FAN')
     n = int(fan_mask.sum())
     if n == 0:
         return df, 0
 
     if verbose:
         removed_labels = sorted(set(col_upper[fan_mask].tolist()))
+        kept_note = (" (AVID FAN kept: reasoned-era TU anchor, "
+                     "Jenna 2026-08-24)" if keep_avid_row else "")
         print(f"   🗑️  strip_avid_casual_fan_rows: dropped {n} fan-row(s) "
-              f"({', '.join(removed_labels)}) -- retired per Jenna 2026-07-20")
+              f"({', '.join(removed_labels)}){kept_note}")
 
     df = df.loc[~fan_mask].reset_index(drop=True)
     return df, n
@@ -8812,7 +8844,8 @@ def dedupe_same_column_value(df, subject, verbose=True):
 
 
 def run_all_enforcers(df, subject, brand_category=None, verbose=True,
-                       target_year=None, follower_ceiling=None):
+                       target_year=None, follower_ceiling=None,
+                       keep_avid_row=False):
     """Run every enforcer in order. Returns (df, total_changes).
 
     target_year (optional): if provided (e.g. 2022 for a `Gen_Pop_2022.csv`
@@ -9539,15 +9572,18 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
     except Exception as e:
         print(f"   ⚠️ enforcer apply_platform_pin failed: {e}")
 
-    # 2026-07-20 (Jenna): retire AVID FAN / CASUAL FAN rows from every
-    # profile IQ output. Runs LAST-mutating (after every row-touching
+    # Fan-row semantics (REVISED 2026-08-24, Jenna "Go with what you
+    # recommend"): CASUAL FAN stripped always, everywhere (the TU IS the
+    # casual cohort). AVID FAN kept on TUs when the caller threads
+    # keep_avid_row=True (profile_writer auto-detects TU keys; BG.py
+    # save-gate passes True), stripped on derived cuts and unthreaded
+    # legacy callers. Runs LAST-mutating (after every row-touching
     # enforcer + after apply_platform_pin) and just before the read-only
-    # validate_demo_sum_100 check. Downstream consumers that used to read
-    # these rows (avid_fan_row_by_row Claude signal, audience_cut_synthesis
-    # deterministic cohort_fraction) have graceful fallbacks -- see the
-    # docstring on strip_avid_casual_fan_rows for the full rationale.
+    # validate_demo_sum_100 check. See strip_avid_casual_fan_rows'
+    # docstring for the full reversal rationale.
     try:
-        df, n = strip_avid_casual_fan_rows(df, subject, verbose=verbose)
+        df, n = strip_avid_casual_fan_rows(df, subject, verbose=verbose,
+                                           keep_avid_row=keep_avid_row)
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer strip_avid_casual_fan_rows failed: {e}")

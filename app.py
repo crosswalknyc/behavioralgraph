@@ -44186,6 +44186,66 @@ def _parent_window_label(s3_key):
     return label
 
 
+_PARENT_AVID_EST_CACHE: dict = {}
+
+
+def _parent_avid_estimate(s3_key):
+    """Planned avid-cut audience read off the parent profile's own
+    AVID FAN row (2026-08-24: profiles carry a per-subject avid share
+    row again, so a request for an avid cut off an existing parent can
+    quote a real estimate band instead of skipping the chip - the cut
+    is sized from exactly this row at build time, so the quoted range
+    matches what the build delivers).
+
+    Returns int (parent sample x avid share) or None when the parent
+    has no AVID FAN row (built before 2026-08-24; no backfill), the
+    row fails the [2.0, 60.0] sanity window that the build-side read
+    also enforces, or the head read fails - callers then skip the
+    chip, same as before. Head-range read + cache mirror
+    _parent_window_label."""
+    key = str(s3_key or '').strip()
+    if not key:
+        return None
+    if key in _PARENT_AVID_EST_CACHE:
+        return _PARENT_AVID_EST_CACHE[key]
+    est = None
+    try:
+        import boto3 as _b3
+        import csv as _csv
+        import io as _io
+        _s3 = _b3.client('s3', region_name='us-east-2')
+        head = _s3.get_object(Bucket='dashboard-inputs', Key=key,
+                              Range='bytes=0-16383')['Body'].read()
+        text = head.decode('utf-8', errors='replace')
+        avid_bp = None
+        parent_sample = None
+        for row in _csv.reader(_io.StringIO(text)):
+            try:
+                col = (row[0] or '').strip().upper()
+                if col == 'AVID FAN' and avid_bp is None and len(row) > 2:
+                    v = float(str(row[2]).replace('%', '').strip())
+                    if 2.0 <= v <= 60.0:
+                        avid_bp = v
+                if col in ('BRAND INPUT', 'SAMPLE SIZE') \
+                        and parent_sample is None and len(row) > 4:
+                    n = int(float(str(row[4]).replace(',', '').strip()))
+                    if n > 0:
+                        parent_sample = n
+            except (ValueError, IndexError):
+                continue
+            if avid_bp is not None and parent_sample:
+                break
+        if avid_bp is not None and parent_sample:
+            est = max(1, int(round(parent_sample * avid_bp / 100.0)))
+    except Exception as e:
+        try:
+            print(f"[avid-estimate] parent read failed for {key!r}: {e}")
+        except Exception:
+            pass
+    _PARENT_AVID_EST_CACHE[key] = est
+    return est
+
+
 def _apply_event_window_to_draft(draft, text, decision=None,
                                  history=None):
     """Detect + resolve an event-scoped window on one interpret draft.
@@ -48032,6 +48092,25 @@ def api_synth_chat_interpret():
                 spec_draft['estimated_audience_high'] = _est_rng['high']
                 spec_draft['estimated_audience_sentence'] = \
                     _estimated_audience_sentence(_est_rng)
+            elif _dec_norm == 'derive_cut' \
+                    and str(spec_draft.get('derive_type')
+                            or '').strip().lower() == 'avid' \
+                    and spec_draft.get('existing_match_s3_key'):
+                # Avid cut off an existing parent (2026-08-24): the
+                # parent carries its own avid share row, which is the
+                # exact fraction the build sizes the cut from - quote
+                # the band from it so the estimate matches delivery.
+                # Parents without the row skip the chip, same as
+                # before.
+                _av_est = _parent_avid_estimate(
+                    spec_draft.get('existing_match_s3_key'))
+                _av_rng = _estimated_audience_range(_av_est) \
+                    if _av_est else None
+                if _av_rng:
+                    spec_draft['estimated_audience_low'] = _av_rng['low']
+                    spec_draft['estimated_audience_high'] = _av_rng['high']
+                    spec_draft['estimated_audience_sentence'] = \
+                        _estimated_audience_sentence(_av_rng)
         except Exception as _est_err:
             print(f"[synth-chat interpret] estimate range skipped: "
                   f"{_est_err}")
@@ -52350,14 +52429,27 @@ def _v1_conclude(prompt, run_avid=True):
         # Estimated audience band, quoted from the exact planned sample
         # the spec carries (the same value the engine host consumes).
         # Cached per prompt so check-then-run quotes identical bounds.
-        # derive_cut is excluded: a derived cut's audience comes from
-        # the parent file's measured cohort share, which cannot be
-        # known before the derivation runs - quoting a band there
-        # would be exactly the fabrication this feature replaces.
+        # Generic derive_cut is excluded: a derived cut's audience
+        # comes from the parent file's measured cohort share, which
+        # cannot be known before the derivation runs - quoting a band
+        # there would be exactly the fabrication this feature replaces.
+        # Exception below: an avid cut off a parent that carries its
+        # own avid share row IS knowable pre-build.
         est = _estimated_audience_range(
             conclusion['spec'].get('subject_raw_tu'))
         conclusion['estimated_audience'] = _v1_estimate_cache_roundtrip(
             prompt, est)
+    elif conclusion['buildable'] and decision == 'derive_cut' \
+            and str(d_type or '').strip().lower() == 'avid' and ex_key:
+        # Avid cut off an existing parent (2026-08-24): the parent
+        # carries a per-subject avid share row, and the build sizes
+        # the cut from exactly that row - so the quoted band matches
+        # what the derivation delivers. Parents without the row (built
+        # before the row shipped) skip the chip, same as before.
+        _av_est = _parent_avid_estimate(ex_key)
+        if _av_est:
+            conclusion['estimated_audience'] = _v1_estimate_cache_roundtrip(
+                prompt, _estimated_audience_range(_av_est))
 
     if conclusion['buildable']:
         conclusion['brief_summary'] = _v1_build_brief_summary(

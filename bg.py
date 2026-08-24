@@ -24002,25 +24002,28 @@ def _demo_safe_to_csv(df, path, subject_label='', tag='', append_genpop=False):
                   f"{subject_label}")
     except Exception as _porn_err:
         print(f"   \u26A0 PORN MEDIA save-gate skipped: {_porn_err}")
-    # AVID FAN / CASUAL FAN strip (Jenna 2026-07-20 mandate; wired here
-    # 2026-08-24). run_all_enforcers has carried strip_avid_casual_fan_rows
-    # since commit e769808f, but this save-gate cherry-picks enforcers by
-    # name and never had it -- which is how 29 straggler files built
-    # 07-22..08-18 via the BG.py path shipped with hash-era fan rows.
-    # Positioned like its run_all_enforcers placement: last-mutating,
-    # after every row-touching gate above and just before the read-only
-    # rank-order sort. Idempotent no-op when no fan rows exist.
+    # Fan-row gate (wired 2026-08-24; semantics REVISED same day per
+    # Jenna "Go with what you recommend"): CASUAL FAN is stripped
+    # always -- the TU IS the casual cohort. AVID FAN is KEPT here with
+    # keep_avid_row=True because BG.py builds TUs, and TUs carry the
+    # reasoned-era AVID FAN anchor row (migration/avid_share_reasoner)
+    # that avid cuts read as their deterministic cohort fraction.
+    # Duplicate AVID FAN rows are deduped to one. Positioned like the
+    # run_all_enforcers placement: last-mutating, after every
+    # row-touching gate above and just before the read-only rank-order
+    # sort. Idempotent no-op when no fan rows exist.
     try:
         from post_generation_enforcers import (
             strip_avid_casual_fan_rows as _strip_fan_rows_sg,
         )
         df, _n_fan_sg = _strip_fan_rows_sg(
-            df, subject_label, verbose=False,
+            df, subject_label, verbose=False, keep_avid_row=True,
         )
         if _n_fan_sg:
             print(f"   \U0001F5D1 fan-row strip [{tag or 'save'}]: dropped "
-                  f"{_n_fan_sg} AVID/CASUAL FAN row(s) for {subject_label} "
-                  f"-- retired per Jenna 2026-07-20")
+                  f"{_n_fan_sg} CASUAL/duplicate fan row(s) for "
+                  f"{subject_label} (reasoned AVID FAN row kept, "
+                  f"Jenna 2026-08-24)")
     except Exception as _fan_sg_err:
         print(f"   \u26A0 fan-row strip save-gate skipped: {_fan_sg_err}")
     # Rank-order pass: sort rows within each category by BP descending
@@ -25968,22 +25971,55 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     
     final_sample_size = float(final_sample_size if final_sample_size is not None else 100000)
     print(f"📐 df_sample Percentage dtype check: sample_size={final_sample_size} type={type(final_sample_size).__name__}")
-    # AVID FAN / CASUAL FAN rows removed from df_sample 2026-08-24 (they
-    # carried the retired hash-generated values; see the note where the
-    # "ULTRA-FAST BRAND AWARENESS" block used to live, ~line 25353).
+    # AVID FAN row (2026-08-24, Jenna "Go with what you recommend"):
+    # reasoned-era replacement for the retired "ULTRA-FAST BRAND
+    # AWARENESS" hash block (which hash()'d the subject name into
+    # unreproducible 5-35 tier noise; deleted 2026-08-24, see the note
+    # at its former site ~line 25353). The share is now reasoned per
+    # subject by migration/avid_share_reasoner (one Claude call;
+    # deterministic subject-salted prior-band fallback on any API
+    # failure - never raises). TUs only: BG.py builds TUs, and genpop
+    # never carries a fan row. CASUAL FAN does not return - the TU IS
+    # the casual cohort by the data model. The save-gate fan-row strip
+    # keeps this row via keep_avid_row=True; downstream recompute
+    # passes canonicalize Raw/Proj from the same BP (Rule #3a). Label
+    # text mirrors enforce_fan_label_consistency semantics (BP at 1dp).
+    avid_share_pct = None
+    if not is_genpop:
+        try:
+            _asr_dir = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), 'migration')
+            if _asr_dir not in sys.path:
+                sys.path.insert(0, _asr_dir)
+            from avid_share_reasoner import reason_avid_share as _reason_avid
+            _avid_subject = (
+                project_name or (brands[0] if brands else '') or '').strip()
+            avid_share_pct = _reason_avid(_avid_subject, brand_category)
+            print(f"🎯 AVID FAN reasoned share for "
+                  f"{_avid_subject!r}: {avid_share_pct:.4f}%")
+        except Exception as _avid_err:
+            print(f"⚠ AVID FAN share reasoning failed "
+                  f"({type(_avid_err).__name__}: {_avid_err}); TU ships "
+                  f"without the anchor row")
+            avid_share_pct = None
+
+    _sample_cols = [
+        normalize_category_name("Sample Size"),
+        normalize_category_name("BRAND CATEGORY"),
+    ]
+    _sample_vals = [
+        f"Sample Size ({sample_start} to {sample_end}) | Behavior Study ({behavior_start} to {behavior_end})",
+        brand_category if brand_category else "UNKNOWN",
+    ]
+    _sample_pcts = [final_sample_size, 0.0]
+    if avid_share_pct is not None:
+        _sample_cols.append(normalize_category_name("AVID FAN"))
+        _sample_vals.append(f"{avid_share_pct:.1f}%")
+        _sample_pcts.append(float(avid_share_pct))
     df_sample = pd.DataFrame({
-        "Column": [
-            normalize_category_name("Sample Size"),
-            normalize_category_name("BRAND CATEGORY"),
-        ],
-        "Value": [
-            f"Sample Size ({sample_start} to {sample_end}) | Behavior Study ({behavior_start} to {behavior_end})",
-            brand_category if brand_category else "UNKNOWN",
-        ],
-        "Percentage": pd.array([
-            final_sample_size,
-            0.0,
-        ], dtype="float64"),
+        "Column": _sample_cols,
+        "Value": _sample_vals,
+        "Percentage": pd.array(_sample_pcts, dtype="float64"),
     })
     
     # SAMPLE SIZE value verified - intelligent inflation (35x max down to 1x) and capped at 10M
@@ -30433,7 +30469,11 @@ def _break_intra_category_pinning(df, project_name: str = ''):
 
         EXCLUDE = {'SAMPLE SIZE','AGE','GENDER','ETHNICITY','INCOME','EDUCATION',
                    'RELATIONSHIP','SEXUAL_ORIENTATION','PARENTAL_STATUS','OCCUPATION',
-                   'INPUT_METADATA','BRAND INPUT','BRAND CATEGORY'}
+                   'INPUT_METADATA','BRAND INPUT','BRAND CATEGORY',
+                   # 2026-08-24: reasoned AVID FAN anchor row is metadata --
+                   # its BP is the avid-cut cohort fraction and must never
+                   # be jittered. SUBJECT is the identity row.
+                   'AVID FAN','CASUAL FAN','SUBJECT'}
         cats_touched = set()
         nudges = 0
         for cat, sub in df.groupby(df['Column'].astype(str).str.upper()):
@@ -30534,6 +30574,14 @@ def _break_global_long_tail_pinning(df, project_name: str = '',
             if bp_r not in pinned_vals:
                 continue
             cat_u = str(row.get('Column', '')).strip().upper()
+            # 2026-08-24: metadata rows are never long-tail candidates.
+            # The reasoned AVID FAN anchor row's BP IS the avid-cut
+            # cohort fraction -- a jitter here would silently move
+            # every downstream cut's sample size.
+            if cat_u in {'SAMPLE SIZE', 'BRAND INPUT', 'BRAND CATEGORY',
+                         'INPUT_METADATA', 'SUBJECT', 'AVID FAN',
+                         'CASUAL FAN'}:
+                continue
             val_u = str(row.get('Value', '')).strip().upper()
             seed = f"{project_name}|{cat_u}|{val_u}|tail-jitter".encode('utf-8')
             h = hashlib.blake2b(seed, digest_size=8).digest()
