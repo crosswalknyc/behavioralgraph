@@ -21480,8 +21480,8 @@ https://www.instagram.com/p/..."></textarea>
                                     <button type="button" onclick="synthChatChipFill('Refresh [existing profile] for the latest 12 months')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Refresh a profile</button>
                                 </div>
                                 <textarea id="synthChatInput" placeholder="What profile do you want? (audience, cohort, brand, talent, or segment)" rows="3" style="width: 100%; box-sizing: border-box; padding: 0.6rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.9rem; resize: vertical; min-height: 72px; font-family: inherit;" onkeydown="if(event.key==='Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); synthChatSubmit(); }"></textarea>
-                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
-                                    <span id="synthChatInputHint" style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.7;">Enter to send &middot; Shift + Enter for new line</span>
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-width: 0;">
+                                    <span id="synthChatInputHint" style="font-size: 0.66rem; color: var(--text-secondary); opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0;">Enter to send &middot; Shift + Enter for new line</span>
                                     <div style="display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto;">
                                         <button type="button" id="synthChatSuggestBtn" onclick="synthChatSuggestionsShow()" title="Show suggestion chips" aria-label="Show suggestion chips" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap; flex: 0 0 auto;">Suggestions</button>
                                         <button type="button" id="synthChatMicBtn" onclick="synthChatMicToggle()" title="Talk to text" aria-label="Talk to text">
@@ -59762,7 +59762,7 @@ https://www.instagram.com/p/..."></textarea>
             });
         }
 
-        // Refresh the 'queue: X pending, Y running, Z completed'
+        // Refresh the 'builds: X pending, Y running, Z completed'
         // badge next to the chat header. Called once on boot,
         // every 5s while the tab is visible, and immediately
         // after synthChatApproveBrief so the pending count jumps
@@ -59776,7 +59776,7 @@ https://www.instagram.com/p/..."></textarea>
                     if (!badge || !d || !d.queue || !d.queue.queue) return;
                     var q = d.queue.queue;
                     badge.textContent =
-                        'queue: ' + q.pending + ' pending, ' + q.running + ' running, ' + q.completed + ' completed';
+                        'builds: ' + q.pending + ' pending, ' + q.running + ' running, ' + q.completed + ' completed';
                 })
                 .catch(function(){});
         }
@@ -61668,7 +61668,7 @@ https://www.instagram.com/p/..."></textarea>
                 var _bTu = d.subject_raw_tu;
                 var _bEst = (typeof _bTu === 'number' && _bTu > 0 &&
                              decision !== 'existing_match' && decision !== 'derive_cut')
-                    ? ' \u00b7 est. ' + _bTu.toLocaleString('en-US') + ' panelists'
+                    ? ' \u00b7 est. ' + _bTu.toLocaleString('en-US') + ' individuals'
                     : '';
                 var _bWin = (_winDistinct > 1 && _winByIdx[i])
                     ? ' \u00b7 ' + _winByIdx[i]
@@ -61779,6 +61779,31 @@ https://www.instagram.com/p/..."></textarea>
         // existing parsers need no changes.
         function _synthChatClarifyOptions(step, draft) {
             var d = draft || synthChatCurrentDraft || {};
+            if (step === 'identity') {
+                // 2026-08-24 (Furious defect): confirm WHAT the
+                // subject is before anything else is scoped.
+                var _idD = d.identity_data || {};
+                var _idT = String(_idD.title || d.subject ||
+                    'this title');
+                var _idM = String(_idD.medium || 'title');
+                var _idP = String(_idD.platform || '').trim();
+                return [
+                    {label: 'Yes, the ' + (_idP ? _idP + ' ' : '') +
+                        _idM, send: 'yes, ' + _idT},
+                    {label: 'No, something else - let me clarify',
+                     send: 'no, something else'}
+                ];
+            }
+            if (step === 'existing_profile') {
+                // 2026-08-24 (SharkNinja directive): the ask names a
+                // profile we already have - use it or pull fresh.
+                return [
+                    {label: 'Use the existing profile',
+                     send: 'use the existing profile'},
+                    {label: 'Pull fresh with different dates',
+                     send: 'pull fresh'}
+                ];
+            }
             if (step === 'ip_scope') {
                 // 2026-08-21: broad vs consumers-only must be
                 // clickable like every other clarify step. The
@@ -61921,6 +61946,34 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         function _synthChatClarifyQuestion(step) {
+            if (step === 'identity') {
+                // 2026-08-24 (Furious defect): the subject name is
+                // ambiguous or collides with a better-known property.
+                // Confirm the exact entity before scoping anything.
+                var _idDraft = synthChatCurrentDraft || {};
+                var _idData = _idDraft.identity_data || {};
+                var _idTitle = String(_idData.title ||
+                    _idDraft.subject || 'this title');
+                var _idMed = String(_idData.medium || 'title');
+                var _idPlat = String(_idData.platform || '').trim();
+                return 'Just to confirm the subject: ' + _idTitle +
+                    ', the ' + _idMed +
+                    (_idPlat ? ' on ' + _idPlat : '') +
+                    '? Pick below, or tell me what you meant.';
+            }
+            if (step === 'existing_profile') {
+                // 2026-08-24 (SharkNinja directive): an existing
+                // profile already covers this subject.
+                var _epDraft = synthChatCurrentDraft || {};
+                var _epData = _epDraft.existing_profile_data || {};
+                var _epName = String(_epData.display_name ||
+                    _epDraft.subject || 'that profile');
+                var _epBuilt = String(_epData.built_label || '').trim();
+                return 'There is an existing ' + _epName + ' profile' +
+                    (_epBuilt ? ' (' + _epBuilt + ')' : '') +
+                    '. Use it as-is (ready now, no credits), or ' +
+                    'pull fresh with different dates or qualifiers?';
+            }
             if (step === 'ip_scope') {
                 // 2026-08-21: IP content (series/movie/book/podcast/
                 // game) must pick its universe - broad audience or
@@ -62066,6 +62119,15 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 st.draft = data.draft || st.draft;
                 synthChatCurrentDraft = st.draft;
+                if (data.discard) {
+                    // Identity rejected (2026-08-24): the brief is set
+                    // aside - never show an approval card for a
+                    // subject the user said is wrong.
+                    synthChatClarify = null;
+                    synthChatCurrentDraft = null;
+                    synthChatPushTurn('agent', data.message || 'Noted.');
+                    return;
+                }
                 var next = String(data.next_step || '').toLowerCase();
                 _synthChatPushQuestion(data.message || 'Noted.',
                     next, st.draft);
@@ -62278,6 +62340,13 @@ https://www.instagram.com/p/..."></textarea>
                     line = 'Building a new ' + subject + ' profile' + eta + '.';
                     break;
             }
+            // Resolved identity (2026-08-24 Furious defect): show
+            // exactly which real-world entity this build is about so a
+            // wrong resolution is visible before approving.
+            var _ridLine = String(s.resolved_identity || '').trim();
+            if (_ridLine) {
+                line = 'Subject: ' + _ridLine + '.\n\n' + line;
+            }
             var _dec = (s.decision || 'new_build').toLowerCase();
             // Time frame (2026-08-20 Jenna: the confirm card must
             // list the window). Shown for decisions that pull a
@@ -62300,7 +62369,7 @@ https://www.instagram.com/p/..."></textarea>
                         ' (' + _incStr + '% incidence).';
                 } else {
                     line += '\n\nEst. sample: ' +
-                        _tuEst.toLocaleString('en-US') + ' panelists (' +
+                        _tuEst.toLocaleString('en-US') + ' individuals (' +
                         _incStr + '% incidence).';
                 }
                 var _avEst = s.subject_raw_avid;

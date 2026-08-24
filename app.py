@@ -43370,6 +43370,55 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "Lincoln has ~0.06% Gen Pop panel reach; even a 65+ luxury-"
         "leaning audience is 1-4%, never 90%+.\n\n"
 
+        # ── Subject identity resolution (Rule added 2026-08-24 after
+        # 'run one on furious show on hulu' resolved to the Fast &
+        # Furious film franchise instead of Furious, the Hulu series.
+        # The model pattern-matched the name to its strongest prior and
+        # ignored the binding words 'show' and 'on hulu').
+        "SUBJECT IDENTITY RESOLUTION (HARD RULE - resolve WHO/WHAT the "
+        "subject is before anything else):\n"
+        "  * Medium and platform words in the request are BINDING: "
+        "'show', 'series', 'miniseries', 'docuseries', 'sitcom', "
+        "'movie', 'film', 'documentary', 'podcast', 'game', 'book', "
+        "'novel', 'album', 'on Hulu', 'on Netflix', 'on Max', 'on "
+        "Peacock', 'on Paramount+', 'on Apple TV+', etc. They constrain "
+        "WHICH real-world entity the subject is. A name that collides "
+        "with a more famous property NEVER wins over those words.\n"
+        "  * Worked failure you must never repeat: the request 'run one "
+        "on furious show on hulu' means Furious, the TV series on Hulu. "
+        "It is NOT the Fast & Furious film franchise - 'show' and 'on "
+        "hulu' are binding. Resolving to the famous lookalike because "
+        "the name pattern-matches its strongest prior is the exact "
+        "defect this rule exists to prevent.\n"
+        "  * If you cannot confidently place a content title (new or "
+        "niche titles especially), do NOT substitute a famous lookalike "
+        "as the subject. Keep the user's own words as the subject, set "
+        "`identity_confident` to false, and the flow will verify or ask "
+        "the user to confirm.\n"
+        "  * Emit these fields on EVERY draft:\n"
+        "      `resolved_title`: the exact entity this draft is about "
+        "(e.g. 'Furious').\n"
+        "      `medium`: 'series'|'movie'|'podcast'|'game'|'book'|"
+        "'album'|'franchise'|'person'|'brand'|'platform'|'cohort'|null.\n"
+        "      `platform`: the platform the request names ('Hulu') or "
+        "null.\n"
+        "      `identity_note`: when the name collides with a better-"
+        "known property, ONE line naming what this IS and what it is "
+        "NOT ('Furious, the Hulu series, not the Fast & Furious film "
+        "franchise'). Null when there is no collision risk.\n"
+        "      `identity_confident`: true ONLY when you are certain "
+        "which real-world entity this is AND that it exists as "
+        "described (right medium, right platform). False otherwise.\n"
+        "  * RATIONALE DISCIPLINE: every free-text field (persona_notes, "
+        "decision_reason, assumptions, category_note, cut labels and "
+        "rationales) must be written from the RESOLVED identity only. "
+        "If the title is niche or new, describe what the profile or cut "
+        "isolates for THIS title's audience - never invent fan history, "
+        "franchise lore, 'grew up with the series' narratives, or genre "
+        "claims borrowed from a similarly named property. Writing "
+        "'Fast & Furious franchise's core fanbase' prose on a draft "
+        "about the Hulu series Furious is the banned failure mode.\n\n"
+
         # ── Content-vs-platform classification (Rule added 2026-08-19
         # after P-Valley shipped miscategorized as STREAMING PLATFORM).
         # This is where Claude was reasoning wrong: a TV show that AIRS
@@ -43703,6 +43752,11 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"follower_ceiling\": <int or null - required if audience_type != 'general'; holds any public-metric ceiling>,\n"
         "  \"follower_platforms\": [\"instagram\", \"tiktok\", ...] or null,\n"
         "  \"is_ip_content\": <true|false - series/movie/book/podcast/game/album/franchise>,\n"
+        "  \"resolved_title\": \"exact entity this draft is about (see SUBJECT IDENTITY RESOLUTION)\",\n"
+        "  \"medium\": \"series|movie|podcast|game|book|album|franchise|person|brand|platform|cohort\" or null,\n"
+        "  \"platform\": \"platform named in the request ('Hulu')\" or null,\n"
+        "  \"identity_note\": \"one line: what this IS and is NOT, when the name collides with a better-known property\" or null,\n"
+        "  \"identity_confident\": <true|false - true ONLY when certain which real-world entity this is>,\n"
         "  \"ip_scope\": \"broad|consumers\" or null (null = ask the user; see IP AUDIENCE SCOPE),\n"
         "  \"consumer_verb\": \"viewers|readers|listeners|players\" or null,\n"
         "  \"consumers_sample_fraction\": <float 0.15-0.90 or null - consumed-share of the broad engager universe>,\n"
@@ -43850,6 +43904,16 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "existing 'Taylor Swift' TU entry directly (existing_match or "
         "time_shifted_refresh). An ask like 'avid Taylor Swift' is a cut "
         "and should map to derive_cut with derive_type='avid'.\n\n"
+
+        "NAME MATCHING IS CASE / SPACING / PUNCTUATION INSENSITIVE, and "
+        "one-letter typos still match. 'SHARKNINJA', 'SharkNinja', "
+        "'shark ninja', and 'sharknija' are all the SAME subject. If a "
+        "candidate above is the same entity as the ask under that "
+        "normalization, the decision must NEVER be new_build - pick "
+        "existing_match / time_shifted_refresh / derive_cut against "
+        "that candidate, and use the candidate's exact casing as the "
+        "subject. A near-identical filename differing only in case or "
+        "spacing is a defect.\n\n"
 
         # -- Parent-selection tiebreak --------------------------------
         # When the catalog has both a base profile ('Reba McEntire')
@@ -44374,6 +44438,20 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         except Exception:
             pass
 
+        # Normalized existing-profile match (2026-08-24 SHARKNINJA
+        # directive). Batch slices are one-shot (no clarify loop), so
+        # force existing_match / time_shifted_refresh instead of
+        # asking - a batch must never mint a near-duplicate filename
+        # differing only in case or spacing.
+        try:
+            _nm_acted, _nm_note = _enforce_normalized_existing_match(
+                spec_draft, candidates, per_prompt,
+                catalog=catalog, allow_ask=False)
+            if _nm_acted:
+                print(f"[synth-chat batch] {_nm_note}")
+        except Exception:
+            pass
+
         # Intersect-cut promoter: if the per-subject prompt looks like
         # "<parent> for <cohort>" / "<parent> -> <cohort>" and a strong
         # candidate matches the left operand, promote from new_build
@@ -44469,9 +44547,21 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
     same treatment as regex-detected batches: decision-normalized
     credits, observed run-minutes, pinned est sample, embedded-cut
     decomposition, multi-cohort recovery, and the cuts-only parent
-    promoter. Mutates and returns the draft; never raises.
+    promoter.     Mutates and returns the draft; never raises.
     """
     try:
+        # Normalized existing-profile dedupe (2026-08-24 SHARKNINJA
+        # directive): array-mode elements are one-shot, so force the
+        # match instead of asking. Uses the element's own subject as
+        # the ask (the umbrella prompt covers several subjects).
+        if catalog is not None:
+            try:
+                _enforce_normalized_existing_match(
+                    spec_draft, None,
+                    str(spec_draft.get('subject') or ''),
+                    catalog=catalog, allow_ask=False)
+            except Exception:
+                pass
         try:
             _dn, _, _ = _normalize_v1_decision(spec_draft)
         except Exception:
@@ -45051,9 +45141,9 @@ def _synth_chat_incidence_check(text, history=None):
     message_lines = [
         f"Sample check for {subject} ({window_label}):",
         "",
-        f"- Panel sample: {tu:,} panelists "
+        f"- Sample: {tu:,} individuals "
         f"({incidence_str} incidence)",
-        f"- Avid tier: {avid:,} panelists",
+        f"- Avid tier: {avid:,} individuals",
         f"- US audience in window: {us_aud_str}",
     ]
     if est_range:
@@ -45978,9 +46068,17 @@ def _synth_chat_cut_strategist(draft):
         "honest why (e.g. 'gender split is near 50/50 here, it will "
         "not change the story').\n"
         "  4. Never recommend a cut whose est_share x the total sample "
-        "would be under ~1,500 panelists.\n"
+        "would be under ~1,500 individuals.\n"
         "  5. Ground the whys in real knowledge of the subject's "
-        "actual audience. No filler.\n"
+        "actual audience. No filler. When a 'Resolved subject "
+        "identity' line is provided, every `why` must be written from "
+        "THAT identity only - never from a more famous property with "
+        "a similar name. If the identity says 'Furious, the Hulu "
+        "series, not the Fast & Furious film franchise', writing "
+        "about the Fast & Furious fanbase is the banned failure "
+        "mode. For a niche or new title, describe what the cut "
+        "isolates for THIS title's audience - no invented fan "
+        "history or borrowed franchise lore.\n"
         "  6. NEVER quote a precise percentage or count in `why` - "
         "the finished data is the only source of exact numbers. Use "
         "approximate language only: 'skews heavily female', 'roughly "
@@ -46003,8 +46101,11 @@ def _synth_chat_cut_strategist(draft):
     user_prompt = (f"Profile subject: {subject}\n"
                    f"Business goal: {goal_line}\n"
                    f"Window: {window}")
+    _rid = str(draft.get('resolved_identity') or '').strip()
+    if _rid:
+        user_prompt += f"\nResolved subject identity: {_rid}"
     if tu:
-        user_prompt += f"\nTotal-universe sample: {tu:,} panelists"
+        user_prompt += f"\nTotal-universe sample: {tu:,} individuals"
     try:
         result = _run_nflx_claude_agent(
             system_prompt=system_prompt, user_prompt=user_prompt,
@@ -46040,7 +46141,7 @@ def _synth_chat_cut_strategist(draft):
                 skips.append({
                     'label': r.get('label') or r.get('cut_id'),
                     'why': (f"would land under ~{_fmt_est_count(est_n)}"
-                            " panelists - too thin for a reliable "
+                            " individuals - too thin for a reliable "
                             "read at this audience size")})
                 continue
             if est_n is not None:
@@ -46060,7 +46161,7 @@ def _synth_chat_cut_strategist(draft):
         ln = f"{i}. {r.get('label')} (+{ADDON_CUT_CREDITS})"
         if r.get('est_lo') and r.get('est_hi'):
             ln += (f" - est. {_fmt_est_count(r['est_lo'])}-"
-                   f"{_fmt_est_count(r['est_hi'])} panelists")
+                   f"{_fmt_est_count(r['est_hi'])} individuals")
         lines.append(ln)
         if r.get('why'):
             lines.append(f"   {r['why']}")
@@ -46335,7 +46436,8 @@ def api_synth_chat_clarify():
     answer = str(body.get('answer') or '').strip()
     draft = body.get('draft') or {}
     if step not in ('goal', 'strategy', 'region', 'cuts', 'parent_link',
-                    'age_breaks', 'ip_scope') \
+                    'age_breaks', 'ip_scope', 'identity',
+                    'existing_profile') \
             or not isinstance(draft, dict):
         _chatbot_error_email('brief-chat/clarify',
                              f'bad clarify step: {step!r}',
@@ -46380,6 +46482,168 @@ def api_synth_chat_clarify():
                 msg = "Couldn't map: " + ", ".join(real) + ". " + msg
         return jsonify({'success': True, 'draft': draft,
                         'message': msg, 'next_step': 'approve'})
+
+    if step == 'identity':
+        # Subject identity confirmation (2026-08-24 Furious defect):
+        # the interpret step could not confidently place the title, so
+        # the user confirms WHAT the subject is before anything else.
+        data = draft.get('identity_data') or {}
+        title = str(data.get('title') or subject).strip()
+        medium = str(data.get('medium') or 'title').strip()
+        platform = str(data.get('platform') or '').strip()
+        where = f' on {platform}' if platform else ''
+        low = answer.lower().strip()
+        said_no = bool(_re.search(
+            r'\b(no|nope|nah|not that|something else|different|wrong|'
+            r'other)\b', low))
+        said_yes = (bool(_re.search(
+            r'\b(yes|yep|yeah|yup|correct|right|confirm(ed)?|exactly|'
+            r'that one|it is)\b', low))
+            or _collapse_for_match(low) == _collapse_for_match(title))
+        if said_no and not said_yes:
+            draft.pop('ask_identity', None)
+            draft.pop('identity_data', None)
+            return jsonify({
+                'success': True, 'draft': draft, 'discard': True,
+                'message': (
+                    "No problem - that brief is set aside, nothing "
+                    "queued. Tell me the subject with one more "
+                    "detail (what it is and where it lives - like "
+                    "'Furious, the series on Hulu') and I'll draw "
+                    "up a fresh one."),
+                'next_step': '',
+            })
+        if not said_yes:
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (f"Just to confirm the subject: {title}, "
+                            f"the {medium}{where}? Reply yes if "
+                            f"that's it, or no and tell me what you "
+                            f"meant."),
+                'next_step': 'identity',
+            })
+        draft['identity_confident'] = True
+        draft.pop('ask_identity', None)
+        draft.pop('identity_data', None)
+        try:
+            _set_resolved_identity_line(draft)
+        except Exception:
+            pass
+        head = f"Confirmed - {title}, the {medium}{where}."
+        # Continue the flow in the same order interpret queued it.
+        if draft.get('ask_existing_profile') and \
+                draft.get('existing_profile_data'):
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head,
+                            'next_step': 'existing_profile'})
+        if draft.get('ask_ip_scope'):
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head, 'next_step': 'ip_scope'})
+        if draft.get('ask_age_breaks') and draft.get('age_break_data'):
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head, 'next_step': 'age_breaks'})
+        if draft.get('ask_parent_link') and \
+                draft.get('parent_link_candidates'):
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head, 'next_step': 'parent_link'})
+        if str(draft.get('decision') or '').strip().lower() in (
+                'new_build', 'time_shifted_refresh', 'cut_needs_parent'):
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (head + " Quick scoping question: what's "
+                            "the business goal for this one? (One "
+                            "line - a pitch, a renewal, a media "
+                            "plan. Say skip to jump straight to the "
+                            "build.)"),
+                'next_step': 'goal',
+            })
+        return jsonify({'success': True, 'draft': draft,
+                        'message': head + " Review the brief below "
+                        "and approve to queue.",
+                        'next_step': 'approve'})
+
+    if step == 'existing_profile':
+        # Existing-profile confirmation (2026-08-24 SHARKNINJA
+        # directive): the ask names an entity we already have. Use the
+        # existing file (0 credits, ready now) or pull fresh.
+        data = draft.get('existing_profile_data') or {}
+        disp = str(data.get('display_name') or subject).strip()
+        low = answer.lower().strip()
+        chose_fresh = bool(_re.search(
+            r'\b(fresh|new|re\s?pull|pull|rebuild|refresh(ed)?|'
+            r'update(d)?|re\s?run|different)\b', low))
+        chose_use = bool(_re.search(
+            r'\b(use|existing|reuse|keep|grab|open|that works|works|'
+            r'yes|yep|yeah|sure|ok|okay)\b', low))
+        if chose_use and not chose_fresh:
+            draft['decision'] = 'existing_match'
+            draft['run_avid'] = False
+            draft['addon_cuts'] = []
+            draft['estimated_credits'] = int(
+                _V1_CREDITS.get('existing_match', 0))
+            draft['base_credits'] = draft['estimated_credits']
+            draft.pop('ask_existing_profile', None)
+            draft.pop('existing_profile_data', None)
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (f"Done - {disp} is ready now in the "
+                            f"Select Profile dropdown, no new run "
+                            f"needed. Approve below to confirm."),
+                'next_step': 'approve',
+            })
+        if chose_fresh and not chose_use:
+            draft['decision'] = 'time_shifted_refresh'
+            draft['run_avid'] = True
+            draft['estimated_credits'] = int(_V1_CREDITS.get(
+                'time_shifted_refresh', CREDITS_PROFILE_ANALYSIS))
+            draft['base_credits'] = draft['estimated_credits']
+            try:
+                draft['estimated_run_minutes'] = _estimate_run_minutes(
+                    'time_shifted_refresh', True)
+            except Exception:
+                pass
+            if not str(draft.get('refresh_row_hypothesis') or '').strip():
+                draft['refresh_row_hypothesis'] = (
+                    f"Fresh read of the {disp} audience over the "
+                    f"current window: brand, talent, platform, and "
+                    f"retail engagement re-checked so recent "
+                    f"launches, partnerships, and seasonal shifts "
+                    f"are reflected.")
+            draft.pop('ask_existing_profile', None)
+            draft.pop('existing_profile_data', None)
+            head = (f"Got it - fresh pull for "
+                    f"{draft.get('subject') or subject}, anchored to "
+                    f"the existing file so the numbers stay "
+                    f"comparable. It runs on Jul 1 2025 to Jun 30 "
+                    f"2026 unless you named a window - to use a "
+                    f"different one, send it as a new message (like "
+                    f"'{draft.get('subject') or subject} past 90 "
+                    f"days') and I'll re-draft.")
+            if str(draft.get('decision') or '').strip().lower() in (
+                    'new_build', 'time_shifted_refresh',
+                    'cut_needs_parent'):
+                return jsonify({
+                    'success': True, 'draft': draft,
+                    'message': (head + " Quick scoping question: "
+                                "what's the business goal for this "
+                                "one? (One line - a pitch, a "
+                                "renewal, a media plan. Say skip to "
+                                "jump straight to the build.)"),
+                    'next_step': 'goal',
+                })
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head + " Review the brief "
+                            "below and approve to queue.",
+                            'next_step': 'approve'})
+        built = str(data.get('built_label') or '').strip()
+        return jsonify({
+            'success': True, 'draft': draft,
+            'message': (f"There is an existing {disp} profile"
+                        f"{' (' + built + ')' if built else ''}. "
+                        f"Reply use it to open that one (no new "
+                        f"run), or pull fresh for an updated read."),
+            'next_step': 'existing_profile',
+        })
 
     if step == 'ip_scope':
         # IP audience scope (2026-08-21 Jenna directive): broad
@@ -47051,6 +47315,29 @@ def api_synth_chat_interpret():
         except Exception as _guard_err:
             print(f"[synth-chat interpret] guardrail error: {_guard_err}")
 
+        # Subject identity resolution (2026-08-24 Furious defect):
+        # binding medium/platform words in the ask win over a famous
+        # lookalike name. Verifies suspect content titles via web
+        # search; still-ambiguous drafts stash a confirm question.
+        try:
+            _resolve_subject_identity(spec_draft, text, allow_ask=True)
+        except Exception as _id_err:
+            print(f"[synth-chat interpret] identity error: {_id_err}")
+
+        # Normalized existing-profile match (2026-08-24 SHARKNINJA
+        # directive): same entity under case/spacing/punctuation
+        # normalization (one-typo tolerant) never silently new_builds.
+        # Stashes the use-existing vs pull-fresh question.
+        try:
+            _nm_acted, _nm_note = _enforce_normalized_existing_match(
+                spec_draft, candidates, text,
+                catalog=catalog, allow_ask=True)
+            if _nm_acted:
+                print(f"[synth-chat interpret] {_nm_note}")
+        except Exception as _nm_err:
+            print(f"[synth-chat interpret] normalized-match error: "
+                  f"{_nm_err}")
+
         # Intersect-cut promoter (2026-08-19). Same logic that runs in
         # the batch check path: if the prompt is a cut of an existing
         # profile (e.g. "Vizio for Spider-Man Moviegoers"), promote
@@ -47256,6 +47543,18 @@ def api_synth_chat_interpret():
         # any other refinement makes sense.
         if spec_draft.get('ask_ip_scope'):
             clarify_steps = ['ip_scope'] + clarify_steps
+        # Existing-profile question (2026-08-24 SHARKNINJA directive):
+        # the ask names an entity we already have - confirm use vs
+        # fresh pull before anything else is scoped.
+        if spec_draft.get('ask_existing_profile') and \
+                spec_draft.get('existing_profile_data'):
+            clarify_steps = ['existing_profile'] + clarify_steps
+        # Identity confirmation runs before EVERYTHING - what the
+        # subject even IS defines every downstream step (2026-08-24
+        # Furious defect).
+        if spec_draft.get('ask_identity') and \
+                spec_draft.get('identity_data'):
+            clarify_steps = ['identity'] + clarify_steps
         # Estimated audience band on the approval brief (2026-08-24
         # Jenna): same helper the Partner API quotes from, derived from
         # the exact sample pinned on this draft, so the brief, the
@@ -47312,11 +47611,113 @@ def _clean_queue_error_text(text):
     return t[:400]
 
 
+_HOSTMAP_CASING_CACHE = {}
+
+
+def _hostmap_canonical_casing(collapsed_key):
+    """Exact BRAND casing from reference.host_mapping for a collapsed
+    (lowercase alphanumeric) entity key. Cached per process, including
+    misses. Best-effort polish - returns None on any failure, never
+    blocks the spec build."""
+    if not collapsed_key or not collapsed_key.isalnum():
+        return None
+    if collapsed_key in _HOSTMAP_CASING_CACHE:
+        return _HOSTMAP_CASING_CACHE[collapsed_key]
+    result = None
+    try:
+        conn = _ch_connect()
+        try:
+            cur = conn.cursor()
+            # collapsed_key is guaranteed [a-z0-9] by the isalnum gate
+            # above, so inlining it is injection-safe.
+            cur.execute(
+                "SELECT BRAND FROM reference.host_mapping "
+                "WHERE lower(replaceRegexpAll(BRAND, '[^A-Za-z0-9]', '')) "
+                f"= '{collapsed_key}' AND SECTION != 'Hidden' LIMIT 1")
+            row = cur.fetchone()
+            if row and str(row[0]).strip():
+                result = str(row[0]).strip()
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    except Exception:
+        result = None
+    _HOSTMAP_CASING_CACHE[collapsed_key] = result
+    return result
+
+
+def _canonical_subject_casing(subject):
+    """Best casing for a subject entity (2026-08-24 SHARKNINJA
+    directive: 'SHARKNINJA', 'SharkNinja', 'shark ninja' must all mint
+    the same file). Priority: existing corpus casing > hostmap
+    canonical casing > sensible title-case of the user's own text.
+    Preserves any ' - <cut>' suffix verbatim."""
+    raw = str(subject or '').strip()
+    if not raw:
+        return raw
+    entity, sep, suffix = raw.partition(' - ')
+    entity = entity.strip()
+    coll = _collapse_for_match(entity)
+    if not coll:
+        return raw
+    fixed = None
+    # 1. Existing corpus casing: the catalog already has this entity.
+    try:
+        for c in _profile_catalog_for_chat():
+            cand = str(c.get('subject') or c.get('display_name')
+                       or '').split(' - ', 1)[0].strip()
+            if cand and _collapse_for_match(cand) == coll:
+                fixed = cand
+                break
+    except Exception:
+        fixed = None
+    # 2. Hostmap canonical casing.
+    if not fixed:
+        try:
+            fixed = _hostmap_canonical_casing(coll)
+        except Exception:
+            fixed = None
+    # 3. Title-case fully-lowercase words; preserve acronyms and
+    # mixed-case tokens (EST, TVOD, YouTube) and mid-name stopwords
+    # ('Fandango at Home').
+    if not fixed:
+        _stop = {'at', 'of', 'the', 'and', 'or', 'in', 'on', 'to',
+                 'from', 'for', 'by', 'vs', 'a', 'an'}
+        parts = []
+        for i, w in enumerate(entity.split()):
+            if not w.islower():
+                parts.append(w)
+            elif i > 0 and w in _stop:
+                parts.append(w)
+            else:
+                parts.append(w.capitalize())
+        fixed = ' '.join(parts) or entity
+    return fixed + ((' - ' + suffix.strip()) if sep else '')
+
+
 def _spec_from_draft(draft):
     """Convert the Claude-emitted draft into the exact spec dict shape that
     synth_engine_row_by_row.synthesize_from_spec expects on Hetzner."""
     subject = draft.get('subject') or draft.get('name') or 'Unknown Subject'
-    stem = draft.get('file_stem') or subject.replace(' ', '_').replace('/', '_')
+    # Canonical-casing choke point (2026-08-24 SHARKNINJA directive):
+    # subject + file_stem minted here flow verbatim into the worker's
+    # TU key and avid display name, so fixing the casing here fixes
+    # every downstream filename.
+    _subject_in = subject
+    try:
+        subject = _canonical_subject_casing(subject) or subject
+    except Exception:
+        subject = _subject_in
+    if subject != _subject_in:
+        try:
+            print(f"[spec-casing] subject {_subject_in!r} -> {subject!r}")
+        except Exception:
+            pass
+        stem = subject.replace(' ', '_').replace('/', '_')
+    else:
+        stem = draft.get('file_stem') or subject.replace(' ', '_').replace('/', '_')
     stem = ''.join(c for c in stem if c.isalnum() or c in '_-') or 'Profile'
     subject_rows_raw = draft.get('subject_rows') or []
     subject_rows = []
@@ -49393,6 +49794,27 @@ def _v1_interpret(prompt):
     except Exception as _guard_err:
         print(f"[v1_interpret] guardrail error: {_guard_err}")
 
+    # Subject identity resolution (2026-08-24 Furious defect): binding
+    # medium/platform words win over a famous lookalike. The partner
+    # API is one-shot (no clarify loop), so ambiguity keeps the
+    # caller's own words as the subject - never a lookalike.
+    try:
+        _resolve_subject_identity(draft, prompt, allow_ask=False)
+    except Exception as _id_err:
+        print(f"[v1_interpret] identity error: {_id_err}")
+
+    # Normalized existing-profile match (2026-08-24 SHARKNINJA
+    # directive): the same entity under case/spacing/punctuation
+    # normalization (one-typo tolerant) never new_builds. Server-side
+    # and authoritative - no request flags (no-external-overrides).
+    try:
+        _nm_acted, _nm_note = _enforce_normalized_existing_match(
+            draft, candidates, prompt, catalog=catalog, allow_ask=False)
+        if _nm_acted:
+            print(f"[v1_interpret] {_nm_note}")
+    except Exception as _nm_err:
+        print(f"[v1_interpret] normalized-match error: {_nm_err}")
+
     # Apply the same run_avid default enforcement the chatbot uses so
     # the Partner API can't be tricked into skipping the Avid cut by
     # a Claude misclassification. Directive 2026-08-17: Avid on by
@@ -50377,6 +50799,625 @@ def _maybe_ask_ip_scope(draft, prompt):
     return draft
 
 
+# --------------------------------------------------------------------
+# Subject identity resolution (2026-08-24, the Furious defect).
+#
+# LIVE DEFECT: "run one on furious show on hulu" resolved the subject
+# to the Fast & Furious film franchise. The interpret model pattern-
+# matched the name to its strongest prior and ignored the binding
+# qualifiers "show" and "on hulu". The prompt now forbids this (see
+# SUBJECT IDENTITY RESOLUTION in _synth_chat_interpret_prompts); the
+# helpers below are the server-side backstop:
+#   1. detect binding medium / platform words in the user's request,
+#   2. detect when the drafted subject carries tokens the user never
+#      typed (the lookalike-substitution signature),
+#   3. verify the title with a web-search-enabled Claude call when
+#      the resolution is suspect (content-typed subjects only, so the
+#      common talent/brand path pays zero latency),
+#   4. if still ambiguous: chatbot asks the user to confirm (clarify
+#      chip flow); the one-shot partner API keeps the user's own words
+#      as the subject rather than shipping a famous lookalike.
+# --------------------------------------------------------------------
+
+_IDENTITY_MEDIUM_WORDS = {
+    'show': 'series', 'series': 'series', 'miniseries': 'series',
+    'docuseries': 'series', 'sitcom': 'series', 'telenovela': 'series',
+    'anime': 'series', 'documentary': 'series',
+    'movie': 'movie', 'film': 'movie',
+    'podcast': 'podcast', 'game': 'game', 'videogame': 'game',
+    'book': 'book', 'novel': 'book', 'album': 'album',
+}
+_IDENTITY_MEDIUM_RE = re.compile(
+    r'\b(' + '|'.join(sorted(_IDENTITY_MEDIUM_WORDS, key=len,
+                             reverse=True)) + r')\b', re.I)
+_IDENTITY_PLATFORM_CANON = {
+    'hulu': 'Hulu', 'netflix': 'Netflix', 'hbo max': 'HBO Max',
+    'max': 'Max', 'hbo': 'HBO', 'peacock': 'Peacock',
+    'paramount plus': 'Paramount+', 'paramount+': 'Paramount+',
+    'paramount': 'Paramount+', 'disney plus': 'Disney+',
+    'disney+': 'Disney+', 'apple tv plus': 'Apple TV+',
+    'apple tv+': 'Apple TV+', 'apple tv': 'Apple TV+',
+    'prime video': 'Prime Video', 'amazon prime video': 'Prime Video',
+    'amazon prime': 'Prime Video', 'starz': 'Starz',
+    'showtime': 'Paramount+', 'tubi': 'Tubi', 'pluto tv': 'Pluto TV',
+    'roku': 'Roku', 'freevee': 'Freevee', 'crunchyroll': 'Crunchyroll',
+    'youtube': 'YouTube', 'spotify': 'Spotify', 'audible': 'Audible',
+    'steam': 'Steam', 'xbox': 'Xbox', 'playstation': 'PlayStation',
+    'nintendo': 'Nintendo', 'fx': 'FX', 'amc': 'AMC', 'nbc': 'NBC',
+    'abc': 'ABC', 'cbs': 'CBS', 'fox': 'FOX', 'bravo': 'Bravo',
+}
+_IDENTITY_PLATFORM_RE = re.compile(
+    r'\bon\s+(?:the\s+)?(' + '|'.join(
+        re.escape(k) for k in sorted(_IDENTITY_PLATFORM_CANON,
+                                     key=len, reverse=True)
+    ) + r')\b', re.I)
+# Subject tokens that carry no identity signal (our own labels, cut
+# nouns, medium nouns) - never treated as lookalike-substitution
+# evidence when absent from the user's words.
+_IDENTITY_GENERIC_TOKENS = {
+    'the', 'and', 'fan', 'fans', 'audience', 'audiences', 'viewers',
+    'listeners', 'readers', 'players', 'engagers', 'profile',
+    'universe', 'franchise', 'series', 'show', 'movie', 'film',
+    'podcast', 'game', 'book', 'album', 'season',
+}
+# Request-verb / filler tokens stripped off the head of a prompt when
+# recovering the user's own title words ("run one on furious show on
+# hulu" -> "furious show on hulu").
+_IDENTITY_LEAD_STOP_TOKENS = {
+    'run', 'build', 'make', 'create', 'do', 'pull', 'generate',
+    'launch', 'start', 'get', 'give', 'need', 'want', 'please',
+    'can', 'you', 'me', 'us', 'i', 'we', 'a', 'an', 'the', 'new',
+    'quick', 'full', 'profile', 'profiles', 'audience', 'one', 'on',
+    'of', 'for', 'about',
+}
+
+
+def _identity_signals_from_prompt(prompt):
+    """Extract binding medium / platform words and the user's own title
+    words from the raw request text. Returns
+    {medium, medium_word, platform, title_guess} (all may be None)."""
+    text = str(prompt or '')
+    sig = {'medium': None, 'medium_word': None, 'platform': None,
+           'title_guess': None}
+    m = _IDENTITY_MEDIUM_RE.search(text)
+    if m:
+        sig['medium_word'] = m.group(1).lower()
+        sig['medium'] = _IDENTITY_MEDIUM_WORDS.get(sig['medium_word'])
+    p = _IDENTITY_PLATFORM_RE.search(text)
+    if p:
+        sig['platform'] = _IDENTITY_PLATFORM_CANON.get(
+            re.sub(r'\s+', ' ', p.group(1).lower()).strip())
+    # Title guess = the user's own words with request-verbs stripped
+    # off the head and the medium/platform tail removed.
+    norm = _normalize_for_match(text)
+    if p:
+        norm = _normalize_for_match(text[:p.start()])
+    toks = norm.split()
+    while toks and toks[0] in _IDENTITY_LEAD_STOP_TOKENS:
+        toks.pop(0)
+    if sig['medium_word']:
+        # keep only the words BEFORE the medium word ("furious show" ->
+        # "furious"); if none, the words after it ("show called furious").
+        try:
+            i = toks.index(sig['medium_word'])
+            head = toks[:i]
+            tail = [t for t in toks[i + 1:]
+                    if t not in ('called', 'named', 'titled', 'on')]
+            toks = head or tail
+        except ValueError:
+            pass
+    title = ' '.join(toks).strip()
+    if title:
+        sig['title_guess'] = ' '.join(
+            w.capitalize() if not w.isupper() else w
+            for w in title.split())
+    return sig
+
+
+def _identity_tokens_missing_from_prompt(subject, prompt):
+    """Tokens in the drafted subject that the user never typed - the
+    lookalike-substitution signature ('Fast & Furious' drafted from a
+    prompt that only says 'furious' -> ['fast'])."""
+    p_norm = _normalize_for_match(prompt)
+    p_tokens = set(p_norm.split())
+    p_collapsed = p_norm.replace(' ', '')
+    missing = []
+    for t in _normalize_for_match(
+            str(subject or '').split(' - ', 1)[0]).split():
+        if len(t) < 3 or t in _IDENTITY_GENERIC_TOKENS:
+            continue
+        if t in p_tokens or t in p_collapsed:
+            continue
+        missing.append(t)
+    return missing
+
+
+def _scrub_identity_dashes(s):
+    """Em/en dashes never ship in user-facing identity copy (workspace
+    rule). Model output flows straight into the approval card and the
+    /check response, so scrub here deterministically."""
+    out = str(s or '').replace('\u2014', ' - ').replace('\u2013', ' - ')
+    return re.sub(r'  +', ' ', out).strip()
+
+
+def _set_resolved_identity_line(draft):
+    """Compose the human-readable resolved-identity line surfaced on
+    the approval card and the /check response."""
+    note = _scrub_identity_dashes(draft.get('identity_note'))
+    if note:
+        draft['identity_note'] = note
+        draft['resolved_identity'] = note
+        return
+    title = str(draft.get('resolved_title')
+                or str(draft.get('subject') or '').split(' - ', 1)[0]
+                ).strip()
+    if not title:
+        return
+    medium = str(draft.get('medium') or '').strip().lower()
+    platform = str(draft.get('platform') or '').strip()
+    line = title
+    if medium and medium not in ('person', 'brand', 'cohort'):
+        line += f', the {medium}'
+    if platform:
+        line += f' on {platform}'
+    draft['resolved_identity'] = _scrub_identity_dashes(line)
+
+
+_IDENTITY_PROSE_FIELDS = ('persona_notes', 'decision_reason',
+                          'category_note', 'refresh_row_hypothesis')
+
+
+def _scrub_identity_prose(draft, title, medium, platform):
+    """Replace free text drafted from the WRONG identity with thin but
+    correct copy. Thin-and-right beats rich-and-wrong: the verify call
+    supplies researched persona notes when it can; this is the floor."""
+    where = f' on {platform}' if platform else ''
+    noun = medium or 'title'
+    draft['persona_notes'] = (
+        f"Audience profile for {title}, the {noun}{where}, over the "
+        f"window Jul 1 2025 to Jun 30 2026. The audience shape (age, "
+        f"gender, platform mix) derives from engagement with this "
+        f"title only - no assumptions borrowed from similarly named "
+        f"properties.")
+    draft['decision_reason'] = (
+        f"Subject resolved to {title}, the {noun}{where}.")
+    draft.pop('category_note', None)
+    draft['assumptions'] = [
+        f"Subject is {title}, the {noun}{where} - confirm if you "
+        f"meant a different property with a similar name."]
+
+
+def _verify_content_identity(draft, prompt, sig):
+    """Web-search-enabled Claude call that verifies WHICH real-world
+    title the request names. Returns a dict like
+      {resolved_title, medium, platform, identity_note, confidence,
+       exists, persona_notes}
+    or None on any failure (callers fall back to the deterministic
+    floor + clarify ask)."""
+    try:
+        from claude_client import claude_messages, is_claude_reasoning_enabled
+        if not is_claude_reasoning_enabled():
+            return None
+    except Exception:
+        return None
+    subject = str(draft.get('subject') or '').strip()
+    system = (
+        "You verify which real-world entity a media-audience request "
+        "names. Medium and platform words in the request (show, "
+        "series, movie, film, podcast, game, book, 'on hulu', 'on "
+        "netflix', ...) are BINDING: they constrain which entity the "
+        "name refers to. A name that collides with a more famous "
+        "property NEVER wins over those words. Worked example: 'run "
+        "one on furious show on hulu' names Furious, the TV series "
+        "on Hulu - NOT the Fast & Furious film franchise. Use web "
+        "search to confirm the title exists as described (right "
+        "medium, right platform, releases/seasons, premise). Return "
+        "ONLY a JSON object:\n"
+        "{\n"
+        '  "resolved_title": "exact official title",\n'
+        '  "medium": "series|movie|podcast|game|book|album|franchise",\n'
+        '  "platform": "primary platform, e.g. Hulu" or null,\n'
+        '  "identity_note": "one line: what this IS and, when the name '
+        'collides with a better-known property, what it is NOT",\n'
+        '  "confidence": "high|medium|low",\n'
+        '  "exists": true|false,\n'
+        '  "persona_notes": "120-250 words describing the REAL '
+        "audience of THIS title (age/gender skew, genre pull, "
+        "platform context). Facts about this title only - no lore "
+        "from similarly named properties, no invented fan history. "
+        "Plain confident prose; never words like modeled, panel, "
+        'synthetic, AI, estimated."\n'
+        "}\n"
+        "If you cannot confirm the title exists as described, set "
+        'exists=false and confidence="low" - NEVER substitute a '
+        "famous lookalike."
+    )
+    user = (
+        f"USER REQUEST (verbatim): {prompt}\n"
+        f"DRAFTED SUBJECT (may be wrong): {subject}\n"
+        f"MEDIUM WORD IN REQUEST: {sig.get('medium_word') or 'none'}\n"
+        f"PLATFORM IN REQUEST: {sig.get('platform') or 'none'}\n"
+        f"USER'S OWN TITLE WORDS: {sig.get('title_guess') or 'unclear'}"
+    )
+    raw = ''
+    for tool in (
+        {"type": "web_search_20260209", "name": "web_search", "max_uses": 5},
+        {"type": "web_search_20250305", "name": "web_search", "max_uses": 5},
+    ):
+        try:
+            raw = claude_messages(
+                system=system, user=user,
+                model=_SYNTH_CHAT_INTERPRET_MODEL,
+                max_tokens=1600, temperature=0.2, tools=[tool])
+        except Exception:
+            raw = ''
+        if raw:
+            break
+    if not raw:
+        return None
+    try:
+        parsed = _extract_json_object(raw)
+    except Exception:
+        parsed = None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _resolve_subject_identity(draft, prompt, allow_ask=True):
+    """In-place server-side identity backstop. Runs on every draft;
+    only content-typed subjects with binding medium/platform words and
+    a suspect resolution pay the web-search verify cost.
+
+    allow_ask=True (chatbot): unresolvable ambiguity stashes a clarify
+    question (`ask_identity` + `identity_data`).
+    allow_ask=False (partner API / batch): unresolvable ambiguity keeps
+    the user's own words as the subject - never a famous lookalike."""
+    if not isinstance(draft, dict):
+        return draft
+    decision = str(draft.get('decision') or 'new_build').strip().lower()
+    if decision in ('existing_match', 'derive_cut'):
+        return draft  # anchored to an existing file's identity
+    sig = _identity_signals_from_prompt(prompt)
+    medium_field = str(draft.get('medium') or '').strip().lower()
+    content_typed = (
+        _draft_is_ip_content(draft)
+        or bool(sig['medium'])
+        or medium_field in ('series', 'movie', 'podcast', 'game',
+                            'book', 'album', 'franchise'))
+    if not content_typed:
+        _set_resolved_identity_line(draft)
+        return draft
+    # Fill identity fields the model omitted, from the request itself.
+    if sig['medium'] and not draft.get('medium'):
+        draft['medium'] = sig['medium']
+    if sig['platform'] and not draft.get('platform'):
+        draft['platform'] = sig['platform']
+    if not draft.get('resolved_title'):
+        draft['resolved_title'] = str(
+            draft.get('subject') or '').split(' - ', 1)[0].strip()
+
+    if not (sig['medium'] or sig['platform']):
+        _set_resolved_identity_line(draft)
+        return draft
+
+    subject_entity = str(draft.get('subject') or '').split(' - ', 1)[0]
+    missing = _identity_tokens_missing_from_prompt(subject_entity, prompt)
+    plat_ok = True
+    if sig['platform']:
+        want = _normalize_for_match(sig['platform']).replace(' ', '')
+        have = _normalize_for_match(
+            str(draft.get('platform') or '')).replace(' ', '')
+        home_parts = []
+        for row in (draft.get('home_platform_rows') or []):
+            if isinstance(row, (list, tuple)) and len(row) >= 2:
+                home_parts.append(
+                    _normalize_for_match(str(row[1])).replace(' ', ''))
+        home = ' '.join(home_parts)
+        plat_ok = bool(want) and (want in have or want in home)
+    confident = draft.get('identity_confident') is True
+    suspect = bool(missing) or not plat_ok or not confident
+    if not suspect:
+        _set_resolved_identity_line(draft)
+        return draft
+
+    ver = None
+    try:
+        ver = _verify_content_identity(draft, prompt, sig)
+    except Exception as e:
+        try:
+            print(f"[identity] verify call failed: {e}")
+        except Exception:
+            pass
+    conf = str((ver or {}).get('confidence') or '').strip().lower()
+    exists = (ver or {}).get('exists')
+    v_title = str((ver or {}).get('resolved_title') or '').strip()
+
+    if ver and v_title and exists is not False and conf in ('high', 'medium'):
+        subject_changed = (
+            _normalize_for_match(v_title)
+            != _normalize_for_match(subject_entity))
+        if subject_changed:
+            draft['subject'] = v_title
+            draft['name'] = v_title
+            draft.pop('file_stem', None)
+        draft['resolved_title'] = v_title
+        v_medium = str(ver.get('medium') or '').strip().lower()
+        if v_medium:
+            draft['medium'] = v_medium
+        v_platform = str(ver.get('platform') or '').strip()
+        if v_platform:
+            draft['platform'] = v_platform
+        if str(ver.get('identity_note') or '').strip():
+            draft['identity_note'] = str(ver['identity_note']).strip()
+        draft['identity_confident'] = True
+        draft['is_ip_content'] = True
+        # Correct the home-platform anchor and category when the wrong
+        # lookalike left them pointing at the wrong property.
+        if v_platform and v_medium in ('series', 'movie'):
+            rows = [r for r in (draft.get('home_platform_rows') or [])
+                    if isinstance(r, (list, tuple)) and len(r) >= 2]
+            if subject_changed or not rows:
+                draft['home_platform_rows'] = [
+                    ['STREAMING/PLATFORM', v_platform]]
+        _MEDIUM_TO_CATEGORY = {'series': 'SERIES', 'movie': 'MOVIE',
+                               'podcast': 'PODCAST', 'game': 'GAMES'}
+        want_cat = _MEDIUM_TO_CATEGORY.get(v_medium)
+        cur_cat = str(draft.get('brand_category') or '').strip().upper()
+        if want_cat and subject_changed and not cur_cat.startswith(want_cat):
+            draft['brand_category'] = want_cat
+        if subject_changed:
+            # Free text was drafted from the wrong identity - replace.
+            _scrub_identity_prose(
+                draft, v_title, draft.get('medium'), v_platform or None)
+            if str(ver.get('persona_notes') or '').strip():
+                draft['persona_notes'] = _scrub_identity_dashes(
+                    ver['persona_notes'])
+            # Subject rows drafted for the lookalike are poison - keep
+            # only the self-pin + verified platform anchor shape.
+            cat = str(draft.get('brand_category') or '').strip().upper()
+            if cat in ('SERIES', 'MOVIE'):
+                draft['subject_rows'] = [[cat, v_title]]
+                draft['extra_rows'] = []
+            try:
+                print(f"[identity] corrected subject "
+                      f"{subject_entity!r} -> {v_title!r} "
+                      f"({draft.get('medium')} on {v_platform or '?'})")
+            except Exception:
+                pass
+        _set_resolved_identity_line(draft)
+        return draft
+
+    # Verification failed or ambiguous. Deterministic floor: the
+    # subject must be built from the USER'S OWN words - a famous
+    # lookalike never survives here.
+    if missing and sig.get('title_guess'):
+        draft['subject'] = sig['title_guess']
+        draft['name'] = sig['title_guess']
+        draft.pop('file_stem', None)
+        draft['resolved_title'] = sig['title_guess']
+        _scrub_identity_prose(
+            draft, sig['title_guess'],
+            sig.get('medium') or draft.get('medium'),
+            sig.get('platform') or draft.get('platform'))
+        cat = str(draft.get('brand_category') or '').strip().upper()
+        if cat in ('SERIES', 'MOVIE'):
+            draft['subject_rows'] = [[cat, sig['title_guess']]]
+            draft['extra_rows'] = []
+        try:
+            print(f"[identity] lookalike floor: subject reset "
+                  f"{subject_entity!r} -> {sig['title_guess']!r}")
+        except Exception:
+            pass
+    draft['identity_confident'] = False
+    _set_resolved_identity_line(draft)
+    if allow_ask:
+        title = str(draft.get('resolved_title')
+                    or draft.get('subject') or '').split(' - ', 1)[0]
+        medium = str(sig.get('medium') or draft.get('medium')
+                     or 'title').strip().lower()
+        platform = str(sig.get('platform') or draft.get('platform')
+                       or '').strip()
+        draft['ask_identity'] = True
+        draft['identity_data'] = {
+            'title': title,
+            'medium': medium,
+            'platform': platform,
+        }
+        try:
+            print(f"[identity] ambiguous - asking user to confirm "
+                  f"{title!r} ({medium}"
+                  f"{' on ' + platform if platform else ''})")
+        except Exception:
+            pass
+    return draft
+
+
+# --------------------------------------------------------------------
+# Normalized existing-profile matching (2026-08-24, the SHARKNINJA
+# directive). Jenna, verbatim: "we cant have case sensitivity
+# producing differing files. it needs to recognize SHARKNINJA and
+# SharkNinja and sharknija and shark ninja are all the same thing and
+# pull the right one."
+#
+# Server-side and authoritative (no request flags, per
+# no-external-overrides.mdc): when the ask names the SAME entity as an
+# existing base profile under case / spacing / punctuation
+# normalization (plus one-letter typos), the decision must never fall
+# through as new_build. The chatbot asks the user (use existing vs
+# pull fresh); the one-shot partner API forces existing_match /
+# time_shifted_refresh by freshness.
+# --------------------------------------------------------------------
+
+def _collapse_for_match(s):
+    """Normalized string with spaces removed: the entity-identity key.
+    'SHARKNINJA' / 'SharkNinja' / 'shark ninja' -> 'sharkninja'."""
+    return _normalize_for_match(s).replace(' ', '')
+
+
+def _edit_distance_leq1(a, b):
+    """True when a and b are within one edit (insert/delete/replace).
+    O(len) - not a full DP table."""
+    if a == b:
+        return True
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return False
+    if la > lb:
+        a, b, la, lb = b, a, lb, la
+    i = j = edits = 0
+    while i < la and j < lb:
+        if a[i] == b[j]:
+            i += 1
+            j += 1
+            continue
+        edits += 1
+        if edits > 1:
+            return False
+        if la == lb:
+            i += 1
+            j += 1
+        else:
+            j += 1  # skip the extra char in the longer string
+    return True
+
+
+def _collapsed_same_entity(a, b):
+    """Same entity under collapse: exact, or one typo when the strings
+    are long enough that a single edit can't be a different real name
+    (min length 6 so 'nike' never matches 'mike')."""
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if min(len(a), len(b)) < 6:
+        return False
+    return _edit_distance_leq1(a, b)
+
+
+def _prompt_subject_collapsed(prompt):
+    """The user's own subject words, lead request-verbs stripped,
+    collapsed ('run shark ninja' -> 'sharkninja')."""
+    toks = _normalize_for_match(prompt).split()
+    while toks and toks[0] in _IDENTITY_LEAD_STOP_TOKENS:
+        toks.pop(0)
+    return ''.join(toks)
+
+
+def _enforce_normalized_existing_match(draft, candidates, prompt,
+                                       catalog=None, allow_ask=True):
+    """In-place guard: an ask that names the same entity as an existing
+    base profile (case / spacing / punctuation insensitive, one-typo
+    tolerant) must never come back new_build silently.
+
+    Scans the FULL catalog (not just the shortlist) because the token-
+    overlap shortlist can miss pure-typo asks like 'sharknija'.
+    Only fires when the ask carries no cut modifier and no explicit
+    year (cut asks route through the derive machinery untouched).
+    Mutates draft; returns (acted: bool, note: str)."""
+    if not isinstance(draft, dict):
+        return False, ''
+    decision = str(draft.get('decision') or 'new_build').strip().lower()
+    if decision != 'new_build':
+        return False, ''
+    p_norm = _normalize_for_match(prompt or '')
+    if _prompt_extract_cut_hints(p_norm):
+        return False, ''
+    if _HISTORICAL_YEAR_RE.findall(prompt or ''):
+        return False, ''
+    subj_entity = str(draft.get('subject') or '').split(' - ', 1)[0]
+    ask_keys = {k for k in (
+        _collapse_for_match(subj_entity),
+        _prompt_subject_collapsed(prompt or ''),
+    ) if k}
+    if not ask_keys:
+        return False, ''
+    from datetime import date as _date
+    current_year_str = str(_date.today().year)
+    pool = list(catalog or []) or list(candidates or [])
+    best = None
+    for c in pool:
+        if not isinstance(c, dict) or not c.get('s3_key'):
+            continue
+        if not _is_base_profile_candidate(c, current_year_str):
+            continue
+        cand_entity = str(c.get('subject') or c.get('display_name')
+                          or '').split(' - ', 1)[0]
+        cand_key = _collapse_for_match(cand_entity)
+        if not cand_key:
+            continue
+        if not any(_collapsed_same_entity(k, cand_key) for k in ask_keys):
+            continue
+        exact = cand_key in ask_keys
+        lm = c.get('last_modified') or ''
+        rank = (0 if exact else 1,
+                lm[::-1] if isinstance(lm, str) else '')
+        if best is None or rank < best[0]:
+            best = (rank, c)
+    if best is None:
+        return False, ''
+    c = best[1]
+    corpus_subject = str(c.get('subject') or c.get('display_name')
+                         or '').split(' - ', 1)[0].strip()
+    days = c.get('days_old')
+    fresh = not isinstance(days, int) or days <= SYNTH_CHAT_FRESH_DAYS
+    # Adopt the corpus casing so no near-duplicate filename can ever be
+    # minted off this draft.
+    if corpus_subject:
+        draft['subject'] = corpus_subject
+        draft['name'] = corpus_subject
+        draft.pop('file_stem', None)
+    draft['existing_match_s3_key'] = c.get('s3_key')
+    draft['existing_match_display_name'] = c.get('display_name')
+    draft['existing_match_days_old'] = days
+    draft['existing_match_last_modified'] = c.get('last_modified')
+    if allow_ask:
+        draft['decision'] = 'existing_match'
+        draft['run_avid'] = False
+        draft['ask_existing_profile'] = True
+        built_label = ''
+        try:
+            lm_raw = str(c.get('last_modified') or '')
+            if lm_raw:
+                lm_dt = datetime.fromisoformat(
+                    lm_raw.replace('Z', '+00:00'))
+                built_label = 'built ' + lm_dt.strftime('%b %-d, %Y')
+        except Exception:
+            built_label = ''
+        if not built_label and isinstance(days, int):
+            built_label = f'built {days} days ago'
+        draft['existing_profile_data'] = {
+            'display_name': c.get('display_name'),
+            's3_key': c.get('s3_key'),
+            'days_old': days,
+            'last_modified': c.get('last_modified'),
+            'built_label': built_label,
+        }
+        note = (f"Normalized-match guard: ask names the same entity as "
+                f"existing {c.get('display_name')!r} - asking use vs "
+                f"fresh pull.")
+    else:
+        draft['decision'] = 'existing_match' if fresh else 'time_shifted_refresh'
+        if not fresh and not str(
+                draft.get('refresh_row_hypothesis') or '').strip():
+            draft['refresh_row_hypothesis'] = (
+                f"Refresh of the existing {corpus_subject} profile "
+                f"({days} days old): brand, talent, platform, and "
+                f"retail engagement re-read over the current window "
+                f"so recent launches, partnerships, and seasonal "
+                f"shifts are reflected.")
+        note = (f"Normalized-match guard: ask names the same entity as "
+                f"existing {c.get('display_name')!r} - forced "
+                f"{draft['decision']} (days_old={days}).")
+    draft['decision_reason'] = (
+        f"'{subj_entity}' is the same subject as the existing "
+        f"{c.get('display_name')} profile (name match is case, "
+        f"spacing, and punctuation insensitive).")
+    try:
+        print(f"[normalized-match] {note}")
+    except Exception:
+        pass
+    return True, note
+
+
 def _normalize_v1_decision(draft):
     """Return (decision, existing_match_s3_key, derive_type).
 
@@ -50412,6 +51453,26 @@ def _normalize_v1_decision(draft):
         d_type = ''
     if decision in ('existing_match', 'time_shifted_refresh', 'derive_cut') and not ex_key:
         decision = 'new_build' if decision != 'derive_cut' else 'cut_needs_parent'
+    # Normalized-match backstop (2026-08-24 SHARKNINJA directive): a
+    # new_build that carries an existing match for the SAME entity
+    # (case / spacing / punctuation insensitive, one-typo tolerant)
+    # must never fall through as a duplicate build. Defensive - the
+    # interpret-path guard normally decides this earlier.
+    if decision == 'new_build' and ex_key and not d_type:
+        try:
+            subj_c = _collapse_for_match(
+                str(draft.get('subject') or '').split(' - ', 1)[0])
+            disp_c = _collapse_for_match(
+                str(draft.get('existing_match_display_name')
+                    or '').split(' - ', 1)[0])
+            if subj_c and disp_c and _collapsed_same_entity(subj_c, disp_c):
+                days = draft.get('existing_match_days_old')
+                fresh = (not isinstance(days, int)
+                         or days <= SYNTH_CHAT_FRESH_DAYS)
+                decision = ('existing_match' if fresh
+                            else 'time_shifted_refresh')
+        except Exception:
+            pass
     # PARENT KEY ALLOWLIST — must run AFTER promotion so a legitimate
     # empty-parent path is not stamped on top of a bogus one.
     if ex_key and not _partner_parent_key_allowed(ex_key):
@@ -50781,6 +51842,14 @@ def _v1_conclude(prompt, run_avid=True):
     if conclusion['buildable']:
         conclusion['brief_summary'] = _v1_build_brief_summary(
             draft, decision, d_type, cuts, run_avid)
+        # Resolved identity leads the summary (2026-08-24 Furious
+        # defect) so a wrong resolution is visible before approving.
+        _rid = _scrub_identity_dashes(draft.get('resolved_identity'))
+        if _rid and decision in ('new_build', 'time_shifted_refresh',
+                                 'cut_needs_parent'):
+            _sep = ' ' if _rid.endswith(('.', '!', '?')) else '. '
+            conclusion['brief_summary'] = (
+                f"Subject: {_rid}{_sep}" + conclusion['brief_summary'])
         if conclusion.get('estimated_audience'):
             conclusion['brief_summary'] += ' ' + _estimated_audience_sentence(
                 conclusion['estimated_audience'])
@@ -50883,11 +51952,18 @@ def api_v1_profiles_check():
         'decision': decision,
         'decision_reason': draft.get('decision_reason') or '',
         'subject': draft.get('subject'),
+        # Resolved identity line (2026-08-24 Furious defect): callers
+        # see exactly which real-world entity the build is about
+        # before approving ('Furious, the Hulu series, not the Fast &
+        # Furious film franchise').
+        'resolved_identity': _scrub_identity_dashes(
+            draft.get('resolved_identity')) or None,
         'brand_category': draft.get('brand_category'),
         'derive_type': d_type or None,
         'existing_match_s3_key': ex_key or None,
         'existing_match_display_name': draft.get('existing_match_display_name') or None,
         'existing_match_days_old': draft.get('existing_match_days_old'),
+        'existing_match_last_modified': draft.get('existing_match_last_modified') or None,
         'credits_would_charge': price,
         'refresh_row_hypothesis': draft.get('refresh_row_hypothesis') or None,
         'brief_summary': conclusion['brief_summary'],
