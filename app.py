@@ -44401,6 +44401,26 @@ def _draft_window_field(draft, decision=None):
     return ''
 
 
+def _annotate_drafts_date_window(drafts):
+    """Stamp each batch draft with its plain-language `date_window`
+    (ECHO RULE 2026-08-24) - the same field the single-draft interpret
+    response returns top-level - so the batch approval card can echo
+    the window per item (event-scoped cuts included). '' when none
+    applies (existing_match, or a derive_cut inheriting its parent's
+    window). Mutates in place; never raises."""
+    for d in drafts or []:
+        if not isinstance(d, dict):
+            continue
+        try:
+            _dn, _, _ = _normalize_v1_decision(d)
+        except Exception:
+            _dn = None
+        try:
+            d['date_window'] = _draft_window_field(d, _dn) or ''
+        except Exception:
+            d.setdefault('date_window', '')
+
+
 # Phrases that indicate the user explicitly does NOT want an Avid cut.
 # Belt-and-suspenders alongside Claude's `run_avid` field - if either
 # signal says "no avid", the response forces run_avid=false. If neither
@@ -44996,6 +45016,9 @@ def _batch_payload_from_drafts(drafts: list, user_text: str, history: list,
         _despread_duplicate_samples(drafts)
     except Exception as _ds_err:
         print(f"[synth-chat despread] failed (non-fatal): {_ds_err}")
+    # Per-item plain-language window (ECHO RULE 2026-08-24): the batch
+    # card renders a window suffix on each line when present.
+    _annotate_drafts_date_window(drafts)
     if failures:
         _chatbot_error_email(
             'brief-chat/interpret',
@@ -45246,6 +45269,9 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
                 f"{str(f.get('error'))[:160]}"
                 for f in failures[:6]),
             tb='(per-subject batch interpret failures)')
+    # Per-item plain-language window (ECHO RULE 2026-08-24): the batch
+    # card renders a window suffix on each line when present.
+    _annotate_drafts_date_window([r.get('spec_draft') for r in ok_drafts])
     return jsonify({
         'success': True,
         'batch': True,

@@ -61681,8 +61681,12 @@ https://www.instagram.com/p/..."></textarea>
         function _synthChatBuildBatchSummary(drafts, totalCredits, failures, sharedCtx) {
             var lines = ['I will queue ' + drafts.length + ' profiles in parallel:'];
             // Time frame per draft (2026-08-20 Jenna: the summary
-            // must list the window). Reuse/derive lines skip it -
-            // those ship the parent file's existing window.
+            // must list the window; 2026-08-24 ECHO RULE). Each item
+            // prefers the plain-language window it carries (the
+            // interpret response populates date_window per item, so
+            // event-scoped derive cuts show theirs too, e.g. 'Aug 17
+            // to Aug 20, 2026'). Reuse/derive lines without one skip
+            // it - those ship the parent file's existing window.
             var _winByIdx = [];
             var _winSeen = {};
             var _winDistinct = 0;
@@ -61690,8 +61694,10 @@ https://www.instagram.com/p/..."></textarea>
             for (var w = 0; w < drafts.length; w++) {
                 var _wd = drafts[w] || {};
                 var _wDec = String(_wd.decision || 'new_build').toLowerCase();
-                var _wLbl = '';
-                if (_wDec !== 'existing_match' && _wDec !== 'derive_cut') {
+                var _wLbl = String(_wd.date_window
+                    || _wd.date_window_label
+                    || _wd.cut_window_label || '').trim();
+                if (!_wLbl && _wDec !== 'existing_match' && _wDec !== 'derive_cut') {
                     _wLbl = _synthChatFormatRange(_wd.date_range)
                         || 'July 1, 2025 to June 30, 2026';
                 }
