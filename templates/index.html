@@ -62295,9 +62295,14 @@ https://www.instagram.com/p/..."></textarea>
                 var _incPct = _tuEst / 10000000 * 100;
                 var _incStr = _incPct >= 1 ? _incPct.toFixed(2)
                     : (_incPct >= 0.01 ? _incPct.toFixed(3) : _incPct.toFixed(4));
-                line += '\n\nEst. sample: ' +
-                    _tuEst.toLocaleString('en-US') + ' panelists (' +
-                    _incStr + '% incidence).';
+                if (s.estimated_audience_sentence) {
+                    line += '\n\n' + s.estimated_audience_sentence +
+                        ' (' + _incStr + '% incidence).';
+                } else {
+                    line += '\n\nEst. sample: ' +
+                        _tuEst.toLocaleString('en-US') + ' panelists (' +
+                        _incStr + '% incidence).';
+                }
                 var _avEst = s.subject_raw_avid;
                 if (s.run_avid !== false && typeof _avEst === 'number' && _avEst > 0) {
                     line += ' Avid tier ~' + _avEst.toLocaleString('en-US') + '.';
