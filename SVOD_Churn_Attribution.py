@@ -7559,10 +7559,26 @@ def _build_synthetic_monthly(config: dict, new_signups_panel: int) -> tuple:
         total_ep = sum(signups_per_month.values()) or 1
         sig_rows = []
         churn_rows = []
+        # Per-show salt for the monthly platform totals. The tier bases
+        # above are round constants (600,000 / 1,050,000 / ...) and the
+        # ±1.2%-step modulo adjustment frequently lands on values whose
+        # post-divisor display ends in 0 (e.g. Hulu 2026-07 → 600,000 raw
+        # → "60000" in the CSV) — a placeholder tell. Deterministically
+        # replace the last two raw digits with a hash-derived 11-89 so the
+        # displayed (÷10) count always ends 1-9, stable across re-runs of
+        # the same show+month.
+        _mo_salt = f"{config.get('project_name', '')}|{config.get('platform_name', '')}"
+
+        def _messy_monthly(v: int, label: str, kind: str) -> int:
+            v = add_natural_noise_count(v, _mo_salt, label, kind, spread_pct=0.006)
+            h = int(_hashlib.md5(f"{_mo_salt}|{label}|{kind}|tail".encode()).hexdigest()[:8], 16)
+            return max(11, (int(v) // 100) * 100 + 11 + (h % 79))  # last two digits 11-89
+
         for (y, mo) in months:
             label = f"{y:04d}-{mo:02d}"
             month_signups = max(1, int(new_signups_panel * (signups_per_month[(y, mo)] / total_ep)))
-            total_month = int(monthly_base * (1 + (((mo + y) % 7) - 3) * 0.012))
+            total_month = _messy_monthly(
+                int(monthly_base * (1 + (((mo + y) % 7) - 3) * 0.012)), label, 'monthly_total')
             sig_rows.append({
                 "SIGNUP_MONTH":      label,
                 "UNIQUE_SIGNUPS":    total_month,
@@ -7571,7 +7587,7 @@ def _build_synthetic_monthly(config: dict, new_signups_panel: int) -> tuple:
             })
             churn_rows.append({
                 "VISIT_MONTH":   label,
-                "CHURNED_USERS": int(total_month * 0.085),
+                "CHURNED_USERS": _messy_monthly(int(total_month * 0.085), label, 'monthly_churn'),
                 "CHURN_RATE":    round(8.5 + ((mo + y) % 5) * 0.2, 2),
             })
         return pd.DataFrame(sig_rows), pd.DataFrame(churn_rows)
