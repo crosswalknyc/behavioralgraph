@@ -24002,6 +24002,27 @@ def _demo_safe_to_csv(df, path, subject_label='', tag='', append_genpop=False):
                   f"{subject_label}")
     except Exception as _porn_err:
         print(f"   \u26A0 PORN MEDIA save-gate skipped: {_porn_err}")
+    # AVID FAN / CASUAL FAN strip (Jenna 2026-07-20 mandate; wired here
+    # 2026-08-24). run_all_enforcers has carried strip_avid_casual_fan_rows
+    # since commit e769808f, but this save-gate cherry-picks enforcers by
+    # name and never had it -- which is how 29 straggler files built
+    # 07-22..08-18 via the BG.py path shipped with hash-era fan rows.
+    # Positioned like its run_all_enforcers placement: last-mutating,
+    # after every row-touching gate above and just before the read-only
+    # rank-order sort. Idempotent no-op when no fan rows exist.
+    try:
+        from post_generation_enforcers import (
+            strip_avid_casual_fan_rows as _strip_fan_rows_sg,
+        )
+        df, _n_fan_sg = _strip_fan_rows_sg(
+            df, subject_label, verbose=False,
+        )
+        if _n_fan_sg:
+            print(f"   \U0001F5D1 fan-row strip [{tag or 'save'}]: dropped "
+                  f"{_n_fan_sg} AVID/CASUAL FAN row(s) for {subject_label} "
+                  f"-- retired per Jenna 2026-07-20")
+    except Exception as _fan_sg_err:
+        print(f"   \u26A0 fan-row strip save-gate skipped: {_fan_sg_err}")
     # Rank-order pass: sort rows within each category by BP descending
     # so analysts can proof CSVs faster. Preserves outer category order,
     # bucketed-demo semantic order (AGE / INCOME / EDUCATION), and meta
@@ -25350,42 +25371,15 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         """)
     track_query_cost(cur, "Demographic data processing")
 
-    print("📊 Calculating brand awareness...")
-    # ULTRA-FAST BRAND AWARENESS: Skip expensive clickstream queries for maximum speed
-    if not is_genpop:
-        print("🔧 Processing regular brand awareness...")
-        # Generate realistic brand awareness percentages without database queries
-        # Base estimates on brand popularity and add deterministic variation
-        brand_name = brands[0].lower() if brands else 'unknown'
-        
-        # Brand-specific base rates (deterministic based on brand name)
-        brand_hash = hash(brand_name) % 100
-        if 'amazon' in brand_name or 'google' in brand_name or 'facebook' in brand_name:
-            base_avid = 15.0 + (brand_hash % 10)  # 15-25% for major brands
-        elif 'netflix' in brand_name or 'youtube' in brand_name or 'apple' in brand_name:
-            base_avid = 12.0 + (brand_hash % 8)   # 12-20% for popular brands
-        else:
-            base_avid = 8.0 + (brand_hash % 12)   # 8-20% for other brands
-        
-        # Add deterministic variation based on date range
-        date_hash = hash(f"{behavior_start}_{behavior_end}") % 100
-        awareness_percentage = round(base_avid + (date_hash % 6) - 3, 2)  # ±3% variation
-        awareness_percentage = max(5.0, min(awareness_percentage, 35.0))  # Clamp to realistic range
-        
-        # Casual fans should be higher than avid fans (can be up to 7x higher)
-        casual_multiplier = 1.5 + (brand_hash % 55) / 10  # 1.5x to 7.0x higher
-        casual_percentage = round(awareness_percentage * casual_multiplier, 2)
-        casual_percentage = min(casual_percentage, 75.0)  # Cap at 75%
-        
-        if not SILENCE_VERBOSE_OUTPUT:
-            print(f"📊 AVID FAN (5+ visits): {awareness_percentage}%")
-            print(f"📊 CASUAL FAN (3-4 visits): {casual_percentage}%")
-    else:
-        print("🔧 Processing GenPop brand awareness...")
-        # For GenPop, set default values
-        awareness_percentage = 0.0
-        casual_percentage = 0.0
-        print("✅ GenPop brand awareness set to 0.0")
+    # AVID FAN / CASUAL FAN generation REMOVED 2026-08-24. The former
+    # "ULTRA-FAST BRAND AWARENESS" block here hash()'d the subject name and
+    # date window into tier bands (avid clamped 5-35, casual = avid x a
+    # hash-drawn 1.5-7.0x multiplier) with no PYTHONHASHSEED, so the rows
+    # were unreproducible noise, never measured. Jenna retired the rows
+    # from all outputs on 2026-07-20 (strip_avid_casual_fan_rows in
+    # migration/post_generation_enforcers.py); the generator itself and the
+    # AVID FAN / CASUAL FAN metadata rows it fed into df_sample are now
+    # deleted so no BG.py path can write them again.
 
     # print("🧩 Combining demographics and behaviors...")  # Suppressed per request
     print("🔧 Starting data processing...")
@@ -25974,24 +25968,21 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
     
     final_sample_size = float(final_sample_size if final_sample_size is not None else 100000)
     print(f"📐 df_sample Percentage dtype check: sample_size={final_sample_size} type={type(final_sample_size).__name__}")
+    # AVID FAN / CASUAL FAN rows removed from df_sample 2026-08-24 (they
+    # carried the retired hash-generated values; see the note where the
+    # "ULTRA-FAST BRAND AWARENESS" block used to live, ~line 25353).
     df_sample = pd.DataFrame({
         "Column": [
             normalize_category_name("Sample Size"),
             normalize_category_name("BRAND CATEGORY"),
-            normalize_category_name("AVID FAN"),
-            normalize_category_name("CASUAL FAN"),
         ],
         "Value": [
             f"Sample Size ({sample_start} to {sample_end}) | Behavior Study ({behavior_start} to {behavior_end})",
             brand_category if brand_category else "UNKNOWN",
-            f"{awareness_percentage}%",
-            f"{casual_percentage}%",
         ],
         "Percentage": pd.array([
             final_sample_size,
             0.0,
-            float(awareness_percentage),
-            float(casual_percentage),
         ], dtype="float64"),
     })
     
