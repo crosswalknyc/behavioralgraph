@@ -60958,6 +60958,7 @@ https://www.instagram.com/p/..."></textarea>
             if (/\bnew (consumers?|customers?|buyers?)\b/i.test(t)) return 'new_consumers';
             if (/\bpersonas?\b/i.test(t)) return 'personas';
             if (/\b(easter eggs?|surprising|unexpected|convergences?)\b/i.test(t)) return 'easter_eggs';
+            if (/\blinked\s?in\b|\bsocial (media )?post\b/i.test(t)) return 'linkedin_post';
             if (/\bfull read\b/i.test(t)) return 'full';
             return null;
         }
@@ -60989,7 +60990,8 @@ https://www.instagram.com/p/..."></textarea>
                 { label: 'Build personas', send: 'Create personas from this audience' },
                 { label: 'Find market whitespace', send: 'Find the market whitespace for this audience' },
                 { label: 'Identify new consumers', send: 'Identify new consumers this brand should go get' },
-                { label: 'Surprising convergences', send: 'Surface the surprising convergences hiding in this data' }
+                { label: 'Surprising convergences', send: 'Surface the surprising convergences hiding in this data' },
+                { label: 'LinkedIn post takeaways', send: 'Give me interesting takeaways for a LinkedIn post from this data' }
             ];
             var tabs = _pmOtherOpenTabs(ctx);
             if (tabs.length) {
