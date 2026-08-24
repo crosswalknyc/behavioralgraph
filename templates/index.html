@@ -15238,6 +15238,57 @@ body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-class.is-owned,
 body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-next .row-icon { color:#1e3a8a !important; }
 body[data-theme="light"] #journeyIQView .jiq-jmap-detail .det-row.is-obs .row-icon { color:#581c87 !important; }
 
+        /* Light-mode styling for the Journey-map stage/touchpoint detail
+           popover. The popover element is appended to document.body (not
+           inside #journeyIQView), so the #journeyIQView-scoped rules above
+           never reach it - in light mode it kept a hardcoded dark card while
+           the body text inherited a dark color (dark-on-dark, unreadable).
+           These body-level rules give it a light card with readable text. */
+body[data-theme="light"] .jiq-jmap-detail {
+    background: #ffffff !important;
+    border-color: rgba(0,0,0,0.12) !important;
+    color: #1f2937 !important;
+}
+body[data-theme="light"] .jiq-jmap-popover::before,
+body[data-theme="light"] .jiq-jmap-popover[data-arrow-side="bottom"]::before {
+    background: #ffffff !important;
+    border-color: rgba(0,0,0,0.12) !important;
+}
+body[data-theme="light"] .jiq-jmap-detail .det-stage { color: #334155 !important; opacity: 1 !important; }
+body[data-theme="light"] .jiq-jmap-detail .det-title { color: #111827 !important; }
+body[data-theme="light"] .jiq-jmap-detail .det-close {
+    background: rgba(0,0,0,0.04) !important;
+    border-color: rgba(0,0,0,0.12) !important;
+    color: #374151 !important;
+}
+body[data-theme="light"] .jiq-jmap-detail .det-close:hover {
+    background: rgba(0,0,0,0.08) !important;
+    color: #111827 !important;
+}
+body[data-theme="light"] .jiq-jmap-detail .det-stat {
+    background: rgba(0,0,0,0.03) !important;
+    border-color: rgba(0,0,0,0.10) !important;
+}
+body[data-theme="light"] .jiq-jmap-detail .det-stat .stat-num { color: #111827 !important; }
+body[data-theme="light"] .jiq-jmap-detail .det-stat .stat-lbl { color: #4b5563 !important; }
+body[data-theme="light"] .jiq-jmap-detail .det-row {
+    background: rgba(0,0,0,0.02) !important;
+    color: #1f2937 !important;
+}
+body[data-theme="light"] .jiq-jmap-detail .det-row .row-label { color: #374151 !important; opacity: 0.85 !important; }
+body[data-theme="light"] .jiq-jmap-detail .det-sowhat { color: #1f2937 !important; }
+/* Accent text/icons: dark variants that read on the light card. */
+body[data-theme="light"] .jiq-jmap-detail .det-stat.is-good .stat-num,
+body[data-theme="light"] .jiq-jmap-detail .det-row.is-winback .row-icon,
+body[data-theme="light"] .jiq-jmap-detail .det-sowhat strong { color: #14532d !important; }
+body[data-theme="light"] .jiq-jmap-detail .det-stat.is-bad .stat-num,
+body[data-theme="light"] .jiq-jmap-detail .det-row.is-drop .row-icon { color: #7f1d1d !important; }
+body[data-theme="light"] .jiq-jmap-detail .det-class.is-earned,
+body[data-theme="light"] .jiq-jmap-detail .det-row.is-detour .row-icon { color: #7c2d12 !important; }
+body[data-theme="light"] .jiq-jmap-detail .det-class.is-owned,
+body[data-theme="light"] .jiq-jmap-detail .det-row.is-next .row-icon { color: #1e3a8a !important; }
+body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #581c87 !important; }
+
         /* ===========================================================
            PROGRESSIVE DISCLOSURE - "broad first, deep on demand"
            ===========================================================
