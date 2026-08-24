@@ -43293,7 +43293,23 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "'illustrative', 'mock'. Write about the profile / audience / "
         "cohort as owned first-party data. If you'd naturally have written "
         "'this synthesized cohort of ~40K panelists', instead write 'this "
-        "audience of ~40K'.\n\n"
+        "audience' - drop the count entirely, never restate it in prose.\n\n"
+
+        "NO COUNTS IN PROSE (hard rule, 2026-08-24 - a client received "
+        "five unrelated pre-build briefs that all narrated the same "
+        "'~847K' audience figure): NEVER state an audience size, sample "
+        "count, reach count, or projected US count in ANY prose field "
+        "(persona_notes, decision_reason, assumptions, category_note, "
+        "cut_label, refresh_row_hypothesis). No 'an audience of ~40K', "
+        "no 'projects to ~847K', no '2.1M US viewers'. Nothing has been "
+        "measured yet when you write these fields - a stated count reads "
+        "as a finding and will be wrong. Absolute sizing lives ONLY in "
+        "the numeric fields (subject_raw_tu, subject_raw_avid, "
+        "follower_ceiling, consumers_sample_fraction). Demographic SHAPE "
+        "guidance in persona_notes (e.g. 'skews ~70% female', 'ASIAN "
+        "over-indexes') is still required per the rules below - the ban "
+        "is on absolute audience-size and projection figures, not on "
+        "distribution shape.\n\n"
 
         "CONTEXT:\n"
         "  * Every US-audience profile is 10M-panel-based; subject_raw is "
@@ -48801,6 +48817,23 @@ def _scrub_v1_progress(raw: str, mapped_status: str) -> str:
     return text
 
 
+def _scrub_v1_freetext(raw: str, cap: int = 700) -> str:
+    """Partner-safe gate for longer free-text fields coming back from
+    the engine host (e.g. delivered_summary). Fail-closed: if ANY
+    banned token appears anywhere in the text, return '' - it is always
+    safer to omit the field than to ship one internal word."""
+    text = (raw or '').replace('\r', ' ').replace('\n', ' ').strip()
+    if not text:
+        return ''
+    low = text.lower()
+    for tok in _V1_BANNED_TOKENS:
+        if tok in low:
+            return ''
+    if len(text) > cap:
+        text = text[:cap - 3] + '...'
+    return text
+
+
 def _scrub_v1_status(raw_status: dict | None) -> dict:
     """Take the raw Hetzner status dict and return ONLY the partner-safe
     fields with normalized values. Never let unknown keys through — if
@@ -48910,6 +48943,7 @@ _V1_RATE_LIMITS = {
     '/v1/check': (60, 500),
     '/v1/run':   (30, 200),
     '/v1/status': (300, 5000),  # polling is expected to be frequent
+    '/v1/genpop': (10, 300),    # baseline file downloads
 }
 _v1_rate_windows: dict = {}  # {(key_id, endpoint): [(ts_epoch), ...]}
 _v1_rate_windows_lock = None
@@ -49150,10 +49184,87 @@ def _partner_credit_preflight(username: str, min_credits: int):
     return resp, 402
 
 
+# --------------------------------------------------------------------
+# v1 interpret draft cache (2026-08-24, check/run parity fix).
+#
+# The partner flow this exists for: POST /check to quote a price live,
+# partner's client says yes, POST /run with the same prompt a minute
+# later. The interpret step runs at temperature 0.4, so re-interpreting
+# the same prompt can produce a slightly different draft - and a
+# different draft can flip the verdict between the two calls. Caching
+# the interpreted draft per prompt for a short TTL guarantees that a
+# /run that follows a /check rides the SAME draft and therefore reaches
+# the SAME conclusion (and saves the second interpret call).
+#
+# In-memory per server instance, same trade-off as the idempotency
+# cache: a cross-instance miss just falls back to a fresh interpret
+# (pre-fix behavior). Not an override surface - callers cannot see or
+# influence the cache.
+# --------------------------------------------------------------------
+_v1_draft_cache: dict = {}   # {prompt_sha: (ts_epoch, draft, candidates)}
+_v1_draft_cache_lock = None
+_V1_DRAFT_CACHE_TTL_SECONDS = 900
+
+
+def _v1_draft_cache_key(prompt: str) -> str:
+    import hashlib as _hl
+    return _hl.sha256((prompt or '').strip().lower().encode('utf-8')).hexdigest()
+
+
+def _v1_draft_cache_get(prompt: str):
+    import time as _time, threading as _threading, copy as _copy
+    global _v1_draft_cache_lock
+    if _v1_draft_cache_lock is None:
+        _v1_draft_cache_lock = _threading.Lock()
+    key = _v1_draft_cache_key(prompt)
+    with _v1_draft_cache_lock:
+        entry = _v1_draft_cache.get(key)
+        if not entry:
+            return None
+        ts, draft, candidates = entry
+        if (_time.time() - ts) > _V1_DRAFT_CACHE_TTL_SECONDS:
+            _v1_draft_cache.pop(key, None)
+            return None
+        # Deep-copy on the way out: the promoters and _spec_from_draft
+        # mutate the draft in place and must never dirty the cache.
+        return _copy.deepcopy(draft), _copy.deepcopy(candidates)
+
+
+def _v1_draft_cache_put(prompt: str, draft, candidates):
+    import time as _time, threading as _threading, copy as _copy
+    global _v1_draft_cache_lock
+    if _v1_draft_cache_lock is None:
+        _v1_draft_cache_lock = _threading.Lock()
+    if not isinstance(draft, dict):
+        return
+    key = _v1_draft_cache_key(prompt)
+    with _v1_draft_cache_lock:
+        _v1_draft_cache[key] = (_time.time(), _copy.deepcopy(draft),
+                                _copy.deepcopy(candidates or []))
+        if len(_v1_draft_cache) > 2000:
+            now = _time.time()
+            expired = [k for k, (ts, _, _) in _v1_draft_cache.items()
+                       if (now - ts) > _V1_DRAFT_CACHE_TTL_SECONDS]
+            for k in expired:
+                _v1_draft_cache.pop(k, None)
+
+
 def _v1_interpret(prompt):
     """Shared interpret helper used by /check and /run. Runs the Claude
     interpret step against the current profile catalog and returns
-    (draft_dict, candidates_list) or raises with a jsonify error."""
+    (draft_dict, candidates_list) or raises with a jsonify error.
+
+    2026-08-24: consults the short-TTL draft cache first so a /run that
+    follows a /check with the same prompt reuses the identical draft
+    (verdict parity + one fewer interpret call)."""
+    cached = _v1_draft_cache_get(prompt)
+    if cached is not None:
+        draft, candidates = cached
+        try:
+            print(f"[v1_interpret] draft cache hit for prompt={prompt[:80]!r}")
+        except Exception:
+            pass
+        return draft, candidates, {'success': True, 'cached': True}
     try:
         from iq_rankers import MASTER_CATEGORIES
     except Exception:
@@ -49226,6 +49337,12 @@ def _v1_interpret(prompt):
             except Exception:
                 pass
             draft[_key_field] = None
+    # Populate the short-TTL draft cache AFTER all draft-level scrubs so
+    # a follow-up call reuses the fully sanitized draft.
+    try:
+        _v1_draft_cache_put(prompt, draft, candidates)
+    except Exception:
+        pass
     return draft, candidates, interp
 
 
@@ -50226,6 +50343,282 @@ def _normalize_v1_decision(draft):
     return decision, ex_key, d_type
 
 
+# --------------------------------------------------------------------
+# Shared /check + /run conclusion (2026-08-24, check/run parity fix).
+#
+# CLIENT-REPORTED DEFECT: /check approved builds that /run then refused.
+# Root cause: the queue listener on the engine host validates the spec
+# (audience-size bounds, required fields) at enqueue time, and /run
+# builds the spec via _spec_from_draft before posting - but /check
+# never built a spec and never ran those bounds. A prompt describing
+# the full US population interprets to an audience size above the
+# engine's per-subject ceiling; /check quoted it happily, /run got the
+# enqueue rejected and returned 502 after a charge + refund cycle.
+#
+# FIX: both routes call _v1_conclude(), which runs the ENTIRE decision
+# chain - interpret, promoters, normalize, spec construction, and a
+# faithful mirror of the enqueue-time validation - so the two routes
+# cannot disagree about a prompt. The enqueue-time validation still
+# runs on the engine host (defense in depth); the mirror below MUST be
+# kept in lockstep with migration/synth_queue_listener.py::_validate_spec.
+# --------------------------------------------------------------------
+
+# Bounds mirrored from migration/synth_queue_listener.py::_validate_spec.
+# If you change them there, change them here in the same commit.
+_V1_QUEUE_PANEL_SIZE = 10_000_000
+_V1_QUEUE_TU_FLOOR = 500
+_V1_QUEUE_TU_CEILING = 9_500_000
+_V1_QUEUE_AVID_FLOOR = 500
+_V1_QUEUE_AVID_CEILING = 8_000_000
+
+
+def _v1_queue_spec_refusal(spec, decision='new_build', body=None):
+    """Faithful mirror of the enqueue-time spec validation that runs on
+    the engine host (migration/synth_queue_listener.py::_validate_spec).
+    Returns the internal refusal reason string, or None when the spec
+    would be accepted. INTERNAL string - never send to a partner raw;
+    map through _v1_refusal_partner() first."""
+    body = body or {}
+    if decision == 'derive_cut':
+        for k in ('name', 'brand_category'):
+            if k not in spec:
+                return f'derive_cut requires spec.{k}'
+        if not (body.get('parent_s3_key') or '').strip():
+            return 'derive_cut requires parent_s3_key'
+        if not (body.get('derive_type') or '').strip():
+            return 'derive_cut requires derive_type'
+        return None
+
+    required = ['name', 'brand_category', 'subject_raw_tu',
+                'subject_rows', 'tu_demos']
+    missing = [k for k in required if k not in spec]
+    if missing:
+        return f'missing fields: {missing}'
+    if not isinstance(spec['subject_raw_tu'], int):
+        return 'subject_raw_tu must be int'
+    if spec['subject_raw_tu'] < _V1_QUEUE_TU_FLOOR:
+        return 'subject_raw_tu too small'
+    if spec['subject_raw_tu'] > _V1_QUEUE_TU_CEILING:
+        return 'subject_raw_tu too large'
+    # NOTE: the listener gates its avid bounds on spec.get('run_avid'),
+    # and the spec produced by _spec_from_draft never carries run_avid
+    # (it rides on the payload envelope) - so the avid bounds are
+    # currently inert on the listener. Mirror that behavior exactly:
+    # checking them here when the listener does not would create the
+    # reverse divergence (/check refusing what /run accepts).
+    if spec.get('run_avid') and spec.get('subject_raw_avid') is not None:
+        av = spec['subject_raw_avid']
+        if not isinstance(av, int):
+            return 'subject_raw_avid must be int'
+        if av < _V1_QUEUE_AVID_FLOOR:
+            return 'subject_raw_avid too small'
+        if av > _V1_QUEUE_AVID_CEILING:
+            return 'subject_raw_avid too large'
+        if av > spec['subject_raw_tu']:
+            return 'subject_raw_avid must be <= subject_raw_tu'
+    if not isinstance(spec['subject_rows'], list) or not spec['subject_rows']:
+        return 'subject_rows must be a non-empty list'
+    if not isinstance(spec['tu_demos'], dict) or not spec['tu_demos']:
+        return 'tu_demos must be a non-empty dict'
+    if decision == 'time_shifted_refresh':
+        if not (body.get('parent_s3_key') or '').strip():
+            return 'time_shifted_refresh requires parent_s3_key'
+    return None
+
+
+def _v1_refusal_partner(internal_reason):
+    """Map an internal refusal reason to (refusal_code, partner_message).
+    Every message here is approved partner-safe phrasing - no internal
+    vocabulary, no bound values, no field names beyond documented API
+    fields."""
+    r = (internal_reason or '').strip()
+    if r.startswith('subject_raw_tu too large'):
+        return ('audience_too_broad',
+                'audience too broad: this prompt reads as the full US '
+                'population rather than a specific audience. Name a brand, '
+                'person, title, or specific behavioral segment and try '
+                'again. A US population baseline file is available at '
+                'GET /api/v1/genpop.')
+    if r.startswith('subject_raw_tu too small'):
+        return ('audience_too_narrow',
+                'audience too narrow to build a reliable profile: broaden '
+                'the audience definition and try again.')
+    if r.startswith('subject_raw_avid'):
+        return ('audience_not_sizable',
+                'the Avid Fan tier could not be sized for this audience: '
+                'retry with "run_avid": false or rephrase the prompt.')
+    return ('not_interpretable',
+            'could not interpret prompt into a buildable audience: '
+            'rephrase with a specific subject.')
+
+
+def _v1_build_brief_summary(draft, decision, d_type=None, cuts=None,
+                            run_avid=True):
+    """Partner-safe PRE-BUILD scope summary: planned deliverables only.
+
+    2026-08-24 defect: brief_summary used to echo the interpret step's
+    persona_notes, which narrated audience-size estimates before any
+    build ran (five unrelated briefs in one client batch all said
+    '~847K'). A pre-build summary must contain NO measured-sounding
+    numbers and NO findings language. Measured values arrive
+    post-build in delivered_summary, computed from the shipped file."""
+    subject = str(draft.get('subject')
+                  or draft.get('existing_match_display_name')
+                  or 'the requested audience').strip()
+    cuts = cuts or []
+    if decision == 'existing_match':
+        base = (f'Existing profile match for {subject}: the deliverable '
+                'is ready for download now, no new run needed')
+    elif decision == 'derive_cut':
+        base = (f'Planned deliverable: {subject}, derived from an '
+                'existing parent profile')
+    elif decision == 'time_shifted_refresh':
+        base = (f'Planned deliverable: a refreshed profile for {subject} '
+                'anchored to the prior deliverable')
+    elif decision == 'cut_needs_parent':
+        base = (f'Planned deliverable: a Total Universe profile for '
+                f'{subject} plus the requested derived view')
+    else:
+        base = f'Planned deliverable: a Total Universe profile for {subject}'
+    parts = [base]
+    if run_avid and decision in ('new_build', 'time_shifted_refresh',
+                                 'cut_needs_parent'):
+        parts.append('with an Avid Fan tier')
+    if cuts:
+        labels = [str(c.get('name_label') or c.get('label') or c.get('cut_id'))
+                  for c in cuts[:4]]
+        extra = len(cuts) - len(labels)
+        joined = ', '.join(labels) + (f' and {extra} more' if extra > 0 else '')
+        plural = 's' if len(cuts) != 1 else ''
+        parts.append(f'plus {len(cuts)} add-on cut{plural} ({joined})')
+    text = ' '.join(parts)
+    if decision != 'existing_match':
+        text += ('. Measured results (audience size, projected US reach, '
+                 'top categories) are reported in delivered_summary when '
+                 'the run completes.')
+    else:
+        text += '.'
+    if len(text) > 300:
+        text = text[:297] + '...'
+    return text
+
+
+def _v1_conclude(prompt, run_avid=True):
+    """THE single decision function for /api/v1/profiles/check and
+    /api/v1/profiles/run. Runs interpret -> promoters -> normalize ->
+    spec construction -> enqueue-validation mirror, identically for
+    both routes, so a /check verdict is exactly the verdict /run
+    reaches for the same prompt.
+
+    Returns (conclusion_dict, None) on success or (None,
+    (flask_response, http_status)) when the prompt could not be
+    interpreted at all. conclusion_dict keys:
+      draft, candidates, decision, ex_key, d_type, cuts, price,
+      buildable (bool), refusal_code, refusal_message, spec,
+      brief_summary
+    On a refusal, buildable=False and price=0 (a refused run charges
+    nothing on either route)."""
+    try:
+        draft, candidates, interp = _v1_interpret(prompt)
+        if draft is None:
+            try:
+                print(f"[v1_conclude] interpret failed: "
+                      f"{str(interp.get('error'))[:400]!r}")
+            except Exception:
+                pass
+            return None, (jsonify({'success': False,
+                                   'error': 'could not interpret prompt'}),
+                          interp.get('status', 502))
+    except Exception:
+        traceback.print_exc()
+        return None, (jsonify({'success': False,
+                               'error': 'could not interpret prompt'}), 500)
+
+    # Promoters - identical order on both routes (this order is part of
+    # the verdict; do not reorder on one route only).
+    try:
+        _maybe_promote_intersect_to_derive_cut(draft, prompt, candidates)
+    except Exception:
+        pass
+    _decompose_embedded_subject_cuts(draft)
+    _augment_multi_cohort_cuts(draft, prompt)
+    _maybe_promote_embedded_cuts_to_parent(draft)
+
+    decision, ex_key, d_type = _normalize_v1_decision(draft)
+    cuts = [c for c in (draft.get('addon_cuts') or [])
+            if isinstance(c, dict) and c.get('cut_id')]
+    if d_type == 'addon_cuts' and cuts:
+        # cuts-only derive: the cuts ARE the deliverable - no base fee
+        price = ADDON_CUT_CREDITS * len(cuts)
+    else:
+        price = (_V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
+                 + ADDON_CUT_CREDITS * len(cuts))
+
+    conclusion = {
+        'draft': draft,
+        'candidates': candidates,
+        'decision': decision,
+        'ex_key': ex_key,
+        'd_type': d_type,
+        'cuts': cuts,
+        'price': price,
+        'buildable': True,
+        'refusal_code': None,
+        'refusal_message': None,
+        'spec': None,
+        'brief_summary': '',
+    }
+
+    if decision != 'existing_match':
+        # Build the spec on BOTH routes. This is where audience sizing
+        # becomes concrete, and it is what the engine host validates at
+        # enqueue time - so the verdict is not complete without it.
+        try:
+            spec = _spec_from_draft(draft)
+        except Exception:
+            traceback.print_exc()
+            return None, (jsonify({'success': False,
+                                   'error': 'could not interpret prompt'}),
+                          500)
+        conclusion['spec'] = spec
+        probe_body = {'parent_s3_key': ex_key or '',
+                      'derive_type': d_type or ''}
+        reason = _v1_queue_spec_refusal(spec, decision, probe_body)
+        if reason:
+            code, message = _v1_refusal_partner(reason)
+            try:
+                print(f"[v1_conclude] refusal code={code} "
+                      f"internal_reason={reason!r} "
+                      f"prompt={prompt[:120]!r}")
+            except Exception:
+                pass
+            conclusion['buildable'] = False
+            conclusion['refusal_code'] = code
+            conclusion['refusal_message'] = message
+            conclusion['price'] = 0
+
+    if conclusion['buildable']:
+        conclusion['brief_summary'] = _v1_build_brief_summary(
+            draft, decision, d_type, cuts, run_avid)
+    return conclusion, None
+
+
+# Caveats surfaced on /check for run-side conditions that genuinely
+# cannot be evaluated at check time. Documented in PARTNER_API.md.
+def _v1_check_caveats():
+    caveats = [
+        'credit balance is verified again at run time; the balance must '
+        'cover the quoted price when /run is called',
+    ]
+    if not (SYNTH_QUEUE_SECRET and SYNTH_QUEUE_URL):
+        caveats.append('the profile engine is temporarily unavailable; '
+                       '/run would currently fail until it recovers')
+    else:
+        caveats.append('profile engine availability is confirmed at run '
+                       'time, not at check time')
+    return caveats
+
+
 @app.route('/api/v1/profiles/check', methods=['POST'])
 def api_v1_profiles_check():
     """Preview what a run would do without charging credits or enqueuing.
@@ -50271,53 +50664,38 @@ def api_v1_profiles_check():
     if pf_resp is not None:
         return pf_resp, pf_status
 
-    try:
-        draft, candidates, interp = _v1_interpret(prompt)
-        if draft is None:
-            # Interpret failure — log the inner detail server-side only,
-            # never return raw error string / stack context to the partner.
-            try:
-                print(f"[v1_check] interpret failed: "
-                      f"{str(interp.get('error'))[:400]!r}")
-            except Exception:
-                pass
-            return jsonify({
-                'success': False,
-                'error': 'could not interpret prompt',
-            }), interp.get('status', 502)
-    except Exception:
-        traceback.print_exc()
-        return jsonify({'success': False,
-                         'error': 'could not interpret prompt'}), 500
+    run_avid = bool(body.get('run_avid', True))
 
-    # Intersect-cut promoter (2026-08-19). Runs BEFORE normalize so any
-    # promotion also passes through the parent-key allowlist gate.
-    try:
-        _maybe_promote_intersect_to_derive_cut(draft, prompt, candidates)
-    except Exception:
-        pass
+    # ONE decision function shared with /run (2026-08-24 parity fix):
+    # whatever verdict this returns is exactly what /run concludes for
+    # the same prompt, including the audience-size bounds the engine
+    # host enforces at enqueue time.
+    conclusion, err_resp = _v1_conclude(prompt, run_avid=run_avid)
+    if err_resp is not None:
+        return err_resp
 
-    # Subject naming + embedded cuts (2026-08-20): full-universe TU +
-    # qualifier-as-cut, same as the dashboard chat path.
-    _decompose_embedded_subject_cuts(draft)
-    # Multi-cohort recovery: same as the dashboard chat path.
-    _augment_multi_cohort_cuts(draft, prompt)
-    # Cuts-only promoter: existing TU parent -> derive the cuts off it
-    # instead of rebuilding (3 x cuts, no base). Loads the catalog
-    # itself; same behavior as the dashboard chat path.
-    _maybe_promote_embedded_cuts_to_parent(draft)
+    draft = conclusion['draft']
+    decision = conclusion['decision']
+    ex_key = conclusion['ex_key']
+    d_type = conclusion['d_type']
+    _v1_cuts = conclusion['cuts']
+    price = conclusion['price']
 
-    decision, ex_key, d_type = _normalize_v1_decision(draft)
-    _v1_cuts = [c for c in (draft.get('addon_cuts') or [])
-                if isinstance(c, dict) and c.get('cut_id')]
-    if d_type == 'addon_cuts' and _v1_cuts:
-        # cuts-only derive: the cuts ARE the deliverable - no base fee
-        price = ADDON_CUT_CREDITS * len(_v1_cuts)
-    else:
-        price = (_V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
-                 + ADDON_CUT_CREDITS * len(_v1_cuts))
+    if not conclusion['buildable']:
+        # The check itself succeeded; the verdict is "this prompt would
+        # be refused at run time, nothing would be charged".
+        return jsonify({
+            'success': True,
+            'buildable': False,
+            'decision': decision,
+            'refusal_code': conclusion['refusal_code'],
+            'refusal_reason': conclusion['refusal_message'],
+            'credits_would_charge': 0,
+        })
+
     resp = {
         'success': True,
+        'buildable': True,
         'decision': decision,
         'decision_reason': draft.get('decision_reason') or '',
         'subject': draft.get('subject'),
@@ -50328,6 +50706,8 @@ def api_v1_profiles_check():
         'existing_match_days_old': draft.get('existing_match_days_old'),
         'credits_would_charge': price,
         'refresh_row_hypothesis': draft.get('refresh_row_hypothesis') or None,
+        'brief_summary': conclusion['brief_summary'],
+        'caveats': _v1_check_caveats(),
     }
     if _v1_cuts:
         resp['addon_cuts'] = [
@@ -50433,53 +50813,33 @@ def api_v1_profiles_run():
     if pf_resp is not None:
         return pf_resp, pf_status
 
-    try:
-        draft, _candidates, interp = _v1_interpret(prompt)
-        if draft is None:
-            # Interpret failure — log inner detail server-side only.
-            try:
-                print(f"[v1_run] interpret failed: "
-                      f"{str(interp.get('error'))[:400]!r}")
-            except Exception:
-                pass
-            return jsonify({
-                'success': False,
-                'error': 'could not interpret prompt',
-            }), interp.get('status', 502)
-    except Exception:
-        traceback.print_exc()
-        return jsonify({'success': False,
-                         'error': 'could not interpret prompt'}), 500
+    # ONE decision function shared with /check (2026-08-24 parity fix).
+    # Everything from interpret through spec validation happens inside
+    # _v1_conclude, so this route cannot reach a different verdict than
+    # the /check the partner quoted from.
+    conclusion, err_resp = _v1_conclude(prompt, run_avid=run_avid)
+    if err_resp is not None:
+        return err_resp
 
-    # Intersect-cut promoter (2026-08-19). Same guardrail as /v1/check
-    # so a partner isn't overcharged when a valid parent already exists.
-    try:
-        _maybe_promote_intersect_to_derive_cut(
-            draft, prompt, _candidates)
-    except Exception:
-        pass
+    draft = conclusion['draft']
+    decision = conclusion['decision']
+    ex_key = conclusion['ex_key']
+    d_type = conclusion['d_type']
+    _v1_run_cuts = conclusion['cuts']
+    price = conclusion['price']
 
-    # Subject naming + embedded cuts (2026-08-20): full-universe TU +
-    # qualifier-as-cut. Price matches /v1/check: base + 3 per cut.
-    _decompose_embedded_subject_cuts(draft)
-    # Multi-cohort recovery: same as /v1/check so quoted price and
-    # charged price always agree.
-    _augment_multi_cohort_cuts(draft, prompt)
-    # Cuts-only promoter: existing TU parent -> derive the cuts off it
-    # instead of rebuilding (3 x cuts, no base). Same as /v1/check so
-    # the quoted price and the charged price always agree.
-    _maybe_promote_embedded_cuts_to_parent(draft)
-
-    decision, ex_key, d_type = _normalize_v1_decision(draft)
-
-    _v1_run_cuts = [c for c in (draft.get('addon_cuts') or [])
-                    if isinstance(c, dict) and c.get('cut_id')]
-    if d_type == 'addon_cuts' and _v1_run_cuts:
-        # cuts-only derive: the cuts ARE the deliverable - no base fee
-        price = ADDON_CUT_CREDITS * len(_v1_run_cuts)
-    else:
-        price = (_V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
-                 + ADDON_CUT_CREDITS * len(_v1_run_cuts))
+    if not conclusion['buildable']:
+        # Refused BEFORE any charge (previously this surfaced as an
+        # enqueue rejection after a charge + refund cycle). Same
+        # refusal_code and message /check reports for this prompt.
+        return jsonify({
+            'success': False,
+            'buildable': False,
+            'decision': decision,
+            'error': conclusion['refusal_message'],
+            'refusal_code': conclusion['refusal_code'],
+            'credits_charged': 0,
+        }), 422
 
     # Exact-tier credit re-check (some tiers cost more than the median
     # preflight - e.g. cut_needs_parent=8). If interpret picked a
@@ -50517,7 +50877,9 @@ def api_v1_profiles_run():
             _idempotency_store(username, idem_key, resp_body)
         return jsonify(resp_body)
 
-    spec = _spec_from_draft(draft)
+    # Spec was already built (and validated against the enqueue-time
+    # bounds) inside _v1_conclude.
+    spec = conclusion['spec']
 
     payload = {
         'user_email': user.get('email') or username,
@@ -50651,9 +51013,13 @@ def api_v1_profiles_run():
 
     _, credits_left = check_user_credits(username)
 
-    brief_summary = (draft.get('persona_notes') or '').strip()
-    if len(brief_summary) > 300:
-        brief_summary = brief_summary[:297] + '...'
+    # PRE-BUILD scope summary (2026-08-24): programmatic, plans only,
+    # no measured-sounding numbers. Previously this echoed the interpret
+    # step's persona_notes, which narrated audience-size estimates
+    # before any build ran ('~847K' shipped verbatim across five
+    # unrelated briefs in one client batch). Measured values arrive in
+    # delivered_summary on the status route once the run completes.
+    brief_summary = conclusion['brief_summary']
 
     status_url = f"{request.host_url.rstrip('/')}/api/v1/profiles/{run_id}"
 
@@ -50770,8 +51136,155 @@ def api_v1_profiles_status(run_id):
             resp['registered_in_dashboard'] = bool(status.get('tu_registered_in_dashboard'))
         if 'avid_registered_in_dashboard' in status:
             resp['avid_registered_in_dashboard'] = bool(status.get('avid_registered_in_dashboard'))
+        # POST-BUILD measured summary (2026-08-24): computed on the
+        # engine host from the shipped file itself (audience size,
+        # projected US count, top categories, demo skews). Routed
+        # through the fail-closed free-text scrub so nothing internal
+        # can leak even if a future engine-side edit slips a bad word
+        # into the text.
+        _dsum = _scrub_v1_freetext(status.get('delivered_summary') or '')
+        if _dsum:
+            resp['delivered_summary'] = _dsum
+        _dsum_avid = _scrub_v1_freetext(status.get('avid_delivered_summary') or '')
+        if _dsum_avid:
+            resp['avid_delivered_summary'] = _dsum_avid
 
     return jsonify(resp)
+
+
+@app.route('/api/v1/genpop', methods=['GET'])
+def api_v1_genpop():
+    """US population baseline file (CSV), API-key-authed, no credit
+    charge (2026-08-24 pricing decision pending: currently free).
+
+    Request:
+      Headers: X-Crosswalk-API-Key: <raw_key>
+      Query (optional): as_of=YYYY-MM-DD
+        Returns the newest baseline revision published on or before
+        end-of-day UTC of that date, so a past analysis can be
+        reproduced against the exact baseline it used. `as_of` is an
+        intent field (which point-in-time file do you want), not a
+        behavior override.
+
+    Response: text/csv attachment. Headers:
+      X-Baseline-Version-Date: publish timestamp of the returned
+        revision (UTC, ISO-8601) - cite this in any reproduction.
+      X-Baseline-As-Of: echo of the requested as_of (when provided).
+
+    The baseline refreshes DAILY (04:00 UTC), not weekly.
+    """
+    user, err = _synth_chat_gate()
+    if err:
+        return err
+
+    key_id = _partner_key_id(user)
+    allowed, retry_after, cur_min, cur_day, cap_min, cap_day = _rate_limit_check(
+        key_id, '/v1/genpop')
+    if not allowed:
+        return _rate_limit_response(retry_after, cur_min, cur_day,
+                                     cap_min, cap_day, '/v1/genpop')
+
+    from datetime import datetime as _dt, timezone as _tz
+
+    as_of_raw = (request.args.get('as_of') or '').strip()
+    version_id = None
+    version_date = None
+
+    try:
+        s3 = boto3.client(
+            's3',
+            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+            region_name=S3_REGION,
+            endpoint_url=f'https://s3.{S3_REGION}.amazonaws.com')
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False,
+                         'error': 'baseline file temporarily unavailable'}), 503
+
+    if as_of_raw:
+        try:
+            as_of_day = _dt.strptime(as_of_raw, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({'success': False,
+                             'error': 'invalid as_of date: use YYYY-MM-DD'}), 400
+        cutoff = as_of_day.replace(hour=23, minute=59, second=59,
+                                   microsecond=999999, tzinfo=_tz.utc)
+        best_lm = None
+        try:
+            paginator = s3.get_paginator('list_object_versions')
+            for page in paginator.paginate(Bucket=S3_BUCKET,
+                                           Prefix=GEN_POP_CANONICAL_KEY):
+                for v in page.get('Versions', []):
+                    if v.get('Key') != GEN_POP_CANONICAL_KEY:
+                        continue
+                    lm = v.get('LastModified')
+                    if lm is None or lm > cutoff:
+                        continue
+                    if best_lm is None or lm > best_lm:
+                        best_lm = lm
+                        version_id = v.get('VersionId')
+        except Exception:
+            traceback.print_exc()
+            return jsonify({'success': False,
+                             'error': 'baseline file temporarily unavailable'}), 503
+        if version_id is None:
+            return jsonify({
+                'success': False,
+                'error': ('no baseline file revision exists on or before '
+                          'that date'),
+            }), 404
+        version_date = best_lm
+
+    get_kwargs = {'Bucket': S3_BUCKET, 'Key': GEN_POP_CANONICAL_KEY}
+    if version_id:
+        get_kwargs['VersionId'] = version_id
+    try:
+        obj = s3.get_object(**get_kwargs)
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False,
+                         'error': 'baseline file temporarily unavailable'}), 503
+
+    if version_date is None:
+        version_date = obj.get('LastModified')
+
+    body = obj['Body']
+
+    def _stream():
+        # Stream in 64KB chunks - never hold the whole object in RAM
+        # (the file is small today but this endpoint must not care).
+        try:
+            for chunk in iter(lambda: body.read(64 * 1024), b''):
+                yield chunk
+        finally:
+            try:
+                body.close()
+            except Exception:
+                pass
+
+    headers = {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="US_Population_Baseline.csv"',
+        'Cache-Control': 'no-store',
+    }
+    if version_date is not None:
+        try:
+            headers['X-Baseline-Version-Date'] = version_date.astimezone(
+                _tz.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        except Exception:
+            pass
+    if as_of_raw:
+        headers['X-Baseline-As-Of'] = as_of_raw
+    try:
+        _clen = obj.get('ContentLength')
+        if _clen:
+            headers['Content-Length'] = str(_clen)
+    except Exception:
+        pass
+
+    from flask import stream_with_context
+    return Response(stream_with_context(_stream()), headers=headers)
 
 
 # ============================================================================
