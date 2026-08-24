@@ -103,6 +103,43 @@ def _seed_jitter(seed: str, span: float) -> float:
     return -span / 2 + span * u
 
 
+_COHORT_SUFFIX_RE = re.compile(
+    r"\s*-\s*(avid|casual|super)?\s*"
+    r"(fan|fans|female|male|total universe|tu)"
+    r"(\s+(fan|fans|female|male))?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _norm_pin(s) -> str:
+    """Case + punctuation insensitive normalizer for self-pin matching."""
+    return re.sub(r"[^A-Z0-9]+", "", str(s or "").upper())
+
+
+def _subject_pin_aliases(subject: str) -> set:
+    """Normalized aliases that count as the subject for self-pin purposes.
+
+    2026-08-24 (Dylan Minnette / Erin Brooks avids, 99.9895 defect):
+    when the collision walk runs with a cohort-label subject
+    ('Dylan Minnette - Avid Fan'), the row carrying the BARE parent
+    name ('Dylan Minnette') at 100 failed the `vu == subj_u` exemption
+    and got jittered off its self-pin to exactly 99.9895
+    (100 - 15*0.0007). The bare parent name in a subject-pin category
+    is the same entity and must stay pinned. Aliases: the subject as
+    passed, the name before ' - <cohort suffix>', and the
+    suffix-stripped form, all case/punctuation-insensitive.
+    """
+    subj = str(subject or "").strip()
+    aliases = {_norm_pin(subj)}
+    if " - " in subj:
+        aliases.add(_norm_pin(subj.split(" - ")[0]))
+    stripped = _COHORT_SUFFIX_RE.sub("", subj)
+    if stripped:
+        aliases.add(_norm_pin(stripped))
+    aliases.discard("")
+    return aliases
+
+
 # =============================================================================
 # Phase 1: audience-aware cohort + demo target reasoning
 # =============================================================================
@@ -176,7 +213,8 @@ def _format_audience_user(snap: dict) -> str:
 
 def _claude_messages_with_retry(*, system, user, max_tokens, temperature,
                                 tag, max_attempts: int = 3,
-                                base_delay: float = 2.0):
+                                base_delay: float = 2.0,
+                                api_key: str = None):
     """Wrap claude_messages with bounded retry + backoff. Surfaces a clear
     log line per attempt so silent failures (rate-limit, transient API
     error, JSON parse miss) are visible in the run log.
@@ -201,10 +239,21 @@ def _claude_messages_with_retry(*, system, user, max_tokens, temperature,
     last_err = None
     for attempt in range(1, max_attempts + 1):
         try:
-            resp = claude_messages(
-                system=system, user=user,
-                max_tokens=max_tokens, temperature=temperature,
-            )
+            if api_key:
+                try:
+                    from cut_parallel import cut_claude_call as _ccc
+                except Exception:
+                    from migration.cut_parallel import (
+                        cut_claude_call as _ccc,
+                    )
+                resp = _ccc(system=system, user=user, api_key=api_key,
+                            max_tokens=max_tokens,
+                            temperature=temperature)
+            else:
+                resp = claude_messages(
+                    system=system, user=user,
+                    max_tokens=max_tokens, temperature=temperature,
+                )
             if resp:
                 return resp
             last_err = f"empty response (attempt {attempt}/{max_attempts})"
@@ -396,7 +445,8 @@ def _audience_summary_text(audience: dict) -> str:
 
 def reason_category_rows(subject: str, audience: dict, category: str,
                          rows: list, *, chunk_size: int = 200,
-                         df_source=None) -> dict:
+                         df_source=None,
+                         api_key: str = None) -> dict:
     """Phase 2 Claude call -- reasons over EVERY row in the category (no
     top-N truncation). Long lists are split into sequential chunks of
     `chunk_size` rows so the agent can reason about each row without
@@ -455,6 +505,7 @@ def reason_category_rows(subject: str, audience: dict, category: str,
             system=_CAT_ROW_SYSTEM, user=user,
             max_tokens=24000, temperature=0.3,
             tag=f"phase-2-{category}-chunk{i+1}/{n_chunks}",
+            api_key=api_key,
         )
         if resp is None:
             n_chunks_failed += 1
@@ -598,9 +649,14 @@ def apply_avid_transform(df, audience: dict, category_decisions: dict,
         if old_bp is None:
             continue
 
-        # Subject self-pin: keep at 100% per Rule #3
+        # Subject self-pin: keep at 100% per Rule #3. Alias-robust
+        # (2026-08-24): also matches the bare parent name when the
+        # subject arrives as a cohort label, case/punct-insensitive.
         if cat in SUBJECT_PIN_CATS_TF or cat == "SUBJECT":
-            if abs(old_bp - 100.0) < 0.01 and val_u == subject.upper():
+            if (abs(old_bp - 100.0) < 0.01
+                    and (val_u == subject.upper()
+                         or _norm_pin(val_u)
+                         in _subject_pin_aliases(subject))):
                 df.at[idx, raw_col] = float(new_sample)
                 df.at[idx, proj_col] = float(new_uspop)
                 n_pin += 1
@@ -808,8 +864,27 @@ def enforce_no_collisions(df_avid, df_baseline, subject: str):
 
     n_fixed = 0
     subj_u = subject.upper()
+    # 2026-08-24 self-pin exemption fix: the exemption previously only
+    # matched the exact subject string passed in. Cut paths pass the
+    # cohort label ('X - Avid Fan') while the pinned row carries the
+    # BARE parent name ('X'), so the parent self-pin got jittered off
+    # 100 to 99.9895 on every avid/cut. Exempt every subject alias
+    # (bare parent included), case/punctuation-insensitive, in
+    # subject-pin categories.
+    pin_aliases = _subject_pin_aliases(subject)
     for idx in df_avid.index:
         cu = str(df_avid.at[idx, cat_col]).strip().upper()
+        # Metadata anchor rows are definitionally allowed to match the
+        # parent and must NEVER be jittered: BRAND INPUT and SAMPLE
+        # SIZE share the same Column+Value key as the parent's rows
+        # and both sit at BP=100, so without this skip they collide
+        # by construction and the walk knocks the anchors off 100
+        # (2026-08-22: GOOGLE PLAY - TVOD Renters SAMPLE SIZE raw
+        # diverged 33,743 -> 33,739; three avid/cut files shipped
+        # 99.9895 anchors the same way).
+        if cu in ("BRAND INPUT", "SAMPLE SIZE", "BRAND CATEGORY",
+                  "SUBJECT"):
+            continue
         vu = str(df_avid.at[idx, val_col]).strip().upper()
         avid_bp = _fbp(df_avid.at[idx, bp_col])
         if avid_bp is None:
@@ -818,9 +893,16 @@ def enforce_no_collisions(df_avid, df_baseline, subject: str):
         base4 = base_idx.get((cu, vu))
         if base4 is None or avid4 != base4:
             continue
-        # Allowed exception: subject self-pin at 100%
-        if abs(avid4 - 100.0) < 0.0001 and vu == subj_u:
-            continue
+        # Allowed exception: subject self-pin at 100%. Matches the full
+        # subject string in ANY category (legacy behavior), plus the
+        # bare parent name / any subject alias in subject-pin
+        # categories (2026-08-24 fix - see _subject_pin_aliases).
+        if abs(avid4 - 100.0) < 0.0001:
+            if vu == subj_u:
+                continue
+            if (_norm_pin(vu) in pin_aliases
+                    and (cu in SUBJECT_PIN_CATS_TF or cu == "SUBJECT")):
+                continue
         # Jitter to break the collision
         for k in range(1, 80):
             cand = round(
@@ -844,6 +926,218 @@ def enforce_no_collisions(df_avid, df_baseline, subject: str):
                 n_fixed += 1
                 break
     return df_avid, n_fixed
+
+
+# =============================================================================
+# Phase 4b: subset-coherence pass vs parent (2026-08-24)
+# =============================================================================
+_SUBSET_COHERENCE_SKIP_CATS = frozenset({
+    "BRAND INPUT", "SAMPLE SIZE", "BRAND CATEGORY", "SUBJECT",
+    "INPUT_METADATA", "INPUT METADATA", "BRAND ID", "REPORT INPUT",
+    "LOCATION", "DMA", "REGION", "AVID FAN", "CASUAL FAN",
+})
+
+# Mass-digital-behavior categories where an engaged (avid) slice cannot
+# plausibly sit far BELOW the broad audience: intensity selects for
+# MORE digital behavior, not less. Talent / politics / persona
+# categories are deliberately excluded - a big downward move there can
+# be a legitimate persona-shaped read.
+_MEGA_REACH_CATS = frozenset({
+    "SOCIAL MEDIA", "SEARCH ENGINE/AI", "SEARCH ENGINE",
+    "STREAMING/PLATFORM", "STREAMING VIDEO", "STREAMING MUSIC",
+    "APP/PLATFORM", "APP/PLATFORM USAGE", "TECHNOLOGY/DEVICE",
+    "MOST VISITED WEBSITES",
+})
+
+
+def _read_sample_size(df, raw_col):
+    """SAMPLE SIZE Raw, falling back to BRAND INPUT Raw. None if absent."""
+    cats_u = df["Column"].astype(str).str.upper().str.strip()
+    for anchor in ("SAMPLE SIZE", "BRAND INPUT"):
+        m = cats_u == anchor
+        if m.any():
+            try:
+                v = float(str(df.loc[m].iloc[0][raw_col]).replace(",", ""))
+                if v > 0:
+                    return v
+            except Exception:
+                continue
+    return None
+
+
+def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
+                                  *, verbose: bool = True,
+                                  down_gap_pp: float = 9.0,
+                                  down_parent_min_bp: float = 60.0):
+    """Both-direction subset coherence between an intensity cut and its
+    parent (2026-08-24, Dylan Minnette / Erin Brooks audits).
+
+    The avid (or any reduced-intensity) cohort is a strict subset of
+    the parent audience, so for every shared (category, brand) pair:
+
+      UPWARD CAP: avid_raw must not exceed parent_raw. In BP terms,
+        avid_bp <= parent_bp * (parent_sample / avid_sample). Dylan's
+        avid shipped 91+ rows violating this (up to 4.67x, e.g. avid
+        Tumblr 22.57 vs parent 4.64). Violators are capped just below
+        the ceiling with a subject-salted epsilon so the avid keeps
+        its legitimate over-index direction without breaking subset
+        arithmetic.
+
+      DOWNWARD LIFT: on mass-digital-behavior categories
+        (_MEGA_REACH_CATS) where parent_bp > `down_parent_min_bp` and
+        the avid sits more than `down_gap_pp` below the parent, the
+        avid is lifted to parent minus a salted small gap. An engaged
+        slice indexing far below the broad audience on YouTube-class
+        reach rows is the inverse failure (Erin's avid YouTube 64.7 vs
+        parent 77.6). Talent/persona categories are exempt so
+        legitimate persona reasoning survives.
+
+    Subject self-pin rows (any alias, see _subject_pin_aliases) are
+    exempt. All outputs 4dp, never on a .XX00 2dp boundary, never
+    colliding 4dp with the parent value. Raw/Proj recomputed from the
+    avid's own sample. Returns (df_avid, stats_dict).
+    """
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df_avid)
+    p_bp_col, _, p_raw_col, _ = _detect_cols(df_parent)
+    stats = {"capped_up": 0, "lifted_down": 0, "skipped": 0,
+             "examples_up": [], "examples_down": []}
+    if bp_col is None or p_bp_col is None:
+        return df_avid, stats
+
+    avid_sample = _read_sample_size(df_avid, raw_col)
+    parent_sample = _read_sample_size(df_parent, p_raw_col)
+    if not avid_sample or not parent_sample:
+        if verbose:
+            print("   [subset-coherence] sample size unreadable on one "
+                  "side; skipping (no-op)")
+        return df_avid, stats
+    ratio = avid_sample / parent_sample
+    if not (0.0 < ratio < 1.0):
+        if verbose:
+            print(f"   [subset-coherence] avid/parent sample ratio "
+                  f"{ratio:.4f} not in (0,1); not a strict subset - "
+                  f"skipping (no-op)")
+        return df_avid, stats
+
+    # Parent (CAT, VAL) -> bp
+    parent_idx = {}
+    for _, r in df_parent.iterrows():
+        cu = str(r.get("Column", "")).strip().upper()
+        vu = str(r.get("Value", "")).strip().upper()
+        bp = _fbp(r.get(p_bp_col))
+        if bp is None or not cu or not vu:
+            continue
+        parent_idx[(cu, vu)] = bp
+
+    df_avid = df_avid.copy()
+    for c in (bp_col, cs_col, raw_col, proj_col):
+        if c in df_avid.columns and df_avid[c].dtype.name not in ("object", "O"):
+            df_avid[c] = df_avid[c].astype(object)
+
+    try:
+        ss_mask = (df_avid["Column"].astype(str).str.upper().str.strip()
+                   == "SAMPLE SIZE")
+        uspop = float(str(df_avid.loc[ss_mask].iloc[0][proj_col])
+                      .replace(",", "")) if ss_mask.any() else None
+    except Exception:
+        uspop = None
+
+    pin_aliases = _subject_pin_aliases(subject)
+
+    def _finalize(new_bp, parent_bp, seed):
+        """4dp, off 2dp boundaries, not 4dp-colliding with parent."""
+        new_bp = max(0.0001, min(99.49, round(new_bp, 4)))
+        p4 = round(parent_bp, 4)
+        for k in range(6):
+            n4 = round(new_bp, 4)
+            on_boundary = abs(n4 - round(n4, 2)) < 0.00005
+            if n4 != p4 and not on_boundary:
+                return n4
+            new_bp = n4 + 0.0007 + abs(_seed_jitter(f"{seed}|nudge{k}",
+                                                    span=0.0014))
+        return round(new_bp, 4)
+
+    for idx in df_avid.index:
+        cu = str(df_avid.at[idx, "Column"]).strip().upper()
+        if cu in _SUBSET_COHERENCE_SKIP_CATS or cu in DEMO_CATS_TF:
+            continue
+        vu = str(df_avid.at[idx, "Value"]).strip().upper()
+        if not vu:
+            continue
+        avid_bp = _fbp(df_avid.at[idx, bp_col])
+        if avid_bp is None:
+            continue
+        # Self-pin exemption (any alias)
+        if avid_bp >= 99.49 and _norm_pin(vu) in pin_aliases:
+            continue
+        parent_bp = parent_idx.get((cu, vu))
+        if parent_bp is None or parent_bp <= 0:
+            continue
+
+        had_pct = "%" in str(df_avid.at[idx, bp_col])
+        new_bp = None
+        max_bp = parent_bp / ratio  # avid_raw == parent_raw at this BP
+
+        if avid_bp > max_bp:
+            # UPWARD violation: avid raw exceeds parent raw.
+            eps = 0.004 + abs(_seed_jitter(
+                f"{subject}|{cu}|{vu}|subset-cap-eps", span=0.032,
+            ))
+            new_bp = _finalize(max_bp * (1.0 - eps), parent_bp,
+                               f"{subject}|{cu}|{vu}|subset-cap")
+            if new_bp < avid_bp:
+                stats["capped_up"] += 1
+                if len(stats["examples_up"]) < 5:
+                    stats["examples_up"].append(
+                        f"{cu}/{vu}: {avid_bp:.4f} -> {new_bp:.4f} "
+                        f"(parent {parent_bp:.4f}, ceil {max_bp:.4f})"
+                    )
+            else:
+                new_bp = None
+        elif (cu in _MEGA_REACH_CATS
+                and parent_bp > down_parent_min_bp
+                and (parent_bp - avid_bp) > down_gap_pp):
+            # DOWNWARD violation: engaged slice far below broad
+            # audience on a mass-reach digital row.
+            gap = 2.5 + abs(_seed_jitter(
+                f"{subject}|{cu}|{vu}|subset-lift-gap", span=8.0,
+            ))
+            target = min(parent_bp - gap, max_bp * 0.995, 99.49)
+            if target > avid_bp:
+                new_bp = _finalize(target, parent_bp,
+                                   f"{subject}|{cu}|{vu}|subset-lift")
+                if new_bp > avid_bp:
+                    stats["lifted_down"] += 1
+                    if len(stats["examples_down"]) < 5:
+                        stats["examples_down"].append(
+                            f"{cu}/{vu}: {avid_bp:.4f} -> {new_bp:.4f} "
+                            f"(parent {parent_bp:.4f})"
+                        )
+                else:
+                    new_bp = None
+
+        if new_bp is None:
+            continue
+        df_avid.at[idx, bp_col] = (f"{new_bp:.4f}%" if had_pct
+                                   else f"{new_bp:.4f}")
+        try:
+            df_avid.at[idx, raw_col] = float(round(
+                avid_sample * new_bp / 100.0))
+            if uspop:
+                df_avid.at[idx, proj_col] = float(round(
+                    uspop * new_bp / 100.0))
+        except Exception:
+            pass
+
+    if verbose:
+        print(f"   [subset-coherence] {subject}: capped_up="
+              f"{stats['capped_up']} lifted_down={stats['lifted_down']} "
+              f"(ratio={ratio:.4f})")
+        for ex in stats["examples_up"][:3]:
+            print(f"      up-cap  {ex}")
+        for ex in stats["examples_down"][:3]:
+            print(f"      lift    {ex}")
+    return df_avid, stats
 
 
 # =============================================================================
@@ -894,6 +1188,8 @@ def synthesize_avid_fan(
     register_in_dashboard: bool = True,
     source_s3_key: Optional[str] = None,
     brand_category: Optional[str] = None,
+    api_key_pool: Optional[list] = None,
+    max_workers: Optional[int] = None,
 ) -> dict:
     """End-to-end orchestrator. Loads `source` (an S3 key or local CSV
     path), runs Phase 1-4 synthesis, writes the avid fan CSV to S3, and
@@ -975,25 +1271,63 @@ def synthesize_avid_fan(
     print(f"  -> Phase 2: ALL {len(cats_to_call)} non-demo categories "
           f"({total_rows} rows total) -- no priority gating, no top-N cap, "
           f"no default-lift fallback ...")
-    rows_decided = 0
-    for i, cat in enumerate(cats_to_call, start=1):
+    # 2026-08-20 parallel categories (see cut_parallel.py) -
+    # reasoning unchanged, chunks within a category still sequential.
+    try:
+        from cut_parallel import load_cut_key_pool, resolve_cut_workers
+    except Exception:
+        from migration.cut_parallel import (
+            load_cut_key_pool, resolve_cut_workers,
+        )
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading as _th
+    _keys = list(api_key_pool) if api_key_pool else load_cut_key_pool()
+    _n_workers = (int(max_workers) if max_workers
+                  else resolve_cut_workers(_keys))
+    cat_rows = {}
+    for cat in cats_to_call:
         rows = []
         for _, r in df_baseline[cats_upper == cat].iterrows():
             v = _fbp(r.get(bp_col, 0))
             if v is None:
                 continue
             rows.append((str(r.get(val_col, "")).strip(), v))
-        if not rows:
-            continue
-        decisions = reason_category_rows(subject, audience, cat, rows,
-                                         df_source=df_baseline)
-        if decisions:
-            cat_decisions[cat] = decisions
-        rows_decided += len(decisions)
-        print(f"     [{i:>2d}/{len(cats_to_call)}] {cat:32s} "
-              f"rows={len(rows):>4d}  claude_returned={len(decisions):>4d}  "
-              f"(running total decided={rows_decided}/{total_rows})",
-              flush=True)
+        if rows:
+            cat_rows[cat] = rows
+    print(f"     parallel: {_n_workers} workers over "
+          f"{max(len(_keys), 1)} key(s)")
+    _prog = {"done": 0, "rows_decided": 0}
+    _plock = _th.Lock()
+
+    def _reason_one(_idx, _cat):
+        _key = _keys[_idx % len(_keys)] if _keys else None
+        return reason_category_rows(subject, audience, _cat,
+                                    cat_rows[_cat],
+                                    df_source=df_baseline,
+                                    api_key=_key)
+
+    with ThreadPoolExecutor(max_workers=_n_workers) as _ex:
+        _futs = {_ex.submit(_reason_one, _i, _c): _c
+                 for _i, _c in enumerate(cat_rows)}
+        for _fut in as_completed(_futs):
+            _c = _futs[_fut]
+            try:
+                decisions = _fut.result()
+            except Exception as _e:
+                print(f"     {_c} FAILED: {_e}", flush=True)
+                decisions = {}
+            if decisions:
+                cat_decisions[_c] = decisions
+            with _plock:
+                _prog["done"] += 1
+                _prog["rows_decided"] += len(decisions)
+                print(f"     [{_prog['done']:>2d}/{len(cat_rows)}] "
+                      f"{_c:32s} rows={len(cat_rows[_c]):>4d}  "
+                      f"claude_returned={len(decisions):>4d}  "
+                      f"(running total decided="
+                      f"{_prog['rows_decided']}/{total_rows})",
+                      flush=True)
+    rows_decided = _prog["rows_decided"]
 
     # Phase 3: apply
     print(f"  -> Phase 3: apply transform row-by-row ...")
@@ -1006,6 +1340,19 @@ def synthesize_avid_fan(
     print(f"  -> Phase 4: no-collision enforcement vs baseline ...")
     df_avid, n_fixed = enforce_no_collisions(df_avid, df_baseline, subject)
     print(f"     re-jittered {n_fixed} rows to break collisions")
+
+    # Phase 4b (2026-08-24 Dylan/Erin audits): subset coherence vs the
+    # parent, both directions. Upward: avid_raw must never exceed
+    # parent_raw for a shared (category, brand). Downward: mass-reach
+    # digital rows must not sit far below the parent on an engaged
+    # slice. See enforce_avid_subset_coherence docstring.
+    print(f"  -> Phase 4b: subset coherence vs baseline ...")
+    try:
+        df_avid, _coh_stats = enforce_avid_subset_coherence(
+            df_avid, df_baseline, subject,
+        )
+    except Exception as _coh_err:
+        print(f"     subset coherence skipped (non-fatal): {_coh_err}")
 
     # Phase 5 (2026-06-15 Defect 29): post-synthesis differentiation gate.
     # On 2026-06-14 a backfill run uploaded ~750 avid profiles where
@@ -1427,8 +1774,12 @@ def synthesize_avid_fan(
 # Back-compat shim -- original name kept so any existing callers continue
 # to work. Prefer `synthesize_avid_fan(...)` for new code; it accepts
 # either an S3 key or a local path via source_kind.
-def synthesize_avid_fan_for_s3_key(s3_key: str, *, dry_run: bool = False) -> dict:
-    return synthesize_avid_fan(s3_key, source_kind="s3_key", dry_run=dry_run)
+def synthesize_avid_fan_for_s3_key(s3_key: str, *, dry_run: bool = False,
+                                   api_key_pool=None,
+                                   max_workers=None) -> dict:
+    return synthesize_avid_fan(s3_key, source_kind="s3_key", dry_run=dry_run,
+                               api_key_pool=api_key_pool,
+                               max_workers=max_workers)
 
 
 __all__ = [

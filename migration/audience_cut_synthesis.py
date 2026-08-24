@@ -503,7 +503,8 @@ def _format_category_user(subject: str, audience_summary: str,
 def reason_category_rows_cut(subject: str, audience: dict, category: str,
                              rows: list, gender: str, intensity: str,
                              *, chunk_size: int = 200,
-                             df_source=None) -> dict:
+                             df_source=None,
+                             api_key: str = None) -> dict:
     """Phase 2 Claude call -- reasons over EVERY row in the category (no
     top-N truncation, no priority gating). Long lists are split into
     sequential chunks of `chunk_size` rows so the agent gets the full
@@ -545,9 +546,12 @@ def reason_category_rows_cut(subject: str, audience: dict, category: str,
                 persona_brief = ""
 
     try:
-        from claude_client import claude_messages
+        from cut_parallel import cut_claude_call
     except Exception:
-        return {}
+        try:
+            from migration.cut_parallel import cut_claude_call
+        except Exception:
+            return {}
 
     rows_sorted = sorted(rows, key=lambda kv: -kv[1])
     decisions: dict = {}
@@ -563,8 +567,8 @@ def reason_category_rows_cut(subject: str, audience: dict, category: str,
             persona_brief=persona_brief,
         )
         try:
-            resp = claude_messages(
-                system=_CAT_ROW_SYSTEM, user=user,
+            resp = cut_claude_call(
+                system=_CAT_ROW_SYSTEM, user=user, api_key=api_key,
                 max_tokens=24000, temperature=0.3,
             )
         except Exception as e:
@@ -904,6 +908,8 @@ def synthesize_audience_cut(
     register_in_dashboard: bool = True,
     source_s3_key: Optional[str] = None,
     subject_override: Optional[str] = None,
+    api_key_pool: Optional[list] = None,
+    max_workers: Optional[int] = None,
 ) -> dict:
     """End-to-end orchestrator for a (gender, intensity) audience cut.
 
@@ -996,28 +1002,63 @@ def synthesize_audience_cut(
     total_rows = sum(cat_sizes.values())
     print(f"  -> Phase 2: ALL {len(cats_to_call)} non-demo categories "
           f"({total_rows} rows total) -- no priority gating, no top-N cap ...")
-    cat_decisions = {}
-    rows_decided = 0
-    for i, cat in enumerate(cats_to_call, start=1):
+    # 2026-08-20 parallel categories (see cut_parallel.py) -
+    # reasoning unchanged, chunks within a category still sequential.
+    try:
+        from cut_parallel import load_cut_key_pool, resolve_cut_workers
+    except Exception:
+        from migration.cut_parallel import (
+            load_cut_key_pool, resolve_cut_workers,
+        )
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading as _th
+    _keys = list(api_key_pool) if api_key_pool else load_cut_key_pool()
+    _n_workers = (int(max_workers) if max_workers
+                  else resolve_cut_workers(_keys))
+    cat_rows = {}
+    for cat in cats_to_call:
         rows = []
         for _, r in df_source[cats_upper == cat].iterrows():
             v = _fbp(r.get(bp_col, 0))
             if v is None:
                 continue
             rows.append((str(r.get(val_col, "")).strip(), v))
-        if not rows:
-            continue
-        decisions = reason_category_rows_cut(
-            subject, audience, cat, rows, gender, intensity,
-            df_source=df_source,
+        if rows:
+            cat_rows[cat] = rows
+    print(f"     parallel: {_n_workers} workers over "
+          f"{max(len(_keys), 1)} key(s)")
+    cat_decisions = {}
+    _prog = {"done": 0, "rows_decided": 0}
+    _plock = _th.Lock()
+
+    def _reason_one(_idx, _cat):
+        _key = _keys[_idx % len(_keys)] if _keys else None
+        return reason_category_rows_cut(
+            subject, audience, _cat, cat_rows[_cat], gender, intensity,
+            df_source=df_source, api_key=_key,
         )
-        if decisions:
-            cat_decisions[cat] = decisions
-        rows_decided += len(decisions)
-        print(f"     [{i:>2d}/{len(cats_to_call)}] {cat:32s} "
-              f"rows={len(rows):>4d}  claude_returned={len(decisions):>4d}  "
-              f"(running total decided={rows_decided}/{total_rows})",
-              flush=True)
+
+    with ThreadPoolExecutor(max_workers=_n_workers) as _ex:
+        _futs = {_ex.submit(_reason_one, _i, _c): _c
+                 for _i, _c in enumerate(cat_rows)}
+        for _fut in as_completed(_futs):
+            _c = _futs[_fut]
+            try:
+                decisions = _fut.result()
+            except Exception as _e:
+                print(f"     {_c} FAILED: {_e}", flush=True)
+                decisions = {}
+            if decisions:
+                cat_decisions[_c] = decisions
+            with _plock:
+                _prog["done"] += 1
+                _prog["rows_decided"] += len(decisions)
+                print(f"     [{_prog['done']:>2d}/{len(cat_rows)}] "
+                      f"{_c:32s} rows={len(cat_rows[_c]):>4d}  "
+                      f"claude_returned={len(decisions):>4d}  "
+                      f"(running total decided="
+                      f"{_prog['rows_decided']}/{total_rows})",
+                      flush=True)
 
     print(f"  -> Phase 3: apply transform row-by-row ...")
     df_cut, stats = apply_audience_cut_transform(
@@ -1028,6 +1069,30 @@ def synthesize_audience_cut(
     print(f"  -> Phase 4: no-collision enforcement vs source ...")
     df_cut, n_fixed = enforce_no_collisions(df_cut, df_source, subject)
     print(f"     re-jittered {n_fixed} rows to break collisions")
+
+    # Phase 4b (2026-08-24 Dylan/Erin audits): subset coherence vs the
+    # source, both directions - ONLY when this cut compresses intensity
+    # (an avid cut built from a non-avid source). Pure gender splits
+    # (source already at target intensity) are governed by
+    # migration/gender_split_coherence.enforce_gender_split_coherence
+    # at the orchestrator level; applying both would double-correct.
+    if intensity == "avid" and source_intensity != "avid":
+        print(f"  -> Phase 4b: subset coherence vs source "
+              f"(intensity-compressing cut) ...")
+        try:
+            try:
+                from avid_fan_row_by_row import (
+                    enforce_avid_subset_coherence,
+                )
+            except ImportError:
+                from migration.avid_fan_row_by_row import (  # type: ignore
+                    enforce_avid_subset_coherence,
+                )
+            df_cut, _coh_stats = enforce_avid_subset_coherence(
+                df_cut, df_source, subject,
+            )
+        except Exception as _coh_err:
+            print(f"     subset coherence skipped (non-fatal): {_coh_err}")
 
     # Output filename: "<Subject> - <Intensity> <Gender> Fan.csv"
     subj_clean = re.sub(r"\s+", " ", subject).strip()

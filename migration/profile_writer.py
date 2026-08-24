@@ -152,6 +152,58 @@ def _sort_within_category(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop(columns=["_orig_ix", "_bp_sort", "_first_ix"])
 
 
+def _normalize_numeric_artifacts(df: pd.DataFrame,
+                                 verbose: bool = True) -> tuple:
+    """Write-path format assertion (2026-08-24, Dylan/Erin avid audit:
+    four cells shipped with a trailing '%' inside numeric columns and
+    broke downstream parsing).
+
+    Scans the four numeric columns (BP / Category Share / Raw / Proj)
+    for cells that do not parse as float but DO parse after stripping
+    '%', thousands commas, and stray whitespace - and normalizes them
+    in place. Cells that are empty or genuinely non-numeric (metadata
+    rows) are left alone. Logs loudly when it fires so a regression
+    upstream is visible in the write log. Idempotent.
+
+    Returns (df, n_fixed).
+    """
+    n_fixed = 0
+    examples = []
+    for col in (BP_COL, CS_COL, RAW_COL, PROJ_COL):
+        if col not in df.columns:
+            continue
+        if df[col].dtype.name not in ("object", "O"):
+            continue  # already numeric dtype; nothing to strip
+        for idx in df.index:
+            cell = df.at[idx, col]
+            if cell is None:
+                continue
+            s = str(cell).strip()
+            if s == "" or s.lower() in ("nan", "none"):
+                continue
+            try:
+                float(s)
+                continue  # clean numeric string
+            except ValueError:
+                pass
+            cleaned = s.replace("%", "").replace(",", "").strip()
+            try:
+                float(cleaned)
+            except ValueError:
+                continue  # genuinely non-numeric (metadata); leave alone
+            df.at[idx, col] = cleaned
+            n_fixed += 1
+            if len(examples) < 5:
+                examples.append(f"{col}[{idx}]: {s!r} -> {cleaned!r}")
+    if n_fixed and verbose:
+        print(f"  [profile_writer] numeric-artifact assertion fired: "
+              f"normalized {n_fixed} cell(s) with non-numeric artifacts "
+              f"(%/commas) in BP/Share/Raw/Proj columns")
+        for ex in examples:
+            print(f"      {ex}")
+    return df, n_fixed
+
+
 def _load_tu_source(tu_source_key: str, s3) -> Optional[pd.DataFrame]:
     try:
         obj = s3.get_object(Bucket=BUCKET, Key=tu_source_key)
@@ -182,6 +234,7 @@ def write_profile_csv(
     gate_raise_on_fail: bool = False,
     verbose: bool = True,
     s3_client=None,
+    follower_ceiling: Optional[int] = None,
 ) -> dict:
     """Canonical write path for any profile CSV heading to
     `s3://dashboard-inputs/<s3_key>`.
@@ -226,8 +279,8 @@ def write_profile_csv(
     gate_defects: list = []
 
     # Gen Pop baseline columns (Jenna 2026-08-22): strip any copies from
-    # the input df so no enforcer / gate sees unexpected columns;
-    # re-appended fresh right before upload (step 6.5 below).
+    # the input df so no enforcer / gate / polish pass sees unexpected
+    # columns; re-appended fresh right before upload (step 6.5 below).
     try:
         try:
             from migration.genpop_baseline import strip_genpop_columns
@@ -255,6 +308,7 @@ def write_profile_csv(
             df, n_enforcer_changes = run_all_enforcers(
                 df, subject, brand_category=category, verbose=verbose,
                 target_year=(year if apply_anachronism else None),
+                follower_ceiling=follower_ceiling,
             )
         except Exception as e:
             print(f"  [profile_writer] run_all_enforcers raised "
@@ -355,16 +409,138 @@ def write_profile_csv(
             if gate_raise_on_fail:
                 raise
 
+        # 5.5 G12 PHANTOM_ZERO is BLOCKING (2026-08-24, Erin Brooks:
+        # gate flagged phantom-zero rows on both files, then uploaded
+        # anyway because this path runs with raise_on_fail=False).
+        # Remediation-first: strip the phantom rows with the standing
+        # enforcer, re-run the safety net so LOCATION/CS/Raw stay
+        # coherent, then re-run the gate. Only hard-fail when the fix
+        # cannot clear the defect - never upload a G12-flagged file.
+        _g12_hits = [d for d in (gate_defects or [])
+                     if "G12 PHANTOM_ZERO" in str(d)]
+        if _g12_hits:
+            print(f"  [profile_writer] G12 PHANTOM_ZERO flagged "
+                  f"({len(_g12_hits)}); applying strip + regate before "
+                  f"upload")
+            try:
+                try:
+                    from migration.post_generation_enforcers import (
+                        strip_phantom_zero_rows,
+                        run_write_safety_net as _rwsn_g12,
+                    )
+                except ImportError:
+                    from post_generation_enforcers import (  # type: ignore
+                        strip_phantom_zero_rows,
+                        run_write_safety_net as _rwsn_g12,
+                    )
+                df, _n_stripped = strip_phantom_zero_rows(
+                    df, subject, verbose=verbose,
+                )
+                df, _ = _rwsn_g12(df, subject, verbose=verbose)
+                if sort:
+                    df = _sort_within_category(df)
+                gate_defects = run_pre_publish_gate(
+                    df, subject,
+                    project_name=display_name or s3_key,
+                    raise_on_fail=False,
+                    verbose=verbose,
+                )
+            except Exception as _g12_err:
+                raise RuntimeError(
+                    f"G12 PHANTOM_ZERO auto-fix failed for {subject} "
+                    f"({s3_key}): {_g12_err}"
+                )
+            _g12_still = [d for d in (gate_defects or [])
+                          if "G12 PHANTOM_ZERO" in str(d)]
+            if _g12_still:
+                raise RuntimeError(
+                    f"G12 PHANTOM_ZERO persists after strip + regate "
+                    f"for {subject} ({s3_key}); refusing to upload a "
+                    f"flagged file: {_g12_still[0]}"
+                )
+            print(f"  [profile_writer] G12 cleared after strip "
+                  f"({_n_stripped} row(s) removed); proceeding")
+
+    # 5.6 Terminal invariant polish (2026-08-20 EST Buyers batch). The
+    # gate's auto-patchers (G1/G13) and several late enforcers (lux
+    # caps, MPB deband) mutate BPs AFTER the depin + self-pin + sort
+    # steps above, which shipped files with exact-2dp rows, a URL-
+    # variant seed string pinned in the native grid, a peer-capped
+    # subject row, and unsorted categories. Re-assert the invariants
+    # here (echo strip -> subject re-pin -> depin -> Raw/Proj + CS
+    # recompute) and re-sort, so nothing after this point can violate
+    # them. Idempotent + Claude-free.
+    n_polish_changes = 0
+    try:
+        try:
+            from migration.post_generation_enforcers import (
+                run_final_invariant_polish,
+            )
+        except ImportError:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from post_generation_enforcers import (  # type: ignore
+                run_final_invariant_polish,
+            )
+        df, polish_stats = run_final_invariant_polish(
+            df, subject, verbose=verbose,
+        )
+        n_polish_changes = sum(
+            v for v in polish_stats.values()
+            if isinstance(v, int) and v > 0
+        )
+        if sort:
+            df = _sort_within_category(df)
+    except Exception as e:
+        print(f"  [profile_writer] final invariant polish raised "
+              f"({type(e).__name__}: {e}); continuing")
+
+    # 5.7 Numeric-artifact assertion (2026-08-24): last-line format
+    # guarantee that no '%' / comma artifact survives in the four
+    # numeric columns of the shipped file. See
+    # _normalize_numeric_artifacts.
+    try:
+        df, _n_artifacts = _normalize_numeric_artifacts(df, verbose=verbose)
+    except Exception as e:
+        print(f"  [profile_writer] numeric-artifact assertion raised "
+              f"({type(e).__name__}: {e}); continuing")
+
+    # 5b. 2026-08-14 (iJustine incident): pre-flight subject-research gate.
+    # LLM estimates the subject's expected US digital engager reach and
+    # BLOCKS the write when the panel projection is orders of magnitude
+    # below expected (indicating hostmap coverage gap or wrong subject
+    # linkage). OPT-IN via env SYNTH_RESEARCH_GATE=1 because it costs an
+    # extra LLM call per profile.
+    try:
+        from migration.small_sample_hardening import (
+            preflight_subject_research_gate,
+        )
+        should_write, reason = preflight_subject_research_gate(
+            df, subject, brand_category=category, verbose=verbose,
+        )
+        if not should_write:
+            msg = (
+                f"[profile_writer] pre-flight research gate BLOCKED "
+                f"write for {subject}: {reason}"
+            )
+            print(f"  🛑 {msg}")
+            if gate_raise_on_fail:
+                raise RuntimeError(msg)
+    except Exception as e:
+        if "BLOCKED" in str(e):
+            raise
+        if verbose:
+            print(f"  [profile_writer] research gate skipped: {e}")
+
     # 6. Back up prior version
     backup_key = None
     if backup:
         backup_key = _backup_prior(s3, s3_key, "write")
 
     # 6.5 Gen Pop baseline columns (Jenna 2026-08-22): appended as the
-    # very last transform, after every enforcer / safety net / gate, so
-    # the raw file ships with the current Gen Pop value and index for
-    # every matched row and nothing upstream ever sees the extra
-    # columns. Non-fatal on any failure.
+    # very last transform, after every enforcer / safety net / polish /
+    # gate, so the raw file ships with the current Gen Pop value and
+    # index for every matched row and nothing upstream ever sees the
+    # extra columns. Non-fatal on any failure.
     try:
         try:
             from migration.genpop_baseline import append_genpop_columns
@@ -416,6 +592,7 @@ def write_profile_csv(
         "n_anachronism_changes": n_anachronism_changes,
         "n_coherence_changes": n_coherence_changes,
         "n_safety_net_changes": n_safety_net_changes,
+        "n_polish_changes": n_polish_changes,
         "gate_defects": gate_defects,
         "register": register_result,
     }

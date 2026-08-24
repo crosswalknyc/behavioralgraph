@@ -425,15 +425,17 @@ def _renormalize_category(df, cat, bp_col, cs_col, raw_col, proj_col, sample_siz
     bp_total = bp_floats.sum()
     if bp_total > 0:
         df.loc[mask, cs_col] = (bp_floats / bp_total * 100).round(4)
+    # Raw first (rounded integer), then Proj FROM the rounded Raw.
+    # 2026-08-22 fix: Proj was computed from the unrounded BP*sample
+    # product, which diverges from round(Raw/10M*US_POP) by up to +/-16
+    # once Raw is rounded (Rule #3a chain: BP -> Raw -> Proj).
+    raw_ints = (bp_floats / 100.0 * sample_size).round(0)
     if raw_col:
-        df.loc[mask, raw_col] = (
-            (bp_floats / 100.0 * sample_size).round(0).astype('int64')
-        )
+        df.loc[mask, raw_col] = raw_ints.astype('int64')
     if proj_col:
-        # Proj = (Raw / 10M) * US_POP  -- subject-scaled, edit_sample_size.py-style
+        # Proj = round(Raw / 10M * US_POP) -- from the ROUNDED Raw
         df.loc[mask, proj_col] = (
-            (bp_floats / 100.0 * sample_size *
-             (US_POP / 10_000_000.0)).round(0).astype('int64')
+            (raw_ints / 10_000_000.0 * US_POP).round(0).astype('int64')
         )
     return df
 
@@ -901,6 +903,12 @@ def _looks_round_any(v) -> bool:
     # Exact integer (5.0000) or X.X5/X.X0 in 2dp display
     if round(f * 100) % 10 in (0, 5):
         return True
+    # X.XX00 - exact 2dp boundary at 4dp precision (6.8900, 11.8900).
+    # 2026-08-22: the dejitter walks (step 0.0003) could land exactly on
+    # a .XX00 boundary because this guard only rejected hundredths 0/5;
+    # Aug 21 TVOD batch shipped 30-47 such landings per file.
+    if round(f * 10000) % 100 == 0:
+        return True
     # X.00xx (anchored near an integer)
     if abs(f - round(f)) < 0.01:
         return True
@@ -987,6 +995,21 @@ def dejitter_cross_cat_4dp_pins(df, subject, verbose=True,
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     sample_size = _detect_sample_size(df, bp_col, raw_col)
 
+    # Rule #3b exemption (2026-08-22): a brand carrying the EXACT same
+    # 4dp BP in MPB and a sub-category is the INTENTIONAL exact mirror
+    # (enforce_mpb_exact_mirror), not a pin defect. Breaking it here was
+    # the root cause of ~1,880 mirror-drift rows per file. Skip any
+    # (brand, bp4) identity that matches the brand's MPB row.
+    mpb_identity = set()
+    for _idx, _r in df.iterrows():
+        if str(_r.get('Column', '') or '').strip().upper() != 'MOST PURCHASED BRANDS':
+            continue
+        _v = _bp(_r.get(bp_col, 0))
+        if _v is None or _v <= 0 or _v >= 99.99:
+            continue
+        mpb_identity.add((_norm_brand(str(_r.get('Value', '') or '')),
+                          round(_v, 4)))
+
     rows_per_pair = {}
     for idx, r in df.iterrows():
         cat = str(r.get('Column', '') or '').strip().upper()
@@ -996,6 +1019,8 @@ def dejitter_cross_cat_4dp_pins(df, subject, verbose=True,
         old_bp = _bp(r.get(bp_col, 0))
         if old_bp <= 0 or old_bp >= 99.99:
             continue
+        if (_norm_brand(val), round(old_bp, 4)) in mpb_identity:
+            continue  # intentional MPB exact mirror (Rule #3b)
         key = (val, round(old_bp, 4))
         rows_per_pair.setdefault(key, []).append((idx, cat, old_bp))
 
@@ -1066,6 +1091,23 @@ def dejitter_within_cat_4dp_collisions(df, subject, verbose=True,
         if _c and _c in df.columns and df[_c].dtype.name not in ('object', 'O'):
             df[_c] = df[_c].astype(object)
 
+    # Mirror-awareness (Rule #3b, 2026-08-22): a sub-category row whose
+    # 4dp BP exactly matches its brand's MPB value is an INTENTIONAL
+    # exact mirror, not a collision artifact. Treat those rows as
+    # unmovable keepers so this pass never fights enforce_mpb_exact_mirror
+    # (jitter the OTHER colliding rows around them instead). If two
+    # mirror-bound brands collide, their MPB parents collide too - the
+    # MPB rows themselves are movable, and the next mirror pass
+    # propagates the separation.
+    mpb_vals = {}
+    for idx, r in df.iterrows():
+        if str(r.get('Column', '') or '').strip().upper() != \
+                'MOST PURCHASED BRANDS':
+            continue
+        v = _bp(r.get(bp_col, 0))
+        if v and 0 < v < 99.99:
+            mpb_vals[_norm_brand(str(r.get('Value', '') or ''))] = round(v, 4)
+
     # Per-category state: set of ALL 4dp BP values already in that
     # category (so shifts don't collide with non-colliding rows either).
     cat_used = {}
@@ -1079,21 +1121,36 @@ def dejitter_within_cat_4dp_collisions(df, subject, verbose=True,
         if old_bp <= 0 or old_bp >= 99.99:
             continue
         val = str(r.get('Value', '') or '').strip().upper()
+        mirror_bound = (
+            cat != 'MOST PURCHASED BRANDS'
+            and cat not in _MPB_MIRROR_SKIP_CATS
+            and mpb_vals.get(_norm_brand(val)) == round(old_bp, 4)
+        )
         cat_used.setdefault(cat, set()).add(round(old_bp, 4))
         key = (cat, round(old_bp, 4))
-        groups.setdefault(key, []).append((idx, val, old_bp))
+        groups.setdefault(key, []).append((idx, val, old_bp, mirror_bound))
 
     fixed = 0
     for (cat, bp4), entries in groups.items():
         if len(entries) < min_collision_group:
             continue
+        # Mirror-bound rows are unmovable keepers; movable rows get
+        # jittered around them. If nothing is movable, leave the group
+        # to the MPB-side dejitter + next mirror pass.
+        movable = [e[:3] for e in entries if not e[3]]
+        pinned = len(entries) - len(movable)
+        if not movable or (pinned == 0 and len(movable) < min_collision_group):
+            continue
+        entries = movable
         # Sort by brand value for deterministic ordering
         entries.sort(key=lambda e: e[1])
         N = len(entries)
         used = cat_used[cat]  # mutated — includes ALL existing values
-        # First entry keeps the original value (already in used)
-        # Others get assigned to unique 4dp slots
-        for pos, (idx, val, old_bp) in enumerate(entries[1:], start=1):
+        # A pinned (mirror-bound) row holds the original value, so ALL
+        # movable rows shift. With no pinned row, the first movable
+        # entry keeps the original value (already in used).
+        movers = entries if pinned else entries[1:]
+        for pos, (idx, val, old_bp) in enumerate(movers, start=1):
             # Find a free 4dp slot near old_bp, walking outward
             h = int(_hl.blake2b(
                 f'{subject}|{cat}|{val}|within-cat-4dp-walk'.encode(),
@@ -1301,8 +1358,35 @@ def dejitter_within_cat_tight_clusters(df, subject, *, verbose=True,
 # won't re-trigger.
 # ============================================================================
 
-_CROSS_PROFILE_INDEX_CACHE_PATH = '/tmp/.cross_profile_4dp_index.pkl'
+# 2026-08-19 (Jenna): shared cross-worker cache. Previously cached under
+# /tmp/ but systemd's PrivateTmp=true on synth-queue-worker@ isolates
+# /tmp per-slot, so every worker rebuilt the 4dp index (a 4,150-file
+# S3 walk, ~2-3 min) independently. Moving under /var/cache lets every
+# slot share one build. Also protected by a lockfile so if two workers
+# arrive cold-cache in the same second, only one does the S3 walk and
+# the other blocks on the lock, then reads the fresh cache when it
+# wins the lock. Persistent across worker restarts too.
+_CROSS_PROFILE_CACHE_DIR = '/var/cache/synth_queue'
+_CROSS_PROFILE_INDEX_CACHE_PATH = (
+    _CROSS_PROFILE_CACHE_DIR + '/cross_profile_4dp_index.pkl'
+)
+_CROSS_PROFILE_INDEX_LOCK_PATH = (
+    _CROSS_PROFILE_CACHE_DIR + '/cross_profile_4dp_index.lock'
+)
+# Legacy fallback: some environments may still write to /tmp (e.g. a
+# stray local script). Try the shared cache first, then fall back to
+# the legacy path if it's newer. New writes always go to the shared
+# path.
+_CROSS_PROFILE_INDEX_LEGACY_TMP_PATH = '/tmp/.cross_profile_4dp_index.pkl'
 _CROSS_PROFILE_INDEX_TTL_SECS = 3600
+# 2026-08-20 (Jenna: "why is gogurt taking so long"): stale-while-
+# revalidate. A cache older than TTL but younger than this hard max is
+# STILL USED by the run (collision-avoidance tolerates hours-stale
+# corpora fine); a background thread refreshes it for the next run.
+# Only a cache older than the hard max (or missing entirely) forces a
+# blocking mid-run rebuild - the 4,163-profile S3 walk that stretched
+# the Go-GURT run. A 6-hourly cron prebuild keeps even that rare.
+_CROSS_PROFILE_INDEX_HARD_MAX_AGE_SECS = 26 * 3600
 # Categories explicitly excluded from cross-profile dejitter:
 #   - DEPIN_DEMO_CATS: demos legitimately repeat (gen pop anchored)
 #   - DEPIN_META_CATS: BRAND INPUT, SAMPLE SIZE, etc.
@@ -1313,41 +1397,189 @@ _CROSS_PROFILE_SKIP_CATS = (
 )
 
 
+def _read_4dp_cache_any_age(cache_path, verbose=True):
+    """Read the newest usable cache file (shared path preferred, legacy
+    /tmp fallback) regardless of age. Returns (idx, age_secs) or
+    (None, None)."""
+    import os as _os_x, time as _time_x, pickle as _pickle_x
+    candidates = [
+        (cache_path, 'shared cache'),
+        (_CROSS_PROFILE_INDEX_LEGACY_TMP_PATH, 'legacy /tmp cache'),
+    ]
+    for path, label in candidates:
+        try:
+            if not _os_x.path.exists(path):
+                continue
+            age = _time_x.time() - _os_x.path.getmtime(path)
+            with open(path, 'rb') as _f:
+                _idx = _pickle_x.load(_f)
+            if verbose:
+                _n_keys = len(_idx)
+                _n_subs = len({s for ss in _idx.values() for s in ss})
+                print(f"   📚 cross-profile 4dp index loaded from "
+                      f"{label} ({_n_keys:,} keys / {_n_subs:,} "
+                      f"subjects / age {age/60:.0f}min)")
+            return _idx, age
+        except Exception as _e:
+            if verbose:
+                print(f"   ⚠ cross-profile {label} load failed: {_e}")
+    return None, None
+
+
+# One background refresh per process at a time.
+_CROSS_PROFILE_BG_REFRESH_LOCK = None
+
+
+def _spawn_4dp_index_bg_refresh(**rebuild_kwargs):
+    """Kick a daemon thread that rebuilds the 4dp index without blocking
+    the calling run. Non-blocking on the cross-process lock too: if
+    another worker is already rebuilding, the thread exits immediately."""
+    import threading as _threading_x
+    global _CROSS_PROFILE_BG_REFRESH_LOCK
+    if _CROSS_PROFILE_BG_REFRESH_LOCK is None:
+        _CROSS_PROFILE_BG_REFRESH_LOCK = _threading_x.Lock()
+    if not _CROSS_PROFILE_BG_REFRESH_LOCK.acquire(blocking=False):
+        return  # this process already has a refresh in flight
+
+    def _run():
+        try:
+            _rebuild_cross_profile_4dp_index(
+                nonblocking=True, verbose=False, **rebuild_kwargs)
+        except Exception:
+            pass
+        finally:
+            try:
+                _CROSS_PROFILE_BG_REFRESH_LOCK.release()
+            except Exception:
+                pass
+
+    _threading_x.Thread(
+        target=_run, name='cross-profile-4dp-refresh', daemon=True,
+    ).start()
+
+
 def _load_cross_profile_4dp_index(*,
                                     bucket='dashboard-inputs',
                                     region_name='us-east-2',
                                     cache_path=_CROSS_PROFILE_INDEX_CACHE_PATH,
+                                    lock_path=_CROSS_PROFILE_INDEX_LOCK_PATH,
                                     ttl=_CROSS_PROFILE_INDEX_TTL_SECS,
-                                    max_workers=20,
+                                    hard_max_age=_CROSS_PROFILE_INDEX_HARD_MAX_AGE_SECS,
+                                    max_workers=80,
                                     verbose=True):
-    """Build (CATEGORY, VALUE, BP_4dp) -> set(subject_upper) index from S3.
+    """Return the (CATEGORY, VALUE, BP_4dp) -> set(subject_upper) index.
 
-    Cached as pickle at cache_path with TTL. Each rebuild walks every
-    root-level *.csv in the bucket (excluding _backups/, system/, and
-    the canonical Gen_Pop_2026.csv). Reads with 20 parallel workers;
-    typical wall time ~25s for 838 files.
+    Freshness policy (2026-08-20 stale-while-revalidate):
+      - age < ttl: use as-is.
+      - ttl <= age < hard_max_age: USE the stale index immediately and
+        refresh it in a background daemon thread so THIS run never
+        pays the 4,000+ profile S3 walk. Collision avoidance tolerates
+        an hours-stale corpus (it only misses profiles uploaded since
+        the last build).
+      - age >= hard_max_age or no cache: blocking lock-serialized
+        rebuild (the pre-2026-08-20 cold path).
 
     Returns the dict, or None if S3 is unreachable / boto3 missing.
     """
-    import os as _os_x, time as _time_x, pickle as _pickle_x
-    try:
-        if _os_x.path.exists(cache_path):
-            age = _time_x.time() - _os_x.path.getmtime(cache_path)
-            if age < ttl:
-                with open(cache_path, 'rb') as _f:
-                    idx = _pickle_x.load(_f)
-                if verbose:
-                    n_keys = len(idx)
-                    n_subs = len({s for ss in idx.values() for s in ss})
-                    print(f"   📚 cross-profile 4dp index loaded from cache "
-                          f"({n_keys:,} keys / {n_subs:,} subjects / "
-                          f"age {age/60:.0f}min)")
-                return idx
-    except Exception as _e_load:
+    idx, age = _read_4dp_cache_any_age(cache_path, verbose=verbose)
+    if idx is not None and age is not None:
+        if age < ttl:
+            return idx
+        if age < hard_max_age:
+            if verbose:
+                print(f"   📚 cross-profile index is {age/60:.0f}min old "
+                      f"(ttl {ttl/60:.0f}min): using it now, refreshing "
+                      f"in background")
+            _spawn_4dp_index_bg_refresh(
+                bucket=bucket, region_name=region_name,
+                cache_path=cache_path, lock_path=lock_path,
+                ttl=ttl, max_workers=max_workers)
+            return idx
         if verbose:
-            print(f"   ⚠ cross-profile cache load failed: {_e_load}")
+            print(f"   📚 cross-profile index is {age/3600:.1f}h old "
+                  f"(> hard max {hard_max_age/3600:.0f}h): rebuilding "
+                  f"before use")
+
+    return _rebuild_cross_profile_4dp_index(
+        bucket=bucket, region_name=region_name, cache_path=cache_path,
+        lock_path=lock_path, ttl=ttl, max_workers=max_workers,
+        verbose=verbose, nonblocking=False)
+
+
+def _rebuild_cross_profile_4dp_index(*,
+                                      bucket='dashboard-inputs',
+                                      region_name='us-east-2',
+                                      cache_path=_CROSS_PROFILE_INDEX_CACHE_PATH,
+                                      lock_path=_CROSS_PROFILE_INDEX_LOCK_PATH,
+                                      ttl=_CROSS_PROFILE_INDEX_TTL_SECS,
+                                      max_workers=80,
+                                      verbose=True,
+                                      nonblocking=False):
+    """Lock-serialized S3 walk + atomic cache write.
+
+    Walks every root-level *.csv in the bucket (excluding _backups/,
+    system/, and the canonical Gen_Pop_2026.csv) with parallel reads.
+
+    Concurrency safety: an fcntl LOCK_EX lockfile at lock_path
+    serializes rebuilds across worker processes. With
+    ``nonblocking=True`` (background refresh path) the lock is taken
+    with LOCK_NB and the function returns None immediately when
+    another worker is already rebuilding. After acquiring the lock the
+    cache is re-checked: if a fresh one appeared while waiting, the S3
+    walk is skipped.
+
+    Returns the dict, or None if the rebuild was skipped or failed.
+    """
+    import os as _os_x, time as _time_x, pickle as _pickle_x
 
     try:
+        _os_x.makedirs(_os_x.path.dirname(cache_path), exist_ok=True)
+    except Exception:
+        pass
+
+    _lock_fh = None
+    _got_lock = False
+    try:
+        import fcntl as _fcntl_x
+        try:
+            _lock_fh = open(lock_path, 'a+')
+            if nonblocking:
+                try:
+                    _fcntl_x.flock(_lock_fh.fileno(),
+                                   _fcntl_x.LOCK_EX | _fcntl_x.LOCK_NB)
+                    _got_lock = True
+                except OSError:
+                    return None  # someone else is already rebuilding
+            else:
+                if verbose:
+                    print(f"   🔒 cross-profile 4dp index: waiting for "
+                          f"build lock ({lock_path})...")
+                _t0 = _time_x.time()
+                _fcntl_x.flock(_lock_fh.fileno(), _fcntl_x.LOCK_EX)
+                _got_lock = True
+                _wait = _time_x.time() - _t0
+                if verbose and _wait > 1.0:
+                    print(f"   🔒 acquired after {_wait:.1f}s "
+                          f"(another worker was likely building)")
+            # Re-check the cache after taking the lock: the previous
+            # lock holder may have just written a fresh one. If so,
+            # skip our own S3 walk.
+            _idx2, _age2 = _read_4dp_cache_any_age(cache_path,
+                                                    verbose=False)
+            if _idx2 is not None and _age2 is not None and _age2 < ttl:
+                if verbose:
+                    print(f"   📚 cross-profile index refreshed by "
+                          f"another worker while waiting; using it")
+                return _idx2
+        except Exception as _e_lock:
+            # If flock isn't available (e.g. Windows dev) or the lockfile
+            # can't be opened, fall through and rebuild without the lock.
+            # This preserves the pre-2026-08-19 behavior as a safety net.
+            if verbose:
+                print(f"   ⚠ cross-profile lock unavailable "
+                      f"({_e_lock}); rebuilding without lock")
+
+        # Do the actual rebuild while holding the lock (if we got it).
         import io as _io_x
         import boto3 as _boto3_x
         import concurrent.futures as _cf_x
@@ -1364,7 +1596,8 @@ def _load_cross_profile_4dp_index(*,
                     keys.append(k)
         if verbose:
             print(f"   📚 building cross-profile 4dp index from "
-                  f"{len(keys):,} S3 profiles...")
+                  f"{len(keys):,} S3 profiles (parallel={max_workers})...")
+        _t_build = _time_x.time()
 
         index = defaultdict(set)
         bp_col_canon = 'Brand Penetration (Row)'
@@ -1400,9 +1633,17 @@ def _load_cross_profile_4dp_index(*,
                     index[(cat, val, bp4)].add(subj)
 
         out = dict(index)
+        _t_walk = _time_x.time() - _t_build
+
+        # Atomic write: write to a tempfile, then rename so partial
+        # writes never corrupt the cache. Any other worker holding the
+        # cache pickle open at read time will see either the old file
+        # (via existing open fd) or the fully-written new one.
         try:
-            with open(cache_path, 'wb') as _f:
+            _tmp = cache_path + '.tmp'
+            with open(_tmp, 'wb') as _f:
                 _pickle_x.dump(out, _f)
+            _os_x.replace(_tmp, cache_path)
         except Exception as _e_w:
             if verbose:
                 print(f"   ⚠ cross-profile cache write failed: {_e_w}")
@@ -1411,12 +1652,26 @@ def _load_cross_profile_4dp_index(*,
             n_keys = len(out)
             n_subs = len({s for ss in out.values() for s in ss})
             print(f"   📚 cross-profile 4dp index built: {n_keys:,} keys / "
-                  f"{n_subs:,} subjects")
+                  f"{n_subs:,} subjects  (S3 walk: {_t_walk:.1f}s)")
         return out
     except Exception as _e_build:
         if verbose:
             print(f"   ⚠ cross-profile 4dp index build failed: {_e_build}")
         return None
+    finally:
+        # Always release the lock, even on failure, so a subsequent
+        # cold-cache worker isn't stuck waiting forever.
+        try:
+            if _got_lock and _lock_fh is not None:
+                import fcntl as _fcntl_x
+                _fcntl_x.flock(_lock_fh.fileno(), _fcntl_x.LOCK_UN)
+        except Exception:
+            pass
+        try:
+            if _lock_fh is not None:
+                _lock_fh.close()
+        except Exception:
+            pass
 
 
 def dejitter_cross_profile_4dp_collisions(df, subject, *,
@@ -2689,8 +2944,13 @@ def enforce_netflix_leads_streaming_platform(df, subject, verbose=True):
     pr_self_pin = pr_bp is not None and pr_bp >= 95.0
 
     # Universal baselines
-    NX_FLOOR, NX_TARGET, NX_JITTER = 73.0, 75.0, 2.0
-    PR_FLOOR, PR_TARGET, PR_JITTER = 64.0, 66.0, 2.0
+    # 2026-08-24 (floor-vs-corrected-baseline sweep): Netflix Gen Pop
+    # baseline corrected to 39.17 and Prime Video to 37.19 in the
+    # market-cap audit; the legacy 73/75 + 64/66 anchors sat ~2x above
+    # baseline and manufactured over-reads on every rescue. Floors now
+    # sit just under the corrected baselines.
+    NX_FLOOR, NX_TARGET, NX_JITTER = 36.5, 38.0, 2.0
+    PR_FLOOR, PR_TARGET, PR_JITTER = 34.5, 36.0, 2.0
 
     n_changes = 0
 
@@ -2706,7 +2966,7 @@ def enforce_netflix_leads_streaming_platform(df, subject, verbose=True):
         new_nx = NX_TARGET + _jitter_for(subject, 'NETFLIX',
                                           salt='baseline',
                                           lo=0.0, hi=NX_JITTER * 2)
-        new_nx = round(min(max(new_nx, NX_TARGET), 80.0), 4)
+        new_nx = round(min(max(new_nx, NX_TARGET), 42.5), 4)
         if verbose:
             print(f"   ⤴ raising NETFLIX {nx_bp:.4f}% -> {new_nx:.4f}% "
                   f"(below baseline floor {NX_FLOOR}%, suppression detected)")
@@ -2718,7 +2978,7 @@ def enforce_netflix_leads_streaming_platform(df, subject, verbose=True):
         new_pr = PR_TARGET + _jitter_for(subject, 'AMAZON PRIME VIDEO',
                                           salt='baseline',
                                           lo=0.0, hi=PR_JITTER * 2)
-        new_pr = round(min(max(new_pr, PR_TARGET), 70.0), 4)
+        new_pr = round(min(max(new_pr, PR_TARGET), 40.5), 4)
         if verbose:
             print(f"   ⤴ raising AMAZON PRIME VIDEO {pr_bp:.4f}% -> "
                   f"{new_pr:.4f}% (below baseline floor {PR_FLOOR}%)")
@@ -2733,6 +2993,18 @@ def enforce_netflix_leads_streaming_platform(df, subject, verbose=True):
     # from df so post-lift Netflix is the comparison reference.
     try:
         nx_bp_now = _to_float(df.at[nx_idx, bp_col])
+        # 2026-08-20 (EST Buyers batch): the subject's own row (and its
+        # parent-anchor row for cut-shaped subjects like "Amazon Prime
+        # Video - EST Buyers") is NEVER a peer. The >=95 exemption below
+        # missed it when earlier passes had eroded the self-pin to ~87,
+        # and this cap then forced the subject UNDER Netflix (73.92) -
+        # a Rule #3 violation that shipped in four files. Exempt by
+        # name, not by magnitude.
+        subj_pin_norm = _re.sub(r'[^A-Z0-9]', '',
+                                str(subject or '').upper())
+        parent_pin_norm = _re.sub(
+            r'[^A-Z0-9]', '',
+            str(subject or '').split(' - ')[0].upper())
         if nx_bp_now is not None and nx_bp_now < 95.0 and sample_size and sample_size > 0:
             for i in sp_idx:
                 if i == nx_idx:
@@ -2742,6 +3014,14 @@ def enforce_netflix_leads_streaming_platform(df, subject, verbose=True):
                     continue
                 if bp_i >= 95.0:  # peer self-pin (e.g. AP profile) — exempt
                     continue
+                _vn = _re.sub(r'[^A-Z0-9]', '',
+                              str(df.at[i, 'Value']).upper())
+                if subj_pin_norm and (
+                        _vn == subj_pin_norm
+                        or (parent_pin_norm and _vn == parent_pin_norm)
+                        or (len(subj_pin_norm) >= 6
+                            and _vn.startswith(subj_pin_norm))):
+                    continue  # subject / parent-anchor row, not a peer
                 if bp_i > nx_bp_now + 1e-9:
                     cap_val = round(nx_bp_now - 0.1, 4)
                     if cap_val < 1.0:
@@ -2768,9 +3048,15 @@ def enforce_netflix_leads_streaming_platform(df, subject, verbose=True):
     if n_changes == 0:
         return df, 0
 
-    # Renormalize Category Share for STREAMING/PLATFORM
-    _renormalize_category(df, 'STREAMING/PLATFORM',
-                          bp_col, cs_col, raw_col, proj_col, sample_size)
+    # Renormalize Category Share for STREAMING/PLATFORM. Guarded: on
+    # str-dtype frames the CS write raises TypeError and previously
+    # killed the whole enforcer AFTER the BP caps had been applied.
+    try:
+        _renormalize_category(df, 'STREAMING/PLATFORM',
+                              bp_col, cs_col, raw_col, proj_col, sample_size)
+    except Exception as _rn_err:
+        if verbose:
+            print(f"   ⚠️ S/P share renormalize skipped: {_rn_err}")
     return df, n_changes
 
 
@@ -3357,6 +3643,150 @@ def strip_avid_casual_fan_rows(df, subject, verbose=True):
     return df, n
 
 
+def enforce_follower_ceiling_projection(df, subject, follower_ceiling,
+                                          verbose=True):
+    """Enforce the physical public-metric ceiling for any capped-audience
+    profile: US Gen Pop Projection cannot exceed the underlying public
+    metric that defines the cohort.
+
+    Established 2026-08-19 (Jenna directive), broadened same day per
+    follow-up: "confirming that the followers of or viewers of a
+    certain video, etc that has easy to see public metrics will never
+    exceed that value when projected."
+
+    Applies to every capped audience_type (see
+    migration/follower_ceiling.CAPPED_AUDIENCE_TYPES):
+      - followers / subscribers: cap = total follower / subscriber count
+      - viewers: cap = video / broadcast view count (YouTube, Nielsen,
+        streamer top-10)
+      - listeners: cap = podcast play / listener count (Spotify,
+        Chartable, Podtrac)
+      - attendees: cap = event attendance figure
+      - users: cap = MAU / DAU
+
+    The function only cares about the ceiling NUMBER, not the audience
+    type - the math is identical regardless of which public metric
+    supplies it. Parameter is named `follower_ceiling` for backward
+    compat; treat it as "audience_ceiling".
+
+    How it works:
+      1. Read BRAND INPUT row's `Original Raw Numbers` (= subject_raw =
+         sample size). Fall back to SAMPLE SIZE row if BRAND INPUT is
+         missing.
+      2. Compute current projection = raw / PANEL * US_POP.
+      3. If projection > ceiling, cap raw at
+         floor(ceiling * PANEL / US_POP) and rewrite the BRAND INPUT /
+         SAMPLE SIZE Raw + Proj cells.
+      4. Downstream `recompute_raw_and_projection` cascades the new
+         sample size to every brand row's Raw + Proj (see Rule #3a).
+
+    Idempotent: if raw is already at or below the ceiling, no changes.
+
+    Only fires when `follower_ceiling` is a positive integer. Pass
+    `None` or `0` to disable (default in the general audience case).
+
+    Returns (df, n_cells_updated).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    try:
+        fc = int(follower_ceiling) if follower_ceiling else 0
+    except Exception:
+        fc = 0
+    if fc <= 0:
+        return df, 0
+
+    try:
+        from migration.follower_ceiling import (
+            max_subject_raw_for_ceiling, PROJECTION_MULTIPLIER,
+        )
+    except Exception:
+        # Fallback math if the helper isn't importable for some reason
+        # (very unlikely; belt-and-suspenders).
+        US_POP_LOCAL = 329_900_000
+        PANEL_LOCAL = 10_000_000
+        PROJECTION_MULTIPLIER = US_POP_LOCAL / PANEL_LOCAL
+        def max_subject_raw_for_ceiling(x):
+            import math as _m
+            try:
+                return _m.floor(int(x) * PANEL_LOCAL / US_POP_LOCAL)
+            except Exception:
+                return 0
+
+    max_raw = max_subject_raw_for_ceiling(fc)
+    if max_raw <= 0:
+        return df, 0
+
+    def _num(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', '').strip())
+        except Exception:
+            return None
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if raw_col is None and proj_col is None:
+        return df, 0
+    if 'Column' not in df.columns:
+        return df, 0
+
+    col_upper = df['Column'].astype(str).str.upper().str.strip()
+    # Locate the metadata rows we need to correct
+    bi_mask = col_upper == 'BRAND INPUT'
+    ss_mask = col_upper == 'SAMPLE SIZE'
+    if not (bi_mask.any() or ss_mask.any()):
+        return df, 0
+
+    # Determine current sample_size from either row (prefer BRAND INPUT
+    # since it always carries BP=100 -> raw=sample_size).
+    current_raw = None
+    for mask in (bi_mask, ss_mask):
+        if not mask.any():
+            continue
+        idx = df.index[mask][0]
+        v = _num(df.at[idx, raw_col]) if raw_col else None
+        if v and v > 0:
+            current_raw = int(round(v))
+            break
+    if current_raw is None or current_raw <= 0:
+        return df, 0
+
+    if current_raw <= max_raw:
+        # Already under the ceiling.
+        return df, 0
+
+    projection_before = int(round(current_raw * PROJECTION_MULTIPLIER))
+    projection_after = int(round(max_raw * PROJECTION_MULTIPLIER))
+    if verbose:
+        print(f"   🔒 enforce_follower_ceiling_projection: "
+              f"{subject!r} follower_ceiling={fc:,}; "
+              f"sample_size {current_raw:,} -> {max_raw:,}; "
+              f"projection {projection_before:,} -> {projection_after:,}")
+
+    # Rewrite Raw + Proj cells on BOTH BRAND INPUT and SAMPLE SIZE rows.
+    # BP + Category Share stay untouched — they were correct relative
+    # to the (now smaller) sample size, and the downstream
+    # `recompute_raw_and_projection` pass cascades the new sample_size
+    # to every non-metadata row's Raw + Proj automatically.
+    n_cells = 0
+    for mask in (bi_mask, ss_mask):
+        if not mask.any():
+            continue
+        idx = df.index[mask][0]
+        if raw_col is not None:
+            try:
+                df.at[idx, raw_col] = int(max_raw)
+                n_cells += 1
+            except Exception:
+                pass
+        if proj_col is not None:
+            try:
+                df.at[idx, proj_col] = int(projection_after)
+                n_cells += 1
+            except Exception:
+                pass
+    return df, n_cells
+
+
 def recompute_raw_and_projection(df, subject, verbose=True):
     """Recompute Original Raw Numbers + US Gen Pop Projection from BP for
     every row. Sample size derives from BRAND INPUT row (BP=100 ->
@@ -3415,19 +3845,24 @@ def recompute_raw_and_projection(df, subject, verbose=True):
     valid = bp_actual.notna()
     cells = 0
 
+    # Raw first (rounded integer), Proj FROM the rounded Raw.
+    # 2026-08-22 fix: Proj was previously computed from the unrounded
+    # BP/100*sample product ("equivalent" per the old comment), but after
+    # Raw is rounded the two formulas diverge by up to +/-16. The
+    # canonical chain (Rule #3a, this function's own docstring) is
+    # BP -> Raw = round(...) -> Proj = round(Raw/10M * 329.9M).
+    raw_expected = (bp_actual / 100.0 * sample_size).round(0)
+
     if raw_col is not None:
         raw_actual = df[raw_col].apply(_num)
-        raw_expected = (bp_actual / 100.0 * sample_size).round(0)
         diff = ((raw_actual - raw_expected).abs() > 1).fillna(False) & valid
         cells += int(diff.sum())
         df.loc[valid, raw_col] = raw_expected.loc[valid].astype('int64')
 
     if proj_col is not None:
         proj_actual = df[proj_col].apply(_num)
-        # Proj = (Raw / 10M) * 329.9M  -- subject-scaled, edit_sample_size.py-style
-        # Equivalent to BP/100 * sample_size * (US_POP/PANEL)
-        proj_expected = (bp_actual / 100.0 * sample_size *
-                         (US_POP / PANEL)).round(0)
+        # Proj = round(Raw / 10M * 329.9M) -- from the ROUNDED Raw
+        proj_expected = (raw_expected / PANEL * US_POP).round(0)
         diff = ((proj_actual - proj_expected).abs() > 1).fillna(False) & valid
         cells += int(diff.sum())
         df.loc[valid, proj_col] = proj_expected.loc[valid].astype('int64')
@@ -3662,8 +4097,8 @@ PANEL_REALITY_FLOORS = {
     # INSURANCE — universal quote-shopping panel; depressed across all talent files
     ('INSURANCE', 'GEICO'):       {'older': 16.0, 'mid': 18.0, 'young': 22.0},
     ('INSURANCE', 'PROGRESSIVE'): {'older': 15.0, 'mid': 17.0, 'young': 20.0},
-    ('INSURANCE', 'STATE FARM'):  {'older': 14.0, 'mid': 15.0, 'young': 16.0},
-    ('INSURANCE', 'ALLSTATE'):    {'older': 11.0, 'mid': 11.0, 'young': 11.0},
+    ('INSURANCE', 'STATE FARM'):  {'older': 11.7, 'mid': 12.6, 'young': 13.4},
+    ('INSURANCE', 'ALLSTATE'):    {'older': 7.7, 'mid': 7.7, 'young': 7.7},
 
     # AUTOMOBILE — mass-auto research panel (CarFax / dealer apps)
     ('AUTOMOBILE', 'TOYOTA'):    {'older': 14.0, 'mid': 20.0, 'young': 26.0},
@@ -3676,9 +4111,9 @@ PANEL_REALITY_FLOORS = {
     ('APPAREL/FOOTWEAR',      'NIKE'): {'older': 18.0, 'mid': 32.0, 'young': 48.0},
 
     # MOVIE THEATER — mass-theatrical-attendance panel
-    ('MOVIE THEATER', 'AMC THEATRES'):       {'older': 24.0, 'mid': 30.0, 'young': 36.0},
-    ('MOVIE THEATER', 'CINEMARK THEATRES'):  {'older': 16.0, 'mid': 22.0, 'young': 26.0},
-    ('MOVIE THEATER', 'REGAL CINEMAS'):      {'older': 14.0, 'mid': 18.0, 'young': 22.0},
+    ('MOVIE THEATER', 'AMC THEATRES'):       {'older': 11.1, 'mid': 13.9, 'young': 16.7},
+    ('MOVIE THEATER', 'CINEMARK THEATRES'):  {'older': 7.0, 'mid': 9.7, 'young': 11.4},
+    ('MOVIE THEATER', 'REGAL CINEMAS'):      {'older': 6.6, 'mid': 8.5, 'young': 10.3},
 
     # TRAVEL — Booking #1 OTA panel; tends to invert with Expedia in talent template
     ('TRAVEL', 'BOOKING'): {'older': 26.0, 'mid': 30.0, 'young': 32.0},
@@ -3706,21 +4141,27 @@ SEGMENT_BENCHMARKS = {
     ('SOCIAL MEDIA', 'TIKTOK'):    {'18-24': 78, '25-34': 62, '35-44': 39, '45-54': 24, '55-64': 17, '65+':  9},
     ('SOCIAL MEDIA', 'SNAPCHAT'):  {'18-24': 75, '25-34': 56, '35-44': 25, '45-54': 14, '55-64':  8, '65+':  4},
     ('SOCIAL MEDIA', 'INSTAGRAM'): {'18-24': 78, '25-34': 71, '35-44': 49, '45-54': 33, '55-64': 22, '65+': 15},
-    ('SOCIAL MEDIA', 'LINKEDIN'):  {'18-24': 30, '25-34': 44, '35-44': 38, '45-54': 32, '55-64': 24, '65+': 13},
-    ('SOCIAL MEDIA', 'PINTEREST'): {'18-24': 38, '25-34': 36, '35-44': 35, '45-54': 28, '55-64': 25, '65+': 21},
+    ('SOCIAL MEDIA', 'LINKEDIN'):  {'18-24': 25, '25-34': 36, '35-44': 31, '45-54': 26, '55-64': 20, '65+': 11},
+    ('SOCIAL MEDIA', 'PINTEREST'): {'18-24': 33, '25-34': 31, '35-44': 30, '45-54': 24, '55-64': 22, '65+': 18},
     ('SOCIAL MEDIA', 'X'):         {'18-24': 32, '25-34': 27, '35-44': 21, '45-54': 16, '55-64': 12, '65+':  6},
+    # YOUTUBE - near-universal reach (Pew 2024: 90%+ of US adults under 65).
+    # Added 2026-08-24 (Erin Brooks / Dylan Minnette audits: engager builds
+    # under-read YouTube at index ~47 vs Gen Pop baseline ~88; engagers must
+    # index at or above gen pop on digital behaviors). Gen-pop-weighted ~87.6
+    # vs corrected baseline 88.07. One-way lift only (NOT in KNOWN_OVERSHOOT).
+    ('SOCIAL MEDIA', 'YOUTUBE'):   {'18-24': 94, '25-34': 93, '35-44': 92, '45-54': 89, '55-64': 85, '65+': 78},
 
     # SEARCH / AI — Pew + LLM-adoption survey 2024
-    ('SEARCH ENGINE/AI', 'CHAT GPT'):   {'18-24': 55, '25-34': 48, '35-44': 38, '45-54': 26, '55-64': 16, '65+':  9},
+    ('SEARCH ENGINE/AI', 'CHAT GPT'):   {'18-24': 48, '25-34': 42, '35-44': 33, '45-54': 23, '55-64': 14, '65+':  8},
     ('SEARCH ENGINE/AI', 'GEMINI'):     {'18-24': 22, '25-34': 20, '35-44': 16, '45-54': 12, '55-64':  9, '65+':  5},
-    ('SEARCH ENGINE/AI', 'PERPLEXITY'): {'18-24': 12, '25-34': 11, '35-44':  8, '45-54':  5, '55-64':  3, '65+':  2},
+    ('SEARCH ENGINE/AI', 'PERPLEXITY'): {'18-24':  5, '25-34':  4, '35-44':  3, '45-54':  2, '55-64':  1, '65+':  1},
     ('SEARCH ENGINE/AI', 'CLAUDE AI'):  {'18-24': 14, '25-34': 12, '35-44':  9, '45-54':  6, '55-64':  3, '65+':  1},
 
     # WHERE THEY SHOP — pharmacy/mass retail visit-in-past-6mo, NOT universal
-    ('WHERE THEY SHOP', 'CVS'):       {'18-24': 28, '25-34': 34, '35-44': 40, '45-54': 44, '55-64': 48, '65+': 52},
-    ('WHERE THEY SHOP', 'WALGREENS'): {'18-24': 24, '25-34': 30, '35-44': 36, '45-54': 40, '55-64': 44, '65+': 48},
-    ('WHERE THEY SHOP', 'TEMU'):      {'18-24': 42, '25-34': 38, '35-44': 28, '45-54': 18, '55-64': 10, '65+':  5},
-    ('WHERE THEY SHOP', 'COSTCO'):    {'18-24': 24, '25-34': 32, '35-44': 40, '45-54': 42, '55-64': 40, '65+': 32},
+    ('WHERE THEY SHOP', 'CVS'):       {'18-24': 11, '25-34': 14, '35-44': 16, '45-54': 18, '55-64': 19, '65+': 21},
+    ('WHERE THEY SHOP', 'WALGREENS'): {'18-24': 10, '25-34': 12, '35-44': 15, '45-54': 17, '55-64': 18, '65+': 20},
+    ('WHERE THEY SHOP', 'TEMU'):      {'18-24': 37, '25-34': 34, '35-44': 25, '45-54': 16, '55-64':  9, '65+':  4},
+    ('WHERE THEY SHOP', 'COSTCO'):    {'18-24': 13, '25-34': 17, '35-44': 21, '45-54': 22, '55-64': 21, '65+': 17},
 
     # TELECOM Big 3 — carrier share-of-audience (subscriber overlap)
     # T-MOBILE updated 2026-05-25 per colleague flag: was systematically under-read by 14-22pp
@@ -3732,18 +4173,18 @@ SEGMENT_BENCHMARKS = {
     ('TELECOM', 'T-MOBILE'): {'18-24': 34, '25-34': 34, '35-44': 32, '45-54': 30, '55-64': 26, '65+': 18},
 
     # BANKING Big 5 — primary-bank household share
-    ('BANKING', 'CHASE'):           {'18-24': 28, '25-34': 35, '35-44': 36, '45-54': 34, '55-64': 30, '65+': 26},
-    ('BANKING', 'BANK OF AMERICA'): {'18-24': 24, '25-34': 30, '35-44': 30, '45-54': 28, '55-64': 26, '65+': 22},
-    ('BANKING', 'WELLS FARGO'):     {'18-24': 22, '25-34': 26, '35-44': 28, '45-54': 28, '55-64': 26, '65+': 22},
-    ('BANKING', 'CITIBANK'):        {'18-24':  8, '25-34': 12, '35-44': 12, '45-54': 11, '55-64': 10, '65+':  8},
-    ('BANKING', 'US BANK'):         {'18-24':  6, '25-34': 10, '35-44': 11, '45-54': 11, '55-64': 11, '65+': 10},
+    ('BANKING', 'CHASE'):           {'18-24': 19, '25-34': 23, '35-44': 24, '45-54': 23, '55-64': 20, '65+': 17},
+    ('BANKING', 'BANK OF AMERICA'): {'18-24': 16, '25-34': 20, '35-44': 20, '45-54': 19, '55-64': 18, '65+': 15},
+    ('BANKING', 'WELLS FARGO'):     {'18-24': 15, '25-34': 18, '35-44': 20, '45-54': 20, '55-64': 18, '65+': 15},
+    ('BANKING', 'CITIBANK'):        {'18-24':  6, '25-34':  9, '35-44':  9, '45-54':  9, '55-64':  8, '65+':  6},
+    ('BANKING', 'US BANK'):         {'18-24':  3, '25-34':  4, '35-44':  5, '45-54':  5, '55-64':  5, '65+':  5},
 
     # DIGITAL BANKING — younger-skewing P2P
-    ('DIGITAL BANKING', 'PAYPAL'):   {'18-24': 56, '25-34': 58, '35-44': 52, '45-54': 46, '55-64': 38, '65+': 28},
-    ('DIGITAL BANKING', 'VENMO'):    {'18-24': 64, '25-34': 56, '35-44': 38, '45-54': 22, '55-64': 12, '65+':  5},
-    ('DIGITAL BANKING', 'CASH APP'): {'18-24': 52, '25-34': 44, '35-44': 28, '45-54': 18, '55-64': 11, '65+':  5},
+    ('DIGITAL BANKING', 'PAYPAL'):   {'18-24': 48, '25-34': 50, '35-44': 45, '45-54': 40, '55-64': 33, '65+': 24},
+    ('DIGITAL BANKING', 'VENMO'):    {'18-24': 55, '25-34': 48, '35-44': 33, '45-54': 19, '55-64': 10, '65+':  4},
+    ('DIGITAL BANKING', 'CASH APP'): {'18-24': 42, '25-34': 35, '35-44': 23, '45-54': 15, '55-64':  9, '65+':  4},
     ('DIGITAL BANKING', 'ZELLE'):    {'18-24': 22, '25-34': 36, '35-44': 42, '45-54': 38, '55-64': 32, '65+': 22},
-    ('DIGITAL BANKING', 'APPLE PAY'):{'18-24': 48, '25-34': 46, '35-44': 38, '45-54': 28, '55-64': 18, '65+':  9},
+    ('DIGITAL BANKING', 'APPLE PAY'):{'18-24': 28, '25-34': 26, '35-44': 22, '45-54': 16, '55-64': 10, '65+':  5},
     # Ally / Chime are niche — NOT in benchmarks; legacy floor logic stays away
 
     # CREDIT PROVIDER — Visa/MC/Discover/Amex universal mass anchors
@@ -3765,7 +4206,7 @@ SEGMENT_BENCHMARKS = {
     ('CREDIT PROVIDER', 'VISA'):       {'18-24': 35, '25-34': 50, '35-44': 58, '45-54': 58, '55-64': 54, '65+': 46},
     ('CREDIT PROVIDER', 'MASTERCARD'): {'18-24': 16, '25-34': 25, '35-44': 32, '45-54': 32, '55-64': 28, '65+': 22},
     ('CREDIT PROVIDER', 'DISCOVER CREDIT CARD'): {'18-24':  8, '25-34': 12, '35-44': 16, '45-54': 16, '55-64': 14, '65+': 11},
-    ('CREDIT PROVIDER', 'AMERICAN EXPRESS'): {'18-24':  6, '25-34': 12, '35-44': 18, '45-54': 20, '55-64': 18, '65+': 14},
+    ('CREDIT PROVIDER', 'AMERICAN EXPRESS'): {'18-24':  4, '25-34':  9, '35-44': 13, '45-54': 15, '55-64': 13, '65+': 10},
     ('CREDIT PROVIDER', 'CAPITAL ONE'): {'18-24': 12, '25-34': 20, '35-44': 26, '45-54': 26, '55-64': 22, '65+': 18},
     # Synchrony — store-card issuer (Amazon Store, PayPal Credit, Lowe's, Care Credit, Walmart).
     # (added 2026-05-25 per KD review — was at 2.67%, ~70M cardholders / 258M adults skews ~12-15%)
@@ -3778,7 +4219,7 @@ SEGMENT_BENCHMARKS = {
     # STREAMING/PLATFORM — Amazon Prime Video ~150M US HH (Prime household halo).
     # (added 2026-05-25 per Gen Pop colleague review — was at 45% gen pop, real is 60-72%)
     # Younger heavy Prime adoption; older buckets still 50%+ via household sharing.
-    ('STREAMING/PLATFORM', 'AMAZON PRIME VIDEO'): {'18-24': 58, '25-34': 70, '35-44': 72, '45-54': 70, '55-64': 64, '65+': 52},
+    ('STREAMING/PLATFORM', 'AMAZON PRIME VIDEO'): {'18-24': 33, '25-34': 39, '35-44': 41, '45-54': 39, '55-64': 36, '65+': 29},
 
     # STREAMING/PLATFORM — Paramount+ ~71M global subs (~40M US). CBS NFL package,
     # Champions League, SEC football, Star Trek, Latin content. Texas culture
@@ -3793,13 +4234,13 @@ SEGMENT_BENCHMARKS = {
     # Anchor: ~25M Sephora Beauty Insider members + Kohl's-bay traffic.
     # The audience-weighting downstream will scale by gender share.
     # Sheet4 canonical: 'SEPHORA' and 'Ulta Beauty'. No 'ULTA' alias.
-    ('WHERE THEY SHOP', 'SEPHORA'):     {'18-24': 28, '25-34': 26, '35-44': 22, '45-54': 16, '55-64':  9, '65+':  5},
-    ('WHERE THEY SHOP', 'ULTA BEAUTY'): {'18-24': 22, '25-34': 24, '35-44': 22, '45-54': 18, '55-64': 12, '65+':  8},
+    ('WHERE THEY SHOP', 'SEPHORA'):     {'18-24': 24, '25-34': 23, '35-44': 19, '45-54': 14, '55-64':  8, '65+':  4},
+    ('WHERE THEY SHOP', 'ULTA BEAUTY'): {'18-24': 19, '25-34': 20, '35-44': 19, '45-54': 15, '55-64': 10, '65+':  7},
 
     # WHERE THEY SHOP — Target mass retail, slight female + young skew.
     # (added 2026-05-25 per Valkyrae audit — was at 38.30% on young female
     #  multicultural audience; persona-real 50-60%.)
-    ('WHERE THEY SHOP', 'TARGET'): {'18-24': 52, '25-34': 56, '35-44': 52, '45-54': 46, '55-64': 38, '65+': 28},
+    ('WHERE THEY SHOP', 'TARGET'): {'18-24': 34, '25-34': 36, '35-44': 34, '45-54': 30, '55-64': 25, '65+': 18},
 
     # QSR — Chipotle young + Hispanic + Asian over-index (urban fast-casual).
     # (added 2026-05-25 per Valkyrae audit — was at 8.73% on young multicultural
@@ -3818,9 +4259,9 @@ SEGMENT_BENCHMARKS = {
     ('VIRTUAL MVPD FAST', 'ROKU CHANNEL'): {'18-24': 10, '25-34': 14, '35-44': 18, '45-54': 22, '55-64': 24, '65+': 22},
     ('VIRTUAL MVPD FAST', 'TUBI'):         {'18-24': 18, '25-34': 22, '35-44': 22, '45-54': 22, '55-64': 22, '65+': 18},
     ('VIRTUAL MVPD FAST', 'PLUTO TV'):     {'18-24':  8, '25-34': 11, '35-44': 14, '45-54': 14, '55-64': 14, '65+': 12},
-    ('VIRTUAL MVPD FAST', 'XUMO'):         {'18-24':  4, '25-34':  6, '35-44':  8, '45-54': 10, '55-64': 10, '65+':  8},
-    ('VIRTUAL MVPD FAST', 'YOUTUBE TV'):   {'18-24': 16, '25-34': 22, '35-44': 24, '45-54': 22, '55-64': 18, '65+': 14},
-    ('VIRTUAL MVPD FAST', 'DIRECTV'):      {'18-24':  4, '25-34':  6, '35-44':  8, '45-54': 10, '55-64': 12, '65+': 14},
+    ('VIRTUAL MVPD FAST', 'XUMO'):         {'18-24':  1, '25-34':  2, '35-44':  2, '45-54':  2, '55-64':  3, '65+':  2},
+    ('VIRTUAL MVPD FAST', 'YOUTUBE TV'):   {'18-24':  6, '25-34':  8, '35-44':  9, '45-54':  8, '55-64':  7, '65+':  5},
+    ('VIRTUAL MVPD FAST', 'DIRECTV'):      {'18-24':  3, '25-34':  4, '35-44':  6, '45-54':  7, '55-64':  9, '65+': 10},
 
     # SEARCH ENGINE/AI — older Windows/Edge default surface.
     # (added 2026-05-25 per Patrick Stewart review — Bing/MSN systematically under-read
@@ -3830,7 +4271,7 @@ SEGMENT_BENCHMARKS = {
     # Copilot — bundled into Windows / Edge, older Windows skew.
     # (added 2026-05-25 per Sandra/Regina/Olivia/Queen lock-release pass — was at
     #  16.1172 lock on Regina/Queen but emerging audience-aware values should curve.)
-    ('SEARCH ENGINE/AI', 'COPILOT'): {'18-24':  6, '25-34':  8, '35-44': 12, '45-54': 14, '55-64': 16, '65+': 14},
+    ('SEARCH ENGINE/AI', 'COPILOT'): {'18-24':  4, '25-34':  5, '35-44':  7, '45-54':  8, '55-64': 10, '65+':  8},
     # GOOGLE — universal search anchor. Real-world penetration peaks at ~92% (Pew
     # 2024 + ComScore 2024). The LLM tends to write 99.9% as a "saturation pin"
     # for any tech-positive audience, producing the 99.99% Chicago_Sky artifact
@@ -3843,7 +4284,7 @@ SEGMENT_BENCHMARKS = {
     # STREAMING/MUSIC — SiriusXM is age-curved (in-car commercial older). iHeart
     # and Pandora REMOVED from SEGMENT in favor of ETHNICITY (see Black radio
     # over-index below). Age-only would suppress Black audiences' real listening.
-    ('STREAMING/MUSIC', 'SIRIUSXM'): {'18-24':  4, '25-34':  7, '35-44': 12, '45-54': 14, '55-64': 16, '65+': 16},
+    ('STREAMING/MUSIC', 'SIRIUSXM'): {'18-24':  3, '25-34':  5, '35-44':  9, '45-54': 10, '55-64': 11, '65+': 11},
 
     # TELECOM — Spectrum ~30% US HH coverage; broadband + cable bundles.
     # NOTE: Spectrum is heavily REGIONAL (Texas/Carolinas/LA/NY) not just age.
@@ -3855,7 +4296,7 @@ SEGMENT_BENCHMARKS = {
     # ~18-19% across Penelope/Patrick/Robin/Octavia (4 of 4 talent files in
     # the 5-25 batch). Adding age-curved targets (younger over-index).
     # (added 2026-05-25 per Penelope Cruz colleague review with backfill mention)
-    ('APPAREL/FOOTWEAR', 'NIKE'):   {'18-24': 64, '25-34': 60, '35-44': 54, '45-54': 48, '55-64': 42, '65+': 36},
+    ('APPAREL/FOOTWEAR', 'NIKE'):   {'18-24': 48, '25-34': 45, '35-44': 41, '45-54': 36, '55-64': 32, '65+': 27},
     ('APPAREL/FOOTWEAR', 'ADIDAS'): {'18-24': 38, '25-34': 34, '35-44': 28, '45-54': 22, '55-64': 18, '65+': 14},
 }
 
@@ -6333,6 +6774,156 @@ def reverse_propagate_subcat_to_mpb(df, subject, verbose=True):
 
 
 # ---------------------------------------------------------------------------
+# 2026-08-22 Rule #3b — MPB EXACT mirror (user verdict 2026-05-28)
+# ---------------------------------------------------------------------------
+# "the value in MBP should be the exact value you put in the sub category
+# with no jitter". The propagate pair above uses the OLD pre-2026-05-28
+# semantics (gap threshold + jitter, hardcoded brand set), which leaves
+# ~1,880 drifted rows per fresh file. The canonical exact-mirror fixer
+# lived only in scripts/fix_mpb_cross_cat_consistency.py (one-shot CLI)
+# and was never wired into the chain. This enforcer is that fixer's
+# fix_one() logic, in-module so every write path gets it:
+#   1. Dedupe MPB by brand-norm (keep max BP, canonical Value).
+#   2. Every non-skip-cat row whose brand-norm exists in MPB gets
+#      BP := MPB BP exactly (Value := MPB canonical casing), Raw/Proj
+#      recomputed. Subject 100-pins untouched.
+#   3. Renormalize Category Share for touched categories.
+# MUST run AFTER every dejitter/depin pass (they would re-break the
+# exact identity; dejitter_cross_cat_4dp_pins also now exempts
+# MPB-mirror identities). Idempotent.
+# ---------------------------------------------------------------------------
+
+_MPB_MIRROR_SKIP_CATS = {
+    # demographics
+    'GENDER', 'AGE', 'ETHNICITY', 'INCOME', 'OCCUPATION',
+    'PARENTAL_STATUS', 'PARENTAL STATUS',
+    'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'SEXUAL ORIENTATION',
+    'EDUCATION', 'LOCATION',
+    # metadata
+    'BRAND INPUT', 'SUBJECT', 'SAMPLE SIZE', 'INPUT_METADATA',
+    'BRAND CATEGORY', 'AVID FAN', 'CASUAL FAN',
+    # source category itself
+    'MOST PURCHASED BRANDS',
+    # talent/sport (have their own internal alignment)
+    'TALENT', 'TALENT SUB', 'ATHLETE', 'NFL ATHLETE', 'NBA ATHLETE',
+    'MLB ATHLETE', 'NHL ATHLETE', 'WNBA ATHLETE', 'MLS ATHLETE',
+    'ACTOR', 'MUSICIAN/BAND', 'MUSICIAN', 'HOST/PERSONALITY',
+    'POLITICS/ACTIVIST', 'POLITICS', 'PODCAST', 'SPORTS TEAM',
+    'AL/NL', 'AFC/NFC', 'AFC EAST', 'AFC NORTH', 'AFC SOUTH', 'AFC WEST',
+    'NFC EAST', 'NFC NORTH', 'NFC SOUTH', 'NFC WEST',
+    'AL EAST', 'AL CENTRAL', 'AL WEST',
+    'NL EAST', 'NL CENTRAL', 'NL WEST',
+    'EASTERN CONFERENCE', 'WESTERN CONFERENCE',
+    'PACIFIC', 'ATLANTIC', 'METROPOLITAN', 'CENTRAL', 'NORTH', 'SOUTH',
+    'EAST', 'WEST',
+    'MLB', 'NBA', 'NFL', 'NHL', 'MLS', 'WNBA', 'EPL', 'LA LIGA',
+    'SERIE A', 'LIGUE 1', 'BUNDESLIGA', 'CFB', 'SOCCER',
+    # content/persona
+    'PERSONA', 'CONTENT', 'SERIES', 'FRANCHISE',
+}
+
+
+def enforce_mpb_exact_mirror(df, subject, verbose=True):
+    """Rule #3b: MOST PURCHASED BRANDS is the canonical source of truth
+    for a brand's BP; every other (non-skip) category carrying the same
+    brand mirrors it EXACTLY (no jitter, no gap). Returns (df, n)."""
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    df = df.copy()
+    for _c in (bp_col, cs_col, raw_col, proj_col):
+        if _c and _c in df.columns and df[_c].dtype.name not in ('object', 'O'):
+            df[_c] = df[_c].astype(object)
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    val_n = df['Value'].astype(str).apply(_norm_brand)
+    mpb_mask = col_u == 'MOST PURCHASED BRANDS'
+
+    # ---- 1. dedupe MPB by brand-norm (keep max BP) ----
+    drop_idx = []
+    by_norm = {}
+    for idx in df.index[mpb_mask]:
+        nb = val_n.at[idx]
+        if not nb:
+            continue
+        bp = _bp(df.at[idx, bp_col])
+        if bp is None or pd.isna(bp) or abs(bp - 100.0) < 0.01:
+            continue
+        prev = by_norm.get(nb)
+        if prev is None or bp > prev[1]:
+            if prev is not None:
+                drop_idx.append(prev[0])
+            by_norm[nb] = (idx, bp)
+        else:
+            drop_idx.append(idx)
+    if drop_idx:
+        df = df.drop(index=drop_idx).reset_index(drop=True)
+        col_u = df['Column'].astype(str).str.upper().str.strip()
+        val_n = df['Value'].astype(str).apply(_norm_brand)
+        mpb_mask = col_u == 'MOST PURCHASED BRANDS'
+
+    # ---- 2. MPB lookup ----
+    mpb_lookup = {}
+    for idx in df.index[mpb_mask]:
+        nb = val_n.at[idx]
+        bp = _bp(df.at[idx, bp_col])
+        if not nb or bp is None or pd.isna(bp) or bp <= 0:
+            continue
+        if abs(bp - 100.0) < 0.01:
+            continue
+        prev = mpb_lookup.get(nb)
+        if prev is None or bp > prev['bp']:
+            mpb_lookup[nb] = {'bp': bp, 'value': str(df.at[idx, 'Value'])}
+    if not mpb_lookup:
+        return df, len(drop_idx)
+
+    # ---- 3. mirror sub-cat rows to MPB exactly ----
+    n_aligned = 0
+    touched = set()
+    for idx in df.index:
+        cat = col_u.at[idx]
+        if cat in _MPB_MIRROR_SKIP_CATS:
+            continue
+        nb = val_n.at[idx]
+        if nb not in mpb_lookup:
+            continue
+        sub_bp = _bp(df.at[idx, bp_col])
+        if sub_bp is None or pd.isna(sub_bp) or abs(sub_bp - 100.0) < 0.01:
+            continue
+        target = mpb_lookup[nb]
+        # Exact-4dp comparison. An abs()<1e-4 tolerance let float noise
+        # (10.9865-10.9864 = 9.99e-5) read as "aligned" while the 4dp
+        # values differ - the one drift class the audit verifier flags.
+        if round(sub_bp, 4) == round(target['bp'], 4):
+            continue
+        df.at[idx, bp_col] = round(target['bp'], 4)
+        df.at[idx, 'Value'] = target['value']
+        new_raw = int(round(target['bp'] / 100.0 * sample_size))
+        if raw_col:
+            df.at[idx, raw_col] = new_raw
+        if proj_col:
+            df.at[idx, proj_col] = int(round(new_raw / 10_000_000.0 * US_POP))
+        touched.add(str(df.at[idx, 'Column']))
+        n_aligned += 1
+
+    if drop_idx:
+        touched.add('MOST PURCHASED BRANDS')
+    for c in touched:
+        df = _renormalize_category(df, c, bp_col, cs_col, raw_col,
+                                   proj_col, sample_size)
+
+    total = n_aligned + len(drop_idx)
+    if verbose and total:
+        print(f"   🪞 MPB exact mirror (Rule #3b): {n_aligned} row(s) aligned, "
+              f"{len(drop_idx)} MPB dupe(s) dropped")
+    return df, total
+
+
+# ---------------------------------------------------------------------------
 # 2026-05-26 Defect Class #24 — TALENT ↔ sub-cat propagation
 # ---------------------------------------------------------------------------
 # Same defect as MPB ↔ sub-cat (Defect Class #23/#23b) but for talent rows.
@@ -6451,18 +7042,18 @@ def propagate_talent_to_subcats(df, subject, verbose=True):
 # Antenna, MoffettNathanson). These are conservative MID points; the
 # enforcer only triggers if BP is more than 8pts below this mid.
 HOUSEHOLD_STREAMING_CONSENSUS_MID: dict[tuple[str, str], float] = {
-    ('STREAMING/PLATFORM', 'NETFLIX'):            70.0,
-    ('STREAMING/PLATFORM', 'AMAZON PRIME VIDEO'): 66.0,
+    ('STREAMING/PLATFORM', 'NETFLIX'):            38.0,   # 2026-08-24: corrected Gen Pop baseline 39.17
+    ('STREAMING/PLATFORM', 'AMAZON PRIME VIDEO'): 36.0,   # 2026-08-24: corrected baseline 37.19
     ('STREAMING/PLATFORM', 'HULU'):               38.0,
     ('STREAMING/PLATFORM', 'DISNEY+'):            43.0,
-    ('STREAMING/PLATFORM', 'HBO MAX'):            33.0,
-    ('STREAMING/PLATFORM', 'PARAMOUNT+'):         21.0,
-    ('STREAMING/PLATFORM', 'PEACOCK'):            23.0,
-    ('STREAMING/PLATFORM', 'APPLE TV+'):          16.0,
+    ('STREAMING/PLATFORM', 'HBO MAX'):            22.3,   # 2026-08-24: baseline 23.01
+    ('STREAMING/PLATFORM', 'PARAMOUNT+'):         18.6,   # 2026-08-24: baseline 19.22
+    ('STREAMING/PLATFORM', 'PEACOCK'):            15.5,   # 2026-08-24: baseline 16.10
+    ('STREAMING/PLATFORM', 'APPLE TV+'):          11.8,   # 2026-08-24: baseline 12.25
     ('STREAMING/PLATFORM', 'YOUTUBE KIDS'):       12.0,
-    ('STREAMING/MUSIC',    'SPOTIFY'):            52.0,
-    ('STREAMING/MUSIC',    'APPLE MUSIC'):        36.0,
-    ('STREAMING/MUSIC',    'AMAZON MUSIC'):       30.0,
+    ('STREAMING/MUSIC',    'SPOTIFY'):            30.1,   # 2026-08-24: baseline 31.18
+    ('STREAMING/MUSIC',    'APPLE MUSIC'):        11.7,   # 2026-08-24: baseline 12.11
+    ('STREAMING/MUSIC',    'AMAZON MUSIC'):       14.4,   # 2026-08-24: baseline 14.89
 }
 
 # Lift trigger: BP must be at least this many points below the mid
@@ -7731,15 +8322,486 @@ def normalize_final_format(df, subject, verbose=True):
 # Convenience wrapper
 # ============================================================================
 
+def _coerce_writeable_columns_to_object(df, verbose=False):
+    """Coerce numeric-writeable columns to object dtype so enforcers can
+    freely assign floats, ints, and formatted strings via ``df.at[]``.
+
+    Pandas 2.1+ introduced an NA-aware string dtype (`'str'`, arrow-
+    backed) that CSV reads sometimes assign to columns containing mixed
+    percent-strings like ``'12.34%'``. That dtype REJECTS float / int
+    writes with ``Invalid value 'X' for dtype 'str'``. Every enforcer
+    that writes into BP / Category Share / Raw / Projection columns
+    silently crashes on those files because ``run_all_enforcers`` wraps
+    each in a broad ``except``. The user-visible symptoms are
+    downstream defects the enforcers were supposed to fix
+    (BP>100 rows, Disney+/Hulu duplicates, panel-reality violations)
+    shipping unfixed.
+
+    Fix: at the very top of ``run_all_enforcers``, coerce every column
+    the enforcers may write to ``object`` dtype. ``object`` accepts
+    ANY Python value at ``df.at`` write time so downstream enforcers
+    stop crashing.
+
+    Safe because the terminal ``recompute_raw_and_projection`` pass
+    canonicalises the numeric columns before write, and profile_writer
+    writes CSV where dtype doesn't matter.
+
+    2026-08-19 (Jenna, Gilmore Girls incident): every profile since
+    the pandas 2.1 upgrade has had ``enforce_bp_hard_ceiling`` and
+    ``apply_disney_hulu_rollup`` silently failing with the string-
+    dtype error. Adding this coercion fixes 6+ enforcers at once.
+    """
+    if df is None or len(df) == 0:
+        return df
+    # These are every column the enforcer chain writes into. Anything
+    # else can keep its original dtype.
+    _writeable = (
+        'Brand Penetration (Row)', 'Brand Penetration',
+        'Category Share', 'Original Raw Numbers',
+        'US Gen Pop Projection', 'US Population', 'Sample Size',
+        'Value', 'Column',
+    )
+    coerced = 0
+    for c in _writeable:
+        if c not in df.columns:
+            continue
+        try:
+            dtype_str = str(df[c].dtype)
+        except Exception:
+            continue
+        if dtype_str == 'object':
+            continue
+        try:
+            df[c] = df[c].astype(object)
+            coerced += 1
+            if verbose:
+                print(f"   🔀 coerced column {c!r} {dtype_str} → object "
+                      f"(enforcer-safe write)")
+        except Exception as e:
+            if verbose:
+                print(f"   ⚠️ could not coerce {c!r} to object: "
+                      f"{type(e).__name__}: {e}")
+    return df
+
+
+def renormalize_location_to_100(df, subject, verbose=True):
+    """Scale LOCATION-column BPs so they sum to 100.
+
+    Every panelist lives in exactly one DMA, so LOCATION should sum to
+    100 across all DMA rows for the audience. Gilmore Girls 2026-08-19
+    shipped with LOCATION sum=121.2 (avid) / 121.5 (base) because
+    LOCATION sits in DEPIN_META_CATS (excluded from demo renorm) and
+    no dedicated pass rescales it. Fix: proportional rescale of every
+    LOCATION row's BP by (100 / current_sum), then recompute Raw and
+    Projection via the standard downstream pass.
+
+    Idempotent — if the file is already within 0.5pp of 100, no-op.
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, _, _, _ = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    loc_mask = (col_u == 'LOCATION')
+    if not loc_mask.any():
+        return df, 0
+
+    bp_num = pd.to_numeric(
+        df.loc[loc_mask, bp_col].astype(str).str.replace('%', '', regex=False),
+        errors='coerce',
+    )
+    total_bp = float(bp_num.sum())
+    if not (total_bp > 0):
+        return df, 0
+    if abs(total_bp - 100.0) < 0.5:
+        return df, 0
+
+    scale = 100.0 / total_bp
+    n_touched = 0
+    for idx in df.index[loc_mask]:
+        cur = _bp(df.at[idx, bp_col])
+        if cur is None:
+            continue
+        new = round(cur * scale, 4)
+        df.at[idx, bp_col] = new
+        n_touched += 1
+
+    if verbose:
+        # Verify post
+        bp_num2 = pd.to_numeric(
+            df.loc[loc_mask, bp_col].astype(str).str.replace('%', '', regex=False),
+            errors='coerce',
+        )
+        print(f"   📍 renormalize_location_to_100 [{subject or ''}]: "
+              f"rescaled {n_touched} DMA rows; "
+              f"sum {total_bp:.2f} → {float(bp_num2.sum()):.2f}")
+    return df, n_touched
+
+
+def enforce_brand_share_plausibility(df, subject, verbose=True,
+                                     repair_share: float = 0.60,
+                                     gp_bp_repair_ceiling: float = 5.0):
+    """Cap a profile's implied audience share of any brand's TOTAL Gen
+    Pop audience (2026-08-24, Dylan Minnette audit).
+
+    Dylan's file carried rows whose Raw exceeded the brand's ENTIRE
+    projected Gen Pop audience (MAXBONE profile_raw > brand US
+    audience; MAEV implied 77% of the brand's audience). One subject's
+    audience cannot plausibly be more than a defensible share of a
+    brand's total US audience. For each brand row with a Gen Pop
+    match:
+
+        share = (bp/100 * profile_sample) / (gp_bp/100 * 10M panel)
+
+    When share > `repair_share` (default 60%), the BP is rescaled so
+    the share lands at a subject-salted target in [0.38, 0.55] - which
+    also enforces the hard 100% cap by construction.
+
+    Scope guard (respects the 2026-06-10 mandate "the fix is in Gen
+    Pop, not in the profile" for MASS brands): auto-repair only fires
+    when the brand's Gen Pop bp is below `gp_bp_repair_ceiling` (the
+    MAXBONE/MAEV micro-brand class where the PROFILE is the implausible
+    side). Mass-brand violations are logged only - those route to the
+    Gen Pop reconcile path (validate_profile_raw_le_gp_raw + 
+    scripts/reconcile_gen_pop.py).
+
+    Skips demos, metadata, LOCATION, and subject self-pin rows. Fails
+    safe: no Gen Pop access -> no-op. Positioned BEFORE
+    recompute_raw_and_projection so only BP needs setting here; the
+    recompute pass canonicalizes Raw/Proj/CS downstream.
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+    try:
+        try:
+            from migration.genpop_baseline import load_genpop_map
+        except ImportError:
+            from genpop_baseline import load_genpop_map  # type: ignore
+        gp_map = load_genpop_map()
+    except Exception as e:
+        if verbose:
+            print(f'   [brand-share] Gen Pop map unavailable; skipping '
+                  f'({e})')
+        return df, 0
+    if not gp_map:
+        return df, 0
+
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+    if not sample_size or sample_size <= 0:
+        return df, 0
+
+    GP_PANEL = 10_000_000.0
+    import re as _re
+
+    def _norm_cat_bs(c):
+        return _re.sub(r'[_\s]+', ' ', str(c or '').strip().upper())
+
+    def _norm_brand_bs(b):
+        return _re.sub(r'[^a-z0-9]+', '', str(b or '').lower())
+
+    subj_norm = _norm_brand_bs(subject)
+    skip_cats = (METADATA_COLS | DEPIN_DEMO_CATS | DEPIN_META_CATS
+                 | {'LOCATION', 'DMA', 'REGION'})
+    n_fixed = 0
+    n_logged = 0
+    examples = []
+    # Pass 1: compute a candidate repaired BP per violating row. The
+    # salt is brand-only (NOT per category) and the final value is the
+    # MIN candidate per brand, applied to every mirror-eligible row of
+    # that brand in pass 2 - Rule #3b (MPB exact mirror) already ran
+    # upstream, so a per-category repair here would re-introduce
+    # MPB-vs-subcat drift on the shipped file.
+    cand = {}   # brand_norm -> min candidate new_bp
+    rows_by_brand = {}   # brand_norm -> [idx of mirror-eligible rows]
+    viol = {}   # brand_norm -> example tuple
+    for idx in df.index:
+        cat_u = str(df.at[idx, 'Column']).strip().upper()
+        if cat_u in skip_cats:
+            continue
+        val = str(df.at[idx, 'Value']).strip()
+        if not val:
+            continue
+        bp = _bp(df.at[idx, bp_col])
+        if bp is None or bp <= 0:
+            continue
+        # Self-pin / subject rows exempt (the subject IS the brand)
+        if subj_norm and subj_norm in _norm_brand_bs(val):
+            continue
+        bnorm = _norm_brand_bs(val)
+        if cat_u not in _MPB_MIRROR_SKIP_CATS or \
+                cat_u == 'MOST PURCHASED BRANDS':
+            rows_by_brand.setdefault(bnorm, []).append(idx)
+        hit = gp_map.get((_norm_cat_bs(cat_u), bnorm))
+        if hit is None:
+            continue
+        gp_bp = hit[0] if isinstance(hit, tuple) else hit
+        if not gp_bp or gp_bp <= 0:
+            continue
+        gp_audience = gp_bp / 100.0 * GP_PANEL
+        p_raw = bp / 100.0 * sample_size
+        share = p_raw / gp_audience
+        if share <= repair_share:
+            continue
+        if gp_bp >= gp_bp_repair_ceiling:
+            # Mass brand: per 2026-06-10 mandate the fix is a Gen Pop
+            # bump, not a profile trim. Log only.
+            n_logged += 1
+            if verbose and n_logged <= 3:
+                print(f'   [brand-share] MASS-BRAND share '
+                      f'{share*100:.0f}% of Gen Pop audience for '
+                      f'{cat_u}/{val} (gp_bp={gp_bp:.4f}) - logged for '
+                      f'Gen Pop reconcile, profile untouched')
+            continue
+        # Micro-gp brand: repair. Target share salted in [0.38, 0.55].
+        tgt = 0.38 + abs(_jitter_for(subject, val, salt='bshare',
+                                     lo=0.0, hi=0.17))
+        tgt = min(tgt, 0.55)
+        new_bp = tgt * gp_audience / sample_size * 100.0
+        new_bp = max(0.0001, min(99.49, round(new_bp, 4)))
+        # keep off 2dp boundaries
+        if abs(new_bp - round(new_bp, 2)) < 0.00005:
+            new_bp = round(new_bp + 0.0013 + abs(_jitter_for(
+                subject, val, salt='bshare-nudge',
+                lo=0.0, hi=0.003)), 4)
+        if new_bp >= bp:
+            continue
+        prev = cand.get(bnorm)
+        if prev is None or new_bp < prev:
+            cand[bnorm] = new_bp
+        if bnorm not in viol:
+            viol[bnorm] = (cat_u, val, bp, share, tgt, gp_audience)
+    # Pass 2: apply the brand-level repaired BP to every mirror-eligible
+    # row of each violating brand (keeps the Rule #3b exact mirror).
+    for bnorm, new_bp in cand.items():
+        for idx in rows_by_brand.get(bnorm, []):
+            bp = _bp(df.at[idx, bp_col])
+            if bp is None or bp <= 0 or new_bp >= bp:
+                continue
+            df.at[idx, bp_col] = (f'{new_bp:.4f}%'
+                                  if '%' in str(df.at[idx, bp_col])
+                                  else f'{new_bp:.4f}')
+            n_fixed += 1
+        if len(examples) < 5 and bnorm in viol:
+            cat_u, val, bp0, share, tgt, gp_aud = viol[bnorm]
+            examples.append(f'{cat_u}/{val}: {bp0:.4f} -> {new_bp:.4f} '
+                            f'(share {share*100:.0f}% -> {tgt*100:.0f}% '
+                            f'of gp audience {gp_aud:,.0f})')
+    if verbose and (n_fixed or n_logged):
+        print(f'   🧮 brand-share plausibility: repaired {n_fixed} '
+              f'micro-brand row(s), logged {n_logged} mass-brand '
+              f'violation(s) [{subject or "profile"}]')
+        for ex in examples:
+            print(f'      {ex}')
+    return df, n_fixed
+
+
+def sync_parent_row_to_segment_anchor(df, subject, verbose=True):
+    """When ``subject`` is a derived cohort (e.g. 'Gilmore Girls - Avid
+    Fan', 'Reba McEntire - Avid Fan', 'Bridesmaids - Casual Fan'), the
+    parent brand row (e.g. 'Gilmore Girls') must equal the segment
+    anchor's BP (typically 100.0) in the categories where the anchor
+    is pinned.
+
+    Gilmore Girls 2026-08-19 (Avid): segment anchor
+    'Gilmore Girls - Avid Fan' = 100.0, but the parent 'Gilmore Girls'
+    row read 97.44. A superset row cannot be below its subset's anchor.
+    Same class as BYD Avid (98.26) and inverse of Andy Grammer Avid.
+
+    Detection: subject contains ' - ' followed by a cohort suffix
+    (Avid Fan / Casual Fan / Fans / Total Universe / Past N Days /
+    similar). Parent = subject before the ' - '. When both a parent-
+    brand row and the segment anchor exist in the SAME Column, pin the
+    parent row's BP to the anchor's BP.
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    if 'Value' not in df.columns:
+        return df, 0
+    bp_col, _, _, _ = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+
+    # Extract parent name from the subject. If there's no ' - ' this
+    # isn't a derived cohort, so no work.
+    subj = str(subject or '').strip()
+    if ' - ' not in subj:
+        return df, 0
+    parent_name = subj.split(' - ')[0].strip()
+    if not parent_name or parent_name == subj:
+        return df, 0
+
+    n_synced = 0
+    examples: list = []
+    # For each Column that contains BOTH the segment anchor AND the
+    # parent brand as separate rows, pin parent BP to anchor BP.
+    val_norm = df['Value'].astype(str).str.strip().str.lower()
+    parent_norm = parent_name.lower()
+    subj_norm = subj.lower()
+
+    for col in df['Column'].astype(str).str.strip().unique():
+        col_mask = (df['Column'].astype(str).str.strip() == col)
+        anchor_idx = df.index[col_mask & (val_norm == subj_norm)]
+        parent_idx = df.index[col_mask & (val_norm == parent_norm)]
+        if len(anchor_idx) == 0 or len(parent_idx) == 0:
+            continue
+        try:
+            anchor_bp = _bp(df.at[anchor_idx[0], bp_col])
+        except Exception:
+            continue
+        if anchor_bp is None:
+            continue
+        for p_idx in parent_idx:
+            parent_bp = _bp(df.at[p_idx, bp_col])
+            if parent_bp is None or abs(parent_bp - anchor_bp) < 0.001:
+                continue
+            if parent_bp > anchor_bp:
+                # Parent is HIGHER than anchor -- that's directionally
+                # correct for a superset (never expected here since
+                # the anchor is usually 100). Leave alone.
+                continue
+            # Parent below anchor -- impossible; pin up.
+            df.at[p_idx, bp_col] = anchor_bp
+            n_synced += 1
+            if len(examples) < 5:
+                examples.append((col, parent_name, parent_bp, anchor_bp))
+
+    if verbose and n_synced:
+        print(f"   👨‍👦 sync_parent_row_to_segment_anchor [{subject}]: "
+              f"pinned {n_synced} parent row(s) up to anchor BP")
+        for col, name, old, new in examples:
+            print(f"      [{col}] {name!r}: {old} → {new}")
+    return df, n_synced
+
+
+def strip_brand_input_csv_phantom_row(df, subject, verbose=True):
+    """Remove any content peer row where Value == 'CSV' (the BRAND
+    INPUT marker) that got emitted as a peer at 100%.
+
+    When BRAND INPUT is 'CSV' (the content-series convention), the
+    writer sometimes emits an additional 'SERIES :: CSV' row at 100
+    or an equivalent phantom row. That row is nonsense — 'CSV' is
+    the marker string, not a peer series. Idempotent.
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    if 'Value' not in df.columns:
+        return df, 0
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    val_u = df['Value'].astype(str).str.strip().str.upper()
+    # Never drop the actual BRAND INPUT row itself
+    mask = ((col_u != 'BRAND INPUT') & (val_u == 'CSV'))
+    if not mask.any():
+        return df, 0
+    dropped = int(mask.sum())
+    examples = df.loc[mask, ['Column', 'Value']].head(5).values.tolist()
+    df = df.drop(index=df.index[mask]).reset_index(drop=True)
+    if verbose:
+        print(f"   🧹 strip_brand_input_csv_phantom_row [{subject or ''}]: "
+              f"dropped {dropped} phantom 'CSV' row(s) (marker string "
+              f"leaked as peer)")
+        for c, v in examples:
+            print(f"      [{c}] {v!r}")
+    return df, dropped
+
+
+def dedupe_same_column_value(df, subject, verbose=True):
+    """Drop duplicate rows within (Column, normalized(Value)); keep MAX BP.
+
+    Idempotent. Catches the "Disney+/Hulu appears twice in
+    STREAMING/PLATFORM" defect (Gilmore Girls 2026-08-19) and any
+    future same-brand-same-column duplicate the row-by-row engine or
+    the hybrid sanity check produces. Case-insensitive, punctuation-
+    stripped match — so 'Disney+/Hulu' and 'DISNEY+/HULU' collapse.
+
+    Does NOT run inside demographic categories (they legitimately have
+    single-occurrence buckets like GENDER::FEMALE, AGE::18-24). Skips
+    metadata rows (BRAND INPUT / SAMPLE SIZE / BRAND CATEGORY /
+    SUBJECT).
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    if 'Value' not in df.columns:
+        return df, 0
+    bp_col, _, _, _ = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+
+    import re as _re
+    def _norm(v):
+        return _re.sub(r'[^a-z0-9]+', '', str(v or '').lower())
+
+    _METADATA = {'BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY',
+                 'SUBJECT', 'INPUT_METADATA', 'AVID FAN', 'CASUAL FAN'}
+
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    val_norm = df['Value'].apply(_norm)
+    metadata_mask = col_u.isin(_METADATA)
+
+    df['_bp_tmp'] = pd.to_numeric(
+        df[bp_col].astype(str).str.replace('%', '', regex=False),
+        errors='coerce',
+    )
+
+    # Group non-metadata rows by (Column, normalized value); if a group
+    # has >1 row, keep the one with MAX BP. Drop the rest.
+    drop_idx: list = []
+    kept_examples: list = []
+    for (col, nm), grp_idx in df.loc[~metadata_mask].groupby(
+        [col_u.rename('_c'), val_norm.rename('_v')]
+    ).groups.items():
+        if len(grp_idx) < 2:
+            continue
+        # Keep the row with the highest BP; drop the rest
+        try:
+            keep = df.loc[list(grp_idx), '_bp_tmp'].idxmax()
+        except Exception:
+            keep = list(grp_idx)[0]
+        for i in grp_idx:
+            if i != keep:
+                drop_idx.append(i)
+        if len(kept_examples) < 5:
+            kept_bp = df.at[keep, '_bp_tmp']
+            drop_bps = [df.at[i, '_bp_tmp'] for i in grp_idx if i != keep]
+            kept_examples.append((col, df.at[keep, 'Value'], kept_bp, drop_bps))
+
+    df = df.drop(columns=['_bp_tmp'])
+    if not drop_idx:
+        return df, 0
+
+    df = df.drop(index=drop_idx).reset_index(drop=True)
+    if verbose:
+        print(f"   🧹 dedupe_same_column_value [{subject or ''}]: "
+              f"dropped {len(drop_idx)} duplicate row(s)")
+        for col, val, kept_bp, drop_bps in kept_examples:
+            print(f"      [{col}] {val!r} kept BP={kept_bp} (dropped {drop_bps})")
+    return df, len(drop_idx)
+
+
 def run_all_enforcers(df, subject, brand_category=None, verbose=True,
-                       target_year=None):
+                       target_year=None, follower_ceiling=None):
     """Run every enforcer in order. Returns (df, total_changes).
 
     target_year (optional): if provided (e.g. 2022 for a `Gen_Pop_2022.csv`
     generation), runs the anachronism check to zero / dampen brands that
     didn't exist yet in the target year. Only pass when the file's
     contents are meant to represent that historical year.
+
+    follower_ceiling (optional int): when provided AND positive, runs the
+    followers-only projection cap (2026-08-19 Jenna directive):
+    US Gen Pop Projection cannot exceed the subject's real follower count.
+    Only pass for followers-only cohorts (spec['audience_type'] ==
+    'followers' / 'subscribers'); leave None otherwise. See
+    `enforce_follower_ceiling_projection` for the full rationale.
     """
+    # 2026-08-19 (Gilmore Girls incident): coerce enforcer-writeable
+    # columns to object dtype FIRST so downstream enforcers stop
+    # silently crashing on pandas-2.1 NA-aware `str` dtype columns.
+    df = _coerce_writeable_columns_to_object(df, verbose=verbose)
     total = 0
     # 2026-07-28 (Jenna pipeline hardening): anachronism check for year
     # skins. Zero / dampen brands whose launch_year > target_year. Only
@@ -7769,6 +8831,27 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer apply_strip_tilde_from_brand_input failed: {e}")
+    # 2026-08-07 (Jenna directive): Disney+ / Hulu are one platform now.
+    # Consolidate any pair of sibling rows into a single 'Disney+/Hulu'
+    # row across every non-metadata column. Idempotent. Also runs in
+    # `run_write_safety_net` (defense in depth for direct-write paths).
+    try:
+        df, n = apply_disney_hulu_rollup(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer apply_disney_hulu_rollup failed: {e}")
+    # 2026-08-19 (Gilmore Girls incident): general dedupe within
+    # (Column, normalized(Value)). Catches the case where the row-by-row
+    # engine or hybrid sanity check produced TWO 'Disney+/Hulu' rows in
+    # the SAME STREAMING/PLATFORM column - which apply_disney_hulu_rollup
+    # doesn't handle (it only merges Disney+ + Hulu into Disney+/Hulu,
+    # not two Disney+/Hulu rows into one). Runs early so downstream
+    # enforcers see a deduped file.
+    try:
+        df, n = dedupe_same_column_value(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer dedupe_same_column_value failed: {e}")
     # 2026-06-24 (Liz Ed Sheeran flag, corpus sweep found 11 same-day-gen
     # files with 98%+ blank BP rows): backfill BP from raw FIRST so every
     # downstream enforcer can read a valid BP. Idempotent — no-op if BPs
@@ -8117,6 +9200,14 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer dejitter_x5x0 (mop-up) failed: {e}")
+    # 2026-08-22 (Rule #3b): MPB exact mirror AFTER every dejitter/depin
+    # pass so nothing re-breaks the exact identity. Fixes the standing
+    # ~1,880-rows-per-file mirror drift (Aug 21-22 batch audit).
+    try:
+        df, n = enforce_mpb_exact_mirror(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_mpb_exact_mirror failed: {e}")
     # 2026-06-04 (Jenna sample-size clamp defect): detect 99K-110K clamp
     # signature on BRAND INPUT raw and re-ground niche/mid subjects to a
     # realistic small panel-share before final Raw/Proj recompute below.
@@ -8172,6 +9263,41 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
     except Exception as e:
         print(f"   ⚠️ enforcer renormalize_demographics_to_100 failed: {e}")
 
+    # 2026-08-14 (iJustine incident hardening, 4 small-sample enforcers):
+    # Runs BEFORE normalize_final_format + recompute_raw_and_projection so
+    # those pipeline-tail passes settle from post-hardened BP values.
+    #  Rail A: LOCATION degrade to Gen-Pop-blend when sample_size < 1500
+    #          (was causing 86 zero-DMAs on iJustine Avid at N=1000).
+    #  Rail B: Canonical demo schema back-fill (was causing EDUCATION to
+    #          ship with only 3 of 5 canonical buckets when panelists
+    #          absent from a bucket in the raw ClickHouse pull).
+    #  Rail C: Mass-brand zero floor (was causing Disney+/Hulu = 0.0 on
+    #          iJustine Avid because 0 of 1000 panelists touched that
+    #          hostname in the window - not a persona signal).
+    #  Rail D: MPB rank-based de-band (was causing 114 brands to stack
+    #          in 0.3pp on iJustine TU when Claude reached for a "generic
+    #          middle" for weak-signal brands under small-sample stress).
+    try:
+        from migration.small_sample_hardening import (
+            enforce_small_sample_location_degrade,
+            enforce_canonical_demo_schema,
+            enforce_mass_brand_zero_floor,
+            enforce_mpb_deband,
+        )
+        for fn in (
+            enforce_small_sample_location_degrade,
+            enforce_canonical_demo_schema,
+            enforce_mass_brand_zero_floor,
+            enforce_mpb_deband,
+        ):
+            try:
+                df, n = fn(df, subject=subject, verbose=verbose)
+                total += n
+            except Exception as e:
+                print(f"   ⚠️ enforcer {fn.__name__} failed: {e}")
+    except Exception as e:
+        print(f"   ⚠️ small_sample_hardening import failed: {e}")
+
     # 2026-07-28 (pipeline hardening rail #5, WoF Avid defects 5/6/7/8):
     # final format normalizer. Runs immediately BEFORE
     # recompute_raw_and_projection so the recompute pass finalizes
@@ -8186,6 +9312,64 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer normalize_final_format failed: {e}")
+
+    # 2026-08-19 (Gilmore Girls incident): three defect-specific
+    # fix-ups that must run AFTER the main enforcer chain and BEFORE
+    # recompute_raw_and_projection so downstream Raw/Proj math is
+    # canonicalized against the corrected BPs.
+    #
+    # D5b — content BRAND INPUT='CSV' should never spawn a peer row.
+    try:
+        df, n = strip_brand_input_csv_phantom_row(
+            df, subject, verbose=verbose,
+        )
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer strip_brand_input_csv_phantom_row "
+              f"failed: {e}")
+    # D6 — LOCATION column must sum to 100 across all DMAs.
+    try:
+        df, n = renormalize_location_to_100(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer renormalize_location_to_100 failed: {e}")
+    # D7 — parent brand row must not sit below its own segment anchor.
+    try:
+        df, n = sync_parent_row_to_segment_anchor(
+            df, subject, verbose=verbose,
+        )
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer sync_parent_row_to_segment_anchor "
+              f"failed: {e}")
+
+    # 2026-08-19 (Jenna followers-cap directive): if this build is a
+    # followers-only cohort, enforce the physical projection ceiling
+    # (US Gen Pop Projection <= real follower count) by capping the
+    # sample size on BRAND INPUT / SAMPLE SIZE rows. MUST run BEFORE
+    # recompute_raw_and_projection so the recompute pass cascades the
+    # capped sample size into every brand row's Raw + Proj.
+    # No-op when follower_ceiling is None / 0 (general audiences).
+    try:
+        df, n = enforce_follower_ceiling_projection(
+            df, subject, follower_ceiling, verbose=verbose,
+        )
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_follower_ceiling_projection "
+              f"failed: {e}")
+
+    # 2026-08-24 (Dylan Minnette MAXBONE/MAEV defect): profile raw count
+    # must never exceed a defensible share of the brand's TOTAL Gen Pop
+    # audience. Runs BEFORE recompute_raw_and_projection so the
+    # recompute pass cascades the corrected BPs into Raw/Proj/CS.
+    # Micro-gp brands repaired in place; mass-brand violations logged
+    # for the Gen Pop reconcile path (2026-06-10 mandate).
+    try:
+        df, n = enforce_brand_share_plausibility(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_brand_share_plausibility failed: {e}")
 
     # 2026-05-27 (D-Proj): VERY LAST -- recompute Raw + Proj from final BP.
     # Every previous enforcer that touched BP may have left stale Raw/Proj
@@ -8357,6 +9541,39 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
     except Exception as e:
         print(f"   ⚠️ enforcer validate_demo_sum_100 failed: {e}")
 
+    # 2026-08-18 (Andy Grammer defect - defense in depth): re-sync
+    # Raw + Proj + Category Share to final BP one more time. Many
+    # post-recompute enforcers (enforce_bp_hard_ceiling,
+    # enforce_subject_self_pin_final,
+    # enforce_netflix_leads_streaming_platform, apply_platform_pin,
+    # strip_avid_casual_fan_rows, validate_demo_sum_100's auto-fix
+    # branch) can drift BP without recomputing the downstream
+    # columns. The individual enforcers now recompute in-place where
+    # they can, but this tail-pass guarantees a clean invariant
+    # regardless of which enforcer touched what: every row's Raw /
+    # Proj / Category Share matches its displayed BP against the
+    # resolved sample size. Both passes are idempotent.
+    try:
+        df, n_final = recompute_raw_and_projection(df, subject,
+                                                    verbose=verbose)
+        if n_final and verbose:
+            print(f"   🔁 tail recompute_raw_and_projection: fixed "
+                  f"{n_final} cell(s) drifted after main recompute pass")
+        total += n_final
+    except Exception as e:
+        print(f"   ⚠️ tail recompute_raw_and_projection failed: {e}")
+
+    try:
+        df, n_final_share = apply_recompute_category_share(
+            df, subject, verbose=verbose,
+        )
+        if n_final_share and verbose:
+            print(f"   🔁 tail apply_recompute_category_share: fixed "
+                  f"{n_final_share} cell(s) drifted after main share pass")
+        total += n_final_share
+    except Exception as e:
+        print(f"   ⚠️ tail apply_recompute_category_share failed: {e}")
+
     return df, total
 
 
@@ -8388,15 +9605,49 @@ def enforce_bp_hard_ceiling(df, subject, verbose=True):
 
     Nike shipped with SOCIAL MEDIA / YOUTUBE = 100.3406% — mathematically
     impossible (you can't have more than 100% of a sample doing X).
+
+    2026-08-18 (Andy Grammer defect): also recompute Original Raw
+    Numbers + US Gen Pop Projection for every capped row using the
+    same sample-size math as recompute_raw_and_projection. Previously
+    this enforcer only touched BP, leaving Raw > sample_size on every
+    capped row (Andy Grammer base had 7 rows with BP=99.9900% and
+    Raw > Sample; avid had 2). That downstream signature also caused
+    Jenna's writeup to see effective BPs like 100.41% because Raw/
+    Sample*100 disagreed with the reported BP.
     """
     if df is None or len(df) == 0:
         return df, 0
-    bp_col, _, _, _ = _detect_cols(df)
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     if bp_col is None:
         return df, 0
     is_str_col = (df[bp_col].dtype == object
                   or str(df[bp_col].dtype).startswith('string'))
     col_u = df['Column'].astype(str).str.upper().str.strip()
+
+    # Sample size for Raw/Proj recompute. Matches
+    # recompute_raw_and_projection's resolution order (BRAND INPUT
+    # raw / bp preferred; fall back to SAMPLE SIZE raw). If we can't
+    # resolve it, fall back to BP-only cap and let the final
+    # recompute pass fix the Raw drift.
+    def _num_local(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', '').strip())
+        except Exception:
+            return None
+
+    sample_size = None
+    for cat in ('BRAND INPUT', 'SAMPLE SIZE'):
+        cand = df[col_u == cat]
+        if len(cand) == 0:
+            continue
+        r = cand.iloc[0]
+        bp_r = _num_local(r.get(bp_col))
+        raw_r = _num_local(r.get(raw_col)) if raw_col else None
+        if raw_r and bp_r and bp_r > 0:
+            sample_size = raw_r / (bp_r / 100.0)
+            break
+
+    PANEL = 10_000_000
     n_caps, examples = 0, []
     for idx, raw in df[bp_col].items():
         cur = _bp(raw)
@@ -8411,6 +9662,22 @@ def enforce_bp_hard_ceiling(df, subject, verbose=True):
             df.at[idx, bp_col] = f'{new:.4f}%'
         else:
             df.at[idx, bp_col] = new
+        # Recompute Raw + Proj so the row stays internally consistent.
+        # Skips silently if sample_size couldn't be resolved above -
+        # the terminal recompute_raw_and_projection safety-net pass
+        # (see run_all_enforcers) will catch that case.
+        if sample_size is not None:
+            if raw_col is not None:
+                try:
+                    df.at[idx, raw_col] = int(round(new / 100.0 * sample_size))
+                except Exception:
+                    pass
+            if proj_col is not None:
+                try:
+                    df.at[idx, proj_col] = int(round(
+                        new / 100.0 * sample_size * (US_POP / PANEL)))
+                except Exception:
+                    pass
         n_caps += 1
         examples.append((df.at[idx, 'Column'], df.at[idx, 'Value'], cur))
     if n_caps and verbose:
@@ -11529,6 +12796,293 @@ def apply_recompute_category_share(df, subject, verbose=True):
     return df, n_blocks + n_pct_stripped
 
 
+# ============================================================================
+# D-DH — Disney+ / Hulu canonical rollup
+# ============================================================================
+# 2026-08-07 (Jenna directive):
+#   "in all profiles Hulu and disney+ should be reporting as one line
+#    Disney+/Hulu not two seperate lines. fix that cononically in all
+#    pipelines. it is a roll up of disney+ and hulu since theye now
+#    one platform"
+#
+# Disney merged the Disney+ and Hulu apps into a single service in 2025-2026.
+# For panel-tracked digital reach, users of either app are users of the
+# combined platform — so the canonical row is a single "Disney+/Hulu"
+# entry, not two sibling rows.
+#
+# Rollup rule:
+#   * Wherever the same Column carries BOTH a Disney+ row and a Hulu row,
+#     merge to a single row with Value='Disney+/Hulu' and BP = max(a, b)
+#     plus subject-salted micro-jitter (never a pin).
+#   * Wherever a Column carries only one of them, rename the Value to
+#     'Disney+/Hulu' (BP unchanged).
+#   * Metadata rows (BRAND INPUT, SAMPLE SIZE, BRAND CATEGORY, SUBJECT,
+#     AVID FAN, CASUAL FAN, INPUT_METADATA) are never touched — their
+#     Value encodes profile identity, not brand-row data.
+#   * Self-pin at ≥99.9999% preserved exactly (Disney+ or Hulu subject
+#     profiles keep their 100 pin on the renamed row).
+#
+# Idempotent: on a re-run the canonical row's Value is 'Disney+/Hulu'
+# (contains slash) so it does not match the source-value set.
+#
+# 2026-08-11 extension: also INJECTS Disney+/Hulu into STREAMING/PLATFORM
+# when the row is completely absent (audit finding — Aug-7 batch of
+# Pop Culture Jeopardy, Jeopardy, Hotel Transylvania, Sombr, Nikki Glaser
+# lacked Disney+/Hulu on 10 of 12 files even though the hostmap's
+# canonical brand row exists). Injection is peer-anchored on the file's
+# HBO Max BP (kids-heavy: x1.55; adult: x1.10) with subject-salted
+# jitter. Only triggers when the file has a live streaming universe
+# (>=3 other streaming rows) so niche B2B files aren't polluted.
+# See `_dh_inject_if_missing` for the full rule.
+#
+# Wired into both `run_all_enforcers` and `run_write_safety_net` so every
+# write path — main pipeline, avid skins, audience cuts, ad-hoc scripts —
+# gets the rollup automatically. Also emitted directly by BG.py's
+# per-category prompt guidance so freshly generated files don't need the
+# consolidation pass.
+# ============================================================================
+
+_DH_SOURCE_NORM = {'hulu', 'disney+', 'disneyplus'}
+_DH_CANONICAL_VALUE = 'Disney+/Hulu'
+_DH_META_COLS = {
+    'BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY', 'SUBJECT',
+    'AVID FAN', 'CASUAL FAN', 'INPUT_METADATA',
+}
+# 2026-08-18: EXPLICIT column whitelist for the rollup. The rule
+# (.cursor/rules/disney-hulu-canonical-rollup.mdc) has always said "The
+# rollup only touches the SVOD-platform rows" - INTEREST, TOYS,
+# FRANCHISE, WHERE THEY SHOP, TRAVEL, EVENTS, BROADCAST/CABLE, MEDIA
+# keep their Disney-named rows as-is. Prior implementation excluded
+# only _DH_META_COLS and swept everything else, which corrupted
+# `INTEREST :: DISNEY+` -> `INTEREST :: Disney+/Hulu` on 194 shipped
+# profiles. This whitelist is the authoritative filter now.
+_DH_TARGET_COLS = {
+    'STREAMING/PLATFORM',
+    'STREAMING PLATFORM',  # legacy variant seen in older files
+}
+
+
+def _dh_norm_value(v) -> str:
+    """Normalize 'Disney +' / 'Disney Plus' / 'DISNEY+' / 'Hulu' all to
+    a single comparable form. Space, underscore, hyphen collapsed;
+    lowercased."""
+    s = str(v or '').strip().lower()
+    for c in (' ', '_', '-'):
+        s = s.replace(c, '')
+    return s
+
+
+def _dh_inject_if_missing(df, subject, bp_col, cs_col, raw_col, proj_col,
+                          sample_size, verbose=True):
+    """Inject a Disney+/Hulu row into STREAMING/PLATFORM when it's absent.
+
+    Only injects when the file already carries a live streaming universe
+    (>=3 other streaming brands present) so niche B2B / non-consumer
+    profiles don't get forced streaming platform rows. Sizing is
+    peer-anchored on the file's own HBO Max BP:
+
+        Disney+/Hulu BP = HBO Max BP * 1.10 + jitter    (adult persona)
+        Disney+/Hulu BP = HBO Max BP * 1.55 + jitter    (kids/family)
+
+    Fallback anchor: Netflix BP * 0.55 when HBO Max is absent.
+    Kids-heavy detection: presence of >=2 of {YOUTUBE KIDS, HAPPYKIDS,
+    NICK, PBS KIDS, DISNEY JR, MOVIES ANYWHERE} in the streaming
+    universe (unless already covered by ratings signal elsewhere).
+
+    Idempotent: skips when the canonical 'Disney+/Hulu' row already
+    exists in STREAMING/PLATFORM.
+    Returns ``(df, n_injected)`` where n_injected is 0 or 1.
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    col_upper = df['Column'].astype(str).str.strip().str.upper()
+    stream_mask = col_upper == 'STREAMING/PLATFORM'
+    if not stream_mask.any():
+        return df, 0
+
+    val_lower = df['Value'].astype(str).str.strip().str.lower()
+    if ((stream_mask) & (val_lower == 'disney+/hulu')).any():
+        return df, 0
+
+    # Peer streaming universe check: require >=3 other brands
+    sub = df[stream_mask]
+    if len(sub) < 3:
+        return df, 0
+
+    def _bp_of(name: str):
+        m = stream_mask & (df['Value'].astype(str).str.strip().str.upper()
+                            == name.upper())
+        if not m.any():
+            return None
+        return _bp(df.loc[m.idxmax(), bp_col])
+
+    hbo = _bp_of('HBO MAX')
+    netflix = _bp_of('NETFLIX')
+    if hbo is None and netflix is None:
+        # No credible streaming universe -- skip.
+        return df, 0
+
+    # Kids-heavy detection
+    kid_signals = {'YOUTUBE KIDS', 'HAPPYKIDS', 'NICK', 'PBS KIDS',
+                   'DISNEY JR', 'DISNEY JR.', 'MOVIES ANYWHERE'}
+    stream_vals = set(df.loc[stream_mask, 'Value'].astype(str)
+                        .str.strip().str.upper())
+    is_kids = len(kid_signals & stream_vals) >= 2
+
+    anchor = hbo if hbo is not None else (netflix or 40.0) * 0.55
+    mult = 1.55 if is_kids else 1.10
+    jit = _jitter_for(subject or '', _DH_CANONICAL_VALUE,
+                      salt='DH_INJECT|STREAMING/PLATFORM',
+                      lo=-1.5, hi=1.5)
+    new_bp = max(6.0, min(78.0, round(anchor * mult + jit, 4)))
+
+    # Build a scaffold row: BP set, everything else recomputed by
+    # _set_bp / _renormalize_category (Raw + Proj + CS).
+    new_row = {c: '' for c in df.columns}
+    new_row['Column'] = 'STREAMING/PLATFORM'
+    new_row['Value'] = _DH_CANONICAL_VALUE
+    new_row[bp_col] = f"{new_bp:.4f}"
+    if raw_col in df.columns:
+        raw_val = int(round(sample_size * new_bp / 100.0))
+        new_row[raw_col] = str(raw_val)
+    if proj_col in df.columns:
+        raw_val = int(round(sample_size * new_bp / 100.0))
+        new_row[proj_col] = str(int(round(raw_val / 10_000_000 * 329_900_000)))
+    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+    # Rebalance the column so CS stays consistent
+    df = _renormalize_category(df, 'STREAMING/PLATFORM', bp_col, cs_col,
+                                raw_col, proj_col, sample_size)
+
+    if verbose:
+        tag = 'kids-heavy' if is_kids else 'adult'
+        print(f"   🔧 apply_disney_hulu_rollup [{subject or ''}]: "
+              f"INJECTED Disney+/Hulu into STREAMING/PLATFORM "
+              f"({tag}, anchor HBO={hbo}, NFX={netflix}, "
+              f"new_bp={new_bp:.4f}%)")
+    return df, 1
+
+
+def apply_disney_hulu_rollup(df, subject, verbose=True):
+    """Consolidate Disney+ and Hulu rows into a single 'Disney+/Hulu' row.
+
+    See module-header block for full rule + rationale. Idempotent.
+    Returns ``(df, n_rows_touched)``.
+
+    In addition to the merge/rename cases above, this enforcer also
+    INJECTS a Disney+/Hulu row into STREAMING/PLATFORM when the column
+    exists (with a live streaming universe) but the row is completely
+    absent. The 2026-08-10 audit of the Aug-7 batch (Pop Culture
+    Jeopardy, Jeopardy, Hotel Transylvania, Sombr, Nikki Glaser)
+    found Disney+/Hulu missing entirely from 10 of 12 files even though
+    the hostmap's canonical brand row exists (BRAND=Disney+/Hulu,
+    SECTION=Streaming/Platform, three hostname aliases). Injection is
+    peer-anchored on the file's own HBO Max BP so it fits the persona.
+    Skips when there are <3 other streaming rows (niche/B2B files).
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    if 'Value' not in df.columns:
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col not in df.columns:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    col_upper = df['Column'].astype(str).str.strip().str.upper()
+    val_norm = df['Value'].apply(_dh_norm_value)
+    # WHITELIST: only rename the source value inside a SVOD-platform
+    # column. Every other Disney-branded row (INTEREST :: DISNEY,
+    # AMUSEMENT PARKS :: DISNEY WORLD, TOYS :: DISNEY FROZEN, etc.)
+    # stays as itself. Historic implementation used a blacklist here
+    # (~col_upper.isin(_DH_META_COLS)) which swept legitimate INTEREST
+    # rows into the platform bundle.
+    is_source = val_norm.isin(_DH_SOURCE_NORM) & col_upper.isin(_DH_TARGET_COLS)
+    if not is_source.any():
+        # No source rows to merge -- fall through to the INJECT path.
+        df, n_injected = _dh_inject_if_missing(
+            df, subject, bp_col, cs_col, raw_col, proj_col, sample_size,
+            verbose=verbose,
+        )
+        return df, n_injected
+    # Note: after the merge/rename block below completes, we also call
+    # _dh_inject_if_missing at the tail so files whose only Disney+/Hulu
+    # presence was in a non-streaming column still get a canonical row
+    # in STREAMING/PLATFORM.
+
+    from collections import defaultdict
+    groups: dict[str, list[int]] = defaultdict(list)
+    for idx in df.index[is_source]:
+        groups[col_upper.at[idx]].append(idx)
+
+    to_drop: list[int] = []
+    total_touched = 0
+    log: list[tuple[str, int, float, float]] = []
+
+    for column, idxs in groups.items():
+        # Compute max BP and choose that row as the keeper
+        scored = [(i, _bp(df.at[i, bp_col]) or 0.0) for i in idxs]
+        keeper_idx, keeper_bp = max(scored, key=lambda t: t[1])
+
+        if len(idxs) > 1:
+            # Multi-row consolidation: max + subject-salted jitter so we
+            # never perfectly pin to either source value. 100.0 self-pin
+            # preserved exactly.
+            if keeper_bp >= 99.9999:
+                new_bp = 100.0
+            else:
+                jit = _jitter_for(subject, _DH_CANONICAL_VALUE,
+                                  salt=f'DH_ROLLUP|{column}',
+                                  lo=-0.15, hi=0.15)
+                new_bp = round(max(0.5, keeper_bp + jit), 4)
+        else:
+            # Rename-only case: BP unchanged.
+            new_bp = keeper_bp
+
+        df.at[keeper_idx, 'Value'] = _DH_CANONICAL_VALUE
+        if abs(new_bp - keeper_bp) > 1e-6:
+            df = _set_bp(df, keeper_idx, new_bp, bp_col, cs_col,
+                         raw_col, proj_col, sample_size)
+
+        for i in idxs:
+            if i != keeper_idx:
+                to_drop.append(i)
+
+        log.append((column, len(idxs), keeper_bp, new_bp))
+        total_touched += len(idxs)
+
+    if to_drop:
+        df = df.drop(index=to_drop).reset_index(drop=True)
+
+    # Recompute Category Share within every affected column so the
+    # column's shares stay consistent. safety-net's
+    # apply_recompute_category_share will also do this later; being
+    # idempotent here means the enforcer is standalone-safe.
+    for column in groups.keys():
+        df = _renormalize_category(df, column, bp_col, cs_col,
+                                   raw_col, proj_col, sample_size)
+
+    if verbose and total_touched:
+        print(f"   🔧 apply_disney_hulu_rollup [{subject or ''}]: "
+              f"consolidated {total_touched} Hulu/Disney+ row(s) into "
+              f"{len(groups)} Disney+/Hulu row(s) "
+              f"(dropped {len(to_drop)}) across {len(groups)} column(s)")
+        for column, n_src, old_bp, new_bp in log:
+            if n_src > 1 or abs(new_bp - old_bp) > 1e-6:
+                print(f"      • {column}: {n_src} rows -> Disney+/Hulu "
+                      f"@ {new_bp:.4f}% (max source BP was {old_bp:.4f}%)")
+
+    # After merge/rename, also inject a STREAMING/PLATFORM row when it's
+    # still missing (e.g., the file only carried D+/Hulu in a non-
+    # streaming column, or never had either service at all).
+    df, n_injected = _dh_inject_if_missing(
+        df, subject, bp_col, cs_col, raw_col, proj_col, sample_size,
+        verbose=verbose,
+    )
+    return df, total_touched + n_injected
+
+
 def fill_blank_bp_from_raw(df, subject, *, verbose: bool = True):
     """Fill Brand Penetration (Row) when it's blank but Raw is populated.
 
@@ -11705,8 +13259,31 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
         return df, stats
 
     for fn_name, fn in (
+        # Rule #4b (wired 2026-08-22): Hidden brands must never ship on
+        # ANY write path. The full chain never called this enforcer and
+        # the derived-cut paths bypass the chain entirely, so cuts were
+        # inheriting Hidden rows from pre-rule parents (Aug 21 TVOD
+        # Renters batch). Cache-based, cheap, idempotent.
+        ("strip_hostmap_hidden_brands", strip_hostmap_hidden_brands),
         ("fill_blank_bp_from_raw", fill_blank_bp_from_raw),
         ("normalize_final_format", normalize_final_format),
+        # Disney+ / Hulu consolidate BEFORE Raw/Proj recompute so the
+        # dropped rows don't waste a Raw/Proj write, and BEFORE
+        # streaming-share-health so the health check sees the final
+        # consolidated shape (single Disney+/Hulu row instead of two
+        # sibling rows that could look like a duplicate).
+        ("apply_disney_hulu_rollup", apply_disney_hulu_rollup),
+        # Rule #3b (wired 2026-08-22): exact MPB mirror re-asserted at
+        # write time so cut paths (which skip run_all_enforcers) hold
+        # the invariant too. Runs before the Raw/Proj + CS recomputes.
+        ("enforce_mpb_exact_mirror", enforce_mpb_exact_mirror),
+        # Mirror copies can land ON another brand's value; the mirror-
+        # aware dejitter breaks those (never moving an intentional MPB
+        # copy), and the second mirror pass re-propagates any MPB rows
+        # the dejitter itself had to separate. Both idempotent.
+        ("dejitter_within_cat_4dp_collisions",
+         dejitter_within_cat_4dp_collisions),
+        ("enforce_mpb_exact_mirror_2", enforce_mpb_exact_mirror),
         ("recompute_raw_and_projection", recompute_raw_and_projection),
         ("enforce_streaming_share_health", enforce_streaming_share_health),
         ("apply_recompute_category_share", apply_recompute_category_share),
@@ -11761,6 +13338,173 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
         if verbose:
             print(f"   ⚠️ write-safety-net meta CS normalize failed: "
                   f"{type(e).__name__}: {e}")
+
+    return df, stats
+
+
+def run_final_invariant_polish(df, subject, *, verbose: bool = True):
+    """Terminal invariant pass for `profile_writer.write_profile_csv`,
+    run AFTER the pre-publish gate (whose auto-patchers mutate df) and
+    immediately before the sort + upload.
+
+    Why this exists (2026-08-20 EST Buyers batch): several passes that
+    run late in the chain - gate auto-patches (G1/G13), lux confirmed-
+    purchase caps, MPB deband - write BPs AFTER the depin/dejitter and
+    self-pin passes have already run. Four files shipped with ~103
+    exact-2dp brand rows each, a URL-variant seed string pinned at 100
+    inside the native grid, an unpinned (peer-capped) subject row, and
+    unsorted categories. This pass re-asserts the invariants no matter
+    what mid-chain passes did:
+
+      1. Strip URL-variant echo rows from category grids (the seed
+         list belongs ONLY in the BRAND INPUT metadata row, Rule #4c).
+      2. Re-pin the subject to exactly 100 in its native grid
+         (pin_subject_to_100_in_appearing_categories).
+      3. Depin exact-2dp / look-round brand BPs (depin_round_brand_bps)
+         and zero-sum-jitter demo rows sitting on a 2dp boundary.
+      4. run_write_safety_net (format normalize + Raw/Proj recompute +
+         Category Share recompute).
+
+    Idempotent, Claude-free, cheap. Returns (df, stats).
+    """
+    stats: dict = {}
+    if df is None or len(df) == 0:
+        return df, stats
+
+    # -- 0. dtype safety --------------------------------------------------
+    # pandas StringDtype / str-dtype columns reject numeric assignment
+    # (the exact failure G13's auto-patch hit on 2026-06-22). Coerce the
+    # numeric target columns to object so every downstream write in
+    # this pass (pin, depin, recompute) succeeds regardless of how the
+    # caller loaded the frame.
+    try:
+        _bp_c, _cs_c, _raw_c, _proj_c = _detect_cols(df)
+        for _c in (_bp_c, _cs_c, _raw_c, _proj_c):
+            if (_c and _c in df.columns
+                    and df[_c].dtype.name not in ('object', 'O',
+                                                  'float64', 'int64')):
+                df[_c] = df[_c].astype(object)
+    except Exception:
+        pass
+
+    # -- 1. echo-row strip -------------------------------------------------
+    try:
+        cat_u = df['Column'].astype(str).str.strip().str.upper()
+        meta_mask = cat_u.isin(METADATA_COLS | {'INPUT_METADATA'})
+        vals = df['Value'].astype(str)
+        looks_echo = (
+            vals.str.contains('%20', regex=False)
+            | ((vals.str.len() > 80) & (vals.str.count(', ') >= 4))
+        )
+        # Only strip when the echo clearly belongs to THIS subject
+        # (first segment normalizes to the subject) so we never drop a
+        # legit long brand value.
+        subj_norm_p = _re.sub(r'[^A-Z0-9]', '',
+                              str(subject or '').upper())
+        first_seg_norm = vals.str.split(',').str[0].str.upper() \
+            .str.replace(r'[^A-Z0-9]', '', regex=True)
+        echo_mask = (
+            (~meta_mask) & looks_echo
+            & (first_seg_norm == subj_norm_p) & (subj_norm_p != '')
+        )
+        n_echo = int(echo_mask.sum())
+        if n_echo:
+            if verbose:
+                for v in vals[echo_mask].head(3):
+                    print(f'   🧹 final-polish: stripped echo grid row '
+                          f'"{str(v)[:60]}..."')
+            df = df.loc[~echo_mask].reset_index(drop=True)
+        stats['echo_rows_stripped'] = n_echo
+    except Exception as e:
+        stats['echo_rows_stripped'] = -1
+        if verbose:
+            print(f'   ⚠️ final-polish echo strip failed: {e}')
+
+    # -- 2. subject re-pin -------------------------------------------------
+    try:
+        df, n_pin = pin_subject_to_100_in_appearing_categories(
+            df, subject, verbose=verbose)
+        stats['subject_repin'] = int(n_pin or 0)
+    except Exception as e:
+        stats['subject_repin'] = -1
+        if verbose:
+            print(f'   ⚠️ final-polish subject re-pin failed: {e}')
+
+    # -- 3. depin (brand + demo boundary) ----------------------------------
+    try:
+        df, n_dp = depin_round_brand_bps(df, subject, verbose=verbose)
+        stats['brand_depin'] = int(n_dp or 0)
+    except Exception as e:
+        stats['brand_depin'] = -1
+        if verbose:
+            print(f'   ⚠️ final-polish brand depin failed: {e}')
+    # -- 3b. within-cat 4dp collision dejitter (2026-08-22) ----------------
+    # The derived-cut engines write BPs without running the full chain,
+    # so multi-brand exact-4dp groups (ACCESSORIES / ACTOR hash-pattern
+    # values, Aug 21 TVOD Renters batch: up to 5 brands at one value)
+    # shipped uncaught. The polish is the shared terminal pass for every
+    # writer path, so the collision breaker belongs here. Idempotent.
+    try:
+        df, n_wc = dejitter_within_cat_4dp_collisions(
+            df, subject, verbose=verbose)
+        stats['within_cat_dejitter'] = int(n_wc or 0)
+    except Exception as e:
+        stats['within_cat_dejitter'] = -1
+        if verbose:
+            print(f'   ⚠️ final-polish within-cat dejitter failed: {e}')
+    try:
+        bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+        n_demo_jit = 0
+        if bp_col:
+            cat_u = df['Column'].astype(str).str.strip().str.upper()
+            for demo_cat in sorted(DEPIN_DEMO_CATS):
+                idxs = list(df.index[cat_u == demo_cat])
+                if not idxs:
+                    continue
+                bps = {}
+                for i in idxs:
+                    try:
+                        bps[i] = float(str(df.at[i, bp_col])
+                                       .replace('%', '').strip())
+                    except Exception:
+                        bps[i] = None
+                on2 = [i for i in idxs
+                       if bps.get(i) is not None
+                       and abs(bps[i] * 100 - round(bps[i] * 100)) < 1e-9
+                       and bps[i] not in (0.0, 100.0)]
+                if not on2:
+                    continue
+                donor = max((i for i in idxs
+                             if i not in on2 and bps.get(i) is not None),
+                            key=lambda i: bps[i], default=None)
+                for i in on2:
+                    d = abs(_jitter_for(subject, str(df.at[i, 'Value']),
+                                        salt=f'polish|{demo_cat}',
+                                        lo=0.0021, hi=0.0093))
+                    df.at[i, bp_col] = round(bps[i] + d, 4)
+                    if donor is not None:
+                        bps[donor] -= d
+                        n_demo_jit += 1
+                if donor is not None:
+                    df.at[donor, bp_col] = round(bps[donor], 4)
+        stats['demo_boundary_jitter'] = n_demo_jit
+        if verbose and n_demo_jit:
+            print(f'   🎲 final-polish: zero-sum jittered {n_demo_jit} '
+                  f'demo row(s) off 2dp boundary')
+    except Exception as e:
+        stats['demo_boundary_jitter'] = -1
+        if verbose:
+            print(f'   ⚠️ final-polish demo jitter failed: {e}')
+
+    # -- 4. safety net (format + Raw/Proj + CS) ----------------------------
+    try:
+        df, net_stats = run_write_safety_net(df, subject, verbose=verbose)
+        stats['safety_net'] = sum(
+            v for v in net_stats.values() if isinstance(v, int) and v > 0)
+    except Exception as e:
+        stats['safety_net'] = -1
+        if verbose:
+            print(f'   ⚠️ final-polish safety net failed: {e}')
 
     return df, stats
 
@@ -11904,20 +13648,37 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
         defects.append(f'G2 PROJECTION: detector errored: {e}')
 
     # ── G3: BRAND INPUT length sanity ─────────────────────────────────
+    # 2026-08-20: the pipeline-emitted URL-variant seed list
+    # ("Name, NAMEVARIANT, NAME-VARIANT, name.com/...") is the CANONICAL
+    # BRAND INPUT format per Rule #4c (used for URL matching at runtime)
+    # and must NOT fire this gate. It fired as a BLOCKING defect on
+    # every chatbot build. Only flag long values that are NOT the
+    # seed-list format (first comma-segment == subject).
     try:
         bi = df[df['Column'].astype(str).str.upper() == 'BRAND INPUT']
         if not bi.empty:
             v = str(bi.iloc[0].get('Value', '') or '')
             if len(v) > 80:
-                defects.append(
-                    f'G3 BRAND_INPUT: row Value is {len(v)} chars '
-                    f"(starts: {v[:60]!r}) — should be the canonical name only"
-                )
+                _first_seg = v.split(',')[0].strip()
+                _fs_norm = _re.sub(r'[^A-Z0-9]', '', _first_seg.upper())
+                _subj_norm_g3 = _re.sub(r'[^A-Z0-9]', '',
+                                        str(subject or '').upper())
+                is_seed_list = (',' in v and _fs_norm
+                                and (_fs_norm == _subj_norm_g3
+                                     or not _subj_norm_g3))
+                if not is_seed_list:
+                    defects.append(
+                        f'G3 BRAND_INPUT: row Value is {len(v)} chars '
+                        f"(starts: {v[:60]!r}) — should be the canonical "
+                        f"name or the URL-variant seed list"
+                    )
     except Exception as e:
         defects.append(f'G3 BRAND_INPUT: detector errored: {e}')
 
     # ── G4: within-cat 4dp collisions ≥ 10 ────────────────────────────
     try:
+        # Scrub '%' before coerce so raw synth-engine cells parse right
+        # (see migration/bp_column_utils for the 2026-08-17 defect background).
         bps = pd.to_numeric(
             df[bp_col].astype(str).str.replace('%', '', regex=False).str.strip(),
             errors='coerce'
@@ -12341,7 +14102,18 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
             bi_g13 = df.loc[cat_u_g13 == 'BRAND INPUT']
             bc_g13 = df.loc[cat_u_g13 == 'BRAND CATEGORY']
             if len(bi_g13) and len(bc_g13):
-                subj_g13 = str(bi_g13.iloc[0].get('Value', '') or '').strip().upper()
+                # 2026-08-20 (EST Buyers batch): BRAND INPUT carries the
+                # URL-variant seed list (Rule #4c), NOT the display name.
+                # Using the raw echo here made the detector miss the
+                # clean self-row (norm never matched) AND made the
+                # auto-patch insert a 279-char seed string into the grid
+                # at 100%. Prefer the caller-passed subject; fall back
+                # to the first comma-segment of the echo.
+                subj_g13 = str(subject or '').strip().upper()
+                if not subj_g13:
+                    _bi_raw_g13 = str(
+                        bi_g13.iloc[0].get('Value', '') or '').strip()
+                    subj_g13 = _bi_raw_g13.split(',')[0].strip().upper()
                 native_g13 = str(bc_g13.iloc[0].get('Value', '') or '').strip().upper()
                 # Skip categories that don't carry a 100% subject self-pin.
                 _g13_skip = (
@@ -12723,15 +14495,18 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
                         gate_ss_local = _gate_sample_size
                         if gate_ss_local and gate_ss_local > 0 and bp_col:
                             # (a) Netflix below the 73% baseline floor
-                            if nx_bp_g17 < 73.0:
+                            # 2026-08-24: threshold tracks the corrected
+                            # Gen Pop Netflix baseline (39.17), not the
+                            # legacy 73/75 anchors.
+                            if nx_bp_g17 < 36.5:
                                 try:
-                                    NX_TARGET_FIX = 75.0
+                                    NX_TARGET_FIX = 38.0
                                     new_nx_g17 = NX_TARGET_FIX + _jitter_for(
                                         subject, 'NETFLIX',
                                         salt='gate_baseline',
                                         lo=0.0, hi=4.0,
                                     )
-                                    new_nx_g17 = round(min(max(new_nx_g17, NX_TARGET_FIX), 79.0), 4)
+                                    new_nx_g17 = round(min(max(new_nx_g17, NX_TARGET_FIX), 42.0), 4)
                                     _set_bp(df, nx_idx_g17, new_nx_g17,
                                             bp_col, cs_col, raw_col, proj_col,
                                             gate_ss_local)
@@ -12801,11 +14576,11 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
                             # legacy detect-only behaviour so we don't ship
                             # silently bad data.
                             problems = []
-                            if nx_bp_g17 < 73.0:
+                            if nx_bp_g17 < 36.5:
                                 problems.append(
                                     f'NETFLIX_BELOW_BASELINE: Netflix at '
-                                    f'{nx_bp_g17:.4f}% is below the 73% '
-                                    f'floor (universal baseline ~75%) -- '
+                                    f'{nx_bp_g17:.4f}% is below the 36.5% '
+                                    f'floor (corrected baseline ~39.2%) -- '
                                     f'and gate could not auto-patch (no '
                                     f'sample_size)'
                                 )
