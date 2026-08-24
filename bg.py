@@ -15088,6 +15088,26 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
     import re
     import urllib.parse
 
+    # PERSONA CARVE-OUT (Jenna 2026-08-24, verbatim: "brand inputs dont
+    # need to be 100% on persona style profiles just elevated"):
+    # persona/interest/potential-customer universes carry a screening-
+    # brand / scrape-term BRAND INPUT, not a self-slug, and their BRAND
+    # INPUT row may deliberately sit at an elevated-but-not-100 value.
+    # When the subject reads as a persona label AND the BRAND INPUT row
+    # already carries such an elevated value (>= 90 and < 100), this
+    # enforcer must leave that row intact instead of re-pinning to 100.
+    _persona_style = False
+    try:
+        _pl_re = re.compile(
+            r"\b(enthusiasts?|lovers?|shoppers?|buyers?|purchasers?|"
+            r"consumers?|customers?|intenders?|seekers?|users?|owners?|"
+            r"viewers?|renters?|subscribers?|members?)\b", re.I)
+        _persona_style = any(
+            _pl_re.search(str(b) or '') for b in input_brands
+        )
+    except Exception:
+        _persona_style = False
+
     def _domain_core(value: str) -> str:
         """
         Extract the core domain label from URL/domain-like text.
@@ -15252,6 +15272,26 @@ def enforce_input_brand_100(df_behavior, input_brands, purchasers_only: bool = F
             
             if is_match:
                 row_col = str(row.get('Column', '')).strip().upper()
+
+                # PERSONA CARVE-OUT (see block at function top): leave a
+                # deliberate elevated BRAND INPUT intact on persona-style
+                # profiles instead of re-pinning to 100.
+                if _persona_style and row_col == 'BRAND INPUT':
+                    try:
+                        _bi_cell = row.get('Brand Penetration (Row)',
+                                           row.get(pct_col, ''))
+                        _cur_bp_val = float(
+                            str(_bi_cell).replace('%', '')
+                            .replace(',', '').strip())
+                    except Exception:
+                        _cur_bp_val = None
+                    if (_cur_bp_val is not None
+                            and 90.0 <= _cur_bp_val < 99.995):
+                        if not SILENCE_VERBOSE_OUTPUT:
+                            print(f"   ⏭️  Persona carve-out: BRAND INPUT "
+                                  f"stays elevated at {_cur_bp_val:.4f} "
+                                  f"(not re-pinned to 100)")
+                        continue
 
                 # ─────────────────────────────────────────────────────────
                 # Hostmap-aware writer dedup: if this brand is in hostmap

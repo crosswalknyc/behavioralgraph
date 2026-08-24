@@ -817,6 +817,37 @@ def apply_audience_cut_transform(df, audience: dict, category_decisions: dict,
                 df.at[idx, raw_col] = float(round(new_sample * normed / 100.0))
                 df.at[idx, proj_col] = float(round(new_uspop * normed / 100.0))
 
+    # LOCATION renormalize-to-~100 (2026-08-24 defect E: cut transforms
+    # jittered LOCATION rows per-row via the no-decision fallback without
+    # ever renormalizing the category, so shipped cuts drifted off the
+    # ~100 sum LOCATION carries by construction). Shape-preserving:
+    # every row scales by the same factor, then gets a subject-salted
+    # micro-jitter (span 0.02pp) so no row lands on a round 2dp/4dp
+    # boundary while the post-renorm sum stays within a few hundredths
+    # of 100.
+    loc_mask = (df[cat_col].astype(str).str.upper().str.strip()
+                == "LOCATION")
+    if loc_mask.any():
+        loc_rows = []
+        for idx in df.index[loc_mask]:
+            v = _fbp(df.at[idx, bp_col])
+            if v is not None and v > 0:
+                loc_rows.append((idx, v))
+        loc_sum = sum(v for _, v in loc_rows)
+        if loc_rows and loc_sum > 0 and abs(loc_sum - 100.0) > 0.05:
+            for idx, v in loc_rows:
+                label = str(df.at[idx, val_col]).strip()
+                normed = v * 100.0 / loc_sum + _seed_jitter(
+                    f"{subject}|LOCATION|{label}|cut-loc-renorm-{gender}",
+                    span=0.02,
+                )
+                normed = round(max(0.0001, normed), 4)
+                df.at[idx, bp_col] = f"{normed:.4f}%"
+                df.at[idx, raw_col] = float(
+                    round(new_sample * normed / 100.0))
+                df.at[idx, proj_col] = float(
+                    round(new_uspop * normed / 100.0))
+
     # Recompute Category Share within each non-demo category
     for cat, grp in df.groupby(cat_col):
         cu = str(cat).strip().upper()

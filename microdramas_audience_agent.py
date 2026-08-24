@@ -124,6 +124,443 @@ DEMO_ORDER = [
 
 
 # ============================================================================
+# Hostmap gating for interests (workspace rule #4).
+# ============================================================================
+# Jenna 2026-08-19: "make sure the interests listed are only from the
+# ones that are canonical in the hostmap file."
+#
+# Every interest label surfaced on a microdrama title card MUST be a
+# real brand in reference.host_mapping (never a made-up topic string
+# like "BookTok / romance novels" or "Reality dating shows"). Both
+# the Claude agent and the heuristic fallback pull from the same
+# curated shortlist below, and any label that fails the hostmap gate
+# is dropped from the payload before it reaches the frontend.
+_HOSTMAP_INTEREST_NORM: Optional[set] = None
+_HOSTMAP_INTEREST_UPPER: Optional[set] = None
+_HOSTMAP_INTEREST_CANONICAL: Optional[dict] = None
+_HOSTMAP_HIDDEN_UPPER: Optional[set] = None
+
+
+def _norm_brand(s) -> str:
+    """Case + punctuation insensitive brand key (matches the workspace
+    rule 'Duplicate check is case + punctuation insensitive')."""
+    return re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+
+
+def _load_hostmap_brands() -> bool:
+    """Load the canonical hostmap brand list once per process. Mirrors
+    the pattern in migration/post_generation_enforcers._ensure_hostmap_loaded.
+
+    Populates:
+      _HOSTMAP_INTEREST_UPPER      punct-sensitive upper-case set
+      _HOSTMAP_INTEREST_NORM       punct-insensitive normalized set
+      _HOSTMAP_INTEREST_CANONICAL  upper-key -> original casing
+      _HOSTMAP_HIDDEN_UPPER        SECTION='Hidden' upper-case set
+
+    Returns True on success; False (open-mode: caller decides) if no
+    cache is available.
+    """
+    global _HOSTMAP_INTEREST_NORM, _HOSTMAP_INTEREST_UPPER
+    global _HOSTMAP_INTEREST_CANONICAL, _HOSTMAP_HIDDEN_UPPER
+    if _HOSTMAP_INTEREST_NORM is not None:
+        return True
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.abspath(os.path.join(here, '..', 'reference',
+                                       'hostmap_brands_canonical.txt')),
+        '/Users/jennamenking/Desktop/finished_codes/reference/hostmap_brands_canonical.txt',
+        '/root/finished_codes/reference/hostmap_brands_canonical.txt',
+        os.path.abspath(os.path.join(here, '..', 'reference',
+                                       'hostmap_brands.txt')),
+        '/tmp/hostmap_brands.txt',
+    ]
+    hidden_candidates = [
+        os.path.abspath(os.path.join(here, '..', 'reference',
+                                       'hostmap_hidden_brands.txt')),
+        '/Users/jennamenking/Desktop/finished_codes/reference/hostmap_hidden_brands.txt',
+        '/root/finished_codes/reference/hostmap_hidden_brands.txt',
+    ]
+    lines: list[str] = []
+    for p in candidates:
+        if p and os.path.exists(p):
+            try:
+                with open(p, 'r', encoding='utf-8') as f:
+                    lines = [ln.strip() for ln in f if ln.strip()]
+                break
+            except Exception as e:
+                logger.info('microdramas_audience_agent: hostmap read failed at %s (%s)', p, e)
+    if not lines:
+        return False
+    hidden: set = set()
+    for p in hidden_candidates:
+        if p and os.path.exists(p):
+            try:
+                with open(p, 'r', encoding='utf-8') as f:
+                    hidden = {ln.strip().upper() for ln in f if ln.strip()}
+                break
+            except Exception:
+                continue
+    _HOSTMAP_INTEREST_UPPER    = {b.upper() for b in lines}
+    _HOSTMAP_INTEREST_NORM     = {_norm_brand(b) for b in lines}
+    canon: dict = {}
+    for b in lines:
+        uk = b.upper()
+        prev = canon.get(uk)
+        # Prefer non-Hidden over Hidden, then Title-case over ALL CAPS
+        prev_hidden = prev is not None and prev.upper() in hidden
+        new_hidden  = uk in hidden
+        if prev is None:
+            canon[uk] = b
+        elif prev_hidden and not new_hidden:
+            canon[uk] = b
+        elif not prev_hidden and new_hidden:
+            pass
+        elif prev.isupper() and not b.isupper():
+            canon[uk] = b
+    _HOSTMAP_INTEREST_CANONICAL = canon
+    _HOSTMAP_HIDDEN_UPPER       = hidden
+    return True
+
+
+def _is_in_hostmap(brand: str) -> bool:
+    """Case + punctuation-insensitive hostmap membership check. Never
+    matches a brand whose SECTION='Hidden' (per workspace rule #4b).
+    Returns True permissively when the hostmap cache is unavailable so
+    dev environments without the reference file don't drop every row."""
+    if not _load_hostmap_brands():
+        return True
+    if not brand:
+        return False
+    bu = str(brand).upper()
+    if bu in (_HOSTMAP_HIDDEN_UPPER or set()):
+        return False
+    if bu in (_HOSTMAP_INTEREST_UPPER or set()):
+        return True
+    return _norm_brand(brand) in (_HOSTMAP_INTEREST_NORM or set())
+
+
+def _hostmap_canonical(brand: str) -> Optional[str]:
+    """Return the hostmap's canonical casing for a brand, or None if
+    it isn't in hostmap (or is Hidden). Guarantees the label rendered
+    on the dashboard uses the exact spelling from the source of truth."""
+    if not _load_hostmap_brands():
+        return brand  # open-mode fallback for dev
+    if not brand:
+        return None
+    bu = str(brand).upper()
+    if bu in (_HOSTMAP_HIDDEN_UPPER or set()):
+        return None
+    canon = _HOSTMAP_INTEREST_CANONICAL or {}
+    if bu in canon:
+        return canon[bu]
+    # Punctuation-stripped fallback for typos like "Coca Cola" -> "Coca-Cola"
+    nb = _norm_brand(brand)
+    for k, v in canon.items():
+        if _norm_brand(k) == nb:
+            return v
+    return None
+
+
+# ============================================================================
+# Canonical interest menu (hostmap-gated)
+# ============================================================================
+# The single source of truth for every interest label rendered on any
+# microdrama title card. Each entry is a real brand in
+# reference.host_mapping (verified at module import via
+# _validate_interest_menu below). Both the Claude agent and the
+# heuristic fallback draw from this menu; anything they return that
+# isn't on the menu (or later fails the hostmap gate at post-shape
+# time) is dropped from the payload before it reaches the frontend.
+#
+# Fields:
+#   label      exact canonical hostmap casing (rendered as-is)
+#   base       cross-audience index vs Gen Pop (100 = parity)
+#   tilts      set of tilt tags that BOOST this brand's index when
+#              the title/audience matches. Tags:
+#                'female'          female-skew title/audience
+#                'male'            male-skew title/audience
+#                'young'           heavy 18-24
+#                'core'            heavy 25-44
+#                'older'           heavy 45+
+#                'romance'         romance/CEO/billionaire/bride/wife
+#                'mdrama'          M-Drama / mafia / overlord / assassin
+#                'revenge'         revenge / rebirth
+#                'family'          second-chance / has-children
+#                'higher_income'   $100K+ index skew
+#                'lower_income'    <$50K index skew
+#
+# Never add a brand here that isn't in hostmap. The
+# _validate_interest_menu() call at module import will log a warning
+# and drop any entry that fails the gate so a stale menu can't leak
+# a non-canonical label onto the dashboard.
+HOSTMAP_INTEREST_MENU: list[dict] = [
+    # Social / short-form video (universal core for microdrama viewers)
+    {'label': 'TikTok',            'base': 205, 'tilts': {'young', 'female'}},
+    {'label': 'Instagram',         'base': 178, 'tilts': {'female', 'young'}},
+    {'label': 'YouTube',           'base': 154, 'tilts': set()},
+    {'label': 'Snapchat',          'base': 148, 'tilts': {'young'}},
+    {'label': 'Facebook',          'base': 132, 'tilts': {'older', 'family'}},
+    {'label': 'Pinterest',         'base': 141, 'tilts': {'female', 'romance'}},
+    {'label': 'Reddit',            'base': 118, 'tilts': {'male', 'mdrama'}},
+    {'label': 'Threads',           'base': 108, 'tilts': {'young'}},
+    {'label': 'BeReal',            'base': 116, 'tilts': {'young'}},
+
+    # Reading / audio (BookTok crossover, romance-novel adjacency).
+    # Wattpad is in hostmap but SECTION='Hidden' (workspace rule #4b)
+    # so it never ships - Kindle + Audible + Barnes & Noble carry the
+    # romance-reader signal instead.
+    {'label': 'Kindle',            'base': 168, 'tilts': {'female', 'romance', 'young'}},
+    {'label': 'Audible',           'base': 152, 'tilts': {'female', 'romance', 'core'}},
+    {'label': 'Barnes & Noble',    'base': 138, 'tilts': {'female', 'romance', 'higher_income'}},
+
+    # Dating (romance-trope audience over-indexes)
+    {'label': 'Bumble',            'base': 168, 'tilts': {'female', 'young', 'romance'}},
+    {'label': 'Hinge',             'base': 152, 'tilts': {'female', 'core', 'romance'}},
+
+    # Beauty (female-skew core, higher for younger + romance tropes)
+    {'label': 'Sephora',           'base': 174, 'tilts': {'female', 'higher_income'}},
+    {'label': 'Ulta Beauty',       'base': 168, 'tilts': {'female'}},
+    {'label': 'Fenty Beauty',      'base': 156, 'tilts': {'female', 'young'}},
+    {'label': 'Rare Beauty',       'base': 152, 'tilts': {'female', 'young'}},
+    # e.l.f. Cosmetics is in hostmap but SECTION='Hidden' - Maybelline
+    # and Wet n Wild carry the affordable-drugstore-beauty signal.
+    {'label': 'Maybelline',        'base': 148, 'tilts': {'female', 'lower_income'}},
+    {'label': 'Wet n Wild',        'base': 138, 'tilts': {'female', 'young', 'lower_income'}},
+    {'label': 'Glossier',          'base': 138, 'tilts': {'female', 'young', 'higher_income'}},
+    {'label': 'MAC Cosmetics',     'base': 142, 'tilts': {'female'}},
+    {'label': 'Milk Makeup',       'base': 132, 'tilts': {'female', 'young'}},
+    {'label': 'Colourpop',         'base': 146, 'tilts': {'female', 'young', 'lower_income'}},
+    {'label': 'Kylie Cosmetics',   'base': 138, 'tilts': {'female', 'young'}},
+    {'label': 'Urban Decay',       'base': 128, 'tilts': {'female', 'young'}},
+    {'label': 'Benefit Cosmetics', 'base': 128, 'tilts': {'female'}},
+    {'label': 'Bath & Body Works', 'base': 158, 'tilts': {'female'}},
+
+    # Fashion / apparel (romance + young female tilt)
+    {'label': 'Shein',             'base': 178, 'tilts': {'female', 'young', 'lower_income'}},
+    {'label': 'Boohoo',            'base': 152, 'tilts': {'female', 'young', 'lower_income'}},
+    {'label': 'Nasty Gal',         'base': 138, 'tilts': {'female', 'young'}},
+    {'label': 'ASOS',              'base': 132, 'tilts': {'female', 'young'}},
+    {'label': 'Skims',             'base': 156, 'tilts': {'female', 'young'}},
+    {'label': 'Fabletics',         'base': 138, 'tilts': {'female', 'core'}},
+    {'label': 'Free People',       'base': 128, 'tilts': {'female', 'higher_income'}},
+    {'label': 'Anthropologie',     'base': 124, 'tilts': {'female', 'higher_income', 'older'}},
+    {'label': 'Urban Outfitters',  'base': 136, 'tilts': {'female', 'young'}},
+    {'label': 'Old Navy',          'base': 118, 'tilts': {'female', 'family'}},
+    {'label': 'Poshmark',          'base': 148, 'tilts': {'female'}},
+    {'label': 'Etsy',              'base': 138, 'tilts': {'female', 'romance'}},
+
+    # QSR / mobile-first food
+    {'label': 'DoorDash',          'base': 152, 'tilts': {'young', 'core'}},
+    {'label': 'Uber Eats',         'base': 141, 'tilts': {'young', 'core'}},
+    {'label': 'Grubhub',           'base': 118, 'tilts': set()},
+    {'label': 'Instacart',         'base': 128, 'tilts': {'family', 'higher_income'}},
+    {'label': 'GoPuff',            'base': 132, 'tilts': {'young'}},
+    {'label': 'Chick-Fil-A',       'base': 128, 'tilts': {'family'}},
+    {'label': 'Wingstop',          'base': 138, 'tilts': {'male', 'young'}},
+    {'label': 'Popeyes',           'base': 132, 'tilts': {'male'}},
+    {'label': 'Taco Bell',         'base': 138, 'tilts': {'young'}},
+    {'label': 'Dunkin',            'base': 118, 'tilts': {'core'}},
+
+    # Streaming (over-index because microdrama viewers are heavy SVOD)
+    {'label': 'Netflix',           'base': 168, 'tilts': set()},
+    {'label': 'Hulu',              'base': 142, 'tilts': set()},
+    {'label': 'Peacock',           'base': 138, 'tilts': {'older'}},
+    {'label': 'Amazon Prime Video', 'base': 148, 'tilts': set()},
+    {'label': 'Spotify',           'base': 152, 'tilts': {'young'}},
+    {'label': 'Amazon Music',      'base': 118, 'tilts': set()},
+    {'label': 'Apple Music',       'base': 124, 'tilts': set()},
+
+    # Retail (mobile-shopper crossover)
+    {'label': 'Amazon',            'base': 156, 'tilts': set()},
+    {'label': 'Target',            'base': 138, 'tilts': {'female', 'family'}},
+    {'label': 'Walmart',           'base': 128, 'tilts': {'family', 'lower_income'}},
+    {'label': 'Costco',            'base': 118, 'tilts': {'family', 'higher_income'}},
+    {'label': 'Kroger',            'base': 108, 'tilts': {'family'}},
+    {'label': 'Publix',            'base': 108, 'tilts': {'family'}},
+    {'label': 'ALDI',              'base': 118, 'tilts': {'family', 'lower_income'}},
+
+    # Fitness / wellness (aspirational for romance-trope viewers)
+    {'label': 'Peloton',           'base': 132, 'tilts': {'higher_income', 'core'}},
+    {'label': 'SoulCycle',         'base': 118, 'tilts': {'female', 'higher_income'}},
+    {'label': 'Equinox',           'base': 112, 'tilts': {'higher_income'}},
+    {'label': 'ClassPass',         'base': 122, 'tilts': {'female', 'core'}},
+    {'label': 'Alo Yoga',          'base': 128, 'tilts': {'female', 'higher_income'}},
+
+    # Fin / payments (young mobile-first)
+    {'label': 'Cash App',          'base': 148, 'tilts': {'young', 'lower_income'}},
+    {'label': 'Venmo',             'base': 138, 'tilts': {'young'}},
+    {'label': 'PayPal',            'base': 118, 'tilts': set()},
+    {'label': 'Robinhood',         'base': 132, 'tilts': {'male', 'young'}},
+
+    # Games (M-Drama / male-tilt crossover)
+    {'label': 'Roblox',            'base': 138, 'tilts': {'young'}},
+    {'label': 'Grand Theft Auto',  'base': 132, 'tilts': {'male', 'mdrama'}},
+    {'label': 'Marvel',            'base': 128, 'tilts': {'male', 'mdrama'}},
+
+    # Utility / lifestyle
+    {'label': 'Duolingo',          'base': 132, 'tilts': {'young'}},
+    {'label': 'WhatsApp',          'base': 128, 'tilts': set()},
+    {'label': 'Uber',              'base': 128, 'tilts': {'young', 'core'}},
+    {'label': 'Lyft',              'base': 118, 'tilts': {'young', 'core'}},
+    {'label': 'Airbnb',            'base': 128, 'tilts': {'higher_income', 'romance'}},
+    {'label': 'Expedia',           'base': 108, 'tilts': {'higher_income', 'older'}},
+    {'label': 'Yelp',              'base': 108, 'tilts': set()},
+
+    # Talent (celebrity-gossip crossover, hostmap Talent brands)
+    {'label': 'Kim Kardashian',    'base': 132, 'tilts': {'female'}},
+    {'label': 'Kylie Jenner',      'base': 128, 'tilts': {'female', 'young'}},
+    {'label': 'Rihanna',           'base': 128, 'tilts': {'female'}},
+    {'label': 'Taylor Swift',      'base': 138, 'tilts': {'female'}},
+    {'label': 'Ariana Grande',     'base': 122, 'tilts': {'female', 'young'}},
+    {'label': 'Doja Cat',          'base': 118, 'tilts': {'young'}},
+    {'label': 'Sabrina Carpenter', 'base': 118, 'tilts': {'young', 'female'}},
+    {'label': 'Olivia Rodrigo',    'base': 122, 'tilts': {'young', 'female'}},
+    {'label': 'Chappell Roan',     'base': 108, 'tilts': {'young', 'female'}},
+    {'label': 'Alix Earle',        'base': 128, 'tilts': {'female', 'young'}},
+    {'label': 'Emma Chamberlain',  'base': 118, 'tilts': {'female', 'young'}},
+]
+
+
+def _validate_interest_menu() -> None:
+    """Drop any menu entry whose label isn't in hostmap at import time.
+    Logs a warning so a drift between the menu and the hostmap cache
+    surfaces immediately (rather than silently rendering a phantom
+    label on the dashboard)."""
+    if not _load_hostmap_brands():
+        # No hostmap cache locally - keep the menu as-is and let the
+        # runtime gate in _shape_agent_payload filter server-side.
+        return
+    kept: list[dict] = []
+    dropped: list[str] = []
+    for entry in HOSTMAP_INTEREST_MENU:
+        lbl = entry.get('label') or ''
+        canon = _hostmap_canonical(lbl)
+        if canon:
+            entry['label'] = canon
+            kept.append(entry)
+        else:
+            dropped.append(lbl)
+    if dropped:
+        logger.warning('microdramas_audience_agent: dropped %d non-hostmap '
+                       'interest menu entries: %s',
+                       len(dropped), ', '.join(dropped[:10]))
+    HOSTMAP_INTEREST_MENU[:] = kept
+
+
+_validate_interest_menu()
+
+
+def _interests_from_menu(tilts: set, target_n: int = 8) -> list[dict]:
+    """Rank the hostmap-gated menu against a set of tilt tags and
+    return the top `target_n` as [{label, index}, ...]. Deterministic
+    for identical tilt sets so the same title always renders the same
+    list. The index nudges +8..+22 for each matching tilt so a brand
+    that resonates with three tilt tags will float above one that
+    matches only one."""
+    if not HOSTMAP_INTEREST_MENU:
+        return []
+    scored: list[tuple[float, str, dict]] = []
+    for entry in HOSTMAP_INTEREST_MENU:
+        base = float(entry.get('base') or 100)
+        etilts = entry.get('tilts') or set()
+        overlap = len(etilts & tilts) if tilts else 0
+        # Each tilt-match adds a modest lift; three matches = ~+45 index
+        bonus = 15.0 * overlap
+        # Ambiguous entries (no tilts) still surface at their base index
+        idx = base + bonus
+        # Stable tie-break on label so ordering is deterministic
+        scored.append((-idx, entry['label'], entry))
+    scored.sort()
+    out: list[dict] = []
+    for _neg_idx, _lbl, entry in scored[:target_n]:
+        out.append({
+            'label': entry['label'],
+            'index': int(round(-_neg_idx)),
+        })
+    return out
+
+
+def _tilts_from_context(title: str, series: str, genre: str,
+                         platform: str) -> set:
+    """Derive tilt tags from a title/genre/platform combo. Mirrors the
+    keyword logic used by the heuristic demographic path so the menu
+    ranking stays consistent with the demographic tilt."""
+    hay = f'{title or ""} {series or ""} {genre or ""}'.lower()
+    tilts: set = set()
+
+    # Trope keywords (map to _KEYWORD_TILTS style)
+    romance_kw = ('billionaire', 'ceo', 'bride', 'wife', 'werewolf',
+                    'vampire', 'stepbrother', 'stepsister', 'second chance',
+                    'love', 'kiss', 'wedding', 'pregnan', 'baby')
+    mdrama_kw  = ('mafia', 'overlord', 'assassin', 'hidden', 'son-in-law',
+                    'god', 'war', 'revenge', 'cop', 'agent', 'boss')
+    revenge_kw = ('revenge', 'rebirth', 'reborn', 'too late', 'ivy')
+    family_kw  = ('second chance', 'wife', 'husband', 'pregnan', 'baby',
+                    'children', 'family')
+
+    if any(k in hay for k in romance_kw): tilts.add('romance'); tilts.add('female')
+    if any(k in hay for k in mdrama_kw):  tilts.add('mdrama');  tilts.add('male')
+    if any(k in hay for k in revenge_kw): tilts.add('revenge'); tilts.add('core')
+    if any(k in hay for k in family_kw):  tilts.add('family');  tilts.add('core')
+
+    # Werewolf / stepbrother / stepsister skew young
+    if any(k in hay for k in ('werewolf', 'vampire', 'stepbrother',
+                                'stepsister', 'high school')):
+        tilts.add('young')
+
+    # Billionaire / CEO widen to older core and higher income
+    if any(k in hay for k in ('billionaire', 'ceo', 'boss')):
+        tilts.add('higher_income'); tilts.add('core')
+
+    # Platform anchors: Peacock is older / higher income; the coin
+    # apps skew young + core
+    plat_key = _platform_key(platform) if platform else ''
+    if plat_key == 'peacock':
+        tilts.add('older'); tilts.add('higher_income')
+    elif plat_key in ('reelshort', 'dramabox', 'goodshort', 'netshort'):
+        tilts.add('core')
+        if plat_key in ('reelshort', 'goodshort'):
+            tilts.add('female')
+        if plat_key == 'netshort':
+            tilts.add('young')  # netshort skews the youngest
+
+    # Every microdrama viewer over-indexes on short-form video and
+    # streaming - guarantees TikTok / Netflix / Prime never fall out
+    tilts.add('core')
+
+    return tilts
+
+
+def _gate_interests_to_hostmap(rows: list[dict]) -> list[dict]:
+    """Filter a list of {label, index} rows to hostmap-only entries.
+    Canonicalizes the label to the hostmap's spelling on the way out
+    (so 'Chick fil A' becomes 'Chick-Fil-A', 'coca cola' becomes
+    'Coca-Cola', etc.). Any label that fails the hostmap gate is
+    dropped with a debug log entry so we can trace what Claude
+    hallucinated."""
+    out: list[dict] = []
+    seen: set = set()
+    for r in rows or []:
+        if not isinstance(r, dict):
+            continue
+        lbl = str(r.get('label') or '').strip()
+        idx = r.get('index')
+        if not lbl or not isinstance(idx, (int, float)):
+            continue
+        canon = _hostmap_canonical(lbl)
+        if not canon:
+            logger.debug('microdramas_audience_agent: dropping non-hostmap '
+                          'interest "%s"', lbl)
+            continue
+        key = canon.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({'label': canon, 'index': int(idx)})
+    return out
+
+
+# ============================================================================
 # Gen Pop baseline loader
 # ============================================================================
 # Every title-audience payload ships a parallel `demographics_genpop`
@@ -703,9 +1140,11 @@ _SYSTEM_PROMPT = (
     "concentrated on the female 18-34 core, over-indexed vs. even the "
     "platform's baseline...')\n"
     "7. 5-8 interests with an index vs Gen Pop (100 = matches Gen Pop, "
-    "150 = 1.5x more likely). Anchor these to platform reality (vertical-"
-    "drama viewers over-index on BookTok, reality dating, beauty, TikTok, "
-    "romance novels; not on prestige-TV or hard news).\n\n"
+    "150 = 1.5x more likely). Every interest label MUST be chosen from "
+    "the CANONICAL HOSTMAP MENU provided in the user prompt - do NOT "
+    "invent topic labels like 'BookTok / romance novels' or 'Reality "
+    "dating shows'. Only real brand names from that menu. Any label "
+    "that isn't on the menu will be dropped from the response.\n\n"
     "Return ONLY the JSON object, no markdown fences, no commentary before "
     "or after."
 )
@@ -746,6 +1185,21 @@ def _build_user_prompt(title: str, series: str, genre: str, platform: str) -> st
         buckets = DEMO_BUCKETS[cat]
         lines.append(f'  {cat}: {buckets}')
     lines.append('')
+
+    # ------------------------------------------------------------------
+    # Canonical HOSTMAP interest menu. Every "interests" label MUST be
+    # chosen from this list - anything else will be dropped from the
+    # response at post-processing time. Workspace rule #4: never surface
+    # a brand that isn't in reference.host_mapping.
+    # ------------------------------------------------------------------
+    if HOSTMAP_INTEREST_MENU:
+        lines.append('CANONICAL HOSTMAP MENU (interests): choose 5-8 for the '
+                       '"interests" array. Use the exact spelling shown, one '
+                       'per line, index each between 60 and 260 vs Gen Pop.')
+        for entry in HOSTMAP_INTEREST_MENU:
+            lines.append(f'  - {entry["label"]}')
+        lines.append('')
+
     lines.append('Return JSON in this exact shape:')
     lines.append('{')
     lines.append('  "audience_summary": "<3-5 sentences about who watches this title on THIS platform, calling out both the platform anchor and the title-specific tilt>",')
@@ -756,9 +1210,10 @@ def _build_user_prompt(title: str, series: str, genre: str, platform: str) -> st
         lines.append(f'    "{cat}": {{...canonical buckets sum to 100...}}')
     lines.append('  },')
     lines.append('  "interests": [')
-    lines.append('    {"label": "BookTok / romance novels", "index": 172},')
-    lines.append('    {"label": "Reality dating shows",      "index": 168},')
-    lines.append('    ...5-8 total, each index between 60 and 260')
+    lines.append('    {"label": "TikTok",  "index": 205},')
+    lines.append('    {"label": "Sephora", "index": 174},')
+    lines.append('    ...5-8 total, each label chosen from the CANONICAL '
+                 'HOSTMAP MENU below, each index between 60 and 260')
     lines.append('  ],')
     lines.append('  "platform_affinities": [')
     lines.append('    {"label": "TikTok",          "reach_pct": 84.6},')
@@ -843,14 +1298,25 @@ def _shape_agent_payload(raw: dict, title: str, series: str,
             cat.lower(): _renormalize_100(genpop_by_cat.get(cat) or {}, DEMO_BUCKETS[cat])
             for cat in DEMO_ORDER
         }
-    interests = []
-    for r in (raw.get('interests') or [])[:8]:
-        if not isinstance(r, dict):
-            continue
-        lbl = str(r.get('label') or '').strip()
-        idx = r.get('index')
-        if lbl and isinstance(idx, (int, float)):
-            interests.append({'label': lbl, 'index': int(idx)})
+    # Hostmap-gate every interest label. Workspace rule #4: never
+    # surface a brand that isn't in reference.host_mapping. If Claude
+    # (or the heuristic path) returned any label that isn't canonical,
+    # drop it now and top up the list from the menu so the frontend
+    # never renders an empty interests card. Jenna 2026-08-19: "make
+    # sure the interests listed are only from the ones that are
+    # canonical in the hostmap file."
+    interests = _gate_interests_to_hostmap(raw.get('interests') or [])[:8]
+    if len(interests) < 5:
+        tilts = _tilts_from_context(title, series, genre, platform)
+        menu = _interests_from_menu(tilts, target_n=8)
+        seen = {r['label'].upper() for r in interests}
+        for r in menu:
+            if r['label'].upper() in seen:
+                continue
+            interests.append(r)
+            seen.add(r['label'].upper())
+            if len(interests) >= 8:
+                break
     platforms = []
     for r in (raw.get('platform_affinities') or [])[:12]:
         if not isinstance(r, dict):
@@ -953,16 +1419,10 @@ _KEYWORD_TILTS = {
     'stepsister':  {'AGE.18-24': +8, 'GENDER.Female': +6},
 }
 
-_BASE_INTERESTS = [
-    {'label': 'BookTok / romance novels',       'index': 168},
-    {'label': 'Reality dating shows',           'index': 172},
-    {'label': 'Beauty & skincare',              'index': 156},
-    {'label': 'Vertical short-form video',      'index': 214},
-    {'label': 'Celebrity gossip',               'index': 148},
-    {'label': 'K-drama / anime fandom',         'index': 137},
-    {'label': 'Fast casual dining',             'index': 131},
-    {'label': 'Streaming subscriptions (SVOD)', 'index': 128},
-]
+# _BASE_INTERESTS removed 2026-08-19: interests are now drawn from
+# HOSTMAP_INTEREST_MENU (hostmap-gated) via _interests_from_menu().
+# Every heuristic-path interest is guaranteed to be a real brand in
+# reference.host_mapping - no invented topic labels ever ship.
 
 _BASE_PLATFORMS = [
     {'label': 'TikTok',            'reach_pct': 84.6},
@@ -1004,12 +1464,12 @@ def _heuristic_audience(title: str, series: str, genre: str, platform: str) -> d
                 vals[label] = max(0.0, vals[label] + v)
         demographics[cat] = vals
 
-    # Interest tilt: bump BookTok/dating/beauty for female-skew titles,
-    # sports/UFC-like for male-skew titles.
-    interests = [dict(x) for x in _BASE_INTERESTS]
-    if any(k.startswith('GENDER.Male') and v > 0 for k, v in tilts.items()):
-        interests.append({'label': 'Sports betting', 'index': 148})
-        interests.append({'label': 'Combat sports / MMA', 'index': 156})
+    # Interest rankings drawn from the hostmap-gated canonical menu.
+    # Both Claude and the heuristic use the SAME menu so the two code
+    # paths render identically shaped interest bars. Workspace rule #4:
+    # never surface a brand that isn't in reference.host_mapping.
+    context_tilts = _tilts_from_context(title, series, genre, platform)
+    interests = _interests_from_menu(context_tilts, target_n=8)
 
     # Build a summary that names both the platform anchor AND the tilt
     plat_label = (profile or {}).get('label') or 'the vertical-drama platform'

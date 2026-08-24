@@ -11060,8 +11060,17 @@ def apply_porn_canonical_normalize(df, subject, verbose=True):
             # Add per-brand jitter (avoid 4dp identity collision with PORNHUB)
             scaled = _jitter_for(subject, v_upper, salt='d111_porn_peer',
                                  base=scaled, pct=0.05)
-            # Hard ceiling at 99.99 (no row can exceed PORNHUB after clamp)
-            scaled = min(scaled, max(2.0, new_pornhub - 1.0))
+            # Ceiling below PORNHUB with a PER-BRAND SALTED gap (2026-08-24
+            # defect D: the old constant `new_pornhub - 1.0` parked every
+            # clamped peer at exactly leader minus 1.0000, a round-offset
+            # ladder signature shipped on 64 files; rank-2 YOUPORN on
+            # SharkNinja Avid was the client-reported case). Salted gap in
+            # [1.05, 2.4]pp keeps the leader invariant AND kills the round
+            # constant; per-brand salt prevents 4dp collisions when several
+            # peers hit the ceiling together.
+            _gap = _jitter_for(subject, v_upper, salt='d111_porn_gap',
+                               lo=1.05, hi=2.4)
+            scaled = min(scaled, max(2.0, round(new_pornhub - _gap, 4)))
             df = _set_bp(df, idx, scaled,
                          bp_col, cs_col, raw_col, proj_col, sample_size)
             n_touched += 1
@@ -11170,10 +11179,13 @@ def apply_porn_leader_invariant(df, subject, verbose=True):
     # output below the gate threshold.
     target_max = max(1.5, pornhub_bp - 2.0)
     scale = target_max / max_peer_bp
-    # Hard ceiling: every peer must end up strictly below PORNHUB - 1pp
-    # (matches G11 gate threshold). Use 1.2pp gap for a small safety
-    # margin against floating-point artifacts.
-    ceiling = max(1.0, pornhub_bp - 1.2)
+    # Ceiling: every peer must end up strictly below PORNHUB - 1pp
+    # (matches G11 gate threshold). 2026-08-24 defect D: the old constant
+    # `pornhub_bp - 1.2` parked every clamped peer at exactly leader minus
+    # 1.2000, the same round-offset ladder family as the D111 `- 1.0`
+    # constant. Per-brand salted gap in [1.25, 2.6]pp stays G11-safe
+    # (always > 1pp below the leader) while never producing a round
+    # constant offset or a 4dp collision between clamped peers.
     n_touched = 0
     log_rows = []
 
@@ -11185,7 +11197,10 @@ def apply_porn_leader_invariant(df, subject, verbose=True):
         # Per-brand jitter to avoid 4dp identity collisions across peers
         new_bp = _jitter_for(subject, v_upper, salt='d118_porn_leader',
                               base=new_bp, pct=0.04)
-        # Hard ceiling: no peer may exceed PORNHUB - 1.2pp (G11-safe)
+        # Per-brand salted ceiling (see block comment above)
+        _gap = _jitter_for(subject, v_upper, salt='d118_porn_gap',
+                           lo=1.25, hi=2.6)
+        ceiling = max(1.0, round(pornhub_bp - _gap, 4))
         new_bp = round(min(new_bp, ceiling), 4)
         # Floor at 0.05 (existing convention)
         new_bp = max(0.05, new_bp)

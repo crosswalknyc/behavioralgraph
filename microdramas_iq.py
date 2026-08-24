@@ -2011,16 +2011,16 @@ OVERALL_AUDIENCE = {
             {'label': 'Rural',    'pct': 14.8},
         ],
     },
-    'interests': [
-        {'label': 'Reality dating shows',           'index': 172},
-        {'label': 'BookTok / romance novels',       'index': 168},
-        {'label': 'Beauty & skincare',              'index': 156},
-        {'label': 'Vertical short-form video',      'index': 214},
-        {'label': 'Celebrity gossip',               'index': 148},
-        {'label': 'K-drama / anime fandom',         'index': 137},
-        {'label': 'Fast casual dining',             'index': 131},
-        {'label': 'Streaming subscriptions (SVOD)', 'index': 128},
-    ],
+    # Interests are hostmap-gated: every label MUST be a real brand in
+    # reference.host_mapping. Populated at module load from
+    # microdramas_audience_agent.HOSTMAP_INTEREST_MENU so the Peacock
+    # tab's audience_overall payload and the per-title audience modal
+    # (research_title_audience) both draw from the same canonical
+    # menu. Workspace rule #4. Jenna 2026-08-19: "make sure the
+    # interests listed are only from the ones that are canonical in
+    # the hostmap file." Populated below (after OVERALL_AUDIENCE is
+    # fully defined) so the module-level reference stays alive.
+    'interests': [],
     'platform_affinities': [
         {'label': 'TikTok',           'reach_pct': 84.6},
         {'label': 'Instagram Reels',  'reach_pct': 78.3},
@@ -2032,6 +2032,34 @@ OVERALL_AUDIENCE = {
         {'label': 'X (Twitter)',      'reach_pct': 18.9},
     ],
 }
+
+
+# Populate OVERALL_AUDIENCE['interests'] from the hostmap-gated menu
+# so the Peacock tab renders only canonical hostmap brands. Falls back
+# to an empty list if microdramas_audience_agent isn't importable
+# (e.g. missing reference dir) so the module still loads.
+try:
+    from microdramas_audience_agent import (
+        HOSTMAP_INTEREST_MENU as _MIQ_INTEREST_MENU,
+        _interests_from_menu as _miq_interests_from_menu,
+    )
+    # "core" tilt captures the cross-platform microdrama viewer shape
+    # (mobile-primary 25-44 female-leaning). Same signal the per-title
+    # audience agent uses as its baseline when Claude is unreachable.
+    OVERALL_AUDIENCE['interests'] = _miq_interests_from_menu(
+        {'core', 'female'}, target_n=8,
+    )
+except Exception as _e:
+    # Never crash microdramas_iq on hostmap-gate failure - just log
+    # and ship an empty interest rail so the rest of the dashboard
+    # stays online.
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        'microdramas_iq: could not load hostmap-gated interest menu (%s); '
+        'audience_overall.interests will be empty until hostmap cache lands',
+        _e,
+    )
+    OVERALL_AUDIENCE['interests'] = []
 
 
 # Per-title tilt heuristics. Series names in the catalog get mapped to

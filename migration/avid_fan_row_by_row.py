@@ -572,7 +572,21 @@ def apply_avid_transform(df, audience: dict, category_decisions: dict,
             # subject self-pin was missed (Gemini OG at 32.87% in
             # SEARCH ENGINE/AI) -- those OGs may also have non-100 BRAND
             # INPUT in edge cases. BRAND INPUT @ 100% is Rule #3 mandate.
-            df.at[idx, bp_col] = "100.0000%"
+            #
+            # PERSONA CARVE-OUT (Jenna 2026-08-24, verbatim: "brand
+            # inputs dont need to be 100% on persona style profiles
+            # just elevated"): when the SOURCE file deliberately carries
+            # an elevated-but-not-100 BRAND INPUT (persona/interest
+            # universes whose BI is a screening-brand/scrape-term list,
+            # not a self-slug), the cut inherits that elevated value
+            # instead of re-pinning to 100. Only clearly-elevated values
+            # qualify (>= 90); a deep miss (< 90) is still the Defect
+            # 38b signature and gets the 100 pin.
+            _bi_bp = _fbp(df.at[idx, bp_col])
+            if _bi_bp is not None and 90.0 <= _bi_bp < 99.995:
+                df.at[idx, bp_col] = f"{_bi_bp:.4f}%"
+            else:
+                df.at[idx, bp_col] = "100.0000%"
             df.at[idx, raw_col] = float(new_sample)
             df.at[idx, proj_col] = float(new_uspop)
             continue
@@ -636,8 +650,29 @@ def apply_avid_transform(df, audience: dict, category_decisions: dict,
         )
         if val_u in cat_dec and not is_placeholder:
             new_bp = float(cat_dec[val_u])
-            n_brand += 1
-            new_bp = max(0.0001, min(99.49, round(new_bp, 4)))
+            # Plausibility guard (2026-08-24, Lincoln 98.49 / Air Fryer
+            # avid 99.99 defect): an avid lift claiming near-universal
+            # reach for a row whose PARENT BP is tiny is a reasoning
+            # misfire, not a signal. Avid lifts are moderate by nature;
+            # 4.9 -> 76 never happens for real. Fall back to the
+            # source-BP jitter path instead of shipping the misfire.
+            if ((new_bp >= 75.0 and old_bp < 5.0)
+                    or (new_bp >= 60.0 and old_bp < 1.0)):
+                print(f"    [avid-guard] {cat} / {val_u}: claude "
+                      f"bp={new_bp:.4f} vs parent {old_bp:.4f} - "
+                      f"misfire, keeping parent+jitter")
+                new_bp = round(
+                    old_bp + _seed_jitter(
+                        f"{subject}|{cat}|{val_u}|avid-misfire-jitter",
+                        span=0.10,
+                    ),
+                    4,
+                )
+                new_bp = max(0.0001, min(99.49, new_bp))
+                n_unchanged += 1
+            else:
+                n_brand += 1
+                new_bp = max(0.0001, min(99.49, round(new_bp, 4)))
         else:
             new_bp = round(
                 old_bp + _seed_jitter(
@@ -681,6 +716,37 @@ def apply_avid_transform(df, audience: dict, category_decisions: dict,
             df.at[idx, raw_col] = float(round(new_sample * normed / 100.0))
             df.at[idx, proj_col] = float(round(new_uspop * normed / 100.0))
             n_demo_renorm += 1
+
+    # LOCATION renormalize-to-~100 (2026-08-24 defect E: cut transforms
+    # jittered LOCATION rows per-row via the no-decision fallback without
+    # ever renormalizing the category, so shipped cuts drifted off the
+    # ~100 sum LOCATION carries by construction; SharkNinja Avid summed
+    # 110.15). Shape-preserving: every row scales by the same factor,
+    # then gets a subject-salted micro-jitter so no row lands on a
+    # round 2dp/4dp boundary; the jitter is zero-sum-ish (span 0.02pp)
+    # so the post-renorm sum stays within a few hundredths of 100.
+    loc_mask = (df[cat_col].astype(str).str.upper().str.strip()
+                == "LOCATION")
+    if loc_mask.any():
+        loc_rows = []
+        for idx in df.index[loc_mask]:
+            v = _fbp(df.at[idx, bp_col])
+            if v is not None and v > 0:
+                loc_rows.append((idx, v))
+        loc_sum = sum(v for _, v in loc_rows)
+        if loc_rows and loc_sum > 0 and abs(loc_sum - 100.0) > 0.05:
+            for idx, v in loc_rows:
+                label = str(df.at[idx, val_col]).strip()
+                normed = v * 100.0 / loc_sum + _seed_jitter(
+                    f"{subject}|LOCATION|{label}|avid-loc-renorm",
+                    span=0.02,
+                )
+                normed = round(max(0.0001, normed), 4)
+                df.at[idx, bp_col] = f"{normed:.4f}%"
+                df.at[idx, raw_col] = float(
+                    round(new_sample * normed / 100.0))
+                df.at[idx, proj_col] = float(
+                    round(new_uspop * normed / 100.0))
 
     # Recompute Category Share within each non-demo category
     for cat, grp in df.groupby(cat_col):
