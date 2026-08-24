@@ -43779,6 +43779,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"estimated_run_minutes\": <int>,\n"
         "  \"date_range\": { \"start\": \"2025-07-01\", \"end\": \"2026-06-30\" },\n"
         "  \"date_range_explicit\": <true|false>,\n"
+        "  \"event_window\": null, // OR, when the request scopes the audience to a real-world event/stint (see EVENT-SCOPED WINDOWS): {\"query\": \"<web-search query that verifies the event dates>\", \"label\": \"<plain framing, e.g. 'her guest-host week'>\", \"confident\": <true|false>, \"candidates\": [{\"start\": \"YYYY-MM-DD\", \"end\": \"YYYY-MM-DD\", \"label\": \"...\"}]}\n"
         "  \"decision\": \"new_build|existing_match|time_shifted_refresh|derive_cut|cut_needs_parent\",\n"
         "  \"decision_reason\": \"1-2 sentences explaining the decision\",\n"
         "  \"existing_match_s3_key\": \"<if matches an existing catalog entry>\",\n"
@@ -43805,6 +43806,39 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "year, use their window instead and echo it back in `date_range` and "
         "in `persona_notes`. If ambiguous, keep the default and note it in "
         "`assumptions`.\n\n"
+
+        "EVENT-SCOPED WINDOWS (MANDATORY - 2026-08-24):\n"
+        "When the request ties the audience to a real-world event or "
+        "stint - 'the week she hosted', 'viewers of X's guest-host "
+        "week', 'during the finale', 'opening weekend', 'premiere "
+        "week', 'his residency', 'the playoff run', 'election night' - "
+        "the window IS the event's actual calendar dates, NOT the "
+        "default and NOT an existing parent file's window. This "
+        "applies to derive_cut and cut_needs_parent decisions too: an "
+        "event-scoped cut carries the event dates.\n"
+        "  * Resolve the event's real first and last calendar days "
+        "from what you know (e.g. Rosie O'Donnell guest-hosted Jimmy "
+        "Kimmel Live Mon Aug 17 through Thu Aug 20, 2026). Set "
+        "`date_range` to exactly those days, set "
+        "`date_range_explicit` to true (the event is the user's "
+        "window), and fill `event_window` with a short verification "
+        "`query` (e.g. 'Rosie O'Donnell Jimmy Kimmel Live guest host "
+        "week exact dates'), a plain-language `label` ('her "
+        "guest-host week'), and `confident: true` ONLY when you are "
+        "sure of the exact days.\n"
+        "  * If you are NOT sure of the exact days, set `confident: "
+        "false` and list your best-researched candidate ranges (up to "
+        "3) in `event_window.candidates` - the dashboard will confirm "
+        "the dates with the user before anything runs. Never "
+        "silently fall back to the default window on an event-scoped "
+        "ask.\n"
+        "  * Keep `cut_label` the clean cohort name WITHOUT dates "
+        "('Rosie O'Donnell Guest Host Week') - the pipeline appends "
+        "the window for display. Weave the dates into "
+        "`persona_notes` so the audience framing reads 'viewers "
+        "during [event], [dates]'.\n"
+        "  * If the event happened more than once, use the most "
+        "recent occurrence unless the user says otherwise.\n\n"
 
         "DATE RANGE EXPLICIT FLAG (MANDATORY):\n"
         "  * `date_range_explicit`: set to TRUE only if the user's request "
@@ -44076,6 +44110,295 @@ def _user_specified_dates(user_text, chat_history=None):
         except _re.error:
             continue
     return False
+
+
+# ---- Event-scoped windows (2026-08-24, Rosie O'Donnell / Jimmy Kimmel
+# Live defect). A request that ties the audience to a real-world event
+# or stint ("viewers of Rosie ODonnell's week hosting") must carry the
+# event's actual calendar dates - never the default window and never
+# the parent file's window - and every cut/build confirmation must echo
+# the window it will run with. Shared helpers live in
+# migration/event_window.py (twin-synced with the parent repo); the
+# functions below apply them to interpret drafts on all four interpret
+# paths (dashboard single, dashboard batch, v1 check, v1 run).
+
+try:
+    from migration.event_window import (
+        detect_event_scoped_text as _ew_detect,
+        format_window_label as _ew_format_label,
+        window_string as _ew_window_string,
+        parse_iso_date as _ew_parse_iso,
+        is_default_window as _ew_is_default,
+    )
+except Exception:  # pragma: no cover - twin module missing
+    def _ew_detect(text):
+        return ''
+
+    def _ew_format_label(start, end):
+        return ''
+
+    def _ew_window_string(start, end):
+        return ''
+
+    def _ew_parse_iso(value):
+        return None
+
+    def _ew_is_default(start, end):
+        return False
+
+
+_DEFAULT_WINDOW_LABEL = 'Jul 1, 2025 to Jun 30, 2026'
+
+# Parent-window cache for cut confirmations: s3_key -> plain label.
+# A Range GET of the first 8KB covers the SAMPLE SIZE row (always in
+# the first handful of rows) without pulling the full profile.
+_PARENT_WINDOW_CACHE = {}
+
+
+def _parent_window_label(s3_key):
+    """Plain-language window label read off a parent profile's SAMPLE
+    SIZE row ('Jul 1, 2025 to Jun 30, 2026'). '' on any failure -
+    callers omit the echo rather than guessing."""
+    key = str(s3_key or '').strip()
+    if not key:
+        return ''
+    if key in _PARENT_WINDOW_CACHE:
+        return _PARENT_WINDOW_CACHE[key]
+    label = ''
+    try:
+        import boto3 as _b3
+        _s3 = _b3.client('s3', region_name='us-east-2')
+        head = _s3.get_object(Bucket='dashboard-inputs', Key=key,
+                              Range='bytes=0-8191')['Body'].read()
+        m = re.search(
+            rb'SAMPLE SIZE \((\d{4}-\d{2}-\d{2}) TO (\d{4}-\d{2}-\d{2})\)',
+            head)
+        if m:
+            label = _ew_format_label(m.group(1).decode(),
+                                     m.group(2).decode())
+    except Exception as e:
+        try:
+            print(f"[event-window] parent window read failed for "
+                  f"{key!r}: {e}")
+        except Exception:
+            pass
+    _PARENT_WINDOW_CACHE[key] = label
+    return label
+
+
+def _apply_event_window_to_draft(draft, text, decision=None,
+                                 history=None):
+    """Detect + resolve an event-scoped window on one interpret draft.
+
+    Returns '' (not event-scoped), 'confident' (event dates resolved
+    and applied to the draft), or 'ask' (event-scoped but the dates
+    are not confidently known - the caller should confirm with the
+    user, or on the v1 API leave `event_window_query` for the engine
+    host to resolve pre-build). Mutates the draft; never raises."""
+    try:
+        ew = draft.get('event_window')
+        ew = dict(ew) if isinstance(ew, dict) else {}
+        haystack = str(text or '')
+        if history:
+            recent_user = [t for t in history[-8:]
+                           if (t.get('role') or '').lower() == 'user']
+            for t in recent_user[-4:]:
+                haystack += ' ' + str(t.get('text') or '')
+        phrase = _ew_detect(haystack)
+        if not ew and not phrase:
+            return ''
+        dr = draft.get('date_range') or {}
+        start = str(dr.get('start') or '').strip()
+        end = str(dr.get('end') or '').strip()
+        valid = bool(_ew_window_string(start, end))
+        default = _ew_is_default(start, end)
+        confident = bool(ew.get('confident')) and valid and not default
+        if ew and ew.get('confident') is None and valid and not default:
+            # Model resolved concrete non-default dates but omitted the
+            # flag - treat the resolution as confident.
+            confident = True
+        if confident:
+            date_label = _ew_format_label(start, end)
+            framing = ' '.join(str(ew.get('label') or '').split())[:120]
+            win_label = date_label
+            if framing and framing.lower() not in date_label.lower():
+                win_label = f"{date_label} ({framing})"
+            draft['date_range_explicit'] = True
+            draft['date_window_label'] = win_label
+            draft['event_window'] = {
+                'query': str(ew.get('query') or '')[:300],
+                'label': framing, 'confident': True,
+            }
+            _route_window_fields(draft, decision, start, end, win_label,
+                                 date_label)
+            return 'confident'
+        # Event-scoped but unresolved: normalize the ask payload.
+        subject = str(draft.get('subject') or draft.get('name') or '')
+        query = str(ew.get('query') or '').strip()
+        if not query:
+            query = f"{subject} {phrase} exact dates".strip()
+        candidates = []
+        for c in (ew.get('candidates') or [])[:3]:
+            if not isinstance(c, dict):
+                continue
+            c_lbl = _ew_format_label(c.get('start'), c.get('end'))
+            if c_lbl:
+                candidates.append({
+                    'start': str(c.get('start')),
+                    'end': str(c.get('end')),
+                    'label': (f"{c_lbl}"
+                              + (f" ({str(c.get('label'))[:80]})"
+                                 if c.get('label') else '')),
+                })
+        draft['event_window'] = {
+            'query': query[:300],
+            'label': ' '.join(str(ew.get('label') or phrase).split())[:120],
+            'confident': False,
+            'candidates': candidates,
+        }
+        return 'ask'
+    except Exception as e:
+        try:
+            print(f"[event-window] draft application failed "
+                  f"(non-fatal): {e}")
+        except Exception:
+            pass
+        return ''
+
+
+def _route_window_fields(draft, decision, start, end, win_label,
+                         date_label):
+    """Land a resolved window on the right spec-bound draft fields for
+    the decision path. Fresh builds stamp the engine window directly;
+    cuts ride dedicated cut_* fields so a cut_needs_parent PARENT still
+    builds on the default window while its cut gets the event dates."""
+    d = str(decision or draft.get('decision') or '').strip().lower()
+    ws = _ew_window_string(start, end)
+    if not ws:
+        return
+    if d in ('new_build', 'time_shifted_refresh'):
+        draft['engine_date_range'] = ws
+    if d in ('derive_cut', 'cut_needs_parent'):
+        draft['cut_date_range'] = ws
+        draft['cut_window_label'] = win_label
+        _append_window_echo_to_cut_label(draft, date_label)
+
+
+def _append_window_echo_to_cut_label(draft, date_label):
+    """Fold the window's date label into the display cut_label so the
+    chat confirmation line always shows it ('Rosie O'Donnell Guest Host
+    Week, Aug 17 to Aug 20, 2026'). The clean label is preserved on
+    cut_label_clean - the approve path uses THAT for deliverable naming
+    per the '{Subject} - {Cut}' rule. Idempotent."""
+    if not date_label:
+        return
+    clean = str(draft.get('cut_label_clean')
+                or draft.get('cut_label') or '').strip()
+    if not clean:
+        return
+    draft['cut_label_clean'] = clean
+    shown = str(draft.get('cut_label') or '').strip()
+    if date_label.lower() not in shown.lower():
+        draft['cut_label'] = f"{clean}, {date_label}"[:220]
+
+
+def _ensure_cut_window_echo(draft, decision=None, fetch_parent=True):
+    """ECHO RULE backstop (2026-08-24 Jenna: 'this didnt give me the
+    date range'). Every derive_cut / cut_needs_parent confirmation must
+    state the window it ships with. Event/explicit windows were already
+    applied by _apply_event_window_to_draft; for a plain cut this reads
+    the PARENT's window off its SAMPLE SIZE row and echoes that. Also
+    guarantees a resolved_identity line carries the window so the
+    'Creating {subject} as a cut of ...' confirmation variant (which
+    doesn't render cut_label) still shows it. Idempotent; never
+    raises."""
+    try:
+        d = str(decision or draft.get('decision') or '').strip().lower()
+        if d not in ('derive_cut', 'cut_needs_parent'):
+            return
+        win_label = str(draft.get('cut_window_label')
+                        or draft.get('date_window_label') or '').strip()
+        date_label = win_label.split(' (')[0].strip() if win_label else ''
+        if not win_label and d == 'derive_cut' and fetch_parent:
+            parent_lbl = _parent_window_label(
+                draft.get('existing_match_s3_key'))
+            if parent_lbl:
+                win_label = parent_lbl
+                date_label = parent_lbl
+                draft['cut_window_label'] = parent_lbl
+                draft['date_window_label'] = parent_lbl
+        if not win_label and d == 'cut_needs_parent':
+            # Fresh parent builds on the default window; without an
+            # event override the cut inherits it.
+            dr = draft.get('date_range') or {}
+            date_label = _ew_format_label(dr.get('start'),
+                                          dr.get('end')) \
+                or _DEFAULT_WINDOW_LABEL
+            win_label = date_label
+            draft['date_window_label'] = win_label
+        if not win_label:
+            return
+        _append_window_echo_to_cut_label(draft, date_label)
+        # The renamed-subject confirmation variant renders
+        # resolved_identity but not cut_label - carry the window there
+        # too so the echo is unconditional.
+        rid = str(draft.get('resolved_identity') or '').strip()
+        if rid:
+            if date_label.lower() not in rid.lower():
+                draft['resolved_identity'] = (
+                    f"{rid.rstrip('.')}, covering {win_label}")
+        else:
+            subject = str(draft.get('subject')
+                          or draft.get('name') or '').strip()
+            if subject:
+                draft['resolved_identity'] = (
+                    f"{subject}, covering {win_label}")
+    except Exception as e:
+        try:
+            print(f"[event-window] cut window echo failed "
+                  f"(non-fatal): {e}")
+        except Exception:
+            pass
+
+
+def _event_window_question(draft):
+    """Plain-language clarify question for an event-scoped ask whose
+    dates could not be confidently resolved. Lists the best-researched
+    candidates so the user can just confirm one."""
+    ew = draft.get('event_window') or {}
+    subject = str(draft.get('subject') or draft.get('name')
+                  or 'this audience').strip()
+    framing = str(ew.get('label') or 'the event').strip()
+    lines = [
+        f"Before I queue {subject}: which exact dates should this "
+        f"cover? The ask is scoped to {framing}, so the window should "
+        f"be those days rather than the standard year."
+    ]
+    cands = ew.get('candidates') or []
+    if cands:
+        lines.append('')
+        lines.append('My best read on the dates:')
+        for c in cands[:3]:
+            lines.append(f"- {c.get('label')}")
+    lines.append('')
+    lines.append("Reply with the dates to use (e.g. 'Aug 17 to Aug 20, "
+                 "2026') and I'll set the window to match.")
+    return '\n'.join(lines)
+
+
+def _draft_window_field(draft, decision=None):
+    """The plain-language window a confirmation/response should quote
+    for this draft, or '' when none applies (existing_match)."""
+    d = str(decision or draft.get('decision') or '').strip().lower()
+    lbl = str(draft.get('date_window_label')
+              or draft.get('cut_window_label') or '').strip()
+    if lbl:
+        return lbl
+    if d in ('new_build', 'time_shifted_refresh', 'cut_needs_parent'):
+        dr = draft.get('date_range') or {}
+        return _ew_format_label(dr.get('start'), dr.get('end')) \
+            or _DEFAULT_WINDOW_LABEL
+    return ''
 
 
 # Phrases that indicate the user explicitly does NOT want an Avid cut.
@@ -44571,6 +44894,19 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
             spec_draft['run_avid'] = _dn != 'derive_cut'
         elif spec_draft.get('run_avid') is None:
             spec_draft['run_avid'] = True
+        # Event-scoped window + ECHO RULE (2026-08-24): batch elements
+        # get the same treatment as the single path. Array mode is
+        # one-shot (no clarify round-trip), so an unresolved event
+        # window rides spec.event_window_query for the engine host to
+        # resolve pre-build with its search-enabled client.
+        _ev_state = _apply_event_window_to_draft(
+            spec_draft, prompt_text, decision=_dn)
+        if _ev_state == 'ask':
+            _ew = spec_draft.get('event_window') or {}
+            if _ew.get('query'):
+                spec_draft['event_window_query'] = _ew['query']
+        _ensure_cut_window_echo(spec_draft, decision=_dn,
+                                fetch_parent=False)
         spec_draft['estimated_credits'] = int(
             _V1_CREDITS.get(_dn, CREDITS_PROFILE_ANALYSIS))
         spec_draft['estimated_run_minutes'] = _estimate_run_minutes(
@@ -47512,6 +47848,14 @@ def api_synth_chat_interpret():
             # and "field was true" uniformly.
             spec_draft['run_avid'] = True
 
+        # Event-scoped window resolution (2026-08-24 Rosie O'Donnell /
+        # Jimmy Kimmel Live defect): when the ask ties the audience to
+        # a real-world event/stint, the resolved event dates override
+        # the default window - on cuts too - and unresolved event dates
+        # trigger a clarify ask instead of a silent default.
+        _ev_state = _apply_event_window_to_draft(
+            spec_draft, text, decision=decision_str, history=history)
+
         # Date-clarification gate. If the user didn't specify a window
         # AND Claude also flagged the range as non-explicit, we return
         # `needs_date_clarification: true` so the frontend can ask
@@ -47527,6 +47871,17 @@ def api_synth_chat_interpret():
         # got a window question on a 3-credit derive).
         if decision_str in ('existing_match', 'derive_cut'):
             needs_date_clarification = False
+        if _ev_state == 'ask' and decision_str != 'existing_match':
+            # Event-scoped but the exact dates aren't confidently
+            # known: confirm with the user (with the best-researched
+            # candidates) rather than silently defaulting. The user's
+            # reply re-enters interpret with the dates in history.
+            return jsonify({
+                'success': False,
+                'guidance': True,
+                'error': _event_window_question(spec_draft),
+                'event_window': spec_draft.get('event_window'),
+            })
 
         dr = spec_draft.get('date_range') or {}
         proposed_range = {
@@ -47581,6 +47936,19 @@ def api_synth_chat_interpret():
             _dec_norm, _, _ = _normalize_v1_decision(spec_draft)
         except Exception:
             pass
+        # ECHO RULE (2026-08-24): every cut/build confirmation states
+        # its window. Runs AFTER the promoters so a decision flipped to
+        # derive_cut/cut_needs_parent still gets the echo, and re-routes
+        # the resolved event window onto the final decision's fields.
+        if _ev_state == 'confident':
+            _route_window_fields(
+                spec_draft, _dec_norm,
+                (spec_draft.get('date_range') or {}).get('start'),
+                (spec_draft.get('date_range') or {}).get('end'),
+                spec_draft.get('date_window_label') or '',
+                (spec_draft.get('date_window_label') or '')
+                .split(' (')[0].strip())
+        _ensure_cut_window_echo(spec_draft, decision=_dec_norm)
         estimated_credits = int(spec_draft.get('estimated_credits')
                                 or estimated_credits)
         subject_label = (spec_draft.get('subject')
@@ -47654,6 +48022,9 @@ def api_synth_chat_interpret():
             'needs_date_clarification': needs_date_clarification,
             'proposed_date_range': proposed_range,
             'subject_label': subject_label,
+            # Plain-language window this build/cut will run with
+            # (ECHO RULE 2026-08-24). '' only for existing_match.
+            'date_window': _draft_window_field(spec_draft, _dec_norm),
         })
     except Exception as e:
         traceback.print_exc()
@@ -48109,6 +48480,24 @@ def _spec_from_draft(draft):
         'follower_platforms': (draft.get('follower_platforms')
                                 if audience_type_out != 'general' else None),
     }
+    # ---- Date window passthrough (2026-08-24, Rosie O'Donnell / JKL
+    # defect). Resolved event/explicit windows finally reach the
+    # engine: `date_range` ('START TO END') stamps the SAMPLE SIZE row
+    # on fresh builds; `cut_date_range` + `cut_window_label` ride to
+    # the derive/cut paths so the CUT gets the event dates while a
+    # cut_needs_parent PARENT still builds on the default window. An
+    # unresolved `event_window_query` is resolved by the engine host
+    # pre-build (migration/event_window.ensure_event_window_resolved).
+    if draft.get('engine_date_range'):
+        spec['date_range'] = str(draft['engine_date_range'])[:60]
+    if draft.get('cut_date_range'):
+        spec['cut_date_range'] = str(draft['cut_date_range'])[:60]
+    if draft.get('cut_window_label'):
+        spec['cut_window_label'] = str(draft['cut_window_label'])[:160]
+    if draft.get('date_window_label'):
+        spec['date_window_label'] = str(draft['date_window_label'])[:160]
+    if draft.get('event_window_query'):
+        spec['event_window_query'] = str(draft['event_window_query'])[:300]
     # Guided-flow passthrough (2026-08-19, reworked same day per Jenna):
     # the base build is ALWAYS the national total universe + avid.
     # Regions are never a build-level filter - each named market rides
@@ -48296,16 +48685,28 @@ def api_synth_chat_approve():
         # Behavioral/intersect cuts: the worker names the output
         # '{Parent} - {cut_label}.csv' and briefs the reasoning engine
         # with the cohort description (2026-08-20 lineage directive).
-        if draft.get('cut_label'):
-            payload['cut_label'] = str(draft.get('cut_label'))[:160]
-        if draft.get('cut_label') or draft.get('cut_label_guess'):
+        # 2026-08-24: the display cut_label may carry a window echo
+        # ('..., Aug 17 to Aug 20, 2026'); deliverable naming uses the
+        # CLEAN label per the '{Subject} - {Cut}' rule, and the window
+        # rides the cohort framing instead.
+        _clean_cut_label = str(draft.get('cut_label_clean')
+                               or draft.get('cut_label') or '').strip()
+        if _clean_cut_label:
+            payload['cut_label'] = _clean_cut_label[:160]
+        if _clean_cut_label or draft.get('cut_label_guess'):
             # cut_label wins: the parent-link/promoter paths upgrade it
             # with the full residual cohort; the guess can be the
             # truncated intersect right-operand (2026-08-20 Marvel
             # TVOD fix).
-            payload['cohort_description'] = str(
-                draft.get('cut_label')
-                or draft.get('cut_label_guess'))[:400]
+            _cohort_desc = str(
+                _clean_cut_label
+                or draft.get('cut_label_guess'))[:300]
+            _cut_win = str(draft.get('cut_window_label')
+                           or draft.get('date_window_label') or '').strip()
+            if _cut_win and _cut_win.lower() not in _cohort_desc.lower():
+                _cohort_desc = (f"{_cohort_desc} - "
+                                f"audience active during {_cut_win}")
+            payload['cohort_description'] = _cohort_desc[:400]
     if decision == 'time_shifted_refresh':
         payload['refresh_row_hypothesis'] = draft.get('refresh_row_hypothesis') or ''
     # Quoted-estimate passthrough (2026-08-24 Jenna): the estimated
@@ -51852,6 +52253,18 @@ def _v1_conclude(prompt, run_avid=True):
     _maybe_promote_embedded_cuts_to_parent(draft)
 
     decision, ex_key, d_type = _normalize_v1_decision(draft)
+    # Event-scoped window (2026-08-24): resolved event dates override
+    # the default window on the v1 surface too. The v1 contract has no
+    # clarify round-trip, so an UNRESOLVED event window rides
+    # spec.event_window_query and the engine host resolves it pre-build
+    # with its search-enabled client.
+    _ev_state = _apply_event_window_to_draft(draft, prompt,
+                                             decision=decision)
+    if _ev_state == 'ask':
+        _ew = draft.get('event_window') or {}
+        if _ew.get('query'):
+            draft['event_window_query'] = _ew['query']
+    _ensure_cut_window_echo(draft, decision=decision)
     cuts = [c for c in (draft.get('addon_cuts') or [])
             if isinstance(c, dict) and c.get('cut_id')]
     if d_type == 'addon_cuts' and cuts:
@@ -52048,6 +52461,9 @@ def api_v1_profiles_check():
         'credits_would_charge': price,
         'refresh_row_hypothesis': draft.get('refresh_row_hypothesis') or None,
         'brief_summary': conclusion['brief_summary'],
+        # Plain-language window the run would use (ECHO RULE
+        # 2026-08-24). Null only for existing_match reuse.
+        'date_window': _draft_window_field(draft, decision) or None,
         'caveats': _v1_check_caveats(),
     }
     # Estimated audience band (2026-08-24 Jenna): pre-build sizing is
@@ -52248,16 +52664,28 @@ def api_v1_profiles_run():
         payload['derive_type'] = d_type or ''
         # Behavioral/intersect cuts: worker names the output
         # '{Parent} - {cut_label}.csv' (2026-08-20 lineage directive).
-        if draft.get('cut_label'):
-            payload['cut_label'] = str(draft.get('cut_label'))[:160]
-        if draft.get('cut_label') or draft.get('cut_label_guess'):
+        # 2026-08-24: display cut_label may carry a window echo; the
+        # deliverable name uses the CLEAN label and the window rides
+        # the cohort framing (same treatment as the dashboard approve).
+        _v1_clean_lbl = str(draft.get('cut_label_clean')
+                            or draft.get('cut_label') or '').strip()
+        if _v1_clean_lbl:
+            payload['cut_label'] = _v1_clean_lbl[:160]
+        if _v1_clean_lbl or draft.get('cut_label_guess'):
             # cut_label wins: the parent-link/promoter paths upgrade it
             # with the full residual cohort; the guess can be the
             # truncated intersect right-operand (2026-08-20 Marvel
             # TVOD fix).
-            payload['cohort_description'] = str(
-                draft.get('cut_label')
-                or draft.get('cut_label_guess'))[:400]
+            _v1_cohort = str(
+                _v1_clean_lbl
+                or draft.get('cut_label_guess'))[:300]
+            _v1_cut_win = str(draft.get('cut_window_label')
+                              or draft.get('date_window_label')
+                              or '').strip()
+            if _v1_cut_win and _v1_cut_win.lower() not in _v1_cohort.lower():
+                _v1_cohort = (f"{_v1_cohort} - audience active during "
+                              f"{_v1_cut_win}")
+            payload['cohort_description'] = _v1_cohort[:400]
     if decision == 'time_shifted_refresh':
         payload['refresh_row_hypothesis'] = draft.get('refresh_row_hypothesis') or ''
     # Quoted-estimate passthrough (2026-08-24 Jenna): the estimated
@@ -52392,6 +52820,8 @@ def api_v1_profiles_run():
         'estimated_run_minutes': _estimate_run_minutes(decision, run_avid),
         'status_url': status_url,
         'brief_summary': brief_summary,
+        # Plain-language window this run uses (ECHO RULE 2026-08-24).
+        'date_window': _draft_window_field(draft, decision) or None,
     }
     # Same estimated band /check quoted for this prompt (byte-identical
     # by construction: one helper, one cached value per prompt).
