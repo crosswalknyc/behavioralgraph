@@ -54,17 +54,28 @@ _HOSTMAP_CACHE_PATH = '/tmp/hostmap_brands.txt'
 _HOSTMAP_NORMALIZED = None     # set on first _ensure_hostmap_loaded() call
 _HOSTMAP_RAW_UPPER = None
 _HOSTMAP_NORM_TO_CANONICAL = None    # normalized (punct-stripped) → canonical
-_HOSTMAP_UPPER_TO_CANONICAL = None   # upper-case (punct-sensitive) → canonical
-                                     # Added 2026-05-27 to fix CNET (Media) vs
-                                     # C-Net (Hidden) collision: norm-key strips
-                                     # punctuation so both normalize to 'CNET'
-                                     # and the canonical lookup returned the
-                                     # wrong (Hidden) variant. Upper-case map
-                                     # preserves punctuation, so 'CNET' and
-                                     # 'C-NET' stay distinct.
+_HOSTMAP_UPPER_TO_CANONICAL = None   # upper-case → GROUP canonical.
+                                     # 2026-08-24 (norm-group semantics, Jenna:
+                                     # "case sensitivity is never the issue"):
+                                     # every spelling of a norm-group resolves
+                                     # to the group's single canonical spelling
+                                     # (visible entry preferred). Supersedes the
+                                     # 2026-05-27 punct-sensitive workaround for
+                                     # the CNET (Media) vs C-Net (Hidden) twin:
+                                     # visibility is now decided per GROUP (a
+                                     # brand is Hidden only if EVERY spelling is
+                                     # Hidden), so 'C-Net' safely resolves to
+                                     # 'CNET' instead of needing to stay apart.
 _HOSTMAP_GAPS = []             # populated by lift attempts on non-hostmap brands
-_HOSTMAP_HIDDEN = None         # set of normalized brand keys with SECTION='Hidden'
+_HOSTMAP_HIDDEN = None         # set of NORM keys (_norm_brand) of brands whose
+                               # ENTIRE norm-group is SECTION='Hidden'. The
+                               # cache file only contains all-hidden groups
+                               # (see migration/genpop_hostmap_sync.py
+                               # refresh_reference_caches), so norm matching
+                               # can never strip a visible brand.
 _HOSTMAP_MPB = None            # set of upper-cased brand names with SECTION LIKE 'Most Purchased%'
+_HOSTMAP_MPB_NORM = None       # same membership as NORM keys (spelling twins
+                               # of an MPB-tagged group all pass the gate)
 
 
 def _norm_brand(s):
@@ -94,21 +105,26 @@ def _ensure_hostmap_loaded():
         '/root/finished_codes/reference/hostmap_brands.txt',
     ]
     # Ensure hidden set is available so we can prefer non-Hidden canonicals
-    # below when two display forms collide on the same key.
+    # below when two display forms collide on the same key. (_HOSTMAP_HIDDEN
+    # holds NORM keys of all-hidden groups; see the global's comment.)
     _ensure_hostmap_hidden_loaded()
-    hidden_upper = _HOSTMAP_HIDDEN or set()
+    hidden_norms = _HOSTMAP_HIDDEN or set()
 
     def _prefer(cur, new):
         """Return the preferred canonical form among `cur` (already stored)
         and `new` (newly seen). Priority:
-          1. Non-Hidden over Hidden
+          1. Non-Hidden over Hidden (group semantics: a norm key is hidden
+             only when its ENTIRE hostmap group is Hidden)
           2. Title-case over all-caps (more human-readable)
           3. First-seen wins
+        The regenerated hostmap_brands_canonical.txt carries ONE canonical
+        spelling per norm-group, so collisions only occur on stale caches;
+        this heuristic is the stale-cache fallback.
         """
         if cur is None:
             return new
-        cur_hidden = cur.upper() in hidden_upper
-        new_hidden = new.upper() in hidden_upper
+        cur_hidden = _norm_brand(cur) in hidden_norms
+        new_hidden = _norm_brand(new) in hidden_norms
         if cur_hidden and not new_hidden:
             return new
         if new_hidden and not cur_hidden:
@@ -125,14 +141,14 @@ def _ensure_hostmap_loaded():
                 _HOSTMAP_RAW_UPPER = {b.upper() for b in lines}
                 _HOSTMAP_NORMALIZED = {_norm_brand(b) for b in lines}
                 # Two canonical maps, populated in tandem:
-                #   _HOSTMAP_UPPER_TO_CANONICAL — upper(b) → canonical
-                #     Punctuation-sensitive. 'CNET' and 'C-NET' are distinct
-                #     keys so the canonical lookup never confuses
-                #     CNET (Media) with C-Net (Hidden).
-                #   _HOSTMAP_NORM_TO_CANONICAL — norm(b) → canonical
-                #     Punctuation-stripped. Used only as a typo fallback
-                #     (e.g. 'COCA COLA' lookup finds 'Coca-Cola').
-                # Both prefer non-Hidden variants when entries collide.
+                #   _HOSTMAP_NORM_TO_CANONICAL - norm(b) -> group canonical
+                #     Punctuation-stripped. The authoritative map: every
+                #     spelling of a norm-group resolves here.
+                #   _HOSTMAP_UPPER_TO_CANONICAL - upper(b) -> group canonical
+                #     Fast path. 2026-08-24: remapped through the norm map
+                #     after the build loop so that a twin spelling (e.g.
+                #     'C-NET') returns the GROUP canonical ('CNET'), never
+                #     the junk spelling itself.
                 _HOSTMAP_NORM_TO_CANONICAL = {}
                 _HOSTMAP_UPPER_TO_CANONICAL = {}
                 for b in lines:
@@ -144,6 +160,10 @@ def _ensure_hostmap_loaded():
                     _HOSTMAP_NORM_TO_CANONICAL[nk] = _prefer(
                         _HOSTMAP_NORM_TO_CANONICAL.get(nk), b,
                     )
+                for uk in list(_HOSTMAP_UPPER_TO_CANONICAL):
+                    grp = _HOSTMAP_NORM_TO_CANONICAL.get(_norm_brand(uk))
+                    if grp:
+                        _HOSTMAP_UPPER_TO_CANONICAL[uk] = grp
                 return True
             except Exception:
                 continue
@@ -164,19 +184,20 @@ def _is_in_hostmap(brand):
 
 
 def _hostmap_canonical(brand):
-    """Return the Sheet4 canonical casing for a brand (or None if not in
-    hostmap). Two-tier lookup (fixes the CNET/C-Net collision identified
-    2026-05-27):
+    """Return the hostmap GROUP-canonical casing for a brand (or None if
+    not in hostmap). Norm-group semantics (2026-08-24, Jenna: "case
+    sensitivity is never the issue"):
 
-      1. PUNCTUATION-SENSITIVE upper-case match. 'CNET' resolves to the
-         entry whose upper() is 'CNET' (the Media publisher), NOT to
-         'C-Net' (Hidden). This is the strict-canonical path.
+      1. Upper-case fast path. Every stored value is already remapped to
+         the norm-group canonical at load time, so 'C-NET' returns 'CNET'
+         (the visible Media publisher), never the Hidden junk spelling.
 
-      2. PUNCTUATION-INSENSITIVE norm-key fallback. Used only when the
-         input has a spelling that isn't exactly in hostmap — e.g.
-         'COCA COLA' (no hyphen) falls back to 'Coca-Cola'.
+      2. PUNCTUATION-INSENSITIVE norm-key lookup. 'COCA COLA' (no
+         hyphen) resolves to 'Coca-Cola'; any spelling twin resolves to
+         its group's single canonical form.
 
-    Both tiers prefer non-Hidden variants when the key collides.
+    Canonical selection prefers non-Hidden entries (group visibility),
+    then human-readable casing; see _ensure_hostmap_loaded._prefer.
     """
     if not _ensure_hostmap_loaded():
         return None
@@ -191,20 +212,24 @@ def _hostmap_canonical(brand):
 
 
 def _ensure_hostmap_hidden_loaded():
-    """Load the set of brand keys whose hostmap SECTION='Hidden'.
-    These brands should NEVER appear in any profile output (Rule #4b,
-    established 2026-05-27 after Bria flagged The Root + Ecosia
-    appearing in UBG MEDIA / SEARCH ENGINE/AI).
+    """Load the set of NORM keys of brands whose hostmap norm-group is
+    entirely Hidden. These brands should NEVER appear in any profile
+    output (Rule #4b, established 2026-05-27 after Bria flagged The
+    Root + Ecosia appearing in UBG MEDIA / SEARCH ENGINE/AI).
 
-    Match policy: **case-insensitive, punctuation-SENSITIVE**.
-    Rationale: 'C-Net' (Hidden) and 'CNET' (Media tech publisher) are
-    distinct brands in hostmap. The norm-key (punct-stripped) collapses
-    them, so we use uppercase-only matching to keep them separate.
+    Match policy (2026-08-24 norm-group semantics): case AND
+    punctuation INSENSITIVE, with group visibility. A brand is hidden
+    ONLY if every hostmap row across every spelling of its norm-group
+    is Hidden. The cache file is regenerated under that contract
+    (migration/genpop_hostmap_sync.py::refresh_reference_caches via
+    migration/hostmap_norm.py), so it contains only all-hidden groups:
+    matching by norm can never strip a visible brand. This supersedes
+    the 2026-05-27 punctuation-SENSITIVE workaround for the
+    CNET/C-Net twin (the twin groups now simply never appear in the
+    cache because each has a visible spelling).
 
-    Cache file: reference/hostmap_hidden_brands.txt (one brand per line,
-    canonical Sheet4 casing). Refresh with:
-        SELECT DISTINCT BRAND FROM reference.host_mapping
-        WHERE SECTION='Hidden' ORDER BY BRAND
+    Cache file: reference/hostmap_hidden_brands.txt (one canonical
+    spelling per all-hidden norm-group).
     """
     global _HOSTMAP_HIDDEN
     if _HOSTMAP_HIDDEN is not None:
@@ -219,7 +244,7 @@ def _ensure_hostmap_hidden_loaded():
             try:
                 with open(path) as f:
                     lines = [line.strip() for line in f if line.strip()]
-                _HOSTMAP_HIDDEN = {b.upper() for b in lines}
+                _HOSTMAP_HIDDEN = {_norm_brand(b) for b in lines}
                 return True
             except Exception:
                 continue
@@ -228,13 +253,14 @@ def _ensure_hostmap_hidden_loaded():
 
 
 def _is_hostmap_hidden(brand):
-    """True if brand has SECTION='Hidden' in reference.host_mapping
-    (Rule #4b — must never appear in a shipped profile).
-    Uses case-insensitive but punctuation-SENSITIVE matching so e.g.
-    'C-Net' (Hidden) doesn't collide with 'CNET' (Media)."""
+    """True if the brand's ENTIRE hostmap norm-group is Hidden
+    (Rule #4b - must never appear in a shipped profile). Case and
+    punctuation insensitive: any spelling of an all-hidden group
+    matches; a group with any visible spelling (e.g. C-Net/CNET)
+    never matches because it is excluded from the cache."""
     if not _ensure_hostmap_hidden_loaded():
         return False
-    return str(brand).upper() in _HOSTMAP_HIDDEN
+    return _norm_brand(brand) in _HOSTMAP_HIDDEN
 
 
 def _ensure_hostmap_mpb_loaded():
@@ -251,18 +277,17 @@ def _ensure_hostmap_mpb_loaded():
     exist in their proper category rows on the same profile, so the MPB
     duplicates are pure pollution).
 
-    Match policy: case-insensitive, punctuation-AND-spelling-SENSITIVE.
-    A brand string of e.g. 'COCA COLA' (no hyphen) will NOT match 'Coca-Cola'
-    here — that's intentional. The agent should emit the canonical hostmap
-    spelling; if it doesn't, the brand-canonicalizer upstream is the right
-    fix point, not this gate.
+    Match policy (2026-08-24 norm-group semantics): case AND
+    punctuation INSENSITIVE. Any spelling of a norm-group that carries
+    an MPB-tagged hostmap entry passes the gate; inserts should use
+    _hostmap_canonical() so canonical casing lands in the profile.
 
-    Cache file: reference/hostmap_mpb_brands.txt (one canonical brand per
-    line). Refresh with:
-        SELECT DISTINCT BRAND FROM reference.host_mapping
-        WHERE SECTION LIKE 'Most Purchased%' ORDER BY BRAND
+    Cache file: reference/hostmap_mpb_brands.txt (one canonical
+    spelling per MPB-tagged, non-all-hidden norm-group; regenerated by
+    migration/genpop_hostmap_sync.py::refresh_reference_caches via
+    migration/hostmap_norm.py).
     """
-    global _HOSTMAP_MPB
+    global _HOSTMAP_MPB, _HOSTMAP_MPB_NORM
     if _HOSTMAP_MPB is not None:
         return True
     candidates = [
@@ -278,29 +303,33 @@ def _ensure_hostmap_mpb_loaded():
                 continue
             with open(path) as f:
                 lines = [line.strip() for line in f if line.strip()]
-            # Case-insensitive but punctuation-sensitive: store upper() only
+            # Fast path: upper() set. Authoritative: NORM set so any
+            # spelling twin of an MPB-tagged group passes the gate.
             _HOSTMAP_MPB = {b.upper() for b in lines}
-            # Also store a punctuation-stripped fallback so 'COCA COLA' (no
-            # hyphen) can resolve to 'Coca-Cola'. Mirrors _hostmap_canonical
-            # fallback logic.
+            _HOSTMAP_MPB_NORM = {_norm_brand(b) for b in lines}
             return True
         except Exception:
             continue
     _HOSTMAP_MPB = set()
+    _HOSTMAP_MPB_NORM = set()
     return False
 
 
 def _is_hostmap_mpb(brand):
-    """True if brand has SECTION LIKE 'Most Purchased%' in
-    reference.host_mapping. Two-tier match: exact upper() first, then
-    a punctuation-insensitive fallback via the canonical-hostmap helper
-    (so 'COCA COLA' resolves to canonical 'Coca-Cola' which IS in MPB)."""
+    """True if the brand's norm-group carries SECTION LIKE
+    'Most Purchased%' in reference.host_mapping. Case and punctuation
+    insensitive (2026-08-24 norm-group semantics): exact upper() fast
+    path first, then the norm-key match so 'COCA COLA' (no hyphen) and
+    any spelling twin resolve to the same MPB-eligible group."""
     if not _ensure_hostmap_mpb_loaded():
         return False
     bu = str(brand).upper()
     if bu in _HOSTMAP_MPB:
         return True
-    # Punct-insensitive fallback via canonical resolver
+    if _HOSTMAP_MPB_NORM and _norm_brand(brand) in _HOSTMAP_MPB_NORM:
+        return True
+    # Legacy fallback via canonical resolver (covers stale caches where
+    # the norm set could not be built).
     canon = _hostmap_canonical(brand)
     if canon is not None and canon.upper() in _HOSTMAP_MPB:
         return True

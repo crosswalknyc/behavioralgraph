@@ -138,6 +138,7 @@ DEMO_ORDER = [
 _HOSTMAP_INTEREST_NORM: Optional[set] = None
 _HOSTMAP_INTEREST_UPPER: Optional[set] = None
 _HOSTMAP_INTEREST_CANONICAL: Optional[dict] = None
+_HOSTMAP_INTEREST_CANONICAL_NORM: Optional[dict] = None
 _HOSTMAP_HIDDEN_UPPER: Optional[set] = None
 
 
@@ -151,17 +152,21 @@ def _load_hostmap_brands() -> bool:
     """Load the canonical hostmap brand list once per process. Mirrors
     the pattern in migration/post_generation_enforcers._ensure_hostmap_loaded.
 
-    Populates:
-      _HOSTMAP_INTEREST_UPPER      punct-sensitive upper-case set
-      _HOSTMAP_INTEREST_NORM       punct-insensitive normalized set
-      _HOSTMAP_INTEREST_CANONICAL  upper-key -> original casing
-      _HOSTMAP_HIDDEN_UPPER        SECTION='Hidden' upper-case set
+    Populates (2026-08-24 norm-group semantics, migration/hostmap_norm.py:
+    caches are regenerated with ONE canonical spelling per norm-group and
+    the hidden cache holds only ALL-hidden groups):
+      _HOSTMAP_INTEREST_UPPER      upper-case fast-path set
+      _HOSTMAP_INTEREST_NORM       norm-key membership set (authoritative)
+      _HOSTMAP_INTEREST_CANONICAL  upper-key -> group canonical casing
+      _HOSTMAP_HIDDEN_UPPER        all-hidden-group NORM-key set (name kept
+                                   for compatibility; contents are norm keys)
 
     Returns True on success; False (open-mode: caller decides) if no
     cache is available.
     """
     global _HOSTMAP_INTEREST_NORM, _HOSTMAP_INTEREST_UPPER
-    global _HOSTMAP_INTEREST_CANONICAL, _HOSTMAP_HIDDEN_UPPER
+    global _HOSTMAP_INTEREST_CANONICAL, _HOSTMAP_INTEREST_CANONICAL_NORM
+    global _HOSTMAP_HIDDEN_UPPER
     if _HOSTMAP_INTEREST_NORM is not None:
         return True
     here = os.path.dirname(os.path.abspath(__file__))
@@ -196,69 +201,84 @@ def _load_hostmap_brands() -> bool:
         if p and os.path.exists(p):
             try:
                 with open(p, 'r', encoding='utf-8') as f:
-                    hidden = {ln.strip().upper() for ln in f if ln.strip()}
+                    # NORM keys: the cache holds only all-hidden groups,
+                    # so norm matching can never hide a visible brand.
+                    hidden = {_norm_brand(ln) for ln in f if ln.strip()}
                 break
             except Exception:
                 continue
     _HOSTMAP_INTEREST_UPPER    = {b.upper() for b in lines}
     _HOSTMAP_INTEREST_NORM     = {_norm_brand(b) for b in lines}
     canon: dict = {}
+    canon_norm: dict = {}
     for b in lines:
         uk = b.upper()
-        prev = canon.get(uk)
-        # Prefer non-Hidden over Hidden, then Title-case over ALL CAPS
-        prev_hidden = prev is not None and prev.upper() in hidden
-        new_hidden  = uk in hidden
+        nk = _norm_brand(b)
+        prev = canon_norm.get(nk)
+        # Prefer non-Hidden over Hidden, then Title-case over ALL CAPS.
+        # (Regenerated caches carry one canonical spelling per group,
+        # so this only matters on stale caches.)
+        prev_hidden = prev is not None and _norm_brand(prev) in hidden
+        new_hidden  = nk in hidden
         if prev is None:
-            canon[uk] = b
+            canon_norm[nk] = b
         elif prev_hidden and not new_hidden:
-            canon[uk] = b
+            canon_norm[nk] = b
         elif not prev_hidden and new_hidden:
             pass
         elif prev.isupper() and not b.isupper():
-            canon[uk] = b
-    _HOSTMAP_INTEREST_CANONICAL = canon
-    _HOSTMAP_HIDDEN_UPPER       = hidden
+            canon_norm[nk] = b
+        canon[uk] = b
+    # Remap upper keys through the norm map so every spelling twin
+    # returns the GROUP canonical (e.g. 'C-NET' -> 'CNET').
+    for uk in list(canon):
+        grp = canon_norm.get(_norm_brand(uk))
+        if grp:
+            canon[uk] = grp
+    _HOSTMAP_INTEREST_CANONICAL      = canon
+    _HOSTMAP_INTEREST_CANONICAL_NORM = canon_norm
+    _HOSTMAP_HIDDEN_UPPER            = hidden
     return True
 
 
 def _is_in_hostmap(brand: str) -> bool:
     """Case + punctuation-insensitive hostmap membership check. Never
-    matches a brand whose SECTION='Hidden' (per workspace rule #4b).
+    matches a brand whose entire norm-group is Hidden (workspace rule
+    #4b under 2026-08-24 group semantics: a brand is hidden ONLY when
+    every spelling of its group is Hidden).
     Returns True permissively when the hostmap cache is unavailable so
     dev environments without the reference file don't drop every row."""
     if not _load_hostmap_brands():
         return True
     if not brand:
         return False
-    bu = str(brand).upper()
-    if bu in (_HOSTMAP_HIDDEN_UPPER or set()):
+    if _norm_brand(brand) in (_HOSTMAP_HIDDEN_UPPER or set()):
         return False
-    if bu in (_HOSTMAP_INTEREST_UPPER or set()):
+    if str(brand).upper() in (_HOSTMAP_INTEREST_UPPER or set()):
         return True
     return _norm_brand(brand) in (_HOSTMAP_INTEREST_NORM or set())
 
 
 def _hostmap_canonical(brand: str) -> Optional[str]:
-    """Return the hostmap's canonical casing for a brand, or None if
-    it isn't in hostmap (or is Hidden). Guarantees the label rendered
-    on the dashboard uses the exact spelling from the source of truth."""
+    """Return the hostmap GROUP-canonical casing for a brand, or None
+    if it isn't in hostmap (or its entire norm-group is Hidden).
+    Guarantees the label rendered on the dashboard uses the exact
+    spelling from the source of truth; any spelling twin resolves to
+    the group's single canonical form."""
     if not _load_hostmap_brands():
         return brand  # open-mode fallback for dev
     if not brand:
         return None
-    bu = str(brand).upper()
-    if bu in (_HOSTMAP_HIDDEN_UPPER or set()):
+    nb = _norm_brand(brand)
+    if nb in (_HOSTMAP_HIDDEN_UPPER or set()):
         return None
     canon = _HOSTMAP_INTEREST_CANONICAL or {}
+    bu = str(brand).upper()
     if bu in canon:
         return canon[bu]
-    # Punctuation-stripped fallback for typos like "Coca Cola" -> "Coca-Cola"
-    nb = _norm_brand(brand)
-    for k, v in canon.items():
-        if _norm_brand(k) == nb:
-            return v
-    return None
+    # Norm-key lookup for typos and spelling twins ("Coca Cola" ->
+    # "Coca-Cola", 'C-Net' -> 'CNET').
+    return (_HOSTMAP_INTEREST_CANONICAL_NORM or {}).get(nb)
 
 
 # ============================================================================

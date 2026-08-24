@@ -20664,7 +20664,13 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
             # in Python, and build a {normalized → canonical} dict so that
             # when an affiliation matches we can write the canonical
             # spelling into the profile (which the panel data is keyed on).
+            # 2026-08-24 norm-group semantics (migration/hostmap_norm.py):
+            # canonical spelling per norm group prefers non-Hidden entries,
+            # then non-empty SECTION, then lexicographic BRAND. Groups whose
+            # EVERY row is Hidden are intentionally suppressed brands: skip
+            # them silently (no insert, no missing-hostmap email).
             _hostmap_canon: dict[str, str] = {}
+            _hostmap_all_hidden: set = set()
             try:
                 import clickhouse_connect as _ch
                 _ch_client = _ch.get_client(
@@ -20673,18 +20679,33 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                     settings={'max_execution_time': 30},
                 )
                 _hm_rows = _ch_client.query(
-                    "SELECT DISTINCT BRAND FROM reference.host_mapping "
+                    "SELECT DISTINCT BRAND, SECTION "
+                    "FROM reference.host_mapping "
                     "WHERE BRAND IS NOT NULL AND BRAND != ''"
                 ).result_rows
+                _hm_rank: dict[str, tuple] = {}
+                _hm_has_visible: set = set()
                 for _r in _hm_rows:
                     _b = _r[0]
+                    _s = str(_r[1] or '').strip() if len(_r) > 1 else ''
                     _n = _norm_brand(_b)
-                    if _n and _n not in _hostmap_canon:
+                    if not _n:
+                        continue
+                    if _s != 'Hidden':
+                        _hm_has_visible.add(_n)
+                    _rk = (1 if _s == 'Hidden' else 0,
+                           1 if not _s else 0,
+                           str(_b))
+                    if _n not in _hm_rank or _rk < _hm_rank[_n]:
+                        _hm_rank[_n] = _rk
                         _hostmap_canon[_n] = _b
-                print(f"   🗺  hostmap loaded: {len(_hostmap_canon):,} normalized brand keys")
+                _hostmap_all_hidden = set(_hostmap_canon) - _hm_has_visible
+                print(f"   🗺  hostmap loaded: {len(_hostmap_canon):,} normalized brand keys "
+                      f"({len(_hostmap_all_hidden):,} all-hidden groups)")
             except Exception as _e:
                 print(f"   ⚠️ hostmap lookup failed for affiliation gating: {_e}")
                 _hostmap_canon = {}  # fail-safe: treat all as missing
+                _hostmap_all_hidden = set()
             # Helper local to this block — looks up affiliation value (any
             # punctuation/case) against the canonical map. Also handles
             # alias rerouting (FX → FX Now) and noise-skip sentinels
@@ -20698,6 +20719,11 @@ def parallel_category_agents(df: pd.DataFrame, persona_doc: dict,
                 if not _n:
                     return ''
                 if _n in _AFFILIATION_NOISE_SKIP:
+                    return '__SKIP__'
+                # All-hidden norm group: intentionally suppressed brand.
+                # Silently drop (would be stripped downstream anyway; a
+                # missing-hostmap email would be wrong, it IS in hostmap).
+                if _n in _hostmap_all_hidden:
                     return '__SKIP__'
                 # Direct hostmap hit
                 hit = _hostmap_canon.get(_n, '')
@@ -28706,22 +28732,29 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
                     if 'conn' in dir() and conn is not None:
                         try:
                             _mpb_cur = conn.cursor()
-                            # Rule #4c (2026-05-28): exclude any brand that
-                            # is *also* tagged ``Hidden`` anywhere in hostmap
-                            # (e.g. Dippin Dots, Klorane, Molton Brown,
-                            # Wildfang, Evolution Fresh). Without this gate
-                            # the floor agent could ADD an MPB-tagged brand
-                            # whose Hidden tag would then drop it again in
-                            # the strip pass downstream — wasted reasoning.
+                            # Rule #4c + norm-group semantics (2026-08-24,
+                            # migration/hostmap_norm.py): exclude only brands
+                            # whose ENTIRE norm-group is Hidden - those are
+                            # the ones the downstream strip pass would drop
+                            # again (wasted reasoning). The old exact-upper
+                            # any-Hidden exclusion wrongly evicted
+                            # dual-section brands (one stray Hidden row next
+                            # to a visible MPB row) and missed hidden
+                            # spelling twins. An MPB-tagged row is itself
+                            # visible, so this exclusion is defense in depth
+                            # against future data states.
                             _mpb_cur.execute(
                                 "SELECT DISTINCT BRAND, SECTION "
                                 "FROM reference.host_mapping "
                                 "WHERE SECTION LIKE 'Most Purchased Brands%' "
                                 "  AND BRAND != '' "
-                                "  AND upper(BRAND) NOT IN ("
-                                "    SELECT DISTINCT upper(BRAND) "
+                                "  AND replaceRegexpAll(upper(BRAND), '[^A-Z0-9]', '') NOT IN ("
+                                "    SELECT replaceRegexpAll(upper(BRAND), '[^A-Z0-9]', '') AS nk "
                                 "    FROM reference.host_mapping "
-                                "    WHERE SECTION='Hidden'"
+                                "    WHERE BRAND != '' "
+                                "    GROUP BY nk "
+                                "    HAVING countIf(SECTION='Hidden') > 0 "
+                                "       AND countIf(SECTION != 'Hidden') = 0"
                                 "  )"
                             )
                             for _r_row in _mpb_cur.fetchall():
@@ -30617,11 +30650,23 @@ def _load_hostmap_category_gate() -> dict:
             "SELECT BRAND, SECTION FROM reference.host_mapping "
             "WHERE BRAND IS NOT NULL AND BRAND != ''"
         ).result_rows
+        # Canonical spelling per NORM GROUP (2026-08-24, Jenna: "case
+        # sensitivity is never the issue" / migration/hostmap_norm.py):
+        # prefer non-Hidden entries, then entries with a non-empty
+        # SECTION, then the lexicographically smallest BRAND. First-seen
+        # order no longer decides, so a Hidden junk spelling (e.g.
+        # 'C-Net') can never shadow the visible one ('CNET').
+        canon_rank: dict[str, tuple] = {}
         for brand, section in rows:
             n = _norm(brand)
             if not n:
                 continue
-            if n not in norm_to_canon:
+            _sec_stripped = str(section or '').strip()
+            _rank = (1 if _sec_stripped == 'Hidden' else 0,
+                     1 if not _sec_stripped else 0,
+                     str(brand))
+            if n not in canon_rank or _rank < canon_rank[n]:
+                canon_rank[n] = _rank
                 norm_to_canon[n] = brand
             cats = norm_to_cats.setdefault(n, set())
             keys = norm_to_cat_keys.setdefault(n, set())
