@@ -5923,6 +5923,17 @@ def _reset_non_hostmap_to_floor_for_categories(df, subject, categories, verbose=
 
         df = _set_bp(df, idx, new_v, bp_col, cs_col, raw_col, proj_col,
                      sample_size)
+        # 2026-08-24: also write a coherent Category Share. _set_bp leaves
+        # CS untouched, and non-MPB categories are never renormalized here,
+        # so the floored row kept its pre-reset CS. That stale CS is what
+        # apply_bp_cs_consistency_recovery later misread as a preserved
+        # share, re-inflating the row to ~99.5 (NINJA/SHARK defect on every
+        # build after this reset shipped).
+        if cs_col is not None and cs_col in df.columns:
+            try:
+                df.at[idx, cs_col] = round(new_v, 4)
+            except Exception:
+                pass
         fixed += 1
         touched_cats.add(cat)
         # Record as a hostmap gap so it surfaces in the data-team escalation
@@ -12613,6 +12624,18 @@ def apply_bp_cs_consistency_recovery(df, subject, verbose=True):
             continue
         total_bp = sum(bp_clean)
         if total_bp <= 0:
+            continue
+        # 2026-08-24 guard (Rosie/Kimmel/Joe/Bethenny NINJA 98-100 defect):
+        # the recovery formula BP = CS x sum_others / (100 - CS) is only
+        # valid when Category Share is genuinely share-of-category (the
+        # category's CS values sum to ~100). Mid-chain the engine writes
+        # CS = BP (category CS sums far above 100); running the formula
+        # there re-inflates rows that reset_non_hostmap_brands_to_floor
+        # deliberately floored (NINJA 18.23 -> 0.04 -> "recovered" 99.5).
+        # Skip any category whose CS column does not behave as a share.
+        cs_clean = [c for c in css if c is not None and pd.notna(c)]
+        total_cs = sum(cs_clean)
+        if not (85.0 <= total_cs <= 115.0):
             continue
 
         for i, b, c in zip(idxs, bps, css):
