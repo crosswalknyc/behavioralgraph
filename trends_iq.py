@@ -2103,6 +2103,7 @@ def _augment_thin_buckets_from_pools(
         movers:              Optional[dict]      = None,
         philanthropy_news:   Optional[list[dict]] = None,
         business_news:       Optional[list[dict]] = None,
+        wall_street_news:    Optional[list[dict]] = None,
 ) -> dict[str, list[dict]]:
     """Fold matching secondary-signal rows into category buckets that
     came out thin (< `_THIN_BUCKET_THRESHOLD` items) from the
@@ -2174,6 +2175,18 @@ def _augment_thin_buckets_from_pools(
     # news pool so the `business` bucket in the Search tab picks them
     # up on days Google Trends misses the corporate beat.
     for h in (business_news or []):
+        t = (h.get('title') or '').strip().lower()
+        if t and t not in _news_seen_titles:
+            news_pool.append(h)
+            _news_seen_titles.add(t)
+
+    # Wall Street desk feed (WSJ/Barron's/FT/Bloomberg/MarketWatch/CNBC
+    # Markets/IBD/Seeking Alpha/Reuters Markets) - ~50 items focused
+    # on markets, macro, earnings, and investor-facing analysis. Fold
+    # into the news pool so `finance` / `business` buckets on the
+    # Search tab pick these up on days Google Trends misses the
+    # markets beat.
+    for h in (wall_street_news or []):
         t = (h.get('title') or '').strip().lower()
         if t and t not in _news_seen_titles:
             news_pool.append(h)
@@ -3000,13 +3013,18 @@ def _annotate_headlines_with_readers(trending_headlines: list,
                                        articles_by_source: list,
                                        philanthropy_news: list,
                                        estimates: dict,
-                                       business_news: Optional[list] = None) -> None:
+                                       business_news: Optional[list] = None,
+                                       wall_street_news: Optional[list] = None) -> None:
     """Stamp `us_readers` on every headline row across the surfaces
     the Headlines tab renders:
       1. `trending_headlines`         - flat "top" list
       2. `articles_by_source[i].articles` - per-outlet lists
       3. `philanthropy_news`          - the Philanthropy sub-tab
       4. `business_news`              - the Business sub-tab (NYT + WSJ)
+      5. `wall_street_news`           - the Wall Street sub-tab
+                                        (WSJ / Barron's / FT / Bloomberg
+                                         / MarketWatch / CNBC Markets /
+                                         IBD / Seeking Alpha / Reuters)
 
     All surfaces key by normalized title so a single Claude estimate
     powers every surface the article appears on. Missing snapshot
@@ -3034,6 +3052,8 @@ def _annotate_headlines_with_readers(trending_headlines: list,
     for row in (philanthropy_news or []):
         _stamp(row)
     for row in (business_news or []):
+        _stamp(row)
+    for row in (wall_street_news or []):
         _stamp(row)
 
 
@@ -3553,6 +3573,13 @@ _FUSE_WEIGHTS = {
                                   # outlets skew hard toward market-
                                   # moving news that also drives
                                   # search interest)
+    'wall_street':       0.55,   # WSJ / Barron's / FT / Bloomberg /
+                                  # MarketWatch / CNBC Markets / IBD /
+                                  # Seeking Alpha / Reuters. Same
+                                  # weight as `business` - both signal
+                                  # market-moving news; matched so
+                                  # cross-desk hits don't over-stack
+                                  # a story that both sections cover.
 }
 _FUSE_CROSS_PLATFORM_BONUS = 0.25
 _FUSE_MIN_KEY_LEN          = 3
@@ -3791,6 +3818,14 @@ def _compute_fused_trending(cards: dict, limit: int = _FUSE_TOP_N) -> list[dict]
         _add(b.get('title') or '', b.get('title') or '',
              'business', 'Business', None, i + 1, max_b,
              url=b.get('url'), image=b.get('image'))
+
+    # ---------------- Wall Street ----------------
+    ws = cards.get('wall_street_news') or []
+    max_w = min(len(ws), 15)
+    for i, w in enumerate(ws[:max_w]):
+        _add(w.get('title') or '', w.get('title') or '',
+             'wall_street', 'Wall Street', None, i + 1, max_w,
+             url=w.get('url'), image=w.get('image'))
 
     # Cross-platform bonus: count DISTINCT tab labels (not source
     # instances). "Spotify + Apple Music" is 1 tab (Music), not 2.
@@ -5849,6 +5884,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'libby_trends':        lambda: _read_snapshot('libby_trends',       asof),
             'philanthropy_news':   lambda: _read_snapshot('philanthropy_news',  asof),
             'business_news':       lambda: _read_snapshot('business_news',      asof),
+            'wall_street_news':    lambda: _read_snapshot('wall_street_news',   asof),
             'stream_estimates':    lambda: _read_snapshot('stream_estimates',   asof),
             'lens_scores':         lambda: _read_snapshot('lens_scores',        asof),
             'fast_trending':       lambda: _fetch_fast_trending(state, lookback_days,
@@ -5882,6 +5918,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'libby_trends':        lambda: _read_snapshot('libby_trends'),
             'philanthropy_news':   lambda: _read_snapshot('philanthropy_news'),
             'business_news':       lambda: _read_snapshot('business_news'),
+            'wall_street_news':    lambda: _read_snapshot('wall_street_news'),
             'stream_estimates':    lambda: _read_snapshot('stream_estimates'),
             'headline_estimates':  lambda: _read_snapshot('headline_estimates'),
             'lens_scores':         lambda: _read_snapshot('lens_scores'),
@@ -5982,6 +6019,16 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     business_news    = list(biz_snap.get('national') or [])[:40]
     business_by_source = biz_snap.get('by_source') or {}
 
+    # Wall Street news (MarketWatch + CNBC Markets + IBD + Seeking
+    # Alpha via native RSS; WSJ Markets + Barron's + FT + Bloomberg
+    # Markets + Reuters Markets via Google News RSS proxy). Same
+    # shape as business_news / philanthropy_news - a `national` list
+    # for the flat "Wall Street" sub-tab and a `by_source` split so
+    # the UI can render per-outlet cards if we want that later.
+    ws_snap          = results.get('wall_street_news') or {}
+    wall_street_news = list(ws_snap.get('national') or [])[:50]
+    wall_street_by_source = ws_snap.get('by_source') or {}
+
     # Persona-lens relevance scores.  Daily Claude pass over every
     # visible item scoring 0-100 for each configured lens (MS NOW
     # Reader, Millennials, ...).  Frontend uses this to instantly
@@ -6047,7 +6094,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     _annotate_headlines_with_readers(
         headlines, articles_by_source, philanthropy_news,
         headline_estimates_snap,
-        business_news = business_news)
+        business_news    = business_news,
+        wall_street_news = wall_street_news)
 
     trending_people = _fetch_trending_people(
         headlines,
@@ -6115,6 +6163,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         movers              = movers,
         philanthropy_news   = philanthropy_news,
         business_news       = business_news,
+        wall_street_news    = wall_street_news,
     )
 
     now = datetime.now(timezone.utc)
@@ -6149,6 +6198,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'philanthropy_news_by_source':    philanthropy_by_source,
             'business_news':                  business_news,
             'business_news_by_source':        business_by_source,
+            'wall_street_news':               wall_street_news,
+            'wall_street_news_by_source':     wall_street_by_source,
             'lens_config':                    lens_config,
             'lens_scores':                    lens_scores_map,
             'lens_cutoffs':                   lens_cutoffs,

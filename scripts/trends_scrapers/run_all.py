@@ -47,6 +47,7 @@ SCRAPERS = [
     ('libby_trends',       'scripts.trends_scrapers.libby_trends',       'Libby popular',        'libby'),
     ('philanthropy_news',  'scripts.trends_scrapers.philanthropy_news',  'Philanthropy news',    'news'),
     ('business_news',      'scripts.trends_scrapers.business_news',      'Business news',        'news'),
+    ('wall_street_news',   'scripts.trends_scrapers.wall_street_news',   'Wall Street news',     'news'),
     # FAST (Free Ad-Supported Streaming TV): one snapshot covering the
     # top 100 titles on Roku Channel, Tubi, Pluto TV, and Amazon
     # (Prime Video ad-tier, which absorbed Freevee in Nov 2024). Data

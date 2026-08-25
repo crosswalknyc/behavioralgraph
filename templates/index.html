@@ -50078,7 +50078,8 @@ https://www.instagram.com/p/..."></textarea>
                 _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [],
                                                                  cards.articles_by_source || [],
                                                                  cards.philanthropy_news    || [],
-                                                                 cards.business_news        || [])) +
+                                                                 cards.business_news        || [],
+                                                                 cards.wall_street_news     || [])) +
                 _renderTIQPanel('searches',  renderTIQSearches({
                     all:         cards.trending_searches             || [],
                     by_category: cards.trending_searches_by_category || {},
@@ -50282,6 +50283,8 @@ https://www.instagram.com/p/..."></textarea>
             // stripped).
             'Top trending':    'Top trending headlines: The most-picked-up stories across major outlets right now.',
             'By news source':  'By news source: Same stories, grouped by outlet. See what each outlet is leading with today.',
+            'Business':        'Business: Corporate news, layoffs, acquisitions, executive changes, industry moves from the NYT and WSJ business desks.',
+            'Wall Street':     'Wall Street: Markets, macro, earnings, and investor-facing analysis from WSJ, Barron\'s, FT, Bloomberg Markets, MarketWatch, CNBC Markets, IBD, Seeking Alpha, and Reuters Markets.',
             'Philanthropy':    'Philanthropy: Cause-driven news. Campaigns, disasters, foundations, charity events, gifts.',
             'Conservative':    'Conservative news: Right-leaning outlet cut.',
             'Progressive':     'Progressive news: Left-leaning outlet cut.',
@@ -50684,17 +50687,58 @@ https://www.instagram.com/p/..."></textarea>
             return '<div class="tiq-cards-grid" style="grid-template-columns: 1fr;">' + html + '</div>';
         }
 
-        function renderTIQHeadlines(rows, sources, philanthropy, business) {
+        // Wall Street sub-tab. WSJ / Barron's / FT / Bloomberg Markets /
+        // MarketWatch / CNBC Markets / IBD / Seeking Alpha / Reuters
+        // Markets. Native RSS where the outlet ships one; Google News
+        // RSS proxy for the paywalled outlets (metadata is free even
+        // when the article isn't). Renderer mirrors the Business
+        // sub-tab: single scrollable list, publication badge chip,
+        // no per-source filter pills.
+        function _renderTIQHeadlinesWallStreet(rows) {
+            if (!rows || !rows.length) {
+                return '<div class="tiq-empty">No Wall Street news yet. Check back later.</div>';
+            }
+            var html = '<div class="tiq-card"><h4>\uD83D\uDCB9 Wall Street news</h4>' +
+                       '<div class="tiq-card-sub">Markets, macro, earnings, and investor-facing analysis.</div>' +
+                       '<div class="tiq-headline-list" style="max-height:720px;overflow-y:auto;">';
+            rows.forEach(function(r, i) {
+                var img = _tiqImgCell('tiq-headline-image', r.image);
+                var srcLabel = r.source_label || r.source || '';
+                var newsKey  = r.title || '';
+                var meta = srcLabel
+                    ? '<span class="tiq-badge">' + _tiqEsc(srcLabel) + '</span>'
+                    : '';
+                if (r.published) {
+                    meta += '<span class="tiq-started">' + _tiqEsc(_tiqShortDate(r.published)) + '</span>';
+                }
+                html += '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                        '<div class="tiq-row-body">' +
+                        '<div class="tiq-row-title">' +
+                        '<a href="' + _tiqEsc(r.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(r.title) + '</a>' +
+                        _tiqCrossPlatformBadge(r) +
+                        _tiqActions('wall_street_news', 'wall_street', newsKey, newsKey, 'National') +
+                        '</div>' +
+                        (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
+                        _tiqWhyLine(r) +
+                        '</div></div>';
+            });
+            html += '</div></div>';
+            return '<div class="tiq-cards-grid" style="grid-template-columns: 1fr;">' + html + '</div>';
+        }
+
+        function renderTIQHeadlines(rows, sources, philanthropy, business, wallStreet) {
             rows         = rows         || [];
             sources      = sources      || [];
             philanthropy = philanthropy || [];
             business     = business     || [];
+            wallStreet   = wallStreet   || [];
             var view = window.__trendsIQ.headlinesView || 'top';
             // If the user landed on a sub-tab whose data came back empty,
             // fall back to the top view so they don't see an empty panel.
             if ((view === 'sources'      && !sources.length) ||
                 (view === 'philanthropy' && !philanthropy.length) ||
-                (view === 'business'     && !business.length)) {
+                (view === 'business'     && !business.length) ||
+                (view === 'wall_street'  && !wallStreet.length)) {
                 if (rows.length) {
                     view = 'top';
                     window.__trendsIQ.headlinesView = 'top';
@@ -50704,6 +50748,7 @@ https://www.instagram.com/p/..."></textarea>
                 { key: 'top',          label: '📰 Top trending',   count: rows.length         },
                 { key: 'sources',      label: '🏛️ By news source', count: sources.length      },
                 { key: 'business',     label: '💼 Business',       count: business.length     },
+                { key: 'wall_street',  label: '💹 Wall Street',    count: wallStreet.length   },
                 { key: 'philanthropy', label: '❤️ Philanthropy',   count: philanthropy.length },
             ];
             var tabsHtml = tabs.map(function(t) {
@@ -50720,6 +50765,8 @@ https://www.instagram.com/p/..."></textarea>
                 body = _renderTIQHeadlinesPhilanthropy(philanthropy);
             } else if (view === 'business') {
                 body = _renderTIQHeadlinesBusiness(business);
+            } else if (view === 'wall_street') {
+                body = _renderTIQHeadlinesWallStreet(wallStreet);
             } else {
                 body = _renderTIQHeadlinesTop(rows);
             }
@@ -50728,7 +50775,8 @@ https://www.instagram.com/p/..."></textarea>
 
         window.setTrendsIQHeadlinesView = function(key) {
             if (key !== 'top' && key !== 'sources' &&
-                key !== 'philanthropy' && key !== 'business') return;
+                key !== 'philanthropy' && key !== 'business' &&
+                key !== 'wall_street') return;
             window.__trendsIQ.headlinesView = key;
             // Repaint the Headlines panel in place; leaves the outer
             // Trends tab selection intact.
@@ -50740,11 +50788,13 @@ https://www.instagram.com/p/..."></textarea>
                     data.cards.trending_headlines || [],
                     data.cards.articles_by_source || [],
                     data.cards.philanthropy_news  || [],
-                    data.cards.business_news      || []);
+                    data.cards.business_news      || [],
+                    data.cards.wall_street_news   || []);
             }
             // Re-run lens filter after in-place repaint so the active
             // persona filter stays applied when the user flips between
-            // Top / By source / Business / Philanthropy sub-tabs.
+            // Top / By source / Business / Wall Street / Philanthropy
+            // sub-tabs.
             if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
         };
 
@@ -52568,7 +52618,8 @@ https://www.instagram.com/p/..."></textarea>
                 _renderTIQPanel('headlines', renderTIQHeadlines(cards.trending_headlines || [],
                                                                  cards.articles_by_source || [],
                                                                  cards.philanthropy_news    || [],
-                                                                 cards.business_news        || [])) +
+                                                                 cards.business_news        || [],
+                                                                 cards.wall_street_news     || [])) +
                 _renderTIQPanel('searches',  renderTIQSearches({
                     all:         cards.trending_searches             || [],
                     by_category: cards.trending_searches_by_category || {},
