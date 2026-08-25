@@ -3057,6 +3057,94 @@ def _annotate_headlines_with_readers(trending_headlines: list,
         _stamp(row)
 
 
+# Tier order for Wall Street outlets when a row has no us_readers
+# estimate yet (right after the scraper landed, before the daily
+# reader-estimate cron catches up). Lower index = ranked higher.
+# Order picks the paywalled Wall-Street-native mastheads first
+# (WSJ, Bloomberg, Reuters, FT), then the free-to-read markets desks
+# (CNBC Markets, Barron's), then the retail-investor mastheads
+# (MarketWatch, IBD, Seeking Alpha).
+_WS_TIER_ORDER: tuple[str, ...] = (
+    'wsj_markets',
+    'bloomberg_markets',
+    'reuters_markets',
+    'ft',
+    'cnbc_markets',
+    'barrons',
+    'marketwatch',
+    'ibd',
+    'seeking_alpha',
+)
+_WS_TIER_INDEX: dict[str, int] = {slug: i for i, slug in enumerate(_WS_TIER_ORDER)}
+_WS_TIER_FALLBACK: int = len(_WS_TIER_ORDER)
+
+
+def _ws_publish_epoch(row: dict) -> float:
+    """Best-effort RFC-822 / ISO parse of a Wall Street row's publish
+    timestamp so recency ties break deterministically. Returns 0.0
+    when nothing parses so the row falls to the end of the recency
+    band rather than crashing the sort."""
+    pub = (row.get('published') or '').strip()
+    if not pub:
+        return 0.0
+    try:
+        from email.utils import parsedate_to_datetime
+        dt = parsedate_to_datetime(pub)
+        if dt is not None:
+            return dt.timestamp()
+    except Exception:
+        pass
+    try:
+        cleaned = pub.replace('Z', '+00:00')
+        dt = datetime.fromisoformat(cleaned)
+        return dt.timestamp()
+    except Exception:
+        return 0.0
+
+
+def _sort_wall_street_by_readership(rows: list[dict]) -> list[dict]:
+    """Return `rows` sorted so the "most read" articles surface first,
+    with a clean fallback ordering for the rows the reader-estimate
+    cron hasn't priced yet.
+
+    Priority (Jenna 2026-08-25):
+      1. Rows carrying `us_readers.us_estimate > 0`, sorted by that
+         estimate descending. This is the true "most read" signal
+         once the daily estimator has caught up.
+      2. Un-priced rows fall in after all priced ones, sorted by:
+         a. Publication tier (WSJ Markets, Bloomberg Markets,
+            Reuters Markets, FT, CNBC Markets, Barron's,
+            MarketWatch, IBD, Seeking Alpha),
+         b. Publish recency (most recent first),
+         c. Title alphabetical.
+
+    After sorting, `rank` is renumbered 1..N so the frontend can
+    render a straight ranked list without touching the data further.
+    """
+    if not rows:
+        return rows or []
+
+    def _key(r: dict) -> tuple:
+        us = r.get('us_readers') or {}
+        est = us.get('us_estimate') if isinstance(us, dict) else 0
+        try:
+            est_val = float(est or 0)
+        except (TypeError, ValueError):
+            est_val = 0.0
+        priced_flag = 0 if est_val > 0 else 1
+        neg_est = -est_val
+        slug = (r.get('source') or '').strip()
+        tier = _WS_TIER_INDEX.get(slug, _WS_TIER_FALLBACK)
+        neg_recency = -_ws_publish_epoch(r)
+        title_key = (r.get('title') or '').strip().lower()
+        return (priced_flag, neg_est, tier, neg_recency, title_key)
+
+    sorted_rows = sorted(rows, key=_key)
+    for i, r in enumerate(sorted_rows, start=1):
+        r['rank'] = i
+    return sorted_rows
+
+
 def _annotate_music_with_streams(music_charts: dict, estimates: dict) -> None:
     """Attach per-platform `us_streams` to every song row: a row on
     the Spotify panel gets the Spotify-only US weekly stream count;
@@ -6096,6 +6184,15 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         headline_estimates_snap,
         business_news    = business_news,
         wall_street_news = wall_street_news)
+
+    # Rank the Wall Street sub-tab so the single flat list reads
+    # "most-read first" instead of stacking one publisher's block
+    # after another (the scraper's `combined.extend(rows)` order).
+    # Rows with a `us_readers.us_estimate` sort by that value desc;
+    # everything the daily reader-estimate cron hasn't priced yet
+    # falls in behind them ordered by publication tier + recency +
+    # title so the pill isn't empty while the estimator catches up.
+    wall_street_news = _sort_wall_street_by_readership(wall_street_news)
 
     trending_people = _fetch_trending_people(
         headlines,

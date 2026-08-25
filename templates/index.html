@@ -50691,15 +50691,18 @@ https://www.instagram.com/p/..."></textarea>
         // MarketWatch / CNBC Markets / IBD / Seeking Alpha / Reuters
         // Markets. Native RSS where the outlet ships one; Google News
         // RSS proxy for the paywalled outlets (metadata is free even
-        // when the article isn't). Renderer mirrors the Business
-        // sub-tab: single scrollable list, publication badge chip,
-        // no per-source filter pills.
+        // when the article isn't). Single flat ranked list ordered by
+        // most-read first (backend sort: rows with a `us_readers`
+        // estimate sort by that value desc; un-priced rows fall in
+        // behind by publication tier + recency + title). Each card
+        // shows a publisher chip and a US-readers chip when the daily
+        // reader-estimate cron has priced the title.
         function _renderTIQHeadlinesWallStreet(rows) {
             if (!rows || !rows.length) {
                 return '<div class="tiq-empty">No Wall Street news yet. Check back later.</div>';
             }
             var html = '<div class="tiq-card"><h4>\uD83D\uDCB9 Wall Street news</h4>' +
-                       '<div class="tiq-card-sub">Markets, macro, earnings, and investor-facing analysis.</div>' +
+                       '<div class="tiq-card-sub">Markets, macro, earnings, and investor-facing analysis, ranked by daily US readers.</div>' +
                        '<div class="tiq-headline-list" style="max-height:720px;overflow-y:auto;">';
             rows.forEach(function(r, i) {
                 var img = _tiqImgCell('tiq-headline-image', r.image);
@@ -50708,6 +50711,8 @@ https://www.instagram.com/p/..."></textarea>
                 var meta = srcLabel
                     ? '<span class="tiq-badge">' + _tiqEsc(srcLabel) + '</span>'
                     : '';
+                var readerChip = _tiqAudienceChip(r.us_readers);
+                if (readerChip) meta += readerChip;
                 if (r.published) {
                     meta += '<span class="tiq-started">' + _tiqEsc(_tiqShortDate(r.published)) + '</span>';
                 }
