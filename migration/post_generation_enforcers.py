@@ -10834,6 +10834,17 @@ def run_post_vet_safety_sweep(df, subject, *, verbose=True):
         # reasoning anchors) plus the existing within-cat dejitter passes
         # that catch literal-identical-value collisions.
         (enforce_shelf_category_distribution, 'shelf_rebase_rows'),
+        # 2026-08-25 (Liz QA, Ari Melber hot PORN block): the shelf
+        # rebase above re-gradients PORN MEDIA toward its fixed 40
+        # target whenever it fires, which can overwrite the D111
+        # audience-aware band clamp that ran earlier in
+        # run_all_enforcers. The documented design intent (see the
+        # D111 header comment) is clamp-after-shelf; BG.py guarantees
+        # it via the _demo_safe_to_csv save-gate, but any other caller
+        # of this sweep gets the re-clamp here. Idempotent no-op when
+        # already in-band.
+        (apply_porn_canonical_normalize,      'porn_reclamp_post_shelf'),
+        (apply_porn_leader_invariant,         'porn_leader_post_shelf'),
         (enforce_mobile_os_balance,           'mobile_os_norms'),
         (enforce_bp_hard_ceiling,             'bp_caps'),
         (strip_input_metadata_leakage,        'metadata_re_stripped'),
@@ -12500,6 +12511,8 @@ def _expected_pornhub_band(male_pct, fem_pct, a18_34, a55_plus):
       2. heavily-senior                 (a55+ ≥ 50)              → (12, 22)
       3. older female-skew              (skew ≤ -8 AND a55+ ≥ 30)→ (15, 25)
       4. female-skew                    (skew ≤ -8)              → (22, 32)
+      4b. older-leaning + mild-fem      (a55+ ≥ 40 AND skew ≤ -4)→ (13, 21)
+      4c. older-leaning non-male        (a55+ ≥ 40 AND skew < 8) → (17, 26)
       5. young male-skew                (skew ≥ +8 AND a18-34 ≥ 50) → (50, 60)
       6. male-skew                      (skew ≥ +8)              → (45, 55)
       7. young mainstream balanced      (a18-34 ≥ 50)            → (40, 50)
@@ -12508,6 +12521,17 @@ def _expected_pornhub_band(male_pct, fem_pct, a18_34, a55_plus):
     `skew` is `male_pct - fem_pct` (positive = male-skew). Threshold 8pp
     chosen because GENDER demos drift ±2-3pp from rounding alone, but a
     real audience-skew tilt is ≥ 8pp (matches D106 sub-tier threshold).
+
+    Tiers 4b/4c added 2026-08-25 (Liz QA flag, Ari Melber base): an
+    audience at 55+ = 45.6% / skew = -5.8 narrowly missed BOTH the
+    heavily-senior threshold (50) and the female-skew threshold (-8)
+    and fell all the way to the default mainstream band (35, 45),
+    which blessed the shelf enforcer's fixed 40-target PORN MEDIA
+    ladder (Pornhub shipped at 40.86 while the file's own Avid subset
+    clamped to 12.57 and the peer Nicolle Wallace base clamped to
+    13.12 - a 3.25x category discontinuity from a 4-7pp demo delta).
+    The intermediate tiers close that cliff for older-leaning
+    audiences without touching male-skew or young-mainstream tiers.
     """
     skew = float(male_pct) - float(fem_pct)
     if a55_plus >= 50:
@@ -12518,6 +12542,10 @@ def _expected_pornhub_band(male_pct, fem_pct, a18_34, a55_plus):
         return (15.0, 25.0)
     if skew <= -8:
         return (22.0, 32.0)
+    if a55_plus >= 40 and skew < 8:
+        if skew <= -4:
+            return (13.0, 21.0)
+        return (17.0, 26.0)
     if skew >= 8 and a18_34 >= 50:
         return (50.0, 60.0)
     if skew >= 8:

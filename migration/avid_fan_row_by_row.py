@@ -1143,6 +1143,195 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
 # =============================================================================
 # Source loading (s3_key OR local_path) -- mirrors super_fan_synthesis._load_source
 # =============================================================================
+def enforce_avid_ratio_collapse_guard(df_avid, df_parent, subject: str,
+                                      *, verbose: bool = True,
+                                      collapse_ratio: float = 0.5,
+                                      peer_hold_ratio: float = 0.9,
+                                      min_parent_bp: float = 2.0,
+                                      max_parent_bp: float = 20.0):
+    """Re-anchor single-brand avid collapses that contradict their own
+    category neighborhood (2026-08-25, Liz QA flag on Nicolle Wallace
+    Avid: CLAUDE AI base 7.3921 -> avid 1.5098, an 80% collapse, while
+    the two nearest base-rank peers COPILOT and DUCKDUCKGO held/rose;
+    same signature on Iowa 1st CD Voters Avid CLAUDE AI and on GROK
+    across several unrelated pairs).
+
+    On mass-digital-behavior categories a subset cannot organically
+    shed most of ONE brand while both of its nearest category peers
+    hold or rise - that pattern is the Phase 2 reasoning pass
+    lowballing an isolated row, not a persona read. Scope:
+
+      - _MEGA_REACH_CATS only (same category philosophy as the Phase
+        4b downward lift: intensity selects for MORE digital behavior,
+        not less; talent / politics / interest / persona categories
+        are exempt because a hard single-brand drop there is routinely
+        the persona read itself - an unrestricted dry run against 8
+        shipped pairs re-anchored 108-327 legitimate persona rows per
+        file, e.g. UFC/MMA declines on a news-avid audience),
+      - brands with parent BP in [`min_parent_bp`, `max_parent_bp`]:
+        below 2pp the ratio has no stable signal, above 20pp the
+        Phase 2 pass reasons deliberately (top-of-category rows) and a
+        halving can be a real persona verdict (e.g. an avid audience
+        abandoning one specific platform); the >60pp extreme is
+        already covered by enforce_avid_subset_coherence's lift,
+      - rank shared brands by parent BP descending,
+      - a row triggers when avid/parent < `collapse_ratio` AND its two
+        nearest peers by parent rank BOTH have avid/parent >=
+        `peer_hold_ratio` (held or rose - 0.9 rather than 1.0 because
+        a healthy neighbor can drift a few percent down while the
+        anomaly sheds 50%+),
+      - the row is re-anchored to parent BP plus a subject-salted
+        ADDITIVE jitter (never a multiplier, per the avid-skin rules),
+        kept below the subset-arithmetic ceiling (avid_raw <=
+        parent_raw), 4dp, off 2dp boundaries, never 4dp-colliding with
+        the parent value.
+
+    Brand-general within scope: nothing is hardcoded to a specific
+    brand. Raw/Proj recomputed from the avid's own sample; Category
+    Share is finalized downstream by the write safety net. Returns
+    (df_avid, stats_dict).
+    """
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df_avid)
+    p_bp_col, _, p_raw_col, _ = _detect_cols(df_parent)
+    stats = {"reanchored": 0, "examples": []}
+    if bp_col is None or p_bp_col is None:
+        return df_avid, stats
+
+    avid_sample = _read_sample_size(df_avid, raw_col)
+    parent_sample = _read_sample_size(df_parent, p_raw_col)
+    sample_ratio = None
+    if avid_sample and parent_sample and 0.0 < (avid_sample / parent_sample) < 1.0:
+        sample_ratio = avid_sample / parent_sample
+
+    # Parent (CAT, VAL) -> bp
+    parent_idx = {}
+    for _, r in df_parent.iterrows():
+        cu = str(r.get("Column", "")).strip().upper()
+        vu = str(r.get("Value", "")).strip().upper()
+        bp = _fbp(r.get(p_bp_col))
+        if bp is None or not cu or not vu:
+            continue
+        parent_idx[(cu, vu)] = bp
+
+    df_avid = df_avid.copy()
+    for c in (bp_col, cs_col, raw_col, proj_col):
+        if c in df_avid.columns and df_avid[c].dtype.name not in ("object", "O"):
+            df_avid[c] = df_avid[c].astype(object)
+
+    try:
+        ss_mask = (df_avid["Column"].astype(str).str.upper().str.strip()
+                   == "SAMPLE SIZE")
+        uspop = float(str(df_avid.loc[ss_mask].iloc[0][proj_col])
+                      .replace(",", "")) if ss_mask.any() else None
+    except Exception:
+        uspop = None
+
+    pin_aliases = _subject_pin_aliases(subject)
+
+    def _finalize(new_bp, parent_bp, seed):
+        """4dp, off 2dp boundaries, not 4dp-colliding with parent."""
+        new_bp = max(0.0001, min(99.49, round(new_bp, 4)))
+        p4 = round(parent_bp, 4)
+        for k in range(6):
+            n4 = round(new_bp, 4)
+            on_boundary = abs(n4 - round(n4, 2)) < 0.00005
+            if n4 != p4 and not on_boundary:
+                return n4
+            new_bp = n4 + 0.0007 + abs(_seed_jitter(f"{seed}|nudge{k}",
+                                                    span=0.0014))
+        return round(new_bp, 4)
+
+    # Group shared avid rows per category so peers can be ranked.
+    # Peers are collected across the full [min_parent_bp, inf) range so
+    # ranking context stays truthful; only rows INSIDE
+    # [min_parent_bp, max_parent_bp] are eligible to be re-anchored.
+    per_cat: dict = {}
+    for idx in df_avid.index:
+        cu = str(df_avid.at[idx, "Column"]).strip().upper()
+        if cu not in _MEGA_REACH_CATS:
+            continue
+        if cu in _SUBSET_COHERENCE_SKIP_CATS or cu in DEMO_CATS_TF:
+            continue
+        vu = str(df_avid.at[idx, "Value"]).strip().upper()
+        if not vu:
+            continue
+        avid_bp = _fbp(df_avid.at[idx, bp_col])
+        if avid_bp is None:
+            continue
+        if avid_bp >= 99.49 and _norm_pin(vu) in pin_aliases:
+            continue
+        parent_bp = parent_idx.get((cu, vu))
+        if parent_bp is None or parent_bp < min_parent_bp:
+            continue
+        if _norm_pin(vu) in pin_aliases and parent_bp >= 99.49:
+            continue
+        per_cat.setdefault(cu, []).append((idx, vu, parent_bp, avid_bp))
+
+    for cu, rows in per_cat.items():
+        if len(rows) < 3:
+            continue  # need a brand and two peers
+        ranked = sorted(rows, key=lambda t: -t[2])  # by parent BP desc
+        for i, (idx, vu, parent_bp, avid_bp) in enumerate(ranked):
+            if parent_bp > max_parent_bp:
+                continue  # high-BP rows: deliberate reasoning, not lowball
+            ratio = avid_bp / parent_bp
+            if ratio >= collapse_ratio:
+                continue
+            # Two nearest peers by parent rank (prefer immediate
+            # neighbors; fall back outward at the rank edges).
+            peer_pos = [p for p in (i - 1, i + 1, i - 2, i + 2)
+                        if 0 <= p < len(ranked) and p != i][:2]
+            if len(peer_pos) < 2:
+                continue
+            peer_ratios = [ranked[p][3] / ranked[p][2] for p in peer_pos]
+            if not all(pr >= peer_hold_ratio for pr in peer_ratios):
+                continue
+
+            # Re-anchor to parent + additive subject-salted jitter.
+            span = max(0.10, min(0.60, parent_bp * 0.05))
+            new_bp = parent_bp + _seed_jitter(
+                f"{subject}|{cu}|{vu}|ratio-collapse", span=span,
+            )
+            if sample_ratio:
+                new_bp = min(new_bp, (parent_bp / sample_ratio) * 0.995)
+            new_bp = _finalize(new_bp, parent_bp,
+                               f"{subject}|{cu}|{vu}|ratio-collapse")
+            if new_bp <= avid_bp:
+                continue
+
+            had_pct = "%" in str(df_avid.at[idx, bp_col])
+            df_avid.at[idx, bp_col] = (f"{new_bp:.4f}%" if had_pct
+                                       else f"{new_bp:.4f}")
+            try:
+                if avid_sample:
+                    df_avid.at[idx, raw_col] = float(round(
+                        avid_sample * new_bp / 100.0))
+                if uspop:
+                    df_avid.at[idx, proj_col] = float(round(
+                        uspop * new_bp / 100.0))
+            except Exception:
+                pass
+            stats["reanchored"] += 1
+            if len(stats["examples"]) < 8:
+                stats["examples"].append(
+                    f"{cu}/{vu}: {avid_bp:.4f} -> {new_bp:.4f} "
+                    f"(parent {parent_bp:.4f}, ratio was {ratio:.3f}, "
+                    f"peers held at {peer_ratios[0]:.2f}/{peer_ratios[1]:.2f})"
+                )
+
+    if verbose:
+        print(f"   [ratio-collapse-guard] {subject}: reanchored="
+              f"{stats['reanchored']}")
+        for ex in stats["examples"][:5]:
+            print(f"      re-anchor  {ex}")
+    return df_avid, stats
+
+
+# =============================================================================
+# Source loading (s3_key OR local_path) -- mirrors super_fan_synthesis._load_source
+# =============================================================================
+
+
 def _load_source_df(source: str, source_kind: str = "auto"):
     """Return (df, resolved_kind). source_kind='auto' picks 'local_path' when
     `source` is an existing absolute/relative path, else 's3_key'."""
@@ -1353,6 +1542,18 @@ def synthesize_avid_fan(
         )
     except Exception as _coh_err:
         print(f"     subset coherence skipped (non-fatal): {_coh_err}")
+    # Phase 4c (2026-08-25, Liz QA flag on Nicolle Wallace Avid CLAUDE
+    # AI): single-brand ratio-collapse guard. When one brand sheds
+    # 50%+ of its base BP while BOTH nearest base-rank peers held or
+    # rose, the Phase 2 reasoning lowballed an isolated row; re-anchor
+    # it to parent + subject-salted additive jitter. Category-general.
+    print(f"  -> Phase 4c: ratio-collapse guard vs baseline ...")
+    try:
+        df_avid, _rc_stats = enforce_avid_ratio_collapse_guard(
+            df_avid, df_baseline, subject,
+        )
+    except Exception as _rc_err:
+        print(f"     ratio-collapse guard skipped (non-fatal): {_rc_err}")
 
     # Phase 5 (2026-06-15 Defect 29): post-synthesis differentiation gate.
     # On 2026-06-14 a backfill run uploaded ~750 avid profiles where
