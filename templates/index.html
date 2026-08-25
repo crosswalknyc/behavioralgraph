@@ -21348,7 +21348,7 @@ https://www.instagram.com/p/..."></textarea>
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:0.5rem; flex:0 0 auto;">
-                    <span id="synthChatQueueBadge" style="font-size: 0.72rem; color: var(--text-secondary);"></span>
+                    <span id="synthChatQueueBadge" style="font-size: 0.72rem; color: #c4b5fd;"></span>
                     <button type="button" id="prometheusCollapseBtn" onclick="prometheusCollapse()" aria-label="Collapse Prometheus" title="Collapse">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </button>
@@ -59947,28 +59947,37 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         function _synthFmtInline(s) {
+            // Light mode: the widget body is white, so the near-white stat
+            // text and the bright pill colors need darker, readable values;
+            // the mid-range (blue) pill also moves to our purple. Dark mode
+            // keeps the original bright-on-dark palette.
+            var _lt = !!(document.body && document.body.getAttribute('data-theme') === 'light');
+            var _anchorCol = _lt ? '#5b21b6' : '#e8eefc';
             // markdown bold survives instead of being stripped
             s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
             // the stat in "Crayola 26.4 (idx 389)" reads as the anchor
             s = s.replace(/\b(\d+(?:\.\d+)?)(?=\s*\(idx\b)/gi,
-                '<strong style="color: #e8eefc;">$1</strong>');
+                '<strong style="color: ' + _anchorCol + ';">$1</strong>');
             // "(idx N)" -> pill badge, color-graded by index strength
             s = s.replace(/\(idx\s+(\d+(?:\.\d+)?)\)/gi, function(_m, v) {
                 var n = parseFloat(v);
                 var bgc, fgc, bdc;
                 if (n >= 150) {
-                    bgc = 'rgba(199,242,62,0.16)'; fgc = '#C7F23E';
-                    bdc = 'rgba(199,242,62,0.45)';
+                    bgc = _lt ? 'rgba(160,217,17,0.22)' : 'rgba(199,242,62,0.16)';
+                    fgc = _lt ? '#3f5c00' : '#C7F23E';
+                    bdc = _lt ? 'rgba(120,160,10,0.55)' : 'rgba(199,242,62,0.45)';
                 } else if (n >= 110) {
-                    bgc = 'rgba(84,141,255,0.16)'; fgc = '#9dc1ff';
-                    bdc = 'rgba(84,141,255,0.45)';
+                    bgc = _lt ? 'rgba(139,92,246,0.16)' : 'rgba(139,92,246,0.20)';
+                    fgc = _lt ? '#6d28d9' : '#c4b5fd';
+                    bdc = 'rgba(139,92,246,0.5)';
                 } else if (n >= 90) {
-                    bgc = 'rgba(255,255,255,0.08)';
+                    bgc = _lt ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.08)';
                     fgc = 'var(--text-secondary)';
                     bdc = 'var(--border-color)';
                 } else {
-                    bgc = 'rgba(255,176,32,0.14)'; fgc = '#ffc766';
-                    bdc = 'rgba(255,176,32,0.4)';
+                    bgc = _lt ? 'rgba(217,119,6,0.14)' : 'rgba(255,176,32,0.14)';
+                    fgc = _lt ? '#b45309' : '#ffc766';
+                    bdc = _lt ? 'rgba(217,119,6,0.4)' : 'rgba(255,176,32,0.4)';
                 }
                 return '<span style="display: inline-block; background: ' +
                     bgc + '; color: ' + fgc + '; border: 1px solid ' + bdc +
@@ -59979,7 +59988,7 @@ https://www.instagram.com/p/..."></textarea>
             });
             // scale tokens (23.1M, 6.6M, 40K) pop
             s = s.replace(/\b(\d+(?:\.\d+)?[MK])\b/g,
-                '<strong style="color: #e8eefc;">$1</strong>');
+                '<strong style="color: ' + _anchorCol + ';">$1</strong>');
             return s;
         }
 
@@ -60009,6 +60018,16 @@ https://www.instagram.com/p/..."></textarea>
                 var html = [];
                 var sawHeader = false;
                 var sawContent = false;
+                // Blue accents -> our purple, darkened for the white light-mode
+                // surface (dark mode keeps a lighter purple on the dark surface).
+                var _lt = !!(document.body && document.body.getAttribute('data-theme') === 'light');
+                var _hdrMain = _lt ? '#2e1065' : '#e8eefc';
+                var _hdrMainBorder = _lt ? 'rgba(139,92,246,0.45)' : 'rgba(139,92,246,0.5)';
+                var _hdrSub = _lt ? '#6d28d9' : '#c4b5fd';
+                var _cardBg = _lt ? 'rgba(139,92,246,0.10)' : 'rgba(139,92,246,0.12)';
+                var _cardBorder = 'rgba(139,92,246,0.5)';
+                var _cardCircleBg = _lt ? 'rgba(139,92,246,0.20)' : 'rgba(139,92,246,0.30)';
+                var _cardCircleFg = _lt ? '#5b21b6' : '#ddd0ff';
                 for (var j = 0; j < lines.length; j++) {
                     var t = lines[j].trim();
                     if (!t) continue;
@@ -60021,9 +60040,9 @@ https://www.instagram.com/p/..."></textarea>
                             sawHeader = true;
                             html.push('<div style="font-weight: 800; ' +
                                 'font-size: 0.92rem; letter-spacing: 0.04em; ' +
-                                'color: #e8eefc; margin: 0.1rem 0 0.55rem; ' +
+                                'color: ' + _hdrMain + '; margin: 0.1rem 0 0.55rem; ' +
                                 'padding-bottom: 0.4rem; border-bottom: ' +
-                                '1px solid rgba(84,141,255,0.35);">' +
+                                '1px solid ' + _hdrMainBorder + ';">' +
                                 _synthFmtInline(_synthChatEscapeHtml(main)) +
                                 (sub ? ' <span style="font-weight: 600; ' +
                                     'font-size: 0.75rem; color: ' +
@@ -60035,7 +60054,7 @@ https://www.instagram.com/p/..."></textarea>
                             sawHeader = true;
                             html.push('<div style="font-weight: 800; ' +
                                 'font-size: 0.7rem; letter-spacing: 0.09em; ' +
-                                'color: #9dc1ff; text-transform: uppercase; ' +
+                                'color: ' + _hdrSub + '; text-transform: uppercase; ' +
                                 'margin: 0.9rem 0 0.35rem;">' +
                                 _synthFmtInline(_synthChatEscapeHtml(main)) +
                                 (sub ? ' <span style="text-transform: none; ' +
@@ -60053,13 +60072,13 @@ https://www.instagram.com/p/..."></textarea>
                         esc = _synthFmtInline(_synthChatEscapeHtml(mNum[2]));
                         html.push('<div style="display: flex; gap: 0.55rem; ' +
                             'margin: 0.45rem 0; padding: 0.45rem 0.55rem; ' +
-                            'background: rgba(84,141,255,0.07); ' +
-                            'border-left: 2px solid rgba(84,141,255,0.45); ' +
+                            'background: ' + _cardBg + '; ' +
+                            'border-left: 2px solid ' + _cardBorder + '; ' +
                             'border-radius: 6px;">' +
                             '<span style="flex: 0 0 auto; min-width: 1.25rem; ' +
                             'height: 1.25rem; border-radius: 50%; ' +
-                            'background: rgba(84,141,255,0.25); ' +
-                            'color: #cfe0ff; font-size: 0.7rem; ' +
+                            'background: ' + _cardCircleBg + '; ' +
+                            'color: ' + _cardCircleFg + '; font-size: 0.7rem; ' +
                             'font-weight: 800; display: flex; ' +
                             'align-items: center; justify-content: center;">' +
                             mNum[1] + '</span>' +
@@ -60105,7 +60124,7 @@ https://www.instagram.com/p/..."></textarea>
                     ? '<div style="font-size: 0.85rem; white-space: pre-wrap; line-height: 1.4;">' +
                         _synthChatEscapeHtml(_rawText) + '</div>'
                     : _synthChatFormatAgentText(_rawText);
-                var bg = isUser ? 'rgba(84, 141, 255, 0.14)' : 'rgba(255,255,255,0.05)';
+                var bg = isUser ? 'rgba(139, 92, 246, 0.14)' : 'rgba(255,255,255,0.05)';
                 var label = isUser ? 'You' : 'Prometheus';
                 // Quick-reply chips (2026-08-20 Jenna: every keyword
                 // prompt should be clickable like the opening
@@ -60322,7 +60341,7 @@ https://www.instagram.com/p/..."></textarea>
                 chips += '<button type="button" onclick="synthChatChipFill(\'Pitching [brand] - help me figure out the right audience to profile\')" style="' + pill + '">Prep a pitch</button>';
                 var el = document.createElement('div');
                 el.id = 'synthChatWelcomeBubble';
-                el.style.cssText = 'margin-bottom: 0.55rem; padding: 0.55rem 0.7rem; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 2px solid rgba(84,141,255,0.45);';
+                el.style.cssText = 'margin-bottom: 0.55rem; padding: 0.55rem 0.7rem; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 2px solid rgba(139,92,246,0.45);';
                 el.innerHTML =
                     '<div style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 0.25rem;">Prometheus</div>' +
                     '<div style="font-size: 0.85rem; line-height: 1.4; margin-bottom: 0.5rem;">' +
