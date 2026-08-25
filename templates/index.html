@@ -21314,6 +21314,17 @@ https://www.instagram.com/p/..."></textarea>
             }
             #prometheusWidget .pm-rs { display: none; }
         }
+        /* Light mode: Prometheus SEND button uses our lime gradient instead of the default blue. */
+        body[data-theme="light"] #synthChatSubmitBtn.btn-primary {
+            background: linear-gradient(135deg, #C7F23E, #A0D911);
+            border-color: #A0D911;
+            color: #14330A;
+        }
+        body[data-theme="light"] #synthChatSubmitBtn.btn-primary:hover {
+            background: linear-gradient(135deg, #D3F95E, #B5E61A);
+            border-color: #B5E61A;
+            color: #14330A;
+        }
         </style>
         <div id="prometheusLauncher" role="button" tabindex="0" aria-label="Open Prometheus" title="Prometheus">
             <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true"><g transform="skewX(-14)" fill="#E9E8E1"><rect x="24" y="10" width="8.5" height="44" rx="1.75"/><rect x="37" y="10" width="8.5" height="44" rx="1.75"/><rect x="50" y="10" width="8.5" height="44" rx="1.75"/></g></svg>
@@ -60276,7 +60287,8 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 lead += ' What do you want to get done today?';
                 var pill = 'background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;';
-                var pillHot = 'background: rgba(84,141,255,0.14); border: 1px solid rgba(84,141,255,0.5); color: #9dc1ff; border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;';
+                var _pmHotLight = !!(document.body && document.body.getAttribute('data-theme') === 'light');
+                var pillHot = 'background: rgba(139,92,246,0.16); border: 1px solid rgba(139,92,246,0.5); color: ' + (_pmHotLight ? '#6d28d9' : '#c4b5fd') + '; border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;';
                 var chips = '';
                 // Page-aware starters (2026-08-20): when a profile is
                 // open on the dashboard, analysis leads the greeting.
