@@ -27560,7 +27560,7 @@ https://www.instagram.com/p/..."></textarea>
                     // variable-width auto cell). Each numeric column is
                     // right-aligned and uses tabular-nums so the digits
                     // stack cleanly.
-                    return '<div style="display:grid; grid-template-columns: 160px 1fr 52px 92px 62px; gap:0.5rem; align-items:center; font-size:0.72rem; line-height:1.2; margin-bottom:0.28rem;">'
+                    return '<div style="display:grid; grid-template-columns: minmax(0, 120px) minmax(0, 1fr) 44px 62px 48px; gap:0.5rem; align-items:center; font-size:0.72rem; line-height:1.2; margin-bottom:0.28rem;">'
                         +    '<div style="color:#cbd5e1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(e.bucket) + '">' + escapeHtml(e.bucket) + '</div>'
                         +    '<div style="position:relative; height:10px; background: rgba(255,255,255,0.05); border-radius:3px; overflow:visible;">'
                         +      '<div style="width:' + wPct + '%; height:100%; background:' + barColor + '; border-radius:3px;"></div>'
@@ -27607,11 +27607,11 @@ https://www.instagram.com/p/..."></textarea>
 
                 // Column headers so users know what each numeric column
                 // represents. Grid columns MUST match the row template
-                // above (160px 1fr 52px 92px 62px). "Cohort" is this
+                // above (minmax(0, 120px) minmax(0, 1fr) 44px 62px 48px). "Cohort" is this
                 // phase's share; "vs Gen Pop" is the pp delta chip
                 // column; "Viewers" is the campaign's projected count
                 // in that bucket (share * phase view total).
-                var colHeader = '<div style="display:grid; grid-template-columns: 160px 1fr 52px 92px 62px; gap:0.5rem; align-items:end; font-size:0.58rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.06em; margin: 0 0 0.4rem; padding-bottom:0.28rem; border-bottom:1px solid rgba(255,255,255,0.06);">'
+                var colHeader = '<div style="display:grid; grid-template-columns: minmax(0, 120px) minmax(0, 1fr) 44px 62px 48px; gap:0.5rem; align-items:end; font-size:0.58rem; color: var(--text-secondary); text-transform:uppercase; letter-spacing:0.06em; margin: 0 0 0.4rem; padding-bottom:0.28rem; border-bottom:1px solid rgba(255,255,255,0.06);">'
                     +  '<div></div>'
                     +  '<div></div>'
                     +  '<div style="text-align:right;">Cohort</div>'
