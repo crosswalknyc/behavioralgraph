@@ -107916,7 +107916,7 @@ https://www.instagram.com/p/..."></textarea>
                 const total = enriched.reduce((s, r) => s + r.weight, 0) || 1;
                 enriched.forEach(r => {
                     r.share = 100 * r.weight / total;
-                    r.priority = r.sig ? _mkPriorityForPct(r.sig.pct, r.sig.index) : { key: 'nosignal', label: 'No Signal' };
+                    r.priority = r.sig ? _mkPriorityForPct(r.sig.pct, r.sig.index) : null; // 2026-08-25 (Jenna): no pill when there is no signal
                 });
                 enriched.sort((a, b) => b.share - a.share);
                 return enriched;
@@ -107952,7 +107952,7 @@ https://www.instagram.com/p/..."></textarea>
                         const p = r.platform;
                         const sigLabel = r.sig
                             ? `${r.sig.pct.toFixed(0)}% panel reach · ${Math.round(r.sig.index)} idx`
-                            : 'No direct panel signal';
+                            : '';
                         return `
                             <div class="mkt-mix-plat">
                                 <div class="mkt-mix-plat-head" onclick="toggleMixPlatform('${bucket}', ${idx})">
@@ -107962,11 +107962,11 @@ https://www.instagram.com/p/..."></textarea>
                                         <span>${p.name.replace(/</g,'&lt;')}</span>
                                     </div>
                                     <div class="mkt-mix-plat-meta">
-                                        <span class="marketing-plat-priority ${r.priority.key}">${r.priority.label}</span>
+                                        ${r.priority ? `<span class="marketing-plat-priority ${r.priority.key}">${r.priority.label}</span>` : ''}
                                         <span class="mkt-mix-plat-share">${r.share.toFixed(0)}%</span>
                                     </div>
                                 </div>
-                                <div class="mkt-mix-plat-sig">${sigLabel} · <span class="mkt-mix-plat-note">${p.buyingNote}</span></div>
+                                <div class="mkt-mix-plat-sig">${sigLabel ? sigLabel + ' · ' : ''}<span class="mkt-mix-plat-note">${p.buyingNote}</span></div>
                                 <div class="mkt-mix-plat-detail" id="mkt-mix-plat-detail-${bucket}-${idx}" style="display:none;">
                                     <div class="mkt-mix-fmt-head">Ad-format allocation within ${p.name.replace(/</g,'&lt;')}:</div>
                                     ${_mkRenderAdFormatsForPlatform(p.key)}
@@ -108019,7 +108019,7 @@ https://www.instagram.com/p/..."></textarea>
                     const w = Math.max(0, (r.share / max) * 100);
                     const note = r.topSignal
                         ? `${r.description} <b>Signal:</b> ${r.topSignal.name} at ${r.topSignal.pct.toFixed(0)}% panel reach${r.contributorCount > 1 ? ` (${r.contributorCount} platforms in bucket)` : ''}.`
-                        : r.description + ' No direct panel signal — sized to baseline only.';
+                        : r.description;
                     return `
                         <div class="marketing-mix-row mkt-mix-row-clickable" id="mkt-mix-row-${r.bucket}" onclick="toggleMediaMixRow('${r.bucket}')">
                             <div class="marketing-mix-label">
@@ -108056,7 +108056,7 @@ https://www.instagram.com/p/..."></textarea>
                     const sig = _mkFindPlatformSignal(p);
                     let priority, pctLabel, indexLabel, seedBrands;
                     if (!sig) {
-                        priority = { key: 'nosignal', label: 'No Signal' };
+                        priority = null; // 2026-08-25 (Jenna): no pill when there is no signal
                         pctLabel = '—';
                         indexLabel = '—';
                         seedBrands = [];
@@ -108075,7 +108075,7 @@ https://www.instagram.com/p/..."></textarea>
                         <div class="marketing-plat-card">
                             <div class="marketing-plat-head">
                                 <div class="marketing-plat-title"><span class="marketing-plat-icon">${p.icon}</span>${p.name.replace(/</g,'&lt;')}</div>
-                                <span class="marketing-plat-priority ${priority.key}">${priority.label}</span>
+                                ${priority ? `<span class="marketing-plat-priority ${priority.key}">${priority.label}</span>` : ''}
                             </div>
                             <div class="marketing-plat-metrics">
                                 <div class="marketing-plat-metric"><b>${pctLabel}</b></div>
@@ -108420,9 +108420,12 @@ https://www.instagram.com/p/..."></textarea>
                 const gender = _mkGenderSkew();
                 const median = _mkMedianAge();
                 const platforms = _mkTopEngagementPlatforms(3);
+                // 2026-08-25 (Jenna): when there is no platform signal, the
+                // "Best platforms to activate." row is skipped entirely
+                // instead of announcing the absence.
                 const platformLine = platforms.length
                     ? platforms.map(p => `${p.name} (${p.pct.toFixed(0)}%)`).join(' · ')
-                    : 'No platform signal available';
+                    : '';
                 const audienceBits = [];
                 if (median) audienceBits.push(`age ${Math.max(18, median-8).toFixed(2)}-${(median+10).toFixed(2)}`);
                 if (gender.primary && gender.primary !== '—') {
@@ -108540,7 +108543,7 @@ https://www.instagram.com/p/..."></textarea>
                                 <div class="marketing-plat-metric"><b>${r.index > 0 ? Math.round(r.index) : '—'} idx</b></div>
                             </div>
                             <div class="marketing-plat-seed"><b>Category.</b> ${catLabel.replace(/</g,'&lt;')}</div>
-                            <div class="marketing-plat-seed"><b>Best platforms to activate.</b> ${platformLine.replace(/</g,'&lt;')}</div>
+                            ${platformLine ? `<div class="marketing-plat-seed"><b>Best platforms to activate.</b> ${platformLine.replace(/</g,'&lt;')}</div>` : ''}
                             <div class="marketing-plat-seed"><b>Audience match.</b> ${audienceLine.replace(/</g,'&lt;')}</div>
                             <div class="marketing-plat-seed"><b>Why.</b> ${rationaleFor(r).replace(/</g,'&lt;')}</div>
                         </div>`;
