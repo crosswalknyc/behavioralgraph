@@ -465,6 +465,140 @@ def invalidate_cache(filename=None):
         _cache_timestamps.clear()
         print(f"🗑️ Invalidated all cache")
 
+
+# ============================================================================
+# ETAG-GUARDED (COMPARE-AND-SWAP) S3 JSON WRITES
+# ============================================================================
+# Shared JSON state files (system/users.json, system/s3_cache.json,
+# metadata/admin_quick_selects.json) are mutated concurrently by this
+# Flask app AND by the queue workers on the engine host (credit refunds
+# on failed runs, the hourly stuck-run sweep, profile registration via
+# migration/dashboard_register.py - all ETag-guarded since 2026-08-24).
+# A bare GET -> mutate -> PUT on this side silently clobbers whatever
+# the other writer landed in between. These helpers inline the exact
+# semantics of migration/s3_json_state.py (this repo deploys standalone
+# on Render and cannot import migration/): conditional PutObject with
+# IfMatch=<etag> (IfNoneMatch='*' for first creation), re-read and
+# re-apply the mutator on HTTP 412, bounded retries with backoff and
+# jitter. All log lines here are server-side only.
+
+import random  # backoff jitter for the CAS retry loop below
+
+
+def _s3_json_read_with_etag(bucket, key):
+    """GET the object and return (parsed_json, etag).
+
+    Returns (None, None) when the key does not exist. Raises on any
+    other S3 error (caller decides whether that is fatal). Corrupt
+    JSON surfaces as (None, etag) so the mutator can rebuild rather
+    than crash every writer.
+    """
+    try:
+        resp = s3_client.get_object(Bucket=bucket, Key=key)
+    except ClientError as e:
+        code = (e.response.get('Error') or {}).get('Code', '')
+        if code in ('NoSuchKey', '404'):
+            return None, None
+        raise
+    body = resp['Body'].read().decode('utf-8')
+    etag = resp.get('ETag')
+    try:
+        obj = json.loads(body) if body.strip() else None
+    except Exception:
+        obj = None
+    return obj, etag
+
+
+def _s3_cas_is_precondition_failed(err):
+    """True when a ClientError is an HTTP 412 conditional-write conflict."""
+    code = (err.response.get('Error') or {}).get('Code', '')
+    status = (err.response.get('ResponseMetadata') or {}).get('HTTPStatusCode')
+    return code in ('PreconditionFailed', '412') or status == 412
+
+
+def _s3_json_cas_update(bucket, key, mutate_fn, max_retries=5, default=None,
+                        content_type='application/json', indent=2,
+                        log_name=None):
+    """GET -> mutate_fn(obj) -> conditional PUT, retrying on HTTP 412.
+
+    mutate_fn receives the parsed JSON (or `default` when the key does
+    not exist: a callable default is invoked, any other default is
+    deep-copied, else {}) and must return the object to write, or None
+    to abort without writing. On a 412 conflict the fresh object is
+    re-fetched and mutate_fn re-applied, so mutate_fn must be safe to
+    call multiple times against different snapshots.
+
+    Returns (written_obj, new_etag) on success, (None, None) when the
+    mutator aborted. Raises RuntimeError after max_retries + 1
+    consecutive conflicts, and re-raises any non-412 S3 error.
+    """
+    label = log_name or key
+    last_err = None
+    for attempt in range(max_retries + 1):
+        obj, etag = _s3_json_read_with_etag(bucket, key)
+        if obj is None:
+            if callable(default):
+                obj = default()
+            elif default is not None:
+                obj = json.loads(json.dumps(default))
+            else:
+                obj = {}
+        new_obj = mutate_fn(obj)
+        if new_obj is None:
+            return None, None
+        body = json.dumps(new_obj, indent=indent, default=str).encode('utf-8')
+        put_kwargs = dict(Bucket=bucket, Key=key, Body=body,
+                          ContentType=content_type)
+        if etag:
+            put_kwargs['IfMatch'] = etag.strip('"')
+        else:
+            put_kwargs['IfNoneMatch'] = '*'
+        try:
+            put_resp = s3_client.put_object(**put_kwargs)
+            new_etag = (put_resp.get('ETag') or '').strip('"') or None
+            return new_obj, new_etag
+        except ClientError as e:
+            if not _s3_cas_is_precondition_failed(e):
+                raise
+            last_err = e
+            # Another writer landed between our GET and PUT.
+            print(f"[s3-cas] {label} conflict, retrying")
+            time.sleep(min(0.25 * (2 ** attempt), 4.0)
+                       + random.uniform(0, 0.25))
+    raise RuntimeError(
+        f"[s3-cas] {max_retries + 1} consecutive write conflicts on "
+        f"s3://{bucket}/{key}") from last_err
+
+
+def update_json_in_s3(filename, mutate_fn, default=None):
+    """CAS companion to save_json_to_s3 for metadata JSON files.
+
+    Runs mutate_fn against the freshly-read S3 copy under an
+    ETag-guarded conditional write (see _s3_json_cas_update) and keeps
+    the in-memory metadata cache in sync with what actually landed.
+
+    Returns the final doc on a successful write, None when the mutator
+    skipped the write, False on failure.
+    """
+    try:
+        if not s3_client:
+            print(f"⚠️ S3 client not available, cannot save {filename}")
+            return False
+        final, _etag = _s3_json_cas_update(
+            METADATA_BUCKET, filename, mutate_fn,
+            default=default if default is not None else {},
+            log_name=filename)
+        if final is None:
+            return None
+        _metadata_cache[filename] = final.copy()
+        _cache_timestamps[filename] = datetime.now().timestamp()
+        print(f"✅ Saved {filename} to S3 and updated cache")
+        return final
+    except Exception as e:
+        print(f"❌ Error saving {filename} to S3: {e}")
+        return False
+
+
 # Cache filenames (stored in metadata/ folder in S3)
 TICKER_IMAGES_FILE = 'metadata/ticker_images_cache.json'
 TICKER_PROFILES_FILE = 'metadata/ticker_profile_mappings.json'
@@ -1054,14 +1188,28 @@ def verify_password(stored_hash, password):
 
 S3_USERS_KEY = 'system/users.json'  # S3 key for persistent user storage
 
+# Baseline for save_users' diff-replay: the raw users.json body as of
+# this thread's most recent load_users() S3 read. save_users replays
+# the caller's intended changes (baseline -> data) onto a freshly-read
+# doc under an ETag-guarded conditional write, so a concurrent writer
+# (the queue worker's credit refunds on failed runs, the hourly
+# stuck-run sweep, another web worker's allowed_runs auto-add) is
+# never silently clobbered by a stale full-document save.
+_users_baseline = threading.local()
+
 def load_users():
     """Load users from S3 (persistent) or local file (fallback)."""
+    _users_baseline.raw = None
     # Try S3 first for persistence across Render restarts
     if s3_client:
         try:
             response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_USERS_KEY)
-            data = json.loads(response['Body'].read().decode('utf-8'))
+            raw_body = response['Body'].read().decode('utf-8')
+            data = json.loads(raw_body)
             print(f"✅ Loaded users from S3")
+            # Remember the exact doc this caller starts from, so a later
+            # save_users(data) can replay only the caller's own changes.
+            _users_baseline.raw = raw_body
             # Also save locally for faster subsequent reads
             with open(USERS_FILE, 'w') as f:
                 json.dump(data, f, indent=2)
@@ -1097,8 +1245,125 @@ def load_users():
         "runs": {}
     }
 
+# Top-level users.json sections shaped as {name: {field: value}} that get
+# the per-entry / per-field replay in _replay_users_changes. 'companies'
+# is included because the queue worker's refunds also decrement company
+# pool counters concurrently.
+_USERS_TWO_LEVEL_SECTIONS = ('users', 'companies')
+
+def _replay_users_changes(fresh, baseline, desired):
+    """Replay the caller's intended edits (baseline -> desired) onto a
+    freshly-read users doc, in place. Entries and fields the caller did
+    not touch keep their fresh values, so a concurrent writer's landed
+    change (a credit refund, a registration's allowed_runs append)
+    survives a full-document save from this side.
+
+    Merge policy for genuinely ambiguous races (documented choice):
+    fresh-base-wins with the caller's explicit changes applied on top.
+    A user deleted by a concurrent writer is NOT resurrected by a mere
+    field edit; only an explicit creation (present in desired, absent
+    from baseline) adds a user. A user deleted by the caller stays
+    deleted. Fields the caller removed are removed; fields the caller
+    never touched are never dropped.
+    """
+    if not isinstance(fresh, dict):
+        return desired
+    for section in _USERS_TWO_LEVEL_SECTIONS:
+        if section not in desired and section not in baseline:
+            continue
+        base_map = baseline.get(section)
+        base_map = base_map if isinstance(base_map, dict) else {}
+        want_map = desired.get(section)
+        want_map = want_map if isinstance(want_map, dict) else {}
+        fresh_map = fresh.setdefault(section, {})
+        if not isinstance(fresh_map, dict):
+            fresh[section] = want_map
+            continue
+        for name in set(want_map) | set(base_map):
+            if name not in base_map:
+                fresh_map[name] = want_map[name]      # caller created it
+                continue
+            if name not in want_map:
+                fresh_map.pop(name, None)             # caller deleted it
+                continue
+            b_e, w_e = base_map[name], want_map[name]
+            if b_e == w_e:
+                continue                              # untouched by caller
+            if name not in fresh_map:
+                # Concurrently deleted while the caller only edited
+                # fields: the deletion wins (fresh-base-wins).
+                continue
+            f_e = fresh_map.get(name)
+            if not isinstance(f_e, dict) or not isinstance(w_e, dict) \
+                    or not isinstance(b_e, dict):
+                fresh_map[name] = w_e
+                continue
+            for fkey in set(w_e) | set(b_e):
+                if fkey in w_e:
+                    if fkey not in b_e or w_e[fkey] != b_e[fkey]:
+                        f_e[fkey] = w_e[fkey]
+                elif fkey in b_e:
+                    f_e.pop(fkey, None)
+    for k in set(desired) | set(baseline):
+        if k in _USERS_TWO_LEVEL_SECTIONS:
+            continue
+        if k in desired:
+            if k not in baseline or desired[k] != baseline[k]:
+                fresh[k] = desired[k]
+        elif k in baseline:
+            fresh.pop(k, None)
+    return fresh
+
+def _users_cas_mutate(mutate_fn):
+    """Apply mutate_fn to a FRESHLY-READ users doc under an ETag-guarded
+    compare-and-swap. This is the preferred path for the contended
+    users.json mutations (credit consume, credit refund, allowed_runs
+    auto-add): re-running the mutator on the fresh doc after a 412
+    folds a concurrent writer's landed change (e.g. the queue worker's
+    refund) into the arithmetic instead of overwriting it with a stale
+    absolute value.
+
+    mutate_fn(data) mutates the doc in place and returns it, or None to
+    skip the write entirely. Returns the final doc (written, or the
+    mutated fallback doc when S3 is unavailable), or None when skipped.
+    """
+    if s3_client:
+        try:
+            final, _etag = _s3_json_cas_update(
+                S3_BUCKET, S3_USERS_KEY, mutate_fn,
+                default=load_users, log_name='users.json')
+            if final is not None:
+                print(f"✅ Users saved to S3")
+                try:
+                    with open(USERS_FILE, 'w') as f:
+                        json.dump(final, f, indent=2)
+                except Exception as e:
+                    print(f"Error saving local users: {e}")
+            return final
+        except Exception as e:
+            print(f"⚠️ Error saving users to S3: {e}")
+    # S3 unavailable: degrade exactly like the legacy load/mutate/save
+    # pair did - mutate the fallback doc and persist what we can.
+    data = load_users()
+    result = mutate_fn(data)
+    if result is None:
+        return None
+    save_users(result)
+    return result
+
 def save_users(data):
-    """Save users to both S3 (persistent) and local file."""
+    """Save users to both S3 (persistent) and local file.
+
+    The S3 side is an ETag-guarded conditional write: the caller's
+    intended changes (relative to the doc its load_users() returned)
+    are replayed onto a freshly-read copy and retried on conflict, so
+    a concurrent writer on the engine host (credit refunds, stuck-run
+    sweep, profile registration) is never silently clobbered. When no
+    load-time baseline exists for this thread (local-file fallback or
+    a caller-built doc), the caller's doc is the whole intent and wins
+    wholesale; the conditional put still guarantees we only ever
+    replace a state we have just read.
+    """
     success = True
     
     # Save to local file first (fast)
@@ -1112,13 +1377,30 @@ def save_users(data):
     # Save to S3 for persistence across Render restarts
     if s3_client:
         try:
-            s3_client.put_object(
-                Bucket=S3_BUCKET,
-                Key=S3_USERS_KEY,
-                Body=json.dumps(data, indent=2),
-                ContentType='application/json'
-            )
+            baseline_raw = getattr(_users_baseline, 'raw', None)
+            baseline = json.loads(baseline_raw) if baseline_raw else None
+
+            def _apply_caller_changes(fresh):
+                if not fresh:
+                    # First creation (or empty doc): the caller's doc is
+                    # the whole intent.
+                    return data
+                if baseline is None:
+                    return data
+                return _replay_users_changes(fresh, baseline, data)
+
+            final, _etag = _s3_json_cas_update(
+                S3_BUCKET, S3_USERS_KEY, _apply_caller_changes,
+                log_name='users.json')
             print(f"✅ Users saved to S3")
+            if final is not None and final is not data:
+                # Keep the local fallback copy aligned with the merged
+                # doc that actually landed in S3.
+                try:
+                    with open(USERS_FILE, 'w') as f:
+                        json.dump(final, f, indent=2)
+                except Exception:
+                    pass
         except Exception as e:
             print(f"⚠️ Error saving users to S3: {e}")
             success = False
@@ -1259,34 +1541,40 @@ def auto_add_runs_to_all_users(s3_keys, key_category_map=None):
                 cat_map[sk] = (job.get('category') or '').upper()
 
     try:
-        data = load_users()
-        users = data.get('users', {})
-        changed = False
-        for username, user in users.items():
-            aan = user.get('auto_access_new', {})
-            if aan and aan.get('profile_iq') is False:
-                continue
-            runs = user.get('allowed_runs', ['*'])
-            if isinstance(runs, list) and '*' in runs:
-                continue
-            existing = set(runs or [])
-
-            user_cats = user.get('allowed_categories', ['*'])
-            has_all_cats = isinstance(user_cats, list) and '*' in user_cats
-            user_cats_upper = set() if has_all_cats else {c.upper() for c in (user_cats or [])}
-
-            added = []
-            for k in s3_keys:
-                if k in existing:
+        # Compare-and-swap mutator: re-runs against the freshly-read doc
+        # on conflict, so a concurrent refund or registration is never
+        # clobbered by this append.
+        def _add_runs(data):
+            users = data.get('users', {})
+            changed = False
+            for username, user in users.items():
+                aan = user.get('auto_access_new', {})
+                if aan and aan.get('profile_iq') is False:
                     continue
-                profile_cat = cat_map.get(k, '')
-                if has_all_cats or profile_cat in user_cats_upper or not profile_cat:
-                    added.append(k)
-            if added:
-                user['allowed_runs'] = list(existing | set(added))
-                changed = True
-        if changed:
-            save_users(data)
+                runs = user.get('allowed_runs', ['*'])
+                if isinstance(runs, list) and '*' in runs:
+                    continue
+                existing = set(runs or [])
+
+                user_cats = user.get('allowed_categories', ['*'])
+                has_all_cats = isinstance(user_cats, list) and '*' in user_cats
+                user_cats_upper = set() if has_all_cats else {c.upper() for c in (user_cats or [])}
+
+                added = []
+                for k in s3_keys:
+                    if k in existing:
+                        continue
+                    profile_cat = cat_map.get(k, '')
+                    if has_all_cats or profile_cat in user_cats_upper or not profile_cat:
+                        added.append(k)
+                if added:
+                    user['allowed_runs'] = list(existing | set(added))
+                    changed = True
+            if not changed:
+                return None  # nothing to write
+            return data
+
+        if _users_cas_mutate(_add_runs) is not None:
             print(f"✅ Auto-added {len(s3_keys)} new profile(s) to qualifying users' allowed_runs")
     except Exception as e:
         print(f"⚠️ auto_add_runs_to_all_users error: {e}")
@@ -1302,17 +1590,29 @@ def auto_add_to_quick_selects(s3_keys):
     if isinstance(s3_keys, str):
         s3_keys = [s3_keys]
     try:
-        qs = load_json_from_s3(QUICK_SELECTS_FILE) or {}
-        profiles = qs.get('profiles', {})
-        added = 0
-        for key in s3_keys:
-            if key not in profiles:
-                profiles[key] = True
-                added += 1
-        if added:
+        added_count = {'n': 0}
+
+        # Compare-and-swap mutator against the freshly-read S3 copy:
+        # keys already present on the fresh doc (including admin-set
+        # False) are left untouched, and a concurrent writer's adds
+        # survive because the mutator re-runs on the fresh doc after a
+        # conflict instead of writing a stale snapshot back.
+        def _add_missing(qs):
+            profiles = qs.get('profiles', {})
+            added = 0
+            for key in s3_keys:
+                if key not in profiles:
+                    profiles[key] = True
+                    added += 1
+            added_count['n'] = added
+            if not added:
+                return None  # nothing new; skip the write
             qs['profiles'] = profiles
-            save_json_to_s3(QUICK_SELECTS_FILE, qs)
-            print(f"✅ Auto-added {added} new profile(s) to quick selects")
+            return qs
+
+        result = update_json_in_s3(QUICK_SELECTS_FILE, _add_missing)
+        if result not in (None, False) and added_count['n']:
+            print(f"✅ Auto-added {added_count['n']} new profile(s) to quick selects")
     except Exception as e:
         print(f"⚠️ auto_add_to_quick_selects error: {e}")
 
@@ -1838,12 +2138,13 @@ def has_credits_for(username, amount):
 
 def consume_credit(username, description=None, job_id=None, pull_type=None, credits_used=1):
     """Consume credits from user and/or company pool.
-    Returns True if successful."""
-    data = load_users()
-    user = data['users'].get(username)
-    if not user:
-        return False
+    Returns True if successful.
 
+    Runs as a compare-and-swap mutator over a freshly-read users.json
+    (see _users_cas_mutate): the debit arithmetic is always applied to
+    the current balance, so a refund landed by the queue worker between
+    our read and write is folded in on retry instead of clobbered.
+    """
     used_at = datetime.now().isoformat()
     entry = {
         'used_at': used_at,
@@ -1852,57 +2153,72 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
         'pull_type': pull_type or 'Profile Analysis',
         'credits_used': credits_used
     }
+    outcome = {'ok': False}
 
-    user_unlimited = _numeric_credits_balance(user) == -1
+    def _consume(data):
+        outcome['ok'] = False
+        user = (data.get('users') or {}).get(username)
+        if not user:
+            return None
 
-    company = (user.get('company') or '').strip()
-    pool = _get_company_pool(data, company)
-    has_personal_override = user.get('credit_source') == 'personal'
+        user_unlimited = _numeric_credits_balance(user) == -1
 
-    if pool is not None and not has_personal_override:
-        pool_total = pool.get('credit_pool', 0)
-        pool_used  = pool.get('credit_pool_used', 0)
-        pool_unlimited = pool_total == -1
-        pool_remaining = -1 if pool_unlimited else (pool_total - pool_used)
+        company = (user.get('company') or '').strip()
+        pool = _get_company_pool(data, company)
+        has_personal_override = user.get('credit_source') == 'personal'
 
-        ceiling = user.get('credit_ceiling', -1)
-        user_used = user.get('credits_used', 0)
-        ceiling_remaining = -1 if ceiling == -1 else (ceiling - user_used)
+        if pool is not None and not has_personal_override:
+            pool_total = pool.get('credit_pool', 0)
+            pool_used  = pool.get('credit_pool_used', 0)
+            pool_unlimited = pool_total == -1
+            pool_remaining = -1 if pool_unlimited else (pool_total - pool_used)
 
-        if not pool_unlimited and pool_remaining < credits_used:
-            return False
-        if ceiling != -1 and ceiling_remaining < credits_used:
-            return False
+            ceiling = user.get('credit_ceiling', -1)
+            user_used = user.get('credits_used', 0)
+            ceiling_remaining = -1 if ceiling == -1 else (ceiling - user_used)
 
+            if not pool_unlimited and pool_remaining < credits_used:
+                return None
+            if ceiling != -1 and ceiling_remaining < credits_used:
+                return None
+
+            user['credits_used'] = user.get('credits_used', 0) + credits_used
+            history = user.setdefault('credit_usage_history', [])
+            history.insert(0, entry)
+            user['credit_usage_history'] = history[:500]
+
+            if not pool_unlimited:
+                pool['credit_pool_used'] = pool.get('credit_pool_used', 0) + credits_used
+
+            outcome['ok'] = True
+            return data
+
+        if not user_unlimited and _numeric_credits_balance(user) < credits_used:
+            return None
+
+        if not user_unlimited:
+            user['credits'] = _numeric_credits_balance(user) - credits_used
         user['credits_used'] = user.get('credits_used', 0) + credits_used
         history = user.setdefault('credit_usage_history', [])
         history.insert(0, entry)
         user['credit_usage_history'] = history[:500]
 
-        if not pool_unlimited:
-            pool['credit_pool_used'] = pool.get('credit_pool_used', 0) + credits_used
+        outcome['ok'] = True
+        return data
 
-        save_users(data)
-        return True
-
-    if not user_unlimited and _numeric_credits_balance(user) < credits_used:
+    try:
+        _users_cas_mutate(_consume)
+    except Exception:
+        traceback.print_exc()
         return False
-
-    if not user_unlimited:
-        user['credits'] = _numeric_credits_balance(user) - credits_used
-    user['credits_used'] = user.get('credits_used', 0) + credits_used
-    history = user.setdefault('credit_usage_history', [])
-    history.insert(0, entry)
-    user['credit_usage_history'] = history[:500]
-
-    save_users(data)
-    return True
+    return outcome['ok']
 
 
 def refund_credit(username, credits=1, reason=''):
     """Reverse a previously-taken credit charge. Used when a downstream
     step (queue POST, worker enqueue, etc.) fails AFTER we've charged
-    the user. Symmetric with consume_credit - reads users.json,
+    the user. Symmetric with consume_credit - mutates a freshly-read
+    users.json under compare-and-swap (see _users_cas_mutate),
     decrements the used counters, adds an audit-log entry, saves.
 
     Returns True on success. Safe to call when the original charge
@@ -1910,14 +2226,6 @@ def refund_credit(username, credits=1, reason=''):
     """
     if credits is None or credits <= 0:
         return True
-    try:
-        data = load_users()
-    except Exception:
-        traceback.print_exc()
-        return False
-    user = (data.get('users') or {}).get(username)
-    if not user:
-        return False
 
     entry = {
         'used_at': datetime.now().isoformat(),
@@ -1926,34 +2234,44 @@ def refund_credit(username, credits=1, reason=''):
         'pull_type': 'refund',
         'credits_used': -int(credits),
     }
+    outcome = {'ok': False}
 
-    company = (user.get('company') or '').strip()
-    pool = _get_company_pool(data, company)
-    has_personal_override = user.get('credit_source') == 'personal'
+    def _refund(data):
+        outcome['ok'] = False
+        user = (data.get('users') or {}).get(username)
+        if not user:
+            return None
 
-    if pool is not None and not has_personal_override:
-        pool_used = pool.get('credit_pool_used', 0)
-        pool_unlimited = pool.get('credit_pool', 0) == -1
-        if not pool_unlimited:
-            pool['credit_pool_used'] = max(0, pool_used - int(credits))
-        user_used = user.get('credits_used', 0)
-        user['credits_used'] = max(0, user_used - int(credits))
-    else:
-        user_unlimited = _numeric_credits_balance(user) == -1
-        if not user_unlimited:
-            user['credits'] = _numeric_credits_balance(user) + int(credits)
-        user['credits_used'] = max(0, user.get('credits_used', 0) - int(credits))
+        company = (user.get('company') or '').strip()
+        pool = _get_company_pool(data, company)
+        has_personal_override = user.get('credit_source') == 'personal'
 
-    history = user.setdefault('credit_usage_history', [])
-    history.insert(0, entry)
-    user['credit_usage_history'] = history[:500]
+        if pool is not None and not has_personal_override:
+            pool_used = pool.get('credit_pool_used', 0)
+            pool_unlimited = pool.get('credit_pool', 0) == -1
+            if not pool_unlimited:
+                pool['credit_pool_used'] = max(0, pool_used - int(credits))
+            user_used = user.get('credits_used', 0)
+            user['credits_used'] = max(0, user_used - int(credits))
+        else:
+            user_unlimited = _numeric_credits_balance(user) == -1
+            if not user_unlimited:
+                user['credits'] = _numeric_credits_balance(user) + int(credits)
+            user['credits_used'] = max(0, user.get('credits_used', 0) - int(credits))
+
+        history = user.setdefault('credit_usage_history', [])
+        history.insert(0, entry)
+        user['credit_usage_history'] = history[:500]
+
+        outcome['ok'] = True
+        return data
 
     try:
-        save_users(data)
+        _users_cas_mutate(_refund)
     except Exception:
         traceback.print_exc()
         return False
-    return True
+    return outcome['ok']
 
 
 def _normalize_role(role):
@@ -19938,16 +20256,26 @@ def save_quick_selects():
         profiles = data.get('profiles', {})
         tickers = data.get('tickers', {})
         behaviors = data.get('behaviors', {})
-        
-        quick_selects = {
-            'profiles': profiles,
-            'tickers': tickers,
-            'behaviors': behaviors,
-            'updated_at': datetime.now().isoformat()
-        }
-        
+        posted = {'profiles': profiles, 'tickers': tickers, 'behaviors': behaviors}
+
+        # Compare-and-swap write. The admin's posted state is
+        # authoritative for every key it contains (including explicit
+        # False - manual unchecks always stick). Keys present on the
+        # freshly-read doc but absent from the posted form (e.g. a
+        # profile registered by another writer while the admin page was
+        # open) are kept rather than dropped: fresh-base-wins with the
+        # caller's explicit changes on top, so a concurrent
+        # registration is never silently clobbered by this save.
+        def _apply_admin_state(qs):
+            for section, posted_map in posted.items():
+                merged = dict(qs.get(section) or {})
+                merged.update(posted_map or {})
+                qs[section] = merged
+            qs['updated_at'] = datetime.now().isoformat()
+            return qs
+
         # Check if S3 save was successful
-        success = save_json_to_s3(QUICK_SELECTS_FILE, quick_selects)
+        success = update_json_in_s3(QUICK_SELECTS_FILE, _apply_admin_state)
         if not success:
             error_msg = 'Failed to save to S3. Check server logs for details.'
             print(f"❌ {error_msg}")
@@ -21665,6 +21993,12 @@ S3_CACHE_KEY = 'system/s3_cache.json'  # Persisted cache location
 _persisted_cache_etag = None
 _persisted_cache_last_head_ts = 0.0
 _PERSISTED_CACHE_HEAD_INTERVAL_SECS = 3.0
+# s3_keys present in the persisted cache doc at this worker's last
+# load/save sync point. save_persisted_cache uses it to tell a job
+# that is remote-only because ANOTHER writer just registered it
+# (adopt it, never clobber) apart from a job that is remote-only
+# because THIS worker deliberately deleted it (keep it deleted).
+_persisted_cache_baseline_keys = None
 S3_DEMO_CACHE_KEY = 'system/demographics_cache.json'  # Cached demographic summaries
 S3_IMAGE_CACHE_KEY = 'system/profile_images_cache.json'  # Cached profile images
 
@@ -24542,7 +24876,7 @@ def _enforce_root_only_jobs(jobs, context: str = ''):
 
 def load_persisted_cache():
     """Load the S3 file cache from S3 storage."""
-    global s3_cache, _persisted_cache_etag
+    global s3_cache, _persisted_cache_etag, _persisted_cache_baseline_keys
     if not s3_client:
         return False
     try:
@@ -24561,6 +24895,12 @@ def load_persisted_cache():
         s3_cache['last_full_scan'] = cached_data.get('last_full_scan')
         # Track ETag so other workers can detect changes via cheap HEAD requests.
         _persisted_cache_etag = (response.get('ETag') or '').strip('"') or None
+        # Sync point for save_persisted_cache's adopt-vs-deleted check:
+        # every key in the remote doc as loaded (pre-strip, so keys we
+        # drop locally on purpose are never re-adopted from remote).
+        _persisted_cache_baseline_keys = {
+            j.get('s3_key') for j in raw_jobs
+            if isinstance(j, dict) and j.get('s3_key')}
         print(f"✅ Loaded persisted cache: {len(s3_cache['jobs'])} files")
         return True
     except s3_client.exceptions.NoSuchKey:
@@ -24590,21 +24930,30 @@ def save_persisted_cache():
     and only touches the in-memory copy — no extra S3 round-trip beyond the
     one GET we'd usually do at boot anyway.
     """
-    global _persisted_cache_etag, _persisted_cache_last_head_ts
+    global _persisted_cache_etag, _persisted_cache_last_head_ts, \
+        _persisted_cache_baseline_keys
     if not s3_client:
         return
     try:
-        # Read-then-write: pull the latest S3 copy and merge its imdb_id /
-        # imdb_label values onto our in-memory jobs by profile_subject. Any
-        # job we don't have a record of in memory but exists on S3 with an
-        # imdb_id is left alone (other workers may add jobs we haven't seen
-        # yet — but we never WRITE jobs that aren't in our in-memory list,
-        # so they stay on S3 untouched).
-        try:
-            remote = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_CACHE_KEY)
-            remote_cache = json.loads(remote['Body'].read().decode('utf-8'))
+        baseline_keys = _persisted_cache_baseline_keys
+
+        # Compare-and-swap write (ETag-guarded, retried on conflict).
+        # The mutator runs against the freshly-read S3 copy: merges the
+        # remote imdb_id / imdb_label side-channel fields onto our
+        # in-memory jobs (the long-standing convention above), enforces
+        # the root-only invariant, and ADOPTS remote-only jobs that
+        # appeared after our last load/save sync point (a concurrent
+        # registration from another writer) while jobs that are
+        # remote-only because we deliberately deleted them stay
+        # deleted. The document written is still this worker's jobs
+        # snapshot, but nothing another writer landed is silently lost.
+        def _merge_onto_remote(remote_cache):
+            remote_jobs = (remote_cache.get('jobs') or []) \
+                if isinstance(remote_cache, dict) else []
             remote_imdb = {}
-            for j in (remote_cache.get('jobs') or []):
+            for j in remote_jobs:
+                if not isinstance(j, dict):
+                    continue
                 subj = (j.get('profile_subject') or '').strip()
                 if not subj:
                     continue
@@ -24622,45 +24971,63 @@ def save_persisted_cache():
                         continue
                     imdb, label = pair
                     # Only restore from remote if local doesn't already
-                    # have a value — local writes (if any) win, but the
+                    # have a value - local writes (if any) win, but the
                     # common case is "local has nothing, remote has the
                     # scraped id."
                     if imdb and not j.get('imdb_id'):
                         j['imdb_id'] = imdb
                     if label and not j.get('imdb_label'):
                         j['imdb_label'] = label
-        except s3_client.exceptions.NoSuchKey:
-            pass
-        except Exception as merge_err:
-            # Merge is a soft guarantee; never fail a save on it.
-            print(f"⚠️ persisted-cache imdb merge failed (non-fatal): {merge_err}")
 
-        # Defense in depth: never PERSIST anything that violates the
-        # root-only invariant. If a subfolder key snuck in via a legacy
-        # admin path (rename / recategorize) or stale cache merge,
-        # drop it here so the next worker that loads can't see it.
-        # Mutates s3_cache in place so the in-memory view stays
-        # consistent with what we wrote.
-        clean_jobs, _dropped = _enforce_root_only_jobs(s3_cache.get('jobs', []), context='save_persisted_cache')
-        if _dropped:
-            s3_cache['jobs'] = clean_jobs
-            s3_cache['file_count'] = len(clean_jobs)
-        cache_data = {
-            'jobs': clean_jobs,
-            'categories': s3_cache.get('categories', []),
-            'last_updated': s3_cache.get('last_updated'),
-            'file_count': len(clean_jobs),
-            'last_full_scan': s3_cache.get('last_full_scan')
-        }
-        put_resp = s3_client.put_object(
-            Bucket=S3_BUCKET,
-            Key=S3_CACHE_KEY,
-            Body=json.dumps(cache_data),
-            ContentType='application/json'
-        )
+            # Defense in depth: never PERSIST anything that violates the
+            # root-only invariant. If a subfolder key snuck in via a legacy
+            # admin path (rename / recategorize) or stale cache merge,
+            # drop it here so the next worker that loads can't see it.
+            # Mutates s3_cache in place so the in-memory view stays
+            # consistent with what we wrote.
+            clean_jobs, _dropped = _enforce_root_only_jobs(s3_cache.get('jobs', []), context='save_persisted_cache')
+            if _dropped:
+                s3_cache['jobs'] = clean_jobs
+                s3_cache['file_count'] = len(clean_jobs)
+
+            # Adopt concurrent additions: a remote job we have never
+            # seen (not in memory, not in our last-known remote key
+            # set) was registered by another writer while we worked.
+            # baseline None means we never read the remote doc, so
+            # nothing remote-only can be something we deleted.
+            mem_keys = {j.get('s3_key') for j in clean_jobs
+                        if isinstance(j, dict) and j.get('s3_key')}
+            known_keys = baseline_keys if baseline_keys is not None else set()
+            adopted = [j for j in remote_jobs
+                       if isinstance(j, dict) and j.get('s3_key')
+                       and j['s3_key'] not in mem_keys
+                       and j['s3_key'] not in known_keys]
+            if adopted:
+                adopted, _adropped = _enforce_root_only_jobs(
+                    adopted, context='save_persisted_cache_adopt')
+            merged_jobs = clean_jobs + adopted
+            return {
+                'jobs': merged_jobs,
+                'categories': s3_cache.get('categories', []),
+                'last_updated': s3_cache.get('last_updated'),
+                'file_count': len(merged_jobs),
+                'last_full_scan': s3_cache.get('last_full_scan')
+            }
+
+        final, new_etag = _s3_json_cas_update(
+            S3_BUCKET, S3_CACHE_KEY, _merge_onto_remote,
+            indent=None, log_name='s3_cache.json')
+        if final is None:
+            return
+        # Sync the in-memory view to what actually landed (adopted
+        # concurrent registrations included) and move the sync point.
+        s3_cache['jobs'] = final['jobs']
+        s3_cache['file_count'] = final['file_count']
+        _persisted_cache_baseline_keys = {
+            j.get('s3_key') for j in final['jobs']
+            if isinstance(j, dict) and j.get('s3_key')}
         # Stamp our own ETag so we don't bounce-reload our own write on the
         # next /api/jobs request (would be wasted work).
-        new_etag = (put_resp.get('ETag') or '').strip('"') or None
         if new_etag:
             _persisted_cache_etag = new_etag
         _persisted_cache_last_head_ts = time.time()
@@ -43483,6 +43850,31 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "      `identity_confident`: true ONLY when you are certain "
         "which real-world entity this is AND that it exists as "
         "described (right medium, right platform). False otherwise.\n"
+        "  * SAME-NAME VERSIONS (HARD RULE - 2026-08-25): many titles "
+        "exist in multiple same-name versions - US vs UK series (The "
+        "Office, Ghosts, Shameless), network remakes, movie vs stage "
+        "musical vs book (Wicked), reboot years (It 1990 vs It 2017). "
+        "When the request disambiguates (says 'US', 'UK', 'the BBC "
+        "one', 'the 2017 movie', names the network or year), resolve "
+        "to that version and set `identity_qualifier` to a short "
+        "qualifier ('US', 'UK', 'CBS', 'Movie 2017'). When the request "
+        "does NOT disambiguate and more than one well-known same-name "
+        "version exists, NEVER pick one silently: keep the user's own "
+        "words as the subject, set `identity_confident` to false, and "
+        "list every version in `identity_versions` so the flow can ask "
+        "the user which one they mean.\n"
+        "  * NICKNAMES AND ALIASES (HARD RULE - 2026-08-25): stage "
+        "names, nicknames, abbreviations, and fan shorthand resolve to "
+        "the canonical person - 'T-Swift' means Taylor Swift, 'King "
+        "James' means LeBron James, 'the GOAT' with clear sport or "
+        "genre context means the person that context names. Use the "
+        "canonical full name as `subject` and `resolved_title`, and "
+        "echo the resolution in `identity_note` ('resolved to Taylor "
+        "Swift'). When an alias is genuinely ambiguous with no "
+        "disambiguating context ('the GOAT' alone), do NOT guess: keep "
+        "the user's own words as the subject, set `identity_confident` "
+        "to false, and list the top candidates in `identity_versions` "
+        "(each with medium 'person') so the flow can ask.\n"
         "  * RATIONALE DISCIPLINE: every free-text field (persona_notes, "
         "decision_reason, assumptions, category_note, cut labels and "
         "rationales) must be written from the RESOLVED identity only. "
@@ -43864,6 +44256,8 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"platform\": \"platform named in the request ('Hulu')\" or null,\n"
         "  \"identity_note\": \"one line: what this IS and is NOT, when the name collides with a better-known property\" or null,\n"
         "  \"identity_confident\": <true|false - true ONLY when certain which real-world entity this is>,\n"
+        "  \"identity_qualifier\": \"short version qualifier when the title has same-name versions and the request disambiguates ('US', 'UK', 'CBS', 'Movie 2017')\" or null,\n"
+        "  \"identity_versions\": [{\"title\": \"The Office\", \"version_label\": \"US, NBC\", \"medium\": \"series\", \"platform\": \"Peacock\", \"qualifier\": \"US\"}, ...] or null // ONLY when multiple same-name versions (or ambiguous-alias candidates) exist AND the request does not disambiguate - see SAME-NAME VERSIONS and NICKNAMES AND ALIASES,\n"
         "  \"ip_scope\": \"broad|consumers\" or null (null = ask the user; see IP AUDIENCE SCOPE),\n"
         "  \"consumer_verb\": \"viewers|readers|listeners|players\" or null,\n"
         "  \"consumers_sample_fraction\": <float 0.15-0.90 or null - consumed-share of the broad engager universe>,\n"
@@ -52097,6 +52491,137 @@ def _scrub_identity_prose(draft, title, medium, platform):
         f"meant a different property with a similar name."]
 
 
+_IDENTITY_VERSION_MEDIUMS = (
+    'series', 'movie', 'podcast', 'game', 'book', 'album',
+    'franchise', 'person', 'musical', 'brand')
+
+
+def _normalize_identity_versions(raw):
+    """Clean a model-emitted same-name-version (or alias-candidate)
+    list into at most 5 dicts of scrubbed strings:
+    {title, version_label, medium, platform, qualifier}. Every field
+    passes the spec-field scrub because these values ride the draft
+    into naming, the spec, and user-facing chips. Returns [] on any
+    shape problem - callers treat that as 'no versions'."""
+    if not isinstance(raw, (list, tuple)):
+        return []
+    _scrub = globals().get('_scrub_spec_text') or (
+        lambda value, **_kw: '' if value is None else str(value))
+    out = []
+    seen = set()
+    for v in raw:
+        if not isinstance(v, dict):
+            continue
+        title = _scrub(v.get('title'), field='identity_version_title',
+                       max_len=120, single_line=True).strip()
+        if not title:
+            continue
+        label = _scrub(v.get('version_label'),
+                       field='identity_version_label',
+                       max_len=80, single_line=True).strip()
+        medium = str(v.get('medium') or '').strip().lower()
+        if medium not in _IDENTITY_VERSION_MEDIUMS:
+            medium = ''
+        platform = _scrub(v.get('platform'),
+                          field='identity_version_platform',
+                          max_len=60, single_line=True).strip()
+        qualifier = _scrub(v.get('qualifier'),
+                           field='identity_version_qualifier',
+                           max_len=40, single_line=True).strip()
+        key = f'{title}|{label}'.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({'title': title, 'version_label': label,
+                    'medium': medium, 'platform': platform,
+                    'qualifier': qualifier})
+        if len(out) >= 5:
+            break
+    return out
+
+
+def _apply_identity_version(draft, version):
+    """Apply a user-chosen same-name version (or alias candidate) to
+    the draft in place. The version-qualified name flows into subject
+    / naming ('The Office US'), and the short qualifier rides
+    `identity_qualifier` onto the spec so downstream BRAND INPUT slugs
+    are version-qualified (the-office-us). Prose drafted before the
+    choice is replaced from the resolved identity."""
+    if not isinstance(draft, dict) or not isinstance(version, dict):
+        return draft
+    title = str(version.get('title') or '').strip()
+    if not title:
+        return draft
+    qualifier = str(version.get('qualifier') or '').strip()
+    medium = str(version.get('medium') or '').strip().lower()
+    platform = str(version.get('platform') or '').strip()
+    label = str(version.get('version_label') or '').strip()
+    old_subject = str(draft.get('subject') or '').split(' - ', 1)[0]
+    subject = title
+    if qualifier and _collapse_for_match(qualifier) \
+            not in _collapse_for_match(title):
+        subject = f'{title} {qualifier}'
+    draft['subject'] = subject
+    draft['name'] = subject
+    draft.pop('file_stem', None)
+    draft['resolved_title'] = subject
+    if qualifier:
+        draft['identity_qualifier'] = qualifier
+    if medium:
+        draft['medium'] = medium
+    if platform:
+        draft['platform'] = platform
+    draft['identity_note'] = (
+        f'Resolved to {subject}' + (f', the {label}' if label else ''))
+    draft['identity_confident'] = True
+    draft.pop('identity_versions', None)
+    content_mediums = ('series', 'movie', 'podcast', 'game', 'book',
+                       'album', 'franchise', 'musical')
+    if medium in content_mediums:
+        draft['is_ip_content'] = True
+        _M2C = {'series': 'SERIES', 'movie': 'MOVIE',
+                'musical': 'MOVIE', 'podcast': 'PODCAST',
+                'game': 'GAMES'}
+        want_cat = _M2C.get(medium)
+        cur_cat = str(draft.get('brand_category') or '').strip().upper()
+        if want_cat and not cur_cat.startswith(want_cat):
+            draft['brand_category'] = want_cat
+        cat = str(draft.get('brand_category') or '').strip().upper()
+        if cat.startswith(('SERIES', 'MOVIE')):
+            draft['subject_rows'] = [[cat, subject]]
+            draft['extra_rows'] = []
+            if platform:
+                draft['home_platform_rows'] = [
+                    ['STREAMING/PLATFORM', platform]]
+        _scrub_identity_prose(draft, subject,
+                              medium if medium != 'musical' else 'movie',
+                              platform or None)
+    else:
+        # Person / brand candidate (alias resolution): keep the drafted
+        # category but repoint any rows written for the alias text.
+        old_coll = _collapse_for_match(old_subject)
+        for rows_key in ('subject_rows', 'extra_rows'):
+            rows = draft.get(rows_key) or []
+            fixed = []
+            for row in rows:
+                if isinstance(row, (list, tuple)) and len(row) >= 2 \
+                        and _collapse_for_match(str(row[1])) == old_coll:
+                    fixed.append([row[0], subject])
+                else:
+                    fixed.append(list(row) if isinstance(
+                        row, (list, tuple)) else row)
+            if rows:
+                draft[rows_key] = fixed
+    _set_resolved_identity_line(draft)
+    try:
+        print(f'[identity] version pick applied: {old_subject!r} -> '
+              f'{subject!r}'
+              + (f' (qualifier {qualifier!r})' if qualifier else ''))
+    except Exception:
+        pass
+    return draft
+
+
 def _verify_content_identity(draft, prompt, sig):
     """Web-search-enabled Claude call that verifies WHICH real-world
     title the request names. Returns a dict like
@@ -52131,6 +52656,12 @@ def _verify_content_identity(draft, prompt, sig):
         'collides with a better-known property, what it is NOT",\n'
         '  "confidence": "high|medium|low",\n'
         '  "exists": true|false,\n'
+        '  "qualifier": "short version qualifier when this title has '
+        "same-name versions and the request disambiguates ('US', "
+        "'UK', 'CBS', 'Movie 2017')\" or null,\n"
+        '  "versions": [{"title": "...", "version_label": "US, NBC", '
+        '"medium": "series", "platform": "Peacock", "qualifier": '
+        '"US"}, ...] or [],\n'
         '  "persona_notes": "120-250 words describing the REAL '
         "audience of THIS title (age/gender skew, genre pull, "
         "platform context). Facts about this title only - no lore "
@@ -52140,7 +52671,14 @@ def _verify_content_identity(draft, prompt, sig):
         "}\n"
         "If you cannot confirm the title exists as described, set "
         'exists=false and confidence="low" - NEVER substitute a '
-        "famous lookalike."
+        "famous lookalike.\n"
+        "SAME-NAME VERSIONS: when the name exists in MULTIPLE "
+        "well-known versions (US vs UK series, network remakes, movie "
+        "vs stage musical vs book, reboot years) and the request does "
+        "NOT disambiguate between them, list every version in "
+        '"versions" and set confidence="low" - never pick one '
+        "silently. When the request DOES disambiguate, resolve to "
+        'that version, set "qualifier", and leave "versions" empty.'
     )
     user = (
         f"USER REQUEST (verbatim): {prompt}\n"
