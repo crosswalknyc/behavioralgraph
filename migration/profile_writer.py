@@ -236,6 +236,7 @@ def write_profile_csv(
     s3_client=None,
     follower_ceiling: Optional[int] = None,
     keep_avid_row: Optional[bool] = None,
+    ship_gate: bool = True,
 ) -> dict:
     """Canonical write path for any profile CSV heading to
     `s3://dashboard-inputs/<s3_key>`.
@@ -471,6 +472,66 @@ def write_profile_csv(
             print(f"  [profile_writer] G12 cleared after strip "
                   f"({_n_stripped} row(s) removed); proceeding")
 
+        # 5.55 G2 / G5 hard impossibilities are BLOCKING (2026-08-24
+        # Jenna mandate, same precedent as G12): a projection above US
+        # population (G2) or a demo category off sum=100 (G5) is not a
+        # judgment call - it is arithmetic that cannot be true.
+        # Remediation-first: re-run the safety net (recomputes Raw and
+        # Proj from BP) and the demo renormalizer, re-gate, and only
+        # hard-fail when the fix cannot clear the defect. Detector
+        # errors ("detector errored") are excluded - those are checker
+        # failures, not confirmed impossibilities, and the terminal
+        # ship gate independently re-checks the same invariants below.
+        def _hard_hits(defect_list):
+            return [d for d in (defect_list or [])
+                    if (str(d).startswith("G2 PROJECTION:")
+                        or str(d).startswith("G5 DEMO_SUM:"))
+                    and "detector errored" not in str(d)]
+
+        _g25_hits = _hard_hits(gate_defects)
+        if _g25_hits:
+            print(f"  [profile_writer] G2/G5 hard impossibility "
+                  f"flagged ({len(_g25_hits)}); applying remediation + "
+                  f"regate before upload")
+            try:
+                try:
+                    from migration.post_generation_enforcers import (
+                        renormalize_demographics_to_100,
+                        run_write_safety_net as _rwsn_g25,
+                    )
+                except ImportError:
+                    from post_generation_enforcers import (  # type: ignore
+                        renormalize_demographics_to_100,
+                        run_write_safety_net as _rwsn_g25,
+                    )
+                df, _ = renormalize_demographics_to_100(
+                    df, subject=subject, verbose=verbose,
+                )
+                df, _ = _rwsn_g25(df, subject, verbose=verbose)
+                if sort:
+                    df = _sort_within_category(df)
+                gate_defects = run_pre_publish_gate(
+                    df, subject,
+                    project_name=display_name or s3_key,
+                    raise_on_fail=False,
+                    verbose=verbose,
+                )
+            except Exception as _g25_err:
+                raise RuntimeError(
+                    f"G2/G5 auto-fix failed for {subject} "
+                    f"({s3_key}): {_g25_err}"
+                )
+            _g25_still = _hard_hits(gate_defects)
+            if _g25_still:
+                raise RuntimeError(
+                    f"G2/G5 hard impossibility persists after "
+                    f"remediation + regate for {subject} ({s3_key}); "
+                    f"refusing to upload a flagged file: "
+                    f"{_g25_still[0]}"
+                )
+            print(f"  [profile_writer] G2/G5 cleared after "
+                  f"remediation; proceeding")
+
     # 5.6 Terminal invariant polish (2026-08-20 EST Buyers batch). The
     # gate's auto-patchers (G1/G13) and several late enforcers (lux
     # caps, MPB deband) mutate BPs AFTER the depin + self-pin + sort
@@ -561,10 +622,28 @@ def write_profile_csv(
     except Exception as e:
         print(f"  [profile_writer] genpop baseline append skipped: {e}")
 
-    # 7. Upload
+    # 6.9 FINAL SHIP GATE (2026-08-24 Jenna mandate): independent
+    # terminal invariant check on the exact bytes about to upload.
+    # Violations quarantine the file, email the hold notice, and raise
+    # ShipGateError - deliberately not wrapped in a swallowing
+    # try/except. ship_gate=False (explicit argument, local ops
+    # override only) runs the checks report-only. No env-flag
+    # downgrade exists.
     buf = io.StringIO()
     df.to_csv(buf, index=False)
     body = buf.getvalue().encode("utf-8")
+    try:
+        from migration.final_ship_gate import run_final_ship_gate
+    except ImportError:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from final_ship_gate import run_final_ship_gate  # type: ignore
+    run_final_ship_gate(
+        body, s3_key, subject,
+        enforce=bool(ship_gate),
+        s3_client=s3, verbose=verbose,
+    )
+
+    # 7. Upload
     s3.put_object(
         Bucket=BUCKET, Key=s3_key, Body=body, ContentType="text/csv",
     )

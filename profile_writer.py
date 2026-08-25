@@ -183,6 +183,7 @@ def write_profile_csv(
     verbose: bool = True,
     s3_client=None,
     keep_avid_row: Optional[bool] = None,
+    ship_gate: bool = True,
 ) -> dict:
     """Canonical write path for any profile CSV heading to
     `s3://dashboard-inputs/<s3_key>`.
@@ -357,10 +358,28 @@ def write_profile_csv(
     if backup:
         backup_key = _backup_prior(s3, s3_key, "write")
 
-    # 7. Upload
+    # 6.9 FINAL SHIP GATE (2026-08-24 Jenna mandate): independent
+    # terminal invariant check on the exact bytes about to upload.
+    # Violations quarantine the file, email the hold notice, and raise
+    # ShipGateError - deliberately not wrapped in a swallowing
+    # try/except. ship_gate=False (explicit argument, local ops
+    # override only) runs the checks report-only. No env-flag
+    # downgrade exists.
     buf = io.StringIO()
     df.to_csv(buf, index=False)
     body = buf.getvalue().encode("utf-8")
+    try:
+        from migration.final_ship_gate import run_final_ship_gate
+    except ImportError:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from final_ship_gate import run_final_ship_gate  # type: ignore
+    run_final_ship_gate(
+        body, s3_key, subject,
+        enforce=bool(ship_gate),
+        s3_client=s3, verbose=verbose,
+    )
+
+    # 7. Upload
     s3.put_object(
         Bucket=BUCKET, Key=s3_key, Body=body, ContentType="text/csv",
     )

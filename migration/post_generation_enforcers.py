@@ -408,13 +408,71 @@ def _detect_sample_size(df, bp_col, raw_col):
     return 1_000_000
 
 
+def _recompute_cs_for_cat(df, cat, bp_col, cs_col):
+    """Rewrite Category Share for ONE category from current BPs.
+
+    Mutation-time coherence helper (2026-08-24, stale-share class kill):
+    a BP write changes the share denominator for EVERY row of that
+    category, so the whole block's CS is recomputed in one shot.
+    Demo-like blocks (sum-to-100 by construction) use Share = BP
+    identity; every other block uses share-of-category
+    (BP / sum(BP) * 100), matching apply_recompute_category_share.
+    Metadata blocks are skipped. Rows with unparseable BP keep their
+    cell (the canonical final pass blanks them). Never raises.
+    """
+    try:
+        if (cs_col is None or cs_col not in df.columns
+                or 'Column' not in df.columns):
+            return df
+        cat = str(cat or '').strip()
+        if not cat:
+            return df
+        cat_u = cat.upper()
+        skip = globals().get('_SHARE_SKIP_BLOCKS') or {
+            'BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY', 'SUBJECT',
+            'INPUT_METADATA'}
+        if cat_u in {str(s).upper() for s in skip}:
+            return df
+        mask = (df['Column'].astype(str).str.strip().str.upper() == cat_u)
+        if not mask.any():
+            return df
+        bps = df.loc[mask, bp_col].apply(_bp)
+        valid = bps.dropna()
+        if len(valid) == 0:
+            return df
+        demo_all = (globals().get('_DEMO_LIKE_ALL')
+                    or globals().get('DEPIN_DEMO_CATS') or ())
+        if cat_u in {str(c).upper() for c in demo_all}:
+            share = valid.astype(float).round(4)
+        else:
+            tot = float(valid.sum())
+            if tot <= 0:
+                return df
+            share = (valid.astype(float) / tot * 100).round(4)
+        if (str(df[cs_col].dtype) == 'string'
+                or str(df[cs_col].dtype).startswith('str')):
+            df[cs_col] = df[cs_col].astype(object)
+        df.loc[share.index, cs_col] = share.values
+    except Exception:
+        pass
+    return df
+
+
 def _set_bp(df, idx, new_bp, bp_col, cs_col, raw_col, proj_col, sample_size):
-    """Set new BP on a row and recompute raw + projection. CategoryShare
-    recomputed downstream via _renormalize_category.
+    """Set new BP on a row and recompute raw + projection + the mutated
+    category's Category Share.
 
     Proj uses the canonical edit_sample_size.py formula:
       Raw  = sample_size * new_bp / 100
       Proj = (Raw / 10_000_000) * US_POP   (= sample_size * new_bp / 100 * 32.99)
+
+    2026-08-24 (stale-share class kill, Jenna mandate): CS used to be
+    left for a downstream _renormalize_category / final-pass recompute.
+    That created mid-chain windows where a later step read a share that
+    no longer matched BP (the D115 recovery re-inflated deliberately
+    floored rows off exactly such a stale share). Every BP write through
+    this helper now leaves the WHOLE mutated category share-coherent at
+    mutation time.
     """
     # 2026-06-22 Jenna fix: pandas StringDtype on bp/raw/proj columns raises
     # "Invalid value 'X' for dtype 'str'" when we assign a float. This bit
@@ -433,6 +491,12 @@ def _set_bp(df, idx, new_bp, bp_col, cs_col, raw_col, proj_col, sample_size):
         df.at[idx, raw_col] = new_raw
     if proj_col:
         df.at[idx, proj_col] = int(round(new_raw / 10_000_000.0 * US_POP))
+    if cs_col is not None and 'Column' in df.columns:
+        try:
+            df = _recompute_cs_for_cat(
+                df, df.at[idx, 'Column'], bp_col, cs_col)
+        except Exception:
+            pass
     return df
 
 
@@ -5923,17 +5987,13 @@ def _reset_non_hostmap_to_floor_for_categories(df, subject, categories, verbose=
 
         df = _set_bp(df, idx, new_v, bp_col, cs_col, raw_col, proj_col,
                      sample_size)
-        # 2026-08-24: also write a coherent Category Share. _set_bp leaves
-        # CS untouched, and non-MPB categories are never renormalized here,
-        # so the floored row kept its pre-reset CS. That stale CS is what
-        # apply_bp_cs_consistency_recovery later misread as a preserved
-        # share, re-inflating the row to ~99.5 (NINJA/SHARK defect on every
-        # build after this reset shipped).
-        if cs_col is not None and cs_col in df.columns:
-            try:
-                df.at[idx, cs_col] = round(new_v, 4)
-            except Exception:
-                pass
+        # 2026-08-24: _set_bp now writes a coherent whole-category share
+        # at mutation time (stale-share class kill), so the floored row
+        # can never keep a pre-reset CS for apply_bp_cs_consistency_
+        # recovery to misread (NINJA/SHARK re-inflation defect). The
+        # earlier per-row CS overwrite here was removed: it wrote the
+        # BP value instead of the share and would clobber the coherent
+        # recompute.
         fixed += 1
         touched_cats.add(cat)
         # Record as a hostmap gap so it surfaces in the data-team escalation
@@ -8875,6 +8935,23 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
     # columns to object dtype FIRST so downstream enforcers stop
     # silently crashing on pandas-2.1 NA-aware `str` dtype columns.
     df = _coerce_writeable_columns_to_object(df, verbose=verbose)
+    # 2026-08-24 (stale-share class kill): snapshot every row's BP at
+    # chain start. apply_bp_cs_consistency_recovery treats the stored
+    # Category Share as writer ground truth; that premise only holds
+    # for rows NOT moved during this run. Deliberate enforcer work
+    # (floors, caps, pins) is never writer corruption, so any category
+    # with a mid-run BP change is skipped by the recovery.
+    bp_at_load = None
+    try:
+        _bp_col0, _, _, _ = _detect_cols(df)
+        if _bp_col0 and _bp_col0 in df.columns:
+            bp_at_load = {}
+            for _i0 in df.index:
+                _v0 = _bp(df.at[_i0, _bp_col0])
+                bp_at_load[_i0] = (None if (_v0 is None or pd.isna(_v0))
+                                   else round(float(_v0), 6))
+    except Exception:
+        bp_at_load = None
     total = 0
     # 2026-07-28 (Jenna pipeline hardening): anachronism check for year
     # skins. Zero / dampen brands whose launch_year > target_year. Only
@@ -9199,7 +9276,8 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
     # Runs LATE so other lifts/caps have already settled the rest of the
     # block; this enforcer only touches the single corrupted row.
     try:
-        df, n = apply_bp_cs_consistency_recovery(df, subject, verbose=verbose)
+        df, n = apply_bp_cs_consistency_recovery(
+            df, subject, verbose=verbose, bp_at_load=bp_at_load)
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer apply_bp_cs_consistency_recovery failed: {e}")
@@ -12592,9 +12670,18 @@ def apply_porn_leader_invariant(df, subject, verbose=True):
 # affiliation natural variance). Tighter threshold avoids false positives.
 # ============================================================================
 
-def apply_bp_cs_consistency_recovery(df, subject, verbose=True):
+def apply_bp_cs_consistency_recovery(df, subject, verbose=True,
+                                     bp_at_load=None):
     """Recover BP/Raw/Proj from preserved Category Share when writer
     suppression has corrupted BP but left CS intact (D115).
+
+    bp_at_load (optional dict idx -> BP-at-chain-start or None): when
+    provided, any category containing a row whose BP moved since chain
+    start (or a freshly inserted row) is skipped entirely. Recovery's
+    premise is that CS survived a WRITER corruption that happened
+    before this process loaded the frame; a mid-run BP change is
+    deliberate enforcer work and the stored share must never be
+    replayed over it (2026-08-24 NINJA/SHARK re-inflation defect).
 
     Returns (df, n_rows_recovered).
     """
@@ -12619,6 +12706,24 @@ def apply_bp_cs_consistency_recovery(df, subject, verbose=True):
         idxs = list(grp.index)
         bps = [_bp(df.at[i, bp_col]) for i in idxs]
         css = [_bp(df.at[i, cs_col]) for i in idxs]
+        # 2026-08-24 (stale-share class kill): skip any category whose
+        # BP moved since chain start - see docstring.
+        if bp_at_load is not None:
+            mutated = False
+            for i, b in zip(idxs, bps):
+                if i not in bp_at_load:
+                    mutated = True
+                    break
+                b0 = bp_at_load[i]
+                cur = (None if (b is None or pd.isna(b))
+                       else round(float(b), 6))
+                if b0 is None and cur is None:
+                    continue
+                if b0 is None or cur is None or abs(b0 - cur) > 1e-6:
+                    mutated = True
+                    break
+            if mutated:
+                continue
         bp_clean = [b for b in bps if b is not None and pd.notna(b)]
         if len(bp_clean) < 4:
             continue
