@@ -12205,6 +12205,11 @@ RECLASSIFY_SECTIONS = [
     'Tennis',
     'Ticketing',
     'Toys',
+    # 2026-08-25 (Jenna): 'Trading' added as a new canonical hostmap
+    # SECTION for the finance family (Robinhood, E*TRADE, Coinbase,
+    # active-trader platforms). Corresponds to BRAND CATEGORY = TRADING
+    # in the profile CSV.
+    'Trading',
     'Travel',
     'UEFA',
     'Venue',

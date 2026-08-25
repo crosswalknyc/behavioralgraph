@@ -65,7 +65,15 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
         "NON PROFIT/CHARITY", "PHARMA", "QSR", "RETAILERS", "SECURITY",
         "SHOPPING INTENT",
         "SWEEPSTAKES",
-        "TELECOM", "TICKETING", "TOY", "TRAVEL", "VENUE", "WHERE THEY SHOP",
+        # 2026-08-25 (Jenna): TRADING added as a new canonical BRAND
+        # category for the finance family (Robinhood, E*TRADE, Coinbase,
+        # Charles Schwab active-trader tools, options/crypto/forex
+        # platforms). Sits alongside BANKING, DIGITAL BANKING, CREDIT
+        # PROVIDER, INVESTMENTS. Icon: 💹 (chart with yen, reads as
+        # active markets, distinct from INVESTMENTS's 📈 which reads as
+        # long-term investing).
+        "TELECOM", "TICKETING", "TOY", "TRADING", "TRAVEL", "VENUE",
+        "WHERE THEY SHOP",
         "WORKOUT FACILITY",
     ],
     "TALENT": [
