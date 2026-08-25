@@ -50,6 +50,14 @@ Invariants asserted (each returns structured violations):
                          flood.
   I9 no hidden brands    nothing from reference/hostmap_hidden_brands
                          (norm-group semantics).
+  I10 degenerate demos   TU files only: no canonical demo category may
+                         hold a bucket >= 99 alongside a bucket at
+                         exactly 0.0000 (a one-bucket demo on a TU is
+                         the cut-mislabeled-as-TU defect signature;
+                         sum-to-100 itself stays I5). Cuts are exempt:
+                         gender / geo cuts legitimately pin one bucket
+                         to ~99.99. Deterministic backstop under the
+                         reasoned migration/demo_plausibility_gate.
 
 Gate behavior: `run_final_ship_gate(df_or_bytes, s3_key, subject)`.
 On violations the caller's upload MUST NOT happen: the gate writes the
@@ -1070,6 +1078,49 @@ def _check_i9(rows, verbose):
     return out
 
 
+def _check_i10(rows, s3_key):
+    """Degenerate one-bucket demo tripwire, TU files only (2026-08-25,
+    MS NOW class). A canonical demo category on a Total Universe that
+    concentrates >= 99 in one bucket while another bucket sits at
+    exactly 0.0000 is the signature of a cut shipped as a TU (a TU's
+    demos must describe the full universe). Deliberately narrow and
+    offline-deterministic: the reasoned persona-vs-demo review lives in
+    migration/demo_plausibility_gate.py; this is the dumb tripwire
+    underneath it. Cuts skip entirely - gender / geo cuts legitimately
+    pin one bucket to ~99.99 (with the rest jittered 0.005-0.05, never
+    exactly zero). The sum-to-100 half of the demo contract stays I5."""
+    out = []
+    if _is_cut_key(s3_key):
+        return out
+    by_cat = {}
+    for r in rows:
+        cu = r["cat_u"]
+        if cu not in DEMO_CATS or cu == "LOCATION":
+            continue
+        bp = _num(r["bp_s"])
+        if bp is None:
+            continue
+        by_cat.setdefault(cu, []).append((r, bp))
+    for cu, pairs in by_cat.items():
+        if len(pairs) < 2:
+            continue
+        hi = [(r, bp) for r, bp in pairs if bp >= 99.0]
+        zero = [(r, bp) for r, bp in pairs if abs(bp) < 0.00005]
+        if hi and zero:
+            r_hi, bp_hi = hi[0]
+            out.append(_v(
+                "I10", "degenerate demos",
+                f"{r_hi['cat']} / {r_hi['val']}", _fmt_pct(bp_hi),
+                f"{r_hi['cat']} on this Total Universe file "
+                f"concentrates {_fmt_pct(bp_hi)} in {r_hi['val']} while "
+                f"{len(zero)} other bucket(s) sit at exactly 0.0000%. A "
+                f"Total Universe must describe the full audience; a "
+                f"one-bucket demographic belongs on a derived cut, not "
+                f"a TU.",
+            ))
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -1126,6 +1177,7 @@ def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
     violations += _safe("I7", _check_i7, rows)
     violations += _safe("I8", _check_i8, rows)
     violations += _safe("I9", _check_i9, rows, verbose)
+    violations += _safe("I10", _check_i10, rows, s3_key)
 
     meta = {"n_rows": len(rows), "sample": sample,
             "is_cut": _is_cut_key(s3_key)}

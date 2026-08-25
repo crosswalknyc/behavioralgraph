@@ -27890,6 +27890,50 @@ def run_full_pipeline(conn, project_name, brands, sample_start, sample_end, beha
         except Exception as _e:
             print(f"   ⚠️ hybrid sanity check skipped: {_e}")
 
+        # ── DEMO PLAUSIBILITY GATE (2026-08-25, MS NOW income defect) ──
+        # One Claude call reviews the sum-to-100 demo categories against
+        # the subject's persona (Gen Pop distribution as the indexing
+        # anchor) and auto-corrects implausible ones. TU builds only -
+        # the gate self-skips on ' - ' cut-suffixed names; cuts inherit
+        # demos from their parent. Runs BEFORE the enforcer chain so the
+        # terminal recompute_raw_and_projection canonicalizes the
+        # corrected rows. Never raises - pipeline continues on any error.
+        try:
+            import sys as _sys
+            _migration_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'migration')
+            if _migration_dir not in _sys.path:
+                _sys.path.insert(0, _migration_dir)
+            from demo_plausibility_gate import enforce_demo_plausibility as _demo_plaus
+            _persona_doc_dp = locals().get('_persona_doc') or locals().get('persona_doc') or {}
+            _pb_parts = []
+            if isinstance(_persona_doc_dp, dict):
+                for _k in ('persona_summary', 'audience_composition'):
+                    _pv = (_persona_doc_dp.get(_k) or '').strip()
+                    if _pv:
+                        _pb_parts.append(_pv)
+            _subject_dp = (locals().get('project_name')
+                           or (_persona_doc_dp.get('subject') if isinstance(_persona_doc_dp, dict) else '')
+                           or '')
+            df_final, _demo_rep = _demo_plaus(
+                df_final, _subject_dp,
+                persona_brief='\n\n'.join(_pb_parts),
+                brand_category=(locals().get('brand_category') or ''),
+            )
+            if _demo_rep.get('ran'):
+                _n_dp = _demo_rep.get('n_corrected', 0)
+                if _n_dp:
+                    _flagged_dp = [c for c, e in (_demo_rep.get('categories') or {}).items()
+                                   if e.get('corrected')]
+                    print(f"   🧭 demo plausibility gate: corrected {_n_dp} "
+                          f"implausible demo categor(ies): {', '.join(_flagged_dp)}")
+                else:
+                    print("   🧭 demo plausibility gate: all demo categories plausible")
+            else:
+                print(f"   🧭 demo plausibility gate: review unavailable "
+                      f"({_demo_rep.get('error') or _demo_rep.get('skipped')}); continuing")
+        except Exception as _e:
+            print(f"   ⚠️ demo plausibility gate skipped: {_e}")
+
         # ── POST-GENERATION ENFORCERS (2026-05-19): consolidated from the
         # /tmp audit scripts (fix_url_dupes / fix_politics /
         # uncap_taylor_swift) that the manual audit loop ran on already-
