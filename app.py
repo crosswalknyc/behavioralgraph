@@ -43568,6 +43568,20 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  * Avid cohort: 20-40% of TU sample.\n"
         "  * HARD CEILING: subject_raw_tu must be <= 9,500,000 "
         "(the panel is 10M; leave headroom).\n"
+        "  * UNIVERSE-ANCHORED SIZING (MANDATORY when countable): if "
+        "your research names a countable universe anchor for the "
+        "subject (registered voters in a state or district, "
+        "subscribers, members, district population, license holders, "
+        "account holders), subject_raw_tu MUST be derived from it "
+        "explicitly, never free-picked: state the anchor, state the "
+        "engaged share you are applying and why, compute projected = "
+        "anchor x share, then subject_raw_tu = projected / 32.99. "
+        "The implied projection (subject_raw_tu x 32.99) must sit "
+        "comfortably BELOW the anchor. Emit the anchor as "
+        "`universe_anchor` (int) in the JSON so the spec step can "
+        "verify; emit null when no countable anchor exists. Example: "
+        "13,426,540 registered voters x 10.6% active seekers = "
+        "1,423,213 projected -> subject_raw_tu = 43,141.\n"
         "  * Do NOT default to a round number. Pick a specific value "
         "with a non-zero last digit (see sample-size rule below).\n"
         "  * PUBLIC-METRIC-CAPPED COHORTS: if `audience_type` is "
@@ -43749,6 +43763,10 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "30% of subject_raw_tu is a banned tell; the ratio must be a "
         "messy subject-specific value like 22.7% or 31.4%>,\n"
         "  \"audience_type\": \"general|followers|subscribers|viewers|listeners|attendees|users\",\n"
+        "  \"universe_anchor\": <int or null - countable universe anchor "
+        "your research named (registered voters, subscribers, members, "
+        "district population). Required when one exists; the projected "
+        "audience (subject_raw_tu x 32.99) must sit below it>,\n"
         "  \"follower_ceiling\": <int or null - required if audience_type != 'general'; holds any public-metric ceiling>,\n"
         "  \"follower_platforms\": [\"instagram\", \"tiktok\", ...] or null,\n"
         "  \"is_ip_content\": <true|false - series/movie/book/podcast/game/album/franchise>,\n"
@@ -44006,7 +44024,13 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "from THAT subject's real audience scale - NEVER copy the "
         "same number across two elements (Amazon Prime Video's "
         "audience is not YouTube's; identical samples across subjects "
-        "are an instant defect).\n"
+        "are an instant defect). The same no-copying bar applies "
+        "ACROSS separate requests: never fall back on a remembered "
+        "value from another subject (the Florida and Iowa voter "
+        "universes both shipping 41,823 is the defect signature). "
+        "When research names a countable universe anchor, derive "
+        "subject_raw_tu from it per UNIVERSE-ANCHORED SIZING and emit "
+        "the anchor in `universe_anchor`.\n"
         "  6. Return ONLY JSON. No markdown fences, no prose.\n"
         "  7. MULTI-PROFILE REQUESTS: if the message clearly asks for "
         "MULTIPLE distinct profiles (a list of brands / platforms / "
@@ -48464,6 +48488,47 @@ def _spec_from_draft(draft):
         try:
             print(f"[follower-ceiling] {subject!r}: cap step raised "
                   f"{type(_fc_err).__name__}: {_fc_err}")
+        except Exception:
+            pass
+
+    # ── Universe-anchor recheck + cross-spec duplicate guard ────────
+    # (2026-08-24, Florida/Iowa duplicated-sample defect.) Two guards
+    # at the same choke point where ensure_messy_sample_size runs:
+    # 1. If the draft carries a countable universe anchor (registered
+    #    voters, subscribers, members) and the implied projection
+    #    exceeds it, scale the sample down under the anchor.
+    # 2. If the minted subject_raw byte-matches a DIFFERENT subject's
+    #    recently minted value (rolling S3 ledger at
+    #    system/recent_subject_raws.json), re-jitter deterministically
+    #    so no two subjects ship identical samples.
+    # The worker mirrors guard 2 in _run_new_build as defense in depth.
+    try:
+        from migration.sample_sizing_guards import apply_sizing_guards
+        _ua_raw = draft.get('universe_anchor')
+        try:
+            _ua = int(float(str(_ua_raw).replace(',', ''))) \
+                if _ua_raw not in (None, '', 'null') else None
+        except Exception:
+            _ua = None
+        _guard_s3 = None
+        try:
+            _guard_s3 = boto3.client(
+                's3',
+                aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                region_name=S3_REGION,
+            )
+        except Exception:
+            _guard_s3 = None
+        subject_raw_tu, subject_raw_avid = apply_sizing_guards(
+            subject, subject_raw_tu, subject_raw_avid,
+            universe_anchor=_ua, s3_client=_guard_s3,
+        )
+    except Exception as _sg_err:
+        try:
+            print(f"[sizing-guard] {subject!r}: guard step raised "
+                  f"{type(_sg_err).__name__}: {_sg_err} - continuing "
+                  f"with unguarded values")
         except Exception:
             pass
 
