@@ -44327,6 +44327,13 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "    {\"type\": \"age_band\", \"label\": \"18-24\", \"buckets\": [\"18-24\"]},\n"
         "    {\"type\": \"dma\", \"dma\": \"<canonical Nielsen DMA name>\"}\n"
         "  ],\n"
+        "  \"exclusions\": [{\"brand\": \"Hulu\", \"note\": \"excluding current Hulu subscribers\"}, ...] or [] // see SEMANTIC GUARDS #1,\n"
+        "  \"universe_mode\": \"churned|sequence\" or null // see SEMANTIC GUARDS #2-3,\n"
+        "  \"universe_note\": \"one plain sentence describing the churned/sequence universe\" or null,\n"
+        "  \"country\": \"US\" or the country the request scopes to ('UK', 'Canada', 'Germany', ...) // see SEMANTIC GUARDS #6,\n"
+        "  \"user_supplied_anchor\": <int or null - a count the USER stated ('we have 2 million subscribers'); see SEMANTIC GUARDS #11>,\n"
+        "  \"intensity_note\": \"how an intensity phrase ('binge-watchers', 'superfans') was mapped onto the Avid/TU tiers\" or null,\n"
+        "  \"scope_note\": \"how an unmeasurable tier/device scope ('with-ads tier', 'mobile-only') was handled\" or null,\n"
         "  \"persona_notes\": \"200-500 words of researched persona shape\",\n"
         "  \"assumptions\": [\"list of assumptions the user should verify\"],\n"
         "  \"estimated_run_minutes\": <int>,\n"
@@ -44444,6 +44451,94 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  * If uncertain, DEFAULT TO TRUE. It's cheap to skip a "
         "checkbox before approve; it's expensive to miss the Avid cut "
         "the user actually wanted.\n\n"
+
+        "SEMANTIC GUARDS (MANDATORY - 2026-08-25). Phrasing you do not "
+        "natively recognize must NEVER silently fall back to a "
+        "default. For each pattern below: bind it into the named "
+        "field, and echo what you bound in `resolved_identity` so the "
+        "confirmation shows it. The spec step independently re-checks "
+        "every one of these, but you must emit them correctly up "
+        "front:\n"
+        "  1. NEGATION / EXCLUSION: 'don't have Hulu', 'without "
+        "Netflix', 'excluding Prime members', 'never watched X', "
+        "'non-subscribers'. The negated brand goes in `exclusions` "
+        "(brand + note) and must NEVER appear as a positive "
+        "subject_row / extra_row / home_platform_row - a negated "
+        "qualifier read positively delivers the OPPOSITE audience.\n"
+        "  2. LAPSED / CHURNED: 'former subscribers', 'lapsed fans', "
+        "'people who cancelled', 'stopped watching'. Set "
+        "`universe_mode`: 'churned' + `universe_note`; the subject is "
+        "the LEAVERS, never a loyal current-customer universe "
+        "(the Spectrum Churners precedent).\n"
+        "  3. DIRECTIONAL SEQUENCES: 'watched X and then subscribed "
+        "to Y', 'came to Y from X'. Set `universe_mode`: 'sequence' + "
+        "`universe_note` naming the ordered steps; the ORDER defines "
+        "who is in the universe.\n"
+        "  4. FISCAL VS CALENDAR: 'Q3' alone means CALENDAR quarter - "
+        "bind its exact dates into `date_range` (explicit=true). "
+        "'fiscal Q3' / 'FY26' differs by company: bind exact dates "
+        "ONLY when you know that company's fiscal calendar (say so in "
+        "the label); otherwise leave date_range at default and note "
+        "the ambiguity in `assumptions` - the dashboard will ask.\n"
+        "  5. FUTURE WINDOWS: a window extending past the CURRENT "
+        "DATE clamps to today; a window entirely in the future cannot "
+        "build (there is no behavior to read yet) - note it in "
+        "`assumptions`. Never ship dates later than today.\n"
+        "  6. INTERNATIONAL: 'in the UK', 'Canadian fans', 'German "
+        "market' - set `country`, keep the country in `subject` "
+        "('Omaze UK' precedent: the deliverable is an authentic "
+        "country-scoped universe with that country's markets, demos, "
+        "and sizing). US asks: country='US'.\n"
+        "  7. REGIONS THAT AREN'T DMAS: 'the Southeast', 'Midwest', "
+        "'Pacific Northwest', 'Sun Belt', 'New England' are "
+        "multi-market regions - emit ONE addon_cut whose dma list "
+        "covers the region's major markets (the spec step maps them "
+        "canonically). Sub-DMA places ('Brooklyn', 'Long Island') "
+        "ride their containing market - say so in the echo. Density "
+        "terms ('rural areas', 'small towns', 'suburbs') do NOT map "
+        "onto measured markets - note in `assumptions`; the dashboard "
+        "asks.\n"
+        "  8. STACKED QUALIFIERS: 'male millennials in LA' stacks "
+        "gender + generation + market on ONE audience. Do NOT quietly "
+        "emit three separate single-pin cuts - the dashboard asks "
+        "'combined or separate'. Emit the single-pin cuts in "
+        "`addon_cuts` as usual only when the user has already said "
+        "'separate'.\n"
+        "  9. COMPARISONS: 'compare X fans vs Y fans' is one profile "
+        "PER side, never one blended build. The dashboard asks; on "
+        "one-shot surfaces it refuses with guidance.\n"
+        "  10. INTENSITY VOCABULARY: 'binge-watchers', 'superfans', "
+        "'die-hard', 'heavy users', 'top 10% most engaged', 'watch at "
+        "least 3x a week' map to the AVID tier (run_avid=true, or "
+        "derive_type='avid' on cuts); 'casual fans' / 'light users' "
+        "map to the Total Universe. Fill `intensity_note` with the "
+        "mapping in plain words.\n"
+        "  11. USER-SUPPLIED NUMBERS: 'we have 2 million subscribers' "
+        "- put the stated count in `user_supplied_anchor`. When "
+        "plausible, size to it (universe_anchor = their number, "
+        "anchor_source = 'client-supplied ... count'). When wildly "
+        "implausible vs research, keep BOTH numbers and note the "
+        "conflict in `assumptions` - the dashboard asks which to use. "
+        "NEVER silently discard the user's number.\n"
+        "  12. NICKNAMES / ALIASES: 'the Swifties', 'Bey hive', "
+        "'Little Monsters', 'Parrotheads' resolve to the canonical "
+        "subject (Taylor Swift, Beyonce, Lady Gaga, Jimmy Buffett). "
+        "Resolve confidently when unambiguous (identity_confident="
+        "true, note the alias in identity_note); ambiguous aliases "
+        "list `identity_versions` candidates - see NICKNAMES AND "
+        "ALIASES.\n"
+        "  13. MULTIPLE HETEROGENEOUS ASKS: 'build a Nike profile and "
+        "refresh my Adidas one' is TWO requests. Emit a JSON array "
+        "(one draft per ask) per MULTI-PROFILE REQUESTS; never merge "
+        "them or drop one.\n"
+        "  14. TIER / DEVICE SCOPES: 'Netflix with-ads tier', "
+        "'mobile-only viewers', 'smart TV users of Tubi' - "
+        "measurement covers the service as a whole, not tier/device "
+        "slices. Do NOT silently build the whole service: note the "
+        "scope in `scope_note` and `assumptions`; the dashboard asks "
+        "'whole service or persona'. Universe-defining device "
+        "subjects ('Vizio TV Owners') stay whole per SUBJECT "
+        "NAMING.\n\n"
 
         "CANDIDATES FROM EXISTING CATALOG (may be empty). These are the "
         "closest matches to the user's ask that already exist. They are "
@@ -45087,6 +45182,1057 @@ def _draft_window_field(draft, decision=None):
     return ''
 
 
+# ---- Semantic bind-or-ask guards (2026-08-25). Jenna, verbatim:
+# "handle for all of them. if someone wants something outside of the
+# us it will need to authentically build an international profile like
+# we did for omaze. all the rest need to be built to handle."
+# Principle: user phrasing the interpreter does not natively bind can
+# NEVER silently fall back to a default. Every guard below detects the
+# phrasing, binds it deterministically when possible, asks a plain
+# question when it cannot, and echoes what was bound on the draft's
+# resolved_identity so the confirmation card shows it before credits
+# are spent. Region + sub-DMA vocabulary lives in migration/us_regions
+# (twin-synced with the parent repo, like migration/event_window).
+
+try:
+    from migration.us_regions import (
+        detect_region as _ur_detect_region,
+        detect_city as _ur_detect_city,
+        detect_density_term as _ur_detect_density,
+        region_echo_label as _ur_region_echo,
+        dma_display as _ur_dma_display,
+    )
+except Exception:  # pragma: no cover - twin module missing
+    def _ur_detect_region(text):
+        return None, None
+
+    def _ur_detect_city(text):
+        return None, None
+
+    def _ur_detect_density(text):
+        return ''
+
+    def _ur_region_echo(region):
+        return ''
+
+    def _ur_dma_display(dma):
+        return str(dma or '')
+
+
+def _sg_haystack(text, history):
+    """Current message plus the last 4 user turns, mirroring the
+    haystack the window binders scan."""
+    hay = str(text or '')
+    if history:
+        recent_user = [t for t in history[-8:]
+                       if (t.get('role') or '').lower() == 'user']
+        for t in recent_user[-4:]:
+            hay += ' ' + str(t.get('text') or '')
+    return hay
+
+
+def _sg_agent_asked(history, marker):
+    """True when a recent agent turn already asked the question whose
+    copy contains `marker` - prevents re-ask loops when the user's
+    reply re-enters interpret with the question in history."""
+    m = str(marker or '').lower()
+    for t in (history or [])[-12:]:
+        role = (t.get('role') or '').lower()
+        if role in ('agent', 'assistant', 'model') \
+                and m in str(t.get('text') or '').lower():
+            return True
+    return False
+
+
+def _append_identity_echo(draft, clause):
+    """Append a bound-value echo clause to resolved_identity so the
+    confirmation card's 'Subject:' line carries it. Idempotent."""
+    clause = ' '.join(str(clause or '').split())
+    if not clause:
+        return
+    rid = str(draft.get('resolved_identity') or '').strip()
+    if clause.lower() in rid.lower():
+        return
+    if rid:
+        draft['resolved_identity'] = f"{rid.rstrip('.')}; {clause}"
+    else:
+        subject = str(draft.get('subject')
+                      or draft.get('name') or '').strip()
+        draft['resolved_identity'] = (f"{subject}; {clause}"
+                                      if subject else clause)
+
+
+def _append_persona_note(draft, sentence):
+    """Carry a binding into persona_notes so downstream research and
+    synthesis see it in plain language. Idempotent."""
+    sentence = ' '.join(str(sentence or '').split())
+    if not sentence:
+        return
+    notes = str(draft.get('persona_notes') or '')
+    if sentence.lower() in notes.lower():
+        return
+    draft['persona_notes'] = (notes.rstrip() + ' ' + sentence).strip()
+
+
+# Guard 1: negation / exclusion. A negated brand must NEVER become a
+# positive qualifier (that delivers the opposite audience).
+_SG_NEG_CUE_RE = re.compile(
+    r"\b(?:(?:don'?t|do\s+not|doesn'?t|does\s+not)\s+(?:currently\s+)?"
+    r"(?:have|watch|use|subscribe\s+to|shop\s+at|buy|play|stream|own)"
+    r"|without|excluding|except(?:\s+for)?"
+    r"|never\s+(?:watched|used|subscribed\s+to|bought|shopped\s+at|"
+    r"played|streamed)"
+    r"|(?:who\s+)?skipped)\s+"
+    r"(?:a\s+|an\s+|the\s+)?([A-Za-z0-9][\w'+&.! -]{1,50})",
+    re.IGNORECASE)
+_SG_NEG_NON_RE = re.compile(r"\bnon[- ]([a-z][\w-]{2,30})\b",
+                            re.IGNORECASE)
+_SG_NEG_TRAIL = {'subscription', 'subscriptions', 'account', 'accounts',
+                 'membership', 'memberships', 'subscriber',
+                 'subscribers', 'user', 'users', 'viewer', 'viewers',
+                 'customer', 'customers'}
+
+
+def _sg_extract_exclusions(text):
+    """Backstop extraction of exclusion targets from negation cues.
+    Only capitalized targets qualify (brand-shaped); 'non-X' nouns are
+    taken as-is. Returns [{'brand': ..., 'note': ...}, ...]."""
+    out, seen = [], set()
+    for m in _SG_NEG_CUE_RE.finditer(str(text or '')):
+        raw = m.group(1)
+        # Cut the capture at the first connective.
+        head = re.split(r"\b(?:and|or|but|who|that|which|in|with|for|"
+                        r"over|during)\b", raw, maxsplit=1,
+                        flags=re.IGNORECASE)[0]
+        head = head.strip(" .,;:!?'-")
+        if not head or not head[0].isupper():
+            continue
+        toks = head.split()
+        while toks and toks[-1].lower() in _SG_NEG_TRAIL:
+            toks.pop()
+        brand = ' '.join(toks).strip()
+        if not brand or len(brand) < 2:
+            continue
+        key = re.sub(r'[^a-z0-9]', '', brand.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        note = ' '.join(head.split())
+        out.append({'brand': brand, 'note': f"excluding {note}"})
+    for m in _SG_NEG_NON_RE.finditer(str(text or '')):
+        noun = m.group(1).strip('-')
+        if noun.lower() in ('binary', 'profit', 'stop', 'fiction',
+                            'stick', 'sense', 'us'):
+            continue
+        key = 'non' + re.sub(r'[^a-z0-9]', '', noun.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({'brand': f'non-{noun}',
+                    'note': f'audience limited to non-{noun}'})
+    return out
+
+
+def _sg_guard_negation(draft, text, hay, allow_ask):
+    has_cue = bool(_SG_NEG_CUE_RE.search(hay)
+                   or _SG_NEG_NON_RE.search(hay))
+    excl = draft.get('exclusions')
+    excl = [e for e in excl if isinstance(e, dict) and e.get('brand')] \
+        if isinstance(excl, list) else []
+    if not excl and has_cue:
+        excl = _sg_extract_exclusions(hay)
+    if not excl:
+        if has_cue and allow_ask and not _sg_agent_asked(
+                None, ''):
+            # Cue present but no target extractable: without the
+            # target we cannot bind, and guessing risks the exact
+            # opposite audience.
+            return {'question': (
+                "Your request excludes part of the audience, but I "
+                "could not pin down exactly who to exclude. Reply "
+                "with the exclusion spelled out (for example "
+                "'exclude Hulu subscribers' or 'exclude parents') "
+                "and I will bind it.")}
+        return None
+    draft['exclusions'] = excl
+    names = [str(e['brand']) for e in excl][:4]
+    joined = ', '.join(names)
+    # Hard defense: an excluded brand must not ride as a positive row.
+    def _k(v):
+        return re.sub(r'[^a-z0-9]', '', str(v).lower())
+    banned = {_k(n) for n in names}
+    for fld in ('extra_rows', 'subject_rows', 'home_platform_rows'):
+        rows = draft.get(fld)
+        if isinstance(rows, list) and rows:
+            kept = [r for r in rows
+                    if not (isinstance(r, (list, tuple)) and len(r) > 1
+                            and _k(r[1]) in banned)]
+            if len(kept) != len(rows):
+                draft[fld] = kept
+    _append_identity_echo(draft, f"excluding {joined}")
+    _append_persona_note(
+        draft, f"EXCLUSION: this universe explicitly excludes "
+               f"{joined}; the excluded audience must never appear "
+               f"as a positive qualifier.")
+    return None
+
+
+# Guard 2: lapsed / churned universes are universe-defining (the
+# 'Spectrum Churners' precedent) - never a loyal 100-pin universe.
+_SG_CHURN_RE = re.compile(
+    r"\b(?:former|lapsed|churned|ex)[- ]?"
+    r"(?:subscriber|member|customer|user|fan|viewer|listener)s?\b"
+    r"|\b(?:cancell?ed|churned|unsubscribed)\b"
+    r"|\bstopped\s+(?:watching|using|subscribing|paying)\b"
+    r"|\bno\s+longer\s+(?:watch|use|subscribe|have|pay)\b",
+    re.IGNORECASE)
+
+# Guard 3: directional sequences ("watched X and then subscribed").
+_SG_SEQUENCE_RE = re.compile(
+    r"\b(?:and\s+then\s+(?:subscribed|signed\s+up|joined|switched|"
+    r"watched|bought|upgraded)"
+    r"|then\s+(?:subscribed|signed\s+up|joined|switched)"
+    r"|came\s+to\s+.{2,50}?\s+from"
+    r"|before\s+(?:subscribing|joining|signing\s+up)"
+    r"|after\s+(?:watching|seeing|playing|reading))\b",
+    re.IGNORECASE)
+
+
+def _sg_guard_universe_mode(draft, text, hay, allow_ask):
+    mode = str(draft.get('universe_mode') or '').strip().lower()
+    if mode not in ('churned', 'sequence'):
+        mode = ''
+    if not mode and _SG_CHURN_RE.search(hay):
+        mode = 'churned'
+    if not mode and _SG_SEQUENCE_RE.search(hay):
+        mode = 'sequence'
+    if not mode:
+        draft.pop('universe_mode', None)
+        return None
+    draft['universe_mode'] = mode
+    note = ' '.join(str(draft.get('universe_note') or '').split())
+    subject = str(draft.get('subject') or draft.get('name')
+                  or 'this audience').strip()
+    if mode == 'churned':
+        if not note:
+            note = (f"a lapsed or churned universe: people who had "
+                    f"or watched {subject} and left, not current "
+                    f"loyalists")
+        _append_persona_note(
+            draft, f"UNIVERSE MODE: churned. {note}. The subject "
+                   f"must not be modeled as a loyal current-customer "
+                   f"universe.")
+    else:
+        if not note:
+            m = _SG_SEQUENCE_RE.search(hay)
+            frag = hay[max(0, m.start() - 60):m.end() + 60] if m else ''
+            frag = ' '.join(frag.split())[:140]
+            note = (f"an ordered journey audience ({frag})"
+                    if frag else "an ordered journey audience")
+        _append_persona_note(
+            draft, f"UNIVERSE MODE: sequence. {note}. The order of "
+                   f"the steps defines who is in the universe.")
+    draft['universe_note'] = note[:400]
+    _append_identity_echo(draft, note)
+    return None
+
+
+# Guard 4: fiscal vs calendar periods.
+_SG_QTR_RE = re.compile(r"\b[qQ]([1-4])\s*(?:of\s+)?((?:20)?\d{2})?\b")
+_SG_FISCAL_RE = re.compile(r"\bfiscal\b|\bfy\s?(?:20)?\d{2}\b",
+                           re.IGNORECASE)
+
+
+def _sg_calendar_quarter(qnum, year_txt, today):
+    import datetime as _dtm
+    year = None
+    if year_txt:
+        y = int(year_txt)
+        year = y if y >= 100 else 2000 + y
+    q_start_month = {1: 1, 2: 4, 3: 7, 4: 10}[qnum]
+    if year is None:
+        year = today.year
+        if _dtm.date(year, q_start_month, 1) > today:
+            year -= 1
+    start = _dtm.date(year, q_start_month, 1)
+    if qnum == 4:
+        end = _dtm.date(year, 12, 31)
+    else:
+        end = _dtm.date(year, q_start_month + 3, 1) \
+            - _dtm.timedelta(days=1)
+    return {'q': qnum, 'year': year, 'start': start.isoformat(),
+            'end': end.isoformat()}
+
+
+def _sg_apply_quarter(draft, cal, decision, note=''):
+    draft['date_range'] = {'start': cal['start'], 'end': cal['end']}
+    draft['date_range_explicit'] = True
+    date_label = _ew_format_label(cal['start'], cal['end'])
+    lbl = f"calendar Q{cal['q']} {cal['year']}: {date_label}"
+    if note:
+        lbl += f" ({note})"
+    draft['date_window_label'] = lbl
+    _route_window_fields(draft, decision, cal['start'], cal['end'],
+                         lbl, date_label)
+    _append_identity_echo(draft, f"window read as {lbl}")
+
+
+def _sg_guard_fiscal_quarter(draft, text, history, decision,
+                             allow_ask):
+    hay = _sg_haystack(text, history)
+    mq = _SG_QTR_RE.search(hay)
+    fiscal = bool(_SG_FISCAL_RE.search(hay))
+    if not mq and not fiscal:
+        return None
+    # A 'calendar' reply resolves a pending fiscal-vs-calendar ask.
+    if fiscal and re.search(r"\bcalendar\b", str(text or ''),
+                            re.IGNORECASE):
+        fiscal = False
+    from datetime import date as _dt_date
+    today = _dt_date.today()
+    dr = draft.get('date_range') or {}
+    have_dates = bool(_ew_window_string(dr.get('start'),
+                                        dr.get('end'))) \
+        and not _ew_is_default(dr.get('start'), dr.get('end'))
+    if fiscal:
+        if have_dates and draft.get('date_range_explicit'):
+            # The interpret step resolved the fiscal calendar via
+            # research; make the interpretation visible either way.
+            lbl = str(draft.get('date_window_label') or '')
+            date_label = _ew_format_label(dr.get('start'),
+                                          dr.get('end'))
+            if 'fiscal' not in lbl.lower():
+                lbl = f"{date_label} (fiscal period as requested)"
+                draft['date_window_label'] = lbl
+            _route_window_fields(draft, decision, dr.get('start'),
+                                 dr.get('end'), lbl, date_label)
+            _append_identity_echo(draft, f"window read as {lbl}")
+            return None
+        if mq:
+            cal = _sg_calendar_quarter(int(mq.group(1)), mq.group(2),
+                                       today)
+            q_lbl = (f"calendar Q{cal['q']} {cal['year']}: "
+                     f"{_ew_format_label(cal['start'], cal['end'])}")
+            if allow_ask:
+                return {'question': (
+                    f"You mentioned a fiscal period. Fiscal calendars "
+                    f"differ by company, so I want to bind exact dates "
+                    f"rather than guess. Reply 'calendar' to use "
+                    f"{q_lbl}, or reply with the fiscal quarter's "
+                    f"exact dates (for example 'Apr 28 to Jul 27, "
+                    f"2026').")}
+            _sg_apply_quarter(draft, cal, decision,
+                              note='calendar dates used')
+            return None
+        if allow_ask:
+            return {'question': (
+                "You mentioned a fiscal period. Fiscal calendars "
+                "differ by company, so I want to bind exact dates "
+                "rather than guess. Reply with the exact start and "
+                "end dates (for example 'Oct 1, 2025 to Sep 30, "
+                "2026'), or reply 'calendar' to use calendar "
+                "dates.")}
+        # One-shot surface: bind the standing window and say so.
+        lbl = (f"{_DEFAULT_WINDOW_LABEL} (fiscal calendar not "
+               f"specified; standard year used)")
+        draft['date_window_label'] = lbl
+        _append_identity_echo(draft, f"window read as {lbl}")
+        return None
+    if mq:
+        cal = _sg_calendar_quarter(int(mq.group(1)), mq.group(2),
+                                   today)
+        _sg_apply_quarter(draft, cal, decision)
+    return None
+
+
+# Guard 5: future windows. Runs AFTER all window binding (event,
+# relative, quarter) so it sees the final dates.
+def _guard_future_window(draft, decision=None, allow_ask=True):
+    """Clamp windows that extend past today (with an echo) and stop
+    windows that are entirely in the future. Returns an ask dict on
+    the dashboard path; on one-shot surfaces an entirely-future
+    window stashes a partner-safe refusal on the draft."""
+    try:
+        from datetime import date as _dt_date
+        today = _dt_date.today()
+        t_iso = today.isoformat()
+        d = str(decision or draft.get('decision') or '').strip().lower()
+
+        def _future_stop(start_label):
+            q = (f"That window starts {start_label}, which is in the "
+                 f"future. Profiles cover behavior that has already "
+                 f"happened, so there is nothing to read yet. Reply "
+                 f"with a window that ends today or earlier (for "
+                 f"example 'trailing 90 days' or 'Jun 1 to today'), "
+                 f"or come back once the dates have passed.")
+            if allow_ask:
+                return {'question': q}
+            draft['_future_window_refusal'] = (
+                'the requested window is entirely in the future; '
+                'profiles cover behavior that has already happened. '
+                'Submit a window that ends today or earlier.')
+            return None
+
+        changed = False
+        dr = draft.get('date_range') or {}
+        s = _ew_parse_iso(dr.get('start'))
+        e = _ew_parse_iso(dr.get('end'))
+        if s and s > today:
+            return _future_stop(_ew_format_label(dr.get('start'),
+                                                 dr.get('start'))
+                                or str(dr.get('start')))
+        if s and e and e > today:
+            draft['date_range'] = {'start': dr.get('start'),
+                                   'end': t_iso}
+            date_label = _ew_format_label(dr.get('start'), t_iso)
+            lbl = (f"{date_label} (through today)"
+                   if date_label else 'through today')
+            draft['date_window_label'] = lbl
+            draft['date_range_explicit'] = True
+            _route_window_fields(draft, d, dr.get('start'), t_iso,
+                                 lbl, date_label)
+            changed = True
+        cdr = str(draft.get('cut_date_range') or '')
+        m = re.match(r'^(\d{4}-\d{2}-\d{2}) TO (\d{4}-\d{2}-\d{2})$',
+                     cdr)
+        if m:
+            cs = _ew_parse_iso(m.group(1))
+            ce = _ew_parse_iso(m.group(2))
+            if cs and cs > today:
+                return _future_stop(
+                    _ew_format_label(m.group(1), m.group(1))
+                    or m.group(1))
+            if cs and ce and ce > today:
+                draft['cut_date_range'] = f"{m.group(1)} TO {t_iso}"
+                c_label = _ew_format_label(m.group(1), t_iso)
+                draft['cut_window_label'] = (
+                    f"{c_label} (through today)"
+                    if c_label else 'through today')
+                changed = True
+        edr = str(draft.get('engine_date_range') or '')
+        m2 = re.match(r'^(\d{4}-\d{2}-\d{2}) TO (\d{4}-\d{2}-\d{2})$',
+                      edr)
+        if m2 and _ew_parse_iso(m2.group(2)) \
+                and _ew_parse_iso(m2.group(2)) > today:
+            draft['engine_date_range'] = f"{m2.group(1)} TO {t_iso}"
+            changed = True
+        if changed:
+            _append_identity_echo(
+                draft, f"window runs through today, "
+                       f"{today.strftime('%b')} {today.day}, "
+                       f"{today.year}")
+        return None
+    except Exception as _fw_err:
+        try:
+            print(f"[semantic-guards] future-window guard failed "
+                  f"(non-fatal): {_fw_err}")
+        except Exception:
+            pass
+        return None
+
+
+# Guard 6: international detection (the Omaze precedent: OMAZE was the
+# UK flagship, OMAZE GERMANY the country-suffixed sibling).
+_SG_COUNTRY_CANON = {
+    'uk': 'UK', 'u.k.': 'UK', 'united kingdom': 'UK', 'britain': 'UK',
+    'great britain': 'UK', 'british': 'UK', 'england': 'UK',
+    'english': 'UK', 'scotland': 'UK', 'scottish': 'UK', 'wales': 'UK',
+    'welsh': 'UK',
+    'canada': 'Canada', 'canadian': 'Canada',
+    'germany': 'Germany', 'german': 'Germany',
+    'france': 'France', 'french': 'France',
+    'australia': 'Australia', 'australian': 'Australia',
+    'mexico': 'Mexico', 'mexican': 'Mexico',
+    'japan': 'Japan', 'japanese': 'Japan',
+    'india': 'India', 'indian': 'India',
+    'brazil': 'Brazil', 'brazilian': 'Brazil',
+    'spain': 'Spain', 'spanish': 'Spain',
+    'italy': 'Italy', 'italian': 'Italy',
+    'ireland': 'Ireland', 'irish': 'Ireland',
+    'netherlands': 'Netherlands', 'dutch': 'Netherlands',
+    'south korea': 'South Korea', 'korean': 'South Korea',
+    'sweden': 'Sweden', 'swedish': 'Sweden',
+    'norway': 'Norway', 'norwegian': 'Norway',
+    'denmark': 'Denmark', 'danish': 'Denmark',
+    'new zealand': 'New Zealand',
+    'argentina': 'Argentina', 'colombia': 'Colombia',
+    'nigeria': 'Nigeria', 'south africa': 'South Africa',
+    'philippines': 'Philippines', 'indonesia': 'Indonesia',
+    'poland': 'Poland', 'portugal': 'Portugal',
+    'switzerland': 'Switzerland', 'austria': 'Austria',
+    'belgium': 'Belgium', 'turkey': 'Turkey',
+    'saudi arabia': 'Saudi Arabia', 'uae': 'UAE',
+    'singapore': 'Singapore',
+}
+_SG_COUNTRY_NOUNS = sorted(
+    (k for k in _SG_COUNTRY_CANON
+     if k not in ('british', 'english', 'scottish', 'welsh',
+                  'canadian', 'german', 'french', 'australian',
+                  'mexican', 'japanese', 'indian', 'brazilian',
+                  'spanish', 'italian', 'irish', 'dutch', 'korean',
+                  'swedish', 'norwegian', 'danish')),
+    key=len, reverse=True)
+_SG_COUNTRY_ADJS = ('uk', 'british', 'english', 'scottish', 'welsh',
+                    'canadian', 'german', 'french', 'australian',
+                    'mexican', 'japanese', 'indian', 'brazilian',
+                    'spanish', 'italian', 'irish', 'dutch', 'korean',
+                    'swedish', 'norwegian', 'danish')
+_SG_COUNTRY_IN_RE = re.compile(
+    r"\bin\s+(?:the\s+)?("
+    + '|'.join(re.escape(k) for k in _SG_COUNTRY_NOUNS)
+    + r")\b", re.IGNORECASE)
+_SG_COUNTRY_ADJ_RE = re.compile(
+    r"\b(" + '|'.join(_SG_COUNTRY_ADJS) + r")\s+"
+    r"(?:fans?|fan\s+base|audiences?|customers?|consumers?|"
+    r"subscribers?|viewers?|users?|shoppers?|buyers?|listeners?|"
+    r"market)\b", re.IGNORECASE)
+_SG_US_TOKENS = ('us', 'u.s.', 'usa', 'united states', 'america',
+                 'domestic')
+
+
+def _sg_detect_country(hay):
+    """Country the request scopes to, or ''. Conservative: locative
+    'in <country>' or '<adjective> audience-noun' phrasings only, and
+    'New England' never reads as England."""
+    hay = str(hay or '')
+    hay_scrub = re.sub(r"\bnew\s+england\b", ' ', hay,
+                       flags=re.IGNORECASE)
+    m = _SG_COUNTRY_IN_RE.search(hay_scrub)
+    if m:
+        return _SG_COUNTRY_CANON.get(m.group(1).lower(), '')
+    m = _SG_COUNTRY_ADJ_RE.search(hay_scrub)
+    if m:
+        return _SG_COUNTRY_CANON.get(m.group(1).lower(), '')
+    return ''
+
+
+def _sg_guard_country(draft, text, hay, allow_ask):
+    country = str(draft.get('country') or '').strip()
+    if country.lower() in [t for t in _SG_US_TOKENS]:
+        country = 'US'
+    if not country or country.upper() == 'US':
+        detected = _sg_detect_country(hay)
+        if detected:
+            country = detected
+    if not country or country.upper() in ('US', 'USA',
+                                          'UNITED STATES'):
+        draft.pop('country', None)
+        return None
+    draft['country'] = country
+    subject = str(draft.get('subject') or '').strip()
+    if subject and country.lower() not in subject.lower():
+        draft['subject'] = f"{subject} {country}"
+        stem = str(draft.get('file_stem') or '').strip()
+        c_stem = re.sub(r'\s+', '_', country)
+        if stem and c_stem.lower() not in stem.lower():
+            draft['file_stem'] = f"{stem}_{c_stem}"
+    _append_identity_echo(
+        draft, f"built as a {country} audience: {country} markets, "
+               f"{country} demographics, {country} sizing")
+    _append_persona_note(
+        draft, f"COUNTRY SCOPE: {country}. Universe research, "
+               f"anchors, and sizing are {country}-scoped, not US.")
+    return None
+
+
+# Guard 7: multi-market regions, sub-DMA places, and density terms.
+def _sg_guard_regions(draft, text, hay, allow_ask):
+    subject_l = str(draft.get('subject') or '').lower()
+    term = _ur_detect_density(hay)
+    if term and term not in subject_l:
+        if allow_ask and not _sg_agent_asked(
+                draft.get('_sg_history'), 'do not map onto the media '
+                                          'markets'):
+            return {'question': (
+                f"'{term.title()}' areas do not map onto the media "
+                f"markets I can measure. I can cover: a named region "
+                f"(Southeast, Midwest, Pacific Northwest, Sun Belt, "
+                f"New England, and similar), specific markets "
+                f"('Atlanta and Dallas'), or the full national "
+                f"universe with the {term} interest noted. Reply "
+                f"with the framing you want.")}
+        if not allow_ask:
+            note = (f"'{term}' does not map onto measured markets; "
+                    f"built on the national universe with the {term} "
+                    f"interest noted")
+            draft['scope_note'] = note
+            _append_identity_echo(draft, note)
+            _append_persona_note(draft, f"SCOPE: {note}.")
+    region, dmas = _ur_detect_region(hay)
+    cuts = draft.get('addon_cuts') if isinstance(
+        draft.get('addon_cuts'), list) else []
+    if region and dmas and region.lower() not in subject_l:
+        cid = 'region_' + re.sub(r'[^a-z0-9]+', '_', region.lower())
+        if not any(isinstance(c, dict) and c.get('cut_id') == cid
+                   for c in cuts):
+            echo = _ur_region_echo(region)
+            cuts = cuts + [{
+                'cut_id': cid,
+                'label': echo or region,
+                'name_label': region,
+                'kind': 'region',
+                'pin_category': 'LOCATION',
+                'pin_buckets': list(dmas),
+                'region_label': region,
+                'region_dmas': list(dmas),
+                'credits': ADDON_CUT_CREDITS,
+            }]
+            draft['addon_cuts'] = cuts
+            _append_identity_echo(draft, echo or region)
+    place, dma = _ur_detect_city(hay)
+    if place and dma and str(place).lower() not in subject_l:
+        covered = any(
+            isinstance(c, dict) and dma in (c.get('pin_buckets') or [])
+            for c in cuts)
+        if not covered:
+            cid = 'dma_' + re.sub(r'[^a-z0-9]+', '_', dma.lower())
+            if not any(isinstance(c, dict) and c.get('cut_id') == cid
+                       for c in cuts):
+                cuts = cuts + [{
+                    'cut_id': cid,
+                    'label': f'{dma} only',
+                    'name_label': dma,
+                    'kind': 'dma',
+                    'pin_category': 'LOCATION',
+                    'pin_buckets': [dma],
+                    'credits': ADDON_CUT_CREDITS,
+                }]
+                draft['addon_cuts'] = cuts
+        _append_identity_echo(
+            draft, f"{place} is covered by the {_ur_dma_display(dma)} "
+                   f"market")
+    return None
+
+
+# Guard 8: intersections stacked on one cohort - combined vs separate.
+_SG_IX_GENDER_RE = re.compile(r"\b(male|female|men|women)\b",
+                              re.IGNORECASE)
+_SG_IX_GEN_RE = re.compile(
+    r"\b(gen[- ]?z|millennials?|gen[- ]?x|boomers?)\b", re.IGNORECASE)
+_SG_IX_CITY_DMA = {
+    'la': 'Los Angeles Ca', 'los angeles': 'Los Angeles Ca',
+    'nyc': 'New York Ny', 'new york': 'New York Ny',
+    'chicago': 'Chicago Il', 'atlanta': 'Atlanta Ga',
+    'dallas': 'Dallas Ft Worth Tx', 'houston': 'Houston Tx',
+    'miami': 'Miami Ft Lauderdale Fl',
+    'philadelphia': 'Philadelphia Pa', 'philly': 'Philadelphia Pa',
+    'phoenix': 'Phoenix Prescott Az', 'seattle': 'Seattle Tacoma Wa',
+    'denver': 'Denver Co', 'boston': 'Boston Ma Manchester Nh',
+    'san francisco': 'San Francisco Oakland San Jose Ca',
+    'sf': 'San Francisco Oakland San Jose Ca', 'detroit': 'Detroit Mi',
+    'minneapolis': 'Minneapolis St Paul Mn',
+    'washington dc': 'Washington Dc Hagerstown Md',
+    'dc': 'Washington Dc Hagerstown Md', 'vegas': 'Las Vegas Nv',
+    'las vegas': 'Las Vegas Nv', 'san diego': 'San Diego Ca',
+    'nashville': 'Nashville Tn', 'austin': 'Austin Tx',
+    'orlando': 'Orlando Daytona Beach Melbourne Fl',
+    'tampa': 'Tampa St Petersburg Sarasota Fl',
+}
+_SG_IX_CITY_RE = re.compile(
+    r"\bin\s+(?:the\s+)?("
+    + '|'.join(re.escape(k) for k in sorted(_SG_IX_CITY_DMA, key=len,
+                                            reverse=True))
+    + r")\b", re.IGNORECASE)
+_SG_IX_GEN_BUCKETS = {
+    'gen z': ['18-24'], 'genz': ['18-24'],
+    'millennial': ['25-34', '35-44'],
+    'millennials': ['25-34', '35-44'],
+    'gen x': ['45-54', '55-64'], 'genx': ['45-54', '55-64'],
+    'boomer': ['65 OR OLDER'], 'boomers': ['65 OR OLDER'],
+}
+
+
+def _sg_intersection_pins(hay):
+    """Pins for the stacked qualifiers found in the ask. Returns
+    (pins, parts) where parts are display fragments."""
+    pins, parts = [], []
+    mg = _SG_IX_GENDER_RE.search(hay)
+    if mg:
+        g = mg.group(1).lower()
+        bucket = 'MALE' if g in ('male', 'men') else 'FEMALE'
+        pins.append({'category': 'GENDER', 'buckets': [bucket]})
+        parts.append(bucket.title())
+    mgen = _SG_IX_GEN_RE.search(hay)
+    if mgen:
+        key = re.sub(r'[^a-z ]', '',
+                     mgen.group(1).lower().replace('-', ' ')).strip()
+        buckets = _SG_IX_GEN_BUCKETS.get(key)
+        if buckets:
+            pins.append({'category': 'AGE', 'buckets': list(buckets)})
+            parts.append(mgen.group(1).title())
+    mc = _SG_IX_CITY_RE.search(hay)
+    geo_dmas = None
+    if mc:
+        geo_dmas = [_SG_IX_CITY_DMA[mc.group(1).lower()]]
+    else:
+        region, dmas = _ur_detect_region(hay)
+        if region and dmas:
+            geo_dmas = list(dmas)
+        else:
+            place, dma = _ur_detect_city(hay)
+            if place and dma:
+                geo_dmas = [dma]
+    if geo_dmas:
+        pins.append({'category': 'LOCATION', 'buckets': geo_dmas})
+        parts.append(_ur_dma_display(geo_dmas[0])
+                     if len(geo_dmas) == 1 else 'the named region')
+    return pins, parts
+
+
+def _sg_guard_intersection(draft, text, history, allow_ask):
+    hay = _sg_haystack(text, history)
+    pins, parts = _sg_intersection_pins(hay)
+    if len(pins) < 2:
+        return None
+    cur = str(text or '')
+    said_combined = bool(re.search(
+        r"\bcombined\b|\btogether as one\b|\bone audience\b", cur,
+        re.IGNORECASE))
+    said_separate = bool(re.search(r"\bseparate\b", cur,
+                                   re.IGNORECASE))
+    if said_separate:
+        draft['intersection_mode'] = 'separate'
+        _append_identity_echo(
+            draft, 'separate cuts as requested (one per qualifier)')
+        return None
+    if said_combined:
+        # Build a single compound cut carrying every pin together.
+        # The label uses the LOCATION bucket names so naming matches
+        # the canonical DMA table ('Male Millennials Los Angeles Ca').
+        label_parts = []
+        for p in pins:
+            if p['category'] == 'GENDER':
+                label_parts.append(p['buckets'][0].title())
+            elif p['category'] == 'AGE':
+                nxt = next((pt for pt in parts
+                            if pt.lower() not in ('male', 'female')),
+                           None)
+                label_parts.append(nxt or '/'.join(p['buckets']))
+            elif p['category'] == 'LOCATION':
+                label_parts.append(p['buckets'][0]
+                                   if len(p['buckets']) == 1
+                                   else 'Region')
+        comp_label = ' '.join(dict.fromkeys(label_parts))
+        cid = 'compound_' + re.sub(r'[^a-z0-9]+', '_',
+                                   comp_label.lower()).strip('_')
+        cuts = draft.get('addon_cuts') if isinstance(
+            draft.get('addon_cuts'), list) else []
+        pin_cats = {p['category'] for p in pins}
+        kept = [c for c in cuts
+                if not (isinstance(c, dict)
+                        and str(c.get('pin_category') or '').upper()
+                        in pin_cats
+                        and not c.get('compound'))]
+        if not any(isinstance(c, dict) and c.get('cut_id') == cid
+                   for c in kept):
+            kept.append({
+                'cut_id': cid,
+                'label': f'{comp_label} (one combined audience)',
+                'name_label': comp_label,
+                'kind': 'compound',
+                'compound': {'label': comp_label, 'pins': pins},
+                'credits': ADDON_CUT_CREDITS,
+            })
+        draft['addon_cuts'] = kept
+        draft['intersection_mode'] = 'combined'
+        _append_identity_echo(
+            draft, f"one combined audience: {comp_label} (a single "
+                   f"cut pinning all {len(pins)} qualifiers "
+                   f"together)")
+        return None
+    if draft.get('intersection_mode'):
+        return None
+    if not allow_ask:
+        return None
+    if _sg_agent_asked(history, 'or separate cuts'):
+        return None
+    combo = ' '.join(parts).lower() if parts else 'the qualifiers'
+    sep = '; '.join(parts) if parts else 'one per qualifier'
+    return {'question': (
+        f"Your request stacks several qualifiers on one audience. "
+        f"Should I build one combined audience ({combo} together as "
+        f"a single cut), or separate cuts ({sep})? Reply 'combined' "
+        f"or 'separate'. Each cut is 3 credits.")}
+
+
+# Guards 9 + 13: comparisons and heterogeneous multi-asks. The
+# interpret prompt instructs a JSON array (one draft per build); these
+# fire only when a compare/multi ask still landed on the single-draft
+# path.
+_SG_COMPARE_RE = re.compile(
+    r"\bcompare\b|\bcomparison\b|\bside[- ]by[- ]side\b",
+    re.IGNORECASE)
+_SG_HETERO_RE = re.compile(
+    r"\b(?:and|plus|;|,)\s*(?:also\s+)?(?:then\s+)?"
+    r"(?:refresh|update|rebuild|re[- ]?run|rerun)\b"
+    r"|\balso\s+(?:refresh|update|rebuild|build|run|pull|create|"
+    r"make)\b", re.IGNORECASE)
+
+
+def _sg_guard_multi_ask(draft, text, history, allow_ask):
+    cur = str(text or '')
+    is_compare = bool(_SG_COMPARE_RE.search(cur)
+                      and re.search(r"\bvs\.?\b|\bversus\b|\band\b",
+                                    cur, re.IGNORECASE))
+    is_hetero = bool(_SG_HETERO_RE.search(cur))
+    if not is_compare and not is_hetero:
+        return None
+    if allow_ask:
+        if _sg_agent_asked(history, 'side by side in the dashboard') \
+                or _sg_agent_asked(history, 'two separate requests'):
+            return None
+        if is_compare:
+            return {'question': (
+                "That reads as a comparison. I build one profile per "
+                "side, and once both are live you can compare them "
+                "side by side in the dashboard. Reply 'both' to queue "
+                "a profile for each side, or name the single profile "
+                "you want.")}
+        return {'question': (
+            "I read two separate requests in there. Reply 'both' to "
+            "run them both (each is scoped and priced on its own), "
+            "or restate the one you want.")}
+    # One-shot surfaces run one profile per request.
+    if is_compare:
+        draft['_v1_guard_refusal'] = {
+            'code': 'comparison_split',
+            'message': ('comparisons run as one profile per subject: '
+                        'submit a separate request for each side, '
+                        'then compare the finished profiles side by '
+                        'side.')}
+    else:
+        draft['_v1_guard_refusal'] = {
+            'code': 'multiple_requests',
+            'message': ('this contains two separate requests; submit '
+                        'each one on its own.')}
+    return None
+
+
+# Guard 10: intensity vocabulary maps onto the tiers we deliver.
+_SG_INTENSITY_AVID_RE = re.compile(
+    r"\b(binge[- ]?watch(?:ers?|ing)?|super[- ]?fans?|die[- ]?hard|"
+    r"hard[- ]?core|hardcore|heavy\s+(?:users?|viewers?|watchers?|"
+    r"listeners?)|most\s+engaged|power\s+users?|"
+    r"top\s+\d{1,2}\s*%(?:\s+most\s+engaged)?|"
+    r"at\s+least\s+\d+\s*(?:x|times)?\s*(?:a|per)\s+"
+    r"(?:day|week|month))\b", re.IGNORECASE)
+_SG_INTENSITY_CASUAL_RE = re.compile(
+    r"\b(casual|light|occasional)\s+(?:fans?|users?|viewers?|"
+    r"watchers?|listeners?|audience)\b", re.IGNORECASE)
+
+
+def _sg_guard_intensity(draft, text, hay, allow_ask, decision):
+    m = _SG_INTENSITY_AVID_RE.search(hay)
+    if m:
+        phrase = ' '.join(m.group(1).split())
+        numeric = bool(re.search(r'\d', phrase))
+        tail = (', the closest supported framing for that threshold'
+                if numeric else '')
+        note = (f"'{phrase}' maps to the Avid tier, the most engaged "
+                f"slice of the audience{tail}")
+        if decision == 'derive_cut':
+            dt = str(draft.get('derive_type') or '').strip().lower()
+            if dt in ('', 'other'):
+                draft['derive_type'] = 'avid'
+        elif decision in ('new_build', 'time_shifted_refresh',
+                          'cut_needs_parent'):
+            draft['run_avid'] = True
+        draft['intensity_note'] = note
+        _append_identity_echo(draft, note)
+        return None
+    m = _SG_INTENSITY_CASUAL_RE.search(hay)
+    if m:
+        phrase = ' '.join(m.group(0).split())
+        note = (f"'{phrase}' maps to the Total Universe, the full "
+                f"audience rather than the most engaged tier")
+        draft['intensity_note'] = note
+        _append_identity_echo(draft, note)
+    return None
+
+
+# Guard 11: user-supplied counts win when plausible; ask when wildly
+# implausible vs the researched anchor. Never silently discarded.
+_SG_USER_ANCHOR_RE = re.compile(
+    r"\b(?:we|we'?ve|i|our|my)\s+(?:have\s+|has\s+|got\s+)?"
+    r"(?:about\s+|around\s+|roughly\s+|~\s*)?"
+    r"([\d][\d,]*(?:\.\d+)?)\s*"
+    r"(million|mm|m|thousand|k|billion|b)?\s*"
+    r"(subscribers?|subs|members?|customers?|users?|followers?|"
+    r"buyers?|fans?|accounts?|viewers?|listeners?)\b",
+    re.IGNORECASE)
+_SG_ANCHOR_MULT = {'million': 1_000_000, 'mm': 1_000_000,
+                   'm': 1_000_000, 'thousand': 1_000, 'k': 1_000,
+                   'billion': 1_000_000_000, 'b': 1_000_000_000}
+
+
+def _sg_parse_user_anchor(hay):
+    m = _SG_USER_ANCHOR_RE.search(str(hay or ''))
+    if not m:
+        return None, ''
+    try:
+        val = float(m.group(1).replace(',', ''))
+    except ValueError:
+        return None, ''
+    unit = (m.group(2) or '').lower()
+    val *= _SG_ANCHOR_MULT.get(unit, 1)
+    noun = m.group(3).lower()
+    n = int(round(val))
+    return (n, noun) if n > 0 else (None, '')
+
+
+def _sg_guard_user_anchor(draft, text, history, allow_ask):
+    hay = _sg_haystack(text, history)
+    user_n, noun = _sg_parse_user_anchor(hay)
+    if not user_n:
+        try:
+            user_n = int(draft.get('user_supplied_anchor') or 0)
+        except (TypeError, ValueError):
+            user_n = 0
+        noun = noun or 'subscribers'
+    if not user_n or user_n <= 0:
+        return None
+    draft['user_supplied_anchor'] = user_n
+    researched = 0
+    try:
+        researched = int(draft.get('universe_anchor') or 0)
+    except (TypeError, ValueError):
+        pass
+    cur = str(text or '')
+    said_mine = bool(re.search(r"\buse mine\b|\bmy (?:number|figure|"
+                               r"count)\b", cur, re.IGNORECASE))
+    said_res = bool(re.search(r"\bresearched\b", cur, re.IGNORECASE))
+    plausible = (researched <= 0
+                 or 0.4 <= (user_n / researched) <= 2.5)
+    if said_res and not said_mine:
+        _append_identity_echo(
+            draft, f"sized to the researched count "
+                   f"({researched:,}) as you chose; your "
+                   f"{user_n:,} figure stays on record")
+        return None
+    if not plausible and allow_ask and not said_mine \
+            and not _sg_agent_asked(history, 'use mine'):
+        return {'question': (
+            f"You said {user_n:,} {noun}, but the researched universe "
+            f"reads closer to {researched:,}. Reply 'use mine' to "
+            f"size to your figure, or 'researched' to size to the "
+            f"researched count.")}
+    draft['universe_anchor'] = user_n
+    draft['anchor_source'] = f'client-supplied {noun} count'
+    try:
+        share = float(draft.get('engaged_share') or 0)
+        if 0 < share <= 1:
+            draft['subject_raw_tu'] = max(
+                1, int(round(user_n * share / 32.99)))
+    except (TypeError, ValueError):
+        pass
+    _append_identity_echo(
+        draft, f"sized to your {user_n:,} {noun} base")
+    return None
+
+
+# Guard 14: service-tier / device scopes we do not measure separately.
+_SG_TIER_SCOPE_RE = re.compile(
+    r"\b(with[- ]ads?|ad[- ]supported|ad[- ]free|premium\s+tier|"
+    r"basic\s+(?:plan|tier)|standard\s+(?:plan|tier)|mobile[- ]only|"
+    r"smart\s+tv|connected\s+tv|ctv|"
+    r"on\s+(?:mobile|iphone|android|tablet|desktop)\s+only|"
+    r"(?:iphone|android|ipad|tablet|roku)[- ]only)\b",
+    re.IGNORECASE)
+
+
+def _sg_guard_tier_scope(draft, text, history, allow_ask):
+    hay = _sg_haystack(text, history)
+    m = _SG_TIER_SCOPE_RE.search(hay)
+    if not m:
+        return None
+    term = ' '.join(m.group(1).split()).lower()
+    subject = str(draft.get('subject') or draft.get('name')
+                  or 'this service').strip()
+    if term in subject.lower():
+        # Universe-defining subject naming ('Vizio TV Owners' style)
+        # stays whole; nothing to widen.
+        return None
+    if draft.get('scope_note'):
+        _append_identity_echo(draft, str(draft['scope_note']))
+        return None
+    cur = str(text or '')
+    said_whole = bool(re.search(
+        r"\bwhole service\b|\bas a whole\b|\beveryone\b|"
+        r"\ball (?:of )?(?:them|viewers|users)\b", cur, re.IGNORECASE))
+    said_persona = bool(re.search(r"\bpersona\b", cur, re.IGNORECASE))
+    if said_persona:
+        note = (f"built as a persona universe oriented to '{term}' "
+                f"users; coverage draws on the {subject} audience as "
+                f"a whole")
+        draft['scope_note'] = note
+        _append_identity_echo(draft, note)
+        _append_persona_note(draft, f"SCOPE: {note}.")
+        return None
+    if said_whole or not allow_ask:
+        note = (f"coverage is {subject} as a whole; the '{term}' "
+                f"qualifier rides as an audience note, not a filter")
+        draft['scope_note'] = note
+        _append_identity_echo(draft, note)
+        _append_persona_note(draft, f"SCOPE: {note}.")
+        return None
+    if _sg_agent_asked(history, 'as a whole service'):
+        return None
+    return {'question': (
+        f"Measurement covers {subject} as a whole service, not the "
+        f"'{term}' slice on its own. Reply 'whole service' to build "
+        f"all {subject} viewers with the '{term}' interest noted, or "
+        f"'persona' to build it as a '{term}' persona audience "
+        f"instead.")}
+
+
+def _apply_semantic_guards(draft, text, history=None, allow_ask=True,
+                           decision=None):
+    """Run every semantic bind-or-ask guard against one interpret
+    draft. Binds everything bindable (mutating the draft, echoing on
+    resolved_identity + persona_notes) and returns None, or returns
+    {'question': str} when the dashboard should ask before anything
+    builds. In no-ask mode (batch elements, the v1 API) bindable
+    guards still bind with echoes; the truly un-bindable cases stash
+    a partner-safe refusal on the draft ('_v1_guard_refusal' /
+    '_future_window_refusal'). Never raises."""
+    if not isinstance(draft, dict):
+        return None
+    try:
+        text = str(text or '')
+        hay = _sg_haystack(text, history)
+        d = str(decision or draft.get('decision') or '').strip().lower()
+        for step in (
+            lambda: _sg_guard_multi_ask(draft, text, history,
+                                        allow_ask),
+            lambda: _sg_guard_negation(draft, text, hay, allow_ask),
+            lambda: _sg_guard_universe_mode(draft, text, hay,
+                                            allow_ask),
+            lambda: _sg_guard_fiscal_quarter(draft, text, history, d,
+                                             allow_ask),
+            lambda: _sg_guard_country(draft, text, hay, allow_ask),
+            lambda: _sg_guard_regions(draft, text, hay, allow_ask),
+            lambda: _sg_guard_intersection(draft, text, history,
+                                           allow_ask),
+            lambda: _sg_guard_intensity(draft, text, hay, allow_ask,
+                                        d),
+            lambda: _sg_guard_user_anchor(draft, text, history,
+                                          allow_ask),
+            lambda: _sg_guard_tier_scope(draft, text, history,
+                                         allow_ask),
+        ):
+            ask = step()
+            if ask and allow_ask:
+                return ask
+        return None
+    except Exception as _sg_err:
+        try:
+            print(f"[semantic-guards] non-fatal guard error: "
+                  f"{_sg_err}")
+        except Exception:
+            pass
+        return None
+
+
 def _annotate_drafts_date_window(drafts):
     """Stamp each batch draft with its plain-language `date_window`
     (ECHO RULE 2026-08-24) - the same field the single-draft interpret
@@ -45615,6 +46761,13 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
             _bind_relative_window(spec_draft, prompt_text, decision=_dn)
         _ensure_cut_window_echo(spec_draft, decision=_dn,
                                 fetch_parent=False)
+        # Semantic bind-or-ask guards (2026-08-25): array elements are
+        # one-shot (no clarify round-trip), so guards run in bind-only
+        # mode - everything bindable binds with an echo, nothing asks.
+        _apply_semantic_guards(spec_draft, prompt_text,
+                               allow_ask=False, decision=_dn)
+        _guard_future_window(spec_draft, decision=_dn,
+                             allow_ask=False)
         spec_draft['estimated_credits'] = int(
             _V1_CREDITS.get(_dn, CREDITS_PROFILE_ANALYSIS))
         spec_draft['estimated_run_minutes'] = _estimate_run_minutes(
@@ -48646,6 +49799,23 @@ def api_synth_chat_interpret():
             # and "field was true" uniformly.
             spec_draft['run_avid'] = True
 
+        # Semantic bind-or-ask guards (2026-08-25 Jenna: "handle for
+        # all of them"): non-default phrasing - exclusions, churn,
+        # sequences, fiscal periods, countries, regions, stacked
+        # qualifiers, intensity words, client-supplied counts, tier
+        # scopes - binds onto the draft with an echo, or asks before
+        # anything builds. Runs BEFORE the date gate so a bound
+        # quarter/fiscal window marks the range explicit.
+        _sg_ask = _apply_semantic_guards(
+            spec_draft, text, history=history, allow_ask=True,
+            decision=decision_str)
+        if _sg_ask:
+            return jsonify({
+                'success': False,
+                'guidance': True,
+                'error': _sg_ask['question'],
+            })
+
         # Event-scoped window resolution (2026-08-24 Rosie O'Donnell /
         # Jimmy Kimmel Live defect): when the ask ties the audience to
         # a real-world event/stint, the resolved event dates override
@@ -48753,6 +49923,18 @@ def api_synth_chat_interpret():
             _bind_relative_window(spec_draft, text, chat_history=history,
                                   decision=_dec_norm)
         _ensure_cut_window_echo(spec_draft, decision=_dec_norm)
+        # Future-window guard (2026-08-25): runs AFTER every window
+        # binder so it sees the final dates. Windows that spill past
+        # today clamp to today with an echo; entirely-future windows
+        # ask instead of building on data that does not exist yet.
+        _fw_ask = _guard_future_window(spec_draft, decision=_dec_norm,
+                                       allow_ask=True)
+        if _fw_ask:
+            return jsonify({
+                'success': False,
+                'guidance': True,
+                'error': _fw_ask['question'],
+            })
         estimated_credits = int(spec_draft.get('estimated_credits')
                                 or estimated_credits)
         subject_label = (spec_draft.get('subject')
@@ -49623,6 +50805,56 @@ def _spec_from_draft(draft):
                                             field='identity_qualifier',
                                             subject=subject, max_len=60,
                                             single_line=True)
+    # ---- Semantic-guard spec contract (2026-08-25, bind-or-ask
+    # mandate). Every field below was either bound by
+    # _apply_semantic_guards or emitted directly by the interpret step;
+    # all user-text-derived values pass through _scrub before riding to
+    # the engine.
+    _excl = draft.get('exclusions')
+    if isinstance(_excl, list) and _excl:
+        _clean_excl = []
+        for e in _excl:
+            if not isinstance(e, dict) or not e.get('brand'):
+                continue
+            _clean_excl.append({
+                'brand': _scrub(e['brand'], field='exclusion_brand',
+                                subject=subject, max_len=80,
+                                single_line=True),
+                'note': _scrub(e.get('note') or '',
+                               field='exclusion_note', subject=subject,
+                               max_len=200, single_line=True),
+            })
+        if _clean_excl:
+            spec['exclusions'] = _clean_excl
+    if str(draft.get('universe_mode') or '').strip().lower() in \
+            ('churned', 'sequence'):
+        spec['universe_mode'] = str(draft['universe_mode']).strip().lower()
+        if draft.get('universe_note'):
+            spec['universe_note'] = _scrub(draft['universe_note'],
+                                           field='universe_note',
+                                           subject=subject, max_len=400,
+                                           single_line=True)
+    _ctry = str(draft.get('country') or '').strip()
+    if _ctry and _ctry.upper() not in ('US', 'USA', 'UNITED STATES'):
+        spec['country'] = _scrub(_ctry, field='country', subject=subject,
+                                 max_len=40, single_line=True)
+    if draft.get('intersection_mode') in ('combined', 'separate'):
+        spec['intersection_mode'] = draft['intersection_mode']
+    if draft.get('intensity_note'):
+        spec['intensity_note'] = _scrub(draft['intensity_note'],
+                                        field='intensity_note',
+                                        subject=subject, max_len=240,
+                                        single_line=True)
+    if draft.get('scope_note'):
+        spec['scope_note'] = _scrub(draft['scope_note'],
+                                    field='scope_note', subject=subject,
+                                    max_len=300, single_line=True)
+    try:
+        _usa = int(draft.get('user_supplied_anchor') or 0)
+        if _usa > 0:
+            spec['user_supplied_anchor'] = _usa
+    except (TypeError, ValueError):
+        pass
     # Guided-flow passthrough (2026-08-19, reworked same day per Jenna):
     # the base build is ALWAYS the national total universe + avid.
     # Regions are never a build-level filter - each named market rides
@@ -49636,12 +50868,29 @@ def _spec_from_draft(draft):
         for c in _cuts:
             if not isinstance(c, dict):
                 continue
-            if not c.get('cut_id') or not c.get('pin_category') \
-                    or not c.get('pin_buckets'):
-                continue
             def _scrub_cut(v, f):
                 return _scrub(v, field=f, subject=subject, max_len=160,
                               single_line=True)
+            # Compound cuts (2026-08-25 intersection guard): one cut
+            # pinning several categories at once ('Male Millennials
+            # Los Angeles Ca'). They carry compound.pins instead of a
+            # single top-level pin_category/pin_buckets pair.
+            _comp = c.get('compound')
+            _comp_pins = []
+            if isinstance(_comp, dict) and isinstance(
+                    _comp.get('pins'), list):
+                for p in _comp['pins']:
+                    if isinstance(p, dict) and p.get('category') \
+                            and p.get('buckets'):
+                        _comp_pins.append({
+                            'category': str(p['category']).upper(),
+                            'buckets': [str(b) for b in p['buckets']],
+                        })
+            if not c.get('cut_id'):
+                continue
+            if not _comp_pins and (not c.get('pin_category')
+                                   or not c.get('pin_buckets')):
+                continue
             _cc = {
                 'cut_id': _scrub_cut(c['cut_id'], 'cut_id'),
                 'label': _scrub_cut(c.get('label') or c['cut_id'],
@@ -49650,9 +50899,30 @@ def _spec_from_draft(draft):
                                          or c.get('label') or c['cut_id'],
                                          'cut_name_label'),
                 'kind': _scrub_cut(c.get('kind') or 'demo', 'cut_kind'),
-                'pin_category': str(c['pin_category']).upper(),
-                'pin_buckets': [str(b) for b in c['pin_buckets']],
             }
+            if _comp_pins:
+                _cc['compound'] = {
+                    'label': _scrub_cut(_comp.get('label')
+                                        or _cc['name_label'],
+                                        'compound_label'),
+                    'pins': _comp_pins,
+                }
+                # Primary pin doubles as the top-level pair so older
+                # worker code paths still see a valid cut shape.
+                _cc['pin_category'] = _comp_pins[0]['category']
+                _cc['pin_buckets'] = list(_comp_pins[0]['buckets'])
+            else:
+                _cc['pin_category'] = str(c['pin_category']).upper()
+                _cc['pin_buckets'] = [str(b) for b in c['pin_buckets']]
+            # Region cuts (2026-08-25 region guard): the region label +
+            # its DMA list ride through so naming and sizing stay tied
+            # to the canonical DMA table.
+            if c.get('region_label'):
+                _cc['region_label'] = _scrub_cut(c['region_label'],
+                                                 'region_label')
+                _rd = c.get('region_dmas')
+                if isinstance(_rd, list) and _rd:
+                    _cc['region_dmas'] = [str(b) for b in _rd]
             # Explicit age range rides through so the engine can size
             # partially-covered AGE buckets proportionally
             # (Jenna 2026-08-24 deterministic cut sample fractions).
@@ -53621,6 +54891,15 @@ def _v1_conclude(prompt, run_avid=True):
     _maybe_promote_embedded_cuts_to_parent(draft)
 
     decision, ex_key, d_type = _normalize_v1_decision(draft)
+    # Semantic bind-or-ask guards (2026-08-25): the v1 contract has no
+    # clarify round-trip, so guards run in bind-only mode - bindable
+    # phrasing (exclusions, churn, countries, regions, intensity,
+    # client-supplied counts, tier scopes) binds with an echo, and the
+    # truly un-bindable cases (comparisons, stacked separate requests,
+    # entirely-future windows) become partner-safe refusals below.
+    # Identical on /check and /run by construction (both call here).
+    _apply_semantic_guards(draft, prompt, allow_ask=False,
+                           decision=decision)
     # Event-scoped window (2026-08-24): resolved event dates override
     # the default window on the v1 surface too. The v1 contract has no
     # clarify round-trip, so an UNRESOLVED event window rides
@@ -53635,6 +54914,7 @@ def _v1_conclude(prompt, run_avid=True):
     if _ev_state != 'confident':
         _bind_relative_window(draft, prompt, decision=decision)
     _ensure_cut_window_echo(draft, decision=decision)
+    _guard_future_window(draft, decision=decision, allow_ask=False)
     cuts = [c for c in (draft.get('addon_cuts') or [])
             if isinstance(c, dict) and c.get('cut_id')]
     if d_type == 'addon_cuts' and cuts:
@@ -53659,6 +54939,30 @@ def _v1_conclude(prompt, run_avid=True):
         'brief_summary': '',
         'estimated_audience': None,
     }
+
+    # Guard refusals (2026-08-25): un-bindable phrasing on the one-shot
+    # surface refuses cleanly (price 0) instead of silently building
+    # the wrong thing. Same verdict on /check and /run.
+    _g_ref = draft.pop('_v1_guard_refusal', None)
+    _fw_ref = draft.pop('_future_window_refusal', None)
+    if _g_ref or _fw_ref:
+        conclusion['buildable'] = False
+        if _g_ref:
+            conclusion['refusal_code'] = str(_g_ref.get('code')
+                                             or 'unsupported_request')
+            conclusion['refusal_message'] = str(_g_ref.get('message')
+                                                or '')
+        else:
+            conclusion['refusal_code'] = 'future_window'
+            conclusion['refusal_message'] = str(_fw_ref)
+        conclusion['price'] = 0
+        try:
+            print(f"[v1_conclude] guard refusal "
+                  f"code={conclusion['refusal_code']} "
+                  f"prompt={prompt[:120]!r}")
+        except Exception:
+            pass
+        return conclusion, None
 
     if decision != 'existing_match':
         # Build the spec on BOTH routes. This is where audience sizing
