@@ -11848,7 +11848,12 @@ def run_post_vet_safety_sweep(df, subject, *, verbose=True):
 # Gates:
 #   G1: any sequential-digit placeholder BP survives (post all dejitters)
 #   G2: any US Gen Pop Projection > US_POP * 1.05 (impossible value)
-#   G3: BRAND INPUT row > 80 chars (URL-permutation soup)
+#   G3: BRAND INPUT row > 80 chars AND the Value reads as leaked junk
+#       (prompt/metadata echo, multiline, prose). Canonical clickstream
+#       slug shapes per Rule #4c-i (variant lists, handle lists,
+#       scrape-term lists, URL slugs, 'CSV') never fire - shape-based
+#       and subject-independent since 2026-08-25 (IFF Avid false
+#       positive; cuts inherit the parent Value verbatim)
 #   G4: any single 4dp BP value appearing 10+ times in one category
 #       (within-cat collision that survived the dejitter)
 #   G5: any of the 9 demos fails sum=100±0.5 (added 2026-06 to catch the
@@ -14885,9 +14890,71 @@ def run_final_invariant_polish(df, subject, *, verbose: bool = True):
     return df, stats
 
 
+def _g3_brand_input_junk_reason(value: str) -> str:
+    """Classify a long (>80 char) BRAND INPUT Value. Returns '' when the
+    shape is canonical per Rule #4c-i, or a short reason string when it
+    reads as genuine leakage.
+
+    Canonical shapes (NEVER flagged, independent of whatever ``subject``
+    string the gate was called with):
+
+      * comma-separated clickstream slug variant lists
+        ('International Fencing Federation, InternationalFencingFederation,
+        International-Fencing-Federation, ...')
+      * person name + social handle lists
+        ('JACKSON WANG, jacksonwang852g7, JacksonWang852')
+      * persona scrape-term lists
+        ('Ninja Crispi, SharkNinja, air fryer recipes, air fryer hacks')
+      * URL slug lists
+        ('netflix.com/title/81234567, amazon.com/gp/video/detail/')
+      * the literal 'CSV' file-fed marker (short, never reaches this
+        classifier; listed for completeness)
+
+    Derived cuts inherit the parent's BRAND INPUT Value verbatim, so the
+    gate is routinely called with a subject that does NOT equal the
+    Value's first comma-segment: cut paths pass the cut-suffixed name
+    ('X - Avid Fan') and the avid writer passes the Value itself as the
+    subject. The pre-2026-08-25 heuristic (first comma-segment ==
+    subject) therefore false-positived on every variant-list cut, e.g.
+    International Fencing Federation - Avid Fan (238-char canonical list
+    logged as a BLOCKING G3 defect while the terminal ship verdict was
+    PASS). Classification is now purely shape-based.
+
+    Junk this exists to catch (why G3 was added 2026-05-30):
+
+      * prompt/metadata echo in the Value cell (SAMPLE_START:, SEED:,
+        BEHAVIOR_START:, '(2025-01-01 TO 2025-12-31)' date blocks)
+      * multiline text (no clickstream slug contains a newline)
+      * prose sentences (leaked prompt language, not slugs)
+    """
+    v = str(value or '').strip()
+    for pat in _METADATA_LEAK_PATS:
+        if pat.search(v):
+            return 'prompt/metadata echo'
+    if '\n' in v or '\r' in v:
+        return 'multiline text'
+    segs = [s.strip() for s in v.split(',') if s.strip()]
+    if len(segs) >= 2:
+        # Slug-list check: name variants, handles, scrape terms and URL
+        # paths are short tokens. A single comma-segment carrying 10+
+        # words or 90+ chars reads as a leaked sentence, not a slug
+        # (longest real slugs observed: full title subtitles at ~8
+        # words, e.g. 'Harry Potter and the Deathly Hallows Part 2').
+        for s in segs:
+            if len(s) > 90 or len(s.split()) >= 10:
+                return f'non-slug segment ({s[:50]!r})'
+        return ''
+    # Single token, no commas: URL-style slugs (netflix.com/title/...)
+    # carry no whitespace and pass; a comma-less multi-word Value only
+    # flags when it reads as a sentence.
+    if len(v.split()) >= 10:
+        return 'prose/sentence text'
+    return ''
+
+
 class PrePublishGateError(Exception):
     """Raised when the pre-publish gate finds an unrecoverable defect.
-    Callers should treat as fatal — do NOT save the CSV."""
+    Callers should treat as fatal - do NOT save the CSV."""
     def __init__(self, defects: list[str]):
         self.defects = defects
         super().__init__(
@@ -15028,25 +15095,29 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
     # ("Name, NAMEVARIANT, NAME-VARIANT, name.com/...") is the CANONICAL
     # BRAND INPUT format per Rule #4c (used for URL matching at runtime)
     # and must NOT fire this gate. It fired as a BLOCKING defect on
-    # every chatbot build. Only flag long values that are NOT the
-    # seed-list format (first comma-segment == subject).
+    # every chatbot build.
+    # 2026-08-25 (International Fencing Federation - Avid Fan, run
+    # mM2vt4MJPyVSpA): the "first comma-segment == subject" exemption
+    # broke on every derived cut. Cuts inherit the parent's Value
+    # verbatim while the gate receives the cut's subject (or, on the
+    # avid path, the Value itself), so the exact match never held and
+    # canonical variant lists logged as BLOCKING. Classification is now
+    # shape-based and subject-independent (_g3_brand_input_junk_reason):
+    # canonical shapes per Rule #4c-i (variant lists, handle lists,
+    # scrape-term lists, URL slugs, 'CSV') produce NO flag at all; only
+    # genuine leakage (prompt/metadata echo, multiline, prose) fires.
     try:
         bi = df[df['Column'].astype(str).str.upper() == 'BRAND INPUT']
         if not bi.empty:
             v = str(bi.iloc[0].get('Value', '') or '')
             if len(v) > 80:
-                _first_seg = v.split(',')[0].strip()
-                _fs_norm = _re.sub(r'[^A-Z0-9]', '', _first_seg.upper())
-                _subj_norm_g3 = _re.sub(r'[^A-Z0-9]', '',
-                                        str(subject or '').upper())
-                is_seed_list = (',' in v and _fs_norm
-                                and (_fs_norm == _subj_norm_g3
-                                     or not _subj_norm_g3))
-                if not is_seed_list:
+                _junk_reason_g3 = _g3_brand_input_junk_reason(v)
+                if _junk_reason_g3:
                     defects.append(
                         f'G3 BRAND_INPUT: row Value is {len(v)} chars '
-                        f"(starts: {v[:60]!r}) — should be the canonical "
-                        f"name or the URL-variant seed list"
+                        f'and reads as {_junk_reason_g3} '
+                        f'(starts: {v[:60]!r}) - should be the canonical '
+                        f'name or a clickstream slug list per Rule #4c-i'
                     )
     except Exception as e:
         defects.append(f'G3 BRAND_INPUT: detector errored: {e}')
