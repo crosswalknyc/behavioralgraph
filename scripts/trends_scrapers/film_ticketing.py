@@ -133,18 +133,37 @@ def _is_title(text: str) -> bool:
 #     </a>
 #   </li>
 _FANDANGO_URL = 'https://www.fandango.com/movies-in-theaters'
+# Fandango redesigned this grid in 2026-08. Each card is now a single
+# anchor:
+#   <a class="grid-item-link" href="/spider-man-brand-new-day-2026-243819/movie-overview">
+#     <div class="f-logo-bg grid-item-poster-container">
+#       <div class="grid-item-poster"
+#            data-fd-lazy-image="https://images.fandango.com/.../poster.jpg">
+#     ...
+#     <div class="grid-item-meta-info">
+#       <span class="grid-item-title" aria-hidden="true">Spider-Man: Brand New Day (2026)</span>
+#     ...
+#   </a>
+# Match the whole grid-item-link anchor as the "card" so the same
+# href / title / image sub-regexes can run inside it (the loop below
+# already works that way).
 _FANDANGO_CARD_RE = re.compile(
-    r'<li class="poster-card poster-card__fluid browse-movielist--item[^"]*">'
-    r'(.+?)</li>',
+    r'(<a class="grid-item-link"[^>]+href="[^"]+"[^>]*>.+?</a>)',
     re.DOTALL,
 )
 _FANDANGO_HREF_RE  = re.compile(r'href="(/[a-z0-9-]+-\d{5,}/movie-overview)"')
 _FANDANGO_TITLE_RE = re.compile(
-    r'<span class="browse-movielist--title poster-card--title"'
-    r'[^>]*>([^<]+)</span>'
+    r'<span class="grid-item-title"[^>]*>([^<]+)</span>'
 )
+# data-fd-lazy-image is Fandango's ImageRenderer URL, e.g.
+# https://images.fandango.com/ImageRenderer/200/0/.../default_poster.png
+# /0/images/MasterRepository/fandango/243819/SMBND_Onlinefinal.jpg
+# The URL itself is valid + renders the real poster; the "default_poster"
+# fragment is the resizer's fallback path, not the served image, so the
+# existing default_poster/MasterRepository guard below still does the
+# right thing.
 _FANDANGO_IMG_RE   = re.compile(
-    r'<img[^>]+class="[^"]*poster-card--img[^"]*"[^>]+src="([^"]+)"'
+    r'data-fd-lazy-image="([^"]+)"'
 )
 
 # Variant-suffix patterns Fandango tacks onto pre-release / special-
