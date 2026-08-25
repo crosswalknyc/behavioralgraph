@@ -18,11 +18,12 @@ tier for detection + label formatting only). Keep the two byte-equal.
 """
 from __future__ import annotations
 
+import calendar
 import io
 import json
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 DEFAULT_WINDOW_START = "2025-07-01"
 DEFAULT_WINDOW_END = "2026-06-30"
@@ -124,6 +125,67 @@ def format_window_label(start, end):
 def is_default_window(start, end):
     return (str(start or "").strip() == DEFAULT_WINDOW_START
             and str(end or "").strip() == DEFAULT_WINDOW_END)
+
+
+# ---- Relative windows (2026-08-24, Florida/Iowa trailing-60-days
+# defect). A request stating a relative window ("trailing 60 days",
+# "last 90 days", "past 3 months") must BIND: concrete dates computed
+# at interpret time relative to today, never the standing default.
+
+_REL_NUM_RE = re.compile(
+    r"\b(?:trailing|last|past|previous|prior)\s+(\d{1,3})\s*"
+    r"(day|week|month|year)s?\b", re.IGNORECASE)
+_REL_BARE_RE = re.compile(
+    r"\b(?:last|past|previous|prior)\s+(week|month|year)\b",
+    re.IGNORECASE)
+
+
+def _shift_months(d, months_back):
+    """Calendar-correct month subtraction (day clamped to month end)."""
+    y, m = d.year, d.month - months_back
+    while m <= 0:
+        m += 12
+        y -= 1
+    day = min(d.day, calendar.monthrange(y, m)[1])
+    return d.replace(year=y, month=m, day=day)
+
+
+def resolve_relative_window(text, today=None):
+    """Parse a relative window phrase out of request text and compute
+    concrete dates anchored to today. 'trailing 60 days' ->
+    ('2026-06-25', '2026-08-24', 'trailing 60 days') when today is
+    2026-08-24. Handles day/week/month/year units with an explicit
+    count, plus bare 'last week' / 'past month' / 'last year'.
+    Returns (start_iso, end_iso, matched_phrase) or None when the text
+    states no relative window."""
+    if not text:
+        return None
+    s = str(text)
+    m = _REL_NUM_RE.search(s)
+    if m:
+        n = int(m.group(1))
+        unit = m.group(2).lower()
+        phrase = m.group(0).strip()
+    else:
+        m2 = _REL_BARE_RE.search(s)
+        if not m2:
+            return None
+        n = 1
+        unit = m2.group(1).lower()
+        phrase = m2.group(0).strip()
+    if n <= 0 or n > 400:
+        return None
+    if today is None:
+        today = datetime.now(timezone.utc).date()
+    if unit == "day":
+        start = today - timedelta(days=n)
+    elif unit == "week":
+        start = today - timedelta(days=7 * n)
+    elif unit == "month":
+        start = _shift_months(today, n)
+    else:
+        start = _shift_months(today, 12 * n)
+    return start.isoformat(), today.isoformat(), phrase
 
 
 def resolve_event_window_via_search(query, run_id=""):

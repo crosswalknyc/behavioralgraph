@@ -43568,20 +43568,29 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  * Avid cohort: 20-40% of TU sample.\n"
         "  * HARD CEILING: subject_raw_tu must be <= 9,500,000 "
         "(the panel is 10M; leave headroom).\n"
-        "  * UNIVERSE-ANCHORED SIZING (MANDATORY when countable): if "
-        "your research names a countable universe anchor for the "
-        "subject (registered voters in a state or district, "
-        "subscribers, members, district population, license holders, "
-        "account holders), subject_raw_tu MUST be derived from it "
-        "explicitly, never free-picked: state the anchor, state the "
-        "engaged share you are applying and why, compute projected = "
-        "anchor x share, then subject_raw_tu = projected / 32.99. "
-        "The implied projection (subject_raw_tu x 32.99) must sit "
-        "comfortably BELOW the anchor. Emit the anchor as "
-        "`universe_anchor` (int) in the JSON so the spec step can "
-        "verify; emit null when no countable anchor exists. Example: "
-        "13,426,540 registered voters x 10.6% active seekers = "
-        "1,423,213 projected -> subject_raw_tu = 43,141.\n"
+        "  * UNIVERSE-ANCHORED SIZING (MANDATORY on EVERY fresh build "
+        "- Jenna 2026-08-24: 'the sample always has to be based to "
+        "the researched anchor'): subject_raw_tu MUST be derived from "
+        "a countable researched universe anchor, never free-picked. "
+        "An anchor is a counted figure your research surfaces: "
+        "registered voters in a state or district, subscribers, "
+        "members, buyers, verified fanbase, MAU, license holders, "
+        "account holders, category TAM in individuals. Derive "
+        "explicitly: state the anchor, state the engaged share you "
+        "are applying and why, compute projected = anchor x share, "
+        "then subject_raw_tu = projected / 32.99. The implied "
+        "projection (subject_raw_tu x 32.99) must sit BELOW the "
+        "anchor. If your initial research surfaces no countable "
+        "anchor, RESEARCH UNTIL YOU CAN STATE ONE - your web-search "
+        "capability exists for exactly this; a fresh-build draft "
+        "without an anchor is invalid. Emit `universe_anchor` (int), "
+        "`anchor_source` (one plain phrase naming what the figure "
+        "counts, e.g. 'active registered FL voters, June 2026'), and "
+        "`engaged_share` (float fraction of the anchor that is this "
+        "audience) in the JSON - the spec step verifies the math and "
+        "recomputes any sample that does not derive from its anchor. "
+        "Example: 13,426,540 registered voters x 10.6% active "
+        "seekers = 1,423,213 projected -> subject_raw_tu = 43,141.\n"
         "  * Do NOT default to a round number. Pick a specific value "
         "with a non-zero last digit (see sample-size rule below).\n"
         "  * PUBLIC-METRIC-CAPPED COHORTS: if `audience_type` is "
@@ -43763,10 +43772,16 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "30% of subject_raw_tu is a banned tell; the ratio must be a "
         "messy subject-specific value like 22.7% or 31.4%>,\n"
         "  \"audience_type\": \"general|followers|subscribers|viewers|listeners|attendees|users\",\n"
-        "  \"universe_anchor\": <int or null - countable universe anchor "
-        "your research named (registered voters, subscribers, members, "
-        "district population). Required when one exists; the projected "
-        "audience (subject_raw_tu x 32.99) must sit below it>,\n"
+        "  \"universe_anchor\": <int - REQUIRED on every fresh build: the "
+        "countable researched universe anchor (registered voters, "
+        "subscribers, members, buyers, verified fanbase, category TAM "
+        "in individuals). Research until you can state one; the "
+        "projected audience (subject_raw_tu x 32.99) must sit below it>,\n"
+        "  \"anchor_source\": \"one plain phrase naming what the anchor "
+        "counts, e.g. 'active registered FL voters, June 2026'\",\n"
+        "  \"engaged_share\": <float in (0, 1) - the reasoned share of "
+        "the anchor that is this audience; subject_raw_tu must equal "
+        "anchor x engaged_share / 32.99>,\n"
         "  \"follower_ceiling\": <int or null - required if audience_type != 'general'; holds any public-metric ceiling>,\n"
         "  \"follower_platforms\": [\"instagram\", \"tiktok\", ...] or null,\n"
         "  \"is_ip_content\": <true|false - series/movie/book/podcast/game/album/franchise>,\n"
@@ -43823,7 +43838,18 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "'since March', 'Q4 window', or names an explicit date/month/quarter/"
         "year, use their window instead and echo it back in `date_range` and "
         "in `persona_notes`. If ambiguous, keep the default and note it in "
-        "`assumptions`.\n\n"
+        "`assumptions`.\n"
+        "RELATIVE WINDOWS BIND (HARD RULE - 2026-08-24): when the "
+        "request states a relative window ('trailing 60 days', 'last "
+        "90 days', 'past 3 months'), you MUST compute the concrete "
+        "dates from the CURRENT DATE above, put them in `date_range`, "
+        "set `date_range_explicit` to true, and echo the window in the "
+        "confirmation. NEVER fall back to the default window when a "
+        "relative window is stated - shipping the default against a "
+        "trailing-60-days ask is a defect (it shipped on the Florida "
+        "and Iowa voter builds). The spec step independently re-binds "
+        "stated relative windows, but you must emit them correctly "
+        "up front.\n\n"
 
         "EVENT-SCOPED WINDOWS (MANDATORY - 2026-08-24):\n"
         "When the request ties the audience to a real-world event or "
@@ -44153,6 +44179,7 @@ try:
         window_string as _ew_window_string,
         parse_iso_date as _ew_parse_iso,
         is_default_window as _ew_is_default,
+        resolve_relative_window as _ew_resolve_relative,
     )
 except Exception:  # pragma: no cover - twin module missing
     def _ew_detect(text):
@@ -44169,6 +44196,9 @@ except Exception:  # pragma: no cover - twin module missing
 
     def _ew_is_default(start, end):
         return False
+
+    def _ew_resolve_relative(text, today=None):
+        return None
 
 
 _DEFAULT_WINDOW_LABEL = 'Jul 1, 2025 to Jun 30, 2026'
@@ -44366,6 +44396,51 @@ def _route_window_fields(draft, decision, start, end, win_label,
         draft['cut_date_range'] = ws
         draft['cut_window_label'] = win_label
         _append_window_echo_to_cut_label(draft, date_label)
+
+
+def _bind_relative_window(draft, user_text, chat_history=None,
+                          decision=None):
+    """RELATIVE-WINDOW BINDING (2026-08-24 Jenna): a request stating a
+    relative window ('trailing 60 days', 'last 90 days') must run on
+    concrete dates computed at interpret time relative to today, never
+    on the standing default window (the Florida/Iowa voter builds
+    shipped the default despite a trailing-60-days ask). Scans the
+    current message plus the last 4 user turns, overrides the draft's
+    date_range when the computed window differs, marks the range
+    explicit, and routes it onto the decision's engine/cut fields so
+    the confirmation echoes it. No-op when no relative phrase exists.
+    Callers skip this when a confident event window already resolved
+    (the event's real dates win)."""
+    try:
+        haystack = str(user_text or '')
+        if chat_history:
+            recent_user = [t for t in chat_history[-8:]
+                           if (t.get('role') or '').lower() == 'user']
+            for t in recent_user[-4:]:
+                haystack += ' ' + str(t.get('text') or '')
+        rel = _ew_resolve_relative(haystack)
+        if not rel:
+            return False
+        r_start, r_end, r_phrase = rel
+        cur = draft.get('date_range') or {}
+        if (cur.get('start'), cur.get('end')) != (r_start, r_end):
+            try:
+                print(f"[relative-window] {draft.get('subject') or draft.get('name')!r}: "
+                      f"request states {r_phrase!r} but draft window was "
+                      f"{cur.get('start')} to {cur.get('end')}; binding to "
+                      f"{r_start} to {r_end}")
+            except Exception:
+                pass
+        draft['date_range'] = {'start': r_start, 'end': r_end}
+        draft['date_range_explicit'] = True
+        r_label = _ew_format_label(r_start, r_end)
+        draft['date_window_label'] = f"{r_label} ({r_phrase})" \
+            if r_label else r_phrase
+        _route_window_fields(draft, decision, r_start, r_end,
+                             draft['date_window_label'], r_label)
+        return True
+    except Exception:
+        return False
 
 
 def _append_window_echo_to_cut_label(draft, date_label):
@@ -45009,6 +45084,8 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
             _ew = spec_draft.get('event_window') or {}
             if _ew.get('query'):
                 spec_draft['event_window_query'] = _ew['query']
+        if _ev_state != 'confident':
+            _bind_relative_window(spec_draft, prompt_text, decision=_dn)
         _ensure_cut_window_echo(spec_draft, decision=_dn,
                                 fetch_parent=False)
         spec_draft['estimated_credits'] = int(
@@ -48058,6 +48135,12 @@ def api_synth_chat_interpret():
                 spec_draft.get('date_window_label') or '',
                 (spec_draft.get('date_window_label') or '')
                 .split(' (')[0].strip())
+        else:
+            # Relative-window binding (2026-08-24): 'trailing 60 days'
+            # style requests compute concrete dates at interpret time;
+            # a confident event window wins when both are present.
+            _bind_relative_window(spec_draft, text, chat_history=history,
+                                  decision=_dec_norm)
         _ensure_cut_window_echo(spec_draft, decision=_dec_norm)
         estimated_credits = int(spec_draft.get('estimated_credits')
                                 or estimated_credits)
@@ -48491,25 +48574,25 @@ def _spec_from_draft(draft):
         except Exception:
             pass
 
-    # ── Universe-anchor recheck + cross-spec duplicate guard ────────
-    # (2026-08-24, Florida/Iowa duplicated-sample defect.) Two guards
-    # at the same choke point where ensure_messy_sample_size runs:
-    # 1. If the draft carries a countable universe anchor (registered
-    #    voters, subscribers, members) and the implied projection
-    #    exceeds it, scale the sample down under the anchor.
+    # ── Mandatory anchor derivation + cross-spec duplicate guard ────
+    # (2026-08-24, Florida/Iowa duplicated-sample defect; hardened
+    # same day by Jenna's standing mandate: "the sample always has to
+    # be based to the researched anchor".) Two guards at the choke
+    # point where ensure_messy_sample_size runs:
+    # 1. Every fresh-build sample must equal universe_anchor x
+    #    engaged_share (within ~5% jitter tolerance) - reject-or-
+    #    repair: a missing/absurd anchor is recovered from the draft
+    #    prose when possible; a genuinely absent anchor flags the run
+    #    with anchor_missing=true (visible in the ops email); a
+    #    non-deriving sample is recomputed from the anchor.
     # 2. If the minted subject_raw byte-matches a DIFFERENT subject's
     #    recently minted value (rolling S3 ledger at
     #    system/recent_subject_raws.json), re-jitter deterministically
     #    so no two subjects ship identical samples.
-    # The worker mirrors guard 2 in _run_new_build as defense in depth.
+    # The worker mirrors both in _run_new_build as defense in depth.
+    _anchor_meta = None
     try:
         from migration.sample_sizing_guards import apply_sizing_guards
-        _ua_raw = draft.get('universe_anchor')
-        try:
-            _ua = int(float(str(_ua_raw).replace(',', ''))) \
-                if _ua_raw not in (None, '', 'null') else None
-        except Exception:
-            _ua = None
         _guard_s3 = None
         try:
             _guard_s3 = boto3.client(
@@ -48520,9 +48603,18 @@ def _spec_from_draft(draft):
             )
         except Exception:
             _guard_s3 = None
-        subject_raw_tu, subject_raw_avid = apply_sizing_guards(
+        _anchor_prose = ' '.join(
+            str(draft.get(k) or '')
+            for k in ('persona_notes', 'assumptions', 'decision_reason',
+                      'category_note')
+        )
+        subject_raw_tu, subject_raw_avid, _anchor_meta = apply_sizing_guards(
             subject, subject_raw_tu, subject_raw_avid,
-            universe_anchor=_ua, s3_client=_guard_s3,
+            universe_anchor=draft.get('universe_anchor'),
+            engaged_share=draft.get('engaged_share'),
+            anchor_source=draft.get('anchor_source'),
+            prose=_anchor_prose,
+            s3_client=_guard_s3,
         )
     except Exception as _sg_err:
         try:
@@ -48628,6 +48720,14 @@ def _spec_from_draft(draft):
         'brand_category': _bc_raw,
         'subject_raw_tu': subject_raw_tu,
         'subject_raw_avid': subject_raw_avid,
+        # 2026-08-24 Jenna mandate: "the sample always has to be based
+        # to the researched anchor". The verified derivation chain
+        # rides the spec so the worker can re-verify and the ops email
+        # can quote it in one line.
+        'universe_anchor': (_anchor_meta or {}).get('anchor'),
+        'anchor_source': (_anchor_meta or {}).get('anchor_source'),
+        'engaged_share': (_anchor_meta or {}).get('engaged_share'),
+        'anchor_missing': bool((_anchor_meta or {}).get('anchor_missing')),
         'subject_rows': subject_rows,
         'tu_demos': draft.get('tu_demos') or {},
         'avid_demos': draft.get('avid_demos') or draft.get('tu_demos') or {},
@@ -52434,6 +52534,8 @@ def _v1_conclude(prompt, run_avid=True):
         _ew = draft.get('event_window') or {}
         if _ew.get('query'):
             draft['event_window_query'] = _ew['query']
+    if _ev_state != 'confident':
+        _bind_relative_window(draft, prompt, decision=decision)
     _ensure_cut_window_echo(draft, decision=decision)
     cuts = [c for c in (draft.get('addon_cuts') or [])
             if isinstance(c, dict) and c.get('cut_id')]
