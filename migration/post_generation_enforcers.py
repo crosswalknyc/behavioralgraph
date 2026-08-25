@@ -9794,8 +9794,18 @@ def enforce_bp_hard_ceiling(df, subject, verbose=True):
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     if bp_col is None:
         return df, 0
+    _bp_dtype = str(df[bp_col].dtype)
     is_str_col = (df[bp_col].dtype == object
-                  or str(df[bp_col].dtype).startswith('string'))
+                  or _bp_dtype.startswith('string')
+                  or _bp_dtype == 'str')
+    # pandas >= 3 'str' / StringDtype columns reject non-string
+    # assignments (raw/proj ints, CS floats). Coerce to object first,
+    # same pattern as enforce_mpb_exact_mirror.
+    for _c in (bp_col, cs_col, raw_col, proj_col):
+        if (_c and _c in df.columns
+                and df[_c].dtype.name not in ('object', 'O',
+                                              'float64', 'int64')):
+            df[_c] = df[_c].astype(object)
     col_u = df['Column'].astype(str).str.upper().str.strip()
 
     # Sample size for Raw/Proj recompute. Matches
