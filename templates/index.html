@@ -29164,7 +29164,6 @@ https://www.instagram.com/p/..."></textarea>
                 audiences: { short: '👥 Audiences', title: 'Audiences of interest', intro: 'Cohorts most likely to convert to this title, sorted by % of Americans who match both the cohort AND the title\'s moviegoing audience. Below: how often each slice of US adults goes to the movies.' },
                 q3: { short: 'Intent to Buy',    title: 'How many people have shown intent to buy a ticket?',         intro: 'People, not dollars. Comparable already-released titles show realized opening-weekend ticket-buyers (Box Office Mojo gross ÷ $13.51 avg US ticket). The subject shows panel-measured high-intent signals captured to date - pre-sale ticketing-page engagement, deep trailer engagement, cast/talent engagement - scaled by industry conversion rates. Nothing here is a forecast.' },
                 q4: { short: 'Talent Attribution', title: 'How do talent & influencer posts boost other marketing?',     intro: 'Per-talent view + engagement totals across the campaign (cast, creators, athletes, influencers, hosts). Identifies which talent are doing disproportionate lift.' },
-                q5: { short: 'Trailer Performance', title: 'Trailer Performance', intro: 'Daily trailer views with overlaid funnel conversion (% of viewers who became info-seekers or visited a ticketing site within 7 days). Second chart traces the PVOD / SVOD search tail that builds after theatrical, peaking at the 5/15 streaming launch.' },
                 demographics: { short: 'Demographics', title: 'Who engaged with each campaign?', intro: 'Per-campaign demographic breakdown of the actual audience that watched + engaged with each asset.' },
                 journey: { short: 'Digital Journey', title: 'What do people do before and after engaging with each asset?', intro: 'Per-asset BEFORE / AFTER funnel. BEFORE = referrer mix (YouTube Up-Next / TikTok FYP / paid display / etc.) calibrated to the asset\'s channel and paid-vs-organic status. AFTER (7-day window) = downstream destinations split across Google / IMDB / RT / Letterboxd / official site for info-seek, Fandango / AMC / Regal / Cinemark / Atom for ticketing, plus shared-to-social, watched-trailer-next, and "where to stream" search. Tilts by phase: ticketing collapses after theatrical, streaming search ramps. Info-seek % + ticketing % ladder up to Assets / Q1 / Q2.' },
             };
@@ -33388,7 +33387,7 @@ https://www.instagram.com/p/..."></textarea>
                 body.innerHTML = html;
             }
 
-            var IIQ_QRENDER = { q1: iiqRenderQ1, q2: iiqRenderQ2, audiences: iiqRenderAudiences, q3: iiqRenderQ3, q4: iiqRenderQ4, q5: iiqRenderQ5, q6: iiqRenderQ6, journey: iiqRenderJourney };
+            var IIQ_QRENDER = { q1: iiqRenderQ1, q2: iiqRenderQ2, audiences: iiqRenderAudiences, q3: iiqRenderQ3, q4: iiqRenderQ4, q6: iiqRenderQ6, journey: iiqRenderJourney };
             // IIQ_QCACHE stores rendered HTML for instant tab fly-back.
             // IIQ_QDATA stores the raw payload (the `d` object the renderer
             // receives) so user-driven filter/sort changes can re-render
