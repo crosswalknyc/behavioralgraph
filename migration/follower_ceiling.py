@@ -125,6 +125,43 @@ def is_followers_only(audience_type) -> bool:
     return is_capped_audience(audience_type)
 
 
+def subject_raw_for_metric(metric) -> int:
+    """Anchor conversion: the subject_raw whose US Gen Pop Projection
+    equals the published metric. published-metric = projection anchor,
+    NEVER a panel percent (Jenna directive 2026-08-20, Vizio defect:
+    18.5M SmartCast accounts was consumed as 18.5% of the 10M panel,
+    tripling the projection to 60.9M)."""
+    return max_subject_raw_for_ceiling(metric)
+
+
+def detect_metric_as_percent_slip(subject_raw, metric,
+                                  tolerance: float = 0.05) -> bool:
+    """Return True iff subject_raw carries the metric-as-percent slip
+    signature.
+
+    A published metric of M persons misread as "M-in-millions percent"
+    of the 10M panel yields subject_raw ~= M / 10. The correct
+    anchor-derived raw is M * PANEL / US_POP ~= M / 32.99, over 3x
+    smaller. We flag when subject_raw sits within `tolerance` of M/10.
+
+    Only meaningful when the metric is at least 1M (smaller metrics
+    read as a percent produce sub-100K raws that don't inflate) and
+    when the slip value is materially above the true anchor.
+    """
+    try:
+        m = int(metric)
+        raw = int(subject_raw)
+    except Exception:
+        return False
+    if m < 1_000_000 or raw <= 0:
+        return False
+    slip_raw = m / 10.0          # metric read as percent of 10M panel
+    anchor_raw = m * PANEL / US_POP
+    if slip_raw <= anchor_raw * 1.5:
+        return False             # signature indistinguishable from anchor
+    return abs(raw - slip_raw) <= slip_raw * tolerance
+
+
 def max_subject_raw_for_ceiling(follower_ceiling) -> int:
     """Convert a follower-count ceiling to the maximum allowed
     subject_raw (a.k.a. sample size) such that the resulting US Gen Pop

@@ -46,6 +46,37 @@ US_POP = 329_900_000
 
 
 # ============================================================================
+# International frame detection (Jenna 2026-08-25, Omaze precedent).
+#
+# Several enforcers below encode US-only assumptions: the canonical US
+# demo bucket schema, US income-bracket ordering, US DMA geo scoping,
+# and US panel-reality brand floors. An international profile (UK,
+# Germany, ...) carries country-native demo buckets, country markets in
+# LOCATION, and country-scoped projections - forcing US structure onto
+# it is corruption, not enforcement. Those enforcers gate on
+# _frame_country(df): detection is content-signature based (currency in
+# INCOME, country-native EDUCATION/ETHNICITY labels, LOCATION dominated
+# by a known country market list) and CONSERVATIVE - a US frame can
+# never read as international, so domestic enforcement never weakens.
+# ============================================================================
+
+def _frame_country(df):
+    """Canonical country name for an international frame, else None
+    (None = US / undetectable, run every enforcer as always)."""
+    try:
+        from migration.international_profiles import detect_profile_country
+    except ImportError:
+        try:
+            from international_profiles import detect_profile_country
+        except ImportError:
+            return None
+    try:
+        return detect_profile_country(df)
+    except Exception:
+        return None
+
+
+# ============================================================================
 # Hostmap gating (workspace rule #4 — never lift/add a brand that isn't
 # in `reference.host_mapping`). Loaded lazily from disk cache or ClickHouse.
 # ============================================================================
@@ -3546,6 +3577,53 @@ def _is_url_variant_seed_list(val):
     return False
 
 
+# Audience-noun suffixes that appear in DELIVERABLE labels but never in
+# the clean entity name: 'Furious Viewers' names the audience of the
+# series 'Furious'. Mirrors _AUDIENCE_LABEL_SUFFIXES in
+# scripts/synth_engine_row_by_row.py (BRAND INPUT slug building) plus the
+# ip-scope consumer verbs (viewers/readers/listeners/players/watchers).
+_AUDIENCE_SUFFIX_NOUNS = {
+    'viewers', 'watchers', 'listeners', 'readers', 'players',
+    'fans', 'fan', 'audience', 'moviegoers',
+}
+
+
+def _norm_ident(s):
+    """Case + punctuation-insensitive identity key for subject/brand
+    name comparison ('Disney+/Hulu' -> 'DISNEYHULU')."""
+    return _re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+
+
+def _subject_label_variants(name):
+    """Ordered clean-subject candidates for a display / deliverable
+    label, full name first, most-stripped last.
+
+    'Furious Viewers - Avid Fan' -> ['Furious Viewers - Avid Fan',
+    'Furious Viewers', 'Furious']. Strips ' - {Cut}' suffixes right to
+    left (naming rule: every cut = '{Subject} - {Cut}'), then a single
+    trailing audience noun per candidate. Callers must validate a
+    stripped variant against a file identity anchor before trusting it
+    ('Steven Universe' must never collapse to 'Steven' blindly).
+    """
+    out = []
+
+    def _add(s):
+        s = _re.sub(r'\s+', ' ', str(s or '').strip().strip('-, ')).strip()
+        if s and s not in out:
+            out.append(s)
+
+    _add(name)
+    base = str(name or '').strip()
+    while ' - ' in base:
+        base = base.rsplit(' - ', 1)[0]
+        _add(base)
+    for cand in list(out):
+        toks = cand.split()
+        if len(toks) >= 2 and toks[-1].lower() in _AUDIENCE_SUFFIX_NOUNS:
+            _add(' '.join(toks[:-1]))
+    return out
+
+
 def _clean_subject_from_bi(bi_value, df=None, col_u=None, subject_arg=None):
     """Return a clean, display-ready subject name for use in category
     row Value cells.
@@ -3558,8 +3636,18 @@ def _clean_subject_from_bi(bi_value, df=None, col_u=None, subject_arg=None):
     real category (MUSICIAN/BAND, TALENT, etc.) must NEVER use the raw
     seed list -- it renders as an ugly comma-blob in the dashboard.
 
+    2026-08-24 (Furious audit D5): cut paths pass DELIVERABLE labels as
+    `subject_arg` ('Furious Viewers', 'Furious Viewers - Millennials
+    25-44') where the clean entity is 'Furious'. Taking subject_arg
+    verbatim planted those labels as pinned rows in SERIES. Now, when
+    subject_arg looks like a label (has a ' - ' cut suffix and/or a
+    trailing audience noun), we walk its stripped variants and return
+    the first one that matches an identity anchor read off the file
+    itself (BRAND INPUT first token, SUBJECT row). Unanchored names
+    still return verbatim, so 'Steven Universe' never collapses.
+
     Priority order for a clean name:
-      1. `subject_arg` (the string passed into run_all_enforcers) if
+      1. `subject_arg` (anchor-validated variant when it's a label) if
          non-empty and not itself a seed list.
       2. The SUBJECT row's Value if present + not a seed list.
       3. The first comma-separated token of `bi_value`.
@@ -3569,10 +3657,34 @@ def _clean_subject_from_bi(bi_value, df=None, col_u=None, subject_arg=None):
         bi_value = ''
     bi_value = str(bi_value).strip()
 
+    # Identity anchors from the file itself.
+    anchors = set()
+    if bi_value:
+        first_tok = bi_value.split(',')[0].strip()
+        if first_tok:
+            anchors.add(_norm_ident(first_tok))
+    if df is not None and col_u is not None:
+        try:
+            subj_mask = col_u == 'SUBJECT'
+            if subj_mask.any():
+                sv = str(
+                    df.loc[subj_mask].iloc[0].get('Value', '') or '',
+                ).strip()
+                if sv and not _is_url_variant_seed_list(sv):
+                    anchors.add(_norm_ident(sv.split(',')[0].strip()))
+        except Exception:
+            pass
+    anchors.discard('')
+
     if (subject_arg and isinstance(subject_arg, str)
             and subject_arg.strip()
             and not _is_url_variant_seed_list(subject_arg)):
-        return subject_arg.strip()
+        variants = _subject_label_variants(subject_arg)
+        if len(variants) > 1 and anchors:
+            for v in variants:
+                if _norm_ident(v) in anchors:
+                    return v
+        return variants[0] if variants else subject_arg.strip()
 
     if df is not None and col_u is not None:
         try:
@@ -3592,6 +3704,488 @@ def _clean_subject_from_bi(bi_value, df=None, col_u=None, subject_arg=None):
             return first_tok
 
     return bi_value
+
+
+def ensure_subject_metadata_row(df, subject, verbose=True):
+    """Guarantee the canonical SUBJECT metadata row exists:
+    Column='SUBJECT', Value=<clean subject name>, BP=100, Raw=sample,
+    Proj=sample projection.
+
+    2026-08-24 (Furious audit D4): all five files of the run shipped
+    without it - the engine never emitted one and no enforcer
+    backfilled. Wired into run_write_safety_net so EVERY write path
+    (fresh builds, avid skins, gender/addon cuts, coherence re-uploads)
+    carries it. Cuts inherit the parent's row; this is the backstop.
+
+    If a SUBJECT row exists but its Value is a URL-variant seed list or
+    a deliverable label that strips to the file's identity anchor, the
+    Value is repaired to the clean name. BP/Raw/Proj are re-anchored to
+    100 / sample / sample-projection when stale.
+    """
+    if (df is None or len(df) == 0 or 'Column' not in df.columns
+            or 'Value' not in df.columns):
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+
+    bi_mask = col_u == 'BRAND INPUT'
+    bi_val = ''
+    if bi_mask.any():
+        bi_val = str(df.loc[bi_mask].iloc[0].get('Value', '') or '').strip()
+    clean = _clean_subject_from_bi(
+        bi_val, df=df, col_u=col_u, subject_arg=subject)
+    clean = _re.sub(r'\s+', ' ', str(clean or '').strip())
+    if not clean:
+        return df, 0
+
+    def _fnum(v):
+        try:
+            f = float(str(v).replace(',', '').replace('%', '').strip())
+            return f if f > 0 else None
+        except Exception:
+            return None
+
+    # Sample + universe anchors: SAMPLE SIZE row first, BRAND INPUT next.
+    sample = universe = None
+    for anchor in ('SAMPLE SIZE', 'BRAND INPUT'):
+        m = col_u == anchor
+        if not m.any():
+            continue
+        row = df.loc[m].iloc[0]
+        if sample is None and raw_col:
+            sample = _fnum(row.get(raw_col))
+        if universe is None and proj_col:
+            universe = _fnum(row.get(proj_col))
+
+    n = 0
+    subj_mask = col_u == 'SUBJECT'
+    if subj_mask.any():
+        idx = df.index[subj_mask][0]
+        try:
+            cur = str(df.at[idx, 'Value'] or '').strip()
+            label_norms = {
+                _norm_ident(v) for v in _subject_label_variants(subject)
+            }
+            if (cur and _norm_ident(cur) != _norm_ident(clean)
+                    and (_is_url_variant_seed_list(cur)
+                         or _norm_ident(cur) in label_norms)):
+                df.at[idx, 'Value'] = clean
+                n += 1
+            if bp_col in df.columns:
+                bpv = _fnum(df.at[idx, bp_col])
+                if bpv is None or abs(bpv - 100.0) > 0.005:
+                    df[bp_col] = df[bp_col].astype(object)
+                    df.at[idx, bp_col] = '100.0000'
+                    n += 1
+            if raw_col and sample is not None:
+                rv = _fnum(df.at[idx, raw_col])
+                if rv is None or abs(rv - sample) > max(1.0, sample * 0.001):
+                    df[raw_col] = df[raw_col].astype(object)
+                    df.at[idx, raw_col] = int(round(sample))
+                    n += 1
+            if proj_col and universe is not None:
+                pv = _fnum(df.at[idx, proj_col])
+                if pv is None or abs(pv - universe) > max(1.0, universe * 0.001):
+                    df[proj_col] = df[proj_col].astype(object)
+                    df.at[idx, proj_col] = int(round(universe))
+                    n += 1
+        except Exception:
+            pass
+        return df, n
+
+    # No SUBJECT row: insert one right after the metadata block.
+    new_row = {c: '' for c in df.columns}
+    new_row['Column'] = 'SUBJECT'
+    new_row['Value'] = clean
+    if bp_col in df.columns:
+        new_row[bp_col] = '100.0000'
+    if raw_col and sample is not None:
+        new_row[raw_col] = int(round(sample))
+    if proj_col and universe is not None:
+        new_row[proj_col] = int(round(universe))
+
+    insert_after = -1
+    for anchor in ('BRAND CATEGORY', 'SAMPLE SIZE', 'BRAND INPUT'):
+        m = col_u == anchor
+        if m.any():
+            insert_after = int(df.index.get_indexer([df.index[m][0]])[0])
+            break
+    try:
+        top = df.iloc[: insert_after + 1]
+        rest = df.iloc[insert_after + 1:]
+        df = pd.concat(
+            [top, pd.DataFrame([new_row], columns=df.columns), rest],
+            ignore_index=True,
+        )
+        n += 1
+        if verbose:
+            print(f"   📇 SUBJECT metadata row inserted: {clean!r} "
+                  f"(BP=100, Raw={new_row.get(raw_col, '?')})")
+    except Exception as e:
+        if verbose:
+            print(f"   ⚠ SUBJECT row insert failed (non-fatal): {e}")
+    return df, n
+
+
+def strip_cohort_label_rows(df, subject, verbose=True):
+    """Drop or rename category rows whose Value is the DELIVERABLE /
+    display label instead of the clean subject.
+
+    2026-08-24 (Furious audit D5): 'Furious Viewers', 'Furious Viewers -
+    Avid Fan', '- Millennials', '- Los Angeles Ca' shipped as ~100-pinned
+    rows in SERIES. Naming rule: TU deliverable = clean entity name only;
+    every cut = '{Subject} - {Cut}'. Neither form is a real content row.
+
+    Rules (non-demo, non-metadata categories only):
+      - dash-orphan Values ('- Millennials') are dropped outright;
+      - a Value equal to a label variant of `subject` (deliverable name
+        or its stripped forms, excluding the clean name itself) is
+        renamed to the clean subject, or dropped when the clean-named
+        row already exists in that category;
+      - a Value of the form '{base} - {tail}' where base is the clean
+        subject or a label variant is treated the same way; when base
+        equals the clean subject the rule additionally requires
+        BP >= 95 so real dash-titled sibling content is never touched.
+    """
+    if (df is None or len(df) == 0 or 'Column' not in df.columns
+            or 'Value' not in df.columns):
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+
+    bi_mask = col_u == 'BRAND INPUT'
+    bi_val = ''
+    if bi_mask.any():
+        bi_val = str(df.loc[bi_mask].iloc[0].get('Value', '') or '').strip()
+    clean = _clean_subject_from_bi(
+        bi_val, df=df, col_u=col_u, subject_arg=subject)
+    clean = _re.sub(r'\s+', ' ', str(clean or '').strip())
+    clean_norm = _norm_ident(clean)
+
+    label_norms = {
+        _norm_ident(v) for v in _subject_label_variants(subject)
+    }
+    label_norms.discard(clean_norm)
+    label_norms.discard('')
+
+    skip_cats = (set(METADATA_COLS) | set(DEPIN_DEMO_CATS)
+                 | {'INPUT_METADATA', 'AVID FAN', 'CASUAL FAN',
+                    'LOCATION', 'DMA', 'REGION', 'GENERAL'})
+
+    val_norm = df['Value'].astype(str).map(_norm_ident)
+    cats_with_clean = set(
+        col_u[(val_norm == clean_norm) & ~col_u.isin(skip_cats)]
+    ) if clean_norm else set()
+
+    drops, renames, examples = [], [], []
+    for idx in df.index:
+        cat = col_u.loc[idx]
+        if not cat or cat in skip_cats:
+            continue
+        val = str(df.at[idx, 'Value'] or '').strip()
+        if not val:
+            continue
+        vn = val_norm.loc[idx]
+        if vn == clean_norm:
+            continue
+        # Dash-orphan: label composed with an empty subject.
+        if _re.match(r'^-\s+\S', val):
+            drops.append(idx)
+            examples.append((cat, val, 'drop:dash-orphan'))
+            continue
+        is_label = vn in label_norms
+        if not is_label and ' - ' in val:
+            base = val.rsplit(' - ', 1)[0].strip()
+            bn = _norm_ident(base)
+            if bn and bn in label_norms:
+                is_label = True
+            elif bn and bn == clean_norm and _bp(df.at[idx, bp_col]) >= 95:
+                # '{CleanSubject} - {Cut}' pinned at/near 100: label leak.
+                # BP gate protects real dash-titled sibling content.
+                is_label = True
+        if not is_label:
+            continue
+        if cat in cats_with_clean:
+            drops.append(idx)
+            examples.append((cat, val, 'drop:clean-row-exists'))
+        else:
+            renames.append(idx)
+            cats_with_clean.add(cat)
+            examples.append((cat, val, f'rename->{clean}'))
+
+    for idx in renames:
+        df.at[idx, 'Value'] = clean
+    if drops:
+        df = df.drop(index=drops).reset_index(drop=True)
+
+    n = len(drops) + len(renames)
+    if n and verbose:
+        print(f"   🏷️  cohort-label row guard: {len(drops)} dropped, "
+              f"{len(renames)} renamed to {clean!r}")
+        for cat, val, action in examples[:4]:
+            print(f"      - {cat} | {val!r} [{action}]")
+    return df, n
+
+
+def pin_target_matches_value(target, value):
+    """Case/punctuation-insensitive + merged-name alias-aware pin match.
+
+    A pin target 'Hulu' must land on rows named 'Hulu', 'HULU',
+    'Disney+/Hulu', 'Hulu (Disney+)', 'Hulu + Live TV' etc. Matching is
+    component-based (split on '/', ',', '(', ')', '|', ' - ', ' + '),
+    NOT free substring, so 'Max' never matches 'Maxwell House'.
+    Symmetric: row 'Hulu' also matches pin target 'Disney+/Hulu'.
+    """
+    def _comps(s):
+        parts = _re.split(r'[/,()|]|\s-\s|\s\+\s', str(s or ''))
+        out = {_norm_ident(p) for p in parts if p and p.strip()}
+        out.add(_norm_ident(s))
+        out.discard('')
+        return out
+
+    t = _norm_ident(target)
+    v = _norm_ident(value)
+    if not t or not v:
+        return False
+    if t == v:
+        return True
+    if t in _comps(value):
+        return True
+    return v in _comps(target)
+
+
+def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True):
+    """Re-assert the approved spec's subject_rows pins late in the write
+    path: every (category, name) pin must land at exactly BP=100 on the
+    row it aliases to.
+
+    2026-08-24 (Furious audit D3): the viewers-scope platform pin
+    ('STREAMING/PLATFORM', 'Hulu') matched nothing because the profile
+    row was the merged name 'Disney+/Hulu', and later pipeline stages
+    (persona noise, sanity fixes) drifted the value to 64-71 with no
+    re-assertion. This enforcer runs after the polish passes with
+    alias-aware matching and logs LOUDLY when a pin target matches zero
+    rows. Demo categories are excluded (GENDER pins etc. are owned by
+    the cut transforms); metadata rows are excluded.
+
+    Returns (df, n_changed, unmatched_pins).
+    """
+    if (not pin_rows or df is None or len(df) == 0
+            or 'Column' not in df.columns or 'Value' not in df.columns):
+        return df, 0, []
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col not in df.columns:
+        return df, 0, []
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+
+    def _fnum(v):
+        try:
+            f = float(str(v).replace(',', '').replace('%', '').strip())
+            return f if f > 0 else None
+        except Exception:
+            return None
+
+    sample = universe = None
+    for anchor in ('SAMPLE SIZE', 'BRAND INPUT'):
+        m = col_u == anchor
+        if not m.any():
+            continue
+        row = df.loc[m].iloc[0]
+        if sample is None and raw_col:
+            sample = _fnum(row.get(raw_col))
+        if universe is None and proj_col:
+            universe = _fnum(row.get(proj_col))
+
+    n = 0
+    unmatched = []
+    for entry in pin_rows:
+        try:
+            cat, name = str(entry[0]).strip(), str(entry[1]).strip()
+        except Exception:
+            continue
+        if not cat or not name:
+            continue
+        cu = cat.upper()
+        if cu in DEPIN_DEMO_CATS or cu in METADATA_COLS or cu == 'INPUT_METADATA':
+            continue
+        cat_mask = col_u == cu
+        if not cat_mask.any():
+            unmatched.append((cat, name))
+            print(f"   ⚠️⚠️ SPEC PIN CATEGORY ABSENT FROM PROFILE: {cu} | "
+                  f"{name!r} - pin cannot be applied; verify the approved "
+                  f"spec's category name")
+            continue
+        hit = 0
+        for idx in df.index[cat_mask]:
+            if not pin_target_matches_value(name, df.at[idx, 'Value']):
+                continue
+            hit += 1
+            cur_cell = str(df.at[idx, bp_col])
+            bpv = _fnum(cur_cell)
+            if bpv is not None and abs(bpv - 100.0) <= 0.00005:
+                continue
+            had_pct = cur_cell.strip().endswith('%')
+            df[bp_col] = df[bp_col].astype(object)
+            df.at[idx, bp_col] = '100.0000%' if had_pct else '100.0000'
+            if raw_col and sample is not None:
+                df[raw_col] = df[raw_col].astype(object)
+                df.at[idx, raw_col] = int(round(sample))
+            if proj_col and universe is not None:
+                df[proj_col] = df[proj_col].astype(object)
+                df.at[idx, proj_col] = int(round(universe))
+            n += 1
+            if verbose:
+                print(f"   📌 spec pin re-asserted: {cu} | "
+                      f"{df.at[idx, 'Value']!r} -> 100 (was {bpv})")
+        if not hit:
+            unmatched.append((cat, name))
+            print(f"   ⚠️⚠️ SPEC PIN TARGET MATCHED ZERO ROWS: {cu} | "
+                  f"{name!r} - no row in the category aliases to the pin "
+                  f"target; the pin did NOT land. Row values present: "
+                  f"{list(df.loc[cat_mask, 'Value'].astype(str).head(8))}")
+    return df, n, unmatched
+
+
+def audit_upload_invariants(df, subject='', context='',
+                            exact_2dp_limit=50, verbose=True):
+    """Pre-upload invariant audit - the loud tripwire for the defect
+    signatures caught on the Furious run (2026-08-24, D2/D4/D6).
+
+    Checks (report only, never mutates):
+      - exact-2dp BP landings on non-metadata rows (>limit = missed
+        depin/dejitter pass);
+      - categories not sorted BP-descending (missed sort pass);
+      - percent/comma string artifacts in numeric cells (missed
+        _normalize_numeric_artifacts);
+      - SUBJECT metadata row present;
+      - subject self-pin erosion (clean-subject row in [95, 100) in a
+        non-demo category).
+
+    Returns a dict report; prints ❌ lines for hard failures.
+    """
+    report = {
+        'context': context,
+        'exact_2dp_count': 0,
+        'unsorted_categories': [],
+        'percent_string_cells': 0,
+        'subject_row_present': False,
+        'eroded_self_pins': [],
+        'ok': True,
+    }
+    if (df is None or len(df) == 0 or 'Column' not in df.columns
+            or 'Value' not in df.columns):
+        return report
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+    meta_like = (set(METADATA_COLS)
+                 | {'INPUT_METADATA', 'GENERAL', 'AVID FAN', 'CASUAL FAN'})
+
+    def _fnum(v):
+        try:
+            return float(str(v).replace(',', '').replace('%', '').strip())
+        except Exception:
+            return None
+
+    # 1. exact-2dp landings
+    exact2 = 0
+    if bp_col in df.columns:
+        for idx in df.index:
+            if col_u.loc[idx] in meta_like:
+                continue
+            bpv = _fnum(df.at[idx, bp_col])
+            if bpv is None or bpv <= 0 or bpv >= 99.985:
+                continue
+            if abs(bpv * 100 - round(bpv * 100)) < 1e-7:
+                exact2 += 1
+    report['exact_2dp_count'] = exact2
+
+    # 2. per-category BP-descending sort
+    unsorted = []
+    if bp_col in df.columns:
+        for cat, grp in df.groupby('Column', sort=False):
+            if str(cat).strip().upper() in meta_like:
+                continue
+            seq = [_fnum(v) for v in grp[bp_col]]
+            seq = [s if s is not None else -1.0 for s in seq]
+            if any(seq[i] < seq[i + 1] - 1e-9 for i in range(len(seq) - 1)):
+                unsorted.append(str(cat))
+    report['unsorted_categories'] = unsorted
+
+    # 3. percent/comma string artifacts in numeric cells
+    pct_cells = 0
+    for c in (bp_col, cs_col, raw_col, proj_col):
+        if not c or c not in df.columns:
+            continue
+        for v in df[c]:
+            s = str(v).strip()
+            if not s or s.lower() in ('nan', 'none', ''):
+                continue
+            try:
+                float(s)
+                continue
+            except Exception:
+                pass
+            if _fnum(s) is not None:
+                pct_cells += 1
+    report['percent_string_cells'] = pct_cells
+
+    # 4. SUBJECT metadata row
+    report['subject_row_present'] = bool((col_u == 'SUBJECT').any())
+
+    # 5. self-pin erosion
+    eroded = []
+    if bp_col in df.columns:
+        bi_mask = col_u == 'BRAND INPUT'
+        bi_val = (str(df.loc[bi_mask].iloc[0].get('Value', '') or '').strip()
+                  if bi_mask.any() else '')
+        clean = _clean_subject_from_bi(
+            bi_val, df=df, col_u=col_u, subject_arg=subject)
+        cn = _norm_ident(clean)
+        if cn:
+            for idx in df.index:
+                cat = col_u.loc[idx]
+                if cat in meta_like or cat in DEPIN_DEMO_CATS:
+                    continue
+                if _norm_ident(df.at[idx, 'Value']) != cn:
+                    continue
+                bpv = _fnum(df.at[idx, bp_col])
+                if bpv is not None and 95.0 <= bpv < 99.9999:
+                    eroded.append((str(df.at[idx, 'Column']), bpv))
+    report['eroded_self_pins'] = eroded
+
+    hard_fail = (exact2 > exact_2dp_limit or unsorted or pct_cells
+                 or eroded)
+    report['ok'] = not hard_fail
+    tag = f" [{context}]" if context else ''
+    if exact2 > exact_2dp_limit:
+        print(f"   ❌ UPLOAD AUDIT{tag}: {exact2} BPs on exact-2dp "
+              f"boundaries (>{exact_2dp_limit}) - depin/dejitter pass "
+              f"did not run on this file")
+    elif exact2 and verbose:
+        print(f"   ⚠ upload audit{tag}: {exact2} exact-2dp BPs (within "
+              f"tolerance {exact_2dp_limit})")
+    if unsorted:
+        print(f"   ❌ UPLOAD AUDIT{tag}: {len(unsorted)} categories not "
+              f"sorted BP-descending (e.g. {unsorted[:5]}) - sort pass "
+              f"did not run")
+    if pct_cells:
+        print(f"   ❌ UPLOAD AUDIT{tag}: {pct_cells} numeric cells carry "
+              f"%/comma string artifacts - _normalize_numeric_artifacts "
+              f"did not run late enough")
+    if not report['subject_row_present']:
+        print(f"   ⚠️ UPLOAD AUDIT{tag}: SUBJECT metadata row missing")
+    if eroded:
+        print(f"   ❌ UPLOAD AUDIT{tag}: subject self-pin eroded below "
+              f"100: {eroded[:5]}")
+    if report['ok'] and verbose:
+        print(f"   ✅ upload audit{tag}: clean "
+              f"(2dp={exact2}, sorted, no artifacts, "
+              f"subject_row={report['subject_row_present']})")
+    return report
 
 
 def strip_url_variant_seed_rows(df, subject, verbose=True):
@@ -3950,6 +4544,7 @@ def recompute_raw_and_projection(df, subject, verbose=True):
     PANEL = 10_000_000
     c_upper = df['Column'].astype(str).str.upper().str.strip()
     sample_size = None
+    proj_base = None
     for cat in ('BRAND INPUT', 'SAMPLE SIZE'):
         cand = df[c_upper == cat]
         if len(cand) == 0:
@@ -3959,6 +4554,12 @@ def recompute_raw_and_projection(df, subject, verbose=True):
         raw = _num(r.get(raw_col)) if raw_col else None
         if raw and bp and bp > 0:
             sample_size = raw / (bp / 100.0)
+            # Projection base at BP=100 (the file's own universe). Only
+            # consulted on international frames below; US frames keep
+            # the fixed 10M-panel chain byte-identically.
+            proj_meta = _num(r.get(proj_col)) if proj_col else None
+            if proj_meta and proj_meta > 0:
+                proj_base = proj_meta / (bp / 100.0)
             break
     if sample_size is None:
         if verbose:
@@ -3986,8 +4587,20 @@ def recompute_raw_and_projection(df, subject, verbose=True):
 
     if proj_col is not None:
         proj_actual = df[proj_col].apply(_num)
-        # Proj = round(Raw / 10M * 329.9M) -- from the ROUNDED Raw
-        proj_expected = (raw_expected / PANEL * US_POP).round(0)
+        _ctry = _frame_country(df)
+        if _ctry and proj_base and proj_base > 0:
+            # International frame (Omaze precedent): projections scale
+            # to the file's own country universe (SAMPLE SIZE row Proj
+            # at BP=100), never the US 10M-panel chain. Omaze UK: TU
+            # sample 40,247 projecting to a UK universe of 4,027,143.
+            proj_expected = (bp_actual / 100.0 * proj_base).round(0)
+            if verbose:
+                print(f'   recompute_raw_and_projection: {_ctry} frame - '
+                      f'projections anchored to the country universe '
+                      f'({int(round(proj_base)):,})')
+        else:
+            # Proj = round(Raw / 10M * 329.9M) -- from the ROUNDED Raw
+            proj_expected = (raw_expected / PANEL * US_POP).round(0)
         diff = ((proj_actual - proj_expected).abs() > 1).fillna(False) & valid
         cells += int(diff.sum())
         df.loc[valid, proj_col] = proj_expected.loc[valid].astype('int64')
@@ -6450,6 +7063,18 @@ def apply_panel_reality_floors(df, subject, verbose=True):
     if df is None or len(df) == 0:
         return df, 0
 
+    # International frames (Omaze precedent): the floor tables encode
+    # US panel reality (USPS, Geico, US carriers, US QSR reach). A
+    # one-way lift toward US floors on a UK/German audience would
+    # re-inflate exactly the US-only brands the country reasoning
+    # correctly scored near zero.
+    _ctry = _frame_country(df)
+    if _ctry:
+        if verbose:
+            print(f"   📊 panel-reality enforcer: {_ctry} frame - US "
+                  f"panel-reality floors skipped")
+        return df, 0
+
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     sample_size = _detect_sample_size(df, bp_col, raw_col)
     arch = _detect_age_archetype(df)
@@ -8516,6 +9141,309 @@ def _coerce_writeable_columns_to_object(df, verbose=False):
     return df
 
 
+# ---------------------------------------------------------------------------
+# Geo-scoped LOCATION enforcement (Jenna 2026-08-24, Florida
+# gubernatorial voters defect: "there should be no value in LOCATION
+# outside of FL"). When a universe is geographically DEFINED (Florida
+# voters, Miami renters, Texas homeowners), every LOCATION row outside
+# the defining geography is removed entirely and the in-scope DMAs
+# renormalize to ~100 with subject-salted micro-jitter.
+# ---------------------------------------------------------------------------
+
+_GEO_STATE_ABBRS = {
+    'ALABAMA': 'Al', 'ALASKA': 'Ak', 'ARIZONA': 'Az', 'ARKANSAS': 'Ar',
+    'CALIFORNIA': 'Ca', 'COLORADO': 'Co', 'CONNECTICUT': 'Ct',
+    'DELAWARE': 'De', 'FLORIDA': 'Fl', 'GEORGIA': 'Ga', 'HAWAII': 'Hi',
+    'IDAHO': 'Id', 'ILLINOIS': 'Il', 'INDIANA': 'In', 'IOWA': 'Ia',
+    'KANSAS': 'Ks', 'KENTUCKY': 'Ky', 'LOUISIANA': 'La', 'MAINE': 'Me',
+    'MARYLAND': 'Md', 'MASSACHUSETTS': 'Ma', 'MICHIGAN': 'Mi',
+    'MINNESOTA': 'Mn', 'MISSISSIPPI': 'Ms', 'MISSOURI': 'Mo',
+    'MONTANA': 'Mt', 'NEBRASKA': 'Ne', 'NEVADA': 'Nv',
+    'NEW HAMPSHIRE': 'Nh', 'NEW JERSEY': 'Nj', 'NEW MEXICO': 'Nm',
+    'NEW YORK': 'Ny', 'NORTH CAROLINA': 'Nc', 'NORTH DAKOTA': 'Nd',
+    'OHIO': 'Oh', 'OKLAHOMA': 'Ok', 'OREGON': 'Or',
+    'PENNSYLVANIA': 'Pa', 'RHODE ISLAND': 'Ri', 'SOUTH CAROLINA': 'Sc',
+    'SOUTH DAKOTA': 'Sd', 'TENNESSEE': 'Tn', 'TEXAS': 'Tx',
+    'UTAH': 'Ut', 'VERMONT': 'Vt', 'VIRGINIA': 'Va',
+    'WASHINGTON STATE': 'Wa', 'WEST VIRGINIA': 'Wv', 'WISCONSIN': 'Wi',
+    'WYOMING': 'Wy', 'WASHINGTON DC': 'Dc', 'D.C.': 'Dc',
+}
+
+# Multi-state border DMAs whose real audience meaningfully spans a
+# state that does not appear in the DMA's name tokens. Membership is
+# by dominant-or-meaningful population share; kept deliberately small.
+# A DMA whose name carries the state token (e.g. 'Mobile Al Pensacola
+# Ft Walton Beach Fl' for Florida, 'Tallahassee Fl Thomasville Ga')
+# is already a member via token parsing.
+_GEO_MULTI_STATE_DMA_SUPPLEMENT = {
+    'Cincinnati Oh': {'Ky', 'In'},
+    'Chattanooga Tn': {'Ga'},
+    'Washington Dc Hagerstown Md': {'Va'},
+    'Philadelphia Pa': {'Nj', 'De'},
+    'New York Ny': {'Nj', 'Ct'},
+    'Charlotte Nc': {'Sc'},
+    'Memphis Tn': {'Ms', 'Ar'},
+    'Chicago Il': {'In'},
+    'Portland Or': {'Wa'},
+    'Louisville Ky': {'In'},
+    'Evansville In': {'Ky'},
+    'St Louis Mo': {'Il'},
+    'Kansas City Mo': {'Ks'},
+    'Omaha Ne': {'Ia'},
+    'Toledo Oh': {'Mi'},
+    'South Bend Elkhart In': {'Mi'},
+    'Fargo Nd': {'Mn'},
+    'Sioux City Ia': {'Ne', 'Sd'},
+    'Salisbury Md': {'De'},
+    'Boise Id': {'Or'},
+}
+
+# Audience nouns that mark a geography token as universe-DEFINING
+# ('Florida Voters', 'Miami Renters') rather than incidental branding
+# ('Texas Roadhouse', 'Florida Georgia Line').
+_GEO_AUDIENCE_NOUNS = (
+    'VOTER', 'VOTERS', 'ELECTORATE', 'RESIDENT', 'RESIDENTS', 'LOCALS',
+    'HOMEOWNER', 'HOMEOWNERS', 'RENTER', 'RENTERS', 'HOUSEHOLDS',
+    'CONSUMER', 'CONSUMERS', 'SHOPPER', 'SHOPPERS', 'BUYER', 'BUYERS',
+    'CUSTOMER', 'CUSTOMERS', 'COMMUTERS', 'FAMILIES', 'PARENTS', 'MOMS',
+    'DADS', 'SENIORS', 'RETIREES', 'STUDENTS', 'TEACHERS', 'NURSES',
+    'WORKERS', 'PROFESSIONALS', 'BUSINESSES', 'DRIVERS', 'PATIENTS',
+    'ADULTS', 'MILLENNIALS', 'GUBERNATORIAL', 'SENATE', 'MAYORAL',
+)
+
+# Brand names that contain a geography word but are NOT geo-defined
+# universes; a subject containing one of these never triggers the
+# geo scope (normalized, case + punctuation insensitive).
+_GEO_BRAND_BLOCKLIST = (
+    'texasroadhouse', 'californiapizzakitchen', 'kentuckyfriedchicken',
+    'bostonmarket', 'arizonaicedtea', 'newyorktimes', 'newyorklife',
+    'floridageorgialine', 'alaskaairlines', 'hawaiianairlines',
+    'virginatlantic', 'newyorkyankees', 'newyorkgiants', 'newyorkjets',
+    'newyorkknicks', 'newyorkmets', 'texasrangers', 'minnesotavikings',
+    'arizonacardinals', 'coloradorockies', 'floridapanthers',
+)
+
+
+def _geo_norm(s):
+    return _re.sub(r'[^a-z0-9]', '', str(s).lower())
+
+
+def _dma_state_tokens(dma_name):
+    """State abbreviation tokens carried by a canonical DMA name, plus
+    the explicit multi-state supplement. A leading token is ignored
+    when the name carries another state token later ('La Crosse Eau
+    Claire Wi' is Wisconsin, not Louisiana)."""
+    toks = _re.split(r'[\s&]+', str(dma_name).strip())
+    abbrs = set(_GEO_STATE_ABBRS.values())
+    hits = [t for t in toks if t in abbrs]
+    if len(hits) > 1 and toks and toks[0] in hits:
+        hits = [t for i, t in enumerate(toks)
+                if t in abbrs and i > 0]
+    out = set(hits)
+    out |= _GEO_MULTI_STATE_DMA_SUPPLEMENT.get(str(dma_name).strip(),
+                                               set())
+    return out
+
+
+def _detect_geo_scope(subject):
+    """Return the set of allowed canonical DMA names when the subject
+    names a geo-DEFINED universe, else None.
+
+    Gates (all must pass):
+      1. subject names a state (full name, word boundary) or a city
+         segment from the canonical DMA table;
+      2. subject also carries an audience noun (voters, residents,
+         renters, ...) so brand names like 'Texas Roadhouse' never
+         trigger;
+      3. subject does not contain a known geo-containing brand name.
+    The caller applies two more gates on the DATA (in-scope share >=
+    30%, no >= 90 LOCATION pin) before mutating anything.
+    """
+    try:
+        from scripts._canonical_dma_baseline import CANONICAL_DMA_PCT
+    except ImportError:
+        try:
+            from _canonical_dma_baseline import CANONICAL_DMA_PCT  # type: ignore
+        except ImportError:
+            return None
+    subj_u = str(subject or '').upper()
+    subj_n = _geo_norm(subject)
+    if not subj_u.strip():
+        return None
+    if any(b in subj_n for b in _GEO_BRAND_BLOCKLIST):
+        return None
+    if not any(_re.search(r'\b' + _re.escape(nn) + r'\b', subj_u)
+               for nn in _GEO_AUDIENCE_NOUNS):
+        return None
+
+    # State scope: full state name in the subject.
+    want_states = set()
+    for full, abbr in _GEO_STATE_ABBRS.items():
+        if _re.search(r'\b' + _re.escape(full) + r'\b', subj_u):
+            want_states.add(abbr)
+    # 'WASHINGTON' alone is ambiguous (state vs DC vs surname); only
+    # honored via the explicit 'WASHINGTON STATE' / 'WASHINGTON DC'
+    # keys above.
+    if want_states:
+        allowed = {name for name in CANONICAL_DMA_PCT
+                   if _dma_state_tokens(name) & want_states}
+        return allowed or None
+
+    # City/DMA scope: a city n-gram of a canonical DMA named in the
+    # subject ('Miami Renters' -> Miami Ft Lauderdale Fl, 'West Palm
+    # Beach Retirees' -> West Palm Beach Ft Pierce Fl). Single generic
+    # tokens (Ft, Beach, City, ...) never match on their own; the
+    # 30% in-scope share gate in the caller is the final guard.
+    abbrs = set(_GEO_STATE_ABBRS.values())
+    generic = {'FT', 'ST', 'BEACH', 'CITY', 'FALLS', 'SPRINGS', 'PARK',
+               'PORT', 'NEW', 'NORTH', 'SOUTH', 'EAST', 'WEST', 'GRAND',
+               'GREEN', 'BAY', 'LAKE', 'POINT', 'HIGH', 'LITTLE'}
+    allowed = set()
+    for name in CANONICAL_DMA_PCT:
+        toks = [t for t in _re.split(r'[\s&]+', name)
+                if t and t not in abbrs]
+        toks_u = [t.upper() for t in toks]
+        hit = False
+        for a in range(len(toks_u)):
+            for b in range(a + 1, len(toks_u) + 1):
+                seg = ' '.join(toks_u[a:b])
+                if b - a == 1 and (len(seg) < 5 or seg in generic):
+                    continue
+                if len(seg) >= 5 and _re.search(
+                        r'\b' + _re.escape(seg) + r'\b', subj_u):
+                    hit = True
+                    break
+            if hit:
+                break
+        if hit:
+            allowed.add(name)
+    return allowed or None
+
+
+def enforce_geo_scope_location(df, subject, verbose=True):
+    """Remove LOCATION rows outside a geo-DEFINED universe's geography
+    and renormalize the in-scope DMAs to ~100 (Jenna 2026-08-24: for a
+    Florida-defined universe "there should be no value in LOCATION
+    outside of FL"; out-of-scope rows are removed, not zeroed, so the
+    dashboard never renders dead rows).
+
+    Data gates on top of _detect_geo_scope's name gates:
+      - in-scope LOCATION share must already be >= 30% (evidence the
+        engine actually built a geo-defined universe; a brand audience
+        that merely mentions a state stays untouched);
+      - skip when any LOCATION row >= 90 (that is a geo-pinned DMA cut
+        per the gender/geo-cut rules - its pin stands).
+
+    Runs BEFORE renormalize_location_to_100 + recompute_raw_and_projection
+    so the sum lands at ~100 and Raw/Proj re-canonicalize downstream.
+    Micro-jitter is subject-salted; no value lands with a trailing-zero
+    4th decimal (no 2dp/4dp boundaries). Idempotent.
+    """
+    bp_col, _, _, _ = _detect_cols(df)
+    if not bp_col or 'Column' not in df.columns:
+        return df, 0
+    # International frames carry country markets in LOCATION (Omaze
+    # precedent), not US DMAs - the US state/DMA scope tables cannot
+    # judge them and would strip every country market as out-of-scope.
+    _ctry = _frame_country(df)
+    if _ctry:
+        if verbose:
+            print(f"   🌎 geo scope: {_ctry} frame - country markets "
+                  f"stand; US DMA scoping skipped")
+        return df, 0
+    allowed = _detect_geo_scope(subject)
+    if not allowed:
+        return df, 0
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    loc_idx = list(df.index[col_u == 'LOCATION'])
+    if not loc_idx:
+        return df, 0
+    allowed_u = {a.upper() for a in allowed}
+    in_rows, out_rows = [], []
+    for i in loc_idx:
+        v = _bp(df.at[i, bp_col])
+        v = None if (v is None or pd.isna(v)) else float(v)
+        name = str(df.at[i, 'Value']).strip()
+        if name.upper() in allowed_u and v is not None and v > 0:
+            in_rows.append((i, name, v))
+        else:
+            out_rows.append((i, name, v))
+    if not in_rows or not out_rows:
+        return df, 0
+    total_all = sum(v for _, _, v in in_rows) + \
+        sum(v for _, _, v in out_rows if v is not None)
+    in_share = (sum(v for _, _, v in in_rows) / total_all * 100.0
+                if total_all > 0 else 0.0)
+    if in_share < 30.0:
+        if verbose:
+            print(f"   🌎 geo scope: subject names a geography but "
+                  f"in-scope LOCATION share is only {in_share:.1f}% - "
+                  f"not a geo-defined build; skipping")
+        return df, 0
+    if any(v is not None and v >= 90.0
+           for _, _, v in in_rows + out_rows):
+        if verbose:
+            print("   🌎 geo scope: LOCATION carries a >=90 DMA pin "
+                  "(geo cut) - pin stands; skipping")
+        return df, 0
+
+    in_total = sum(v for _, _, v in in_rows)
+    newvals = {}
+    for i, name, v in in_rows:
+        scaled = v * 100.0 / in_total
+        h = int(_hl.sha256(
+            f"{subject}|LOCATION|{name}|geo-scope".encode()
+        ).hexdigest()[:8], 16)
+        jit = ((h % 2001) - 1000) / 1000.0 * 0.02
+        newvals[i] = max(0.01, scaled + jit)
+    largest = max(newvals, key=lambda k: newvals[k])
+    newvals[largest] += (100.0 - sum(newvals.values()))
+    out = {}
+    for i, name, _ in in_rows:
+        v = round(newvals[i], 4)
+        if int(round(v * 10000)) % 10 == 0:
+            h2 = int(_hl.sha256(
+                f"{subject}|{name}|geo-ub".encode()).hexdigest()[:8], 16)
+            v = round(v + (1 + h2 % 8) / 10000.0, 4)
+        out[i] = v
+    resid = round(100.0 - sum(out.values()), 4)
+    if abs(resid) >= 0.0005:
+        v = round(out[largest] + resid, 4)
+        if int(round(v * 10000)) % 10 == 0:
+            v = round(v + 0.0003, 4)
+        out[largest] = v
+
+    drop_idx = [i for i, _, _ in out_rows]
+    df = df.drop(index=drop_idx).reset_index(drop=True)
+    # Re-locate kept rows post-drop by (Column, Value) since indices
+    # shifted; safe because LOCATION values are unique per file.
+    col_u = df['Column'].astype(str).str.upper().str.strip()
+    val_by_name = {}
+    for i2 in df.index[col_u == 'LOCATION']:
+        val_by_name[str(df.at[i2, 'Value']).strip()] = i2
+    name_targets = {name: out[i] for i, name, _ in in_rows}
+    share_col = next((c for c in df.columns if 'Category Share' in c),
+                     None)
+    kept_sum = sum(name_targets.values())
+    n = 0
+    for name, v in name_targets.items():
+        i2 = val_by_name.get(name)
+        if i2 is None:
+            continue
+        # Bare 4dp numeric, matching renormalize_location_to_100's
+        # write convention (normalize_final_format has already run).
+        df.at[i2, bp_col] = f"{v:.4f}"
+        if share_col:
+            df.at[i2, share_col] = round(v * 100.0 / kept_sum, 4)
+        n += 1
+    if verbose:
+        print(f"   🌎 geo scope: removed {len(drop_idx)} out-of-scope "
+              f"LOCATION rows, renormalized {n} in-scope DMAs to "
+              f"{sum(name_targets.values()):.4f} "
+              f"(in-scope share was {in_share:.1f}%)")
+    return df, len(drop_idx) + n
+
+
 def renormalize_location_to_100(df, subject, verbose=True):
     """Scale LOCATION-column BPs so they sum to 100.
 
@@ -9523,6 +10451,20 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
     except Exception as e:
         print(f"   ⚠️ enforcer strip_brand_input_csv_phantom_row "
               f"failed: {e}")
+    # 2026-08-24 (Florida gubernatorial voters, Jenna: "there should be
+    # no value in LOCATION outside of FL"): geo-DEFINED universes strip
+    # every out-of-geography LOCATION row and renormalize in-scope DMAs
+    # to ~100. Runs BEFORE renormalize_location_to_100 (which then
+    # no-ops on the ~100 result) and BEFORE recompute_raw_and_projection
+    # (which cascades the new BPs into Raw/Proj). Four gates prevent
+    # false positives: geography + audience noun in the subject name,
+    # geo-brand blocklist, in-scope share >= 30%, no >= 90 DMA pin
+    # (geo cuts keep their pin).
+    try:
+        df, n = enforce_geo_scope_location(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_geo_scope_location failed: {e}")
     # D6 — LOCATION column must sum to 100 across all DMAs.
     try:
         df, n = renormalize_location_to_100(df, subject, verbose=verbose)
@@ -11021,6 +11963,18 @@ def enforce_canonical_demo_buckets(df, *, subject=None, verbose=True):
     if df is None or len(df) == 0:
         return df, 0
 
+    # International frames keep their country-native bucket labels
+    # (Omaze precedent) - the canonical US schema must never be forced
+    # onto them. renormalize_demographics_to_100 (name-agnostic) still
+    # holds every demo category at 100.
+    _ctry = _frame_country(df)
+    if _ctry:
+        if verbose:
+            print(f'   enforce_canonical_demo_buckets: {_ctry} frame - '
+                  f'country-native demo schema preserved, US canonical '
+                  f'collapse skipped')
+        return df, 0
+
     try:
         from migration.canonical_demos import (
             PIPELINE_DEMO_SCHEMA, canonical_value, orphan_fallback,
@@ -11549,6 +12503,15 @@ def apply_income_monotonicity_fix(df, subject=None, verbose=True,
         return df, 0
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     if bp_col is None:
+        return df, 0
+    # International frames carry country-native income bands (GBP/EUR
+    # buckets, different widths and ordering conventions) - the US
+    # bracket-order interpolation does not apply.
+    _ctry = _frame_country(df)
+    if _ctry:
+        if verbose:
+            print(f'   apply_income_monotonicity_fix: {_ctry} frame - '
+                  f'US income-bracket repair skipped')
         return df, 0
     m_inc = df['Column'].astype(str).str.strip().str.upper() == 'INCOME'
     if not m_inc.any():
@@ -13685,6 +14648,19 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
                 print(f"   ⚠️ write-safety-net {fn_name} failed: "
                       f"{type(e).__name__}: {e}")
 
+    # SUBJECT metadata row backstop (2026-08-24 Furious audit D4): all
+    # five files of that run shipped without Column='SUBJECT'. The
+    # engine now emits it on fresh builds and cuts inherit it, but the
+    # safety net is the guarantee for every write path. Idempotent.
+    try:
+        df, n_subj = ensure_subject_metadata_row(df, subject, verbose=verbose)
+        stats["ensure_subject_row"] = int(n_subj or 0)
+    except Exception as e:
+        stats["ensure_subject_row"] = -1
+        if verbose:
+            print(f"   ⚠️ write-safety-net SUBJECT row backstop failed: "
+                  f"{type(e).__name__}: {e}")
+
     # Normalize metadata-row CS: SAMPLE SIZE / BRAND INPUT should not
     # carry a subject_raw or 10M "pseudo-category-share" value in the
     # CS column (dashboard doesn't render it; leaving numeric junk here
@@ -13807,6 +14783,18 @@ def run_final_invariant_polish(df, subject, *, verbose: bool = True):
         stats['echo_rows_stripped'] = -1
         if verbose:
             print(f'   ⚠️ final-polish echo strip failed: {e}')
+
+    # -- 1b. cohort-label row guard (2026-08-24 Furious audit D5) -----------
+    # Deliverable labels ('Furious Viewers', 'Furious Viewers - Avid
+    # Fan') and dash-orphans ('- Millennials') must never sit as pinned
+    # rows in content categories; drop or rename to the clean subject.
+    try:
+        df, n_lbl = strip_cohort_label_rows(df, subject, verbose=verbose)
+        stats['cohort_label_rows'] = int(n_lbl or 0)
+    except Exception as e:
+        stats['cohort_label_rows'] = -1
+        if verbose:
+            print(f'   ⚠️ final-polish cohort-label guard failed: {e}')
 
     # -- 2. subject re-pin -------------------------------------------------
     try:

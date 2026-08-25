@@ -1463,7 +1463,7 @@ def detect_cliffs(df):
     """Step 8: categories with surprisingly few entries (<CLIFF_THRESHOLD)."""
     cliffs = []
     cat_counts = df['Column'].astype(str).str.strip().str.upper().value_counts()
-    EXPECTED_RICH = {'TALENT', 'MUSICIAN/BAND', 'ACTOR', 'ATHLETE',
+    EXPECTED_RICH = {'TALENT', 'MUSICIAN/BAND', 'ACTOR', 'ATHLETE', 'COMEDIAN',
                      'MOST PURCHASED BRANDS', 'INTEREST', 'WHERE THEY SHOP',
                      'APPAREL/FOOTWEAR', 'BEAUTY/WELLNESS', 'SPORTS TEAM',
                      'APP/PLATFORM USAGE'}
@@ -2478,7 +2478,7 @@ ALWAYS_ALLOWED_COLUMNS = {
 #   SELECT DISTINCT SECTION FROM reference.host_mapping
 # and splitting each value on commas.
 _HOSTMAP_SECTION_FALLBACK = {
-    'TALENT', 'ACTOR', 'MUSICIAN/BAND', 'ATHLETE',
+    'TALENT', 'ACTOR', 'MUSICIAN/BAND', 'ATHLETE', 'COMEDIAN',
     'NFL ATHLETE', 'NBA ATHLETE', 'MLB ATHLETE', 'WNBA ATHLETE',
     'NHL ATHLETE', 'SOCCER ATHLETE', 'MOTORSPORT ATHLETE',
     'CREATOR/INFLUENCER', 'HOST/PERSONALITY',
@@ -3040,7 +3040,7 @@ _DEMO_VALUE_FALLBACK = {
         '$150,000 - $249,999', '$250,000 or More',
     ],
     'EDUCATION': [
-        "Bachelors Degree", 'Graduate or Professional Degree',
+        'Bachelors Degree', 'Graduate or Professional Degree',
         'High School or Less', 'Prefer Not to Say',
         'Some College / Associate Degree',
     ],

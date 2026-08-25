@@ -896,6 +896,25 @@ def _check_i6(rows, sample):
     out = []
     if sample is None:
         return out
+    # International frames (Omaze precedent): projections scale to the
+    # file's own country universe (SAMPLE SIZE row Proj at BP=100), not
+    # the US 10M-panel chain. Detection is content-signature based and
+    # conservative - US files keep the exact chain below.
+    intl_proj_base = None
+    try:
+        from migration.international_profiles import (
+            detect_country_from_pairs,
+        )
+        if detect_country_from_pairs([(r["cat"], r["val"]) for r in rows]):
+            for r in rows:
+                if r["cat_u"] in ("SAMPLE SIZE", "BRAND INPUT"):
+                    _bp0 = _num(r["bp_s"])
+                    _pj0 = _num(r["proj_s"])
+                    if _bp0 and _pj0 and _bp0 > 0:
+                        intl_proj_base = _pj0 / (_bp0 / 100.0)
+                        break
+    except Exception:
+        intl_proj_base = None
     n_flagged = 0
     for r in rows:
         cu = r["cat_u"]
@@ -937,15 +956,18 @@ def _check_i6(rows, sample):
         # integer; the 10M -> 329.9M scale-up multiplies as much as
         # 0.5 of raw rounding into ~16.5 projection units (dry-run
         # 2026-08-24 measured deltas of 6-11 on same-night files).
-        want_proj = round(raw / PANEL_DENOM * US_POP)
+        if intl_proj_base:
+            want_proj = round(bp / 100.0 * intl_proj_base)
+        else:
+            want_proj = round(raw / PANEL_DENOM * US_POP)
         if abs(proj - want_proj) > 18:
             n_flagged += 1
             if n_flagged <= 25:
                 out.append(_v(
                     "I6", "chain math", f"{r['cat']} / {r['val']}",
                     f"proj={proj:,.0f} expected={want_proj:,}",
-                    f"{r['val']} in {r['cat']}: the US projection "
-                    f"{proj:,.0f} does not follow from its raw count "
+                    f"{r['val']} in {r['cat']}: the projected audience "
+                    f"{proj:,.0f} does not follow from its reach "
                     f"({want_proj:,} expected).",
                 ))
     if n_flagged > 25:

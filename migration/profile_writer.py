@@ -235,8 +235,10 @@ def write_profile_csv(
     verbose: bool = True,
     s3_client=None,
     follower_ceiling: Optional[int] = None,
+    pin_rows: Optional[list] = None,
     keep_avid_row: Optional[bool] = None,
     ship_gate: bool = True,
+    s3_metadata: Optional[dict] = None,
 ) -> dict:
     """Canonical write path for any profile CSV heading to
     `s3://dashboard-inputs/<s3_key>`.
@@ -265,6 +267,14 @@ def write_profile_csv(
          the write.
       6. If backup AND file exists on S3: back up prior to
          `_backups/{key}.pre_write_<ts>.csv`
+      6.9 FINAL SHIP GATE (2026-08-24 Jenna mandate): the independent
+         terminal invariant check in migration/final_ship_gate.py runs
+         on the EXACT bytes about to upload. On any violation the
+         write is BLOCKED: the rejected bytes land in _quarantine/,
+         Jenna + Jessie get a hold notice, and ShipGateError
+         propagates to the caller. ship_gate=False (local ops override
+         only, via migration/local_override_profile.py) downgrades to
+         report-only. There is NO env-flag downgrade.
       7. Upload df to `s3://dashboard-inputs/<s3_key>`
       8. If register: register_profile_in_dashboard(s3_key, ...)
 
@@ -565,6 +575,35 @@ def write_profile_csv(
         print(f"  [profile_writer] final invariant polish raised "
               f"({type(e).__name__}: {e}); continuing")
 
+    # 5.65 Spec pin re-assert (2026-08-24 Furious audit D3): the
+    # approved spec's subject_rows pins are re-enforced AFTER the polish
+    # so no late pass (persona noise, sanity fixes, gate patches) can
+    # leave a viewers-scope platform pin drifted off 100. Alias-aware
+    # ('Hulu' lands on 'Disney+/Hulu'); logs LOUDLY on zero matches.
+    if pin_rows:
+        try:
+            try:
+                from migration.post_generation_enforcers import (
+                    enforce_spec_pin_rows,
+                    run_write_safety_net as _rwsn_pins,
+                )
+            except ImportError:
+                sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                from post_generation_enforcers import (  # type: ignore
+                    enforce_spec_pin_rows,
+                    run_write_safety_net as _rwsn_pins,
+                )
+            df, _n_pins, _unmatched_pins = enforce_spec_pin_rows(
+                df, subject, pin_rows, verbose=verbose,
+            )
+            if _n_pins:
+                df, _ = _rwsn_pins(df, subject, verbose=False)
+                if sort:
+                    df = _sort_within_category(df)
+        except Exception as e:
+            print(f"  [profile_writer] spec pin re-assert raised "
+                  f"({type(e).__name__}: {e}); continuing")
+
     # 5.7 Numeric-artifact assertion (2026-08-24): last-line format
     # guarantee that no '%' / comma artifact survives in the four
     # numeric columns of the shipped file. See
@@ -573,6 +612,24 @@ def write_profile_csv(
         df, _n_artifacts = _normalize_numeric_artifacts(df, verbose=verbose)
     except Exception as e:
         print(f"  [profile_writer] numeric-artifact assertion raised "
+              f"({type(e).__name__}: {e}); continuing")
+
+    # 5.75 Pre-upload invariant audit (2026-08-24 Furious audit D2):
+    # loud tripwire for exact-2dp floods, unsorted categories, percent-
+    # string cells, missing SUBJECT row, eroded self-pins. Report-only.
+    try:
+        try:
+            from migration.post_generation_enforcers import (
+                audit_upload_invariants,
+            )
+        except ImportError:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from post_generation_enforcers import (  # type: ignore
+                audit_upload_invariants,
+            )
+        audit_upload_invariants(df, subject, context=s3_key, verbose=verbose)
+    except Exception as e:
+        print(f"  [profile_writer] upload audit raised "
               f"({type(e).__name__}: {e}); continuing")
 
     # 5b. 2026-08-14 (iJustine incident): pre-flight subject-research gate.
@@ -622,13 +679,15 @@ def write_profile_csv(
     except Exception as e:
         print(f"  [profile_writer] genpop baseline append skipped: {e}")
 
-    # 6.9 FINAL SHIP GATE (2026-08-24 Jenna mandate): independent
-    # terminal invariant check on the exact bytes about to upload.
-    # Violations quarantine the file, email the hold notice, and raise
-    # ShipGateError - deliberately not wrapped in a swallowing
-    # try/except. ship_gate=False (explicit argument, local ops
-    # override only) runs the checks report-only. No env-flag
-    # downgrade exists.
+    # 6.9 FINAL SHIP GATE (2026-08-24 Jenna mandate: profiles must
+    # never ship with defect classes like today's four). Independent
+    # module - own CSV parse, own numeric coercion, no shared enforcer
+    # helpers - run on the EXACT bytes about to upload. On violations
+    # it quarantines the rejected bytes, emails the hold notice, and
+    # raises ShipGateError; deliberately NOT wrapped in a swallowing
+    # try/except so nothing after this line can ship a flagged file.
+    # ship_gate=False (explicit argument, local ops override only)
+    # still runs the checks report-only.
     buf = io.StringIO()
     df.to_csv(buf, index=False)
     body = buf.getvalue().encode("utf-8")
@@ -643,10 +702,15 @@ def write_profile_csv(
         s3_client=s3, verbose=verbose,
     )
 
-    # 7. Upload
-    s3.put_object(
-        Bucket=BUCKET, Key=s3_key, Body=body, ContentType="text/csv",
-    )
+    # 7. Upload. s3_metadata (e.g. refresh-generation for refresh
+    # chains) rides the object so the next refresh can read it back
+    # via head_object.
+    _put_kwargs = dict(Bucket=BUCKET, Key=s3_key, Body=body,
+                       ContentType="text/csv")
+    if s3_metadata:
+        _put_kwargs["Metadata"] = {
+            str(k): str(v) for k, v in s3_metadata.items()}
+    s3.put_object(**_put_kwargs)
     if verbose:
         print(f"  [profile_writer] uploaded ({len(body):,} bytes) -> "
               f"s3://{BUCKET}/{s3_key}")

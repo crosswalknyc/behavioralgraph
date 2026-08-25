@@ -220,6 +220,19 @@ def build_source_snapshot(df) -> dict:
     cats_upper = df['Column'].astype(str).str.strip().str.upper()
     bi = df[cats_upper == 'BRAND INPUT']
     subject = str(bi['Value'].iloc[0]).strip() if len(bi) else ''
+    # 2026-08-21 (Google Play TVOD Renters): new-era parents carry the
+    # URL-variant seed list in BRAND INPUT ("Google Play, GooglePlay,
+    # ..., play.google.com/store/..."). The subject is the FIRST
+    # segment; keeping the raw list produced a derived cut literally
+    # NAMED after the whole seed string. Only strip when the tail
+    # segments look like URL/squashed variants, so legit comma subjects
+    # ("Crosby, Stills & Nash") survive.
+    if ',' in subject:
+        _segs = [s.strip() for s in subject.split(',') if s.strip()]
+        if len(_segs) >= 3 and any(
+                ('/' in s or '%20' in s or '.' in s.replace(' ', ''))
+                for s in _segs[1:]):
+            subject = _segs[0]
     ss = df[cats_upper == 'SAMPLE SIZE']
     sample_size = None
     if len(ss):

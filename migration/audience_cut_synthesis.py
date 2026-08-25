@@ -65,6 +65,16 @@ from super_fan_synthesis import (  # noqa: E402
     build_source_snapshot, _extract_json_block,
 )
 
+_ROOT = os.path.dirname(HERE)
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+try:
+    from scripts._sample_size_jitter import ensure_messy_sample_size
+except Exception:  # pragma: no cover - scripts/ not on path in odd envs
+    def ensure_messy_sample_size(subj, v, **kw):
+        v = int(v or 0) or 9873
+        return v + 7 if v % 10 == 0 else v
+
 # =============================================================================
 # Constants
 # =============================================================================
@@ -631,6 +641,11 @@ def apply_audience_cut_transform(df, audience: dict, category_decisions: dict,
         except Exception:
             old_uspop = 0
         new_sample = max(500, round(old_sample * cohort_fraction))
+        # Workspace rule (no-round-sample-sizes): the parent x fraction
+        # product must never ship with a trailing zero. Jitter breaks
+        # trailing digits only; the cohort fraction holds within it.
+        new_sample = ensure_messy_sample_size(
+            f"{subject}|cut {gender}", new_sample)
         # us_pop_fraction is absolute (frac of US pop), not relative,
         # but we let Claude pick that. Convert via old_uspop ratio.
         if old_uspop > 0 and old_sample > 0:
@@ -638,7 +653,8 @@ def apply_audience_cut_transform(df, audience: dict, category_decisions: dict,
         else:
             new_uspop = max(5000, round(330_000_000 * us_pop_fraction))
     else:
-        new_sample = 50000
+        new_sample = ensure_messy_sample_size(f"{subject}|cut {gender}",
+                                              50000)
         new_uspop = 5_000_000
 
     # Cast cols to object so float assignment works
@@ -685,6 +701,22 @@ def apply_audience_cut_transform(df, audience: dict, category_decisions: dict,
                 df.at[idx, proj_col] = float(new_uspop)
                 n_pin += 1
                 continue
+
+        # Universal 100-pin keep (2026-08-24 Furious audit D6a): ANY
+        # non-demo row the parent holds at exactly 100 is a pin by
+        # construction - subject self-pin in a native grid outside
+        # SUBJECT_PIN_CATS_TF (SERIES 'Furious', where the exact-name
+        # check above also fails when the caller passes the deliverable
+        # label 'Furious Viewers'), viewers-scope platform pins
+        # (STREAMING/PLATFORM 'Disney+/Hulu'), companion pins. Keep the
+        # BP untouched; only Raw/Proj rescale to the cohort. Without
+        # this the row fell through to the brand path and the
+        # min(99.49, ...) clamp below eroded the pin to 99.49.
+        if cat not in DEMO_CATS_TF and old_bp >= 99.995:
+            df.at[idx, raw_col] = float(new_sample)
+            df.at[idx, proj_col] = float(new_uspop)
+            n_pin += 1
+            continue
 
         # GENDER row: HARD pin.
         if cat == "GENDER":
@@ -910,6 +942,7 @@ def synthesize_audience_cut(
     subject_override: Optional[str] = None,
     api_key_pool: Optional[list] = None,
     max_workers: Optional[int] = None,
+    ship_gate: bool = True,
 ) -> dict:
     """End-to-end orchestrator for a (gender, intensity) audience cut.
 
@@ -1066,6 +1099,27 @@ def synthesize_audience_cut(
     )
     print(f"     {stats}")
 
+    # Phase 3b (2026-08-24 Furious audit D1): non-pinned demo categories
+    # stay anchored to the parent's shape. GENDER is this cut's pinned
+    # dimension; AGE / ETHNICITY / INCOME / ... may tilt a few points
+    # but never invert the parent's majority bucket. Arithmetic drift
+    # correction, not a multiplier on the reasoning.
+    try:
+        try:
+            from cut_demo_anchor import anchor_nonpinned_demos_to_parent
+        except ImportError:
+            from migration.cut_demo_anchor import (  # type: ignore
+                anchor_nonpinned_demos_to_parent,
+            )
+        df_cut, _anchor_stats = anchor_nonpinned_demos_to_parent(
+            df_cut, df_source, subject,
+            pin_category="GENDER",
+            cut_salt=f"{intensity}-{gender}",
+        )
+        print(f"     demo anchor: {_anchor_stats}")
+    except Exception as _anchor_err:
+        print(f"   ⚠ demo anchor failed (non-fatal): {_anchor_err}")
+
     print(f"  -> Phase 4: no-collision enforcement vs source ...")
     df_cut, n_fixed = enforce_no_collisions(df_cut, df_source, subject)
     print(f"     re-jittered {n_fixed} rows to break collisions")
@@ -1161,6 +1215,36 @@ def synthesize_audience_cut(
         )
     except Exception as _sn_err:
         print(f"   ⚠ write-safety-net raised (non-fatal): {_sn_err}")
+
+    # Shared terminal cut write gate (2026-08-24 Furious audit D2: the
+    # Male cut shipped 715 exact-2dp BPs + 99 unsorted categories
+    # because this path never ran the final polish or a sort). Runs the
+    # same chain as every other derived-cut path: final invariant
+    # polish (cohort-label guard + subject re-pin + depin + SUBJECT-row
+    # backstop) -> parent no-collision recheck -> numeric-artifact
+    # normalize -> canonical sort -> loud pre-upload audit.
+    try:
+        try:
+            from migration.cut_write_gate import finalize_cut_for_upload
+        except ImportError:
+            from cut_write_gate import finalize_cut_for_upload  # type: ignore
+        df_cut, _gate_report = finalize_cut_for_upload(
+            df_cut, subject, parent_df=df_source, out_key=out_key,
+            verbose=True,
+            # Final ship gate (2026-08-24 Jenna mandate): blocking on
+            # real uploads, report-only on dry runs and on the local
+            # ops override (ship_gate kwarg).
+            ship_gate=(bool(ship_gate) and not dry_run),
+        )
+    except Exception as _cwg_err:
+        # ShipGateError is the blocking verdict - never swallow it.
+        try:
+            from migration.final_ship_gate import ShipGateError
+        except ImportError:
+            from final_ship_gate import ShipGateError  # type: ignore
+        if isinstance(_cwg_err, ShipGateError):
+            raise
+        print(f"   ⚠ cut write gate raised (non-fatal): {_cwg_err}")
 
     # Gen Pop baseline columns (Jenna 2026-08-22): terminal append after
     # every enforcer / safety net so the raw file ships with the current

@@ -148,23 +148,30 @@ def register_intent_title(
         CacheControl="no-cache, max-age=0",
     )
 
-    quick_select_added = False
-    try:
-        qs_resp = s3.get_object(Bucket=BUCKET, Key=QUICK_SELECTS_KEY)
-        qs = json.loads(qs_resp["Body"].read().decode("utf-8"))
-    except Exception:
-        qs = {}
-    intent_titles = qs.setdefault("intent_titles", {})
-    if title_slug not in intent_titles:
+    # ETag-guarded write: quick_selects is also mutated by the worker
+    # fleet's dashboard registration; a bare put here could drop a
+    # concurrently-registered profile flag.
+    quick_select_flags = {"added": False}
+
+    def _mutate_qs(qs):
+        intent_titles = qs.setdefault("intent_titles", {})
+        if title_slug in intent_titles:
+            quick_select_flags["added"] = False
+            return None
         intent_titles[title_slug] = True
-        quick_select_added = True
+        quick_select_flags["added"] = True
         qs["updated_at"] = now_iso
-        s3.put_object(
-            Bucket=BUCKET, Key=QUICK_SELECTS_KEY,
-            Body=json.dumps(qs, indent=2).encode("utf-8"),
-            ContentType="application/json",
-            CacheControl="no-cache, max-age=0",
-        )
+        return qs
+
+    try:
+        from migration.s3_json_state import update_json
+    except ImportError:
+        from s3_json_state import update_json
+    update_json(
+        BUCKET, QUICK_SELECTS_KEY, _mutate_qs, s3=s3,
+        put_extra_args={"CacheControl": "no-cache, max-age=0"},
+    )
+    quick_select_added = quick_select_flags["added"]
 
     return {
         "title_slug": title_slug,

@@ -184,6 +184,20 @@ def enforce_canonical_demo_schema(df, subject=None, verbose=True):
     if df is None or len(df) == 0:
         return df, 0
 
+    # International frames (Omaze precedent) carry country-native demo
+    # buckets; back-filling the canonical US buckets would re-inject a
+    # US schema into a UK/German file.
+    try:
+        from migration.international_profiles import detect_profile_country
+        _ctry = detect_profile_country(df)
+    except Exception:
+        _ctry = None
+    if _ctry:
+        if verbose:
+            print(f"   canonical-demo-schema rail: {_ctry} frame - US "
+                  f"bucket back-fill skipped")
+        return df, 0
+
     subject_raw = _sample_size(df) or 10000
     ops = 0
     inserts = []
@@ -475,6 +489,20 @@ def enforce_small_sample_location_degrade(
     subject_raw = _sample_size(df) or 10000
     if subject_raw >= sample_threshold:
         return df, 0  # sample is fine, don't touch
+
+    # International frames carry country markets in LOCATION; blending
+    # them 70% into US Gen Pop DMAs would replace the country geography
+    # with US geography.
+    try:
+        from migration.international_profiles import detect_profile_country
+        _ctry = detect_profile_country(df)
+    except Exception:
+        _ctry = None
+    if _ctry:
+        if verbose:
+            print(f"   location-degrade rail: {_ctry} frame - US Gen Pop "
+                  f"DMA blend skipped")
+        return df, 0
 
     subj_key = str(subject or df.get("Value", pd.Series([""])).iloc[0] or "")
     m = df["Column"] == "LOCATION"
