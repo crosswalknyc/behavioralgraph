@@ -42626,6 +42626,41 @@ def _enforce_base_parent_pick(spec_draft, candidates, prompt):
     return False, ''
 
 
+# ── Version-aware matching (2026-08-25) ─────────────────────────────
+# 'The Office US' and 'The Office UK' are different subjects; a prompt
+# that names one version must never be routed at the other. These
+# short qualifier tokens would otherwise be dropped by the >=3-char
+# token filter ('us', 'uk'), conflating the versions.
+_VERSION_QUALIFIER_TOKENS = {
+    'us', 'uk', 'usa', 'american', 'british', 'bbc', 'cbs', 'nbc',
+    'abc', 'fox', 'remake', 'reboot', 'original', 'broadway',
+    'musical',
+}
+# 'us' the pronoun ("give us a profile of the office") is not a
+# version signal - strip verb+us patterns before extraction.
+_PROMPT_PRONOUN_US_RE = re.compile(
+    r'\b(?:give|make|run|build|pull|get|send|show|do|tell|for|help|'
+    r'let|bring|of)\s+us\b')
+
+
+def _prompt_version_tokens(p_norm):
+    """Version-qualifier tokens the prompt actually names, with the
+    'us' pronoun stripped so 'give us the office' carries none."""
+    cleaned = _PROMPT_PRONOUN_US_RE.sub(' ', p_norm or '')
+    return set(t for t in cleaned.split()
+               if t in _VERSION_QUALIFIER_TOKENS)
+
+
+def _subject_version_tokens(subject_norm):
+    """Version-qualifier tokens on a catalog subject. The first token
+    never counts - a single-token subject IS the title ('Us' the
+    movie), not a version marker."""
+    toks = (subject_norm or '').split()
+    if len(toks) < 2:
+        return set()
+    return set(t for t in toks[1:] if t in _VERSION_QUALIFIER_TOKENS)
+
+
 def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CANDIDATES):
     """Return the top-N profile candidates most likely to match the user's
     prompt. Uses token-overlap scoring against each candidate's subject
@@ -42650,7 +42685,12 @@ def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CA
     if not prompt or not catalog:
         return []
     p_norm = _normalize_for_match(prompt)
-    p_tokens = set(t for t in p_norm.split() if len(t) >= 3)
+    # Version qualifiers ('us', 'uk', 'bbc') are shorter than the
+    # 3-char token floor but distinguish same-name versions - keep
+    # them (2026-08-25).
+    p_version_tokens = _prompt_version_tokens(p_norm)
+    p_tokens = set(t for t in p_norm.split()
+                   if len(t) >= 3) | p_version_tokens
     if not p_tokens:
         return []
     # Extract explicit years from the prompt so historical-year skins
@@ -42664,7 +42704,11 @@ def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CA
         subject_norm = _normalize_for_match(c.get('subject') or '')
         display_norm = _normalize_for_match(c.get('display_name') or '')
         combined = f"{subject_norm} {display_norm}"
-        c_tokens = set(t for t in combined.split() if len(t) >= 3)
+        cand_versions = _subject_version_tokens(
+            subject_norm or _normalize_for_match(
+                str(c.get('display_name') or '').split(' - ', 1)[0]))
+        c_tokens = set(t for t in combined.split()
+                       if len(t) >= 3) | cand_versions
         if not c_tokens:
             continue
         overlap = p_tokens & c_tokens
@@ -42677,6 +42721,14 @@ def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CA
         prompt_coverage = len(overlap) / max(len(p_tokens), 1)
         subject_hit = 1.0 if any(t in subject_norm.split() for t in overlap) else 0.5
         score = prompt_coverage * subject_hit
+
+        # Version mismatch (2026-08-25): the prompt names one version
+        # ('the office uk') and this candidate carries a DIFFERENT
+        # version marker ('The Office US') - push it down hard so the
+        # sibling version wins.
+        if p_version_tokens and cand_versions \
+                and not (p_version_tokens & cand_versions):
+            score *= 0.15
 
         # Historical-year handling. If the display name contains a year
         # AND the prompt does NOT mention that exact year, this candidate
@@ -47579,37 +47631,103 @@ def api_synth_chat_clarify():
         where = f' on {platform}' if platform else ''
         low = answer.lower().strip()
         said_no = bool(_re.search(
-            r'\b(no|nope|nah|not that|something else|different|wrong|'
-            r'other)\b', low))
-        said_yes = (bool(_re.search(
-            r'\b(yes|yep|yeah|yup|correct|right|confirm(ed)?|exactly|'
-            r'that one|it is)\b', low))
-            or _collapse_for_match(low) == _collapse_for_match(title))
-        if said_no and not said_yes:
+            r'\b(no|nope|nah|not that|none|neither|something else|'
+            r'different|wrong|other)\b', low))
+        # Same-name versions / alias candidates (2026-08-25): more
+        # than one entity carries this name and the user picks which
+        # one - a number (the chips send '1'..'N'), the title, or the
+        # version label. Never a silent default.
+        versions = [v for v in (data.get('versions') or [])
+                    if isinstance(v, dict)
+                    and str(v.get('title') or '').strip()]
+        if versions:
+            pick = None
+            m = _re.match(r'^\s*(?:option\s*)?(\d{1,2})\b', answer or '')
+            if m:
+                idx = int(m.group(1)) - 1
+                if 0 <= idx < len(versions):
+                    pick = versions[idx]
+            if pick is None:
+                coll_ans = _collapse_for_match(answer)
+                for v in versions:
+                    t_coll = _collapse_for_match(
+                        str(v.get('title') or ''))
+                    l_coll = _collapse_for_match(
+                        str(v.get('version_label') or ''))
+                    full_coll = _collapse_for_match(
+                        f"{v.get('title', '')} "
+                        f"{v.get('version_label', '')}")
+                    keys = [k for k in (t_coll, full_coll, l_coll) if k]
+                    if coll_ans and any(
+                            coll_ans == k
+                            or (len(k) >= 4 and k in coll_ans)
+                            for k in keys):
+                        pick = v
+                        break
+            if pick is None and said_no:
+                draft.pop('ask_identity', None)
+                draft.pop('identity_data', None)
+                return jsonify({
+                    'success': True, 'draft': draft, 'discard': True,
+                    'message': (
+                        "No problem - that brief is set aside, "
+                        "nothing queued. Tell me the subject with "
+                        "one more detail (what it is and where it "
+                        "lives) and I'll draw up a fresh one."),
+                    'next_step': '',
+                })
+            if pick is None:
+                lines = [f"More than one {title} exists. Which one "
+                         f"do you mean?"]
+                for i, v in enumerate(versions, 1):
+                    lbl = str(v.get('version_label') or '').strip()
+                    lines.append(
+                        f"  {i}. {v['title']}"
+                        + (f" ({lbl})" if lbl else ''))
+                lines.append("Reply with a number, or say no if it's "
+                             "something else.")
+                return jsonify({
+                    'success': True, 'draft': draft,
+                    'message': "\n".join(lines),
+                    'next_step': 'identity',
+                })
+            _apply_identity_version(draft, pick)
             draft.pop('ask_identity', None)
             draft.pop('identity_data', None)
-            return jsonify({
-                'success': True, 'draft': draft, 'discard': True,
-                'message': (
-                    "No problem - that brief is set aside, nothing "
-                    "queued. Tell me the subject with one more "
-                    "detail (what it is and where it lives - like "
-                    "'Furious, the series on Hulu') and I'll draw "
-                    "up a fresh one."),
-                'next_step': '',
-            })
-        if not said_yes:
-            return jsonify({
-                'success': True, 'draft': draft,
-                'message': (f"Just to confirm the subject: {title}, "
-                            f"the {medium}{where}? Reply yes if "
-                            f"that's it, or no and tell me what you "
-                            f"meant."),
-                'next_step': 'identity',
-            })
+            title = str(draft.get('subject') or title).strip()
+            medium = str(pick.get('medium') or medium).strip() or 'title'
+            platform = str(pick.get('platform') or '').strip()
+            where = f' on {platform}' if platform else ''
+        else:
+            said_yes = (bool(_re.search(
+                r'\b(yes|yep|yeah|yup|correct|right|confirm(ed)?|'
+                r'exactly|that one|it is)\b', low))
+                or _collapse_for_match(low) == _collapse_for_match(title))
+            if said_no and not said_yes:
+                draft.pop('ask_identity', None)
+                draft.pop('identity_data', None)
+                return jsonify({
+                    'success': True, 'draft': draft, 'discard': True,
+                    'message': (
+                        "No problem - that brief is set aside, nothing "
+                        "queued. Tell me the subject with one more "
+                        "detail (what it is and where it lives - like "
+                        "'Furious, the series on Hulu') and I'll draw "
+                        "up a fresh one."),
+                    'next_step': '',
+                })
+            if not said_yes:
+                return jsonify({
+                    'success': True, 'draft': draft,
+                    'message': (f"Just to confirm the subject: {title}, "
+                                f"the {medium}{where}? Reply yes if "
+                                f"that's it, or no and tell me what you "
+                                f"meant."),
+                    'next_step': 'identity',
+                })
+            draft.pop('ask_identity', None)
+            draft.pop('identity_data', None)
         draft['identity_confident'] = True
-        draft.pop('ask_identity', None)
-        draft.pop('identity_data', None)
         try:
             _set_resolved_identity_line(draft)
         except Exception:
@@ -49494,6 +49612,16 @@ def _spec_from_draft(draft):
         spec['event_window_query'] = _scrub(draft['event_window_query'],
                                             field='event_window_query',
                                             subject=subject, max_len=300,
+                                            single_line=True)
+    # Same-name version qualifier (2026-08-25): the resolved version's
+    # short qualifier ('US', 'UK', 'CBS', 'Movie 2017') rides the spec
+    # so the engine's BRAND INPUT slugs are version-qualified
+    # (the-office-us), never bare forms that also match the other
+    # version.
+    if draft.get('identity_qualifier'):
+        spec['identity_qualifier'] = _scrub(draft['identity_qualifier'],
+                                            field='identity_qualifier',
+                                            subject=subject, max_len=60,
                                             single_line=True)
     # Guided-flow passthrough (2026-08-19, reworked same day per Jenna):
     # the base build is ALWAYS the national total universe + avid.
@@ -52724,6 +52852,42 @@ def _resolve_subject_identity(draft, prompt, allow_ask=True):
     decision = str(draft.get('decision') or 'new_build').strip().lower()
     if decision in ('existing_match', 'derive_cut'):
         return draft  # anchored to an existing file's identity
+    # Same-name versions / ambiguous aliases straight from the
+    # interpret model (2026-08-25): more than one candidate and no
+    # confidence means the user picks - never a silent guess. Runs
+    # before the content-typed gate because alias candidates are
+    # persons.
+    model_versions = _normalize_identity_versions(
+        draft.get('identity_versions'))
+    if len(model_versions) >= 2 \
+            and draft.get('identity_confident') is not True:
+        draft.pop('identity_versions', None)
+        draft['identity_confident'] = False
+        _set_resolved_identity_line(draft)
+        if allow_ask:
+            title = str(draft.get('resolved_title')
+                        or draft.get('subject') or '').split(' - ', 1)[0]
+            draft['ask_identity'] = True
+            draft['identity_data'] = {
+                'title': title,
+                'medium': str(draft.get('medium') or 'title'),
+                'platform': str(draft.get('platform') or ''),
+                'versions': model_versions,
+            }
+            try:
+                print(f"[identity] {len(model_versions)} same-name "
+                      f"versions for {title!r} - asking the user to "
+                      f"pick")
+            except Exception:
+                pass
+        return draft
+    if len(model_versions) == 1 \
+            and draft.get('identity_confident') is not True:
+        # Exactly one candidate survived normalization: apply it, but
+        # keep confidence false so the standard confirm flow still
+        # runs on the chatbot.
+        _apply_identity_version(draft, model_versions[0])
+        draft['identity_confident'] = False
     sig = _identity_signals_from_prompt(prompt)
     medium_field = str(draft.get('medium') or '').strip().lower()
     content_typed = (
@@ -52778,8 +52942,44 @@ def _resolve_subject_identity(draft, prompt, allow_ask=True):
     conf = str((ver or {}).get('confidence') or '').strip().lower()
     exists = (ver or {}).get('exists')
     v_title = str((ver or {}).get('resolved_title') or '').strip()
+    ver_versions = _normalize_identity_versions((ver or {}).get('versions'))
+
+    if len(ver_versions) >= 2 and conf != 'high':
+        # Research surfaced multiple same-name versions and the request
+        # does not disambiguate: the user picks (2026-08-25). Never a
+        # silent pick.
+        draft['identity_confident'] = False
+        _set_resolved_identity_line(draft)
+        if allow_ask:
+            title = str(draft.get('resolved_title')
+                        or draft.get('subject') or '').split(' - ', 1)[0]
+            draft['ask_identity'] = True
+            draft['identity_data'] = {
+                'title': title,
+                'medium': str(sig.get('medium') or draft.get('medium')
+                              or 'title'),
+                'platform': str(sig.get('platform')
+                                or draft.get('platform') or ''),
+                'versions': ver_versions,
+            }
+            try:
+                print(f"[identity] verify surfaced {len(ver_versions)} "
+                      f"same-name versions for {title!r} - asking")
+            except Exception:
+                pass
+        return draft
 
     if ver and v_title and exists is not False and conf in ('high', 'medium'):
+        # Version qualifier from a disambiguated request ('the US
+        # office'): rides the draft into naming and the spec so BRAND
+        # INPUT slugs are version-qualified (2026-08-25).
+        v_qual = _scrub_identity_dashes(
+            str(ver.get('qualifier') or '').strip())[:40]
+        if v_qual:
+            draft['identity_qualifier'] = v_qual
+            if _collapse_for_match(v_qual) \
+                    not in _collapse_for_match(v_title):
+                v_title = f'{v_title} {v_qual}'
         subject_changed = (
             _normalize_for_match(v_title)
             != _normalize_for_match(subject_entity))
@@ -52870,6 +53070,8 @@ def _resolve_subject_identity(draft, prompt, allow_ask=True):
             'medium': medium,
             'platform': platform,
         }
+        if ver_versions:
+            draft['identity_data']['versions'] = ver_versions
         try:
             print(f"[identity] ambiguous - asking user to confirm "
                   f"{title!r} ({medium}"

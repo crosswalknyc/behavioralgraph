@@ -61856,6 +61856,31 @@ https://www.instagram.com/p/..."></textarea>
                 // 2026-08-24 (Furious defect): confirm WHAT the
                 // subject is before anything else is scoped.
                 var _idD = d.identity_data || {};
+                var _idVers = _idD.versions || [];
+                if (_idVers.length) {
+                    // 2026-08-25: multiple same-name versions (US vs
+                    // UK remakes, movie vs musical) or ambiguous-alias
+                    // candidates - one chip per version, never a
+                    // silent pick.
+                    var _vo = [];
+                    for (var _vi = 0; _vi < _idVers.length && _vi < 5;
+                         _vi++) {
+                        var _vT = String(_idVers[_vi].title || '').trim();
+                        var _vL = String(_idVers[_vi].version_label ||
+                            '').trim();
+                        var _vLbl = _vT + (_vL ? ' (' + _vL + ')' : '');
+                        if (_vLbl.length > 58) {
+                            _vLbl = _vLbl.slice(0, 55) + '...';
+                        }
+                        if (_vT) {
+                            _vo.push({label: _vLbl,
+                                      send: String(_vi + 1)});
+                        }
+                    }
+                    _vo.push({label: 'None of these - let me clarify',
+                              send: 'no, something else'});
+                    return _vo;
+                }
                 var _idT = String(_idD.title || d.subject ||
                     'this title');
                 var _idM = String(_idD.medium || 'title');
@@ -62027,6 +62052,25 @@ https://www.instagram.com/p/..."></textarea>
                 var _idData = _idDraft.identity_data || {};
                 var _idTitle = String(_idData.title ||
                     _idDraft.subject || 'this title');
+                var _idQVers = _idData.versions || [];
+                if (_idQVers.length) {
+                    // 2026-08-25: more than one same-name version -
+                    // list them and let the user pick.
+                    var _qLines = ['More than one ' + _idTitle +
+                        ' exists. Which one do you mean?'];
+                    for (var _qi = 0; _qi < _idQVers.length && _qi < 5;
+                         _qi++) {
+                        var _qT = String(_idQVers[_qi].title ||
+                            '').trim();
+                        var _qL = String(_idQVers[_qi].version_label ||
+                            '').trim();
+                        _qLines.push('  ' + (_qi + 1) + '. ' + _qT +
+                            (_qL ? ' (' + _qL + ')' : ''));
+                    }
+                    _qLines.push('Pick below, or tell me what you ' +
+                        'meant.');
+                    return _qLines.join('\n');
+                }
                 var _idMed = String(_idData.medium || 'title');
                 var _idPlat = String(_idData.platform || '').trim();
                 return 'Just to confirm the subject: ' + _idTitle +
