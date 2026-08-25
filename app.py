@@ -44456,7 +44456,8 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"date_range\": { \"start\": \"2025-07-01\", \"end\": \"2026-06-30\" },\n"
         "  \"date_range_explicit\": <true|false>,\n"
         "  \"event_window\": null, // OR, when the request scopes the audience to a real-world event/stint (see EVENT-SCOPED WINDOWS): {\"query\": \"<web-search query that verifies the event dates>\", \"label\": \"<plain framing, e.g. 'her guest-host week'>\", \"confident\": <true|false>, \"candidates\": [{\"start\": \"YYYY-MM-DD\", \"end\": \"YYYY-MM-DD\", \"label\": \"...\"}]}\n"
-        "  \"decision\": \"new_build|existing_match|time_shifted_refresh|derive_cut|cut_needs_parent\",\n"
+        "  \"subiq\": null, // OR, when the request asks for a Subscriber IQ (see SUBSCRIBER IQ REQUESTS): {\"title\": \"Landman\", \"platform\": \"Paramount+\", \"medium\": \"series|movie\", \"season\": <int or null>, \"genre\": \"Drama\", \"content_cadence\": \"Weekly|Binge|Single Event Telecast\", \"is_new_show\": <bool>, \"air_window\": {\"start\": \"YYYY-MM-DD\", \"end\": \"YYYY-MM-DD\"} or null, \"air_window_confident\": <bool>, \"episode_dates\": [\"YYYY-MM-DD\", ...] or [], \"movie_scope\": \"theatrical|streaming|since_release\" or null}\n"
+        "  \"decision\": \"new_build|existing_match|time_shifted_refresh|derive_cut|cut_needs_parent|subscriber_iq\",\n"
         "  \"decision_reason\": \"1-2 sentences explaining the decision\",\n"
         "  \"existing_match_s3_key\": \"<if matches an existing catalog entry>\",\n"
         "  \"existing_match_display_name\": \"<display name of the match>\",\n"
@@ -44471,6 +44472,39 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "    // Each entry: host (bare domain like 'amazon.com' - no scheme), path_pattern (starts with '/' e.g. '/gp/video/detail/'), optional param_hint (short phrase describing distinguishing query params or path elements), evidence (short phrase citing what makes you confident of this URL shape - retailer help doc, checkout UI, etc.). Return 3-8 entries when populated. Do NOT fabricate URLs - only include patterns you can defend.\n"
         "  ]\n"
         "}\n\n"
+
+        "SUBSCRIBER IQ REQUESTS (2026-08-25):\n"
+        "When the request asks for a Subscriber IQ (phrases like "
+        "'subscriber iq', 'sub iq', 'subiq', 'signup tracker', "
+        "'subscriber tracker', 'acquisition tracker' for a show or "
+        "movie), set decision='subscriber_iq' and fill the `subiq` "
+        "object. Rules:\n"
+        "  * subject = the CLEAN title only ('Landman'), never a season "
+        "or audience qualifier. Put the season number in subiq.season.\n"
+        "  * subiq.platform is the streaming platform that carries the "
+        "title. If the user did not name one and you are not certain, "
+        "still fill your best-known platform and note it in "
+        "`assumptions`.\n"
+        "  * subiq.air_window: the season's real premiere-to-finale "
+        "dates (or the movie's release window) from your knowledge. Set "
+        "air_window_confident=false when unsure - the server re-checks "
+        "real air dates with live research either way, so never fake "
+        "confidence.\n"
+        "  * subiq.episode_dates: the season's episode air dates when "
+        "you know them (weekly shows); [] otherwise.\n"
+        "  * For movies, set subiq.movie_scope ONLY when the user "
+        "stated the measurement window kind (theatrical vs streaming vs "
+        "since release); otherwise null - the user is asked.\n"
+        "  * STILL fill every standard field (subject_rows, tu_demos, "
+        "persona_notes, universe_anchor as the researched US viewer "
+        "count of the title, subject_raw_tu = universe_anchor x "
+        "engaged_share / 32.99, brand_category from the CONTENT list "
+        "e.g. 'SERIES - PARAMOUNT+' family or 'MOVIE') - the user can "
+        "add a Profile IQ for the same title audience in one click, and "
+        "those fields drive it. Set is_ip_content=true, medium, "
+        "resolved_title, and audience_type='viewers'.\n"
+        "  * A Subscriber IQ request NEVER matches an existing Profile "
+        "IQ catalog entry - do not emit existing_match for it.\n\n"
 
         "DEFAULT DATE RANGE - use these unless the user's request "
         "explicitly names a different window:\n"
@@ -46299,6 +46333,173 @@ def _sg_guard_tier_scope(draft, text, history, allow_ask):
         f"all {subject} viewers with the '{term}' interest noted, or "
         f"'persona' to build it as a '{term}' persona audience "
         f"instead.")}
+
+
+def _apply_subiq_guards(draft, text):
+    """Subscriber IQ dates/season clarification (2026-08-25, bind-or-
+    ask). Researches the season's REAL air window (or the movie's
+    release window) with live web search, detects a season still in
+    progress (deliverable becomes 'Season N to date' through a concrete
+    date), surfaces conflicts between user-supplied dates and the
+    researched window, and asks movies for their measurement window
+    kind. Always stashes the window confirmation ask plus the Profile
+    IQ add-on ask - the build never runs on silently defaulted dates.
+    Mutates the draft in place; never raises."""
+    if not isinstance(draft, dict):
+        return
+    if str(draft.get('decision') or '').strip().lower() != 'subscriber_iq':
+        return
+    try:
+        try:
+            from migration.title_anchors import (
+                season_from_text, season_to_date, window_conflicts,
+            )
+        except ImportError:
+            from title_anchors import (  # twin layout
+                season_from_text, season_to_date, window_conflicts,
+            )
+        subiq = draft.get('subiq') if isinstance(draft.get('subiq'),
+                                                 dict) else {}
+        draft['subiq'] = subiq
+        title = str(subiq.get('title') or draft.get('resolved_title')
+                    or str(draft.get('subject') or '')
+                    .split(' - ', 1)[0]).strip()
+        # Strip audience-noun tails the model may have left on.
+        for _tail in (' viewers', ' watchers', ' fans', ' audience'):
+            if title.lower().endswith(_tail):
+                title = title[:-len(_tail)].strip()
+        subiq['title'] = title
+        medium = str(subiq.get('medium') or draft.get('medium')
+                     or 'series').strip().lower()
+        medium = 'movie' if medium == 'movie' else 'series'
+        subiq['medium'] = medium
+        platform = str(subiq.get('platform') or draft.get('platform')
+                       or '').strip()
+        subiq['platform'] = platform
+        try:
+            season = int(subiq.get('season'))
+        except (TypeError, ValueError):
+            season = None
+        if season is None and medium == 'series':
+            season = season_from_text(text)
+        subiq['season'] = season
+
+        # Research the real air window with live web search - the
+        # model's date recall is never trusted on its own.
+        resolved = None
+        try:
+            try:
+                from migration.event_window import (
+                    resolve_event_window_via_search,
+                )
+            except ImportError:
+                from event_window import (  # twin layout
+                    resolve_event_window_via_search,
+                )
+            if medium == 'movie':
+                q = (f"{title} movie"
+                     + (f" ({platform})" if platform else "")
+                     + " US release date; if it later moved to "
+                       "streaming, when did it premiere there")
+            else:
+                q = (f"{title}"
+                     + (f" season {season}" if season else "")
+                     + (f" on {platform}" if platform else "")
+                     + " premiere date and finale air date; if the "
+                       "season is still airing, use the announced or "
+                       "scheduled finale date as the end")
+            resolved = resolve_event_window_via_search(
+                q, run_id='subiq-interpret')
+        except Exception as _rw_err:
+            print(f"[subiq-guard] air window research failed: {_rw_err}")
+
+        kind = 'confirm'
+        air = None
+        if resolved and resolved.get('start') and resolved.get('end'):
+            air = {'start': resolved['start'], 'end': resolved['end']}
+        else:
+            model_win = subiq.get('air_window')
+            if (isinstance(model_win, dict)
+                    and subiq.get('air_window_confident')
+                    and model_win.get('start') and model_win.get('end')):
+                air = {'start': str(model_win['start'])[:10],
+                       'end': str(model_win['end'])[:10]}
+            else:
+                kind = 'need_dates'
+        if air:
+            subiq['air_window'] = dict(air)
+
+        # Season still airing -> the deliverable is 'Season N to date'
+        # through a concrete date, and the user approves that framing.
+        if air and medium == 'series':
+            in_prog, through = season_to_date(air.get('end'))
+            if in_prog and through:
+                subiq['season_to_date'] = True
+                subiq['through_date'] = through
+                kind = 'season_to_date'
+
+        # User-supplied dates that disagree with the researched air
+        # window surface as a choice, never a silent pick.
+        user_rng = draft.get('date_range') or {}
+        user_win = None
+        if (air and draft.get('date_range_explicit')
+                and user_rng.get('start') and user_rng.get('end')
+                and window_conflicts(user_rng.get('start'),
+                                     user_rng.get('end'),
+                                     air.get('start'), air.get('end'))):
+            kind = 'conflict'
+            user_win = {'start': str(user_rng['start'])[:10],
+                        'end': str(user_rng['end'])[:10]}
+
+        # Movies confirm the measurement window kind unless stated.
+        scope = str(subiq.get('movie_scope') or '').strip().lower()
+        if medium == 'movie' and scope not in ('theatrical', 'streaming',
+                                               'since_release'):
+            kind = 'movie_scope'
+            subiq['movie_scope'] = None
+
+        label = title
+        if season:
+            label = f"{title} - Season {season}"
+            if subiq.get('season_to_date'):
+                label = f"{label} to date"
+        subiq['deliverable_label'] = label
+
+        # Bind the working window now for the non-conflict kinds so
+        # every echo shows real dates; the clarify step still owns the
+        # final confirmation.
+        if air and kind in ('confirm', 'season_to_date'):
+            draft['date_range'] = {
+                'start': air['start'],
+                'end': subiq.get('through_date') or air['end'],
+            }
+            draft['date_range_explicit'] = True
+
+        draft['ask_subiq_window'] = True
+        draft['subiq_window_data'] = {
+            'kind': kind,
+            'title': title,
+            'platform': platform,
+            'season': season,
+            'medium': medium,
+            'air_window': air,
+            'through_date': subiq.get('through_date'),
+            'season_to_date': bool(subiq.get('season_to_date')),
+            'user_window': user_win,
+            'researched_label': str((resolved or {}).get('label')
+                                    or '')[:120],
+        }
+        draft['ask_subiq_upsell'] = True
+        draft['subiq_upsell_data'] = {
+            'title': title,
+            'label': label,
+            'profile_credits': CREDITS_PROFILE_ANALYSIS,
+            'subiq_credits': CREDITS_SVOD,
+        }
+        draft['estimated_credits'] = CREDITS_SVOD
+        draft['base_credits'] = CREDITS_SVOD
+    except Exception as _sq_err:
+        print(f"[subiq-guard] failed (non-fatal): {_sq_err}")
 
 
 def _apply_semantic_guards(draft, text, history=None, allow_ask=True,
@@ -48843,7 +49044,7 @@ def api_synth_chat_clarify():
     draft = body.get('draft') or {}
     if step not in ('goal', 'strategy', 'region', 'cuts', 'parent_link',
                     'age_breaks', 'ip_scope', 'identity',
-                    'existing_profile') \
+                    'existing_profile', 'subiq_window', 'subiq_upsell') \
             or not isinstance(draft, dict):
         _chatbot_error_email('brief-chat/clarify',
                              f'bad clarify step: {step!r}',
@@ -49116,6 +49317,270 @@ def api_synth_chat_clarify():
                         f"run), or pull fresh for an updated read."),
             'next_step': 'existing_profile',
         })
+
+    if step == 'subiq_window':
+        # Subscriber IQ dates/season confirmation (2026-08-25, bind-or-
+        # ask). The interpret step researched the real air window; the
+        # user confirms it, resolves a conflict with their own dates,
+        # picks a movie measurement window, or supplies dates directly.
+        data = draft.get('subiq_window_data') or {}
+        subiq = draft.get('subiq') if isinstance(draft.get('subiq'),
+                                                 dict) else {}
+        draft['subiq'] = subiq
+        kind = str(data.get('kind') or 'confirm').strip().lower()
+        title = str(data.get('title') or subiq.get('title')
+                    or subject).strip()
+        season = data.get('season')
+        air = data.get('air_window') or {}
+        low = answer.lower().strip()
+
+        def _fmt_win(w):
+            return (f"{(w or {}).get('start', '?')} to "
+                    f"{(w or {}).get('end', '?')}")
+
+        def _label_now():
+            lbl = title
+            if season:
+                lbl = f"{title} - Season {season}"
+                if subiq.get('season_to_date'):
+                    lbl = f"{lbl} to date"
+            subiq['deliverable_label'] = lbl
+            return lbl
+
+        def _bind_window(start, end, note):
+            subiq['air_window'] = {'start': start, 'end': end}
+            draft['date_range'] = {
+                'start': start,
+                'end': subiq.get('through_date') or end,
+            }
+            draft['date_range_explicit'] = True
+            draft.pop('ask_subiq_window', None)
+            draft.pop('subiq_window_data', None)
+            lbl = _label_now()
+            nxt = ('subiq_upsell' if draft.get('ask_subiq_upsell')
+                   else 'approve')
+            tail = (" One more thing below." if nxt == 'subiq_upsell'
+                    else " Review the brief below and approve to "
+                         "queue.")
+            return jsonify({'success': True, 'draft': draft,
+                            'message': f"{note} {lbl} measures "
+                                       f"{start} to "
+                                       f"{subiq.get('through_date') or end}."
+                                       f"{tail}",
+                            'next_step': nxt})
+
+        # Direct dates in the answer always win (any kind).
+        _dates = _re.findall(r'(\d{4}-\d{2}-\d{2})', answer)
+        if len(_dates) >= 2:
+            subiq.pop('season_to_date', None)
+            subiq.pop('through_date', None)
+            return _bind_window(_dates[0], _dates[1],
+                                "Locked to your dates.")
+
+        if kind == 'movie_scope':
+            scope = None
+            if _re.search(r'\b(theatrical|theater|theatre|box office)\b',
+                          low) or low.startswith('1'):
+                scope = 'theatrical'
+            elif _re.search(r'\b(stream|streaming|svod|on '
+                            r'(?:netflix|hulu|max|peacock|paramount|'
+                            r'prime|apple|disney))\b', low) \
+                    or low.startswith('2'):
+                scope = 'streaming'
+            elif _re.search(r'\b(since|release|all|everything|both|'
+                            r'cumulative|to date)\b', low) \
+                    or low.startswith('3'):
+                scope = 'since_release'
+            if not scope:
+                return jsonify({
+                    'success': True, 'draft': draft,
+                    'message': (f"Which window should {title} measure? "
+                                "Reply theatrical (the theater run), "
+                                "streaming (its streaming window), or "
+                                "since release (everything to date). "
+                                "Or send exact dates like 2025-11-16 "
+                                "to 2026-01-11."),
+                    'next_step': 'subiq_window'})
+            subiq['movie_scope'] = scope
+            start = str(air.get('start') or '').strip()
+            today_iso = datetime.now().strftime('%Y-%m-%d')
+            if not start:
+                return jsonify({
+                    'success': True, 'draft': draft,
+                    'message': ("Send the window as two dates like "
+                                "2025-11-16 to 2026-01-11 and I'll "
+                                "lock it in."),
+                    'next_step': 'subiq_window'})
+            if scope == 'theatrical':
+                try:
+                    _s = datetime.strptime(start, '%Y-%m-%d')
+                    _e = min(_s + timedelta(days=89), datetime.now())
+                    end = _e.strftime('%Y-%m-%d')
+                except ValueError:
+                    end = str(air.get('end') or today_iso)[:10]
+                return _bind_window(start, end,
+                                    "Measuring the theatrical window.")
+            if scope == 'streaming':
+                _sw = None
+                try:
+                    try:
+                        from migration.event_window import (
+                            resolve_event_window_via_search as _rev)
+                    except ImportError:
+                        from event_window import (
+                            resolve_event_window_via_search as _rev)
+                    _plat = str(data.get('platform')
+                                or subiq.get('platform') or '').strip()
+                    _sw = _rev(f"{title} streaming premiere date"
+                               + (f" on {_plat}" if _plat else ""),
+                               run_id='subiq-clarify')
+                except Exception as _sw_err:
+                    print(f"[subiq-clarify] streaming window research "
+                          f"failed: {_sw_err}")
+                if _sw and _sw.get('start'):
+                    return _bind_window(_sw['start'], today_iso,
+                                        "Measuring the streaming "
+                                        "window.")
+                return jsonify({
+                    'success': True, 'draft': draft,
+                    'message': ("I could not pin the streaming "
+                                "premiere date. Send the window as "
+                                "two dates like 2025-11-16 to "
+                                "2026-01-11."),
+                    'next_step': 'subiq_window'})
+            return _bind_window(start, today_iso,
+                                "Measuring since release.")
+
+        if kind == 'conflict':
+            user_win = data.get('user_window') or {}
+            if _re.search(r'\b(mine|my dates|keep|user|stick)\b', low) \
+                    or low.startswith('2'):
+                subiq.pop('season_to_date', None)
+                subiq.pop('through_date', None)
+                return _bind_window(
+                    str(user_win.get('start') or '')[:10],
+                    str(user_win.get('end') or '')[:10],
+                    "Keeping your dates.")
+            if _re.search(r'\b(research|air|actual|real|correct|'
+                          r'yours|use th)\b', low) or low.startswith('1') \
+                    or _re.match(r'^(yes|yep|yeah|ok|okay|sure)\b', low):
+                return _bind_window(
+                    str(air.get('start') or '')[:10],
+                    str(air.get('end') or '')[:10],
+                    "Using the real air window.")
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (f"The dates you gave "
+                            f"({_fmt_win(user_win)}) differ from the "
+                            f"real air window ({_fmt_win(air)}). Reply "
+                            f"air window to use the researched dates, "
+                            f"my dates to keep yours, or send exact "
+                            f"dates."),
+                'next_step': 'subiq_window'})
+
+        if kind == 'need_dates':
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (f"I could not pin the exact window for "
+                            f"{title}"
+                            + (f" season {season}" if season else "")
+                            + ". Send it as two dates like 2025-11-16 "
+                              "to 2026-01-11 and I'll lock it in."),
+                'next_step': 'subiq_window'})
+
+        # kind in ('confirm', 'season_to_date'): a yes keeps the bound
+        # researched window; a no invites dates.
+        if _re.match(r'^(yes|yep|yeah|ok|okay|sure|confirm|correct|'
+                     r'right|approve|sounds good|that works|good|'
+                     r'season to date|to date|1)\b', low):
+            return _bind_window(
+                str(air.get('start') or '')[:10],
+                str(air.get('end') or '')[:10],
+                "Confirmed.")
+        if _re.search(r'\b(no|nope|different|wrong|change|not)\b', low):
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': ("No problem. Send the window as two dates "
+                            "like 2025-11-16 to 2026-01-11, or name "
+                            "the season you meant."),
+                'next_step': 'subiq_window'})
+        _season_pick = _re.search(r'\bseason\s*(\d{1,2})\b', low)
+        if _season_pick and int(_season_pick.group(1)) != (season or 0):
+            return jsonify({
+                'success': True, 'draft': draft, 'discard': True,
+                'message': (f"Got it - season "
+                            f"{int(_season_pick.group(1))}. That brief "
+                            "is set aside; ask again naming that "
+                            "season and I'll research its air window "
+                            "fresh."),
+                'next_step': ''})
+        return jsonify({
+            'success': True, 'draft': draft,
+            'message': (f"Reply yes to measure {_fmt_win(air)}"
+                        + (f" (through "
+                           f"{data.get('through_date')} so far this "
+                           f"season)" if kind == 'season_to_date'
+                           else "")
+                        + ", or send exact dates like 2025-11-16 to "
+                          "2026-01-11."),
+            'next_step': 'subiq_window'})
+
+    if step == 'subiq_upsell':
+        # Profile IQ add-on offer (2026-08-25): one click adds a
+        # Profile IQ for the same title audience, built off the same
+        # universe so the two deliverables always agree.
+        subiq = draft.get('subiq') if isinstance(draft.get('subiq'),
+                                                 dict) else {}
+        draft['subiq'] = subiq
+        data = draft.get('subiq_upsell_data') or {}
+        label = str(data.get('label') or subiq.get('deliverable_label')
+                    or subject).strip()
+        subiq_credits = int(data.get('subiq_credits') or CREDITS_SVOD)
+        prof_credits = int(data.get('profile_credits')
+                           or CREDITS_PROFILE_ANALYSIS)
+        low = answer.lower().strip()
+        said_yes = bool(_re.match(
+            r'^(yes|yep|yeah|ok|okay|sure|add|both|include|do it|'
+            r'add it|1)\b', low)) or 'profile' in low and not \
+            _re.search(r'\b(no|skip|just|only|without)\b', low)
+        said_no = bool(_re.search(
+            r'\b(no|nope|skip|just the|only the|not now|pass|'
+            r'without)\b', low)) or low.startswith('2')
+        if said_yes and not said_no:
+            subiq['addon_profile'] = True
+            total = subiq_credits + prof_credits
+            draft['estimated_credits'] = total
+            draft.pop('ask_subiq_upsell', None)
+            draft.pop('subiq_upsell_data', None)
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (f"Added - a Profile IQ for this audience "
+                            f"builds alongside the tracker, on the "
+                            f"same viewer universe so the two always "
+                            f"agree. Total: {total} credits "
+                            f"({subiq_credits} Subscriber IQ + "
+                            f"{prof_credits} Profile IQ). Review the "
+                            f"brief below and approve to queue."),
+                'next_step': 'approve'})
+        if said_no:
+            subiq['addon_profile'] = False
+            draft['estimated_credits'] = subiq_credits
+            draft.pop('ask_subiq_upsell', None)
+            draft.pop('subiq_upsell_data', None)
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (f"Just the Subscriber IQ - "
+                            f"{subiq_credits} credits. Review the "
+                            f"brief below and approve to queue."),
+                'next_step': 'approve'})
+        return jsonify({
+            'success': True, 'draft': draft,
+            'message': (f"Want a Profile IQ for the {label} audience "
+                        f"alongside the tracker (+{prof_credits} "
+                        f"credits)? It builds on the same viewers, so "
+                        f"demographics and audience size match across "
+                        f"both. Reply add it or just the tracker."),
+            'next_step': 'subiq_upsell'})
 
     if step == 'ip_scope':
         # IP audience scope (2026-08-21 Jenna directive): broad
@@ -50039,6 +50504,15 @@ def api_synth_chat_interpret():
             _bind_relative_window(spec_draft, text, chat_history=history,
                                   decision=_dec_norm)
         _ensure_cut_window_echo(spec_draft, decision=_dec_norm)
+        # Subscriber IQ dates/season guard (2026-08-25): researches the
+        # real air window, flags a season still in progress as 'Season
+        # N to date', surfaces user-date conflicts, and stashes the
+        # window confirmation + Profile IQ add-on asks. Runs before the
+        # future-window guard so an in-progress season's through-today
+        # binding is what that guard sees.
+        if _dec_norm == 'subscriber_iq':
+            _apply_subiq_guards(spec_draft, text)
+            needs_date_clarification = False
         # Future-window guard (2026-08-25): runs AFTER every window
         # binder so it sees the final dates. Windows that spill past
         # today clamp to today with an echo; entirely-future windows
@@ -50094,6 +50568,19 @@ def api_synth_chat_interpret():
         if spec_draft.get('ask_identity') and \
                 spec_draft.get('identity_data'):
             clarify_steps = ['identity'] + clarify_steps
+        # Subscriber IQ flow (2026-08-25): its own two-step clarify
+        # (window confirmation, then the Profile IQ add-on offer)
+        # replaces the fresh-build scoping steps entirely. Identity
+        # still leads when stashed.
+        if _dec_norm == 'subscriber_iq':
+            clarify_steps = []
+            if spec_draft.get('ask_identity') and \
+                    spec_draft.get('identity_data'):
+                clarify_steps.append('identity')
+            if spec_draft.get('ask_subiq_window'):
+                clarify_steps.append('subiq_window')
+            if spec_draft.get('ask_subiq_upsell'):
+                clarify_steps.append('subiq_upsell')
         # Estimated audience band on the approval brief (2026-08-24
         # Jenna): same helper the Partner API quotes from, derived from
         # the exact sample pinned on this draft, so the brief, the
@@ -51170,6 +51657,61 @@ def api_synth_chat_approve():
             'run_id': None,
         })
 
+    # ---- Subscriber IQ payload shaping (2026-08-25): the tracker's
+    # own fields ride the spec under `subiq` (scrubbed + bounded), and
+    # anchor_title pins the cross-product universe anchor. The window
+    # was confirmed in the clarify flow; a draft that somehow arrives
+    # without one gets a plain ask instead of a queue rejection.
+    if decision == 'subscriber_iq':
+        _subiq_d = (draft.get('subiq')
+                    if isinstance(draft.get('subiq'), dict) else {})
+        _siq_title = str(_subiq_d.get('title') or spec.get('name')
+                         or '').split(' - ', 1)[0].strip()
+        _siq_win = (_subiq_d.get('air_window')
+                    if isinstance(_subiq_d.get('air_window'), dict)
+                    else {})
+        if not (_siq_win.get('start') and _siq_win.get('end')):
+            return jsonify({
+                'success': False,
+                'guidance': True,
+                'error': ('Need the measurement window first - send '
+                          'the dates as 2025-11-16 to 2026-01-11 and '
+                          'then approve.'),
+            })
+        try:
+            _siq_season = int(_subiq_d.get('season'))
+        except (TypeError, ValueError):
+            _siq_season = None
+        spec['subiq'] = {
+            'title': _siq_title[:120],
+            'platform': str(_subiq_d.get('platform') or '')[:60],
+            'medium': ('movie'
+                       if str(_subiq_d.get('medium') or ''
+                              ).strip().lower() == 'movie'
+                       else 'series'),
+            'season': _siq_season,
+            'genre': str(_subiq_d.get('genre') or '')[:80],
+            'content_cadence': str(_subiq_d.get('content_cadence')
+                                   or 'Weekly')[:40],
+            'is_new_show': bool(_subiq_d.get('is_new_show')),
+            'air_window': {'start': str(_siq_win['start'])[:10],
+                           'end': str(_siq_win['end'])[:10]},
+            'episode_dates': [str(d)[:10]
+                              for d in (_subiq_d.get('episode_dates')
+                                        or [])
+                              if isinstance(d, str)][:60],
+            'movie_scope': (str(_subiq_d.get('movie_scope'))[:20]
+                            if _subiq_d.get('movie_scope') else None),
+            'season_to_date': bool(_subiq_d.get('season_to_date')),
+            'through_date': (str(_subiq_d.get('through_date'))[:10]
+                             if _subiq_d.get('through_date') else None),
+            'deliverable_label': str(_subiq_d.get('deliverable_label')
+                                     or _siq_title)[:120],
+            'addon_profile': bool(_subiq_d.get('addon_profile')),
+        }
+        spec['anchor_title'] = _siq_title[:120]
+        spec['anchor_season'] = _siq_season
+
     # ---- Credit pricing + preflight (2026-08-21 Jenna directive: the
     # chatbot must charge and record usage like the dashboard and the
     # partner API do - including for unlimited users, whose history and
@@ -51186,6 +51728,10 @@ def api_synth_chat_approve():
     else:
         price = (_V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
                  + ADDON_CUT_CREDITS * len(_billable_cuts))
+    if decision == 'subscriber_iq' and (spec.get('subiq')
+                                        or {}).get('addon_profile'):
+        # Tracker + Profile IQ add-on: both deliverables price in.
+        price += CREDITS_PROFILE_ANALYSIS
     if price > 0 and _charge_user and not has_credits_for(_charge_user, price):
         _, _left = check_user_credits(_charge_user)
         return jsonify({
@@ -52383,6 +52929,7 @@ _V1_CREDITS = {
     'time_shifted_refresh': CREDITS_PROFILE_ANALYSIS,       # 5
     'new_build':            CREDITS_PROFILE_ANALYSIS,       # 5
     'cut_needs_parent':     CREDITS_PROFILE_ANALYSIS + 3,   # 8
+    'subscriber_iq':        CREDITS_SVOD,                   # 10
 }
 
 # --------------------------------------------------------------------
@@ -53792,6 +54339,13 @@ def _maybe_ask_ip_scope(draft, prompt):
     decision = str(draft.get('decision') or 'new_build').strip().lower()
     if decision in ('existing_match', 'derive_cut'):
         return draft  # parent's universe semantics already fixed
+    if decision == 'subscriber_iq':
+        # A Subscriber IQ is inherently the title's viewers; the
+        # optional Profile IQ add-on rides the same viewers scope. No
+        # broad-vs-consumers question to ask.
+        draft['ip_scope'] = 'consumers'
+        _apply_ip_scope_to_draft(draft, 'consumers')
+        return draft
     scope = str(draft.get('ip_scope') or '').strip().lower()
     if scope in ('broad', 'consumers'):
         _apply_ip_scope_to_draft(draft, scope)
@@ -54763,6 +55317,10 @@ def _v1_queue_spec_refusal(spec, decision='new_build', body=None):
     would be accepted. INTERNAL string - never send to a partner raw;
     map through _v1_refusal_partner() first."""
     body = body or {}
+    if decision == 'subscriber_iq':
+        # Subscriber IQ requires the dashboard chatbot's dates/season
+        # confirmation flow, which the one-shot partner API cannot run.
+        return 'subscriber_iq requires the dashboard flow'
     if decision == 'derive_cut':
         for k in ('name', 'brand_category'):
             if k not in spec:
@@ -54816,6 +55374,12 @@ def _v1_refusal_partner(internal_reason):
     vocabulary, no bound values, no field names beyond documented API
     fields."""
     r = (internal_reason or '').strip()
+    if r.startswith('subscriber_iq requires'):
+        return ('use_dashboard',
+                'Subscriber IQ builds run through the dashboard, where '
+                'the season and measurement window are confirmed with '
+                'you before the build starts. Open Chatbot Profile IQ '
+                'in the dashboard to request it.')
     if r.startswith('subject_raw_tu too large'):
         return ('audience_too_broad',
                 'audience too broad: this prompt reads as the full US '

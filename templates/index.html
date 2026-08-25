@@ -62069,6 +62069,51 @@ https://www.instagram.com/p/..."></textarea>
                 ao.push({label: 'All ages', send: 'all ages'});
                 return ao;
             }
+            if (step === 'subiq_window') {
+                // 2026-08-25 Subscriber IQ: confirm the researched
+                // air window (or resolve conflicts / movie scope)
+                // before anything builds.
+                var _swD = (d && d.subiq_window_data) || {};
+                var _swKind = String(_swD.kind || 'confirm');
+                if (_swKind === 'movie_scope') {
+                    return [
+                        {label: 'Theatrical run', send: 'theatrical'},
+                        {label: 'Streaming window', send: 'streaming'},
+                        {label: 'Since release', send: 'since release'}
+                    ];
+                }
+                if (_swKind === 'conflict') {
+                    return [
+                        {label: 'Use the real air window', send: '1'},
+                        {label: 'Keep my dates', send: '2'}
+                    ];
+                }
+                if (_swKind === 'need_dates') {
+                    return null; // the user types the dates
+                }
+                if (_swKind === 'season_to_date') {
+                    return [
+                        {label: 'Season to date works', send: 'yes'},
+                        {label: 'Different dates', send: 'different dates'}
+                    ];
+                }
+                return [
+                    {label: 'Yes, that window', send: 'yes'},
+                    {label: 'Different dates', send: 'different dates'}
+                ];
+            }
+            if (step === 'subiq_upsell') {
+                // 2026-08-25: one-click Profile IQ add-on for the
+                // same title audience.
+                var _suD = (d && d.subiq_upsell_data) || {};
+                var _suC = _suD.profile_credits || 5;
+                return [
+                    {label: 'Add the Profile IQ (+' + _suC +
+                        ' credits)', send: 'add it'},
+                    {label: 'Just the Subscriber IQ',
+                     send: 'just the tracker'}
+                ];
+            }
             return null;
         }
 
@@ -62284,6 +62329,64 @@ https://www.instagram.com/p/..."></textarea>
                         'own profile.');
                 }
                 return _plLines.join('\n');
+            }
+            if (step === 'subiq_window') {
+                // 2026-08-25 Subscriber IQ: the window question is
+                // built from the researched air-window data stashed
+                // on the draft by the interpret step.
+                var _swQD = synthChatCurrentDraft || {};
+                var _swQ = _swQD.subiq_window_data || {};
+                var _swT = String(_swQ.title || _swQD.subject ||
+                    'this title');
+                var _swS = _swQ.season
+                    ? ' Season ' + _swQ.season : '';
+                var _swWin = _swQ.air_window || {};
+                var _swRange = String(_swWin.start || '?') + ' to ' +
+                    String(_swWin.end || '?');
+                var _swQKind = String(_swQ.kind || 'confirm');
+                if (_swQKind === 'movie_scope') {
+                    return 'Which window should ' + _swT +
+                        ' measure? The theatrical run, its ' +
+                        'streaming window, or everything since ' +
+                        'release. Pick below, or send exact dates ' +
+                        'like 2025-11-16 to 2026-01-11.';
+                }
+                if (_swQKind === 'conflict') {
+                    var _swU = _swQ.user_window || {};
+                    return 'The dates you gave (' +
+                        String(_swU.start || '?') + ' to ' +
+                        String(_swU.end || '?') + ') differ from ' +
+                        _swT + _swS + "'s real air window (" +
+                        _swRange + '). Which should this measure?';
+                }
+                if (_swQKind === 'need_dates') {
+                    return 'I could not pin the exact window for ' +
+                        _swT + _swS + '. Send it as two dates like ' +
+                        '2025-11-16 to 2026-01-11 and I will lock ' +
+                        'it in.';
+                }
+                if (_swQKind === 'season_to_date') {
+                    return _swT + _swS + ' is still airing, so this ' +
+                        'would be delivered as ' + _swT + ' -' +
+                        _swS + ' to date, measured ' +
+                        String(_swWin.start || '?') + ' through ' +
+                        String(_swQ.through_date || 'today') +
+                        '. Work for you?';
+                }
+                return _swT + _swS + ' aired ' + _swRange +
+                    '. Measure that window?';
+            }
+            if (step === 'subiq_upsell') {
+                var _suQD = synthChatCurrentDraft || {};
+                var _suQ = _suQD.subiq_upsell_data || {};
+                var _suLbl = String(_suQ.label || _suQ.title ||
+                    _suQD.subject || 'this title');
+                var _suPC = _suQ.profile_credits || 5;
+                return 'Want a Profile IQ for the ' + _suLbl +
+                    ' audience alongside it (+' + _suPC +
+                    ' credits)? It builds on the same viewers, so ' +
+                    'demographics and audience size match across ' +
+                    'both.';
             }
             if (step === 'goal') {
                 return 'Quick context so I can recommend the right ' +

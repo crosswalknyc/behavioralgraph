@@ -5757,14 +5757,47 @@ def write_output(df_summary, df_comp, df_demo, df_timing, df_episode_attribution
         print(f"✅ AI validation passed: {note}")
 
     # Final-step GPT-4o audience alignment before saving output.
-    print("🧠 Running final demographic alignment agent (GPT-4o)...")
-    df_out, final_demo_changes = ai_align_final_demographics_with_research(df_out, p['platform_name'])
-    if final_demo_changes:
-        print("   Applied final demographic alignment changes:")
-        for c in final_demo_changes:
-            print(f"     → {c}")
+    # Skipped when demographics are locked to the title's established
+    # audience shape (2026-08-25 cross-product coherence): the alignment
+    # agent would drift the buckets away from the anchor.
+    if p.get('demographics_locked'):
+        print("🔒 Skipping final demographic alignment agent: demographics "
+              "are locked to the title's established audience shape.")
     else:
-        print("   No final demographic adjustments applied.")
+        print("🧠 Running final demographic alignment agent (GPT-4o)...")
+        df_out, final_demo_changes = ai_align_final_demographics_with_research(df_out, p['platform_name'])
+        if final_demo_changes:
+            print("   Applied final demographic alignment changes:")
+            for c in final_demo_changes:
+                print(f"     → {c}")
+        else:
+            print("   No final demographic adjustments applied.")
+
+    # Stash the FINAL demographic percentages (post-alignment) on the
+    # params dict so run_synthetic_attribution can return them and the
+    # caller can record them as the title's universe anchor.
+    try:
+        _final_demos = {}
+        _section = None
+        for _idx in df_out.index:
+            _cat = str(df_out.loc[_idx, "Category"] or "").strip()
+            _pct = str(df_out.loc[_idx, "Percentage"] or "").strip()
+            if _cat in ("AGE", "GENDER") and not _pct:
+                _section = _cat
+                _final_demos.setdefault(_section, {})
+                continue
+            if _section:
+                if not _cat:
+                    _section = None
+                    continue
+                if _pct.endswith("%"):
+                    try:
+                        _final_demos[_section][_cat] = float(_pct[:-1])
+                    except ValueError:
+                        pass
+        p['_final_demo_pcts'] = {k: v for k, v in _final_demos.items() if v}
+    except Exception as _fd_err:
+        print(f"   ⚠️  Could not capture final demo percentages: {_fd_err}")
 
     # Hard final consistency guard for attribution summary rows.
     df_out, attrib_changes = enforce_attribution_summary_consistency(df_out)
@@ -7027,7 +7060,27 @@ def _build_synthetic_demographics(config: dict, new_signups_panel: int,
 
     Claude's downstream demographic-alignment agent will refine these
     starting numbers further, so they just need to be in the right ballpark.
+
+    Locked-override path (2026-08-25 cross-product coherence): when the
+    caller supplies BOTH demographic_age_pcts and demographic_gender_pcts
+    AND sets demographics_locked, those distributions came from the
+    title's established universe anchor (the Profile IQ built first for
+    this title) and are emitted verbatim - research and genre heuristics
+    are both bypassed so the two products always match.
     """
+    if (config.get('demographics_locked')
+            and isinstance(config.get('demographic_age_pcts'), dict)
+            and isinstance(config.get('demographic_gender_pcts'), dict)
+            and config['demographic_age_pcts']
+            and config['demographic_gender_pcts']):
+        print("   🔒 Demographics locked to the title's established "
+              "audience shape (cross-product coherence)")
+        return _emit_demographics_df(
+            dict(config['demographic_age_pcts']),
+            dict(config['demographic_gender_pcts']),
+            new_signups_panel,
+        )
+
     if research and research.get('demographics_confidence') in ('high', 'medium'):
         age_research = research.get('demographics_age') or {}
         gen_research = research.get('demographics_gender') or {}
@@ -7912,6 +7965,9 @@ def run_synthetic_attribution(config: dict) -> dict:
         "new_signups_us":    panel['new_signups_panel'] * int(US_POPULATION / SAMPLE_REPRESENTS),
         "validation_status": validation_meta.get('status', 'UNKNOWN'),
         "panel_breakdown":   panel['reach_breakdown'],
+        # Final (post-alignment) AGE + GENDER percentages so the caller
+        # can record the title's universe anchor (2026-08-25 coherence).
+        "final_demo_pcts":   p.get('_final_demo_pcts') or {},
     }
 
 
