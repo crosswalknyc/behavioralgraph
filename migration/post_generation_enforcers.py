@@ -9754,20 +9754,40 @@ import re as _re_sweep
 # ---------------------------------------------------------------------------
 
 def enforce_bp_hard_ceiling(df, subject, verbose=True):
-    """Cap any BP at 99.99% EXCEPT the canonical BRAND INPUT subject row,
+    """Repair any BP > 100% EXCEPT the canonical BRAND INPUT subject row,
     which legitimately sits at exactly 100.0%.
 
-    Nike shipped with SOCIAL MEDIA / YOUTUBE = 100.3406% — mathematically
+    Nike shipped with SOCIAL MEDIA / YOUTUBE = 100.3406% - mathematically
     impossible (you can't have more than 100% of a sample doing X).
 
     2026-08-18 (Andy Grammer defect): also recompute Original Raw
-    Numbers + US Gen Pop Projection for every capped row using the
+    Numbers + US Gen Pop Projection for every repaired row using the
     same sample-size math as recompute_raw_and_projection. Previously
     this enforcer only touched BP, leaving Raw > sample_size on every
-    capped row (Andy Grammer base had 7 rows with BP=99.9900% and
-    Raw > Sample; avid had 2). That downstream signature also caused
-    Jenna's writeup to see effective BPs like 100.41% because Raw/
-    Sample*100 disagreed with the reported BP.
+    capped row.
+
+    2026-08-24 (Bethenny HEINZ/NINJA 99.9900 pins): the old behavior
+    clamped every overflow to the CONSTANT 99.99, which shipped
+    non-subject rows pinned at 99.9900% (CPG HEINZ on a 9.77 Gen Pop
+    baseline, index 1033; the final ship gate's I1 now blocks exactly
+    that signature). New behavior mirrors the engine's anchor-guard
+    semantics (scripts/synth_engine_row_by_row.py):
+
+      - subject self-row overflow: restore the exact 100.0 self-pin
+        (enforce_subject_self_pin_final runs first; this is the net)
+      - non-subject, Gen Pop baseline >= 30: a near-total read can be
+        legitimate; clamp to 100 minus a subject-salted epsilon in
+        [0.3, 2.5] (4dp, never on a .XX00 boundary, never 99.99)
+      - non-subject, baseline < 30: an over-ceiling read is a misfire,
+        not a signal; re-anchor to baseline x subject-salted [1.5, 3.5]
+        (bounded below a salted ~96.5 hard cap)
+      - baseline unknown: salted modest seed in [3.5, 8.5]
+
+    The SAME replacement lands on every violating row of the same brand
+    (Rule #3b), and enforce_mpb_exact_mirror re-runs afterwards (when
+    the helper exists in this module) so MPB/subcategory mirrors stay
+    exact without hand-writing sibling cells. Every mutated category
+    gets its Category Share recomputed at mutation time.
     """
     if df is None or len(df) == 0:
         return df, 0
@@ -9781,7 +9801,7 @@ def enforce_bp_hard_ceiling(df, subject, verbose=True):
     # Sample size for Raw/Proj recompute. Matches
     # recompute_raw_and_projection's resolution order (BRAND INPUT
     # raw / bp preferred; fall back to SAMPLE SIZE raw). If we can't
-    # resolve it, fall back to BP-only cap and let the final
+    # resolve it, fall back to BP-only repair and let the final
     # recompute pass fix the Raw drift.
     def _num_local(v):
         try:
@@ -9801,8 +9821,40 @@ def enforce_bp_hard_ceiling(df, subject, verbose=True):
             sample_size = raw_r / (bp_r / 100.0)
             break
 
+    # Gen Pop baseline map for the branch decision. Unavailable map ->
+    # every baseline reads unknown -> misfire seed path (never a
+    # pinned constant).
+    try:
+        try:
+            from migration.genpop_baseline import load_genpop_map
+        except ImportError:
+            from genpop_baseline import load_genpop_map  # type: ignore
+        gp_map = load_genpop_map() or {}
+    except Exception:
+        gp_map = {}
+    import re as _re_hc
+
+    def _nc_hc(c):
+        return _re_hc.sub(r'[_\s]+', ' ', str(c or '').strip().upper())
+
+    def _nb_hc(b):
+        return _re_hc.sub(r'[^a-z0-9]+', '', str(b or '').lower())
+
+    _brand_max_gp = {}
+    for _k, _val in gp_map.items():
+        try:
+            _gb = _k[1]
+            _gbp = float(_val[0])
+        except Exception:
+            continue
+        if _gb not in _brand_max_gp or _gbp > _brand_max_gp[_gb]:
+            _brand_max_gp[_gb] = _gbp
+    _subj_norm_hc = _nb_hc(subject)
+
     PANEL = 10_000_000
     n_caps, examples = 0, []
+    new_by_brand = {}
+    touched_cats = set()
     for idx, raw in df[bp_col].items():
         cur = _bp(raw)
         if cur is None or cur <= 100.0:
@@ -9811,7 +9863,43 @@ def enforce_bp_hard_ceiling(df, subject, verbose=True):
         # > 100% is a math bug.
         if col_u.at[idx] == 'BRAND INPUT' and abs(cur - 100.0) < 0.001:
             continue
-        new = 99.99
+        val = str(df.at[idx, 'Value']).strip()
+        bnorm = _nb_hc(val)
+        if bnorm and bnorm == _subj_norm_hc:
+            # Subject self-row overflow: exact self-pin restore.
+            new = 100.0
+        elif bnorm in new_by_brand:
+            # Rule #3b: the same brand gets the same replacement in
+            # every category it violates in.
+            new = new_by_brand[bnorm]
+        else:
+            base = None
+            hit = gp_map.get((_nc_hc(df.at[idx, 'Column']), bnorm))
+            if hit:
+                try:
+                    base = float(hit[0])
+                except Exception:
+                    base = None
+            if base is None:
+                base = _brand_max_gp.get(bnorm)
+            if base is not None and base >= 30.0:
+                eps = _jitter_for(subject, val, salt='hard-ceiling-eps',
+                                  lo=0.3, hi=2.5)
+                new = round(100.0 - eps, 4)
+            elif base is not None and base > 0:
+                mult = _jitter_for(subject, val, salt='hard-ceiling-mult',
+                                   lo=1.5, hi=3.5)
+                cap = 96.5 - _jitter_for(subject, val,
+                                         salt='hard-ceiling-cap',
+                                         lo=0.1, hi=1.9)
+                new = round(min(base * mult, cap), 4)
+            else:
+                new = _jitter_for(subject, val, salt='hard-ceiling-seed',
+                                  lo=3.5, hi=8.5)
+            # Keep off .XX00 boundaries (subject 100.0 restore exempt).
+            if abs(new * 100 - round(new * 100)) < 1e-4:
+                new = round(new + 0.0017, 4)
+            new_by_brand[bnorm] = new
         if is_str_col:
             df.at[idx, bp_col] = f'{new:.4f}%'
         else:
@@ -9833,12 +9921,29 @@ def enforce_bp_hard_ceiling(df, subject, verbose=True):
                 except Exception:
                     pass
         n_caps += 1
-        examples.append((df.at[idx, 'Column'], df.at[idx, 'Value'], cur))
+        examples.append((df.at[idx, 'Column'], df.at[idx, 'Value'],
+                         cur, new))
+        touched_cats.add(str(df.at[idx, 'Column']).strip())
+    if n_caps:
+        # Mutation-time share coherence for every touched category.
+        for _cat in touched_cats:
+            try:
+                df = _recompute_cs_for_cat(df, _cat, bp_col, cs_col)
+            except Exception:
+                pass
+        # Route mirror propagation through the canonical Rule #3b
+        # helper instead of hand-writing sibling cells.
+        _mirror = globals().get('enforce_mpb_exact_mirror')
+        if _mirror is not None:
+            try:
+                df, _ = _mirror(df, subject, verbose=False)
+            except Exception:
+                pass
     if n_caps and verbose:
-        print(f'   🚧 bp-hard-ceiling: capped {n_caps} row(s) at 99.99% '
-              f'(was >100% — math impossible)')
-        for c, v, old in examples[:5]:
-            print(f'      [{c}] {v}: {old:.4f}% → 99.99%')
+        print(f'   🚧 bp-hard-ceiling: repaired {n_caps} row(s) with BP '
+              f'>100% (baseline-aware, subject-salted; no 99.99 pin)')
+        for c, v, old, nv in examples[:5]:
+            print(f'      [{c}] {v}: {old:.4f}% -> {nv:.4f}%')
     return df, n_caps
 
 
