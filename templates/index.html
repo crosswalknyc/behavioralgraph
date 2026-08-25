@@ -42198,19 +42198,10 @@ https://www.instagram.com/p/..."></textarea>
                 var _iptbName = String(profileMeta.name || profileName || brandName || '');
                 var _iptbKey = _iptbName.toLowerCase().replace(/[^a-z0-9]/g, '');
                 if (_iptbKey.indexOf('influencerprojectticketbuyer') !== -1) {
-                    var _iptbTooltip = 'This profile is for all panelists who are active viewers of at least one of the following:\n'
-                        + 'Obsession\n'
-                        + 'Backrooms\n'
-                        + 'The Blair Witch Project\n'
-                        + 'Blair Witch (2016)\n'
-                        + 'Missing\n'
-                        + 'Searching\n'
-                        + 'Bodies Bodies Bodies\n'
-                        + 'Unfriended\n'
-                        + 'Cuckoo\n'
-                        + 'Longlegs\n'
-                        + 'Send Help\n'
-                        + 'Scream Franchise';
+                    var _iptbTooltip = 'This profile is for all panelists who are active viewers of at least one of the following: '
+                        + 'Obsession, Backrooms, The Blair Witch Project, Blair Witch (2016), Missing, '
+                        + 'Searching, Bodies Bodies Bodies, Unfriended, Cuckoo, Longlegs, Send Help, '
+                        + 'the Scream Franchise.';
                     applyProfileTitleTooltip(container, _iptbTooltip, sampleSize, brandName, s3Key);
                     return;
                 }
