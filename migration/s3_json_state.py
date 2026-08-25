@@ -29,9 +29,19 @@ import random
 import time
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ParamValidationError
 
 _s3 = None
+
+# Older botocore (the Hetzner worker fleet as of 2026-08-25) does not
+# accept IfMatch / IfNoneMatch on put_object and raises
+# ParamValidationError, which took down every dashboard registration
+# and credit refund routed through this module (Ari Melber / Nicolle
+# Wallace holds). Once detected, the process degrades to a
+# verify-ETag-then-unguarded-put for its lifetime. The check-then-put
+# window is inherently racy but only exists on old botocore; upgrading
+# boto3/botocore on the fleet restores true CAS.
+_SUPPORTS_CONDITIONAL_PUT = True
 
 
 def _client():
@@ -72,6 +82,49 @@ def _is_precondition_failed(err: ClientError) -> bool:
     return code in ('PreconditionFailed', '412') or status == 412
 
 
+def _put_with_fallback(s3, bucket, key, put_kwargs, etag):
+    """PUT with CAS when botocore supports it; verify-then-put otherwise.
+
+    Returns True on success, False on a detected conflict (caller
+    retries on fresh state). Raises on non-conflict S3 errors. Same
+    degrade pattern as the worker's avid-path conditional put.
+    """
+    global _SUPPORTS_CONDITIONAL_PUT
+    kwargs = dict(put_kwargs)
+    if _SUPPORTS_CONDITIONAL_PUT:
+        if etag:
+            kwargs['IfMatch'] = etag.strip('"')
+        else:
+            kwargs['IfNoneMatch'] = '*'
+        try:
+            s3.put_object(**kwargs)
+            return True
+        except ParamValidationError:
+            _SUPPORTS_CONDITIONAL_PUT = False
+            kwargs.pop('IfMatch', None)
+            kwargs.pop('IfNoneMatch', None)
+        except ClientError as e:
+            if _is_precondition_failed(e):
+                return False
+            raise
+    # Degraded mode: re-read the current ETag; put unguarded only when
+    # the object is unchanged since our GET.
+    try:
+        head = s3.head_object(Bucket=bucket, Key=key)
+        current = (head.get('ETag') or '').strip('"')
+    except ClientError as e:
+        code = (e.response.get('Error') or {}).get('Code', '')
+        if code in ('404', 'NoSuchKey', 'NotFound'):
+            current = None
+        else:
+            raise
+    expected = etag.strip('"') if etag else None
+    if current != expected:
+        return False
+    s3.put_object(**kwargs)
+    return True
+
+
 def update_json(bucket: str, key: str, mutate_fn, max_retries: int = 5,
                 default=None, content_type: str = 'application/json',
                 s3=None, put_extra_args: dict | None = None,
@@ -101,20 +154,17 @@ def update_json(bucket: str, key: str, mutate_fn, max_retries: int = 5,
                           ContentType=content_type)
         if put_extra_args:
             put_kwargs.update(put_extra_args)
-        if etag:
-            put_kwargs['IfMatch'] = etag.strip('"')
-        else:
-            put_kwargs['IfNoneMatch'] = '*'
         try:
-            s3.put_object(**put_kwargs)
-            return new_obj
+            if _put_with_fallback(s3, bucket, key, put_kwargs, etag):
+                return new_obj
+            last_err = None
         except ClientError as e:
             if not _is_precondition_failed(e):
                 raise
             last_err = e
-            # Conflict: another writer landed between our GET and PUT.
-            time.sleep(min(0.25 * (2 ** attempt), 4.0)
-                       + random.uniform(0, 0.25))
+        # Conflict: another writer landed between our GET and PUT.
+        time.sleep(min(0.25 * (2 ** attempt), 4.0)
+                   + random.uniform(0, 0.25))
     raise RuntimeError(
         f"update_json: {max_retries + 1} consecutive write conflicts on "
         f"s3://{bucket}/{key}") from last_err
