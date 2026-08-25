@@ -8524,10 +8524,25 @@ def renormalize_location_to_100(df, subject, verbose=True):
     shipped with LOCATION sum=121.2 (avid) / 121.5 (base) because
     LOCATION sits in DEPIN_META_CATS (excluded from demo renorm) and
     no dedicated pass rescales it. Fix: proportional rescale of every
-    LOCATION row's BP by (100 / current_sum), then recompute Raw and
-    Projection via the standard downstream pass.
+    LOCATION row's BP by (100 / current_sum) with subject-salted
+    micro-jitter so no row lands on a trailing-zero 4dp boundary, then
+    recompute Raw and Projection via the standard downstream pass.
 
-    Idempotent — if the file is already within 0.5pp of 100, no-op.
+    2026-08-25 hardening (Ari Melber 104.75% / Nicolle Wallace 111.93%
+    ship-gate holds): pandas 3.x loads BP columns as 'str' dtype and
+    rejects bare-float assignment ("Invalid value '9.3788' for dtype
+    'str'"), which crashed this pass inside the chain's per-step
+    try/except and let the overshoot reach the ship gate untouched.
+    Writes now coerce the BP column to object dtype first (same
+    pattern as enforce_mpb_exact_mirror) and assign formatted strings
+    that preserve each cell's original style. The pass is also wired
+    into run_write_safety_net immediately before
+    recompute_raw_and_projection so the invariant re-asserts at write
+    time on every path, after the last thing that can mutate LOCATION.
+
+    Idempotent - if the file is already within 0.5pp of 100, no-op
+    (nests inside the ship gate's I5 tolerance of 1.5pp). Rows at 0 BP
+    (phantom-zeroed) are left untouched.
     """
     if df is None or len(df) == 0 or 'Column' not in df.columns:
         return df, 0
@@ -8550,14 +8565,44 @@ def renormalize_location_to_100(df, subject, verbose=True):
     if abs(total_bp - 100.0) < 0.5:
         return df, 0
 
+    # pandas >= 3 'str' / StringDtype BP columns reject mixed
+    # assignment; coerce to object first.
+    if df[bp_col].dtype.name not in ('object', 'O'):
+        df[bp_col] = df[bp_col].astype(object)
+
     scale = 100.0 / total_bp
-    n_touched = 0
+    targets = {}
     for idx in df.index[loc_mask]:
         cur = _bp(df.at[idx, bp_col])
-        if cur is None:
+        if cur is None or cur <= 0:
             continue
-        new = round(cur * scale, 4)
-        df.at[idx, bp_col] = new
+        name = (str(df.at[idx, 'Value']).strip()
+                if 'Value' in df.columns else str(idx))
+        h = int(_hl.sha256(
+            f"{subject}|LOCATION|{name}|renorm".encode()).hexdigest()[:8], 16)
+        jit = ((h % 2001) - 1000) / 1_000_000.0  # +/- 0.001pp
+        targets[idx] = max(0.0001, cur * scale + jit)
+    if not targets:
+        return df, 0
+
+    # Largest row absorbs the jitter residual so the sum returns to 100.
+    largest = max(targets, key=lambda k: targets[k])
+    targets[largest] += 100.0 - sum(targets.values())
+
+    n_touched = 0
+    for idx, val in targets.items():
+        new = round(val, 4)
+        if int(round(new * 10000)) % 10 == 0:
+            # De-boundary nudge: keep the final 4dp digit non-zero.
+            name = (str(df.at[idx, 'Value']).strip()
+                    if 'Value' in df.columns else str(idx))
+            h2 = int(_hl.sha256(
+                f"{subject}|LOCATION|{name}|deboundary".encode()
+            ).hexdigest()[:8], 16)
+            new = round(new + (1 + h2 % 8) / 10000.0, 4)
+        old_cell = df.at[idx, bp_col]
+        had_pct = isinstance(old_cell, str) and old_cell.strip().endswith('%')
+        df.at[idx, bp_col] = f"{new:.4f}%" if had_pct else f"{new:.4f}"
         n_touched += 1
 
     if verbose:
@@ -8568,7 +8613,7 @@ def renormalize_location_to_100(df, subject, verbose=True):
         )
         print(f"   📍 renormalize_location_to_100 [{subject or ''}]: "
               f"rescaled {n_touched} DMA rows; "
-              f"sum {total_bp:.2f} → {float(bp_num2.sum()):.2f}")
+              f"sum {total_bp:.2f} -> {float(bp_num2.sum()):.2f}")
     return df, n_touched
 
 
@@ -13592,6 +13637,13 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
         ("dejitter_within_cat_4dp_collisions",
          dejitter_within_cat_4dp_collisions),
         ("enforce_mpb_exact_mirror_2", enforce_mpb_exact_mirror),
+        # LOCATION sum=100 re-asserted at write time (2026-08-25 Ari
+        # Melber / Nicolle Wallace ship-gate holds): the mid-chain
+        # renorm can be skipped by cut paths or crash-swallowed, and
+        # nothing after this point may leave LOCATION off 100. Runs
+        # BEFORE recompute_raw_and_projection + the CS recompute so
+        # the canonical chain cascades the renormed BPs into Raw/Proj.
+        ("renormalize_location_to_100", renormalize_location_to_100),
         ("recompute_raw_and_projection", recompute_raw_and_projection),
         ("enforce_streaming_share_health", enforce_streaming_share_health),
         ("apply_recompute_category_share", apply_recompute_category_share),
