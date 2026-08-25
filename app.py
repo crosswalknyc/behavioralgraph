@@ -2358,6 +2358,84 @@ def requires_super_admin(f):
         return f(*args, **kwargs)
     return decorated
 
+
+# Fields on a user record that only a super_admin may modify. Per Jenna
+# directive 2026-08-25:
+#   "only let super admins grant access to allow product access to users
+#    and assign user status"
+# Regular admins retain edit rights on non-restricted fields (name, email,
+# credits, allowed_categories/runs/behavioral, api keys, consulting hours,
+# etc.). The gate below is defense in depth on top of the admin.html UI
+# disabling these controls for non-super callers.
+_PRODUCT_ACCESS_FIELDS = frozenset([
+    'has_profile_iq_access', 'has_subscriber_iq_access',
+    'has_roas_iq_access', 'has_ecommerce_iq_access',
+    'has_ticket_sales_iq_access',
+    'has_hedge_fund_iq_access', 'gets_hedge_fund_iq_emails',
+    'hedge_fund_iq_tabs', 'hedge_fund_iq_tickers',
+    'hedge_fund_iq_data_cutoff',
+    'has_analysis_iq_access', 'analysis_iq_modules',
+    'has_ticket_sales_tracker_access',
+    'has_rankers_iq_access', 'rankers_iq_options',
+    'has_llmo_iq_access', 'has_talent_fit_access',
+    'has_sf_conversion_access', 'has_flywheel_conversion_access',
+    'has_brand_partnership_iq_access', 'has_sentiment_iq_access',
+    'has_journey_iq_access', 'allowed_journey_iq_runs',
+    'has_intent_iq_access', 'allowed_intent_iq_runs',
+    'has_workspace_access',
+    'has_share_of_time_access', 'has_share_of_time_run_access',
+    'has_blue_iq_access',
+    'has_impact_iq_access', 'impact_iq_journeys',
+    'has_trends_iq_access', 'has_microdramas_iq_access',
+    'has_chatbot_profile_iq_access',
+    'auto_access_new',
+])
+# 'role' drives the SA / A / U badge - the "user status" in the UI.
+SUPER_ADMIN_ONLY_USER_FIELDS = _PRODUCT_ACCESS_FIELDS | frozenset({'role'})
+
+
+def _reject_if_non_super_touches_restricted(req_data, existing_user=None):
+    """Return (jsonify_403, 403) if a non-super_admin is trying to change
+    a product-access flag or the user's role; return None otherwise.
+
+    Update flow (pass `existing_user`): only the fields whose values are
+    actually CHANGING count as "touched" - no-op writes (same value as
+    the stored user) are allowed so a non-super admin can save unrelated
+    fields without having to strip every restricted key client-side.
+
+    Create flow (leave `existing_user=None`): ANY restricted field
+    present in the request is considered a touch. Non-super admins
+    should create users under company defaults and let a super_admin
+    customize product access afterward.
+
+    Purgatory approval retains its own dedicated inline gate below
+    (unchanged), so it is intentionally NOT in this set.
+    """
+    if not isinstance(req_data, dict):
+        return None
+    changing = []
+    for key in SUPER_ADMIN_ONLY_USER_FIELDS:
+        if key not in req_data:
+            continue
+        if existing_user is None:
+            changing.append(key)
+        elif req_data[key] != existing_user.get(key):
+            changing.append(key)
+    if not changing:
+        return None
+    current_user = get_current_user()
+    if current_user and _normalize_role(current_user.get('role', '')) == 'super_admin':
+        return None
+    return jsonify({
+        'success': False,
+        'error': (
+            "Only a super admin can grant product access or assign "
+            "user status. Restricted fields in this request: "
+            + ", ".join(sorted(changing))
+        ),
+    }), 403
+
+
 def requires_purgatory_access(f):
     """Decorator that allows admins, super_admins, and users with purgatory approval access."""
     @wraps(f)
@@ -4617,6 +4695,15 @@ def create_user():
     """Create a new user with optional email welcome."""
     try:
         req_data = request.json
+
+        # Only super_admin may grant product access or set user status
+        # on create (Jenna 2026-08-25). Non-super admins should create
+        # users under company defaults and let a super_admin customize
+        # access afterward.
+        guard = _reject_if_non_super_touches_restricted(req_data)
+        if guard is not None:
+            return guard
+
         username = req_data.get('username', '').strip().lower()
         email = req_data.get('email', '').strip().lower()
         password = req_data.get('password', '')
@@ -4754,7 +4841,18 @@ def update_user(username):
             return jsonify({'success': False, 'error': 'User not found'})
         
         user = data['users'][username]
-        
+
+        # Only super_admin may CHANGE product access flags or the user's
+        # role (Jenna 2026-08-25). No-op writes (same value) are allowed
+        # so non-super admins can save unrelated fields (name, email,
+        # credits, etc.) without stripping every restricted key client-
+        # side. The admin.html modal also disables these controls and
+        # strips restricted keys from the request when the current user
+        # is not super_admin.
+        guard = _reject_if_non_super_touches_restricted(req_data, existing_user=user)
+        if guard is not None:
+            return guard
+
         # Update allowed fields
         if 'password' in req_data and req_data['password']:
             user['password_hash'] = hash_password(req_data['password'])
@@ -6292,9 +6390,15 @@ def api_get_company_defaults(company_name):
 
 
 @app.route('/api/admin/companies/<path:company_name>/defaults', methods=['PUT'])
-@requires_admin
+@requires_super_admin
 def api_set_company_defaults(company_name):
-    """Save custom defaults for a company."""
+    """Save custom defaults for a company.
+
+    Super_admin only per Jenna 2026-08-25 ("only let super admins grant
+    access to allow product access to users..."). Company defaults seed
+    every new user's product-access flags, so allowing non-super admins
+    to edit them would be a trivial bypass of the per-user gate.
+    """
     try:
         req = request.get_json() or {}
         data = load_users()
@@ -6338,9 +6442,14 @@ def api_set_company_defaults(company_name):
 
 
 @app.route('/api/admin/companies/<path:company_name>/defaults', methods=['DELETE'])
-@requires_admin
+@requires_super_admin
 def api_delete_company_defaults(company_name):
-    """Remove custom defaults for a company (revert to global)."""
+    """Remove custom defaults for a company (revert to global).
+
+    Super_admin only per Jenna 2026-08-25 - same rationale as
+    api_set_company_defaults above (this endpoint also mutates the
+    product-access template applied to new users).
+    """
     try:
         data = load_users()
         cd = data.get('company_defaults', {})

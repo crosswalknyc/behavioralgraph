@@ -2793,10 +2793,20 @@
                                 </div>
                                 <div id="cdBehavioralCheckboxes" style="max-height: 150px; overflow-y: auto; margin-left: 0.5rem;"></div>
                             </div>
-                            <!-- Save / Delete buttons -->
-                            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                            <!-- Save / Delete buttons. Super_admin only per
+                                 Jenna 2026-08-25 - company defaults seed every
+                                 new user's product-access flags, so editing
+                                 them is effectively bulk product-access
+                                 grant. Backend endpoints
+                                 /api/admin/companies/.../defaults (PUT +
+                                 DELETE) are gated with @requires_super_admin. -->
+                            <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; align-items: center; flex-wrap: wrap;">
+                                {% if current_user_role == 'super_admin' %}
                                 <button class="btn btn-primary btn-small" onclick="saveCompanyDefaults()">Save Defaults</button>
                                 <button class="btn btn-secondary btn-small" onclick="deleteCompanyDefaults()">Remove Custom Defaults</button>
+                                {% else %}
+                                <span style="color: var(--text-secondary); font-size: 0.72rem;">Only a super admin can edit company defaults.</span>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -4698,6 +4708,67 @@
         const currentUsername = '{{ current_username }}';
         const defaultProfilePhotoUrl = {{ (default_profile_photo or '')|tojson }};
         const defaultProfilePhoto = {{ (default_profile_photo or '')|tojson }};
+
+        // Per Jenna 2026-08-25: "only let super admins grant access to
+        // allow product access to users and assign user status". Fields
+        // that only a super_admin may modify on a user record; kept in
+        // sync with SUPER_ADMIN_ONLY_USER_FIELDS in app.py.
+        const SUPER_ADMIN_ONLY_USER_FIELDS = [
+            'role',
+            'has_profile_iq_access','has_subscriber_iq_access',
+            'has_roas_iq_access','has_ecommerce_iq_access',
+            'has_ticket_sales_iq_access',
+            'has_hedge_fund_iq_access','gets_hedge_fund_iq_emails',
+            'hedge_fund_iq_tabs','hedge_fund_iq_tickers',
+            'hedge_fund_iq_data_cutoff',
+            'has_analysis_iq_access','analysis_iq_modules',
+            'has_ticket_sales_tracker_access',
+            'has_rankers_iq_access','rankers_iq_options',
+            'has_llmo_iq_access','has_talent_fit_access',
+            'has_sf_conversion_access','has_flywheel_conversion_access',
+            'has_brand_partnership_iq_access','has_sentiment_iq_access',
+            'has_journey_iq_access','allowed_journey_iq_runs',
+            'has_intent_iq_access','allowed_intent_iq_runs',
+            'has_workspace_access',
+            'has_share_of_time_access','has_share_of_time_run_access',
+            'has_blue_iq_access',
+            'has_impact_iq_access','impact_iq_journeys',
+            'has_trends_iq_access','has_microdramas_iq_access',
+            'has_chatbot_profile_iq_access',
+            'auto_access_new'
+        ];
+
+        // Disable the role dropdown + every product-access checkbox in
+        // the user create/edit modal when the current admin is not a
+        // super_admin. Backend enforces the same guard (see
+        // SUPER_ADMIN_ONLY_USER_FIELDS in app.py); this keeps the UI
+        // honest so non-super admins can't fill out controls that would
+        // 403 on save. Idempotent - safe to call every modal open.
+        function _applySuperAdminOnlyControls() {
+            const isSuper = currentUserRole === 'super_admin';
+            const roleSel = document.getElementById('newRole');
+            if (roleSel) {
+                roleSel.disabled = !isSuper;
+                roleSel.title = isSuper ? '' : 'Only a super admin can assign user status';
+            }
+            const disableTitle = 'Only a super admin can grant product access';
+            document.querySelectorAll('#userModal [id^="has"][id$="Access"]').forEach(el => {
+                el.disabled = !isSuper;
+                el.title = isSuper ? '' : disableTitle;
+            });
+            const extras = [
+                'getsHedgeFundIQEmails','hedgeFundIQDataCutoff','allHedgeFundTickers'
+            ];
+            extras.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.disabled = !isSuper;
+                    el.title = isSuper ? '' : disableTitle;
+                }
+            });
+            const notice = document.getElementById('userModalSuperAdminNotice');
+            if (notice) notice.style.display = isSuper ? 'none' : 'block';
+        }
 
         // Profile image cache for admin
         const profileImageCache = {};
@@ -9605,6 +9676,7 @@
             document.getElementById('aanTicketSalesTracker').checked = true;
             document.getElementById('aanTicketSalesIQ').checked = true;
 
+            _applySuperAdminOnlyControls();
             document.getElementById('userModal').classList.add('show');
             // 2026-07-30: seed the new streamlined access UI on every
             // open — reset to "Everything" tab, populate tab count
@@ -9825,6 +9897,7 @@
             document.getElementById('activityExportEmails').value = user.activity_export_emails || '';
             document.getElementById('activityExportCadence').value = user.activity_export_cadence || '';
 
+            _applySuperAdminOnlyControls();
             document.getElementById('userModal').classList.add('show');
 
             // Populate the recurring-rules list for this user (fires only in
@@ -12747,7 +12820,18 @@
                     ticket_sales_iq: document.getElementById('aanTicketSalesIQ').checked,
                 }
             };
-            
+
+            // Strip super-admin-only fields when the current admin is not
+            // a super_admin. Backend enforces the same guard (see
+            // SUPER_ADMIN_ONLY_USER_FIELDS in app.py); stripping client-
+            // side avoids gratuitous 403s from no-op writes when the
+            // caller is only editing unrelated fields (name, credits,
+            // categories, etc.). Kept in sync with the constant declared
+            // above.
+            if (currentUserRole !== 'super_admin') {
+                SUPER_ADMIN_ONLY_USER_FIELDS.forEach(k => { delete userData[k]; });
+            }
+
             // Include original username if changed
             const originalUsername = document.getElementById('originalUsername').value;
             if (originalUsername && originalUsername !== userData.username) {
