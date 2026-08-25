@@ -62643,6 +62643,20 @@ https://www.instagram.com/p/..."></textarea>
                             : SYNTH_CHAT_CALM_MSG);
                     return;
                 }
+                if (data.reused_existing || !data.run_id) {
+                    // existing_match approve reply: the profile already
+                    // exists, so nothing was queued and there is no
+                    // run_id. Without this branch the chat said
+                    // 'Queued undefined' and polled /status/null forever.
+                    var _exPanel = document.getElementById('synthChatBriefPreview');
+                    if (_exPanel) _exPanel.style.display = 'none';
+                    synthChatCurrentDraft = null;
+                    synthChatPushTurn('agent',
+                        (data.subject || 'This profile') + ' already exists as a profile' +
+                            (data.profile_name ? ' (' + data.profile_name + ')' : '') +
+                            '. No new build was needed - it is ready in the Select Profile dropdown now.');
+                    return;
+                }
                 synthChatActiveRun = data.run_id;
                 // Kick the queue badge immediately so the user
                 // sees the new pending/running counts jump right
@@ -62737,6 +62751,16 @@ https://www.instagram.com/p/..."></textarea>
                                 '. I will update this thread as it progresses.',
                             { run_id: r.run_id, status: 'queued', subject: r.subject || subj });
                         _synthChatStartPolling(r.run_id, r.subject || subj);
+                    } else if (r && r.success && r.reused_existing) {
+                        // existing_match approve reply: the profile
+                        // already exists, nothing was queued and there
+                        // is no run_id to poll. Counting this as an
+                        // error fired a false 'queue failed' beacon
+                        // (2026-08-25 Rachel Maddow batch).
+                        synthChatPushTurn('agent',
+                            (r.subject || subj) + ' already exists as a profile' +
+                                (r.profile_name ? ' (' + r.profile_name + ')' : '') +
+                                '. No new build was needed - it is ready in the Select Profile dropdown now.');
                     } else {
                         errored.push({ subject: subj,
                                        error: (r && r.error) || 'queue failed',
