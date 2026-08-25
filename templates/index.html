@@ -30165,6 +30165,17 @@ https://www.instagram.com/p/..."></textarea>
                 var DAY_MS = 86400000;
                 var startMs = new Date(dates[0] + 'T12:00:00Z').getTime();
                 var endMs   = new Date(dates[dates.length - 1] + 'T12:00:00Z').getTime();
+                // Extend the campaign timeline out to today so the "as of"
+                // scrubber can advance past the last asset drop while views
+                // keep accruing. Without this, maxDate is anchored to the
+                // last posted_date and the _assetPitFactor decay caps well
+                // below 1.0 for assets that are already ~1-2 weeks old,
+                // making the Top Assets table display a small fraction of
+                // ext_view_count (Hades: 3.83M YouTube reads as 993K when
+                // asOf is stuck on last-drop date 2026-08-12).
+                var _iiqTodayIso = new Date().toISOString().slice(0, 10);
+                var _iiqTodayMs  = new Date(_iiqTodayIso + 'T12:00:00Z').getTime();
+                if (_iiqTodayMs > endMs) endMs = _iiqTodayMs;
                 var allDates = [];
                 for (var t = startMs; t <= endMs; t += DAY_MS) {
                     allDates.push(new Date(t).toISOString().slice(0, 10));
