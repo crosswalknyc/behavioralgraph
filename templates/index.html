@@ -71138,7 +71138,8 @@ https://www.instagram.com/p/..."></textarea>
             var rows = comps.slice(0, 10).map(function(c) {
                 var w = _jiqParseCompanionWindow(c.typical_window, scale);
                 return {
-                    vertical: c.vertical || '-',
+                    // Display rename: 'Doomscroll social media' -> 'Social media'
+                    vertical: (/^\s*doomscroll\s+social\s+media\s*$/i.test(c.vertical || '') ? 'Social media' : (c.vertical || '-')),
                     pct: +c.share_pct_of_visitors || 0,
                     center: w.center,
                     span: w.span,
