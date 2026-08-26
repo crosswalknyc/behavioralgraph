@@ -215,6 +215,188 @@ def _load_tu_source(tu_source_key: str, s3) -> Optional[pd.DataFrame]:
         return None
 
 
+def _is_avid_cut_basename(s3_key: str) -> bool:
+    base = os.path.basename(str(s3_key or ""))
+    if base.lower().endswith(".csv"):
+        base = base[:-4]
+    if " - " not in base:
+        return False
+    return "AVID" in base.split(" - ", 1)[1].upper()
+
+
+# Ship-gate invariant classes with a safe DETERMINISTIC fixer. Only
+# these ever trigger the fix-and-regate pass below; every judgment-
+# required class (I1 rogue pins, I5 demo sums, I9 hidden brands, ...)
+# still quarantines on first block.
+_AUTOFIX_GATE_CODES = ("I11", "I12")
+
+
+def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
+                            tu_source_key=None, sort=True, verbose=True):
+    """Deterministic fix-and-regate ahead of the blocking ship gate
+    (2026-08-26 Danny Go - Avid Fan incident: the fresh-build avid path
+    shipped 299 rows whose Raw out-counted the parent TU; the gate's
+    I12 caught them at the terminal check and quarantined a file the
+    standing subset enforcer could have corrected in seconds).
+
+    Runs the gate's invariants READ-ONLY on the serialized frame. When
+    every violation class present has a safe deterministic fixer, the
+    standing fixers run here:
+
+      I12 avid subset raws -> enforce_avid_subset_coherence bound to
+          the published parent TU (tu_source_key when the caller knows
+          it, else the gate's own parent resolution). This is the
+          arithmetic Raw cap the hardened enforcer already implements -
+          reasoning tilt is preserved, no multipliers.
+      I11 reach above 100  -> enforce_bp_hard_ceiling.
+
+    Then Raw / Projection / Category Share recompute (write safety
+    net), re-sort, numeric-artifact normalize, and Gen Pop baseline
+    columns re-append, so the caller re-serializes corrected bytes and
+    the FULL blocking gate re-runs on them. Violations that survive
+    the fix attempt (true anomalies) quarantine exactly as before.
+
+    Returns (df, summary_str_or_None). Never raises: any internal
+    error returns the frame unchanged so the blocking gate stays the
+    verdict.
+    """
+    try:
+        from migration.final_ship_gate import (
+            check_final_ship_invariants,
+            _resolve_parent_tu,
+        )
+    except ImportError:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from final_ship_gate import (  # type: ignore
+            check_final_ship_invariants,
+            _resolve_parent_tu,
+        )
+    buf = io.StringIO()
+    df.to_csv(buf, index=False)
+    violations, _meta = check_final_ship_invariants(
+        buf.getvalue().encode("utf-8"), s3_key, subject,
+        s3_client=s3, verbose=False,
+    )
+    if not violations:
+        return df, None
+    fixable = [v for v in violations
+               if v.get("code") in _AUTOFIX_GATE_CODES]
+    if not fixable:
+        return df, None
+    codes = sorted({v.get("code") for v in fixable})
+    print(f"  [profile_writer] ship-gate pre-check flagged "
+          f"{len(fixable)} fixable violation(s) ({', '.join(codes)}); "
+          f"applying deterministic fix + full re-gate before upload")
+
+    try:
+        from migration.post_generation_enforcers import (
+            run_write_safety_net as _rwsn_gate,
+            enforce_bp_hard_ceiling as _bp_ceiling_gate,
+        )
+    except ImportError:
+        from post_generation_enforcers import (  # type: ignore
+            run_write_safety_net as _rwsn_gate,
+            enforce_bp_hard_ceiling as _bp_ceiling_gate,
+        )
+
+    # Gen Pop baseline columns were appended at step 6.5; strip them so
+    # the fixers and the recompute see the canonical six-column frame,
+    # re-appended below.
+    try:
+        try:
+            from migration.genpop_baseline import (
+                strip_genpop_columns as _strip_gp,
+                append_genpop_columns as _append_gp,
+            )
+        except ImportError:
+            from genpop_baseline import (  # type: ignore
+                strip_genpop_columns as _strip_gp,
+                append_genpop_columns as _append_gp,
+            )
+        df = _strip_gp(df)
+    except Exception:
+        _append_gp = None
+
+    n_fixed = 0
+    if any(v.get("code") == "I12" for v in fixable):
+        df_parent = None
+        parent_label = None
+        if tu_source_key:
+            df_parent = _load_tu_source(tu_source_key, s3)
+            parent_label = tu_source_key
+        if df_parent is None:
+            try:
+                parent_key, parent_body = _resolve_parent_tu(
+                    s3_key, s3, verbose=verbose)
+                if parent_body:
+                    df_parent = pd.read_csv(
+                        io.BytesIO(parent_body), dtype=object,
+                        keep_default_na=False)
+                    parent_label = parent_key
+            except Exception as e:
+                print(f"  [profile_writer] I12 parent resolution "
+                      f"failed ({e}); subset fix skipped")
+        if df_parent is not None:
+            try:
+                try:
+                    from migration.avid_fan_row_by_row import (
+                        enforce_avid_subset_coherence as _subset_fix,
+                    )
+                except ImportError:
+                    from avid_fan_row_by_row import (  # type: ignore
+                        enforce_avid_subset_coherence as _subset_fix,
+                    )
+                df, _st = _subset_fix(df, df_parent, subject,
+                                      verbose=verbose)
+                n_capped = int(_st.get("capped_up", 0) or 0)
+                n_lifted = int(_st.get("lifted_down", 0) or 0)
+                n_fixed += n_capped + n_lifted
+                print(f"  [profile_writer] I12 subset fix vs "
+                      f"{parent_label}: capped_up={n_capped} "
+                      f"lifted_down={n_lifted}")
+            except Exception as e:
+                print(f"  [profile_writer] I12 subset fix raised "
+                      f"({type(e).__name__}: {e}); gate keeps the "
+                      f"verdict")
+    if any(v.get("code") == "I11" for v in fixable):
+        try:
+            df, _n_ceiling = _bp_ceiling_gate(df, subject,
+                                              verbose=verbose)
+            n_fixed += int(_n_ceiling or 0)
+            print(f"  [profile_writer] I11 ceiling fix: "
+                  f"{_n_ceiling} row(s) repaired")
+        except Exception as e:
+            print(f"  [profile_writer] I11 ceiling fix raised "
+                  f"({type(e).__name__}: {e}); gate keeps the verdict")
+
+    # Recompute the downstream chain from the corrected BPs, re-sort,
+    # re-assert numeric formats, re-append baseline columns.
+    try:
+        df, _ = _rwsn_gate(df, subject, verbose=False)
+    except Exception as e:
+        print(f"  [profile_writer] post-fix safety net raised "
+              f"({type(e).__name__}: {e})")
+    if sort:
+        try:
+            df = _sort_within_category(df)
+        except Exception:
+            pass
+    try:
+        df, _ = _normalize_numeric_artifacts(df, verbose=False)
+    except Exception:
+        pass
+    if _append_gp is not None:
+        try:
+            df = _append_gp(df, s3_client=s3, verbose=False)
+        except Exception as e:
+            print(f"  [profile_writer] post-fix genpop re-append "
+                  f"skipped: {e}")
+
+    summary = (f"{n_fixed} row(s) corrected before publish "
+               f"({', '.join(codes)})") if n_fixed else None
+    return df, summary
+
+
 def write_profile_csv(
     df: pd.DataFrame,
     subject: str,
@@ -267,6 +449,14 @@ def write_profile_csv(
          the write.
       6. If backup AND file exists on S3: back up prior to
          `_backups/{key}.pre_write_<ts>.csv`
+      6.8 DETERMINISTIC FIX-AND-REGATE (2026-08-26 Danny Go mandate):
+         read-only pre-check of the ship-gate invariants; I12 (avid
+         subset raws, fixed by enforce_avid_subset_coherence bound to
+         the published parent TU) and I11 (reach above 100, fixed by
+         enforce_bp_hard_ceiling) auto-remediate in real time, the
+         chain recomputes + re-sorts, and the blocking gate re-runs on
+         the corrected bytes. Judgment-required classes never
+         auto-fix; surviving violations still quarantine.
       6.9 FINAL SHIP GATE (2026-08-24 Jenna mandate): the independent
          terminal invariant check in migration/final_ship_gate.py runs
          on the EXACT bytes about to upload. On any violation the
@@ -367,6 +557,36 @@ def write_profile_csv(
             except Exception as e:
                 print(f"  [profile_writer] enforce_tu_avid_coherence raised "
                       f"({type(e).__name__}: {e}); continuing")
+            # 3b. Avid subset Raw invariant vs the published parent TU
+            # (2026-08-26 Danny Go incident). The enforcer chain in
+            # step 1 reasons per-row with no parent frame; an avid cut
+            # written with a known TU source must satisfy
+            # round(avid_bp/100 x avid_sample) <=
+            # round(parent_bp/100 x parent_sample) on every shared row
+            # BEFORE the terminal gate sees the bytes. Same standing
+            # fixer the derive_cut paths run (Phase 4b) - arithmetic
+            # Raw cap, reasoning tilt preserved, no multipliers.
+            if _is_avid_cut_basename(s3_key):
+                try:
+                    try:
+                        from migration.avid_fan_row_by_row import (
+                            enforce_avid_subset_coherence,
+                        )
+                    except ImportError:
+                        from avid_fan_row_by_row import (  # type: ignore
+                            enforce_avid_subset_coherence,
+                        )
+                    df, _sub_stats = enforce_avid_subset_coherence(
+                        df, df_tu, subject, verbose=verbose,
+                    )
+                    n_coherence_changes += int(
+                        _sub_stats.get("capped_up", 0) or 0)
+                    n_coherence_changes += int(
+                        _sub_stats.get("lifted_down", 0) or 0)
+                except Exception as e:
+                    print(f"  [profile_writer] avid subset coherence "
+                          f"raised ({type(e).__name__}: {e}); "
+                          f"continuing")
 
     # 3.5 MANDATORY write-time safety net (2026-08-06). Idempotent,
     #     cheap, always runs regardless of `run_enforcers`. Repairs the
@@ -679,6 +899,27 @@ def write_profile_csv(
     except Exception as e:
         print(f"  [profile_writer] genpop baseline append skipped: {e}")
 
+    # 6.8 Deterministic fix-and-regate (2026-08-26 Danny Go mandate:
+    # the gate must FIX fixable violations in real time and publish,
+    # not quarantine). Read-only invariant pre-check; when I12 (avid
+    # subset raws) or I11 (reach above 100) are present, the standing
+    # deterministic fixers run, the chain recomputes, and the blocking
+    # gate below re-runs on the corrected bytes. Judgment-required
+    # classes never auto-fix; anything that survives the fix attempt
+    # still quarantines. Never raises - the gate stays the verdict.
+    ship_gate_autofix = None
+    try:
+        df, ship_gate_autofix = _ship_gate_autofix_pass(
+            df, subject, s3_key, s3,
+            tu_source_key=tu_source_key, sort=sort, verbose=verbose,
+        )
+        if ship_gate_autofix:
+            print(f"  [profile_writer] ship-gate auto-fix: "
+                  f"{ship_gate_autofix}")
+    except Exception as e:
+        print(f"  [profile_writer] ship-gate auto-fix pass skipped "
+              f"({type(e).__name__}: {e})")
+
     # 6.9 FINAL SHIP GATE (2026-08-24 Jenna mandate: profiles must
     # never ship with defect classes like today's four). Independent
     # module - own CSV parse, own numeric coercion, no shared enforcer
@@ -747,6 +988,7 @@ def write_profile_csv(
         "n_safety_net_changes": n_safety_net_changes,
         "n_polish_changes": n_polish_changes,
         "gate_defects": gate_defects,
+        "ship_gate_autofix": ship_gate_autofix,
         "register": register_result,
     }
 
