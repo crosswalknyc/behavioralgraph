@@ -25000,7 +25000,53 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-placeholder .tiq-placeholder-title { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.35rem; }
             body[data-theme="light"] #trendsIQView .tiq-card,
             body[data-theme="light"] #trendsIQView .tiq-product-card { background: #fff; border-color: rgba(0,0,0,0.08); }
-            body[data-theme="light"] #trendsIQView .tiq-row-title { color: #1a1a2e; }
+            /* Light mode: Trends pills + the italic "why trending" subtext
+               use pale-on-dark colors that wash out on the white card.
+               Darken the text and firm up the tints for real contrast. */
+            body[data-theme="light"] #trendsIQView .tiq-badge { background: rgba(124,58,237,0.12); color: #6d28d9; }
+            body[data-theme="light"] #trendsIQView .tiq-badge.hot { background: rgba(239,68,68,0.14); color: #b91c1c; }
+            body[data-theme="light"] #trendsIQView .tiq-badge.rising { background: rgba(34,197,94,0.16); color: #15803d; }
+            body[data-theme="light"] #trendsIQView .tiq-badge.tiq-vol { background: rgba(59,130,246,0.16); color: #1d4ed8; }
+            body[data-theme="light"] #trendsIQView .tiq-badge.tiq-growth { background: rgba(34,197,94,0.16); color: #15803d; }
+            body[data-theme="light"] #trendsIQView .tiq-badge.tiq-growth.tiq-growth-hot { background: rgba(34,197,94,0.24); color: #166534; }
+            body[data-theme="light"] #trendsIQView .tiq-chip { background: rgba(124,58,237,0.12); color: #6d28d9; border-color: rgba(124,58,237,0.4); }
+            body[data-theme="light"] #trendsIQView .tiq-chip:hover { background: rgba(124,58,237,0.22); color: #5b21b6; }
+            body[data-theme="light"] #trendsIQView .tiq-trend.tiq-trend-rising { background: rgba(34,197,94,0.16); color: #15803d; border-color: rgba(34,197,94,0.4); }
+            body[data-theme="light"] #trendsIQView .tiq-trend.tiq-trend-falling { background: rgba(239,68,68,0.14); color: #b91c1c; border-color: rgba(239,68,68,0.4); }
+            body[data-theme="light"] #trendsIQView .tiq-trend.tiq-trend-stable,
+            body[data-theme="light"] #trendsIQView .tiq-trend.tiq-trend-neutral { background: rgba(59,130,246,0.14); color: #1d4ed8; border-color: rgba(59,130,246,0.4); }
+            body[data-theme="light"] #trendsIQView .tiq-trend.tiq-trend-new { background: rgba(163,190,40,0.30); color: #3f6212; border-color: rgba(140,170,30,0.55); }
+            body[data-theme="light"] #trendsIQView .tiq-trend.tiq-trend-cross { background: linear-gradient(135deg, rgba(251,146,60,0.30) 0%, rgba(239,68,68,0.24) 100%); color: #c2410c; border-color: rgba(234,88,12,0.5); }
+            body[data-theme="light"] #trendsIQView .tiq-badge.tiq-origin-news { background: rgba(59,130,246,0.14); color: #1d4ed8; }
+            body[data-theme="light"] #trendsIQView .tiq-badge.tiq-origin-person { background: rgba(168,85,247,0.14); color: #7e22ce; }
+            body[data-theme="light"] #trendsIQView .tiq-badge.tiq-origin-wiki { background: rgba(100,116,139,0.18); color: #334155; }
+            body[data-theme="light"] #trendsIQView .tiq-badge.tiq-origin-mover { background: rgba(34,197,94,0.14); color: #15803d; }
+            body[data-theme="light"] #trendsIQView .tiq-mover-badge.new { background: rgba(59,130,246,0.16); color: #1d4ed8; }
+            body[data-theme="light"] #trendsIQView .tiq-mover-badge.up { background: rgba(34,197,94,0.18); color: #15803d; }
+            body[data-theme="light"] #trendsIQView .tiq-mover-badge.down { background: rgba(239,68,68,0.16); color: #b91c1c; }
+            body[data-theme="light"] #trendsIQView .tiq-mover-badge.flat { background: rgba(100,116,139,0.18); color: #334155; }
+            body[data-theme="light"] #trendsIQView .tiq-mover-badge.dropped { background: rgba(239,68,68,0.14); color: #b91c1c; }
+            body[data-theme="light"] #trendsIQView .tiq-fast-kind.film { background: rgba(56,189,248,0.20); color: #0369a1; }
+            body[data-theme="light"] #trendsIQView .tiq-fast-kind.tv { background: rgba(168,85,247,0.18); color: #7e22ce; }
+            body[data-theme="light"] #trendsIQView .tiq-audience-chip { background: rgba(99,102,241,0.14); color: #4338ca; border-color: rgba(99,102,241,0.4); }
+            body[data-theme="light"] #trendsIQView .tiq-audience-delta.up { color: #15803d; }
+            body[data-theme="light"] #trendsIQView .tiq-audience-delta.down { color: #b91c1c; }
+            body[data-theme="light"] #trendsIQView .tiq-mix-label.tiq-mix-search-primary b { color: #1d4ed8; }
+            body[data-theme="light"] #trendsIQView .tiq-mix-label.tiq-mix-media-primary b { color: #b45309; }
+            body[data-theme="light"] #trendsIQView .tiq-mix-label.tiq-mix-social-primary b { color: #be185d; }
+            body[data-theme="light"] #trendsIQView .tiq-momentum-tag.breakout { background: rgba(16,185,129,0.16); color: #047857; }
+            body[data-theme="light"] #trendsIQView .tiq-momentum-tag.rising { background: rgba(59,130,246,0.16); color: #1d4ed8; }
+            body[data-theme="light"] #trendsIQView .tiq-momentum-tag.falling { background: rgba(239,68,68,0.16); color: #b91c1c; }
+            body[data-theme="light"] #trendsIQView .tiq-momentum-tag.sustained { background: rgba(124,58,237,0.14); color: #6d28d9; }
+            body[data-theme="light"] #trendsIQView .tiq-momentum-tag.new,
+            body[data-theme="light"] #trendsIQView .tiq-momentum-tag.new_arc { background: rgba(202,138,4,0.16); color: #a16207; }
+            body[data-theme="light"] #trendsIQView .tiq-momentum-tag.dropped,
+            body[data-theme="light"] #trendsIQView .tiq-momentum-tag.unknown { background: rgba(100,116,139,0.16); color: #475569; }
+            /* Italic 'why trending' subtext + timestamps: override the inline
+               pale color/opacity so the description reads on white. */
+            body[data-theme="light"] #trendsIQView .tiq-row-why { color: #334155 !important; opacity: 1 !important; }
+            body[data-theme="light"] #trendsIQView .tiq-person-context { color: #475569; opacity: 1; }
+            body[data-theme="light"] #trendsIQView .tiq-started { color: #475569; opacity: 1; }
         </style>
         <div id="trendsIQView">
             <div class="tiq-header" style="position: relative;">
