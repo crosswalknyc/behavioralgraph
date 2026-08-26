@@ -50,6 +50,7 @@ if _ROOT not in sys.path:
 
 from super_fan_synthesis import (  # noqa: E402
     build_source_snapshot,
+    subject_is_seed_marker,
     _extract_json_block,
     _norm_subject_for_filename,
     DEMO_CATS_TF,
@@ -1473,6 +1474,20 @@ def enforce_avid_ratio_collapse_guard(df_avid, df_parent, subject: str,
 # =============================================================================
 # Source loading (s3_key OR local_path) -- mirrors super_fan_synthesis._load_source
 # =============================================================================
+def _subject_from_source_name(source):
+    """Recover a subject label from the parent's S3 key / file name.
+
+    'Happys_Place_06_09_2026_00_13.csv' -> 'Happys Place'. Last-resort
+    fallback when BRAND INPUT carries a seed-file marker AND the
+    INPUT_METADATA BRAND stamp is missing (see the identity guard in
+    synthesize_avid_fan). Returns None when nothing usable remains."""
+    base = os.path.basename(str(source or ""))
+    base = re.sub(r"\.csv$", "", base, flags=re.I)
+    base = re.sub(r"_\d{2}_\d{2}_\d{4}(_\d{2}_\d{2})?$", "", base)
+    base = re.sub(r"_\d{4}_\d{2}_\d{2}(_\d{2}_\d{2})?$", "", base)
+    return re.sub(r"\s+", " ", base.replace("_", " ")).strip() or None
+
+
 def _load_source_df(source: str, source_kind: str = "auto"):
     """Return (df, resolved_kind). source_kind='auto' picks 'local_path' when
     `source` is an existing absolute/relative path, else 's3_key'."""
@@ -1562,6 +1577,26 @@ def synthesize_avid_fan(
     df_baseline, kind = _load_source_df(source, source_kind=source_kind)
     snap = build_source_snapshot(df_baseline)
     subject = snap["subject"]
+    # 2026-08-25 identity guard (Happys Place 'CSV - Avid Fan' defect):
+    # a seed-file marker ('CSV') or empty subject must never become the
+    # deliverable name. build_source_snapshot already substitutes the
+    # INPUT_METADATA BRAND slug when BRAND INPUT carries the marker;
+    # this is the last-resort net for parents lacking both. Recover
+    # from the parent's own S3 key / file name, else refuse to ship a
+    # mislabeled cut.
+    if subject_is_seed_marker(subject):
+        recovered = (_subject_from_source_name(source)
+                     if kind in ("s3_key", "local_path") else None)
+        if subject_is_seed_marker(recovered):
+            raise RuntimeError(
+                f"avid naming guard: subject {subject!r} (from parent "
+                f"BRAND INPUT / INPUT_METADATA) is a seed-file marker "
+                f"or empty and cannot name a deliverable. Parent "
+                f"source={source!r}. Fix the parent's INPUT_METADATA "
+                f"BRAND stamp or its BRAND INPUT row.")
+        print(f"  subject recovered from parent file name: {recovered!r}")
+        subject = recovered
+        snap["subject"] = subject
     print(f"  subject={subject!r}  cats={snap['category_count']}  "
           f"sample={snap['sample_size']}")
 

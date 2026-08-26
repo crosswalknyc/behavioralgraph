@@ -210,6 +210,44 @@ def _fbp(v):
         return None
 
 
+# BRAND INPUT Values that are seed/ingest markers, never subjects. The
+# engine (scripts/synth_engine_row_by_row.py::_build_brand_input_value)
+# emits the literal 'CSV' for file-fed universes (spec markers
+# universe_seed_csv / seed_file), and derived cuts inherit the parent's
+# BRAND INPUT Value verbatim (rule 4c-i). A marker is a legitimate
+# BRAND INPUT Value but must NEVER become a subject or deliverable name.
+SEED_FILE_MARKERS = frozenset({'CSV'})
+
+
+def subject_is_seed_marker(subject) -> bool:
+    """True when `subject` is empty or a seed-file marker ('CSV'),
+    i.e. unusable as a subject label or deliverable name."""
+    s = str(subject or '').strip()
+    return (not s) or s.upper() in SEED_FILE_MARKERS
+
+
+def subject_from_input_metadata(df):
+    """Recover the subject from the INPUT_METADATA 'BRAND:<slug>' stamp
+    ('BRAND:HAPPYS-PLACE_SAMPLE_START:...' -> 'HAPPYS PLACE').
+
+    Used when BRAND INPUT carries a seed-file marker instead of a
+    subject (file-fed universes). Returns None when the row or stamp
+    is missing."""
+    try:
+        cats_upper = df['Column'].astype(str).str.strip().str.upper()
+        im = df[cats_upper == 'INPUT_METADATA']
+        if not len(im):
+            return None
+        raw = str(im['Value'].iloc[0])
+        m = re.search(r'BRAND:(.+?)(?:_SAMPLE_START:|$)', raw)
+        if not m:
+            return None
+        subj = re.sub(r'\s+', ' ', m.group(1).replace('-', ' ')).strip()
+        return subj or None
+    except Exception:
+        return None
+
+
 def build_source_snapshot(df) -> dict:
     """Compact snapshot of the source profile for Claude reasoning.
 
@@ -233,6 +271,16 @@ def build_source_snapshot(df) -> dict:
                 ('/' in s or '%20' in s or '.' in s.replace(' ', ''))
                 for s in _segs[1:]):
             subject = _segs[0]
+    # 2026-08-25 (Happys Place 'CSV - Avid Fan' defect): on file-fed
+    # universes BRAND INPUT is the literal seed-file marker 'CSV', not
+    # the subject. Deriving the subject from it shipped an avid cut
+    # literally named 'CSV - Avid Fan' (serially clobbered across
+    # subjects: Will & Grace's avid, then Happys Place's, landed on the
+    # same key). When the marker (or an empty value) is all BRAND INPUT
+    # gives us, recover the real subject from INPUT_METADATA's
+    # BRAND:<slug> stamp instead.
+    if subject_is_seed_marker(subject):
+        subject = subject_from_input_metadata(df) or subject
     ss = df[cats_upper == 'SAMPLE SIZE']
     sample_size = None
     if len(ss):
