@@ -61484,6 +61484,136 @@ https://www.instagram.com/p/..."></textarea>
             return false;
         }
 
+        // ============= SUBSCRIBER IQ ROUTING (2026-08-26) =============
+        // Subscriber IQ pulls (product-name asks, signup/acquisition
+        // attribution, first watch, title-tied churn or win-back,
+        // subscriber impact) always fall through to the interpret
+        // flow, even when a profile is open on screen - the page-aware
+        // analysis routing must never hijack them. Typo tolerant: each
+        // token's letters are counted against the key vocabulary so
+        // 'subscriber aqcuisiont' and 'subsciber' still match.
+        // Mirrors subiq_intent.py (detect_subscriber_iq_intent);
+        // scripts/test_subiq_intent_coverage.py enforces the sync.
+        var _PM_SUBIQ_CANON = ['subscriber', 'subscribers', 'subscribed',
+            'subscribes', 'subscribe', 'subscription', 'subscriptions',
+            'acquisition', 'acquisitions', 'attribution', 'reactivation',
+            'reactivations', 'reactivated', 'cancellation',
+            'cancellations', 'signup', 'signups'];
+        function _pmSubIqLetterDiff(a, b) {
+            var ca = {}, cb = {}, k, d = 0, i;
+            for (i = 0; i < a.length; i++) ca[a[i]] = (ca[a[i]] || 0) + 1;
+            for (i = 0; i < b.length; i++) cb[b[i]] = (cb[b[i]] || 0) + 1;
+            for (k in ca) d += Math.max(0, ca[k] - (cb[k] || 0));
+            for (k in cb) d += Math.max(0, cb[k] - (ca[k] || 0));
+            return d;
+        }
+        function _pmSubIqCanonToken(tok) {
+            if (tok.length < 5 || _PM_SUBIQ_CANON.indexOf(tok) !== -1) return tok;
+            var best = null, bestDiff = 3;
+            for (var i = 0; i < _PM_SUBIQ_CANON.length; i++) {
+                var c = _PM_SUBIQ_CANON[i];
+                if (c[0] !== tok[0]) continue;
+                if (Math.abs(c.length - tok.length) > 2) continue;
+                if (c.indexOf('q') !== -1 && tok.indexOf('q') === -1) continue;
+                var diff = _pmSubIqLetterDiff(tok, c);
+                if (diff < bestDiff) { bestDiff = diff; best = c; }
+            }
+            return (best && bestDiff <= 2) ? best : tok;
+        }
+        function _pmSubIqNormalize(text) {
+            var t = String(text || '').toLowerCase()
+                .replace(/[\u2018\u2019\u02bc'`]/g, '')
+                .replace(/[^a-z0-9+]+/g, ' ')
+                .replace(/\s+/g, ' ').trim();
+            if (!t) return '';
+            t = ' ' + t.split(' ').map(_pmSubIqCanonToken).join(' ') + ' ';
+            t = t.replace(/ sign ups /g, ' signups ')
+                 .replace(/ sign up /g, ' signup ')
+                 .replace(/ win back /g, ' winback ')
+                 .replace(/ win backs /g, ' winbacks ');
+            return t.replace(/^\s+|\s+$/g, '');
+        }
+        var _PM_SUBIQ_PRODUCT = [
+            /\bsub(?:scri\w*)?s? ?iq\b/,
+            /\b(?:signups?|subscri\w*|acquisitions?|subs?) trackers?\b/
+        ];
+        var _PM_SUBIQ_VETO = [
+            /\b(?:build|make|create|pull|run|generate|queue|derive|spin up)\b[^.?!]{0,50}\b(?:profile|audience|universe|persona|cut)s?\b/,
+            /\b(?:profile|audience|universe|cohort|persona)s? (?:of|for|on)\b/,
+            /\bpeople who\b/,
+            /\b(?:viewers|users|subscri\w*|fans|members|customers|households|adults|shoppers|buyers) who\b/,
+            /\b(?:subscri\w*|audience|viewers?) demographics?\b/,
+            /\bdemographics? (?:of|for|breakdown)\b/,
+            /\bdemo breakdown\b/,
+            /\bsearch demand\b/,
+            /\bsearch journey\b/,
+            /\bfirst touch\w*\b/,
+            /\bsearch to play\b/,
+            /\bwhere to watch\b/,
+            /\bhow (?:are|were|do|did|is|was) (?:people|viewers|users|searchers|audiences?|everyone|subscribers) (?:find|finding|discover|discovering)\b/,
+            /\bswitchers?\b/,
+            /\bchurned (?:from|off|out of|away from)\b/,
+            /\bhow many (?:panelists?|panel|sample)\b/,
+            /\bhow many (?:subscri\w*|subs|members) (?:does|do|did)\b/,
+            /\bsubscri\w* counts?\b/,
+            /\b(?:avid|casual) fans?\b/
+        ];
+        var _PM_SUBIQ_FAMILIES = [
+            /\b(?:subscri\w*|signups?|subs?) acquisitions?\b/,
+            /\bacquisitions? (?:drivers?|analysis|report|read|numbers|story|breakdown|attribution|funnel|split|deck)\b/,
+            /\bacquisitions? (?:for|on)\b/,
+            /\b(?:signups?|subscri\w*|subs) attribution\b/,
+            /\battribution (?:of|for|on) (?:signups?|subscri\w*|subs)\b/,
+            /\b(?:drove|drive|drives|driving|driven|brought|bring|brings|bringing)\b[^.?!]{0,40}\b(?:signups?|subscri\w*|subs)\b/,
+            /\b(?:signups?|subscri\w*|subs)\b[^.?!]{0,30}\b(?:driven by|attributed to|because of|thanks to|due to)\b/,
+            /\b(?:subscri\w*|subs|signups?) (?:gained|added|acquired|won)\b/,
+            /\bnew (?:subscri\w*|subs|signups?) (?:from|off|because|after|thanks|due)\b/,
+            /\b(?:who|how many(?: people| viewers| users| folks)?) (?:signed up|subscribed|joined)\b/,
+            /\bsign(?:ed|s)? up (?:because|after|for|off|from|thanks|due)\b/,
+            /\bsubscribed (?:because|after|for|off|from|thanks|due)\b/,
+            /\bjoin(?:ed|s|ing)?\b[^.?!]{0,25}\b(?:because of|to watch|for)\b/,
+            /\b\w+ driven signups?\b/,
+            /\bsignups? (?:for|from|off)\b/,
+            /\bconversion to (?:subscri\w*|subs|signups?)\b/,
+            /\bfirst watch\w*\b/,
+            /\bfirst (?:title|show|series|movie|thing|content) (?:watched|streamed|played|viewed)\b/,
+            /\bwatch(?:ed)? first\b/,
+            /\bfirst stream\w*\b/,
+            /\bentry title\b/,
+            /\bfront door title\b/,
+            /\bgateway (?:title|show|series)\b/,
+            /\bcancell?ations? (?:after|when|following|during|spike)\b/,
+            /\bchurn\w* (?:after|when|following|during)\b/,
+            /\b(?:did|do|will|are) (?:people|subscri\w*|subs|viewers|users|anyone|they) (?:leave|leaving|cancel|churn|drop|unsubscribe)\b/,
+            /\b(?:leave|left|cancell?ed|churned) (?:when|after|once)\b/,
+            /\bwin ?backs?\b/,
+            /\breactivat\w*\b/,
+            /\bdormant (?:subscri\w*|subs|accounts?|users)\b/,
+            /\b(?:subscri\w*|subs|accounts?) (?:coming|came|come) back\b/,
+            /\bretention (?:after|through|during|impact)\b/,
+            /\b(?:subscri\w*|subs) (?:lost|churned)\b/,
+            /\b(?:subscri\w*|signups?) impact\b/,
+            /\bsubscri\w* (?:lift|bump|effect)\b/,
+            /\bsignups? (?:during|over|around) (?:the )?\w+/,
+            /\b(?:finale|premiere|launch) (?:week )?signups?\b/,
+            /\bimpact on (?:signups?|subscri\w*|subs)\b/
+        ];
+        function _pmLooksSubscriberIq(text) {
+            var t = _pmSubIqNormalize(text);
+            if (!t) return false;
+            var i;
+            for (i = 0; i < _PM_SUBIQ_PRODUCT.length; i++) {
+                if (_PM_SUBIQ_PRODUCT[i].test(t)) return true;
+            }
+            for (i = 0; i < _PM_SUBIQ_VETO.length; i++) {
+                if (_PM_SUBIQ_VETO[i].test(t)) return false;
+            }
+            for (i = 0; i < _PM_SUBIQ_FAMILIES.length; i++) {
+                if (_PM_SUBIQ_FAMILIES[i].test(t)) return true;
+            }
+            return false;
+        }
+
         // Other profiles open as dashboard tabs (beyond the active one).
         function _pmOtherOpenTabs(ctx) {
             var out = [];
@@ -61971,6 +62101,10 @@ https://www.instagram.com/p/..."></textarea>
                 return;
             }
             var _pmCtx = _pmCollectPageContext();
+            // Subscriber IQ asks bypass the page-aware analysis
+            // routing entirely (2026-08-26): they are build requests
+            // for the interpret flow, even when a profile is open.
+            var _pmSubIqAsk = _pmLooksSubscriberIq(text);
             // Analysis mode menu (2026-08-21 Jenna): the bare "Analyze
             // this data" chip opens a menu of analysis modes instead of
             // firing one generic read. Specific asks still flow straight
@@ -61990,17 +62124,17 @@ https://www.instagram.com/p/..."></textarea>
                 _pmShowComparePicker(_pmCtx);
                 return;
             }
-            if (_pmLooksSearchDemand(text)) {
+            if (!_pmSubIqAsk && _pmLooksSearchDemand(text)) {
                 var _pmOutcomeSd = await _pmAnalyze(text, _pmCtx,
                                                     'search_demand');
                 if (_pmOutcomeSd !== 'reroute') return;
             }
-            var _pmMode = _pmModeForText(text);
+            var _pmMode = _pmSubIqAsk ? null : _pmModeForText(text);
             if (_pmMode && _pmCtx) {
                 var _pmOutcomeM = await _pmAnalyze(text, _pmCtx, _pmMode);
                 if (_pmOutcomeM !== 'reroute') return;
             }
-            if (_pmShouldAnalyze(text, _pmCtx)) {
+            if (!_pmSubIqAsk && _pmShouldAnalyze(text, _pmCtx)) {
                 var _pmOutcome = await _pmAnalyze(text, _pmCtx);
                 if (_pmOutcome !== 'reroute') return;
                 // reroute: the analyst says this is a build ask; fall

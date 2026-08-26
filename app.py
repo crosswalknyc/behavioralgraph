@@ -44862,12 +44862,41 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  ]\n"
         "}\n\n"
 
-        "SUBSCRIBER IQ REQUESTS (2026-08-25):\n"
-        "When the request asks for a Subscriber IQ (phrases like "
-        "'subscriber iq', 'sub iq', 'subiq', 'signup tracker', "
-        "'subscriber tracker', 'acquisition tracker' for a show or "
-        "movie), set decision='subscriber_iq' and fill the `subiq` "
-        "object. Rules:\n"
+        "SUBSCRIBER IQ REQUESTS (2026-08-25; phrasing families "
+        "2026-08-26):\n"
+        "When the request asks for a Subscriber IQ for a show or "
+        "movie, set decision='subscriber_iq' and fill the `subiq` "
+        "object. Recognize ALL of these phrasing families, including "
+        "casual forms and misspellings ('subscriber aqcuisiont', "
+        "'acquisiton', 'subsciber', 'sign ups', 'subs'):\n"
+        "  - product names: 'subscriber iq', 'sub iq', 'subiq', "
+        "'signup tracker', 'subscriber tracker', 'acquisition "
+        "tracker'.\n"
+        "  - signup / acquisition attribution: 'subscriber "
+        "acquisition', 'acquisition drivers', 'what drove signups', "
+        "'signup attribution', 'new subscribers from X', 'who signed "
+        "up because of Y', 'did <title> bring subscribers', 'subs "
+        "gained', 'title-driven signups', 'how many people joined "
+        "<platform> for <title>'.\n"
+        "  - first watch: 'first watch', 'first title watched', 'what "
+        "did new subs watch first', 'entry title', 'front-door "
+        "title'.\n"
+        "  - title-tied churn and win-back (the deliverable includes "
+        "monthly churn and reactivations): 'cancellations after the "
+        "finale', 'did people leave when <title> ended', 'win-back', "
+        "'reactivations', 'dormant subscribers coming back'.\n"
+        "  - season / window subscriber impact: '<title> season 2 "
+        "subscriber impact', 'signups during the finale week'.\n"
+        "Do NOT route to subscriber_iq: audience / profile builds "
+        "('audience of <title> fans', 'profile of <platform> "
+        "subscribers', 'people who signed up for <platform>' are "
+        "cohort definitions - Profile IQ builds; churned-audience "
+        "asks use universe_mode='churned'), 'subscriber demographics' "
+        "style asks (Profile IQ), search-demand questions ('how are "
+        "people finding X', 'first touch'), and platform-level count "
+        "questions ('how many subscribers does Netflix have'). A "
+        "bare 'churn' or 'retention' ask with no title context is "
+        "NOT subscriber_iq either. Rules:\n"
         "  * subject = the CLEAN title only ('Landman'), never a season "
         "or audience qualifier. Put the season number in subiq.season.\n"
         "  * subiq.platform is the streaming platform that carries the "
@@ -46758,6 +46787,55 @@ def _sg_guard_tier_scope(draft, text, history, allow_ask):
         f"all {subject} viewers with the '{term}' interest noted, or "
         f"'persona' to build it as a '{term}' persona audience "
         f"instead.")}
+
+
+def _promote_subiq_intent(draft, text):
+    """Deterministic Subscriber IQ intent net UNDER the interpret step
+    (2026-08-26 Jenna: "think through all the ways someone could ask
+    you to pull a subscriber iq like 'first watch' 'subscriber
+    aqcuisiont' that kinda thing and make sure that's fully wired").
+
+    When the ask plainly reads as a Subscriber IQ pull (product name,
+    signup / acquisition attribution, first watch, title-tied churn or
+    reactivation, subscriber impact - typo-tolerant matching lives in
+    subiq_intent.py) but the interpret step routed it elsewhere,
+    promote the decision to subscriber_iq so the dates/season
+    confirmation + Profile IQ add-on flow runs. Runs BEFORE the
+    existing-match / qualifier / intersect gates so a catalog Profile
+    IQ can never hijack a Subscriber IQ ask. Profile builds, cohort
+    definitions, demographic asks, search-demand questions, and count
+    questions never promote - subiq_intent.py owns the negative
+    guards. Returns True when it promoted. Never raises."""
+    try:
+        if not isinstance(draft, dict):
+            return False
+        if str(draft.get('decision')
+               or '').strip().lower() == 'subscriber_iq':
+            return False
+        from subiq_intent import subiq_intent_family
+        family = subiq_intent_family(text)
+        if not family:
+            return False
+        draft['decision'] = 'subscriber_iq'
+        draft['decision_reason'] = (
+            'Subscriber IQ request (matched the '
+            + family.replace('_', ' ') + ' phrasing family).')
+        # A Subscriber IQ request never reuses a Profile IQ catalog
+        # entry - drop any match or clarify stash Claude attached.
+        for k in ('existing_match_s3_key', 'existing_match_display_name',
+                  'existing_match_days_old', 'ask_existing_profile',
+                  'existing_profile_data', 'ask_qualifier_match',
+                  'qualifier_match_data', 'ask_parent_link',
+                  'parent_link_candidates', 'derive_type'):
+            draft.pop(k, None)
+        if not isinstance(draft.get('subiq'), dict):
+            draft['subiq'] = {}
+        print(f"[subiq-intent] promoted decision to subscriber_iq "
+              f"(family={family})")
+        return True
+    except Exception as _sp_err:
+        print(f"[subiq-intent] promoter failed (non-fatal): {_sp_err}")
+        return False
 
 
 def _apply_subiq_guards(draft, text):
@@ -50794,6 +50872,13 @@ def api_synth_chat_interpret():
                     "per segment."
                 ),
             }), 400
+
+        # Subscriber IQ intent net (2026-08-26): typo-tolerant
+        # deterministic routing for Subscriber IQ asks the interpret
+        # step misread ('subscriber aqcuisiont', 'first watch', 'what
+        # drove signups'). Runs before the parent-match gates so a
+        # catalog Profile IQ never hijacks a Subscriber IQ pull.
+        _promote_subiq_intent(spec_draft, text)
 
         # Parent-selection guardrail (2026-08-18 Reba-2024 regression).
         # Deterministically swap Claude's existing_match away from any
