@@ -9415,7 +9415,7 @@ the 79.4M projected base; every absolute count is the panel n times 32.99.
 
 def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
                            temperature=0.4, model=None,
-                           salvage_arrays=False):
+                           salvage_arrays=False, usage_tag=None):
     """
     Run a single Claude reasoning pass, parse the response as a JSON object,
     and return either {'success': True, 'data': {...}, 'model': '...'} or
@@ -9455,6 +9455,7 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
             max_tokens=max_tokens,
             temperature=temperature,
             raise_on_error=True,
+            usage_tag=usage_tag,
         )
     except Exception as exc:
         return {'success': False, 'status': 502,
@@ -9489,6 +9490,7 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
                 max_tokens=max_tokens,
                 temperature=0.2,
                 raise_on_error=True,
+                usage_tag=usage_tag,
             )
             parsed = _extract_json_object(raw2)
             if parsed is None and salvage_arrays:
@@ -20552,6 +20554,44 @@ def save_live_features():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+DAILY_COSTS_FILE = 'system/usage/daily_costs.json'
+
+
+@app.route('/api/admin/daily-costs', methods=['GET'])
+@requires_super_admin
+def get_admin_daily_costs():
+    """Day-by-day usage spend (Prometheus / API / Custom Pulls).
+
+    Super admin only. Reads the day-keyed spend store maintained by the
+    nightly aggregation job; never computes anything inline."""
+    try:
+        data = load_json_from_s3(DAILY_COSTS_FILE, use_cache=False) or {}
+        days_map = data.get('days') or {}
+        rows = []
+        for d in sorted(days_map, reverse=True):
+            e = days_map.get(d) or {}
+            rows.append({
+                'date': d,
+                'prometheus': round(float(e.get('prometheus') or 0.0), 2),
+                'api': round(float(e.get('api') or 0.0), 2),
+                'custom_pulls': round(float(e.get('custom_pulls') or 0.0), 2),
+                'total': round(float(e.get('total') or 0.0), 2),
+                'basis': str(e.get('basis') or 'measured'),
+            })
+        resp = jsonify({
+            'success': True,
+            'days': rows,
+            'definitions': data.get('bucket_definitions') or {},
+            'updated_at': data.get('updated_at') or '',
+        })
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        return resp
+    except Exception as e:
+        print(f"❌ Error loading daily costs: {e}")
+        return jsonify({'success': True, 'days': [], 'definitions': {},
+                        'updated_at': ''})
 
 
 @app.route('/api/ecosystem/ai-analyze', methods=['POST'])
@@ -47177,6 +47217,7 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
             system_prompt=system_prompt, user_prompt=user_prompt,
             max_tokens=16000, temperature=0.4,
             model=_SYNTH_CHAT_INTERPRET_MODEL,
+            usage_tag=('interpret', 'chatbot'),
         )
         if not result.get('success'):
             return {
@@ -47708,7 +47749,8 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
                 system_prompt=_sp, user_prompt=_up,
                 max_tokens=32000, temperature=0.4,
                 model=_SYNTH_CHAT_INTERPRET_MODEL,
-                salvage_arrays=True)
+                salvage_arrays=True,
+                usage_tag=('interpret', 'chatbot'))
             _data = _res.get('data') if _res.get('success') else None
             if isinstance(_data, dict):
                 _data = [_data]
@@ -52654,7 +52696,7 @@ def _pm_model_chain():
 
 
 def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
-                    temperature=0.5):
+                    temperature=0.5, surface='analysis'):
     """JSON reasoning pass on the strongest model that answers. Walks
     the Opus candidate chain once, caches the winner for the process
     lifetime, and always keeps the interpret sonnet as the final
@@ -52671,7 +52713,8 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
     for m in _pm_model_chain():
         result = _run_nflx_claude_agent(
             system_prompt=system_prompt, user_prompt=user_prompt,
-            max_tokens=max_tokens, temperature=temperature, model=m)
+            max_tokens=max_tokens, temperature=temperature, model=m,
+            usage_tag=(surface, 'chatbot'))
         if result.get('success'):
             with _pm_model_lock:
                 if _pm_resolved_model['name'] != m:
@@ -52857,7 +52900,7 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
         plan_result = _pm_claude_json(
             pma.DECK_PLAN_SYSTEM_PROMPT,
             pma.build_deck_user_prompt(digest, history, angle),
-            max_tokens=7000, temperature=0.4)
+            max_tokens=7000, temperature=0.4, surface='deck')
         if not plan_result.get('success'):
             raise RuntimeError(plan_result.get('error')
                                or 'slide plan failed')
@@ -53821,6 +53864,7 @@ def _v1_interpret(prompt):
     interp = _run_nflx_claude_agent(
         system_prompt=system_prompt, user_prompt=user_prompt,
         max_tokens=8192, temperature=0.4,
+        usage_tag=('interpret', 'partner_api'),
     )
     if not interp.get('success'):
         return None, candidates, interp

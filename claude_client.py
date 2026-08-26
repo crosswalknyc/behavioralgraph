@@ -115,6 +115,24 @@ def get_claude_client():
         return None
 
 
+def _record_tagged_usage(usage_tag, model_id, resp) -> None:
+    """Persist per-call usage when the caller tagged the request.
+
+    usage_tag is a (surface, origin) tuple, e.g. ('interpret',
+    'chatbot'). Untagged calls are skipped. Never raises."""
+    if not usage_tag:
+        return
+    try:
+        _u = getattr(resp, "usage", None)
+        if _u is None:
+            return
+        import render_usage_log
+        render_usage_log.record_call(usage_tag[0], usage_tag[1],
+                                     model_id, _u)
+    except Exception:
+        pass
+
+
 def claude_reason_json(
     *,
     system: str,
@@ -124,6 +142,7 @@ def claude_reason_json(
     temperature: float = 0.2,
     max_retries: int = 3,
     raise_on_error: bool = False,
+    usage_tag=None,
 ) -> str:
     """Send a single-shot reasoning prompt to Claude; return the raw text.
 
@@ -205,6 +224,7 @@ def claude_reason_json(
                     resp = _issue(_kwargs)
                 else:
                     raise
+            _record_tagged_usage(usage_tag, model_id, resp)
             try:
                 _u = getattr(resp, "usage", None)
                 if _u is not None:

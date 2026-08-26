@@ -1,0 +1,169 @@
+"""Per-call Anthropic usage records for the web app's own model calls.
+
+The profile engine's per-run token ledger lives with the engine; the
+web app's OWN Claude calls (chat interpret, on-screen analysis, deck
+plans) historically discarded the response usage object entirely, so
+their spend was invisible. This module closes that gap: call sites tag
+each request with a (surface, origin) pair and this module writes one
+small JSON record per call to S3.
+
+Records land at:
+
+    s3://dashboard-inputs/system/usage/render_calls/YYYY_MM_DD/<ts>_<uuid>.json
+
+One object per call (no read-modify-write, so concurrent gunicorn
+workers can never clobber each other). A nightly aggregation job reads
+the dated prefixes and folds them into the day-by-day spend store at
+system/usage/daily_costs.json.
+
+Surfaces: 'interpret' (chat request -> draft spec), 'analysis'
+(on-screen profile analysis), 'deck' (slide-plan generation).
+Origins: 'chatbot' (dashboard chat) or 'partner_api' (/api/v1/*).
+
+Pricing mirrors the engine-side table (migration/usage_tracker.py in
+the parent repo); update both when the Anthropic price sheet moves.
+
+Every function here is failure-proof by design: a recording problem
+must never affect a user-facing request. Writes happen on a daemon
+thread so no S3 latency is added to the request path.
+"""
+from __future__ import annotations
+
+import json
+import os
+import threading
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Optional
+
+S3_BUCKET = os.environ.get('RENDER_USAGE_BUCKET') or 'dashboard-inputs'
+CALLS_PREFIX = 'system/usage/render_calls/'
+
+# USD per 1M tokens. Mirror of migration/usage_tracker.PRICING_USD_PER_MTOK.
+PRICING_USD_PER_MTOK = {
+    'claude-sonnet-4-5':      {'input': 3.00, 'output': 15.00,
+                               'cache_read': 0.30, 'cache_write': 3.75},
+    'claude-sonnet-4-6':      {'input': 3.00, 'output': 15.00,
+                               'cache_read': 0.30, 'cache_write': 3.75},
+    'claude-3-5-sonnet-20241022': {'input': 3.00, 'output': 15.00,
+                                   'cache_read': 0.30, 'cache_write': 3.75},
+    'claude-opus-4-5':        {'input': 15.00, 'output': 75.00,
+                               'cache_read': 1.50, 'cache_write': 18.75},
+    'claude-opus-4-6':        {'input': 15.00, 'output': 75.00,
+                               'cache_read': 1.50, 'cache_write': 18.75},
+    'claude-opus-4-7':        {'input': 15.00, 'output': 75.00,
+                               'cache_read': 1.50, 'cache_write': 18.75},
+    'claude-opus-4-8':        {'input': 15.00, 'output': 75.00,
+                               'cache_read': 1.50, 'cache_write': 18.75},
+    'claude-opus-5':          {'input': 15.00, 'output': 75.00,
+                               'cache_read': 1.50, 'cache_write': 18.75},
+    'claude-haiku-4-5':       {'input': 0.80, 'output': 4.00,
+                               'cache_read': 0.08, 'cache_write': 1.00},
+}
+_DEFAULT_PRICES = {'input': 3.00, 'output': 15.00,
+                   'cache_read': 0.30, 'cache_write': 3.75}
+
+_s3 = None
+_s3_lock = threading.Lock()
+
+
+def _client():
+    global _s3
+    with _s3_lock:
+        if _s3 is None:
+            import boto3
+            _s3 = boto3.client('s3')
+        return _s3
+
+
+def _prices_for(model: str) -> dict:
+    m = (model or '').strip()
+    if m in PRICING_USD_PER_MTOK:
+        return PRICING_USD_PER_MTOK[m]
+    for k, v in PRICING_USD_PER_MTOK.items():
+        if m.startswith(k):
+            return v
+    ml = m.lower()
+    if 'opus' in ml:
+        return PRICING_USD_PER_MTOK['claude-opus-4-5']
+    if 'haiku' in ml:
+        return PRICING_USD_PER_MTOK['claude-haiku-4-5']
+    return _DEFAULT_PRICES
+
+
+def _usage_field(usage: Any, name: str) -> int:
+    if usage is None:
+        return 0
+    if isinstance(usage, dict):
+        try:
+            return int(usage.get(name) or 0)
+        except Exception:
+            return 0
+    try:
+        return int(getattr(usage, name, 0) or 0)
+    except Exception:
+        return 0
+
+
+def cost_usd(model: str, usage: Any) -> float:
+    """Dollar cost of one call from its usage object (or dict)."""
+    p = _prices_for(model)
+    in_tok = _usage_field(usage, 'input_tokens')
+    out_tok = _usage_field(usage, 'output_tokens')
+    cr_tok = _usage_field(usage, 'cache_read_input_tokens')
+    cw_tok = _usage_field(usage, 'cache_creation_input_tokens')
+    total = (in_tok * p['input'] + out_tok * p['output']
+             + cr_tok * p['cache_read'] + cw_tok * p['cache_write'])
+    return round(total / 1_000_000, 6)
+
+
+def _put_record(record: dict) -> None:
+    day = record['ts'][:10].replace('-', '_')
+    key = (f"{CALLS_PREFIX}{day}/"
+           f"{record['ts'][11:19].replace(':', '')}_{uuid.uuid4().hex[:10]}.json")
+    _client().put_object(
+        Bucket=S3_BUCKET, Key=key,
+        Body=json.dumps(record).encode('utf-8'),
+        ContentType='application/json')
+
+
+def record_call(surface: str, origin: str, model: str,
+                usage: Any) -> None:
+    """Persist one model call's usage. Never raises; never blocks the
+    caller (S3 put runs on a daemon thread)."""
+    try:
+        in_tok = _usage_field(usage, 'input_tokens')
+        out_tok = _usage_field(usage, 'output_tokens')
+        cr_tok = _usage_field(usage, 'cache_read_input_tokens')
+        cw_tok = _usage_field(usage, 'cache_creation_input_tokens')
+        if not (in_tok or out_tok or cr_tok or cw_tok):
+            return
+        record = {
+            'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'surface': str(surface or 'other')[:32],
+            'origin': str(origin or 'chatbot')[:32],
+            'model': str(model or 'unknown')[:80],
+            'input_tokens': in_tok,
+            'output_tokens': out_tok,
+            'cache_read_input_tokens': cr_tok,
+            'cache_creation_input_tokens': cw_tok,
+            'cost_usd': cost_usd(model, usage),
+        }
+        t = threading.Thread(target=_put_record_safe, args=(record,),
+                             daemon=True)
+        t.start()
+    except Exception:
+        pass
+
+
+def _put_record_safe(record: dict) -> None:
+    try:
+        _put_record(record)
+    except Exception as e:
+        try:
+            print(f"[render-usage] record put failed: {e}")
+        except Exception:
+            pass
+
+
+__all__ = ['record_call', 'cost_usd', 'PRICING_USD_PER_MTOK']

@@ -1787,6 +1787,7 @@
                 <button class="admin-tab" onclick="showSettingsTab('svodPricing')">📺 SVOD Pricing</button>
                 <button class="admin-tab" onclick="showSettingsTab('analysisPricing')">💰 Analysis Pricing</button>
                 <button class="admin-tab" onclick="showSettingsTab('creditUsageExport')">📊 Credit Usage by Period</button>
+                <button class="admin-tab" id="settingsTabDailySpend" onclick="showSettingsTab('dailySpend')" style="display: {{ 'inline-block' if current_user_role == 'super_admin' else 'none' }};">💵 Daily Spend</button>
                 <button class="admin-tab" id="settingsTabDefaultPhoto" onclick="showSettingsTab('defaultProfilePhoto')" style="display: {{ 'inline-block' if current_user_role == 'super_admin' else 'none' }};">👤 Default Profile Photo</button>
             </div>
             
@@ -2338,6 +2339,29 @@
                         <p id="creditExportMessage" style="font-size: 0.85rem; color: var(--text-secondary); margin: 0;"></p>
                     </div>
                 </div>
+            </div>
+
+            <!-- Daily Spend Tab (Super Admin only) -->
+            <div id="settings-tab-dailySpend" class="settings-tab-content" style="display: none;">
+                {% if current_user_role == 'super_admin' %}
+                <div class="card">
+                    <div class="card-header">
+                        <h2>💵 Daily Spend</h2>
+                        <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                            Day-by-day usage spend, newest first. Prometheus covers dashboard chat requests plus the profile builds approved from that chat. API covers partner API requests plus the builds they start. Custom Pulls covers every other profile build. Each build lands in exactly one bucket.
+                        </p>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                            <span id="dailySpendUpdatedAt" style="font-size: 0.8rem; color: var(--text-secondary);"></span>
+                            <button class="btn btn-small btn-secondary" onclick="loadDailySpend()">↻ Refresh</button>
+                        </div>
+                        <div id="dailySpendContent">
+                            <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
 
             <!-- Default Profile Photo Tab (Super Admin only) -->
@@ -6232,8 +6256,71 @@
             if (tabName === 'defaultProfilePhoto') {
                 loadDefaultProfilePhotoUI();
             }
+            if (tabName === 'dailySpend') {
+                loadDailySpend();
+            }
         }
-        
+
+        // Daily Spend (Settings, super_admin only)
+        async function loadDailySpend() {
+            const content = document.getElementById('dailySpendContent');
+            const updatedAt = document.getElementById('dailySpendUpdatedAt');
+            if (!content) return;
+            content.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading...</div>';
+            try {
+                const res = await fetch('/api/admin/daily-costs', { credentials: 'same-origin' });
+                const data = await res.json();
+                const days = (data && data.days) || [];
+                if (updatedAt) {
+                    updatedAt.textContent = data.updated_at ? ('Updated ' + String(data.updated_at).slice(0, 16).replace('T', ' ') + ' UTC') : '';
+                }
+                if (!days.length) {
+                    content.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">No spend recorded yet. The store updates once a day.</div>';
+                    return;
+                }
+                const fmt = (v) => '$' + Number(v || 0).toFixed(2);
+                let totP = 0, totA = 0, totC = 0, totT = 0;
+                const rows = days.map(d => {
+                    totP += d.prometheus; totA += d.api; totC += d.custom_pulls; totT += d.total;
+                    const estMark = d.basis && d.basis !== 'measured'
+                        ? ' <span title="Includes estimated figures for days before full tracking began" style="color: var(--text-secondary); font-size: 0.75rem;">~</span>'
+                        : '';
+                    return `<tr style="border-bottom: 1px solid var(--border-color);">
+                        <td style="padding: 0.5rem 0.75rem; white-space: nowrap;">${d.date}${estMark}</td>
+                        <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(d.prometheus)}</td>
+                        <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(d.api)}</td>
+                        <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(d.custom_pulls)}</td>
+                        <td style="padding: 0.5rem 0.75rem; text-align: right; font-weight: 600;">${fmt(d.total)}</td>
+                    </tr>`;
+                }).join('');
+                content.innerHTML = `
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase;">
+                                <th style="padding: 0.5rem 0.75rem; text-align: left;">Date</th>
+                                <th style="padding: 0.5rem 0.75rem; text-align: right;">Prometheus</th>
+                                <th style="padding: 0.5rem 0.75rem; text-align: right;">API</th>
+                                <th style="padding: 0.5rem 0.75rem; text-align: right;">Custom Pulls</th>
+                                <th style="padding: 0.5rem 0.75rem; text-align: right;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                        <tfoot>
+                            <tr style="border-top: 2px solid var(--border-color); font-weight: 700;">
+                                <td style="padding: 0.5rem 0.75rem;">All days</td>
+                                <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(totP)}</td>
+                                <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(totA)}</td>
+                                <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(totC)}</td>
+                                <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(totT)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                    <p style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);">Rows marked ~ include estimated figures for days before full tracking began.</p>`;
+            } catch (e) {
+                content.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Nothing was lost. The spend table could not load; try refresh.</div>';
+            }
+        }
+
         // Default Profile Photo (Settings, super_admin only)
         async function loadDefaultProfilePhotoUI() {
             const preview = document.getElementById('defaultProfilePhotoPreview');
