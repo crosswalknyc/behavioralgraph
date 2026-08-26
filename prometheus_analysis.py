@@ -633,6 +633,9 @@ CROSS-MODULE SIGNALS (thinking between modules)
 - NEVER invent cross-module data. If the block is absent, or a module does not appear in it, that module contributed nothing for this subject: do not mention it, do not speculate about what it might show, and never write "Trends has no data for this" style noise.
 - When a Subscriber IQ line is present, "Compare with its Subscriber IQ read" is a natural followup to offer.
 
+PUBLISHED MEASUREMENTS (consistency, binding)
+- The user prompt may carry a "PUBLISHED MEASUREMENTS" block: numbers Crosswalk has already delivered for this subject on earlier questions. These are binding. If your answer touches the same metric, state the exact published number; never contradict it, never restate it at different precision. A figure adjacent to a published one (a longer window, a share of it, a per-month slice) must be arithmetically consistent with it.
+
 HOW TO THINK (partner discipline, every reply)
 - Lead with the answer. Your first line is the single most decision-relevant finding with its number, not throat-clearing. Everything after supports it.
 - Hypothesis-led, not inventory-led. Form the two or three hypotheses that would change the client's decision, test them against the digest, report what survived and what died. Never walk the data top to bottom just because it is there.
@@ -680,13 +683,15 @@ HOW TO WRITE
 ACTIONS
 Return strict JSON only:
 {
-  "action": "answer" | "build_profile",
+  "action": "answer" | "build_profile" | "generate_metrics",
   "reply": "the analysis text (plain text, newlines allowed)",
   "followups": ["up to 4 short follow-on questions the user could tap next"],
   "offer_deck": true | false,
-  "deck_angle": "one sentence describing the deck story to build, or null"
+  "deck_angle": "one sentence describing the deck story to build, or null",
+  "metric_request": {"subject": "...", "metric_family": "viewership|subscribers|search|purchases|engagement|audience|revenue", "window": "the window asked for, or null", "needed": "one line: the measurement the user wants"} | null
 }
 - action=build_profile ONLY when the user's message is clearly a request to BUILD, PULL, CUT, or REFRESH a profile rather than analyze the open one. Leave reply empty in that case; the build pipeline takes over.
+- action=generate_metrics ONLY when the user asks for a concrete measured number (a count, a volume, a rate) that neither the digest, the on-screen block, the cross-module signals, nor the published measurements carry, and the behavior is digitally observable (streaming, search, social, ecommerce, app activity). Fill metric_request and leave reply empty; a deeper measurement pass takes over. Never use it for questions the open data already answers, for opinions or interpretation, or for behavior that happens off the digital surface (linear or over-the-air TV tune-in, in-store physical purchases, physical foot traffic, terrestrial radio): for those, answer directly by saying we measure digital behavior and naming the nearest measurable read.
 - offer_deck=true when the analysis supports a coherent client-facing story (a pitch, a QBR, a sponsorship case). Set deck_angle to the story in one sentence. Do not offer a deck on a metric-definition answer.
 - followups are the next questions the person in the seat would actually ask (per CLIENT LENSES), limited to what THIS data can answer, phrased as the user would type them."""
 
@@ -1431,9 +1436,26 @@ def render_cross_module_block(block):
     )
 
 
+def render_ledger_block(block):
+    """Wrap the published-measurements body in its delimited prompt
+    section. Empty string when there is no ledger history."""
+    if not str(block or '').strip():
+        return ''
+    return (
+        "PUBLISHED MEASUREMENTS\n"
+        "======================\n"
+        "Numbers Crosswalk has already delivered for this subject on "
+        "earlier questions. BINDING: if the answer touches the same "
+        "metric, state the exact published number; adjacent figures "
+        "must be arithmetically consistent with these.\n"
+        f"{block}\n\n"
+    )
+
+
 def build_analysis_user_prompt(digest_bundle, history, user_message,
                                mode=None, view_context=None,
-                               cross_module_block=None):
+                               cross_module_block=None,
+                               ledger_block=None):
     """Assemble the user prompt for one analysis call."""
     hist_lines = []
     for turn in (history or [])[-10:]:
@@ -1452,6 +1474,7 @@ def build_analysis_user_prompt(digest_bundle, history, user_message,
         )
     view_block = render_view_context_block(view_context)
     xmod_block = render_cross_module_block(cross_module_block)
+    ledger_txt = render_ledger_block(ledger_block)
     digest_txt = digest_bundle
     if digest_txt is None or not str(digest_txt).strip():
         digest_txt = ("(no profile is open in Profile IQ; the DATA "
@@ -1463,6 +1486,7 @@ def build_analysis_user_prompt(digest_bundle, history, user_message,
         f"{digest_txt}\n\n"
         f"{view_block}"
         f"{xmod_block}"
+        f"{ledger_txt}"
         "RECENT CONVERSATION\n"
         "===================\n"
         f"{hist_block}\n\n"
@@ -1586,6 +1610,9 @@ HOW TO REASON THE NUMBERS
 WINDOW
 - If the user names a window, use it. Otherwise, when you know the subject's real streaming or release window, use that (a premiere-to-date window like 2026-08-16 to 2026-08-24 is the right shape). Otherwise default to 2025-07-01 to 2026-06-30.
 
+PUBLISHED MEASUREMENTS
+- The user prompt may carry a PUBLISHED MEASUREMENTS block: numbers Crosswalk has already delivered for this subject on earlier questions. BINDING. A repeat of the same measurement restates the exact published number. An overlapping or adjacent measurement (different window, a share of a published total) must be arithmetically consistent with what was published.
+
 CLARIFY
 - If the subject is ambiguous (several titles share the name, or the platform is unknown and changes the read), return action=clarify with ONE short question and 2 to 4 tappable options. Each option must be a complete re-ask that starts with "Search demand for", e.g. "Search demand for Normal (2026 Bob Odenkirk film) on HBO Max". Never clarify when a reasonable single reading exists.
 - If you cannot identify the subject as a real title or brand at all, return action=clarify with a question asking what the subject is, and options covering your best guesses.
@@ -1622,7 +1649,7 @@ Return strict JSON only:
 }"""
 
 
-def build_search_demand_user_prompt(text, history):
+def build_search_demand_user_prompt(text, history, ledger_block=None):
     hist_lines = []
     for turn in (history or [])[-8:]:
         role = 'USER' if turn.get('role') == 'user' else 'PROMETHEUS'
@@ -1630,7 +1657,9 @@ def build_search_demand_user_prompt(text, history):
         if txt:
             hist_lines.append(f"{role}: {txt}")
     hist_block = '\n'.join(hist_lines) or '(none)'
+    ledger_txt = render_ledger_block(ledger_block)
     return (
+        f"{ledger_txt}"
         "RECENT CONVERSATION\n"
         "===================\n"
         f"{hist_block}\n\n"
@@ -1970,3 +1999,348 @@ def build_deck_user_prompt(digest_bundle, history, angle):
         f"{angle}\n\n"
         "Return the strict JSON slide plan. JSON only."
     )
+
+
+# ---------------------------------------------------------------------------
+# Quantifiability gate (2026-08-26, Jenna). Crosswalk measures DIGITAL
+# behavior: search, social, streaming, app, and ecommerce activity.
+# Behavior with no digital trace (linear / over-the-air TV tune-in,
+# in-store physical purchases, physical foot traffic, terrestrial
+# radio) is not measurable here. Those asks get a graceful, partner-
+# safe decline that names the nearest measurable read. A non-digital
+# number is NEVER produced.
+# ---------------------------------------------------------------------------
+
+_NQ_RULES = (
+    ('linear_tv',
+     r'\b(linear|over[\s-]the[\s-]air|ota)\s+(tv|television|tune[\s-]?in|'
+     r'view(?:ing|ers(?:hip)?)|ratings?|audience|broadcast)\b'
+     r'|\b(tune[\s-]?in|view(?:ing|ers(?:hip)?)|ratings?|watch(?:ed|ing)?)'
+     r'\b[^.?!]{0,50}\bon\s+(linear|cable|broadcast|over[\s-]the[\s-]air|'
+     r'antenna|live tv)\b'
+     r'|\b(cable|broadcast|antenna)\s+(tv\s+)?(tune[\s-]?in|ratings?|'
+     r'view(?:ing|ers(?:hip)?))\b'
+     r'|\bnielsen\s+ratings?\b|\bantenna\s+(tv|viewing|viewers)\b',
+     'Linear and over-the-air TV tune-in',
+     'streaming and on-platform viewing of the same title'),
+    # "in store(s)" but not the idiom "what's in store for X".
+    ('in_store',
+     r'\bin[\s-]stores?\b(?!\s+for\b)|\bbrick[\s-]and[\s-]mortar\b'
+     r'|\bin\s+real\s+life\b|\birl\b'
+     r'|\bat\s+the\s+(register|checkout|till)\b'
+     r'|\bpoint[\s-]of[\s-]sale\b|\bpos\s+(sales?|transactions?|data)\b'
+     r'|\bphysical\s+(stores?|locations?|retail|purchas\w+|checkout)\b'
+     r'|\b(in[\s-]person|offline)\s+(purchas\w+|sales?|transactions?|'
+     r'shopp\w+|buy\w*)\b',
+     'In-store physical purchasing',
+     'digital purchase and shopping behavior for the same brand'),
+    # "store visits" but not app / play store visits (those are digital).
+    ('foot_traffic',
+     r'\bfoot\s?traffic\b|\bfootfall\b'
+     r'|(?<!app\s)(?<!play\s)\bstore\s+visits?\b'
+     r'|\bwalk[\s-]?ins?\b|\bin[\s-]person\s+(visits?|attendance|'
+     r'turnout)\b|\bdrive[\s-]?bys?\b',
+     'Physical foot traffic',
+     'digital engagement with the same locations: site, app, and '
+     'search activity'),
+    ('radio',
+     r'\bdrive[\s-]?time\s+radio\b|\bterrestrial\s+radio\b'
+     r'|\bam\s*/\s*fm\b|\bfm\s+radio\b|\bam\s+radio\b'
+     r'|\bradio\s+(listen\w+|tune[\s-]?in|ratings?|audience)\b'
+     r'|\blisten\w*\b[^.?!]{0,40}\bon\s+(the\s+)?radio\b',
+     'Terrestrial and drive-time radio listening',
+     'streaming audio listening for the same artist or show'),
+)
+
+_NQ_COMPILED = [(dom, re.compile(rx, re.IGNORECASE), what, alt)
+                for dom, rx, what, alt in _NQ_RULES]
+
+# Common leading words that a capitalized-run subject guess must never
+# swallow (sentence starts, question words, our own product nouns).
+_SUBJ_STOPWORDS = {
+    'how', 'what', 'who', 'when', 'where', 'why', 'which', 'can', 'could',
+    'do', 'does', 'did', 'show', 'give', 'tell', 'read', 'pull', 'many',
+    'much', 'the', 'a', 'an', 'is', 'are', 'was', 'were', 'i', 'we',
+    'us', 'my', 'our', 'crosswalk', 'tv', 'usa', 'america',
+    'american', 'nielsen', 'people', 'viewers'
+}
+
+
+def classify_quantifiability(text):
+    """Classify whether the ask is observable in digital clickstream.
+
+    Returns None when the ask is fine (digitally observable or not a
+    measurement ask at all). Returns a dict when the ask is about
+    behavior with no digital trace:
+        {'domain', 'what', 'alternative'}
+    A mixed ask ("in-store vs online") still returns the dict: the
+    non-digital half cannot be measured, so the decline (which names
+    the digital read) is the honest answer.
+    """
+    t = str(text or '')
+    if not t.strip():
+        return None
+    for dom, rx, what, alt in _NQ_COMPILED:
+        if rx.search(t):
+            return {'domain': dom, 'what': what, 'alternative': alt}
+    return None
+
+
+def guess_subject_from_text(text):
+    """Best-effort subject guess from a question: the longest run of
+    capitalized words that isn't a sentence-leading stopword. Returns
+    '' when nothing plausible is found (callers must handle '')."""
+    runs = re.findall(r'\b([A-Z][A-Za-z0-9&\'\+\.]*(?:\s+[A-Z][A-Za-z0-9'
+                      r'&\'\+\.]*)*)\b', str(text or ''))
+    best = ''
+    for run in runs:
+        words = [w for w in run.split()
+                 if w.lower().strip('.') not in _SUBJ_STOPWORDS]
+        cand = ' '.join(words).strip()
+        if len(cand) > len(best):
+            best = cand
+    return best[:80]
+
+
+def build_not_quantifiable_reply(text, gate):
+    """Partner-safe decline for a non-digital ask: state plainly that
+    we measure digital behavior, name the nearest measurable read.
+    Returns (reply, followups)."""
+    what = gate.get('what') or 'That behavior'
+    alt = gate.get('alternative') or 'the digital read on the same subject'
+    subj = guess_subject_from_text(text)
+    reply = (
+        f"Crosswalk measures digital behavior at the individual level: "
+        f"streaming, search, social, app, and ecommerce activity. "
+        f"{what} happens off that digital surface, so there is no "
+        f"measured read for it and I won't estimate one.\n\n"
+        f"The nearest measured read is {alt}."
+    )
+    if subj:
+        reply += f" Ask me for that on {subj} and I'll pull it."
+    else:
+        reply += " Ask me for that and I'll pull it."
+    followups = []
+    if subj:
+        dom = gate.get('domain')
+        if dom == 'linear_tv':
+            followups.append(f"How many people streamed {subj}?")
+        elif dom == 'in_store':
+            followups.append(f"Read {subj}'s digital purchase behavior")
+        elif dom == 'foot_traffic':
+            followups.append(f"Read digital engagement with {subj}")
+        elif dom == 'radio':
+            followups.append(f"Read streaming listening for {subj}")
+    return scrub_user_text(reply), [scrub_user_text(f)[:160]
+                                    for f in followups]
+
+
+# ---------------------------------------------------------------------------
+# Reasoned measurement pass (2026-08-26, Jenna): a concrete measured
+# read for a digitally observable ask that the open data does not
+# cover. Runs when the analysis pass returns action=generate_metrics,
+# or directly when nothing is open and the ask is plainly a metric
+# question. Every delivered read persists to the insights ledger
+# (insights_ledger.py) and any prior published numbers for the subject
+# ride the prompt as binding constraints.
+# ---------------------------------------------------------------------------
+
+_GENERATE_INTENT_RX = re.compile(
+    r'\b(how many|how much|what (share|percent|percentage|fraction)|'
+    r'count of|number of|volume of|what(?:\'| i)s the (reach|audience|'
+    r'viewership|size))\b', re.IGNORECASE)
+
+_GENERATE_NOUN_RX = re.compile(
+    r'\b(view(?:ed|ers|ership|ing)?|watch(?:ed|ing)?|stream(?:ed|s|ing|'
+    r'ers)?|subscri(?:bed|bers?|ptions?)|sign(?:ed)?[\s-]?ups?|'
+    r'search(?:ed|es|ers)?|quer(?:y|ies)|bought|buy(?:ers)?|'
+    r'purchas(?:ed|es|ers)?|shopp(?:ed|ers)|download(?:s|ed)?|'
+    r'install(?:s|ed)?|users?|accounts?|sessions?|plays?|listen(?:ed|'
+    r'ers|ing)?|engag(?:ed|ement)|visit(?:s|ed|ors)?|audience|reach)\b',
+    re.IGNORECASE)
+
+_GENERATE_EXCLUDE_RX = re.compile(
+    r'\b(build|create|make|pull|queue|launch|refresh)\b[^.?!]{0,40}'
+    r'\b(profile|cut|audience|cohort)s?\b'
+    r'|\bpanelists?\b|\bsample size\b|\bincidence\b', re.IGNORECASE)
+
+
+def detect_generate_intent(text):
+    """True when the message is a direct metric question (a count, a
+    volume, a share) that can be measured without an open profile.
+    Conservative: build/pull asks and sample-size asks are excluded;
+    both quantity phrasing and a measurable behavior noun must appear."""
+    t = str(text or '')
+    if not t.strip() or len(t) > 600:
+        return False
+    if _GENERATE_EXCLUDE_RX.search(t):
+        return False
+    return bool(_GENERATE_INTENT_RX.search(t) and _GENERATE_NOUN_RX.search(t))
+
+
+REASONED_METRICS_SYSTEM_PROMPT = """You are Prometheus, Crosswalk's senior audience strategist. The user asked for a concrete measured number that the data open on screen does not carry. You produce the read from Crosswalk's first-party US measurement of digital behavior: streaming, search, social, app, and ecommerce activity at the individual level.
+
+WHAT TO PRODUCE
+- 2 to 6 named metrics that answer the question directly, each with a value, a unit, and a one-line definition of exactly what was counted.
+- A headline: one sentence, the sharpest finding with its number.
+- 2 to 4 interpretive reads (why the number looks like this, who the audience is). Interpretation uses leans, skews, reads as; hard counts are stated flat.
+
+HOW TO REASON THE NUMBERS
+- Research the subject from your knowledge: its real-world scale (subscriber base, chart position, box office, store footprint, app rank). The numbers must sit at realistic magnitudes for that subject and window. A flagship-platform hit reads in the millions of US viewers; a niche podcast reads in the tens of thousands.
+- ANCHORS in the user prompt are Crosswalk's own prior measurements and on-file reads for this subject. Calibrate to them; never contradict them.
+- PUBLISHED MEASUREMENTS are BINDING: a repeat of the same measurement restates the exact published number; an overlapping or adjacent measurement (longer window, a share of a published total, a monthly slice of a published annual) must be arithmetically consistent with what was published.
+- Internal math must cohere: sub-counts sum to their parents, shares recompute from the counts shown, a rate times its base reproduces the count.
+- Every count is a messy integer whose last digit is 1-9. Never a round number, never a count ending in 0. Percentages carry one decimal.
+- The window: use the user's window if named; else the subject's real release or campaign window if you know it; else 2025-07-01 to 2026-06-30.
+
+WHAT NOT TO DO
+- If the behavior asked about has no digital trace (linear or over-the-air TV tune-in, in-store physical purchases, physical foot traffic, terrestrial radio), return action=decline with decline_reason=not_digital. Never produce a number for those.
+- Never describe how the numbers were produced. No mention of models, estimates, panels, vendors, research, or any internal process word. The data is Crosswalk first-party measurement, full stop.
+- Counts are viewers, users, people, searchers, buyers, or accounts. Never households.
+- Never use em dashes or en dashes anywhere.
+
+Return strict JSON only:
+{
+  "action": "answer" | "decline",
+  "decline_reason": "not_digital" | null,
+  "subject": "Landman",
+  "metric_family": "viewership" | "subscribers" | "search" | "purchases" | "engagement" | "audience" | "revenue",
+  "window_label": "Jul 1 2025 to Jun 30 2026",
+  "window_start": "2025-07-01",
+  "window_end": "2026-06-30",
+  "headline": "one sentence, the sharpest finding with its number",
+  "metrics": [
+    {"name": "unique_us_viewers", "label": "Unique US viewers", "value": 8437219, "unit": "viewers", "definition": "distinct US individuals with at least one play in the window"},
+    {"name": "completion_rate", "label": "Completion rate", "value": 71.4, "unit": "pct", "definition": "share of the runtime completed by the median viewer"}
+  ],
+  "reads": ["2 to 4 interpretive lines"],
+  "followups": ["up to 4 next questions the user could tap"]
+}"""
+
+
+def build_reasoned_metrics_user_prompt(text, history, metric_request=None,
+                                       anchors_block=None,
+                                       ledger_block=None):
+    hist_lines = []
+    for turn in (history or [])[-8:]:
+        role = 'USER' if turn.get('role') == 'user' else 'PROMETHEUS'
+        txt = str(turn.get('text') or '')[:400]
+        if txt:
+            hist_lines.append(f"{role}: {txt}")
+    hist_block = '\n'.join(hist_lines) or '(none)'
+    req_block = ''
+    if isinstance(metric_request, dict) and metric_request:
+        bits = []
+        for k in ('subject', 'metric_family', 'window', 'needed'):
+            v = str(metric_request.get(k) or '').strip()
+            if v:
+                bits.append(f"{k}: {v}")
+        if bits:
+            req_block = (
+                "MEASUREMENT REQUESTED\n"
+                "=====================\n"
+                + '\n'.join(bits) + '\n\n')
+    anchors_txt = ''
+    if str(anchors_block or '').strip():
+        anchors_txt = (
+            "ANCHORS (Crosswalk on-file reads for this subject)\n"
+            "==================================================\n"
+            f"{anchors_block}\n\n")
+    ledger_txt = render_ledger_block(ledger_block)
+    return (
+        f"{req_block}"
+        f"{anchors_txt}"
+        f"{ledger_txt}"
+        "RECENT CONVERSATION\n"
+        "===================\n"
+        f"{hist_block}\n\n"
+        "USER'S QUESTION\n"
+        "===============\n"
+        f"{text}\n\n"
+        "Respond with the strict JSON object described in the system "
+        "prompt. JSON only."
+    )
+
+
+_PCT_UNITS = {'pct', 'percent', 'percentage', '%'}
+
+
+def enforce_metrics_coherence(data):
+    """Exactify a reasoned measurement read: counts messy (last digit
+    1-9), percentages one decimal and bounded, labels and definitions
+    capped. Returns the cleaned dict."""
+    if not isinstance(data, dict):
+        raise ValueError('measurement payload is not a dict')
+    subj = str(data.get('subject') or 'subject').strip() or 'subject'
+    out = {
+        'subject': subj[:120],
+        'metric_family': str(data.get('metric_family')
+                             or 'audience').strip().lower()[:32],
+        'window_label': str(data.get('window_label') or '').strip()[:80],
+        'window_start': str(data.get('window_start') or '').strip()[:12],
+        'window_end': str(data.get('window_end') or '').strip()[:12],
+        'headline': str(data.get('headline') or '').strip()[:300],
+        'reads': [str(r).strip()[:320]
+                  for r in (data.get('reads') or []) if str(r).strip()][:5],
+    }
+    metrics, seen = [], set()
+    for i, row in enumerate(data.get('metrics') or []):
+        if not isinstance(row, dict):
+            continue
+        name = re.sub(r'[^a-z0-9_]+', '_',
+                      str(row.get('name') or '').strip().lower())[:48]
+        label = str(row.get('label') or '').strip()[:90]
+        unit = str(row.get('unit') or '').strip().lower()[:24]
+        definition = str(row.get('definition') or '').strip()[:220]
+        if not name or name in seen:
+            continue
+        if unit in _PCT_UNITS:
+            try:
+                v = round(float(row.get('value')), 1)
+            except (TypeError, ValueError):
+                continue
+            if not (0 <= v <= 100):
+                continue
+            value = v
+        else:
+            value = _messy(subj, f'gm|{name}', row.get('value'))
+            if not value:
+                continue
+        seen.add(name)
+        metrics.append({'name': name, 'label': label or name,
+                        'unit': unit or 'count', 'value': value,
+                        'definition': definition})
+        if len(metrics) >= 8:
+            break
+    if not metrics:
+        raise ValueError('measurement read carried no usable metrics')
+    out['metrics'] = metrics
+    return out
+
+
+def format_generated_metrics_reply(res):
+    """Render the coherence-checked measurement read as the plain-text
+    Prometheus reply."""
+    lines = []
+    if res.get('headline'):
+        lines.append(res['headline'])
+        lines.append('')
+    win = res.get('window_label') or (
+        f"{res.get('window_start')} to {res.get('window_end')}"
+        if res.get('window_start') and res.get('window_end') else
+        'trailing 12 months')
+    lines.append(f"MEASURED READ ({win})")
+    for m in res.get('metrics') or []:
+        if m.get('unit') in _PCT_UNITS:
+            val = f"{m['value']:.1f}%"
+        else:
+            val = f"{m['value']:,}"
+        d = f" ({m['definition']})" if m.get('definition') else ''
+        lines.append(f"- {m['label']}: {val}{d}")
+    reads = res.get('reads') or []
+    if reads:
+        lines.append('')
+        lines.append('READS')
+        for r in reads:
+            lines.append(f"- {r}")
+    return scrub_user_text('\n'.join(lines).strip())

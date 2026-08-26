@@ -166,4 +166,100 @@ def _put_record_safe(record: dict) -> None:
             pass
 
 
-__all__ = ['record_call', 'cost_usd', 'PRICING_USD_PER_MTOK']
+# ---------------------------------------------------------------------------
+# Ask log (2026-08-26, Jenna: "log the questions people are asking and
+# then figure out how to be smarter with those periodicly")
+# ---------------------------------------------------------------------------
+# One small JSON object per question, same append-safe pattern as the
+# per-call usage records above: no read-modify-write, so concurrent
+# gunicorn workers can never clobber each other. Records land at
+#
+#     s3://dashboard-inputs/system/usage/ask_log/YYYY-MM-DD/<ts>_<uuid>.json
+#
+# The weekly miner (migration/ask_log_miner.py on the box) folds each
+# finished day's objects into system/usage/ask_log/YYYY-MM-DD.jsonl and
+# builds the weekly themes report from them.
+
+ASK_PREFIX = 'system/usage/ask_log/'
+
+# Test hook: when True, record_ask writes inline instead of on a daemon
+# thread so unit tests can assert on the captured record synchronously.
+_SYNC_FOR_TESTS = False
+
+
+def _put_ask_record(record: dict) -> None:
+    day = record['ts'][:10]
+    key = (f"{ASK_PREFIX}{day}/"
+           f"{record['ts'][11:19].replace(':', '')}_"
+           f"{uuid.uuid4().hex[:10]}.json")
+    _client().put_object(
+        Bucket=S3_BUCKET, Key=key,
+        Body=json.dumps(record).encode('utf-8'),
+        ContentType='application/json')
+
+
+def _put_ask_record_safe(record: dict) -> None:
+    try:
+        _put_ask_record(record)
+    except Exception as e:
+        try:
+            print(f"[ask-log] record put failed: {e}")
+        except Exception:
+            pass
+
+
+def record_ask(*, user: str, view: str, question: str, surface: str,
+               route: str, outcome: str, ms: int,
+               mode: Optional[str] = None,
+               subject: Optional[str] = None,
+               extra: Optional[dict] = None) -> None:
+    """Persist one user question. Never raises; never blocks the caller
+    (S3 put runs on a daemon thread, mirroring record_call).
+
+    surface: which endpoint took the question ('analyze' | 'interpret').
+    route:   which flow answered it ('page_analysis', 'search_demand',
+             'reasoned_metrics', 'profile_build', 'subiq', 'incidence',
+             'discovery', 'clarify', ...).
+    outcome: what the user got ('answered', 'clarify', 'declined',
+             'declined_not_quantifiable', 'declined_no_context',
+             'declined_credits', 'error').
+    """
+    try:
+        q = str(question or '').strip()
+        if not q:
+            return
+        record = {
+            'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'user': str(user or 'unknown')[:120],
+            'view': str(view or '')[:48],
+            'question': q[:600],
+            'surface': str(surface or 'analyze')[:24],
+            'route': str(route or 'unknown')[:40],
+            'outcome': str(outcome or 'unknown')[:40],
+            'ms': max(int(ms or 0), 0),
+        }
+        if mode:
+            record['mode'] = str(mode)[:40]
+        if subject:
+            record['subject'] = str(subject)[:120]
+        if isinstance(extra, dict) and extra:
+            clean = {}
+            for k, v in list(extra.items())[:8]:
+                if v is None:
+                    continue
+                clean[str(k)[:40]] = (v if isinstance(v, (int, float, bool))
+                                      else str(v)[:200])
+            if clean:
+                record['extra'] = clean
+        if _SYNC_FOR_TESTS:
+            _put_ask_record_safe(record)
+            return
+        t = threading.Thread(target=_put_ask_record_safe, args=(record,),
+                             daemon=True)
+        t.start()
+    except Exception:
+        pass
+
+
+__all__ = ['record_call', 'record_ask', 'cost_usd',
+           'PRICING_USD_PER_MTOK', 'ASK_PREFIX']

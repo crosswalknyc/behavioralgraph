@@ -50693,10 +50693,128 @@ def api_synth_chat_clarify():
     return _finalize_cuts_response(notes)
 
 
+# --------------------------------------------------------------------
+# Ask logging (2026-08-26, Jenna: "can we log the questions people are
+# asking and then figure out how to be smarter with those periodicly").
+# Every question that reaches the chatbot answer path lands as one
+# small S3 object under system/usage/ask_log/ (render_usage_log.
+# record_ask, fire-and-forget daemon thread, zero reply latency). The
+# weekly miner on the box (migration/ask_log_miner.py) folds them into
+# daily JSONL and mails the themes report.
+#
+# Route + outcome are inferred from the response payload; handlers can
+# override via flask.g (g._pm_ask_route / g._pm_ask_outcome /
+# g._pm_ask_subject / g._pm_ask_mode) when the payload alone is
+# ambiguous. The decorator never raises and never blocks the reply.
+# --------------------------------------------------------------------
+
+def _ask_infer_route_outcome(surface, payload, status_code):
+    """Best-effort (route, outcome, subject) from a response body."""
+    route, outcome, subject = 'unknown', 'unknown', None
+    if not isinstance(payload, dict):
+        return route, outcome, subject
+    if surface == 'interpret':
+        route = 'profile_build'
+        if 'incidence_check' in payload:
+            route, outcome = 'incidence', 'answered'
+            subject = (payload.get('incidence_check') or {}).get('subject')
+        elif 'discovery' in payload:
+            route, outcome = 'discovery', 'answered'
+        elif 'spec_drafts' in payload:
+            outcome = 'batch_draft'
+        elif 'spec_draft' in payload:
+            draft = payload.get('spec_draft') or {}
+            outcome = str(draft.get('decision') or 'draft')[:40]
+            subject = draft.get('subject') or draft.get('subject_label')
+        elif 'draft' in payload and payload.get('next_step'):
+            route, outcome = 'clarify', 'clarify'
+        elif payload.get('success') is False:
+            outcome = ('declined' if payload.get('guidance') else 'error')
+        return route, outcome, subject
+    # analyze surface
+    route = 'page_analysis'
+    if payload.get('success') is False:
+        err = str(payload.get('error') or '').lower()
+        if status_code == 402 or 'credit' in err:
+            outcome = 'declined_credits'
+        else:
+            outcome = 'error'
+        return route, outcome, subject
+    action = str(payload.get('action') or '').strip().lower()
+    reply = str(payload.get('reply') or '')
+    subject = payload.get('profile')
+    if action == 'build_profile':
+        route, outcome = 'profile_build', 'answered'
+    elif payload.get('not_quantifiable'):
+        route, outcome = 'quantifiability_gate', 'declined_not_quantifiable'
+    elif reply.startswith('Nothing is open to analyze yet'):
+        outcome = 'declined_no_context'
+    else:
+        outcome = 'answered'
+    return route, outcome, subject
+
+
+def _ask_logged(surface):
+    """Wrap a chatbot route so every question is recorded to the ask
+    log with route, outcome, and response time. Fire-and-forget."""
+    def deco(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            from flask import g as _g
+            t0 = time.time()
+            question, view, mode = '', '', None
+            try:
+                body = request.get_json(force=True, silent=True) or {}
+                question = str(body.get('text') or '').strip()
+                mode = (str(body.get('mode') or '').strip().lower()
+                        or None)
+                pc = body.get('page_context') or {}
+                vc = (pc.get('view_context') or {}) \
+                    if isinstance(pc, dict) else {}
+                view = str(vc.get('view_id') or '').strip()
+                if not view and isinstance(pc, dict) and pc.get('primary'):
+                    view = 'profileIQ'
+            except Exception:
+                pass
+            resp = fn(*args, **kwargs)
+            try:
+                if not question:
+                    return resp
+                status_code, payload = 200, None
+                actual = resp
+                if isinstance(resp, tuple) and resp:
+                    actual = resp[0]
+                    if len(resp) > 1 and isinstance(resp[1], int):
+                        status_code = resp[1]
+                try:
+                    payload = actual.get_json(silent=True)
+                except Exception:
+                    payload = None
+                route, outcome, subject = _ask_infer_route_outcome(
+                    surface, payload, status_code)
+                route = getattr(_g, '_pm_ask_route', None) or route
+                outcome = getattr(_g, '_pm_ask_outcome', None) or outcome
+                subject = getattr(_g, '_pm_ask_subject', None) or subject
+                mode = getattr(_g, '_pm_ask_mode', None) or mode
+                import render_usage_log as _rul
+                _rul.record_ask(
+                    user=(session.get('username') or 'unknown'),
+                    view=view, question=question, surface=surface,
+                    route=route, outcome=outcome,
+                    ms=int((time.time() - t0) * 1000),
+                    mode=mode, subject=subject)
+            except Exception:
+                traceback.print_exc()
+            return resp
+        return wrapper
+    return deco
+
+
 @app.route('/api/brief-chat/interpret', methods=['POST'])
 @app.route('/api/synth-chat/interpret', methods=['POST'])  # legacy alias
 @requires_auth
 @_chatbot_route_guard('brief-chat/interpret')
+@_ask_logged('interpret')
 def api_synth_chat_interpret():
     """Free-form text -> draft spec JSON. Non-destructive: does NOT queue
     the run. Front-end shows the returned draft as an approvable brief.
@@ -53089,6 +53207,23 @@ def _pm_charge_async(username, description):
     threading.Thread(target=_charge, daemon=True).start()
 
 
+def _pm_ask_hint(route=None, outcome=None, subject=None, mode=None):
+    """Set ask-log inference hints on flask.g. Safe outside a request
+    context (tests, threads): failures are swallowed."""
+    try:
+        from flask import g as _g
+        if route:
+            _g._pm_ask_route = route
+        if outcome:
+            _g._pm_ask_outcome = outcome
+        if subject:
+            _g._pm_ask_subject = str(subject)[:120]
+        if mode:
+            _g._pm_ask_mode = mode
+    except Exception:
+        pass
+
+
 def _pm_search_demand_response(user, text, history):
     """Search-journey demand read (2026-08-26 Jenna directive): how
     people find, search for, and first touch a title or brand. Shaped
@@ -53096,17 +53231,46 @@ def _pm_search_demand_response(user, text, history):
     rival hunt, destination share, interest clusters. Needs no page
     context; the subject comes from the question itself. Every count
     passes the server-side coherence pass (messy last digits, sub-counts
-    sum exactly to parents) and the vocabulary scrub before it ships."""
+    sum exactly to parents) and the vocabulary scrub before it ships.
+
+    Consistency (2026-08-26): the insights ledger is consulted first.
+    A repeat of a stored ask replays the stored reply verbatim; prior
+    published numbers for the same subject ride the prompt as binding
+    constraints; every delivered study persists back to the ledger."""
     import prometheus_analysis as pma
+    import insights_ledger as il
+    _pm_ask_hint(route='search_demand')
     _pm_user = (session.get('username') or user.get('username') or '').strip()
     if _pm_user and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
+        _pm_ask_hint(outcome='declined_credits')
         return jsonify({
             'success': False,
             'guidance': True,
             'error': ('No credits remaining for analysis. Use the credits '
                       'button in the top bar to request more.'),
         }), 402
-    user_prompt = pma.build_search_demand_user_prompt(text, history)
+    led = {'block': '', 'exact': None, 'entries': []}
+    try:
+        led = il.consult(question=text)
+    except Exception:
+        traceback.print_exc()
+    exact = led.get('exact')
+    if exact and exact.get('route') == 'search_demand' \
+            and exact.get('reply'):
+        _pm_ask_hint(outcome='answered', subject=led.get('subject'))
+        if _pm_user:
+            _pm_charge_async(
+                _pm_user,
+                f"Chatbot Analysis [search demand] - "
+                f"{led.get('subject') or 'search demand'}")
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': exact['reply'],
+            'followups': exact.get('followups') or [],
+            'offer_deck': False, 'deck_angle': None,
+            'profile': led.get('subject')})
+    user_prompt = pma.build_search_demand_user_prompt(
+        text, history, ledger_block=led.get('block'))
     result = _pm_claude_json(pma.SEARCH_DEMAND_SYSTEM_PROMPT, user_prompt,
                              max_tokens=7500, temperature=0.4)
     if not result.get('success'):
@@ -53115,6 +53279,7 @@ def _pm_search_demand_response(user, text, history):
             'search-demand model call failed: '
             + str(result.get('error') or 'unknown')[:400],
             tb='(model chain exhausted without a usable reply)')
+        _pm_ask_hint(outcome='error')
         return jsonify(_chatbot_calm_payload())
     data = result.get('data') or {}
     if isinstance(data, list):
@@ -53127,6 +53292,7 @@ def _pm_search_demand_response(user, text, history):
         opts = [pma.scrub_user_text(str(o).strip())[:160]
                 for o in (data.get('clarify_options') or [])
                 if str(o).strip()][:4]
+        _pm_ask_hint(outcome='clarify')
         return jsonify({
             'success': True, 'action': 'answer', 'reply': q,
             'followups': opts, 'offer_deck': False, 'deck_angle': None})
@@ -53136,15 +53302,34 @@ def _pm_search_demand_response(user, text, history):
     except Exception as e:
         traceback.print_exc()
         _chatbot_error_email('brief-chat/analyze', e)
+        _pm_ask_hint(outcome='error')
         return jsonify(_chatbot_calm_payload())
     if not reply.strip():
         _chatbot_error_email('brief-chat/analyze',
                              'search-demand study rendered empty',
                              tb='(coherence pass left no sections)')
+        _pm_ask_hint(outcome='error')
         return jsonify(_chatbot_calm_payload())
     followups = [pma.scrub_user_text(str(f).strip())[:160]
                  for f in (data.get('followups') or [])
                  if str(f).strip()][:4]
+    try:
+        il.persist(
+            subject=study.get('subject'), metric_family='search',
+            question=text, route='search_demand',
+            metrics=il.metrics_from_study(study),
+            anchors=[b for b in (
+                f"platform: {study.get('platform')}"
+                if study.get('platform') else None,
+                f"rival: {study.get('rival')}"
+                if study.get('rival') else None) if b],
+            window_start=study.get('window_start'),
+            window_end=study.get('window_end'),
+            window_label=study.get('window_label'),
+            reply=reply, followups=followups)
+    except Exception:
+        traceback.print_exc()
+    _pm_ask_hint(outcome='answered', subject=study.get('subject'))
     if _pm_user:
         _pm_charge_async(
             _pm_user,
@@ -53157,9 +53342,149 @@ def _pm_search_demand_response(user, text, history):
         'profile': study.get('subject')})
 
 
+def _pm_generate_metrics_response(user, text, history, metric_request=None,
+                                  anchors_block='', charge_done=False):
+    """Reasoned measurement read (2026-08-26, Jenna): a concrete
+    number for a digitally observable ask the open data does not
+    cover. The insights ledger is the consistency surface: identical
+    asks replay the stored reply verbatim, prior published numbers
+    ride the prompt as binding constraints, and every delivered read
+    persists back to the ledger before it ships.
+
+    `metric_request` comes from the analysis pass (action=
+    generate_metrics); the direct no-context path passes None and the
+    subject resolves from the question. `charge_done` skips the credit
+    preflight when the caller already ran it."""
+    import prometheus_analysis as pma
+    import insights_ledger as il
+    _pm_ask_hint(route='reasoned_metrics')
+    _pm_user = (session.get('username') or user.get('username') or '').strip()
+    if not charge_done and _pm_user \
+            and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
+        _pm_ask_hint(outcome='declined_credits')
+        return jsonify({
+            'success': False,
+            'guidance': True,
+            'error': ('No credits remaining for analysis. Use the credits '
+                      'button in the top bar to request more.'),
+        }), 402
+    mr = metric_request if isinstance(metric_request, dict) else {}
+    subj_hint = str(mr.get('subject') or '').strip()
+    led = {'block': '', 'exact': None, 'entries': []}
+    try:
+        led = il.consult(subject=subj_hint or None, question=text,
+                         metric_family=mr.get('metric_family'))
+        if not led.get('entries') and subj_hint:
+            led = il.consult(question=text)
+    except Exception:
+        traceback.print_exc()
+    exact = led.get('exact')
+    if exact and exact.get('reply'):
+        _pm_ask_hint(outcome='answered',
+                     subject=led.get('subject') or subj_hint)
+        if _pm_user:
+            _pm_charge_async(
+                _pm_user,
+                f"Chatbot Analysis [measured read] - "
+                f"{led.get('subject') or subj_hint or 'measured read'}")
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': exact['reply'],
+            'followups': exact.get('followups') or [],
+            'offer_deck': False, 'deck_angle': None,
+            'profile': led.get('subject') or subj_hint or None})
+    # First-party anchors: when the caller (analyze path) already built
+    # the cross-module block, reuse it; otherwise resolve the subject
+    # from the question against the catalog / SubIQ / trends indexes.
+    if not anchors_block:
+        try:
+            _xm_trends_reader = None
+            if _trends_iq is not None:
+                def _xm_trends_reader():
+                    return _trends_iq._cache_get({
+                        'geo_type': 'National', 'geo_value': '',
+                        'lookback_days': _trends_iq.DEFAULT_LOOKBACK_DAYS})
+            anchors_block, _xm_mods = pma.build_cross_module_block(
+                s3_client, S3_BUCKET, {'primary': None}, text,
+                active_view='', subiq_bucket=SUBSCRIBER_S3_BUCKET,
+                subiq_parser=parse_subscriber_iq_csv,
+                trends_reader=_xm_trends_reader)
+        except Exception:
+            traceback.print_exc()
+            anchors_block = ''
+    user_prompt = pma.build_reasoned_metrics_user_prompt(
+        text, history, metric_request=mr or None,
+        anchors_block=anchors_block, ledger_block=led.get('block'))
+    result = _pm_claude_json(pma.REASONED_METRICS_SYSTEM_PROMPT,
+                             user_prompt, max_tokens=4000,
+                             temperature=0.4)
+    if not result.get('success'):
+        _chatbot_error_email(
+            'brief-chat/analyze',
+            'measured-read model call failed: '
+            + str(result.get('error') or 'unknown')[:400],
+            tb='(model chain exhausted without a usable reply)')
+        _pm_ask_hint(outcome='error')
+        return jsonify(_chatbot_calm_payload())
+    data = result.get('data') or {}
+    if isinstance(data, list):
+        data = next((d for d in data if isinstance(d, dict)), {})
+    if str(data.get('action') or '').strip().lower() == 'decline':
+        gate = {'domain': 'model_decline',
+                'what': 'That behavior',
+                'alternative': 'the digital read on the same subject'}
+        reply, followups = pma.build_not_quantifiable_reply(text, gate)
+        _pm_ask_hint(outcome='declined_not_quantifiable')
+        return jsonify({
+            'success': True, 'action': 'answer', 'reply': reply,
+            'followups': followups, 'offer_deck': False,
+            'deck_angle': None, 'not_quantifiable': 'model_decline'})
+    try:
+        res = pma.enforce_metrics_coherence(data)
+        reply = pma.format_generated_metrics_reply(res)
+    except Exception as e:
+        traceback.print_exc()
+        _chatbot_error_email('brief-chat/analyze', e)
+        _pm_ask_hint(outcome='error')
+        return jsonify(_chatbot_calm_payload())
+    followups = [pma.scrub_user_text(str(f).strip())[:160]
+                 for f in (data.get('followups') or [])
+                 if str(f).strip()][:4]
+    try:
+        anchor_names = []
+        for ln in (anchors_block or '').splitlines():
+            ln = ln.strip().lstrip('-').strip()
+            if ln and len(anchor_names) < 6:
+                anchor_names.append(ln[:120])
+        il.persist(
+            subject=res.get('subject'),
+            metric_family=res.get('metric_family'),
+            question=text, route='reasoned_metrics',
+            metrics=res.get('metrics'),
+            anchors=anchor_names,
+            window_start=res.get('window_start'),
+            window_end=res.get('window_end'),
+            window_label=res.get('window_label'),
+            reply=reply, followups=followups)
+    except Exception:
+        traceback.print_exc()
+    _pm_ask_hint(outcome='answered', subject=res.get('subject'))
+    if _pm_user:
+        _pm_charge_async(
+            _pm_user,
+            f"Chatbot Analysis [measured read] - "
+            f"{res.get('subject') or 'measured read'}")
+    return jsonify({
+        'success': True, 'action': 'answer', 'reply': reply,
+        'followups': followups, 'offer_deck': False, 'deck_angle': None,
+        'model': result.get('model'),
+        'profile': res.get('subject')})
+
+
 @app.route('/api/brief-chat/analyze', methods=['POST'])
 @requires_auth
 @_chatbot_route_guard('brief-chat/analyze')
+@_ask_logged('analyze')
 def api_synth_chat_analyze():
     """Analyze the data open on the dashboard (primary profile + any
     checked Data Cuts). First-party digest is the primary evidence.
@@ -53180,6 +53505,26 @@ def api_synth_chat_analyze():
                              tb='(request validation)')
         return jsonify(_chatbot_calm_payload())
     history = body.get('history') or []
+    # Quantifiability gate (2026-08-26, Jenna): asks about behavior
+    # with no digital trace (linear / over-the-air tune-in, in-store
+    # physical purchases, foot traffic, terrestrial radio) decline
+    # gracefully with the nearest measurable read. Runs before every
+    # other branch so no flow can produce a non-digital number.
+    try:
+        import prometheus_analysis as _pma_gate
+        _gate = _pma_gate.classify_quantifiability(text)
+        if _gate:
+            _g_reply, _g_chips = _pma_gate.build_not_quantifiable_reply(
+                text, _gate)
+            _pm_ask_hint(route='quantifiability_gate',
+                         outcome='declined_not_quantifiable')
+            return jsonify({
+                'success': True, 'action': 'answer', 'reply': _g_reply,
+                'followups': _g_chips, 'offer_deck': False,
+                'deck_angle': None,
+                'not_quantifiable': _gate.get('domain')})
+    except Exception:
+        traceback.print_exc()
     # Search-journey demand asks (2026-08-26): route to the dedicated
     # flow before the page-context gate; these questions carry their
     # own subject and need no open profile. The frontend sends
@@ -53199,6 +53544,17 @@ def api_synth_chat_analyze():
     if ctx_err:
         return ctx_err
     if not ctx:
+        # Direct metric question with nothing open (2026-08-26): a
+        # digitally observable count is answerable without a profile -
+        # route it to the measured-read pass instead of bouncing the
+        # user. Everything else keeps the open-something nudge.
+        try:
+            import prometheus_analysis as _pma_gen
+            if _pma_gen.detect_generate_intent(text):
+                return _pm_generate_metrics_response(user, text, history)
+        except Exception:
+            traceback.print_exc()
+        _pm_ask_hint(outcome='declined_no_context')
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': ('Nothing is open to analyze yet. Open a profile '
@@ -53254,10 +53610,27 @@ def api_synth_chat_analyze():
     except Exception:
         traceback.print_exc()
         xmod_block, xmod_modules = '', []
+    # Insights-ledger history (2026-08-26, Jenna): numbers Crosswalk
+    # already delivered for this subject ride the prompt as binding
+    # constraints, so the NORMAL answer path sits on the same
+    # consistency surface as generated reads. Open-subject lookup
+    # first, question-text lookup as the fallback.
+    _led_block = ''
+    try:
+        import insights_ledger as _il_an
+        _led_subj = ((p_meta.get('name') if ctx.get('primary') else None)
+                     or (ctx.get('view_context') or {}).get('view_title'))
+        _led = _il_an.consult(subject=_led_subj, question=text)
+        if not _led.get('entries'):
+            _led = _il_an.consult(question=text)
+        _led_block = _led.get('block') or ''
+    except Exception:
+        traceback.print_exc()
     user_prompt = pma.build_analysis_user_prompt(
         digest, history, text, mode=mode or None,
         view_context=ctx.get('view_context'),
-        cross_module_block=xmod_block)
+        cross_module_block=xmod_block,
+        ledger_block=_led_block)
     _max_tok = 7500 if mode in ('cross_profile', 'personas',
                                 'whitespace') else 6000
     result = _pm_claude_json(pma.ANALYSIS_SYSTEM_PROMPT, user_prompt,
@@ -53273,6 +53646,15 @@ def api_synth_chat_analyze():
     if isinstance(data, list):
         data = next((d for d in data if isinstance(d, dict)), {})
     action = str(data.get('action') or 'answer')
+    # Measured-read handoff (2026-08-26): the analysis pass decided the
+    # ask needs a concrete number nothing on screen carries. Credits
+    # were prechecked above; the measured-read pass consults the
+    # ledger, generates, persists, and charges.
+    if action == 'generate_metrics':
+        return _pm_generate_metrics_response(
+            user, text, history,
+            metric_request=data.get('metric_request'),
+            anchors_block=xmod_block, charge_done=True)
     reply = str(data.get('reply') or '').strip()
     if action != 'build_profile' and not reply:
         _chatbot_error_email('brief-chat/analyze',
@@ -53300,6 +53682,10 @@ def api_synth_chat_analyze():
     _pm_subject = (p_meta.get('name')
                    or (ctx.get('view_context') or {}).get('view_title')
                    or 'open view')
+    _pm_ask_hint(route=('profile_build' if action == 'build_profile'
+                        else 'page_analysis'),
+                 outcome='answered', subject=_pm_subject,
+                 mode=mode or None)
     # Record the successful analysis as tracked usage (unlimited users
     # included - their history + credits_used counters still move).
     # Deferred to a daemon thread so the S3 write is off the reply path.
