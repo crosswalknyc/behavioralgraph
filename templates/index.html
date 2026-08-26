@@ -62002,6 +62002,16 @@ https://www.instagram.com/p/..."></textarea>
                      send: 'pull fresh'}
                 ];
             }
+            if (step === 'qualifier_match') {
+                // 2026-08-25: the closest existing profile is the
+                // same brand but a different universe scope - confirm
+                // "is that what you meant?" with yes/no chips. Chip
+                // sends match the Python parser branches exactly.
+                return [
+                    {label: 'Yes, use it', send: 'yes, use it'},
+                    {label: 'No, build fresh', send: 'no, build fresh'}
+                ];
+            }
             if (step === 'ip_scope') {
                 // 2026-08-21: broad vs consumers-only must be
                 // clickable like every other clarify step. The
@@ -62235,6 +62245,23 @@ https://www.instagram.com/p/..."></textarea>
                     (_epBuilt ? ' (' + _epBuilt + ')' : '') +
                     '. Use it as-is (ready now, no credits), or ' +
                     'pull fresh with different dates or qualifiers?';
+            }
+            if (step === 'qualifier_match') {
+                // 2026-08-25: same brand, different universe scope
+                // ('Apple buyers' vs 'Apple TV EST Buyers'). Never
+                // silently pick a path - ask, per Jenna.
+                var _qmDraft = synthChatCurrentDraft || {};
+                var _qmData = _qmDraft.qualifier_match_data || {};
+                var _qmName = String(_qmData.display_name ||
+                    'that profile');
+                var _qmBuilt = String(_qmData.built_label || '').trim();
+                var _qmSubj = String(_qmDraft.subject ||
+                    _qmDraft.name || 'your audience');
+                return 'We have ' + _qmName +
+                    (_qmBuilt ? ' (' + _qmBuilt + ')' : '') +
+                    ' - is that what you meant? Yes uses it as-is ' +
+                    '(ready now, no credits); no builds ' + _qmSubj +
+                    ' fresh, exactly as you described it.';
             }
             if (step === 'ip_scope') {
                 // 2026-08-21: IP content (series/movie/book/podcast/

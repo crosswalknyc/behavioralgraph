@@ -42538,15 +42538,12 @@ def _profile_catalog_for_chat():
         subject = (j.get('profile_subject') or j.get('subject') or display).strip()
         cat = (j.get('category') or '').strip()
         lm_iso = j.get('last_modified') or j.get('created_at')
-        days_old = None
+        # Age from the filename timestamp first (immutable build stamp);
+        # registry dates only when the key has no stamp. Bulk
+        # maintenance clobbers last_modified, which made a 78-day-old
+        # file report days_old=0 (client defect 2026-08-25).
         try:
-            if lm_iso:
-                lm_iso_s = lm_iso.replace('Z', '+00:00') if isinstance(lm_iso, str) else lm_iso
-                lm_dt = datetime.fromisoformat(lm_iso_s) if isinstance(lm_iso_s, str) else lm_iso_s
-                if lm_dt.tzinfo is None:
-                    from datetime import timezone as _tz2
-                    lm_dt = lm_dt.replace(tzinfo=_tz2.utc)
-                days_old = int((now - lm_dt).total_seconds() // 86400)
+            days_old = _profile_age_days(s3_key, lm_iso, now=now)
         except Exception:
             days_old = None
         out.append({
@@ -42768,6 +42765,285 @@ def _subject_version_tokens(subject_norm):
     if len(toks) < 2:
         return set()
     return set(t for t in toks[1:] if t in _VERSION_QUALIFIER_TOKENS)
+
+
+# ── Profile age from the s3_key filename (2026-08-25) ────────────────
+# The canonical deliverable key embeds the build timestamp:
+# Subject_MM_DD_YYYY_HH_MM.csv. That stamp is immutable, while the
+# registry's created_at / last_modified get clobbered by bulk
+# maintenance (re-registration, allow-list syncs) - which is how a
+# 78-day-old file reported existing_match_days_old=0 to a partner.
+# Every age/recency read prefers the filename stamp; registry dates
+# are the fallback for keys with no stamp.
+_S3_KEY_TS_RE = re.compile(
+    r'_(\d{2})_(\d{2})_(\d{4})_(\d{2})_(\d{2})$')
+
+
+def _profile_key_timestamp(s3_key):
+    """UTC datetime parsed from the timestamp embedded in a canonical
+    profile filename (Subject_MM_DD_YYYY_HH_MM.csv). None when the key
+    carries no parseable stamp."""
+    from datetime import timezone as _tz
+    base = str(s3_key or '').rsplit('/', 1)[-1].strip()
+    if base.lower().endswith('.csv'):
+        base = base[:-4]
+    m = _S3_KEY_TS_RE.search(base)
+    if not m:
+        return None
+    mo, dy, yr, hh, mi = (int(g) for g in m.groups())
+    if not (1 <= mo <= 12 and 1 <= dy <= 31 and 2019 <= yr <= 2040
+            and 0 <= hh <= 23 and 0 <= mi <= 59):
+        return None
+    try:
+        return datetime(yr, mo, dy, hh, mi, tzinfo=_tz.utc)
+    except ValueError:
+        return None
+
+
+def _profile_age_days(s3_key, last_modified_iso=None, now=None):
+    """Age in whole days for a catalog profile. The filename timestamp
+    is the source of truth; the registry last_modified/created_at is
+    used only when the key has no embedded stamp. None when neither
+    source parses."""
+    from datetime import timezone as _tz
+    now = now or datetime.now(_tz.utc)
+    built = _profile_key_timestamp(s3_key)
+    if built is None and last_modified_iso:
+        try:
+            lm = last_modified_iso
+            if isinstance(lm, str):
+                lm = datetime.fromisoformat(lm.replace('Z', '+00:00'))
+            if lm.tzinfo is None:
+                lm = lm.replace(tzinfo=_tz.utc)
+            built = lm
+        except Exception:
+            built = None
+    if built is None:
+        return None
+    return max(0, int((now - built).total_seconds() // 86400))
+
+
+def _profile_built_label(s3_key, last_modified_iso=None, days_old=None):
+    """Human 'built Mon D, YYYY' label from the same age sources, for
+    clarify copy. Falls back to 'built N days ago', then ''."""
+    built = _profile_key_timestamp(s3_key)
+    if built is None and last_modified_iso:
+        try:
+            lm = str(last_modified_iso)
+            built = datetime.fromisoformat(lm.replace('Z', '+00:00'))
+        except Exception:
+            built = None
+    if built is not None:
+        try:
+            return 'built ' + built.strftime('%b %-d, %Y')
+        except ValueError:
+            return 'built ' + built.strftime('%b %d, %Y')
+    if isinstance(days_old, int):
+        return f'built {days_old} days ago'
+    return ''
+
+
+def _stamp_existing_match_age(draft):
+    """Recompute existing_match_days_old on a draft from the picked
+    key's filename stamp so the field never echoes a registry-clobbered
+    zero (or a model-guessed value). No-op when no match is picked."""
+    if not isinstance(draft, dict):
+        return
+    key = (draft.get('existing_match_s3_key') or '').strip()
+    if not key:
+        return
+    days = _profile_age_days(key, draft.get('existing_match_last_modified'))
+    if days is not None:
+        draft['existing_match_days_old'] = days
+        epd = draft.get('existing_profile_data')
+        if isinstance(epd, dict) and str(epd.get('s3_key') or '') == key:
+            epd['days_old'] = days
+
+
+# ── Universe-qualifier compatibility (2026-08-25) ────────────────────
+# Client defect: "Audience of Apple buyers" existing_matched at
+# "Apple TV EST Buyers" (score 0.87, free download). Brand-token
+# overlap must never trump a fundamentally different universe: a
+# candidate whose name carries a behavioral/universe qualifier the
+# request lacks (EST Buyers, TVOD Renters, Switchers, Owners, Members,
+# a viewers scope, a Past-N-Days window) - or vice versa - is NOT the
+# same audience, no matter the string similarity.
+#
+# Signature = the set of universe-defining tokens in a name. Generic
+# audience nouns (buyers, customers, consumers, shoppers, fans,
+# audience) carry NO signature on their own: "Apple buyers" is the
+# plain Apple universe, while "EST Buyers" signs through 'est'.
+_UNIVERSE_QUALIFIER_TOKENS = {
+    # transaction / consumption scopes
+    'est', 'tvod', 'pvod', 'svod', 'avod', 'vod',
+    'renters', 'renter', 'rentals', 'rental',
+    'purchasers', 'purchaser',
+    'subscribers', 'subscriber', 'subs',
+    'viewers', 'viewer', 'watchers', 'watcher',
+    'listeners', 'listener', 'readers', 'reader',
+    'players', 'player', 'gamers', 'gamer',
+    'streamers', 'streamer', 'moviegoers', 'moviegoer',
+    'bingers', 'binger',
+    # membership / ownership / relationship scopes
+    'members', 'member', 'membership', 'owners', 'owner',
+    'holders', 'holder', 'cardholders', 'cardholder',
+    'accountholders', 'subscribed',
+    # movement / lifecycle scopes
+    'switchers', 'switcher', 'churners', 'churner', 'churned',
+    'cancellers', 'canceller', 'cancelers', 'canceler',
+    'upgraders', 'upgrader', 'adopters', 'adopter',
+    'signups', 'reactivated', 'lapsed', 'intenders', 'intender',
+    'cordcutters', 'cordcutter',
+    # visit / attendance scopes
+    'attendees', 'attendee', 'visitors', 'visitor',
+    'travelers', 'traveler', 'riders', 'rider', 'drivers', 'driver',
+    'donors', 'donor',
+}
+_UNIVERSE_WINDOW_RE = re.compile(
+    r'\b(?:past|last|trailing)\s+(\d+)\s+(day|week|month|year)s?\b')
+
+
+def _universe_qualifier_signature(name):
+    """Set of universe-defining qualifier tokens in a name/prompt.
+    Empty set = plain brand/person/title universe. Window phrases
+    ('Past 60 Days') sign as 'window:60day' style tokens so a windowed
+    file never matches an unwindowed ask."""
+    raw = str(name or '')
+    norm = _normalize_for_match(raw)
+    sig = set(t for t in norm.split() if t in _UNIVERSE_QUALIFIER_TOKENS)
+    for n, unit in _UNIVERSE_WINDOW_RE.findall(norm):
+        sig.add(f'window:{int(n)}{unit}')
+    return sig
+
+
+def _universe_qualifiers_compatible(request_text, candidate_name):
+    """True when the request and the candidate describe the same
+    universe scope: their qualifier signatures are identical (both
+    empty, or both carry the same qualifier set). The candidate's cut
+    suffix after ' - ' is ignored - cut compatibility is handled by
+    the existing suffix machinery."""
+    cand_entity = str(candidate_name or '').split(' - ', 1)[0]
+    return (_universe_qualifier_signature(request_text)
+            == _universe_qualifier_signature(cand_entity))
+
+
+def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
+    """Guard on every interpret path: an existing_match (or refresh
+    anchored the same way) whose picked candidate carries a different
+    universe-qualifier signature than the user's own words is NOT a
+    confident match.
+
+    allow_ask=False (partner API, batch): demote to new_build for the
+    subject as the user stated it, remember the related profile by
+    display name only (related_profile_display_name - no download
+    link), and blank the match fields.
+
+    allow_ask=True (dashboard chatbot): stash the 'is that what you
+    meant?' question (ask_qualifier_match + qualifier_match_data) and
+    provisionally demote to new_build; the clarify step restores the
+    existing match if the user says yes.
+
+    Mutates draft; returns (acted: bool, note: str)."""
+    if not isinstance(draft, dict):
+        return False, ''
+    decision = str(draft.get('decision') or '').strip().lower()
+    if decision not in ('existing_match', 'time_shifted_refresh',
+                        'derive_cut'):
+        return False, ''
+    disp = str(draft.get('existing_match_display_name') or '').strip()
+    key = str(draft.get('existing_match_s3_key') or '').strip()
+    if not disp or not key:
+        return False, ''
+    if _universe_qualifiers_compatible(prompt, disp):
+        return False, ''
+    # derive_cut parents: the parent's qualifier set only needs to be
+    # a SUBSET of the ask's (a 'Vizio TV Owners' ask deriving off the
+    # 'Vizio TV Owners' parent is fine; deriving 'Apple buyers' off
+    # 'Apple TV EST Buyers' is not). Extra ask-side qualifiers are the
+    # cut being derived.
+    cand_sig = _universe_qualifier_signature(disp.split(' - ', 1)[0])
+    req_sig = _universe_qualifier_signature(prompt)
+    if decision == 'derive_cut' and cand_sig <= req_sig:
+        return False, ''
+    days = _profile_age_days(key, draft.get('existing_match_last_modified'))
+    built_label = _profile_built_label(
+        key, draft.get('existing_match_last_modified'), days)
+    # Keep the subject as the user's own universe: if the model adopted
+    # the candidate's qualified name as the subject, strip the
+    # candidate-only qualifier tokens back out of it.
+    subj = str(draft.get('subject') or '').split(' - ', 1)[0].strip()
+    if subj and _universe_qualifier_signature(subj) - req_sig:
+        kept = [t for t in subj.split()
+                if _normalize_for_match(t) not in _UNIVERSE_QUALIFIER_TOKENS]
+        cleaned = ' '.join(kept).strip()
+        if cleaned:
+            draft['subject'] = cleaned
+            draft['name'] = cleaned
+            draft.pop('file_stem', None)
+    note = (f"Universe-qualifier gate: ask "
+            f"{sorted(req_sig) or '(plain universe)'} vs candidate "
+            f"{disp!r} {sorted(cand_sig)} - not the same audience; "
+            f"{'asking' if allow_ask else 'demoted to new_build'}.")
+    draft['related_profile_display_name'] = disp
+    draft['decision'] = 'new_build'
+    draft['decision_reason'] = (
+        f"The ask describes the {draft.get('subject') or subj} universe; "
+        f"the closest existing profile ({disp}) covers a different "
+        f"audience scope, so a fresh build is planned.")
+    draft.pop('derive_type', None)
+    draft.pop('ask_existing_profile', None)
+    if allow_ask:
+        draft['ask_qualifier_match'] = True
+        draft['qualifier_match_data'] = {
+            'display_name': disp,
+            's3_key': key,
+            'days_old': days,
+            'last_modified': draft.get('existing_match_last_modified'),
+            'built_label': built_label,
+        }
+    else:
+        draft.pop('existing_profile_data', None)
+    draft.pop('existing_match_s3_key', None)
+    draft.pop('existing_match_display_name', None)
+    draft.pop('existing_match_days_old', None)
+    draft.pop('existing_match_last_modified', None)
+    try:
+        print(f"[qualifier-gate] {note}")
+    except Exception:
+        pass
+    return True, note
+
+
+# Model-authored prose fields echoed to the user (brief card,
+# /check responses). Em/en dashes never ship (workspace rule); the
+# strategist copy path already normalizes, the interpret path now does
+# too, at the single point the draft is returned.
+_DRAFT_PROSE_DASH_FIELDS = (
+    'assumptions', 'notes', 'persona_notes', 'decision_reason',
+    'refresh_row_hypothesis', 'resolved_identity', 'identity_note',
+    'category_note', 'universe_note', 'intensity_note', 'scope_note',
+    'anchor_source', 'cut_label', 'cut_label_clean',
+    'estimated_audience_sentence', 'subject_verification_note',
+)
+
+
+def _scrub_draft_prose_dashes(draft):
+    """Normalize em/en dashes to hyphens in every model-authored text
+    field on a draft, in place. Handles str fields and list-of-str
+    fields (assumptions). Returns the draft."""
+    if not isinstance(draft, dict):
+        return draft
+    for f in _DRAFT_PROSE_DASH_FIELDS:
+        v = draft.get(f)
+        if isinstance(v, str) and ('\u2014' in v or '\u2013' in v):
+            draft[f] = _scrub_identity_dashes(v)
+        elif isinstance(v, list):
+            draft[f] = [
+                _scrub_identity_dashes(x)
+                if isinstance(x, str) and ('\u2014' in x or '\u2013' in x)
+                else x
+                for x in v]
+    return draft
 
 
 def _shortlist_profile_matches(prompt, catalog, max_candidates=SYNTH_CHAT_MAX_CANDIDATES):
@@ -44459,6 +44735,8 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"subiq\": null, // OR, when the request asks for a Subscriber IQ (see SUBSCRIBER IQ REQUESTS): {\"title\": \"Landman\", \"platform\": \"Paramount+\", \"medium\": \"series|movie\", \"season\": <int or null>, \"genre\": \"Drama\", \"content_cadence\": \"Weekly|Binge|Single Event Telecast\", \"is_new_show\": <bool>, \"air_window\": {\"start\": \"YYYY-MM-DD\", \"end\": \"YYYY-MM-DD\"} or null, \"air_window_confident\": <bool>, \"episode_dates\": [\"YYYY-MM-DD\", ...] or [], \"movie_scope\": \"theatrical|streaming|since_release\" or null}\n"
         "  \"decision\": \"new_build|existing_match|time_shifted_refresh|derive_cut|cut_needs_parent|subscriber_iq\",\n"
         "  \"decision_reason\": \"1-2 sentences explaining the decision\",\n"
+        "  \"subject_verified\": <true|false - see SUBJECT VERIFICATION: true when the subject resolves to a real, verifiable entity; false ONLY when you cannot verify it exists at all>,\n"
+        "  \"subject_verification_note\": \"one line naming what the subject verifiably is, or why it could not be verified\" or null,\n"
         "  \"existing_match_s3_key\": \"<if matches an existing catalog entry>\",\n"
         "  \"existing_match_display_name\": \"<display name of the match>\",\n"
         "  \"existing_match_days_old\": <int or null>,\n"
@@ -44757,6 +45035,42 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "that candidate, and use the candidate's exact casing as the "
         "subject. A near-identical filename differing only in case or "
         "spacing is a defect.\n\n"
+
+        "UNIVERSE-QUALIFIER COMPATIBILITY (HARD RULE - 2026-08-25): a "
+        "candidate is only a match when BOTH the brand/entity AND the "
+        "universe scope agree. A candidate whose name carries a "
+        "behavioral or universe qualifier the request never stated "
+        "(EST Buyers, TVOD Renters, Switchers, Owners, Members, "
+        "Subscribers, a viewers scope, a 'Past 60 Days' window) - or "
+        "vice versa - is NOT an existing match, no matter how strong "
+        "the name overlap is. 'Audience of Apple buyers' does NOT "
+        "match 'Apple TV EST Buyers'; 'Nike buyers' does NOT match "
+        "'Nike Run Club Members'; 'Spectrum customers' does NOT match "
+        "'Spectrum to Starlink Switchers'. In those cases the "
+        "decision is new_build for the subject exactly as the user "
+        "stated it (generic nouns like buyers/customers/consumers "
+        "mean the plain brand universe). The closest existing profile "
+        "may be mentioned in decision_reason by display name only.\n\n"
+
+        "SUBJECT VERIFICATION (HARD RULE - 2026-08-25): before "
+        "anything else, attest whether the subject resolves to a "
+        "real, verifiable entity - a brand, person, title, "
+        "organization, or well-defined behavioral cohort of real "
+        "entities. Set subject_verified=true when it does, and name "
+        "what it is in subject_verification_note. Set "
+        "subject_verified=false ONLY when you cannot verify the "
+        "entity exists at all (a plausible-sounding but nonexistent "
+        "brand like 'Glorbex Athletics'). The bar is 'cannot verify "
+        "exists', NOT 'small' or 'niche' - a real regional chain, "
+        "indie artist, or niche podcast is verified. Obvious typos "
+        "or misspellings of real entities resolve to the real entity "
+        "(fix the subject to the real name and set "
+        "subject_verified=true) - never refuse a typo. Behavioral "
+        "cohorts anchored to real platforms ('Spectrum to Starlink "
+        "Switchers') are verified when the platforms are real. When "
+        "subject_verified=false, still fill decision='new_build' and "
+        "the other fields as best you can - the server refuses "
+        "cleanly using your attestation.\n\n"
 
         # -- Parent-selection tiebreak --------------------------------
         # When the catalog has both a base profile ('Reba McEntire')
@@ -46944,6 +47258,15 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         except Exception:
             pass
 
+        # Universe-qualifier gate (2026-08-25): batch slices are
+        # one-shot, so a brand-matches-but-qualifier-differs pick
+        # demotes to new_build with the related profile noted by name.
+        try:
+            _apply_universe_qualifier_gate(spec_draft, per_prompt,
+                                           allow_ask=False)
+        except Exception:
+            pass
+
         # Intersect-cut promoter: if the per-subject prompt looks like
         # "<parent> for <cohort>" / "<parent> -> <cohort>" and a strong
         # candidate matches the left operand, promote from new_build
@@ -46996,6 +47319,11 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
             pass
         est_credits = int(spec_draft.get('estimated_credits')
                           or est_credits)
+        try:
+            _stamp_existing_match_age(spec_draft)
+            _scrub_draft_prose_dashes(spec_draft)
+        except Exception:
+            pass
 
         return {
             'success': True, 'subject_input': subject,
@@ -47054,6 +47382,21 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
                     catalog=catalog, allow_ask=False)
             except Exception:
                 pass
+        # Universe-qualifier gate + filename-stamp age (2026-08-25):
+        # array elements are one-shot, same treatment as the batch
+        # path.
+        try:
+            # Element's own subject is the ask (the umbrella prompt
+            # covers several subjects and would cross-contaminate the
+            # qualifier signature).
+            _apply_universe_qualifier_gate(
+                spec_draft,
+                str(spec_draft.get('subject') or '') or prompt_text,
+                allow_ask=False)
+            _stamp_existing_match_age(spec_draft)
+            _scrub_draft_prose_dashes(spec_draft)
+        except Exception:
+            pass
         try:
             _dn, _, _ = _normalize_v1_decision(spec_draft)
         except Exception:
@@ -49044,7 +49387,8 @@ def api_synth_chat_clarify():
     draft = body.get('draft') or {}
     if step not in ('goal', 'strategy', 'region', 'cuts', 'parent_link',
                     'age_breaks', 'ip_scope', 'identity',
-                    'existing_profile', 'subiq_window', 'subiq_upsell') \
+                    'existing_profile', 'qualifier_match',
+                    'subiq_window', 'subiq_upsell') \
             or not isinstance(draft, dict):
         _chatbot_error_email('brief-chat/clarify',
                              f'bad clarify step: {step!r}',
@@ -49204,6 +49548,11 @@ def api_synth_chat_clarify():
             pass
         head = f"Confirmed - {title}, the {medium}{where}."
         # Continue the flow in the same order interpret queued it.
+        if draft.get('ask_qualifier_match') and \
+                draft.get('qualifier_match_data'):
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head,
+                            'next_step': 'qualifier_match'})
         if draft.get('ask_existing_profile') and \
                 draft.get('existing_profile_data'):
             return jsonify({'success': True, 'draft': draft,
@@ -49234,6 +49583,102 @@ def api_synth_chat_clarify():
                         'message': head + " Review the brief below "
                         "and approve to queue.",
                         'next_step': 'approve'})
+
+    if step == 'qualifier_match':
+        # Qualifier-match confirmation (2026-08-25, Jenna): the closest
+        # existing profile is the same brand but a different universe
+        # scope ('Apple buyers' vs 'Apple TV EST Buyers'). 'We have X -
+        # is that what you meant?' Yes routes to the existing profile
+        # (existing_match semantics, 0 credits); no proceeds with the
+        # fresh build for the subject exactly as the user stated it.
+        data = draft.get('qualifier_match_data') or {}
+        disp = str(data.get('display_name') or '').strip()
+        low = answer.lower().strip()
+        said_no = bool(_re.search(
+            r'\b(no|nope|nah|not that|fresh|new|build fresh|'
+            r'something else|different|as stated|keep mine)\b', low))
+        said_yes = bool(_re.search(
+            r'\b(yes|yep|yeah|yup|correct|exactly|that one|'
+            r'that works|use it|use that|i meant that)\b', low))
+        if said_yes and not said_no and disp:
+            entity = disp.split(' - ', 1)[0].strip()
+            draft['subject'] = entity
+            draft['name'] = entity
+            draft.pop('file_stem', None)
+            draft['decision'] = 'existing_match'
+            draft['run_avid'] = False
+            draft['addon_cuts'] = []
+            draft['estimated_credits'] = int(
+                _V1_CREDITS.get('existing_match', 0))
+            draft['base_credits'] = draft['estimated_credits']
+            draft['existing_match_s3_key'] = data.get('s3_key')
+            draft['existing_match_display_name'] = disp
+            draft['existing_match_days_old'] = data.get('days_old')
+            draft['existing_match_last_modified'] = data.get(
+                'last_modified')
+            draft['decision_reason'] = (
+                f"You confirmed the existing {disp} profile is the "
+                f"audience you meant.")
+            draft.pop('ask_qualifier_match', None)
+            draft.pop('qualifier_match_data', None)
+            draft.pop('related_profile_display_name', None)
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (f"Done - {disp} is ready now in the "
+                            f"Select Profile dropdown, no new run "
+                            f"needed. Approve below to confirm."),
+                'next_step': 'approve',
+            })
+        if said_no and not said_yes:
+            draft.pop('ask_qualifier_match', None)
+            draft.pop('qualifier_match_data', None)
+            draft['decision'] = 'new_build'
+            draft.pop('existing_match_s3_key', None)
+            draft.pop('existing_match_display_name', None)
+            draft.pop('existing_match_days_old', None)
+            draft.pop('existing_match_last_modified', None)
+            subj_now = str(draft.get('subject') or subject).strip()
+            head = (f"Got it - fresh build for {subj_now}, exactly as "
+                    f"you described it.")
+            # Continue the flow in the same order interpret queued it.
+            if draft.get('ask_existing_profile') and \
+                    draft.get('existing_profile_data'):
+                return jsonify({'success': True, 'draft': draft,
+                                'message': head,
+                                'next_step': 'existing_profile'})
+            if draft.get('ask_ip_scope'):
+                return jsonify({'success': True, 'draft': draft,
+                                'message': head,
+                                'next_step': 'ip_scope'})
+            if draft.get('ask_age_breaks') and \
+                    draft.get('age_break_data'):
+                return jsonify({'success': True, 'draft': draft,
+                                'message': head,
+                                'next_step': 'age_breaks'})
+            if draft.get('ask_parent_link') and \
+                    draft.get('parent_link_candidates'):
+                return jsonify({'success': True, 'draft': draft,
+                                'message': head,
+                                'next_step': 'parent_link'})
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (head + " Quick scoping question: what's "
+                            "the business goal for this one? (One "
+                            "line - a pitch, a renewal, a media "
+                            "plan. Say skip to jump straight to the "
+                            "build.)"),
+                'next_step': 'goal',
+            })
+        built = str(data.get('built_label') or '').strip()
+        return jsonify({
+            'success': True, 'draft': draft,
+            'message': (f"We have {disp}"
+                        f"{' (' + built + ')' if built else ''} - is "
+                        f"that what you meant? Reply yes to use it, "
+                        f"or no to build "
+                        f"{draft.get('subject') or subject} fresh."),
+            'next_step': 'qualifier_match',
+        })
 
     if step == 'existing_profile':
         # Existing-profile confirmation (2026-08-24 SHARKNINJA
@@ -50275,6 +50720,21 @@ def api_synth_chat_interpret():
             print(f"[synth-chat interpret] normalized-match error: "
                   f"{_nm_err}")
 
+        # Universe-qualifier gate (2026-08-25, Jenna's 'is that what
+        # you meant?' flow): brand matches an existing profile but the
+        # universe qualifier differs ('Apple buyers' vs 'Apple TV EST
+        # Buyers') - never silently pick either path. Stashes the
+        # qualifier_match clarify question; yes routes to the existing
+        # profile, no proceeds with the fresh build as stated.
+        try:
+            _uq_acted, _uq_note = _apply_universe_qualifier_gate(
+                spec_draft, text, allow_ask=True)
+            if _uq_acted:
+                print(f"[synth-chat interpret] {_uq_note}")
+        except Exception as _uq_err:
+            print(f"[synth-chat interpret] qualifier-gate error: "
+                  f"{_uq_err}")
+
         # Intersect-cut promoter (2026-08-19). Same logic that runs in
         # the batch check path: if the prompt is a cut of an existing
         # profile (e.g. "Vizio for Spider-Man Moviegoers"), promote
@@ -50562,6 +51022,13 @@ def api_synth_chat_interpret():
         if spec_draft.get('ask_existing_profile') and \
                 spec_draft.get('existing_profile_data'):
             clarify_steps = ['existing_profile'] + clarify_steps
+        # Qualifier-match question (2026-08-25): the closest existing
+        # profile is the same brand but a different universe scope -
+        # 'We have X, is that what you meant?' runs before any
+        # fresh-build scoping.
+        if spec_draft.get('ask_qualifier_match') and \
+                spec_draft.get('qualifier_match_data'):
+            clarify_steps = ['qualifier_match'] + clarify_steps
         # Identity confirmation runs before EVERYTHING - what the
         # subject even IS defines every downstream step (2026-08-24
         # Furious defect).
@@ -50617,6 +51084,18 @@ def api_synth_chat_interpret():
         except Exception as _est_err:
             print(f"[synth-chat interpret] estimate range skipped: "
                   f"{_est_err}")
+        # Age from the immutable filename stamp + em/en dash scrub on
+        # every model-authored prose field the widget renders
+        # (2026-08-25: interpret assumptions shipped em dashes onto
+        # the brief card).
+        try:
+            _stamp_existing_match_age(spec_draft)
+        except Exception:
+            pass
+        try:
+            _scrub_draft_prose_dashes(spec_draft)
+        except Exception:
+            pass
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
@@ -53380,6 +53859,29 @@ def _v1_interpret(prompt):
     except Exception as _nm_err:
         print(f"[v1_interpret] normalized-match error: {_nm_err}")
 
+    # Universe-qualifier gate (2026-08-25 client defect: 'Apple buyers'
+    # existing_matched at 'Apple TV EST Buyers'). One-shot surface:
+    # brand-matches-but-qualifier-differs demotes to new_build and the
+    # related profile rides by display name only (no download link).
+    try:
+        _apply_universe_qualifier_gate(draft, prompt, allow_ask=False)
+    except Exception as _uq_err:
+        print(f"[v1_interpret] qualifier-gate error: {_uq_err}")
+
+    # Age from the immutable filename stamp on whatever match survived
+    # (2026-08-25 client defect: 78-day-old file reported days_old=0).
+    try:
+        _stamp_existing_match_age(draft)
+    except Exception:
+        pass
+
+    # Em/en dashes never ship in model-authored prose echoed to callers
+    # (assumptions, notes, decision_reason, ...).
+    try:
+        _scrub_draft_prose_dashes(draft)
+    except Exception:
+        pass
+
     # Apply the same run_avid default enforcement the chatbot uses so
     # the Partner API can't be tricked into skipping the Avid cut by
     # a Claude misclassification. Directive 2026-08-17: Avid on by
@@ -55163,17 +55665,11 @@ def _enforce_normalized_existing_match(draft, candidates, prompt,
         draft['decision'] = 'existing_match'
         draft['run_avid'] = False
         draft['ask_existing_profile'] = True
-        built_label = ''
         try:
-            lm_raw = str(c.get('last_modified') or '')
-            if lm_raw:
-                lm_dt = datetime.fromisoformat(
-                    lm_raw.replace('Z', '+00:00'))
-                built_label = 'built ' + lm_dt.strftime('%b %-d, %Y')
+            built_label = _profile_built_label(
+                c.get('s3_key'), c.get('last_modified'), days)
         except Exception:
             built_label = ''
-        if not built_label and isinstance(days, int):
-            built_label = f'built {days} days ago'
         draft['existing_profile_data'] = {
             'display_name': c.get('display_name'),
             's3_key': c.get('s3_key'),
@@ -55279,6 +55775,49 @@ def _normalize_v1_decision(draft):
             decision = 'cut_needs_parent'
         # cut_needs_parent stays as-is (worker builds a fresh parent).
     return decision, ex_key, d_type
+
+
+# --------------------------------------------------------------------
+# Subject verification (2026-08-25, client finding #2): /check said yes
+# to plausible-sounding brands that do not exist, so a typo became a
+# paid build of nothing. The interpret model now attests whether the
+# subject resolves to a real, verifiable entity (subject_verified in
+# the draft); unverifiable subjects refuse cleanly on /check and /run
+# with zero credits consumed. The bar is "cannot verify exists", not
+# "small" - and anything anchored to the catalog is verified by
+# construction (typos of real brands resolve through the existing
+# case-insensitive identity rules, they never refuse).
+# --------------------------------------------------------------------
+
+def _v1_subject_verified(draft, decision, ex_key, candidates=None):
+    """Return (verified: bool, subject_string). Deterministic
+    auto-verify beats the model attestation: a decision anchored to an
+    existing catalog file (existing_match / refresh / derive parent)
+    or a subject that collapses to a catalog entity is real by
+    construction. Otherwise the interpret model's subject_verified
+    attestation stands; a missing field defaults to verified (older
+    cached drafts, defensive)."""
+    subj = str(draft.get('subject') or '').split(' - ', 1)[0].strip()
+    if ex_key or decision == 'existing_match':
+        return True, subj
+    attested = draft.get('subject_verified')
+    if attested is not False:
+        return True, subj
+    # Model said unverifiable - double-check against the catalog
+    # shortlist before refusing (never refuse a subject we already
+    # carry).
+    try:
+        subj_c = _collapse_for_match(subj)
+        for c in (candidates or []):
+            cand_c = _collapse_for_match(
+                str(c.get('subject') or c.get('display_name')
+                    or '').split(' - ', 1)[0])
+            if subj_c and cand_c and _collapsed_same_entity(subj_c,
+                                                            cand_c):
+                return True, subj
+    except Exception:
+        pass
+    return False, subj
 
 
 # --------------------------------------------------------------------
@@ -55571,6 +56110,45 @@ def _v1_conclude(prompt, run_avid=True):
     _maybe_promote_embedded_cuts_to_parent(draft)
 
     decision, ex_key, d_type = _normalize_v1_decision(draft)
+    # Age from the immutable filename stamp on the final pick
+    # (2026-08-25 client finding #4: registry dates get clobbered by
+    # bulk maintenance; a 78-day-old file reported days_old=0).
+    try:
+        _stamp_existing_match_age(draft)
+    except Exception:
+        pass
+    # Subject verification (2026-08-25 client finding #2): an
+    # unverifiable subject refuses cleanly on both routes, zero
+    # credits, before any spec work.
+    _sv_ok, _sv_subj = _v1_subject_verified(draft, decision, ex_key,
+                                            candidates)
+    if not _sv_ok:
+        try:
+            print(f"[v1_conclude] subject unverified: {_sv_subj!r} "
+                  f"prompt={prompt[:120]!r}")
+        except Exception:
+            pass
+        return {
+            'draft': draft,
+            'candidates': candidates,
+            'decision': 'new_build',
+            'ex_key': '',
+            'd_type': '',
+            'cuts': [],
+            'price': 0,
+            'buildable': False,
+            'refusal_code': 'subject_unverified',
+            'refusal_message': (
+                'subject could not be verified as a known brand, '
+                'person, or title: '
+                + _scrub_identity_dashes(_sv_subj or prompt[:120])),
+            'spec': None,
+            'brief_summary': '',
+            'estimated_audience': None,
+            'subject_verified': False,
+            'match_score': None,
+            'related_profile': None,
+        }, None
     # Semantic bind-or-ask guards (2026-08-25): the v1 contract has no
     # clarify round-trip, so guards run in bind-only mode - bindable
     # phrasing (exclusions, churn, countries, regions, intensity,
@@ -55604,6 +56182,19 @@ def _v1_conclude(prompt, run_avid=True):
         price = (_V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
                  + ADDON_CUT_CREDITS * len(cuts))
 
+    # Computed match score (2026-08-25 client ask #4): the shortlist
+    # score of the picked candidate, surfaced as a numeric field on
+    # existing_match responses. Real computed value only - None when
+    # no scored candidate matches the picked key.
+    match_score = None
+    if decision == 'existing_match' and ex_key:
+        for _c in (candidates or []):
+            if str(_c.get('s3_key') or '') == ex_key:
+                _s = _c.get('_score')
+                if isinstance(_s, (int, float)):
+                    match_score = round(float(_s), 3)
+                break
+
     conclusion = {
         'draft': draft,
         'candidates': candidates,
@@ -55618,6 +56209,12 @@ def _v1_conclude(prompt, run_avid=True):
         'spec': None,
         'brief_summary': '',
         'estimated_audience': None,
+        'subject_verified': True,
+        'match_score': match_score,
+        # Related existing profile by display name only (2026-08-25
+        # qualifier gate): named, never linked - no free download.
+        'related_profile': (str(draft.get('related_profile_display_name')
+                                or '').strip() or None),
     }
 
     # Guard refusals (2026-08-25): un-bindable phrasing on the one-shot
@@ -55805,6 +56402,8 @@ def api_v1_profiles_check():
             'refusal_code': conclusion['refusal_code'],
             'refusal_reason': conclusion['refusal_message'],
             'credits_would_charge': 0,
+            'subject_verified': bool(
+                conclusion.get('subject_verified', True)),
         })
 
     resp = {
@@ -55831,6 +56430,15 @@ def api_v1_profiles_check():
         # Plain-language window the run would use (ECHO RULE
         # 2026-08-24). Null only for existing_match reuse.
         'date_window': _draft_window_field(draft, decision) or None,
+        # Subject resolved to a real, verifiable entity (2026-08-25).
+        'subject_verified': True,
+        # Computed shortlist score of the match (2026-08-25 client
+        # ask #4). Present (non-null) only on existing_match.
+        'match_score': conclusion.get('match_score'),
+        # Closest existing profile by display name when the decision
+        # preferred a fresh build over a different-universe match
+        # (2026-08-25 qualifier gate). Name only - no download link.
+        'related_profile': conclusion.get('related_profile'),
         'caveats': _v1_check_caveats(),
     }
     # Estimated audience band (2026-08-24 Jenna): pre-build sizing is
@@ -55970,6 +56578,8 @@ def api_v1_profiles_run():
             'error': conclusion['refusal_message'],
             'refusal_code': conclusion['refusal_code'],
             'credits_charged': 0,
+            'subject_verified': bool(
+                conclusion.get('subject_verified', True)),
         }), 422
 
     # Exact-tier credit re-check (some tiers cost more than the median
@@ -56003,6 +56613,8 @@ def api_v1_profiles_run():
             'download_expires_seconds': 86400 if url else None,
             'credits_charged': 0,
             'credits_remaining': credits_left,
+            'subject_verified': True,
+            'match_score': conclusion.get('match_score'),
         }
         if idem_key:
             _idempotency_store(username, idem_key, resp_body)
@@ -56198,6 +56810,12 @@ def api_v1_profiles_run():
         'brief_summary': brief_summary,
         # Plain-language window this run uses (ECHO RULE 2026-08-24).
         'date_window': _draft_window_field(draft, decision) or None,
+        # Subject resolved to a real, verifiable entity (2026-08-25).
+        'subject_verified': True,
+        # Closest existing profile by display name when the decision
+        # preferred a fresh build over a different-universe match
+        # (2026-08-25 qualifier gate). Name only - no download link.
+        'related_profile': conclusion.get('related_profile'),
     }
     # Same estimated band /check quoted for this prompt (byte-identical
     # by construction: one helper, one cached value per prompt).
