@@ -1238,6 +1238,11 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
         for _ in range(4000):
             n4 = round(bp, 4)
             if n4 <= 0.0001:
+                # 4dp floor. If even 0.0001 overshoots the parent count
+                # (large avid sample vs parent raw of 0-1), the avid
+                # tier has no measurable panelists for this brand: 0.
+                if round(avid_sample * 0.0001 / 100.0) > parent_raw:
+                    return 0.0
                 return 0.0001
             raw_ok = round(avid_sample * n4 / 100.0) <= parent_raw
             on_boundary = abs(n4 - round(n4, 2)) < 0.00005
