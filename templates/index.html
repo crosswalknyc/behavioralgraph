@@ -17968,6 +17968,33 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             opacity: 0.55;
             line-height: 1;
         }
+
+        /* ---- All dashboard values UPPERCASE (Jenna 2026-08-26) ------------
+           Values in profile CSVs carry hostmap-canonical casing (TikTok,
+           New York Ny, Coca-Cola, Reba McEntire, ...). The dashboard now
+           renders every string in uppercase so cards read consistently
+           against the always-uppercase category headers.
+
+           Display-only: the underlying DOM textContent stays canonical
+           so copy-paste, CSV exports, search matching, and JS logic all
+           still see the original values.
+
+           Opt-outs (case-preserving):
+             - Form controls: user-typed text renders as typed.
+             - code / pre: raw slugs preserve original typography.
+             - .no-uppercase: escape hatch for the rare element that
+               genuinely needs mixed case (add sparingly, with reason).
+           `!important` beats the ~800 pre-existing text-transform
+           declarations in this file. */
+        body {
+            text-transform: uppercase !important;
+        }
+        input, textarea, select, option,
+        input::placeholder, textarea::placeholder,
+        code, pre, kbd, samp,
+        .no-uppercase, .no-uppercase * {
+            text-transform: none !important;
+        }
     </style>
     <script>
         /* Apply persisted theme before render to avoid flash-of-wrong-theme.
