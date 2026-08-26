@@ -60362,7 +60362,7 @@ https://www.instagram.com/p/..."></textarea>
                 // open on the dashboard, analysis leads the greeting.
                 var _pmCtxW = null;
                 try { _pmCtxW = _pmCollectPageContext(); } catch (_) {}
-                if (_pmCtxW) {
+                if (_pmCtxW && _pmCtxW.primary && !_pmCtxW.view_context) {
                     var _pmNm = (_pmCtxW.primary && _pmCtxW.primary.name) || 'A profile';
                     var _pmCutsN = (_pmCtxW.cuts || []).length;
                     lead = greet + ' - ' + _pmNm +
@@ -60379,6 +60379,20 @@ https://www.instagram.com/p/..."></textarea>
                         chips += '<button type="button" onclick="synthChatChipSend(\'Compare the selected cuts against the base profile\')" style="' + pill + '">Compare the selected cuts</button>';
                     }
                     chips += '<button type="button" onclick="synthChatChipSend(\'Build a deck from this data\')" style="' + pill + '">Build a deck from this data</button>';
+                }
+                // View-aware greeting (2026-08-26): on Subscriber IQ,
+                // Trends, Microdramas IQ, or any data-bearing view, the
+                // chips speak to what is on screen right now.
+                if (_pmCtxW && _pmCtxW.view_context) {
+                    var _pmVc = _pmCtxW.view_context;
+                    lead = greet + ' - ' +
+                        (_pmVc.view_title || 'a data view') + ' is on screen.';
+                    if (running > 0) {
+                        lead += ' You have ' + running + ' build' +
+                            (running === 1 ? '' : 's') + ' still in motion.';
+                    }
+                    lead += ' Want me to dig into what is showing?';
+                    chips += _pmViewChipsHtml(_pmVc, pillHot, pill);
                 }
                 if (running > 0) {
                     chips += '<button type="button" onclick="synthChatChipSend(\'status update\')" style="' + pillHot + '">Status update on my builds</button>';
@@ -60418,6 +60432,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (!synthChatHistory.length) {
                     // Empty thread: the starter chips under the input
                     // are already the suggestion surface.
+                    try { _pmRefreshStarterChips(); } catch (_) {}
                     var chips = document.getElementById('synthChatStarterChips');
                     if (chips) chips.style.display = 'flex';
                     return;
@@ -61030,6 +61045,320 @@ https://www.instagram.com/p/..."></textarea>
         var _pmPendingDeckAngle = null;
         var _pmDeckInFlight = false;
 
+        // ========== PAGE-CONTEXT VIEW SERIALIZERS (2026-08-26) ==========
+        // Jenna: "update prometheus to be able to read what is on
+        // whatever page you are on within the dashboard." Each
+        // serializer returns a compact summary of the active view's
+        // on-screen data (KPI tiles, top table rows, chart series).
+        // The compactor bounds depth, list length, key count, string
+        // length, and a total character budget before anything leaves
+        // the browser; the server re-validates and re-caps. Adding a
+        // view later is one registry entry; views without one fall
+        // back to visible headings.
+        var _PM_VIEW_CTX_MAX_CHARS = 6000;
+
+        function _pmActiveViewId() {
+            try {
+                var dd = document.getElementById('viewNavDropdown');
+                return (dd && dd.value) || 'profileIQ';
+            } catch (_) { return 'profileIQ'; }
+        }
+
+        function _pmActiveViewTitle() {
+            try {
+                var dd = document.getElementById('viewNavDropdown');
+                var opt = dd && dd.options[dd.selectedIndex];
+                return ((opt && opt.textContent) || '').trim() || _pmActiveViewId();
+            } catch (_) { return _pmActiveViewId(); }
+        }
+
+        function _pmCompactValue(v, depth) {
+            if (v === null || v === undefined) return null;
+            if (depth >= 5) return null;
+            var t = typeof v;
+            if (t === 'boolean') return v;
+            if (t === 'number') return isFinite(v) ? v : null;
+            if (t === 'string') return v.length > 300 ? v.slice(0, 300) : v;
+            if (Array.isArray(v)) {
+                var out = [];
+                for (var i = 0; i < v.length && out.length < 12; i++) {
+                    var c = _pmCompactValue(v[i], depth + 1);
+                    if (c !== null) out.push(c);
+                }
+                return out;
+            }
+            if (t === 'object') {
+                var o = {};
+                var keys = Object.keys(v);
+                for (var j = 0; j < keys.length && j < 30; j++) {
+                    var cv = _pmCompactValue(v[keys[j]], depth + 1);
+                    if (cv !== null) o[String(keys[j]).slice(0, 80)] = cv;
+                }
+                return o;
+            }
+            return null;
+        }
+
+        function _pmCapContextBytes(data) {
+            try {
+                var s = JSON.stringify(data);
+                var guard = 0;
+                while (s && s.length > _PM_VIEW_CTX_MAX_CHARS && guard < 40) {
+                    guard++;
+                    var biggest = null, biggestLen = 3;
+                    var keys = Object.keys(data);
+                    for (var i = 0; i < keys.length; i++) {
+                        var v = data[keys[i]];
+                        if (Array.isArray(v) && v.length > biggestLen) {
+                            biggest = keys[i]; biggestLen = v.length;
+                        }
+                    }
+                    if (biggest !== null) {
+                        data[biggest] = data[biggest].slice(0,
+                            Math.max(3, Math.floor(data[biggest].length / 2)));
+                    } else if (keys.length > 1) {
+                        delete data[keys[keys.length - 1]];
+                    } else {
+                        break;
+                    }
+                    s = JSON.stringify(data);
+                }
+            } catch (_) {}
+            return data;
+        }
+
+        function _pmGenericViewSummary() {
+            try {
+                var heads = [];
+                var els = document.querySelectorAll('h1, h2, h3');
+                for (var i = 0; i < els.length && heads.length < 12; i++) {
+                    var el = els[i];
+                    if (!el.offsetParent) continue;
+                    var t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+                    if (t && t.length > 2 && heads.indexOf(t) === -1) {
+                        heads.push(t.slice(0, 120));
+                    }
+                }
+                return heads.length ? { visible_headings: heads } : null;
+            } catch (_) { return null; }
+        }
+
+        var _pmViewSerializers = {
+            subscriberIQ: function() {
+                var d = (typeof currentSubscriberData !== 'undefined')
+                    ? currentSubscriberData : null;
+                if (!d) return null;
+                var show = '';
+                try {
+                    var tabs = (typeof openSubscriberTabs !== 'undefined' &&
+                                openSubscriberTabs) || [];
+                    for (var i = 0; i < tabs.length; i++) {
+                        if (tabs[i] && tabs[i].data === d) {
+                            show = tabs[i].name || '';
+                            break;
+                        }
+                    }
+                    if (!show && tabs.length) show = tabs[0].name || '';
+                } catch (_) {}
+                return {
+                    show: show,
+                    metadata: d.metadata || null,
+                    key_metrics: d.key_metrics || null,
+                    attribution_summary: d.attribution_summary || null,
+                    top_episodes: (d.episode_attribution || []).slice(0, 6),
+                    signup_timing: (d.signup_timing || []).slice(0, 6)
+                };
+            },
+            trendsIQ: function() {
+                var st = window.__trendsIQ || {};
+                var d = st.lastData;
+                if (!d || !d.cards) return null;
+                var c = d.cards;
+                var out = { filters: d.filters || null,
+                            active_tab: st.activeTab || null };
+                if (Array.isArray(c.trending_searches)) {
+                    out.trending_searches = c.trending_searches.slice(0, 10);
+                }
+                if (Array.isArray(c.trending_people)) {
+                    out.trending_people = c.trending_people.slice(0, 8);
+                }
+                if (Array.isArray(c.headlines)) {
+                    out.headlines = c.headlines.slice(0, 6);
+                }
+                ['streaming_trending', 'fast_trending', 'gaming_trending',
+                 'social_trending', 'retail_trending'].forEach(function(k) {
+                    var g = c[k];
+                    if (!g || typeof g !== 'object' || Array.isArray(g)) return;
+                    var slim = {};
+                    Object.keys(g).slice(0, 6).forEach(function(src) {
+                        var e = g[src] || {};
+                        var rows = e.rows || e.items ||
+                            (Array.isArray(e) ? e : null);
+                        slim[src] = Array.isArray(rows) ? rows.slice(0, 5) : e;
+                    });
+                    out[k] = slim;
+                });
+                return out;
+            },
+            microdramasIQ: function() {
+                var mq = window.__microdramasIQ || {};
+                var d = mq.allData || mq.lastData || mq.compData;
+                if (!d) return null;
+                var out = { panel: mq.activePanel || null,
+                            filters: d.filters || null,
+                            window_days: mq.currentWindowDays || null };
+                var rowKeys = ['rows', 'titles', 'leaderboard', 'items'];
+                for (var i = 0; i < rowKeys.length; i++) {
+                    if (Array.isArray(d[rowKeys[i]]) && d[rowKeys[i]].length) {
+                        out.top_rows = d[rowKeys[i]].slice(0, 10);
+                        break;
+                    }
+                }
+                if (!out.top_rows) {
+                    for (var k in d) {
+                        if (Array.isArray(d[k]) && d[k].length &&
+                                typeof d[k][0] === 'object') {
+                            out.top_rows = d[k].slice(0, 10);
+                            out.rows_field = k;
+                            break;
+                        }
+                    }
+                }
+                if (d.kpis) out.kpis = d.kpis;
+                if (d.summary) out.summary = d.summary;
+                return out;
+            }
+        };
+
+        function _pmCollectViewContext() {
+            try {
+                var viewId = _pmActiveViewId();
+                if (!viewId || viewId === 'profileIQ' ||
+                        viewId === 'workspace' || viewId === 'dashboard') {
+                    return null;
+                }
+                var fn = _pmViewSerializers[viewId];
+                var data = null;
+                try { data = fn ? fn() : null; } catch (_) { data = null; }
+                if (!data) data = _pmGenericViewSummary();
+                if (!data) return null;
+                return {
+                    view_id: viewId,
+                    view_title: _pmActiveViewTitle(),
+                    data: _pmCapContextBytes(_pmCompactValue(data, 0) || {})
+                };
+            } catch (_) { return null; }
+        }
+
+        // View-aware chip strings. They ride inside onclick attributes,
+        // so sends and labels must carry no quote characters.
+        function _pmSanitizeChipText(s) {
+            return String(s || '').replace(/['"\\<>&`]/g, '')
+                .replace(/\s+/g, ' ').trim();
+        }
+
+        function _pmViewChipDefs(vc) {
+            var viewId = (vc && vc.view_id) || '';
+            var data = (vc && vc.data) || {};
+            if (viewId === 'subscriberIQ') {
+                var showNm = _pmSanitizeChipText(data.show || '');
+                var s = [
+                    { t: 'What drove signups this window?', hot: true },
+                    { t: 'Which episodes pulled the most new signups?' },
+                    { t: 'Analyze the data on this screen' }
+                ];
+                if (showNm) {
+                    s.push({ t: 'How does ' + showNm +
+                        ' compare to the rest of the platform?' });
+                }
+                return s;
+            }
+            if (viewId === 'trendsIQ') {
+                var out = [
+                    { t: 'What stands out in trends today?', hot: true },
+                    { t: 'Which of these trends should a brand jump on?' },
+                    { t: 'Analyze the data on this screen' }
+                ];
+                try {
+                    var top = (data.trending_searches || [])[0] || {};
+                    var lbl = _pmSanitizeChipText(top.term || top.title ||
+                        top.name || top.label || '');
+                    if (lbl) {
+                        out.splice(1, 0,
+                            { t: 'Why is ' + lbl + ' trending today?' });
+                    }
+                } catch (_) {}
+                return out;
+            }
+            if (viewId === 'microdramasIQ') {
+                var m = [
+                    { t: 'What is winning in microdramas right now?',
+                      hot: true },
+                    { t: 'Analyze the data on this screen' }
+                ];
+                try {
+                    var r0 = (data.top_rows || [])[0] || {};
+                    var t0 = _pmSanitizeChipText(r0.title || r0.name ||
+                        r0.show || '');
+                    if (t0) {
+                        m.splice(1, 0, { t: 'What is driving ' + t0 +
+                            ' on this leaderboard?' });
+                    }
+                } catch (_) {}
+                return m;
+            }
+            return [
+                { t: 'Analyze the data on this screen', hot: true },
+                { t: 'What stands out on this page?' }
+            ];
+        }
+
+        function _pmViewChipsHtml(vc, pillHot, pill) {
+            try {
+                return _pmViewChipDefs(vc).map(function(c) {
+                    var t = _pmSanitizeChipText(c.t);
+                    return '<button type="button" onclick="synthChatChipSend(\'' +
+                        t + '\')" style="' + (c.hot ? pillHot : pill) + '">' +
+                        t + '</button>';
+                }).join('');
+            } catch (_) { return ''; }
+        }
+
+        // Starter-chip refresh on view switch: the strip under the input
+        // leads with view-aware chips when a data-bearing view is open.
+        var _pmDefaultStarterChipsHtml = null;
+        function _pmRefreshStarterChips() {
+            try {
+                var host = document.getElementById('synthChatStarterChips');
+                if (!host) return;
+                if (_pmDefaultStarterChipsHtml === null) {
+                    _pmDefaultStarterChipsHtml = host.innerHTML;
+                }
+                var vc = _pmCollectViewContext();
+                if (!vc) {
+                    host.innerHTML = _pmDefaultStarterChipsHtml;
+                    return;
+                }
+                var pillHot = 'background: rgba(199,242,62,0.10); border: 1px solid rgba(199,242,62,0.40); color: var(--text-primary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;';
+                var pill = 'background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;';
+                host.innerHTML = _pmViewChipsHtml(vc, pillHot, pill) +
+                    _pmDefaultStarterChipsHtml;
+            } catch (_) {}
+        }
+
+        (function() {
+            try {
+                var dd = document.getElementById('viewNavDropdown');
+                if (dd) {
+                    dd.addEventListener('change', function() {
+                        setTimeout(_pmRefreshStarterChips, 400);
+                        setTimeout(_pmRefreshStarterChips, 2500);
+                    });
+                }
+                setTimeout(_pmRefreshStarterChips, 900);
+            } catch (_) {}
+        })();
+
         function _pmCollectPageContext() {
             try {
                 var primaryKey = (typeof currentS3Key !== 'undefined' && currentS3Key) || null;
@@ -61038,7 +61367,17 @@ https://www.instagram.com/p/..."></textarea>
                     primaryName = currentProfileData.name || null;
                     if (!primaryKey) primaryKey = currentProfileData.s3Key || null;
                 }
-                if (!primaryKey) return null;
+                var viewCtx = null;
+                try { viewCtx = _pmCollectViewContext(); } catch (_) {}
+                if (!primaryKey) {
+                    // No profile open: a data-bearing view still gives
+                    // Prometheus something to analyze (2026-08-26).
+                    if (viewCtx) {
+                        return { view: viewCtx.view_id, primary: null,
+                                 cuts: [], view_context: viewCtx };
+                    }
+                    return null;
+                }
                 var cuts = [];
                 try {
                     var st = (typeof _comparisonRunsState !== 'undefined') ? _comparisonRunsState : null;
@@ -61054,9 +61393,10 @@ https://www.instagram.com/p/..."></textarea>
                     }
                 } catch (_) {}
                 return {
-                    view: 'profile-iq',
+                    view: viewCtx ? viewCtx.view_id : 'profile-iq',
                     primary: { s3_key: primaryKey, name: primaryName },
-                    cuts: cuts.slice(0, 3)
+                    cuts: cuts.slice(0, 3),
+                    view_context: viewCtx
                 };
             } catch (_) { return null; }
         }
@@ -61186,7 +61526,9 @@ https://www.instagram.com/p/..."></textarea>
             opts.push({ label: 'Compare vs another profile',
                         send: 'Compare this against other profiles' });
             opts.push({ label: 'Full read', send: 'Give me the full read on this data' });
-            var name = (ctx.primary && ctx.primary.name) || 'the open profile';
+            var name = (ctx.primary && ctx.primary.name) ||
+                (ctx.view_context && ctx.view_context.view_title) ||
+                'the open profile';
             var lead = 'I have ' + name + ' on screen';
             if (ctx.cuts && ctx.cuts.length) {
                 lead += ' with ' + ctx.cuts.length + ' cut' +
@@ -61400,7 +61742,7 @@ https://www.instagram.com/p/..."></textarea>
 
         async function _pmStartDeck(text) {
             var ctx = _pmCollectPageContext();
-            if (!ctx) {
+            if (!ctx || !ctx.primary) {
                 synthChatPushTurn('agent',
                     'Open a profile first (Select Profile), then ask for ' +
                     'the deck again.');

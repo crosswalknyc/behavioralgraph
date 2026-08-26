@@ -52844,12 +52844,31 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
 def _pm_validate_page_context(page_context):
     """Access-gate every s3 key in the page context. Returns
     (clean_ctx_or_None, err_response_or_None). A missing/keyless
-    context is not an error; it means nothing is open."""
+    context is not an error; it means nothing is open.
+
+    2026-08-26 (Jenna): the context may also carry `view_context`, a
+    compact frontend summary of whatever dashboard view is on screen
+    (Subscriber IQ, Trends, Microdramas IQ, ...). It is validated,
+    field-whitelisted, and byte-capped server-side in
+    prometheus_analysis.validate_view_context, and it can stand alone:
+    a user on a data-bearing view with no profile open still gets an
+    analysis grounded in the on-screen data."""
     if not isinstance(page_context, dict):
         return None, None
+    view_ctx = None
+    try:
+        import prometheus_analysis as _pma_vc
+        view_ctx = _pma_vc.validate_view_context(
+            page_context.get('view_context'))
+    except Exception:
+        traceback.print_exc()
+        view_ctx = None
     primary = page_context.get('primary') or {}
     p_key = str(primary.get('s3_key') or '').strip()
     if not p_key:
+        if view_ctx:
+            return {'primary': None, 'cuts': [], 'extras': [],
+                    'view_context': view_ctx}, None
         return None, None
     ok, err = _require_profile_run_access(p_key)
     if not ok:
@@ -52882,7 +52901,8 @@ def _pm_validate_page_context(page_context):
     return {'primary': {'s3_key': p_key,
                         'name': str(primary.get('name') or '')[:200]},
             'cuts': clean_cuts,
-            'extras': clean_extras}, None
+            'extras': clean_extras,
+            'view_context': view_ctx}, None
 
 
 def _pm_charge_async(username, description):
@@ -53017,7 +53037,8 @@ def api_synth_chat_analyze():
             'success': True, 'action': 'answer',
             'reply': ('Nothing is open to analyze yet. Open a profile '
                       'from Select Profile (and check any Data Cuts you '
-                      'want included), then ask me again.'),
+                      'want included), or open a view with data on '
+                      'screen, then ask me again.'),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     # Credit preflight (2026-08-21): chatbot analyses are tracked usage
     # like every other pull. Unlimited users always pass; the charge
@@ -53032,7 +53053,10 @@ def api_synth_chat_analyze():
         }), 402
     try:
         import prometheus_analysis as pma
-        digest, p_meta = pma.get_digest_bundle(s3_client, S3_BUCKET, ctx)
+        digest, p_meta = None, {}
+        if ctx.get('primary'):
+            digest, p_meta = pma.get_digest_bundle(s3_client, S3_BUCKET,
+                                                   ctx)
     except Exception as e:
         traceback.print_exc()
         _chatbot_error_email('brief-chat/analyze', e)
@@ -53040,8 +53064,34 @@ def api_synth_chat_analyze():
     mode = str(body.get('mode') or '').strip().lower()
     if mode not in pma.MODE_INSTRUCTIONS:
         mode = ''
-    user_prompt = pma.build_analysis_user_prompt(digest, history, text,
-                                                 mode=mode or None)
+    # Cross-module signals (2026-08-26 Jenna: "prometheus thinks
+    # between modules"): what Subscriber IQ, Trends, and the profile
+    # library know about the same subject. Existence checks against
+    # TTL-cached indexes, parallel fetches, hard time budget; on any
+    # failure the analysis proceeds without enrichment.
+    xmod_block, xmod_modules = '', []
+    try:
+        _xm_view = ((ctx.get('view_context') or {}).get('view_id')
+                    or ('profileIQ' if ctx.get('primary') else ''))
+        _xm_trends_reader = None
+        if _trends_iq is not None:
+            def _xm_trends_reader():
+                return _trends_iq._cache_get({
+                    'geo_type': 'National', 'geo_value': '',
+                    'lookback_days': _trends_iq.DEFAULT_LOOKBACK_DAYS})
+        xmod_block, xmod_modules = pma.build_cross_module_block(
+            s3_client, S3_BUCKET, ctx, text,
+            active_view=_xm_view,
+            subiq_bucket=SUBSCRIBER_S3_BUCKET,
+            subiq_parser=parse_subscriber_iq_csv,
+            trends_reader=_xm_trends_reader)
+    except Exception:
+        traceback.print_exc()
+        xmod_block, xmod_modules = '', []
+    user_prompt = pma.build_analysis_user_prompt(
+        digest, history, text, mode=mode or None,
+        view_context=ctx.get('view_context'),
+        cross_module_block=xmod_block)
     _max_tok = 7500 if mode in ('cross_profile', 'personas',
                                 'whitespace') else 6000
     result = _pm_claude_json(pma.ANALYSIS_SYSTEM_PROMPT, user_prompt,
@@ -53070,7 +53120,20 @@ def api_synth_chat_analyze():
     followups = [pma.scrub_user_text(str(f).strip())[:160]
                  for f in (data.get('followups') or [])
                  if str(f).strip()][:4]
+    # Cross-module chip: when Subscriber IQ has a read for this
+    # subject, surface it as a followup (deduped, room permitting).
+    if 'subscriber_iq' in xmod_modules:
+        _sq_chip = 'Compare with its Subscriber IQ read'
+        if not any('subscriber iq' in f.lower() for f in followups):
+            followups = (followups[:3] + [_sq_chip])
     deck_angle = data.get('deck_angle')
+    # Deck builds render from an open Profile IQ profile; a view-only
+    # analysis (Subscriber IQ / Trends / Microdramas screen data with
+    # no profile open) never offers one.
+    offer_deck = bool(data.get('offer_deck')) and bool(ctx.get('primary'))
+    _pm_subject = (p_meta.get('name')
+                   or (ctx.get('view_context') or {}).get('view_title')
+                   or 'open view')
     # Record the successful analysis as tracked usage (unlimited users
     # included - their history + credits_used counters still move).
     # Deferred to a daemon thread so the S3 write is off the reply path.
@@ -53079,12 +53142,13 @@ def api_synth_chat_analyze():
             _pm_user,
             f"Chatbot Analysis"
             f"{' [' + mode + ']' if mode else ''} - "
-            f"{p_meta.get('name') or 'open profile'}")
+            f"{_pm_subject}")
     return jsonify({
         'success': True, 'action': action, 'reply': reply,
         'followups': followups,
-        'offer_deck': bool(data.get('offer_deck')),
-        'deck_angle': (str(deck_angle)[:400] if deck_angle else None),
+        'offer_deck': offer_deck,
+        'deck_angle': (str(deck_angle)[:400]
+                       if (deck_angle and offer_deck) else None),
         'model': result.get('model'),
         'profile': p_meta.get('name')})
 
@@ -53192,7 +53256,7 @@ def api_synth_chat_deck():
     ctx, ctx_err = _pm_validate_page_context(body.get('page_context'))
     if ctx_err:
         return ctx_err
-    if not ctx:
+    if not ctx or not ctx.get('primary'):
         return jsonify({'success': False,
                         'guidance': True,
                         'error': ('Open a profile first, then ask for '

@@ -15,6 +15,7 @@ Design constraints (Jenna 2026-08-20):
 """
 
 import io
+import json
 import re
 import time
 import threading
@@ -606,7 +607,7 @@ def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
 # Fitch director of research). Names and companies stay OUT of the
 # prompt text so they can never leak into client-facing output.
 
-ANALYSIS_SYSTEM_PROMPT = """You are Prometheus, Crosswalk's senior audience strategist inside the Profile IQ dashboard. The user has a profile open on screen (sometimes with cut overlays) and you are handed a numeric digest of that exact data. You think like a senior partner at a top-tier strategy consultancy: hypothesis-led, answer-first, ruthless about what actually changes the client's decision. Your job is to turn the data into sharp, commercially useful thinking.
+ANALYSIS_SYSTEM_PROMPT = """You are Prometheus, Crosswalk's senior audience strategist inside the Crosswalk dashboard. The user usually has a profile open on screen (sometimes with cut overlays) and you are handed a numeric digest of that exact data. Sometimes they are on a different dashboard view instead (Subscriber IQ, Trends, Microdramas IQ, and others) and you are handed a summary of what that view shows; see ON-SCREEN VIEW DATA. You think like a senior partner at a top-tier strategy consultancy: hypothesis-led, answer-first, ruthless about what actually changes the client's decision. Your job is to turn the data into sharp, commercially useful thinking.
 
 THE DATA
 - Crosswalk data is first-party, T+1, derived from observed clickstream behavior of a US panel. It reflects what panelists did, not what they claim.
@@ -616,6 +617,21 @@ THE DATA
 - PEER NORMS is your rarity evidence: it compares this audience against every other audience of the same subject type in the Crosswalk corpus. RAREST SIGNALS rows are reads above the 90th percentile of peers (med / p90 / max shown, with the profile that holds the max). Use them for sentences like "idx 412 is the highest we have measured across 34 ACTOR audiences" - this is the single most persuasive framing the data supports, so use it whenever a RAREST SIGNALS row backs your point. WEAKEST VS PEERS and DEMO OUTLIERS rows work the same way in the other direction.
 - Each behavioral category carries a "math:" block computed from the full category (not just the rows shown): row count, leader, median row, concentration (the leader's share of the top-5 total, tagged CONCENTRATED / MIXED / SPLIT), and conquest gaps (brands big in gen pop but weak in this audience). Use concentration for fragmentation and whitespace claims and conquest gaps for acquisition targets; do not re-derive these by eye.
 - The digest is your PRIMARY evidence. Every claim you make must be anchored to numbers in it. You may add outside market knowledge (deal sizes, category dynamics, who sponsors what) as supporting context, never as a substitute, and never invent numbers that look like they came from the data.
+
+ON-SCREEN VIEW DATA (other dashboard views)
+- The dashboard has more views than Profile IQ: Subscriber IQ (per-title signup and reactivation attribution for streaming platforms), Trends (daily national and geo trend reads across search, headlines, streaming, gaming, retail), Microdramas IQ (vertical-drama title leaderboards across Peacock, ReelShort, DramaBox), and others. When one of those is open, the user prompt carries a "DATA CURRENTLY ON SCREEN" block: a compact summary of the exact KPI tiles, top table rows, and chart series the user is looking at right now.
+- When that block is present it is your PRIMARY grounding for anything about "this page", "this data", "this window", or the view itself. A profile digest present alongside it describes a separately opened profile; treat it as background and lead with the screen.
+- Confidence discipline on screen data: counts, rankings, penetrations, and windows from the block are measured; state them flat, exactly as shown. Interpretation layered on top (why a number moved, who an audience reads as, what a trend signals, what to do next) is directional; say leans, skews, reads as, tends to, directional. Never put invented decimal precision on an interpretive read.
+- Only numbers present in the block or the digest may appear in the reply. If the on-screen summary does not carry the number the user asks for, say what the screen does show and name what it does not; never fabricate the missing number.
+- The block may include a small `note` or truncation markers; rows shown are the top of each table, not the entire table. Say "top titles shown" style qualifiers when the ask needs the full universe.
+- When no profile digest is present, set offer_deck=false (decks render from an open Profile IQ profile). action=build_profile still applies when the message is a build / pull / cut / refresh ask.
+- The ANALYSIS MODE blocks below say "digest"; when only the on-screen block is present, read "digest" as that block.
+
+CROSS-MODULE SIGNALS (thinking between modules)
+- The user prompt may carry a "CROSS-MODULE SIGNALS" block: what OTHER Crosswalk modules know about the same subject. A Subscriber IQ line means the platform acquisition read exists for the title (attributed signups, reactivations, accounts viewed, window). A Trends line means the subject appears in today's national trend reads. A Profile library line names related audience profiles already built.
+- Use these to BUILD OUT the answer, not to replace the primary evidence. Weave the numbers in flat as supporting context ("Subscriber IQ attributes 412,387 signups to season 2; worth reflecting that acquisition strength in this profile's streaming read"). What a cross-module number implies is interpretation: say leans, reads as, worth reflecting, directional.
+- NEVER invent cross-module data. If the block is absent, or a module does not appear in it, that module contributed nothing for this subject: do not mention it, do not speculate about what it might show, and never write "Trends has no data for this" style noise.
+- When a Subscriber IQ line is present, "Compare with its Subscriber IQ read" is a natural followup to offer.
 
 HOW TO THINK (partner discipline, every reply)
 - Lead with the answer. Your first line is the single most decision-relevant finding with its number, not throat-clearing. Everything after supports it.
@@ -818,8 +834,606 @@ MODE_INSTRUCTIONS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# On-screen view context (2026-08-26, Jenna directive)
+# ---------------------------------------------------------------------------
+# Prometheus reads whatever dashboard view is open, not just Profile IQ:
+# Subscriber IQ, Trends, Microdramas IQ, and any view the frontend
+# registry serializes. The frontend sends a compact summary of the data
+# on screen ({view_id, view_title, data}); this section is the
+# server-side gate. Everything is whitelisted, every branch bounded,
+# and the whole block hard-capped by byte size so a buggy or hostile
+# client can never balloon the reasoning prompt.
+
+VIEW_CONTEXT_MAX_BYTES = 8000
+_VIEW_ID_RE = re.compile(r'[^A-Za-z0-9_-]+')
+_VIEW_MAX_DEPTH = 5
+_VIEW_MAX_LIST = 25
+_VIEW_MAX_KEYS = 40
+_VIEW_MAX_STR = 300
+
+
+def _trim_view_value(v, depth=0):
+    """Bound one branch of the on-screen summary: depth, list length,
+    key count, and string length. Anything non-JSON-safe drops."""
+    if depth >= _VIEW_MAX_DEPTH:
+        return None
+    if v is None or isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        try:
+            if v != v or v in (float('inf'), float('-inf')):
+                return None
+        except Exception:
+            return None
+        return v
+    if isinstance(v, str):
+        return v.strip()[:_VIEW_MAX_STR]
+    if isinstance(v, (list, tuple)):
+        out = []
+        for item in list(v)[:_VIEW_MAX_LIST]:
+            t = _trim_view_value(item, depth + 1)
+            if t is not None:
+                out.append(t)
+        return out
+    if isinstance(v, dict):
+        out = {}
+        for k in list(v.keys())[:_VIEW_MAX_KEYS]:
+            t = _trim_view_value(v.get(k), depth + 1)
+            if t is not None:
+                out[str(k)[:80]] = t
+        return out
+    return None
+
+
+def _view_data_nbytes(data):
+    try:
+        return len(json.dumps(data, ensure_ascii=False).encode('utf-8'))
+    except Exception:
+        return VIEW_CONTEXT_MAX_BYTES + 1
+
+
+def validate_view_context(raw):
+    """Validate + trim the frontend's on-screen summary. Returns a
+    clean {view_id, view_title, data} dict or None. Only those three
+    fields survive; `data` is recursively bounded then hard-capped at
+    VIEW_CONTEXT_MAX_BYTES (largest lists halved first, then trailing
+    keys dropped)."""
+    if not isinstance(raw, dict):
+        return None
+    view_id = _VIEW_ID_RE.sub('', str(raw.get('view_id') or ''))[:40]
+    if not view_id:
+        return None
+    view_title = str(raw.get('view_title') or '').strip()[:80] or view_id
+    data = _trim_view_value(raw.get('data'), 0)
+    if not isinstance(data, dict):
+        data = {}
+    while data and _view_data_nbytes(data) > VIEW_CONTEXT_MAX_BYTES:
+        biggest = None
+        for k, v in data.items():
+            if isinstance(v, list) and len(v) > 3:
+                if biggest is None or len(v) > len(data[biggest]):
+                    biggest = k
+        if biggest is not None:
+            data[biggest] = data[biggest][:max(3, len(data[biggest]) // 2)]
+            continue
+        data.pop(list(data.keys())[-1])
+    return {'view_id': view_id, 'view_title': view_title, 'data': data}
+
+
+def render_view_context_block(view_context):
+    """The clearly-delimited on-screen block injected into the
+    analysis user prompt. Empty string when there is nothing to show."""
+    if not isinstance(view_context, dict):
+        return ''
+    title = (view_context.get('view_title')
+             or view_context.get('view_id') or 'the open view')
+    data = view_context.get('data') or {}
+    try:
+        body = json.dumps(data, ensure_ascii=False, indent=1)
+    except Exception:
+        return ''
+    return (
+        f"DATA CURRENTLY ON SCREEN: {title}\n"
+        "=========================\n"
+        f"The user is on the {title} view right now. The JSON below is "
+        "a compact summary of exactly what is visible on their screen "
+        "(KPI tiles, top table rows, chart series). It is first-party "
+        "Crosswalk measurement, same standing as the digest. Ground "
+        "the answer in it.\n"
+        f"{body}\n\n"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Cross-module signals (2026-08-26, Jenna directive)
+# ---------------------------------------------------------------------------
+# "make sure prometheus thinks between modules." While the user works in
+# one module, Prometheus checks what the OTHER modules know about the
+# same subject and weaves it in: the Subscriber IQ acquisition read for
+# the title, Trends appearances, related profiles in the library.
+#
+# Design: cheap existence checks first (title-anchor registry at
+# system/title_anchors.json, the profile catalog at system/s3_cache.json,
+# the Subscriber IQ file index), then fetch ONLY on match, in parallel,
+# under a hard time budget. Every store read is TTL-cached in-process so
+# repeat questions never re-fetch. The assembled block is byte-capped.
+
+XMOD_TIME_BUDGET_S = 2.5
+XMOD_MAX_BYTES = 2048
+_XMOD_INDEX_TTL_S = 600
+_XMOD_TRENDS_TTL_S = 1800
+_XMOD_BLOCK_TTL_S = 600
+
+_xmod_lock = threading.Lock()
+_xmod_anchors_cache = {'ts': 0.0, 'data': None}
+_xmod_catalog_cache = {'ts': 0.0, 'names': None}
+_xmod_subiq_index_cache = {'ts': 0.0, 'index': None}
+_xmod_trends_payload_cache = {'ts': 0.0, 'payload': None, 'miss_ts': 0.0}
+_xmod_block_cache = {}   # {(subject_key, active_view): (ts, block, modules)}
+
+_XMOD_NORM_RE = re.compile(r'[^A-Z0-9]+')
+_XMOD_SEASON_RE = re.compile(
+    r'\bseason\s*(\d{1,2})\b|\bs(\d{1,2})\b(?!\d)', re.IGNORECASE)
+_XMOD_NOISE_WORDS = (
+    'viewers', 'watchers', 'fans', 'audience', 'audiences', 'subscribers',
+    'streamers', 'households',
+)
+
+
+def _xmod_title_key(title):
+    """Case + punctuation insensitive per-title key; mirrors
+    migration/title_anchors.title_key (cut suffix, season qualifier,
+    and audience-noun tails stripped)."""
+    try:
+        from migration.title_anchors import title_key as _tk
+        return _tk(title)
+    except Exception:
+        pass
+    s = str(title or '').strip()
+    if not s:
+        return ''
+    s = s.split(' - ', 1)[0].strip()
+    s = _XMOD_SEASON_RE.sub(' ', s)
+    words = [w for w in s.split() if w.lower() not in _XMOD_NOISE_WORDS]
+    s = ' '.join(words) or s
+    return _XMOD_NORM_RE.sub('', s.upper())
+
+
+def _xmod_fmt_count(v):
+    try:
+        n = float(str(v).replace(',', '').replace('%', ''))
+    except (TypeError, ValueError):
+        return None
+    if n != n:
+        return None
+    if abs(n - round(n)) < 1e-9 and abs(n) >= 1000:
+        return f"{int(round(n)):,}"
+    if abs(n - round(n)) < 1e-9:
+        return str(int(round(n)))
+    return f"{n:g}"
+
+
+def _load_title_anchors(s3_client, bucket):
+    """The per-title cross-product anchor registry: which modules know
+    a title, its universe, window, and the s3 keys per product."""
+    now = time.time()
+    with _xmod_lock:
+        if (_xmod_anchors_cache['data'] is not None
+                and now - _xmod_anchors_cache['ts'] < _XMOD_INDEX_TTL_S):
+            return _xmod_anchors_cache['data']
+    data = {}
+    if s3_client is not None:
+        try:
+            resp = s3_client.get_object(Bucket=bucket,
+                                        Key='system/title_anchors.json')
+            data = json.loads(resp['Body'].read().decode('utf-8')) or {}
+            if not isinstance(data, dict):
+                data = {}
+        except Exception:
+            data = {}
+    with _xmod_lock:
+        if data or _xmod_anchors_cache['data'] is None:
+            _xmod_anchors_cache.update(ts=now, data=data)
+        return _xmod_anchors_cache['data'] or {}
+
+
+def _load_catalog_names(s3_client, bucket):
+    """Profile library display names from the persisted selector cache
+    (system/s3_cache.json). Returns [(display_name, s3_key)]."""
+    now = time.time()
+    with _xmod_lock:
+        if (_xmod_catalog_cache['names'] is not None
+                and now - _xmod_catalog_cache['ts'] < _XMOD_INDEX_TTL_S):
+            return _xmod_catalog_cache['names']
+    names = []
+    if s3_client is not None:
+        try:
+            resp = s3_client.get_object(Bucket=bucket,
+                                        Key='system/s3_cache.json')
+            cache = json.loads(resp['Body'].read().decode('utf-8')) or {}
+            for job in (cache.get('jobs') or []):
+                nm = str((job or {}).get('display_name') or '').strip()
+                sk = str((job or {}).get('s3_key') or '').strip()
+                if nm and sk:
+                    names.append((nm, sk))
+        except Exception:
+            names = []
+    with _xmod_lock:
+        if names or _xmod_catalog_cache['names'] is None:
+            _xmod_catalog_cache.update(ts=now, names=names)
+        return _xmod_catalog_cache['names'] or []
+
+
+def _load_subiq_index(s3_client, subiq_bucket):
+    """Subscriber IQ file index: {title_key: (show_name, s3_key)} with
+    the newest file per title winning. One LIST, TTL-cached."""
+    now = time.time()
+    with _xmod_lock:
+        if (_xmod_subiq_index_cache['index'] is not None
+                and now - _xmod_subiq_index_cache['ts'] < _XMOD_INDEX_TTL_S):
+            return _xmod_subiq_index_cache['index']
+    index = {}
+    if s3_client is not None and subiq_bucket:
+        try:
+            paginator = s3_client.get_paginator('list_objects_v2')
+            entries = []
+            for page in paginator.paginate(Bucket=subiq_bucket):
+                for obj in page.get('Contents', []) or []:
+                    key = obj.get('Key') or ''
+                    if (not key.endswith('.csv')
+                            or key.startswith('historic/')
+                            or key.startswith('purgatory/')):
+                        continue
+                    stem = key.rsplit('/', 1)[-1][:-4]
+                    m = re.match(r'^(.+?)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$',
+                                 stem)
+                    show = (m.group(1) if m else stem).replace('_', ' ')
+                    entries.append((obj.get('LastModified'), show, key))
+            entries.sort(key=lambda e: str(e[0] or ''))
+            for _lm, show, key in entries:
+                tk = _xmod_title_key(show)
+                if tk:
+                    index[tk] = (show, key)
+        except Exception:
+            index = {}
+    with _xmod_lock:
+        if index or _xmod_subiq_index_cache['index'] is None:
+            _xmod_subiq_index_cache.update(ts=now, index=index)
+        return _xmod_subiq_index_cache['index'] or {}
+
+
+def _load_trends_payload(trends_reader):
+    """Latest cached national Trends payload via the injected reader
+    (trends_iq._cache_get on the default filters). Never computes a
+    fresh view; a cache miss is remembered briefly so we don't hammer
+    S3 on every message."""
+    if trends_reader is None:
+        return None
+    now = time.time()
+    with _xmod_lock:
+        c = _xmod_trends_payload_cache
+        if (c['payload'] is not None
+                and now - c['ts'] < _XMOD_TRENDS_TTL_S):
+            return c['payload']
+        if c['payload'] is None and now - c['miss_ts'] < 120:
+            return None
+    payload = None
+    try:
+        payload = trends_reader()
+    except Exception:
+        payload = None
+    with _xmod_lock:
+        if payload:
+            _xmod_trends_payload_cache.update(ts=now, payload=payload)
+        else:
+            _xmod_trends_payload_cache['miss_ts'] = now
+    return payload
+
+
+def resolve_subject(ctx, view_context=None):
+    """Derive the active subject (title / brand / person) from the page
+    context. The open profile wins; a view summary with a subject-ish
+    field (Subscriber IQ show) is next. Returns '' when the screen has
+    no single subject (Trends, Microdramas leaderboards)."""
+    ctx = ctx or {}
+    primary = ctx.get('primary') or {}
+    nm = str(primary.get('name') or '').strip()
+    if nm:
+        return nm.split(' - ', 1)[0].strip()
+    vc = view_context or ctx.get('view_context') or {}
+    data = (vc.get('data') or {}) if isinstance(vc, dict) else {}
+    for k in ('show', 'subject', 'title'):
+        v = str(data.get(k) or '').strip()
+        if v:
+            return v
+    return ''
+
+
+def _xmod_subject_from_text(text, known_titles):
+    """Fallback subject resolution: the longest known title named in
+    the user's message (word-bounded, case-insensitive, >= 4 chars)."""
+    t = str(text or '')
+    if not t.strip():
+        return ''
+    best = ''
+    for title in known_titles:
+        s = str(title or '').strip()
+        if len(s) < 4 or len(s) <= len(best):
+            continue
+        try:
+            if re.search(r'(?<![A-Za-z0-9])' + re.escape(s.lower())
+                         + r'(?![A-Za-z0-9])', t.lower()):
+                best = s
+        except re.error:
+            continue
+    return best
+
+
+def _xmod_subiq_line(parsed, show, anchor):
+    """One compact Subscriber IQ line from the parsed CSV (+ anchor)."""
+    parsed = parsed or {}
+    km = parsed.get('key_metrics') or {}
+    asum = parsed.get('attribution_summary') or {}
+    md = parsed.get('metadata') or {}
+    bits = []
+
+    def _metric(d, label):
+        d = d or {}
+        v = _xmod_fmt_count(d.get('gen_pop')) or _xmod_fmt_count(
+            d.get('count'))
+        return f"{v} {label}" if v else None
+
+    for src, label in ((asum.get('attributed'), 'attributed signups'),
+                       (km.get('new_signups'), 'new platform signups'),
+                       (asum.get('dormant_reactive'),
+                        'reactivated accounts'),
+                       (km.get('total_watchers'), 'accounts viewed')):
+        b = _metric(src, label)
+        if b:
+            bits.append(b)
+    window = str(md.get('date_range') or '').strip()
+    platform = str(md.get('platform') or '').strip()
+    season = (anchor or {}).get('season')
+    uv = _xmod_fmt_count((anchor or {}).get('us_viewers'))
+    head = show + (f" (Season {season})" if season else '')
+    tail = []
+    if platform:
+        tail.append(f"platform {platform}")
+    if window:
+        tail.append(f"window {window}")
+    if uv:
+        tail.append(f"universe {uv} US viewers")
+    if not bits and not tail:
+        return f"SUBSCRIBER IQ: an acquisition read exists for {head}."
+    joined = '; '.join(bits + tail)
+    return f"SUBSCRIBER IQ ({head}): {joined}."
+
+
+_XMOD_LABEL_FIELDS = ('term', 'title', 'name', 'label', 'query',
+                      'headline', 'person', 'show', 'artist')
+_XMOD_VALUE_FIELDS = ('rank', 'count', 'views', 'score', 'traffic',
+                      'change', 'searches', 'mentions')
+
+
+def _xmod_trends_hits(payload, subject, max_hits=5):
+    """Scan the Trends cards for word-bounded mentions of the subject.
+    Returns compact 'card > label (rank 3)' strings."""
+    subject = str(subject or '').strip()
+    if not subject or len(subject) < 3 or not isinstance(payload, dict):
+        return []
+    try:
+        rx = re.compile(r'(?<![A-Za-z0-9])' + re.escape(subject.lower())
+                        + r'(?![A-Za-z0-9])')
+    except re.error:
+        return []
+    hits = []
+
+    def _walk(node, path, depth):
+        if len(hits) >= max_hits or depth > 5:
+            return
+        if isinstance(node, dict):
+            label = ''
+            for f in _XMOD_LABEL_FIELDS:
+                v = node.get(f)
+                if isinstance(v, str) and v.strip():
+                    label = v.strip()
+                    break
+            if label and rx.search(label.lower()):
+                vals = []
+                for f in _XMOD_VALUE_FIELDS:
+                    fv = node.get(f)
+                    fs = _xmod_fmt_count(fv)
+                    if fs is not None:
+                        vals.append(f"{f} {fs}")
+                    if len(vals) >= 2:
+                        break
+                loc = path or 'trends'
+                hits.append(f"{loc}: \"{label[:60]}\""
+                            + (f" ({', '.join(vals)})" if vals else ''))
+                return
+            for k, v in node.items():
+                if isinstance(v, (dict, list)):
+                    _walk(v, (f"{path} > {k}" if path else str(k))[:60],
+                          depth + 1)
+                if len(hits) >= max_hits:
+                    return
+        elif isinstance(node, list):
+            for item in node[:80]:
+                _walk(item, path, depth + 1)
+                if len(hits) >= max_hits:
+                    return
+
+    _walk(payload.get('cards') or {}, '', 0)
+    return hits
+
+
+def build_cross_module_block(s3_client, bucket, ctx, text,
+                             active_view='', subiq_bucket=None,
+                             subiq_parser=None, trends_reader=None,
+                             time_budget_s=XMOD_TIME_BUDGET_S):
+    """Assemble the CROSS-MODULE SIGNALS body for one analyze call.
+
+    Returns (block_str, matched_modules). block_str is '' when nothing
+    matched or the subject could not be resolved; matched_modules is a
+    list drawn from ('subscriber_iq', 'trends', 'profile_library').
+    Existence checks run against TTL-cached indexes; fetches run in
+    parallel under the hard time budget - on timeout we ship whatever
+    finished, never blocking the analysis."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    started = time.time()
+    subject = resolve_subject(ctx)
+    subject_key = _xmod_title_key(subject)
+    active_view = str(active_view or '')
+    cache_key = (subject_key, active_view, bool(subject))
+    now = time.time()
+    with _xmod_lock:
+        hit = _xmod_block_cache.get(cache_key)
+        if hit and now - hit[0] < _XMOD_BLOCK_TTL_S:
+            return hit[1], list(hit[2])
+
+    def _indexes():
+        anchors = _load_title_anchors(s3_client, bucket)
+        catalog = _load_catalog_names(s3_client, bucket)
+        subiq_index = _load_subiq_index(s3_client, subiq_bucket)
+        return anchors, catalog, subiq_index
+
+    lines = []
+    modules = []
+    try:
+        ex = ThreadPoolExecutor(max_workers=3)
+        try:
+            fut_idx = ex.submit(_indexes)
+            fut_trends = ex.submit(_load_trends_payload, trends_reader)
+            remaining = max(0.2, time_budget_s - (time.time() - started))
+            anchors, catalog, subiq_index = fut_idx.result(
+                timeout=remaining)
+
+            local_subject = subject
+            local_key = subject_key
+            if not local_subject:
+                known = ([str((v or {}).get('title') or '')
+                          for v in anchors.values()]
+                         + [nm.split(' - ', 1)[0] for nm, _k in catalog]
+                         + [show for show, _k in subiq_index.values()])
+                local_subject = _xmod_subject_from_text(text, set(known))
+                local_key = _xmod_title_key(local_subject)
+            if not local_key:
+                with _xmod_lock:
+                    _xmod_block_cache[cache_key] = (time.time(), '', [])
+                return '', []
+
+            anchor = anchors.get(local_key) if isinstance(anchors, dict) \
+                else None
+
+            # --- Subscriber IQ (skip when that view is already open) ---
+            fut_subiq = None
+            subiq_show = None
+            if active_view != 'subscriberIQ':
+                sq_key = None
+                a_keys = ((anchor or {}).get('s3_keys') or {})
+                if a_keys.get('subscriber_iq'):
+                    sq_key = a_keys['subscriber_iq']
+                    subiq_show = (anchor or {}).get('title') \
+                        or local_subject
+                elif local_key in subiq_index:
+                    subiq_show, sq_key = subiq_index[local_key]
+                if sq_key and s3_client is not None and subiq_parser:
+                    def _fetch_subiq(k=sq_key):
+                        resp = s3_client.get_object(
+                            Bucket=subiq_bucket, Key=k)
+                        return subiq_parser(
+                            resp['Body'].read().decode('utf-8'))
+                    fut_subiq = ex.submit(_fetch_subiq)
+                elif sq_key:
+                    lines.append(
+                        f"SUBSCRIBER IQ: an acquisition read exists "
+                        f"for {subiq_show or local_subject}.")
+                    modules.append('subscriber_iq')
+
+            # --- Profile library (skip the profile already open) ---
+            open_key = ((ctx or {}).get('primary') or {}).get('s3_key')
+            related = []
+            for nm, sk in catalog:
+                if sk == open_key:
+                    continue
+                if _xmod_title_key(nm) == local_key:
+                    related.append(nm)
+                if len(related) >= 4:
+                    break
+            if related:
+                lines.append("PROFILE LIBRARY: related profiles: "
+                             + '; '.join(related[:4]) + '.')
+                modules.append('profile_library')
+
+            # --- Trends (skip when that view is already open) ---
+            if active_view != 'trendsIQ':
+                remaining = max(0.2,
+                                time_budget_s - (time.time() - started))
+                try:
+                    trends_payload = fut_trends.result(timeout=remaining)
+                except Exception:
+                    trends_payload = None
+                t_hits = _xmod_trends_hits(trends_payload, local_subject)
+                if t_hits:
+                    lines.append("TRENDS (today's national read): "
+                                 + '; '.join(t_hits) + '.')
+                    modules.append('trends')
+
+            if fut_subiq is not None:
+                remaining = max(0.2,
+                                time_budget_s - (time.time() - started))
+                try:
+                    parsed = fut_subiq.result(timeout=remaining)
+                    line = _xmod_subiq_line(parsed, subiq_show
+                                            or local_subject, anchor)
+                    lines.insert(0, line)
+                    modules.insert(0, 'subscriber_iq')
+                except Exception:
+                    pass
+        finally:
+            ex.shutdown(wait=False)
+    except Exception:
+        pass
+
+    block = '\n'.join(lines).strip()
+    while block and len(block.encode('utf-8')) > XMOD_MAX_BYTES:
+        cut_lines = block.split('\n')
+        if len(cut_lines) > 1:
+            block = '\n'.join(cut_lines[:-1]).strip()
+        else:
+            block = block.encode('utf-8')[:XMOD_MAX_BYTES].decode(
+                'utf-8', errors='ignore').strip()
+            break
+    with _xmod_lock:
+        _xmod_block_cache[cache_key] = (time.time(), block, list(modules))
+        if len(_xmod_block_cache) > 200:
+            oldest = sorted(_xmod_block_cache.items(),
+                            key=lambda kv: kv[1][0])[:100]
+            for k, _v in oldest:
+                _xmod_block_cache.pop(k, None)
+    return block, modules
+
+
+def render_cross_module_block(block):
+    """Wrap the cross-module body in its delimited prompt section."""
+    if not str(block or '').strip():
+        return ''
+    return (
+        "CROSS-MODULE SIGNALS\n"
+        "====================\n"
+        "What other Crosswalk modules know about this subject. "
+        "Supporting context for building out the answer; cite these "
+        "numbers flat, interpret directionally, and never invent a "
+        "cross-module signal that is not listed here.\n"
+        f"{block}\n\n"
+    )
+
+
 def build_analysis_user_prompt(digest_bundle, history, user_message,
-                               mode=None):
+                               mode=None, view_context=None,
+                               cross_module_block=None):
     """Assemble the user prompt for one analysis call."""
     hist_lines = []
     for turn in (history or [])[-10:]:
@@ -836,10 +1450,19 @@ def build_analysis_user_prompt(digest_bundle, history, user_message,
             "=============\n"
             f"{instr}\n\n"
         )
+    view_block = render_view_context_block(view_context)
+    xmod_block = render_cross_module_block(cross_module_block)
+    digest_txt = digest_bundle
+    if digest_txt is None or not str(digest_txt).strip():
+        digest_txt = ("(no profile is open in Profile IQ; the DATA "
+                      "CURRENTLY ON SCREEN block below is the primary "
+                      "evidence)")
     return (
         "FIRST-PARTY DATA ON SCREEN\n"
         "==========================\n"
-        f"{digest_bundle}\n\n"
+        f"{digest_txt}\n\n"
+        f"{view_block}"
+        f"{xmod_block}"
         "RECENT CONVERSATION\n"
         "===================\n"
         f"{hist_block}\n\n"
