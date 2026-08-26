@@ -72,6 +72,18 @@ Invariants asserted (each returns structured violations):
                          panelist count). Parent lookup is fail-open:
                          unresolvable / unfetchable parent skips with
                          a log line, never blocks on infrastructure.
+  I13 viewer carriage    consumption-scoped (viewers) TU files only:
+                         the title's carrying platforms (from the
+                         build's cached carriage research sidecar at
+                         system/viewer_carriage/) must jointly cover
+                         ~99+ of the streaming categories; exclusive
+                         carrier ~100, multi-carrier union ~100 with
+                         distinct 4dp values, alias rows consistent.
+                         Fail-open when the sidecar is absent /
+                         unconfident. Deterministically fixed by
+                         enforce_viewer_carriage_constraint in the
+                         writer's autofix pass (2026-08-26 Jenna
+                         JKL/Rosie mandate).
 
 Gate behavior: `run_final_ship_gate(df_or_bytes, s3_key, subject)`.
 On violations the caller's upload MUST NOT happen: the gate writes the
@@ -600,6 +612,85 @@ def _subject_forms(subject, s3_key, rows):
     return full, mono
 
 
+# ---------------------------------------------------------------------------
+# Viewer-carriage sidecar (2026-08-26 Jenna JKL/Rosie mandate).
+# The build-time research step caches its carriage facts at
+# system/viewer_carriage/<NORM>.json; the gate reads that sidecar with
+# its OWN fetch + parse (no import of migration.viewer_carriage, per
+# this module's independence mandate) and validates that a
+# consumption-scoped universe's carrying platforms jointly cover ~100%.
+# ---------------------------------------------------------------------------
+
+CARRIAGE_PREFIX = "system/viewer_carriage/"
+_CARRIAGE_CACHE = {}
+_CARRIAGE_TTL = 300.0
+_CARRIAGE_CATS = {
+    "STREAMING/PLATFORM", "STREAMING VIDEO",
+    "VIRTUAL MVPD/FAST", "VIRTUAL MVPD FAST", "VMVPD/FAST", "VMVPD",
+}
+# Cheap pre-filter so the sidecar GET only happens for subjects whose
+# name carries consumption vocabulary at all.
+_CARRIAGE_VOCAB_RE = re.compile(
+    r"(?i)\b(viewers?|watchers?|streamers?|bingers?|watched|streamed|"
+    r"binged)\b")
+
+
+def _carriage_row_match(platform, value):
+    """Alias-aware carrier-vs-row match, self-contained: 'Hulu'
+    matches 'Disney+/Hulu' (components split on '/', '&', ',', '|',
+    ' + '); 'Disney+' matches a 'Disney' component."""
+    cn = _norm_token(platform)
+    rv = str(value or "").strip()
+    if not cn or not rv:
+        return False
+    if _norm_token(rv) == cn:
+        return True
+    for p in re.split(r"\s*(?:/|&|,|\|)\s*|\s+\+\s+", rv):
+        pn = _norm_token(p)
+        if pn == cn:
+            return True
+        if cn.rstrip("+") and pn.rstrip("+") == cn.rstrip("+"):
+            return True
+    return False
+
+
+def _load_carriage_doc(subject, s3_key, s3_client, verbose=True):
+    """Cached carriage facts for this subject (stem before ' - '), or
+    None. Own S3 fetch + JSON parse; fail-open on everything. Only
+    enforceable docs (confident research with carriers) are returned."""
+    stem = str(subject or _display_name(s3_key)).split(" - ")[0].strip()
+    if not stem or not _CARRIAGE_VOCAB_RE.search(stem):
+        return None
+    n = _norm_token(stem)
+    if not n:
+        return None
+    now = time.time()
+    with _CACHE_LOCK:
+        hit = _CARRIAGE_CACHE.get(n)
+        if hit and now - hit[1] < _CARRIAGE_TTL:
+            return hit[0]
+    doc = None
+    try:
+        import json as _json
+        body = _s3(s3_client).get_object(
+            Bucket=BUCKET, Key=f"{CARRIAGE_PREFIX}{n}.json")["Body"].read()
+        raw = _json.loads(body.decode("utf-8"))
+        if (isinstance(raw, dict) and raw.get("consumption_scoped")
+                and not raw.get("research_failed")
+                and raw.get("confident", True)
+                and isinstance(raw.get("carriers"), list)
+                and raw.get("carriers")):
+            doc = raw
+    except Exception:
+        doc = None
+    with _CACHE_LOCK:
+        _CARRIAGE_CACHE[n] = (doc, now)
+    if doc and verbose:
+        print(f"[ship-gate] viewer-carriage facts loaded for {stem!r}: "
+              f"{', '.join(str(c.get('platform')) for c in doc['carriers'])}")
+    return doc
+
+
 def _is_cut_key(s3_key):
     return " - " in _display_name(s3_key)
 
@@ -623,7 +714,7 @@ def _skip_gate_reason(s3_key):
 
 
 # ---------------------------------------------------------------------------
-# The invariants (I1-I12)
+# The invariants (I1-I13)
 # ---------------------------------------------------------------------------
 
 def _v(code, name, where, value, plain):
@@ -635,6 +726,11 @@ def _check_i1(rows, subject, s3_key, s3_client, verbose):
     out = []
     baselines = _load_genpop_baselines(s3_client, verbose=verbose)
     full, mono = _subject_forms(subject, s3_key, rows)
+    # Viewer-carriage carve-out (2026-08-26 JKL/Rosie mandate): on a
+    # consumption-scoped universe the CARRYING platform legitimately
+    # reads ~100 in the streaming categories even though it is not the
+    # subject. Verified against the build's cached carriage facts.
+    carriage = _load_carriage_doc(subject, s3_key, s3_client, verbose)
     by_cat = {}
     for r in rows:
         by_cat.setdefault(r["cat_u"], []).append(r)
@@ -657,6 +753,12 @@ def _check_i1(rows, subject, s3_key, s3_client, verbose):
             if vn in mono and not cat_has_full_subject:
                 # Mononym standing alone for the subject in this
                 # category (sole representation) is a subject pin.
+                continue
+            if (carriage and cat_u in _CARRIAGE_CATS
+                    and any(_carriage_row_match(c.get("platform", ""),
+                                                r["val"])
+                            for c in carriage["carriers"])):
+                # Verified carrier of a consumption-scoped universe.
                 continue
             if baselines is not None:
                 base_bp = baselines.get(vn)
@@ -1308,6 +1410,109 @@ def _check_i12(rows, sample, subject, s3_key, s3_client, verbose):
 # Public API
 # ---------------------------------------------------------------------------
 
+def _check_i13(rows, subject, s3_key, s3_client, verbose):
+    """Viewer-carriage constraint (2026-08-26 Jenna, verbatim: "you can
+    ony watch it online on disney+ or hulu so Disney+/Hulu should have
+    been 100%"). A consumption-scoped universe's carrying platforms
+    must jointly cover ~100% of the audience in the streaming
+    categories.
+
+    Applies to TU files only (cuts inherit the parent's rows). The
+    carriage facts come from the build's cached research sidecar; an
+    absent / failed / unconfident sidecar skips the check entirely
+    (never block a build on research). Missing carrier ROWS also skip
+    with a log line - row coverage is a Gen Pop question, not a
+    carriage-math violation.
+
+    Violations (all deterministically fixable by
+    enforce_viewer_carriage_constraint, so profile_writer's autofix
+    pass remediates before quarantine):
+      * single carrier row below 99.0;
+      * multi-carrier union sum below 99.0;
+      * two carrier rows sharing the same 4dp value;
+      * the same carrier differing across STREAMING/PLATFORM and
+        STREAMING VIDEO by more than 0.02.
+    """
+    out = []
+    if _is_cut_key(s3_key):
+        return out
+    doc = _load_carriage_doc(subject, s3_key, s3_client, verbose)
+    if not doc:
+        return out
+    carriers = doc.get("carriers") or []
+    per_cat_vals = {}
+    for cat_u in ("STREAMING/PLATFORM", "STREAMING VIDEO"):
+        cat_rows = _rows_for_cat(rows, cat_u)
+        if not cat_rows:
+            continue
+        matched = {}
+        for r in cat_rows:
+            if any(_carriage_row_match(c.get("platform", ""), r["val"])
+                   for c in carriers):
+                key = _norm_token(r["val"])
+                if key not in matched:
+                    matched[key] = (r, _num(r["bp_s"]))
+        if not matched:
+            if verbose:
+                print(f"[ship-gate] I13: no carrier row present in "
+                      f"{cat_u} for {_display_name(s3_key)}; carriage "
+                      f"math not checkable in this category")
+            continue
+        per_cat_vals[cat_u] = {k: bp for k, (r, bp) in matched.items()}
+        vals = [(r, bp) for r, bp in matched.values() if bp is not None]
+        if not vals:
+            continue
+        total = sum(bp for _, bp in vals)
+        if len(vals) == 1:
+            r, bp = vals[0]
+            if bp < 99.0:
+                out.append(_v(
+                    "I13", "viewer carriage",
+                    f"{r['cat']} / {r['val']}", _fmt_pct(bp),
+                    f"{r['val']} is the only service carrying this "
+                    f"title, so on a viewers universe its row must "
+                    f"read ~100%; it shows {_fmt_pct(bp)}.",
+                ))
+        else:
+            if total < 99.0:
+                names = ", ".join(r["val"] for r, _ in vals)
+                out.append(_v(
+                    "I13", "viewer carriage",
+                    f"{cat_u} / union({names})", _fmt_pct(total),
+                    f"The services carrying this title ({names}) sum "
+                    f"to {_fmt_pct(total)} in {cat_u}; on a viewers "
+                    f"universe their union must cover ~100%.",
+                ))
+            seen4 = {}
+            for r, bp in vals:
+                k4 = f"{bp:.4f}"
+                if k4 in seen4:
+                    out.append(_v(
+                        "I13", "viewer carriage",
+                        f"{cat_u} / {seen4[k4]} = {r['val']}", k4,
+                        f"Two carrier rows ({seen4[k4]} and {r['val']}) "
+                        f"share the identical value {k4}% in {cat_u}; "
+                        f"carriers must carry distinct values.",
+                    ))
+                else:
+                    seen4[k4] = r["val"]
+    # Alias consistency across the two streaming spellings.
+    sp = per_cat_vals.get("STREAMING/PLATFORM") or {}
+    sv = per_cat_vals.get("STREAMING VIDEO") or {}
+    for k in set(sp) & set(sv):
+        a, b = sp.get(k), sv.get(k)
+        if a is not None and b is not None and abs(a - b) > 0.02:
+            out.append(_v(
+                "I13", "viewer carriage",
+                f"STREAMING/PLATFORM vs STREAMING VIDEO / {k}",
+                f"{_fmt_pct(a)} vs {_fmt_pct(b)}",
+                f"The same carrier reads {_fmt_pct(a)} in "
+                f"STREAMING/PLATFORM but {_fmt_pct(b)} in STREAMING "
+                f"VIDEO; alias rows must stay consistent.",
+            ))
+    return out
+
+
 def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
                                 s3_client=None, verbose=True):
     """Run all invariants read-only. Returns (violations, meta).
@@ -1363,6 +1568,8 @@ def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
     violations += _safe("I10", _check_i10, rows, s3_key)
     violations += _safe("I11", _check_i11, rows, subject, s3_key)
     violations += _safe("I12", _check_i12, rows, sample, subject, s3_key,
+                        s3_client, verbose)
+    violations += _safe("I13", _check_i13, rows, subject, s3_key,
                         s3_client, verbose)
 
     meta = {"n_rows": len(rows), "sample": sample,

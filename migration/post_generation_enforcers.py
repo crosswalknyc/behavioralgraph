@@ -9887,9 +9887,250 @@ def dedupe_same_column_value(df, subject, verbose=True):
     return df, len(drop_idx)
 
 
+def enforce_viewer_carriage_constraint(df, subject, carriage_doc=None,
+                                       allow_research=False, verbose=True):
+    """Viewer-carriage constraint (Jenna 2026-08-26, Jimmy Kimmel Live /
+    Rosie hosted viewers defect): a consumption-scoped universe
+    ("viewers of X") is DEFINED by having watched the title on some
+    digital service, so the services that actually carry the full
+    episodes must jointly account for ~100% of the universe.
+
+    Semantics:
+      * exclusive carrier (or carriers merged into one row, e.g.
+        Disney+ and Hulu both aliasing to 'Disney+/Hulu'): that row is
+        lifted to a messy ~100 (99.93-99.995, subject-salted, never
+        exactly 100 - exact 100 is reserved for spec pins, which are
+        left untouched);
+      * multiple carrier rows: the union must reach ~100. When the sum
+        falls short, both rows slide UP by the same additive shift
+        (Claude's reasoned tilt between them is preserved - this is an
+        arithmetic correction, never a multiplier), each capped below
+        100 with a salted epsilon, and no two carriers may share the
+        same 4dp value;
+      * alias rows (STREAMING VIDEO vs STREAMING/PLATFORM) are kept
+        consistent per carrier;
+      * non-carrier rows are NEVER touched (organic Netflix usage on a
+        JKL-viewers universe stays wherever reasoning put it);
+      * Raw / Projection recomputed for every touched row (the chain's
+        final recompute pass re-canonicalizes again downstream).
+
+    carriage_doc: the canonical doc from migration.viewer_carriage
+    (spec['carriage_doc']). When None, the enforcer auto-resolves:
+    detection on the subject name, then the S3 cache; live research
+    only when allow_research=True (the BG.py-path entry via
+    run_all_enforcers(keep_avid_row=True)). Fail-open on everything -
+    an unresolvable doc means no changes, never a crash.
+
+    Derived cuts never reach this code with a doc: run_all_enforcers
+    only auto-resolves when keep_avid_row=True (TU write paths), and
+    cut subjects ('{Subject} - {Cut}') fail detection by design.
+
+    Returns (df, n_changed).
+    """
+    if (df is None or len(df) == 0 or 'Column' not in df.columns
+            or 'Value' not in df.columns):
+        return df, 0
+    try:
+        from migration import viewer_carriage as vc
+    except ImportError:
+        try:
+            import viewer_carriage as vc  # twin layout
+        except ImportError:
+            return df, 0
+
+    doc = carriage_doc
+    try:
+        if doc is None:
+            det = vc.detect_consumption_scoped(subject)
+            if not det:
+                return df, 0
+            doc = vc.load_cached_carriage(subject, verbose=verbose)
+            if doc is None and allow_research and vc.research_enabled():
+                doc = vc.research_carriage(
+                    subject, det['research_hint'],
+                    qualifier=det['qualifier'])
+                vc.save_carriage_cache(subject, doc)
+        if not vc.doc_is_enforceable(doc):
+            if doc is not None and verbose:
+                print(f"   📺 viewer carriage: doc for {subject!r} not "
+                      f"enforceable (research failed / no carriers); "
+                      f"constraint skipped")
+            return df, 0
+    except Exception as e:
+        print(f"   ⚠️ viewer carriage resolution failed (non-fatal): {e}")
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col not in df.columns:
+        return df, 0
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+
+    def _fnum(v):
+        try:
+            f = float(str(v).replace(',', '').replace('%', '').strip())
+            return f
+        except Exception:
+            return None
+
+    sample = None
+    for anchor in ('SAMPLE SIZE', 'BRAND INPUT'):
+        m = col_u == anchor
+        if m.any() and raw_col:
+            s = _fnum(df.loc[m].iloc[0].get(raw_col))
+            if s and s > 0:
+                sample = s
+                break
+    if sample is None:
+        sample = 10_000_000
+
+    carriers = doc.get('carriers') or []
+    vmvpd_carrier = any((c.get('kind') or '') == 'vmvpd' for c in carriers)
+    cats = [c for c in vc.STREAMING_ALIAS_CATS
+            if (col_u == c).any()]
+    if vmvpd_carrier:
+        cats += [c for c in vc.VMVPD_CATS if (col_u == c).any()]
+    if not cats:
+        return df, 0
+
+    def _write(idx, new_bp):
+        cur_cell = str(df.at[idx, bp_col])
+        had_pct = cur_cell.strip().endswith('%')
+        df[bp_col] = df[bp_col].astype(object)
+        df.at[idx, bp_col] = (f"{new_bp:.4f}%" if had_pct
+                              else f"{new_bp:.4f}")
+        if raw_col:
+            df[raw_col] = df[raw_col].astype(object)
+            df.at[idx, raw_col] = int(round(sample * new_bp / 100.0))
+        if proj_col:
+            df[proj_col] = df[proj_col].astype(object)
+            df.at[idx, proj_col] = int(round(
+                (sample * new_bp / 100.0) / 10_000_000 * 329_900_000))
+
+    n = 0
+    # Per-carrier canonical value so alias categories mirror exactly.
+    canonical_bp: dict[str, float] = {}
+    touched_cats = set()
+    for cat in cats:
+        cat_mask = col_u == cat
+        # carrier key -> list of row idx (a merged row like
+        # 'Disney+/Hulu' collapses multiple carriers into ONE entry).
+        row_map: dict[int, list[str]] = {}
+        for c in carriers:
+            plat = c.get('platform') or ''
+            if not plat:
+                continue
+            for idx in df.index[cat_mask]:
+                if vc.carrier_matches_row(plat, df.at[idx, 'Value']):
+                    row_map.setdefault(idx, []).append(plat)
+                    break  # first (highest-sorted) matching row only
+        if not row_map:
+            if verbose:
+                print(f"   📺 viewer carriage: no carrier row found in "
+                      f"{cat} for {subject!r} "
+                      f"({', '.join(c['platform'] for c in carriers)})")
+            continue
+
+        idxs = sorted(row_map.keys())
+        vals = {i: (_fnum(df.at[i, bp_col]) or 0.0) for i in idxs}
+        rkey = {i: '+'.join(sorted(row_map[i])) for i in idxs}
+
+        if len(idxs) == 1:
+            i = idxs[0]
+            key = rkey[i]
+            if key in canonical_bp:
+                tgt = canonical_bp[key]
+            else:
+                cur = vals[i]
+                if abs(cur - 100.0) <= 0.00005:
+                    # Exact-100 spec pin (Furious flow) is authoritative.
+                    canonical_bp[key] = cur
+                    continue
+                if cur >= 99.0:
+                    canonical_bp[key] = cur
+                    continue
+                tgt = vc.messy_near_total(subject, key)
+                canonical_bp[key] = tgt
+            if abs(vals[i] - tgt) > 0.00005:
+                _write(i, tgt)
+                touched_cats.add(cat)
+                n += 1
+                if verbose:
+                    print(f"   📺 viewer carriage: {cat} | "
+                          f"{df.at[i, 'Value']!r} exclusive carrier "
+                          f"{vals[i]:.4f} -> {tgt:.4f} (union of "
+                          f"carriers must cover ~100% of a viewers "
+                          f"universe)")
+        else:
+            # Multi-carrier union. Reuse canonical values when the
+            # alias category already settled them.
+            if all(rkey[i] in canonical_bp for i in idxs):
+                new_vals = {i: canonical_bp[rkey[i]] for i in idxs}
+            else:
+                cur_sum = sum(vals.values())
+                margin = vc.salted_unit(subject, 'union-margin', 2.5, 9.5)
+                target_sum = 100.0 + margin
+                if cur_sum >= 100.0 - 0.75:
+                    new_vals = dict(vals)
+                else:
+                    shift = (target_sum - cur_sum) / len(idxs)
+                    new_vals = {i: v + shift for i, v in vals.items()}
+                # Cap each below a per-row messy ceiling; hand overflow
+                # to the other carriers (waterfall, one pass).
+                overflow = 0.0
+                caps = {i: vc.messy_near_total(subject, rkey[i])
+                        for i in idxs}
+                for i in idxs:
+                    if new_vals[i] > caps[i]:
+                        overflow += new_vals[i] - caps[i]
+                        new_vals[i] = caps[i]
+                if overflow > 0:
+                    open_rows = [i for i in idxs
+                                 if new_vals[i] < caps[i] - 0.01]
+                    for i in open_rows:
+                        add = min(overflow / len(open_rows),
+                                  caps[i] - new_vals[i])
+                        new_vals[i] += add
+                # 4dp rounding + collision/boundary hygiene: no two
+                # carriers identical, nothing on a .XX00 boundary.
+                seen4 = set()
+                for i in idxs:
+                    v4 = round(new_vals[i], 4)
+                    if abs(v4 * 100 - round(v4 * 100)) < 1e-9:
+                        v4 = round(v4 - vc.salted_unit(
+                            subject, f'b|{rkey[i]}', 0.0003, 0.0041), 4)
+                    while f"{v4:.4f}" in seen4:
+                        v4 = round(v4 - vc.salted_unit(
+                            subject, f'c|{rkey[i]}|{len(seen4)}',
+                            0.0007, 0.0151), 4)
+                    seen4.add(f"{v4:.4f}")
+                    new_vals[i] = v4
+                for i in idxs:
+                    canonical_bp[rkey[i]] = new_vals[i]
+            for i in idxs:
+                if abs(vals[i] - new_vals[i]) > 0.00005:
+                    _write(i, new_vals[i])
+                    touched_cats.add(cat)
+                    n += 1
+                    if verbose:
+                        print(f"   📺 viewer carriage: {cat} | "
+                              f"{df.at[i, 'Value']!r} carrier "
+                              f"{vals[i]:.4f} -> {new_vals[i]:.4f} "
+                              f"(carrier union covers ~100% of a "
+                              f"viewers universe; reasoned tilt "
+                              f"preserved)")
+
+    for cat in touched_cats:
+        try:
+            df = _renormalize_category(df, cat, bp_col, cs_col, raw_col,
+                                       proj_col, sample)
+        except Exception:
+            pass
+    return df, n
+
+
 def run_all_enforcers(df, subject, brand_category=None, verbose=True,
                        target_year=None, follower_ceiling=None,
-                       keep_avid_row=False):
+                       keep_avid_row=False, carriage_doc=None):
     """Run every enforcer in order. Returns (df, total_changes).
 
     target_year (optional): if provided (e.g. 2022 for a `Gen_Pop_2022.csv`
@@ -10508,6 +10749,26 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer enforce_brand_share_plausibility failed: {e}")
+
+    # 2026-08-26 (Jenna, Jimmy Kimmel Live / Rosie hosted viewers):
+    # viewer-carriage constraint. A consumption-scoped universe's
+    # carrying platforms must jointly cover ~100% of the audience.
+    # Runs AFTER every brand strip / plausibility pass (so nothing
+    # re-lowers a carrier) and BEFORE recompute_raw_and_projection (so
+    # the canonical math pass cascades the lifted BPs). Explicit
+    # carriage_doc comes from the build spec (worker path); when None,
+    # auto-resolution (detection + S3 cache + live research) only fires
+    # on TU write paths (keep_avid_row=True) - derived cuts inherit
+    # from their parent and skip this entirely.
+    try:
+        df, n = enforce_viewer_carriage_constraint(
+            df, subject, carriage_doc=carriage_doc,
+            allow_research=bool(keep_avid_row and carriage_doc is None),
+            verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_viewer_carriage_constraint "
+              f"failed: {e}")
 
     # 2026-05-27 (D-Proj): VERY LAST -- recompute Raw + Proj from final BP.
     # Every previous enforcer that touched BP may have left stale Raw/Proj

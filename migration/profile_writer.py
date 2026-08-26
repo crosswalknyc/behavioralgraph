@@ -228,7 +228,7 @@ def _is_avid_cut_basename(s3_key: str) -> bool:
 # these ever trigger the fix-and-regate pass below; every judgment-
 # required class (I1 rogue pins, I5 demo sums, I9 hidden brands, ...)
 # still quarantines on first block.
-_AUTOFIX_GATE_CODES = ("I11", "I12")
+_AUTOFIX_GATE_CODES = ("I11", "I12", "I13")
 
 
 def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
@@ -249,6 +249,12 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
           arithmetic Raw cap the hardened enforcer already implements -
           reasoning tilt is preserved, no multipliers.
       I11 reach above 100  -> enforce_bp_hard_ceiling.
+      I13 viewer carriage  -> enforce_viewer_carriage_constraint
+          (2026-08-26 Jenna JKL/Rosie mandate): the carrying
+          platforms of a consumption-scoped universe are lifted so
+          their union covers ~100%, reading the same cached carriage
+          facts the gate checked against. Pure arithmetic on the
+          reasoned tilt, no multipliers.
 
     Then Raw / Projection / Category Share recompute (write safety
     net), re-sort, numeric-artifact normalize, and Gen Pop baseline
@@ -368,6 +374,26 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
         except Exception as e:
             print(f"  [profile_writer] I11 ceiling fix raised "
                   f"({type(e).__name__}: {e}); gate keeps the verdict")
+    if any(v.get("code") == "I13" for v in fixable):
+        try:
+            try:
+                from migration.post_generation_enforcers import (
+                    enforce_viewer_carriage_constraint as _carriage_fix,
+                )
+            except ImportError:
+                from post_generation_enforcers import (  # type: ignore
+                    enforce_viewer_carriage_constraint as _carriage_fix,
+                )
+            # The enforcer reads the same cached carriage facts the
+            # gate checked against (S3 sidecar); no live research at
+            # the gate.
+            df, _n_car = _carriage_fix(df, subject, verbose=verbose)
+            n_fixed += int(_n_car or 0)
+            print(f"  [profile_writer] I13 viewer-carriage fix: "
+                  f"{_n_car} row(s) lifted")
+        except Exception as e:
+            print(f"  [profile_writer] I13 viewer-carriage fix raised "
+                  f"({type(e).__name__}: {e}); gate keeps the verdict")
 
     # Recompute the downstream chain from the corrected BPs, re-sort,
     # re-assert numeric formats, re-append baseline columns.
@@ -421,6 +447,7 @@ def write_profile_csv(
     keep_avid_row: Optional[bool] = None,
     ship_gate: bool = True,
     s3_metadata: Optional[dict] = None,
+    carriage_doc: Optional[dict] = None,
 ) -> dict:
     """Canonical write path for any profile CSV heading to
     `s3://dashboard-inputs/<s3_key>`.
@@ -520,6 +547,10 @@ def write_profile_csv(
                 target_year=(year if apply_anachronism else None),
                 follower_ceiling=follower_ceiling,
                 keep_avid_row=keep_avid_row,
+                # Viewer-carriage facts from the build spec (2026-08-26
+                # Jenna JKL/Rosie mandate). None -> the enforcer
+                # auto-resolves on TU paths via detection + S3 cache.
+                carriage_doc=carriage_doc,
             )
         except Exception as e:
             print(f"  [profile_writer] run_all_enforcers raised "
