@@ -361,6 +361,24 @@ _SNAPSHOT_PREFIX    = 'trends_iq_snapshots/latest/'
 # from the dated prefix; asof=None keeps the current "latest" behavior.
 _SNAPSHOT_DATED_PREFIX = 'trends_iq_snapshots/{date}/'
 
+# Sources that are refreshed AD-HOC (not on a daily cron) are exempt
+# from the 2-day freshness gate. Their upstream cadence is human-in-the-
+# loop - e.g. MediaBiz emails a new Stream Metric Schedules xlsx every
+# few weeks, and `scripts/trends_scrapers/build_fast_channel_lineups.py`
+# only runs when Jenna receives that dump. The data itself (per-platform
+# FAST micro-channels + weekly airings) is stable across the refresh
+# gap - Waypoint TV, Nick Jr. Pluto TV, Forensic Files 24/7 don't churn
+# every 48 hours. Without the exemption, `_read_snapshot` would drop
+# these snapshots between MediaBiz deliveries and every downstream
+# reader (the Channel Ranker sub-tab in Trends IQ) renders empty.
+#
+# The freshness gate still applies to every daily-refreshed source
+# (music_charts, book_charts, streaming panels, stream_estimates, ...),
+# so a scraper that legitimately stops writing still fails loud.
+_AD_HOC_REFRESH_SOURCES = frozenset({
+    'fast_channel_lineups',
+})
+
 
 # ============================================================================
 # HTTP helpers
@@ -519,8 +537,12 @@ def _read_snapshot(source: str, asof: Optional[str] = None) -> Optional[dict]:
         return None
     # Freshness gate only applies to the "live" latest/ read. Dated
     # historic reads deliberately bypass it - the whole point of asof
-    # queries is to see stale data.
-    if asof is None:
+    # queries is to see stale data. Ad-hoc-refreshed sources also
+    # bypass it: their cadence is human-in-the-loop (MediaBiz dumps,
+    # etc.) and the underlying data is stable across the refresh gap,
+    # so treating them as unavailable between deliveries would drop
+    # the downstream tile for no reason. See _AD_HOC_REFRESH_SOURCES.
+    if asof is None and source not in _AD_HOC_REFRESH_SOURCES:
         fetched_at = data.get('fetched_at')
         if fetched_at:
             try:
