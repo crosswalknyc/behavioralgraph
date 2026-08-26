@@ -119,16 +119,20 @@ def _record_tagged_usage(usage_tag, model_id, resp) -> None:
     """Persist per-call usage when the caller tagged the request.
 
     usage_tag is a (surface, origin) tuple, e.g. ('interpret',
-    'chatbot'). Untagged calls are skipped. Never raises."""
+    'chatbot'), optionally (surface, origin, extras) where extras is
+    an attribution dict (user, user_email, session_id, request_id,
+    pay_per_use) for pay-as-you-go billing. Untagged calls are
+    skipped. Never raises."""
     if not usage_tag:
         return
     try:
         _u = getattr(resp, "usage", None)
         if _u is None:
             return
+        extras = usage_tag[2] if len(usage_tag) > 2 else None
         import render_usage_log
         render_usage_log.record_call(usage_tag[0], usage_tag[1],
-                                     model_id, _u)
+                                     model_id, _u, extras=extras)
     except Exception:
         pass
 

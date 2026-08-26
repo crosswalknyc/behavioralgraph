@@ -61071,6 +61071,11 @@ https://www.instagram.com/p/..."></textarea>
         var _pmAnalysisActive = false;
         var _pmPendingDeckAngle = null;
         var _pmDeckInFlight = false;
+        // Pay-as-you-go offer (2026-08-26, Jenna): when a pulls-only
+        // user triggers an analysis feature the server answers with
+        // the offer instead. The original ask is stashed here so a
+        // Yes can replay it seamlessly after the opt-in.
+        var _pmPpuOffer = null;
 
         // ========== PAGE-CONTEXT VIEW SERIALIZERS (2026-08-26) ==========
         // Jenna: "update prometheus to be able to read what is on
@@ -61879,6 +61884,16 @@ https://www.instagram.com/p/..."></textarea>
                     mode: mode || _pmModeForText(text) || ''
                 });
                 var data = _fr.data;
+                if (data && data.success && data.pay_per_use_offer) {
+                    // Not subscribed to analysis: show Jenna's offer
+                    // with Yes/No chips and stash the ask for replay.
+                    _pmPpuOffer = { kind: 'analyze', text: text,
+                                    ctx: ctx, mode: mode || '' };
+                    _synthChatPushTurnWithMeta('agent', data.reply, {
+                        options: [ { label: 'Yes', send: 'Yes' },
+                                   { label: 'No', send: 'No' } ] });
+                    return 'done';
+                }
                 if (!data || !_fr.r.ok || !data.success) {
                     console.error('[brief-chat] analyze reply not ok');
                     if (!data) {
@@ -61936,6 +61951,16 @@ https://www.instagram.com/p/..."></textarea>
                     history: synthChatHistory.slice(-14)
                 });
                 var data = _fr.data;
+                if (data && data.success && data.pay_per_use_offer) {
+                    // Decks are an analysis-tier feature. Same offer,
+                    // same Yes/No chips; the ask replays after opt-in.
+                    _pmPpuOffer = { kind: 'deck', angle: angle,
+                                    text: String(text || '') };
+                    _synthChatPushTurnWithMeta('agent', data.reply, {
+                        options: [ { label: 'Yes', send: 'Yes' },
+                                   { label: 'No', send: 'No' } ] });
+                    return;
+                }
                 if (data && data.success && data.clarify) {
                     var copts = (data.clarify.options || []).map(function(o) {
                         return { label: o, send: o };
@@ -62006,6 +62031,59 @@ https://www.instagram.com/p/..."></textarea>
             if (!text) return;
             input.value = '';
             synthChatPushTurn('user', text);
+
+            // Pay-as-you-go offer follow-through (2026-08-26, Jenna).
+            // The last agent turn was "Not subscribed to this
+            // feature. Turn it on for pay as you go?". Yes turns it
+            // on (it persists until an admin changes the tier) and
+            // replays the original ask seamlessly. No politely
+            // declines - nothing is charged and the analyze
+            // affordances stay visible for later.
+            if (_pmPpuOffer) {
+                var _ppuStash = _pmPpuOffer;
+                var _ppuLow = text.trim().toLowerCase()
+                    .replace(/[.!]+$/, '');
+                if (_ppuLow === 'yes' || _ppuLow === 'y' ||
+                    _ppuLow === 'yes please' || _ppuLow === 'sure' ||
+                    _ppuLow === 'turn it on') {
+                    _pmPpuOffer = null;
+                    var _ppuOk = false;
+                    try {
+                        var _pr = await _synthChatFetchJson(
+                            '/api/brief-chat/pay-per-use', {});
+                        _ppuOk = !!(_pr.data && _pr.data.success &&
+                                    (_pr.data.enabled ||
+                                     _pr.data.already_subscribed));
+                    } catch (_) { _ppuOk = false; }
+                    if (!_ppuOk) {
+                        synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
+                        return;
+                    }
+                    if (_ppuStash.kind === 'deck') {
+                        _pmPendingDeckAngle = _ppuStash.angle || null;
+                        await _pmStartDeck(_ppuStash.text || '');
+                    } else {
+                        await _pmAnalyze(_ppuStash.text,
+                                         _ppuStash.ctx ||
+                                             _pmCollectPageContext(),
+                                         _ppuStash.mode);
+                    }
+                    return;
+                }
+                if (_ppuLow === 'no' || _ppuLow === 'n' ||
+                    _ppuLow === 'no thanks' || _ppuLow === 'not now' ||
+                    _ppuLow === 'no thank you') {
+                    _pmPpuOffer = null;
+                    synthChatPushTurn('agent',
+                        'No problem - nothing was turned on and nothing ' +
+                        'was charged. The option is here whenever you ' +
+                        'want it; profile pulls work as usual.');
+                    return;
+                }
+                // Neither a yes nor a no: drop the offer and route
+                // the message normally.
+                _pmPpuOffer = null;
+            }
 
             // Incidence-offer follow-through (2026-08-19). If the
             // last agent turn was a sample check and this message

@@ -3979,6 +3979,29 @@
                             </label>
                             <span style="margin-left: auto; font-size: 0.72rem; color: var(--text-secondary);">Analysis IQ · natural-language brief</span>
                         </div>
+                        <!-- Prometheus access tier (2026-08-26, Jenna): two
+                             options. "Pulls only" = Profile IQ + Subscriber IQ
+                             builds; "Full" = analysis and everything else.
+                             Existing users default to Full. A pulls-only user
+                             who triggers analysis gets the pay-as-you-go offer;
+                             their own Yes sets pay_per_use_enabled (read-only
+                             indicator below - an admin tier change resets it). -->
+                        <div class="dashboard-access-content" style="display: block; padding: 0.6rem 0 0 0;">
+                            <div style="padding: 0.65rem 0.75rem; background: var(--bg-dark); border-radius: 6px; font-size: 0.78rem;">
+                                <div style="font-weight: 600; margin-bottom: 0.45rem; color: var(--text-secondary); text-transform: uppercase; font-size: 0.68rem;">Prometheus access</div>
+                                <label class="checkbox-group" style="display: flex; align-items: flex-start; gap: 0.4rem; margin-bottom: 0.35rem;" onclick="event.stopPropagation()">
+                                    <input type="radio" name="prometheusAccessTier" id="prometheusAccessFull" value="full" style="margin-top: 0.15rem;">
+                                    <span><strong>Full</strong> <span style="color: var(--text-secondary);">- analysis and everything else (default)</span></span>
+                                </label>
+                                <label class="checkbox-group" style="display: flex; align-items: flex-start; gap: 0.4rem;" onclick="event.stopPropagation()">
+                                    <input type="radio" name="prometheusAccessTier" id="prometheusAccessPullsOnly" value="pulls_only" style="margin-top: 0.15rem;">
+                                    <span><strong>Pulls only</strong> <span style="color: var(--text-secondary);">- Profile IQ + Subscriber IQ builds; analysis offered as pay as you go</span></span>
+                                </label>
+                                <div id="payPerUseIndicator" style="display: none; margin-top: 0.55rem; padding: 0.4rem 0.6rem; border-radius: 6px; background: rgba(199,242,62,0.12); color: var(--text-primary); font-size: 0.75rem;">
+                                    💵 Pay as you go active<span id="payPerUseStartedAt" style="color: var(--text-secondary);"></span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- API Access (2026-08-17) - per-user API key management.
@@ -4759,6 +4782,7 @@
             'has_impact_iq_access','impact_iq_journeys',
             'has_trends_iq_access','has_microdramas_iq_access',
             'has_chatbot_profile_iq_access',
+            'prometheus_access',
             'auto_access_new'
         ];
 
@@ -4781,7 +4805,8 @@
                 el.title = isSuper ? '' : disableTitle;
             });
             const extras = [
-                'getsHedgeFundIQEmails','hedgeFundIQDataCutoff','allHedgeFundTickers'
+                'getsHedgeFundIQEmails','hedgeFundIQDataCutoff','allHedgeFundTickers',
+                'prometheusAccessFull','prometheusAccessPullsOnly'
             ];
             extras.forEach(id => {
                 const el = document.getElementById(id);
@@ -6315,9 +6340,69 @@
                             </tr>
                         </tfoot>
                     </table>
-                    <p style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);">Rows marked ~ include estimated figures for days before full tracking began.</p>`;
+                    <p style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);">Rows marked ~ include estimated figures for days before full tracking began.</p>
+                    <div id="payPerUseRollup" style="margin-top: 1.5rem;"></div>`;
+                loadPayPerUseRollup();
             } catch (e) {
                 content.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-secondary);">Nothing was lost. The spend table could not load; try refresh.</div>';
+            }
+        }
+
+        // Pay-as-you-go rollup (2026-08-26): per (day, user) over closed
+        // sessions - sessions, asks, our cost, billed at 2.10x. Renders
+        // under the daily spend table; super_admin only (same gate).
+        async function loadPayPerUseRollup() {
+            const box = document.getElementById('payPerUseRollup');
+            if (!box) return;
+            try {
+                const res = await fetch('/api/admin/pay-per-use', { credentials: 'same-origin' });
+                const data = await res.json();
+                const rows = (data && data.rows) || [];
+                if (!rows.length) {
+                    box.innerHTML = `
+                        <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem;">💵 Pay as you go</h4>
+                        <div style="padding: 1rem; color: var(--text-secondary); font-size: 0.85rem;">No pay-as-you-go sessions yet.</div>`;
+                    return;
+                }
+                const fmt = (v) => '$' + Number(v || 0).toFixed(2);
+                let totS = 0, totAsk = 0, totCost = 0, totBill = 0;
+                const trs = rows.map(r => {
+                    totS += r.sessions; totAsk += r.asks; totCost += r.cost_usd; totBill += r.billed_usd;
+                    return `<tr style="border-bottom: 1px solid var(--border-color);">
+                        <td style="padding: 0.5rem 0.75rem; white-space: nowrap;">${r.date}</td>
+                        <td style="padding: 0.5rem 0.75rem;">${String(r.user || r.user_email || '').replace(/</g, '&lt;')}</td>
+                        <td style="padding: 0.5rem 0.75rem; text-align: right;">${r.sessions}</td>
+                        <td style="padding: 0.5rem 0.75rem; text-align: right;">${r.asks}</td>
+                        <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(r.cost_usd)}</td>
+                        <td style="padding: 0.5rem 0.75rem; text-align: right; font-weight: 600;">${fmt(r.billed_usd)}</td>
+                    </tr>`;
+                }).join('');
+                box.innerHTML = `
+                    <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem;">💵 Pay as you go</h4>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase;">
+                                <th style="padding: 0.5rem 0.75rem; text-align: left;">Date</th>
+                                <th style="padding: 0.5rem 0.75rem; text-align: left;">User</th>
+                                <th style="padding: 0.5rem 0.75rem; text-align: right;">Sessions</th>
+                                <th style="padding: 0.5rem 0.75rem; text-align: right;">Asks</th>
+                                <th style="padding: 0.5rem 0.75rem; text-align: right;">Our Cost</th>
+                                <th style="padding: 0.5rem 0.75rem; text-align: right;">Billed (2.10x)</th>
+                            </tr>
+                        </thead>
+                        <tbody>${trs}</tbody>
+                        <tfoot>
+                            <tr style="border-top: 2px solid var(--border-color); font-weight: 700;">
+                                <td style="padding: 0.5rem 0.75rem;" colspan="2">All days</td>
+                                <td style="padding: 0.5rem 0.75rem; text-align: right;">${totS}</td>
+                                <td style="padding: 0.5rem 0.75rem; text-align: right;">${totAsk}</td>
+                                <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(totCost)}</td>
+                                <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(totBill)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>`;
+            } catch (e) {
+                box.innerHTML = '';
             }
         }
 
@@ -9848,6 +9933,28 @@
             if (mdAccess) mdAccess.checked = user.has_microdramas_iq_access === true; // Default false
             var cbpiqAccess = document.getElementById('hasChatbotProfileIQAccess');
             if (cbpiqAccess) cbpiqAccess.checked = user.has_chatbot_profile_iq_access === true; // Default false
+            // Prometheus access tier (2026-08-26): anything that is not
+            // exactly 'pulls_only' renders as Full - the default every
+            // existing user has.
+            var pmTierPulls = document.getElementById('prometheusAccessPullsOnly');
+            var pmTierFull = document.getElementById('prometheusAccessFull');
+            var pmIsPullsOnly = String(user.prometheus_access || '').toLowerCase() === 'pulls_only';
+            if (pmTierPulls) pmTierPulls.checked = pmIsPullsOnly;
+            if (pmTierFull) pmTierFull.checked = !pmIsPullsOnly;
+            // Read-only pay-as-you-go indicator: set by the user's own
+            // opt-in, cleared automatically when an admin changes the tier.
+            var ppuInd = document.getElementById('payPerUseIndicator');
+            if (ppuInd) {
+                var ppuOn = user.pay_per_use_enabled === true;
+                ppuInd.style.display = ppuOn ? 'block' : 'none';
+                var ppuAt = document.getElementById('payPerUseStartedAt');
+                if (ppuAt) {
+                    var startedRaw = String(user.pay_per_use_started_at || '');
+                    ppuAt.textContent = (ppuOn && startedRaw)
+                        ? (' since ' + startedRaw.slice(0, 16).replace('T', ' ') + ' UTC')
+                        : '';
+                }
+            }
             if (typeof _renderApiKeyPanel === 'function') _renderApiKeyPanel(user);
             // 2026-07-30: reflect the loaded child states in the consolidated
             // 📈 TRENDS master (checked / unchecked / indeterminate). Talent
@@ -12881,6 +12988,7 @@
                 has_trends_iq_access: !!(document.getElementById('hasTrendsIQAccess') && document.getElementById('hasTrendsIQAccess').checked),
                 has_microdramas_iq_access: !!(document.getElementById('hasMicrodramasIQAccess') && document.getElementById('hasMicrodramasIQAccess').checked),
                 has_chatbot_profile_iq_access: !!(document.getElementById('hasChatbotProfileIQAccess') && document.getElementById('hasChatbotProfileIQAccess').checked),
+                prometheus_access: (document.getElementById('prometheusAccessPullsOnly') && document.getElementById('prometheusAccessPullsOnly').checked) ? 'pulls_only' : 'full',
                 has_impact_iq_access: !!(document.getElementById('hasImpactIQAccess') && document.getElementById('hasImpactIQAccess').checked),
                 impact_iq_journeys: getImpactIQJourneys(),
                 has_talent_fit_access: document.getElementById('hasTalentFitAccess').checked,

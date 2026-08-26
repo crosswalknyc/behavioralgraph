@@ -39,6 +39,17 @@ from typing import Any, Optional
 S3_BUCKET = os.environ.get('RENDER_USAGE_BUCKET') or 'dashboard-inputs'
 CALLS_PREFIX = 'system/usage/render_calls/'
 
+# Pay-as-you-go (2026-08-26). Jenna: "we need to have a 110% markup on
+# what we are charged" - billed price = our cost x 2.10. Calls made by
+# a pay-per-use user carry user/session attribution extras and are
+# mirrored one-object-per-call to a second prefix so the session sweep
+# (pay_per_use.py) only lists billable rows, not all render traffic.
+PPU_MARKUP = 2.10
+PPU_CALLS_PREFIX = 'system/usage/ppu_calls/'
+
+# Attribution fields a call site may attach to a usage record.
+_EXTRA_FIELDS = ('user', 'user_email', 'session_id', 'request_id')
+
 # USD per 1M tokens. Mirror of migration/usage_tracker.PRICING_USD_PER_MTOK.
 PRICING_USD_PER_MTOK = {
     'claude-sonnet-4-5':      {'input': 3.00, 'output': 15.00,
@@ -127,10 +138,28 @@ def _put_record(record: dict) -> None:
         ContentType='application/json')
 
 
+def _put_ppu_record(record: dict) -> None:
+    """Mirror one billable call (or a logout marker) to the
+    pay-per-use prefix the session sweep reads."""
+    day = record['ts'][:10].replace('-', '_')
+    key = (f"{PPU_CALLS_PREFIX}{day}/"
+           f"{record['ts'][11:19].replace(':', '')}_{uuid.uuid4().hex[:10]}.json")
+    _client().put_object(
+        Bucket=S3_BUCKET, Key=key,
+        Body=json.dumps(record).encode('utf-8'),
+        ContentType='application/json')
+
+
 def record_call(surface: str, origin: str, model: str,
-                usage: Any) -> None:
+                usage: Any, extras: Optional[dict] = None) -> None:
     """Persist one model call's usage. Never raises; never blocks the
-    caller (S3 put runs on a daemon thread)."""
+    caller (S3 put runs on a daemon thread).
+
+    ``extras`` (optional) attaches attribution: user, user_email,
+    session_id, request_id, and pay_per_use (bool). Every record
+    carries billed_usd = cost_usd x PPU_MARKUP; when pay_per_use is
+    set the record is also mirrored to PPU_CALLS_PREFIX so the
+    session sweep can bill it to the user."""
     try:
         in_tok = _usage_field(usage, 'input_tokens')
         out_tok = _usage_field(usage, 'output_tokens')
@@ -138,6 +167,7 @@ def record_call(surface: str, origin: str, model: str,
         cw_tok = _usage_field(usage, 'cache_creation_input_tokens')
         if not (in_tok or out_tok or cr_tok or cw_tok):
             return
+        cost = cost_usd(model, usage)
         record = {
             'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
             'surface': str(surface or 'other')[:32],
@@ -147,16 +177,29 @@ def record_call(surface: str, origin: str, model: str,
             'output_tokens': out_tok,
             'cache_read_input_tokens': cr_tok,
             'cache_creation_input_tokens': cw_tok,
-            'cost_usd': cost_usd(model, usage),
+            'cost_usd': cost,
+            'billed_usd': round(cost * PPU_MARKUP, 6),
         }
-        t = threading.Thread(target=_put_record_safe, args=(record,),
+        ppu = False
+        if isinstance(extras, dict) and extras:
+            for f in _EXTRA_FIELDS:
+                v = extras.get(f)
+                if v:
+                    record[f] = str(v)[:120]
+            ppu = bool(extras.get('pay_per_use'))
+            if ppu:
+                record['pay_per_use'] = True
+        if _SYNC_FOR_TESTS:
+            _put_record_safe(record, ppu)
+            return
+        t = threading.Thread(target=_put_record_safe, args=(record, ppu),
                              daemon=True)
         t.start()
     except Exception:
         pass
 
 
-def _put_record_safe(record: dict) -> None:
+def _put_record_safe(record: dict, ppu: bool = False) -> None:
     try:
         _put_record(record)
     except Exception as e:
@@ -164,6 +207,51 @@ def _put_record_safe(record: dict) -> None:
             print(f"[render-usage] record put failed: {e}")
         except Exception:
             pass
+    if ppu:
+        try:
+            _put_ppu_record(record)
+        except Exception as e:
+            try:
+                print(f"[render-usage] ppu mirror put failed: {e}")
+            except Exception:
+                pass
+
+
+def record_ppu_marker(user: str, user_email: str, session_id: str) -> None:
+    """Zero-cost logout marker on the pay-per-use prefix only. The
+    session sweep treats it as an immediate session end for the user
+    (no 30-minute wait). Never raises."""
+    try:
+        if not (user_email or '').strip():
+            return
+        record = {
+            'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'surface': 'logout',
+            'user': str(user or '')[:120],
+            'user_email': str(user_email or '')[:120],
+            'session_id': str(session_id or '')[:120],
+            'cost_usd': 0.0,
+            'billed_usd': 0.0,
+            'pay_per_use': True,
+            'logout': True,
+        }
+        if _SYNC_FOR_TESTS:
+            try:
+                _put_ppu_record(record)
+            except Exception:
+                pass
+            return
+        def _put():
+            try:
+                _put_ppu_record(record)
+            except Exception as e:
+                try:
+                    print(f"[render-usage] logout marker put failed: {e}")
+                except Exception:
+                    pass
+        threading.Thread(target=_put, daemon=True).start()
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -261,5 +349,6 @@ def record_ask(*, user: str, view: str, question: str, surface: str,
         pass
 
 
-__all__ = ['record_call', 'record_ask', 'cost_usd',
-           'PRICING_USD_PER_MTOK', 'ASK_PREFIX']
+__all__ = ['record_call', 'record_ask', 'record_ppu_marker', 'cost_usd',
+           'PRICING_USD_PER_MTOK', 'ASK_PREFIX', 'PPU_MARKUP',
+           'PPU_CALLS_PREFIX']

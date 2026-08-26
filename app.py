@@ -2459,6 +2459,7 @@ _PRODUCT_ACCESS_FIELDS = frozenset([
     'has_impact_iq_access', 'impact_iq_journeys',
     'has_trends_iq_access', 'has_microdramas_iq_access',
     'has_chatbot_profile_iq_access',
+    'prometheus_access',
     'auto_access_new',
 ])
 # 'role' drives the SA / A / U badge - the "user status" in the UI.
@@ -3435,6 +3436,26 @@ def api_set_password():
 
 @app.route('/logout')
 def logout():
+    # Pay-as-you-go session end on logout (2026-08-26): write the
+    # zero-cost marker row so the usage sweep closes this user's
+    # session immediately instead of waiting out the 30-minute idle
+    # window. Written whenever the user is on pay-as-you-go (another
+    # worker may hold the in-process session id); a marker with no
+    # prior usage rows is ignored by the sweep. Never blocks logout.
+    try:
+        _u = get_current_user()
+        if _u:
+            import pay_per_use as _ppu
+            if _ppu.billing_active(_u):
+                _email = (_u.get('email') or _u.get('username')
+                          or '').strip().lower()
+                _sid = _ppu.peek_session(_email)
+                _ppu.note_logout(_email)
+                import render_usage_log as _rul
+                _rul.record_ppu_marker(
+                    _u.get('username') or '', _email, _sid)
+    except Exception:
+        pass
     session.clear()
     return redirect(url_for('login_page'))
 
@@ -4859,6 +4880,15 @@ def create_user():
             'has_trends_iq_access': req_data.get('has_trends_iq_access', cd.get('has_trends_iq_access', False) if cd else False),
             'has_microdramas_iq_access': req_data.get('has_microdramas_iq_access', cd.get('has_microdramas_iq_access', False) if cd else False),
             'has_chatbot_profile_iq_access': req_data.get('has_chatbot_profile_iq_access', cd.get('has_chatbot_profile_iq_access', False) if cd else False),
+            # Prometheus tier (2026-08-26): 'full' (analysis and
+            # everything else) unless the creating super_admin picked
+            # 'pulls_only'. pay_per_use_enabled starts False; only the
+            # user's own opt-in sets it.
+            'prometheus_access': (
+                'pulls_only'
+                if str(req_data.get('prometheus_access') or '').strip().lower()
+                == 'pulls_only' else 'full'),
+            'pay_per_use_enabled': False,
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
@@ -5055,6 +5085,26 @@ def update_user(username):
             user['has_microdramas_iq_access'] = bool(req_data['has_microdramas_iq_access'])
         if 'has_chatbot_profile_iq_access' in req_data:
             user['has_chatbot_profile_iq_access'] = bool(req_data['has_chatbot_profile_iq_access'])
+        if 'prometheus_access' in req_data:
+            # Prometheus tier (2026-08-26): 'pulls_only' (Profile IQ /
+            # Subscriber IQ builds only) or 'full' (analysis and
+            # everything else). Anything unrecognized resolves to
+            # 'full' - the default every existing user already has.
+            _new_tier = str(req_data['prometheus_access'] or '').strip().lower()
+            if _new_tier not in ('pulls_only', 'full'):
+                _new_tier = 'full'
+            _old_tier = str(user.get('prometheus_access') or '').strip().lower()
+            if _old_tier not in ('pulls_only', 'full'):
+                _old_tier = 'full'
+            user['prometheus_access'] = _new_tier
+            if _new_tier != _old_tier:
+                # An admin tier change ends the user's own
+                # pay-as-you-go opt-in (the opt-in persists exactly
+                # until an admin changes the tier - this is that
+                # change). Moving to 'full' makes it moot; moving to
+                # 'pulls_only' means the user must opt in themselves.
+                user['pay_per_use_enabled'] = False
+                user.pop('pay_per_use_started_at', None)
         if 'has_impact_iq_access' in req_data:
             user['has_impact_iq_access'] = bool(req_data['has_impact_iq_access'])
         if 'impact_iq_journeys' in req_data:
@@ -8775,6 +8825,8 @@ def compute_product_access_flags(user, role):
             'has_trends_iq_access': True,
             'has_microdramas_iq_access': True,
             'has_chatbot_profile_iq_access': True,
+            'prometheus_access': 'full',
+            'pay_per_use_enabled': False,
         }
     u = user or {}
     has_sot_view = bool(u.get('has_share_of_time_access', True))
@@ -8817,6 +8869,14 @@ def compute_product_access_flags(user, role):
         'has_chatbot_profile_iq_access': (
             role == 'super_admin' or bool(u.get('has_chatbot_profile_iq_access', False))
         ),
+        # Prometheus tier (2026-08-26): missing/unknown resolves to
+        # 'full' so every existing user keeps today's behavior.
+        'prometheus_access': (
+            'pulls_only'
+            if str(u.get('prometheus_access') or '').strip().lower()
+            == 'pulls_only' else 'full'
+        ),
+        'pay_per_use_enabled': bool(u.get('pay_per_use_enabled', False)),
     }
 
 
@@ -20663,6 +20723,30 @@ def get_admin_daily_costs():
         print(f"❌ Error loading daily costs: {e}")
         return jsonify({'success': True, 'days': [], 'definitions': {},
                         'updated_at': ''})
+
+
+@app.route('/api/admin/pay-per-use', methods=['GET'])
+@requires_super_admin
+def get_admin_pay_per_use():
+    """Per-user pay-as-you-go rollup for the Daily Spend view
+    (2026-08-26). One row per (day, user) over closed sessions:
+    sessions, asks, our cost, billed at 2.10x. Super admin only."""
+    try:
+        import pay_per_use as ppu
+        import render_usage_log as _rul
+        try:
+            days = int(request.args.get('days') or 45)
+        except (TypeError, ValueError):
+            days = 45
+        days = min(max(days, 1), 120)
+        rows = ppu.load_session_rollup(s3=s3_client, days=days)
+        resp = jsonify({'success': True, 'rows': rows,
+                        'markup': _rul.PPU_MARKUP})
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        return resp
+    except Exception as e:
+        print(f"❌ Error loading pay-per-use rollup: {e}")
+        return jsonify({'success': True, 'rows': [], 'markup': 2.10})
 
 
 @app.route('/api/ecosystem/ai-analyze', methods=['POST'])
@@ -53093,7 +53177,8 @@ def _pm_model_chain():
 
 
 def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
-                    temperature=0.5, surface='analysis'):
+                    temperature=0.5, surface='analysis',
+                    usage_extras=None):
     """JSON reasoning pass on the strongest model that answers. Walks
     the Opus candidate chain once, caches the winner for the process
     lifetime, and always keeps the interpret sonnet as the final
@@ -53105,13 +53190,18 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
     matched neither 'not_found' nor '404'), so the first unusable Opus
     candidate hard-failed every Prometheus analyze call. The tail
     sonnet is proven on this deploy's key, so walking the whole chain
-    is always safe and at worst costs a few failed cheap requests."""
+    is always safe and at worst costs a few failed cheap requests.
+
+    2026-08-26: `usage_extras` (from _pm_usage_extras) rides the usage
+    tag so a pay-as-you-go user's calls land with user + session
+    attribution and the billed amount."""
     last = None
     for m in _pm_model_chain():
         result = _run_nflx_claude_agent(
             system_prompt=system_prompt, user_prompt=user_prompt,
             max_tokens=max_tokens, temperature=temperature, model=m,
-            usage_tag=(surface, 'chatbot'))
+            usage_tag=((surface, 'chatbot', usage_extras)
+                       if usage_extras else (surface, 'chatbot')))
         if result.get('success'):
             with _pm_model_lock:
                 if _pm_resolved_model['name'] != m:
@@ -53224,6 +53314,62 @@ def _pm_ask_hint(route=None, outcome=None, subject=None, mode=None):
         pass
 
 
+def _pm_access_gate(user):
+    """Prometheus tier gate for the analysis surfaces (2026-08-26).
+
+    Admin sets prometheus_access per user: 'full' (analysis and
+    everything else - the default; every existing user resolves here)
+    or 'pulls_only' (Profile IQ / Subscriber IQ builds only). A
+    pulls_only user who has NOT opted into pay as you go gets Jenna's
+    exact offer copy with Yes/No chips instead of the analysis; the
+    affordance itself never hides. Returns None when the user may
+    proceed."""
+    import pay_per_use as ppu
+    if ppu.analysis_allowed(user):
+        return None
+    _pm_ask_hint(outcome='declined_not_subscribed')
+    return jsonify({
+        'success': True, 'action': 'answer',
+        'reply': ppu.OFFER_MESSAGE,
+        'followups': ['Yes', 'No'],
+        'pay_per_use_offer': True,
+        'offer_deck': False, 'deck_angle': None})
+
+
+def _pm_usage_extras(user):
+    """Attribution extras for a pay-as-you-go user's model calls.
+
+    Returns None for subscribed (full-tier) users so their usage
+    records stay exactly as before. For a pulls_only user who opted
+    in: username, email, the active session id (30-minute idle
+    window), and a per-request id so one ask that fans out into
+    several model calls still counts as one ask on the bill."""
+    import pay_per_use as ppu
+    try:
+        if not ppu.billing_active(user):
+            return None
+        email = (user.get('email') or '').strip().lower()
+        uname = (session.get('username') or user.get('username')
+                 or '').strip()
+        rid = None
+        try:
+            from flask import g as _g
+            rid = getattr(_g, '_pm_ppu_request_id', None)
+            if not rid:
+                rid = uuid.uuid4().hex[:12]
+                _g._pm_ppu_request_id = rid
+        except Exception:
+            rid = uuid.uuid4().hex[:12]
+        return {'user': uname or email,
+                'user_email': email or uname,
+                'session_id': ppu.touch_session(email or uname),
+                'request_id': rid,
+                'pay_per_use': True}
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
 def _pm_search_demand_response(user, text, history):
     """Search-journey demand read (2026-08-26 Jenna directive): how
     people find, search for, and first touch a title or brand. Shaped
@@ -53241,7 +53387,9 @@ def _pm_search_demand_response(user, text, history):
     import insights_ledger as il
     _pm_ask_hint(route='search_demand')
     _pm_user = (session.get('username') or user.get('username') or '').strip()
-    if _pm_user and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
+    _pm_ppu = _pm_usage_extras(user)
+    if _pm_user and _pm_ppu is None \
+            and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
         _pm_ask_hint(outcome='declined_credits')
         return jsonify({
             'success': False,
@@ -53258,7 +53406,7 @@ def _pm_search_demand_response(user, text, history):
     if exact and exact.get('route') == 'search_demand' \
             and exact.get('reply'):
         _pm_ask_hint(outcome='answered', subject=led.get('subject'))
-        if _pm_user:
+        if _pm_user and _pm_ppu is None:
             _pm_charge_async(
                 _pm_user,
                 f"Chatbot Analysis [search demand] - "
@@ -53272,7 +53420,8 @@ def _pm_search_demand_response(user, text, history):
     user_prompt = pma.build_search_demand_user_prompt(
         text, history, ledger_block=led.get('block'))
     result = _pm_claude_json(pma.SEARCH_DEMAND_SYSTEM_PROMPT, user_prompt,
-                             max_tokens=7500, temperature=0.4)
+                             max_tokens=7500, temperature=0.4,
+                             usage_extras=_pm_ppu)
     if not result.get('success'):
         _chatbot_error_email(
             'brief-chat/analyze',
@@ -53330,7 +53479,7 @@ def _pm_search_demand_response(user, text, history):
     except Exception:
         traceback.print_exc()
     _pm_ask_hint(outcome='answered', subject=study.get('subject'))
-    if _pm_user:
+    if _pm_user and _pm_ppu is None:
         _pm_charge_async(
             _pm_user,
             f"Chatbot Analysis [search demand] - "
@@ -53359,7 +53508,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     import insights_ledger as il
     _pm_ask_hint(route='reasoned_metrics')
     _pm_user = (session.get('username') or user.get('username') or '').strip()
-    if not charge_done and _pm_user \
+    _pm_ppu = _pm_usage_extras(user)
+    if not charge_done and _pm_user and _pm_ppu is None \
             and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
         _pm_ask_hint(outcome='declined_credits')
         return jsonify({
@@ -53417,7 +53567,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         anchors_block=anchors_block, ledger_block=led.get('block'))
     result = _pm_claude_json(pma.REASONED_METRICS_SYSTEM_PROMPT,
                              user_prompt, max_tokens=4000,
-                             temperature=0.4)
+                             temperature=0.4, usage_extras=_pm_ppu)
     if not result.get('success'):
         _chatbot_error_email(
             'brief-chat/analyze',
@@ -53469,7 +53619,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     except Exception:
         traceback.print_exc()
     _pm_ask_hint(outcome='answered', subject=res.get('subject'))
-    if _pm_user:
+    if _pm_user and _pm_ppu is None:
         _pm_charge_async(
             _pm_user,
             f"Chatbot Analysis [measured read] - "
@@ -53505,6 +53655,16 @@ def api_synth_chat_analyze():
                              tb='(request validation)')
         return jsonify(_chatbot_calm_payload())
     history = body.get('history') or []
+    # Prometheus tier gate (2026-08-26): pulls_only users without the
+    # pay-as-you-go opt-in get Jenna's offer instead of any analysis
+    # flow. Runs before every branch so no analysis path leaks.
+    _gate_resp = _pm_access_gate(user)
+    if _gate_resp is not None:
+        return _gate_resp
+    # Pay-as-you-go attribution (None for subscribed users): rides
+    # every model call this request makes, and switches billing from
+    # credits to per-session dollar usage.
+    _pm_ppu = _pm_usage_extras(user)
     # Quantifiability gate (2026-08-26, Jenna): asks about behavior
     # with no digital trace (linear / over-the-air tune-in, in-store
     # physical purchases, foot traffic, terrestrial radio) decline
@@ -53565,8 +53725,11 @@ def api_synth_chat_analyze():
     # Credit preflight (2026-08-21): chatbot analyses are tracked usage
     # like every other pull. Unlimited users always pass; the charge
     # itself lands after a successful analysis so failures cost nothing.
+    # Pay-as-you-go users skip credits entirely - their usage is billed
+    # in dollars per session instead.
     _pm_user = (session.get('username') or user.get('username') or '').strip()
-    if _pm_user and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
+    if _pm_user and _pm_ppu is None \
+            and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
         return jsonify({
             'success': False,
             'guidance': True,
@@ -53634,7 +53797,8 @@ def api_synth_chat_analyze():
     _max_tok = 7500 if mode in ('cross_profile', 'personas',
                                 'whitespace') else 6000
     result = _pm_claude_json(pma.ANALYSIS_SYSTEM_PROMPT, user_prompt,
-                             max_tokens=_max_tok, temperature=0.5)
+                             max_tokens=_max_tok, temperature=0.5,
+                             usage_extras=_pm_ppu)
     if not result.get('success'):
         _chatbot_error_email(
             'brief-chat/analyze',
@@ -53689,7 +53853,9 @@ def api_synth_chat_analyze():
     # Record the successful analysis as tracked usage (unlimited users
     # included - their history + credits_used counters still move).
     # Deferred to a daemon thread so the S3 write is off the reply path.
-    if _pm_user:
+    # Pay-as-you-go users are billed per session from the usage rows
+    # instead; no credit debit.
+    if _pm_user and _pm_ppu is None:
         _pm_charge_async(
             _pm_user,
             f"Chatbot Analysis"
@@ -53847,6 +54013,14 @@ def _pm_resolve_deck_subject(text, ctx):
                   'again.')}), 400)
 
 
+# Pay-as-you-go attribution for deck jobs (2026-08-26): the kickoff
+# request computes the extras (session id needs the request context)
+# and stashes them here for the background thread to ride on the
+# slide-plan model call. Keyed by job_id; popped when the job starts.
+_PM_DECK_PPU_EXTRAS = {}
+
+
+
 def _pm_run_deck_job(job_id, username, ctx, history, angle,
                      charge_user='', subject='', partner=''):
     """Background insights-deck build: digest -> full slide plan ->
@@ -53857,6 +54031,7 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
     import tempfile
     base = {'job_id': job_id, 'user': username, 'angle': angle,
             'started_at': time.time()}
+    _ppu_extras = _PM_DECK_PPU_EXTRAS.pop(job_id, None)
     try:
         import prometheus_analysis as pma
         import deck_builder
@@ -53867,7 +54042,8 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
             pma.INSIGHTS_DECK_SYSTEM_PROMPT,
             pma.build_insights_deck_user_prompt(
                 subject, partner, digest, history, angle),
-            max_tokens=20000, temperature=0.4, surface='deck')
+            max_tokens=20000, temperature=0.4, surface='deck',
+            usage_extras=_ppu_extras)
         if not plan_result.get('success'):
             raise RuntimeError(plan_result.get('error')
                                or 'slide plan failed')
@@ -53944,6 +54120,12 @@ def api_synth_chat_deck():
     except Exception as e:
         _chatbot_error_email('brief-chat/deck', e)
         return jsonify(_chatbot_calm_payload())
+    # Prometheus tier gate (2026-08-26): decks are an analysis-tier
+    # feature. pulls_only users without pay-as-you-go get the offer.
+    _gate_resp = _pm_access_gate(user)
+    if _gate_resp is not None:
+        return _gate_resp
+    _pm_ppu = _pm_usage_extras(user)
     text = str(body.get('text') or '').strip()[:600]
     angle = ((body.get('angle') or '').strip()
              or text
@@ -53973,8 +54155,10 @@ def api_synth_chat_deck():
     # Credit preflight + charge (2026-08-21): deck builds are tracked
     # usage on every account including unlimited ones. Charged up front
     # with the deck job id; the background job refunds on failure.
-    _charge_user = (session.get('username') or user.get('username')
-                    or '').strip()
+    # Pay-as-you-go users skip credits: their deck's model usage is
+    # billed per session in dollars instead.
+    _charge_user = '' if _pm_ppu else (session.get('username')
+                                       or user.get('username') or '').strip()
     if _charge_user and not has_credits_for(_charge_user,
                                             CREDITS_CHATBOT_DECK):
         return jsonify({
@@ -53993,6 +54177,8 @@ def api_synth_chat_deck():
                 credits_used=CREDITS_CHATBOT_DECK)
         except Exception:
             traceback.print_exc()
+    if _pm_ppu:
+        _PM_DECK_PPU_EXTRAS[job_id] = _pm_ppu
     _pm_deck_status_write(job_id, {
         'job_id': job_id, 'user': username, 'status': 'queued',
         'angle': angle, 'started_at': time.time()})
@@ -54030,6 +54216,59 @@ def api_synth_chat_deck_status(job_id):
         payload = dict(payload)
         payload['error'] = ''
     return jsonify({'success': True, **payload})
+
+
+@app.route('/api/brief-chat/pay-per-use', methods=['POST'])
+@requires_auth
+@_chatbot_route_guard('brief-chat/pay-per-use')
+def api_synth_chat_pay_per_use():
+    """The user's Yes on the pay-as-you-go offer (2026-08-26, Jenna).
+
+    Flips pay_per_use_enabled on the user's own record (ETag CAS via
+    save_users), notifies Jenna/Jessie/Liz that pay per use started
+    for this user, and returns enabled=True so the frontend replays
+    the original ask seamlessly. Idempotent: a second Yes from an
+    already-enabled user just confirms. The opt-in persists until an
+    admin changes the user's tier in the admin (a tier change resets
+    it)."""
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    import pay_per_use as ppu
+    tier, already = ppu.resolve_access(user)
+    if tier != ppu.ACCESS_PULLS_ONLY:
+        # Full-tier (or super_admin) users are subscribed; nothing to
+        # turn on.
+        return jsonify({'success': True, 'enabled': False,
+                        'already_subscribed': True})
+    username = (session.get('username') or user.get('username')
+                or '').strip()
+    if not username:
+        return jsonify({'success': False, 'error': 'no user'}), 400
+    if not already:
+        started = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+        try:
+            data = load_users()
+            u = (data.get('users') or {}).get(username)
+            if not u:
+                return jsonify({'success': False,
+                                'error': 'user not found'}), 404
+            u['pay_per_use_enabled'] = True
+            u['pay_per_use_started_at'] = started
+            save_users(data)
+        except Exception as e:
+            traceback.print_exc()
+            return jsonify({'success': False,
+                            'error': 'could not update your access'}), 500
+        display = (f"{user.get('first_name', '')} "
+                   f"{user.get('last_name', '')}").strip() or username
+        try:
+            ppu.send_start_email_async(display,
+                                       (user.get('email') or username))
+        except Exception:
+            traceback.print_exc()
+        print(f"[pay-per-use] {username} opted in at {started}")
+    return jsonify({'success': True, 'enabled': True})
 
 
 # ============================================================================
@@ -58471,6 +58710,20 @@ def api_v1_genpop():
 # ============================================================================
 # MAIN
 # ============================================================================
+
+# Pay-as-you-go session sweep (2026-08-26): every worker runs one
+# background thread; the S3 usage rows are the shared truth and each
+# closed session is claimed with a conditional-put stamp, so the
+# summary email goes out exactly once no matter how many workers
+# sweep. PPU_SWEEP_DISABLED=true turns it off (tests, one-off tools).
+try:
+    if os.environ.get('PPU_SWEEP_DISABLED', '').lower() not in (
+            'true', '1', 'yes'):
+        import pay_per_use as _ppu_boot
+        _ppu_boot.start_sweeper()
+        print("✅ Pay-per-use session sweep started")
+except Exception as _ppu_boot_err:
+    print(f"⚠️ Pay-per-use sweep failed to start: {_ppu_boot_err}")
 
 # Print startup completion message
 print("=" * 60)
