@@ -151,7 +151,8 @@ def _put_ppu_record(record: dict) -> None:
 
 
 def record_call(surface: str, origin: str, model: str,
-                usage: Any, extras: Optional[dict] = None) -> None:
+                usage: Any, extras: Optional[dict] = None,
+                duration_s: Optional[float] = None) -> None:
     """Persist one model call's usage. Never raises; never blocks the
     caller (S3 put runs on a daemon thread).
 
@@ -159,7 +160,13 @@ def record_call(surface: str, origin: str, model: str,
     session_id, request_id, and pay_per_use (bool). Every record
     carries billed_usd = cost_usd x PPU_MARKUP; when pay_per_use is
     set the record is also mirrored to PPU_CALLS_PREFIX so the
-    session sweep can bill it to the user."""
+    session sweep can bill it to the user.
+
+    ``duration_s`` (optional) is the call's wall-clock processing
+    time (2026-08-26 Jenna: billing is metered time AND consumption,
+    never per query). Stored on the record so session summaries and
+    the admin rollup can report active processing minutes and the
+    emergent billed-per-active-hour rate."""
     try:
         in_tok = _usage_field(usage, 'input_tokens')
         out_tok = _usage_field(usage, 'output_tokens')
@@ -180,6 +187,11 @@ def record_call(surface: str, origin: str, model: str,
             'cost_usd': cost,
             'billed_usd': round(cost * PPU_MARKUP, 6),
         }
+        try:
+            if duration_s is not None and float(duration_s) > 0:
+                record['duration_s'] = round(float(duration_s), 3)
+        except (TypeError, ValueError):
+            pass
         ppu = False
         if isinstance(extras, dict) and extras:
             for f in _EXTRA_FIELDS:

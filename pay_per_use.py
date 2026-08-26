@@ -14,6 +14,18 @@ Pricing mandate: "we need to have a 110% markup on what we are charged
 from anthropic" - billed = our cost x 2.10 (PPU_MARKUP lives in
 render_usage_log next to the cost math).
 
+Billing model (2026-08-26, Jenna): "I want to pay per metered time and
+consumption not per query." No flat per-question rate exists anywhere.
+The billing basis is metered consumption (actual cost x 2.10 per
+session, accumulated from the per-call records) with TIME tracked and
+quotable alongside: each call's wall-clock processing duration lands
+on its usage record, and every session carries both active processing
+time (sum of call durations) and the session span (first ask to last
+activity). The admin rollup derives the emergent billed-per-active-
+hour rate from those. In anything a reader sees - emails, admin
+tables - the meter units are dollars and minutes only, framed as
+"metered usage", never tokens or vendor terms.
+
 The two tiers, stored per user in system/users.json:
 
     prometheus_access: 'pulls_only' | 'full'
@@ -169,6 +181,17 @@ def _fmt_ts(ts: str) -> str:
     return t
 
 
+def _fmt_minutes(seconds: float) -> str:
+    """Seconds -> a plain minutes string for emails: '7.3 min',
+    '0.4 min', '84.0 min'. Dollars and minutes are the only meter
+    units that ever face a reader."""
+    try:
+        m = max(0.0, float(seconds)) / 60.0
+    except (TypeError, ValueError):
+        m = 0.0
+    return f"{m:.1f} min"
+
+
 def build_start_email(display_name: str, email: str, ts: str) -> tuple:
     """(subject, body) for the opt-in notification to Jenna/Jessie/Liz."""
     who = (display_name or '').strip() or (email or '').strip() or 'a user'
@@ -177,15 +200,20 @@ def build_start_email(display_name: str, email: str, ts: str) -> tuple:
         f"Pay per use started for {who} ({email}).\n\n"
         f"Started: {_fmt_ts(ts)}\n\n"
         "This user turned on pay as you go for the analysis features. "
-        "Their analysis usage is now tracked per session and allocated "
-        "to them; a cost summary for each session arrives when the "
-        "session ends.\n"
+        "Their metered usage (time and consumption) is now tracked per "
+        "session and allocated to them; a cost summary for each "
+        "session arrives when the session ends.\n"
     )
     return subject, body
 
 
 def build_session_email(summary: dict) -> tuple:
-    """(subject, body) for one closed session's cost summary."""
+    """(subject, body) for one closed session's metered-usage summary.
+
+    Billing is metered time and consumption, never per query (Jenna
+    2026-08-26): the body reports the session span, the active
+    processing minutes, the asks handled, and the dollars - our cost
+    and the billed amount at 2.10x."""
     who = (summary.get('user') or '').strip() \
         or (summary.get('user_email') or '').strip() or 'user'
     email = summary.get('user_email') or ''
@@ -196,7 +224,11 @@ def build_session_email(summary: dict) -> tuple:
         f"Pay per use session summary for {who} ({email}).\n\n"
         f"Session start: {_fmt_ts(summary.get('session_start'))}\n"
         f"Session end:   {_fmt_ts(summary.get('session_end'))}\n"
-        f"Asks: {int(summary.get('asks') or 0)}\n\n"
+        f"Session span: {_fmt_minutes(summary.get('span_seconds'))}\n"
+        f"Active processing time: "
+        f"{_fmt_minutes(summary.get('active_seconds'))}\n"
+        f"Asks handled: {int(summary.get('asks') or 0)}\n\n"
+        f"Metered usage this session:\n"
         f"Our cost: ${cost:,.2f}\n"
         f"Billed (2.10x): ${billed:,.2f}\n"
     )
@@ -331,6 +363,18 @@ def _summarize(sess: dict) -> dict:
     billed = sum(float(r.get('billed_usd') or 0.0) for r in rows)
     req_ids = {str(r.get('request_id') or '') for r in rows
                if r.get('request_id')}
+    # Time metering (2026-08-26 Jenna: "pay per metered time and
+    # consumption not per query"). Two clocks per session: active
+    # processing time (sum of per-call wall-clock durations) and the
+    # session span (first ask to last activity).
+    active = 0.0
+    for r in rows:
+        try:
+            active += max(0.0, float(r.get('duration_s') or 0.0))
+        except (TypeError, ValueError):
+            pass
+    span = max(0.0, float(sess.get('last_epoch') or 0.0)
+               - float(sess.get('start_epoch') or 0.0))
     return {
         'user': sess.get('user') or '',
         'user_email': sess['user_email'],
@@ -338,6 +382,8 @@ def _summarize(sess: dict) -> dict:
         'session_end': sess['end_ts'],
         'asks': len(req_ids) or len(rows),
         'calls': len(rows),
+        'active_seconds': round(active, 3),
+        'span_seconds': round(span, 3),
         'cost_usd': round(cost, 6),
         'billed_usd': round(billed, 6),
     }
@@ -458,7 +504,12 @@ def start_sweeper(interval_s: int = 300) -> bool:
 def load_session_rollup(s3=None, days: int = 45) -> list:
     """Closed pay-per-use sessions grouped per (day, user):
     [{'date', 'user', 'user_email', 'sessions', 'asks',
-      'cost_usd', 'billed_usd'}], newest day first."""
+      'active_minutes', 'cost_usd', 'billed_usd',
+      'billed_per_active_hour'}], newest day first.
+
+    billed_per_active_hour is the emergent hourly rate of the metered
+    usage (billed dollars / active processing hours) so Jenna can
+    quote "metered usage typically runs $X-Y per active hour"."""
     s3 = s3 or _client()
     now_dt = datetime.now(timezone.utc)
     agg = {}
@@ -483,10 +534,12 @@ def load_session_rollup(s3=None, days: int = 45) -> list:
                     k = (date, email)
                     row = agg.setdefault(k, {
                         'date': date, 'user': who, 'user_email': email,
-                        'sessions': 0, 'asks': 0,
+                        'sessions': 0, 'asks': 0, 'active_seconds': 0.0,
                         'cost_usd': 0.0, 'billed_usd': 0.0})
                     row['sessions'] += 1
                     row['asks'] += int(st.get('asks') or 0)
+                    row['active_seconds'] += float(
+                        st.get('active_seconds') or 0.0)
                     row['cost_usd'] += float(st.get('cost_usd') or 0.0)
                     row['billed_usd'] += float(st.get('billed_usd') or 0.0)
         except Exception as e:
@@ -494,8 +547,13 @@ def load_session_rollup(s3=None, days: int = 45) -> list:
     rows = sorted(agg.values(),
                   key=lambda r: (r['date'], r['user']), reverse=True)
     for r in rows:
+        active_s = r.pop('active_seconds', 0.0)
+        r['active_minutes'] = round(active_s / 60.0, 1)
         r['cost_usd'] = round(r['cost_usd'], 2)
         r['billed_usd'] = round(r['billed_usd'], 2)
+        r['billed_per_active_hour'] = (
+            round(r['billed_usd'] / (active_s / 3600.0), 2)
+            if active_s > 0 else None)
     return rows
 
 

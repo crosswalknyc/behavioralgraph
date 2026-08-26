@@ -6437,20 +6437,24 @@
                     return;
                 }
                 const fmt = (v) => '$' + Number(v || 0).toFixed(2);
-                let totS = 0, totAsk = 0, totCost = 0, totBill = 0;
+                let totS = 0, totAsk = 0, totMin = 0, totCost = 0, totBill = 0;
                 const trs = rows.map(r => {
-                    totS += r.sessions; totAsk += r.asks; totCost += r.cost_usd; totBill += r.billed_usd;
+                    totS += r.sessions; totAsk += r.asks; totMin += Number(r.active_minutes || 0); totCost += r.cost_usd; totBill += r.billed_usd;
+                    const perHr = (r.billed_per_active_hour === null || r.billed_per_active_hour === undefined) ? '—' : (fmt(r.billed_per_active_hour) + '/hr');
                     return `<tr style="border-bottom: 1px solid var(--border-color);">
                         <td style="padding: 0.5rem 0.75rem; white-space: nowrap;">${r.date}</td>
                         <td style="padding: 0.5rem 0.75rem;">${String(r.user || r.user_email || '').replace(/</g, '&lt;')}</td>
                         <td style="padding: 0.5rem 0.75rem; text-align: right;">${r.sessions}</td>
                         <td style="padding: 0.5rem 0.75rem; text-align: right;">${r.asks}</td>
+                        <td style="padding: 0.5rem 0.75rem; text-align: right;">${Number(r.active_minutes || 0).toFixed(1)}</td>
                         <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(r.cost_usd)}</td>
                         <td style="padding: 0.5rem 0.75rem; text-align: right; font-weight: 600;">${fmt(r.billed_usd)}</td>
+                        <td style="padding: 0.5rem 0.75rem; text-align: right;">${perHr}</td>
                     </tr>`;
                 }).join('');
+                const totPerHr = totMin > 0 ? (fmt(totBill / (totMin / 60)) + '/hr') : '—';
                 box.innerHTML = `
-                    <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem;">💵 Pay as you go</h4>
+                    <h4 style="margin: 0 0 0.5rem 0; font-size: 0.95rem;">💵 Pay as you go (metered usage)</h4>
                     <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
                         <thead>
                             <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase;">
@@ -6458,8 +6462,10 @@
                                 <th style="padding: 0.5rem 0.75rem; text-align: left;">User</th>
                                 <th style="padding: 0.5rem 0.75rem; text-align: right;">Sessions</th>
                                 <th style="padding: 0.5rem 0.75rem; text-align: right;">Asks</th>
+                                <th style="padding: 0.5rem 0.75rem; text-align: right;">Active Min</th>
                                 <th style="padding: 0.5rem 0.75rem; text-align: right;">Our Cost</th>
                                 <th style="padding: 0.5rem 0.75rem; text-align: right;">Billed (2.10x)</th>
+                                <th style="padding: 0.5rem 0.75rem; text-align: right;">Billed / Active Hr</th>
                             </tr>
                         </thead>
                         <tbody>${trs}</tbody>
@@ -6468,8 +6474,10 @@
                                 <td style="padding: 0.5rem 0.75rem;" colspan="2">All days</td>
                                 <td style="padding: 0.5rem 0.75rem; text-align: right;">${totS}</td>
                                 <td style="padding: 0.5rem 0.75rem; text-align: right;">${totAsk}</td>
+                                <td style="padding: 0.5rem 0.75rem; text-align: right;">${totMin.toFixed(1)}</td>
                                 <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(totCost)}</td>
                                 <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(totBill)}</td>
+                                <td style="padding: 0.5rem 0.75rem; text-align: right;">${totPerHr}</td>
                             </tr>
                         </tfoot>
                     </table>`;

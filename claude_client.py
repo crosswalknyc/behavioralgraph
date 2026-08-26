@@ -115,14 +115,17 @@ def get_claude_client():
         return None
 
 
-def _record_tagged_usage(usage_tag, model_id, resp) -> None:
+def _record_tagged_usage(usage_tag, model_id, resp,
+                         duration_s=None) -> None:
     """Persist per-call usage when the caller tagged the request.
 
     usage_tag is a (surface, origin) tuple, e.g. ('interpret',
     'chatbot'), optionally (surface, origin, extras) where extras is
     an attribution dict (user, user_email, session_id, request_id,
-    pay_per_use) for pay-as-you-go billing. Untagged calls are
-    skipped. Never raises."""
+    pay_per_use) for pay-as-you-go billing. duration_s is the
+    wall-clock processing time of the call (metered-time billing,
+    2026-08-26 Jenna: "pay per metered time and consumption").
+    Untagged calls are skipped. Never raises."""
     if not usage_tag:
         return
     try:
@@ -132,7 +135,8 @@ def _record_tagged_usage(usage_tag, model_id, resp) -> None:
         extras = usage_tag[2] if len(usage_tag) > 2 else None
         import render_usage_log
         render_usage_log.record_call(usage_tag[0], usage_tag[1],
-                                     model_id, _u, extras=extras)
+                                     model_id, _u, extras=extras,
+                                     duration_s=duration_s)
     except Exception:
         pass
 
@@ -212,6 +216,7 @@ def claude_reason_json(
                         return _s.get_final_message()
                 return client.messages.create(**_kw)
 
+            _t0 = time.monotonic()
             try:
                 resp = _issue(_kwargs)
             except Exception as _te:
@@ -228,7 +233,8 @@ def claude_reason_json(
                     resp = _issue(_kwargs)
                 else:
                     raise
-            _record_tagged_usage(usage_tag, model_id, resp)
+            _record_tagged_usage(usage_tag, model_id, resp,
+                                 duration_s=time.monotonic() - _t0)
             try:
                 _u = getattr(resp, "usage", None)
                 if _u is not None:
