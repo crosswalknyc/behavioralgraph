@@ -71216,8 +71216,8 @@ https://www.instagram.com/p/..."></textarea>
             var rows = comps.slice(0, 10).map(function(c) {
                 var w = _jiqParseCompanionWindow(c.typical_window, scale);
                 return {
-                    // Display rename: 'Doomscroll social media' -> 'Social media'
-                    vertical: (/^\s*doomscroll\s+social\s+media\s*$/i.test(c.vertical || '') ? 'Social media' : (c.vertical || '-')),
+                    // Display rename: 'Doomscroll social media[...]' -> 'Social media[...]'
+                    vertical: String(c.vertical || '-').replace(/^\s*doomscroll\s+social\s+media/i, 'Social media'),
                     pct: +c.share_pct_of_visitors || 0,
                     center: w.center,
                     span: w.span,
@@ -71572,11 +71572,17 @@ https://www.instagram.com/p/..."></textarea>
                     var dmag = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
                     var uxL = ddx / dmag, uyL = ddy / dmag;
                     // Bubbles near the cluster centroid have an unstable
-                    // direction - drop their label straight down instead.
-                    if (dmag < e.r * 0.8) { uxL = 0; uyL = 1; }
+                    // direction - push their label out to the right instead.
+                    if (dmag < e.r * 0.8) { uxL = 1; uyL = 0; }
+                    // One-off placement nudges for this curated view:
+                    if (/google trivia/i.test(e.vertical)) { uxL = 1; uyL = 0; }
+                    if (/look up contestants/i.test(e.vertical)) { uxL = 0.55; uyL = -0.85; }
                     if (isFE) { uxL = 0; uyL = -1; }
                     var lx = Math.max(padL + 8, Math.min(W - padR - 8, e.cx + uxL * (e.r + 16)));
-                    var startDy = (uyL < -0.2) ? -((labelLines.length - 1) * LABEL_LINE_HEIGHT) : 0;
+                    var startDy;
+                    if (uyL < -0.2) { startDy = -((labelLines.length - 1) * LABEL_LINE_HEIGHT); }
+                    else if (uyL <= 0.2) { startDy = -((labelLines.length - 1) * LABEL_LINE_HEIGHT) / 2; }
+                    else { startDy = 0; }
                     var ly = e.cy + uyL * (e.r + 19) + startDy;
                     var anchorC = (uxL > 0.35) ? 'start' : (uxL < -0.35 ? 'end' : 'middle');
                     var tspansC = labelLines.map(function(line, idx) {
