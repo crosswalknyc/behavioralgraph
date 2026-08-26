@@ -1275,7 +1275,10 @@ def _check_i12(rows, sample, subject, s3_key, s3_client, verbose):
         if pbp is None:
             continue
         cut_raw = round(sample * bp / 100.0)
-        parent_raw = round(parent_sample * pbp / 100.0)
+        # Raw counts floor at 0: corrupt parents can carry negative BP
+        # rows; the subset comparison reads those as 0 panelists so a
+        # clean cut row at 0 is never blocked by a parent defect.
+        parent_raw = max(0, round(parent_sample * pbp / 100.0))
         if cut_raw > parent_raw:
             n_flagged += 1
             if n_flagged <= 25:

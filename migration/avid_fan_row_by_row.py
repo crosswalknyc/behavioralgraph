@@ -1265,8 +1265,12 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
         if avid_bp >= 99.49 and _norm_pin(vu) in pin_aliases:
             continue
         parent_bp = parent_idx.get((cu, vu))
-        if parent_bp is None or parent_bp < 0:
+        if parent_bp is None:
             continue
+        if parent_bp < 0:
+            # Corrupt parent row (negative BP): raw counts floor at 0,
+            # so the avid must land at 0 panelists too.
+            parent_bp = 0.0
 
         had_pct = "%" in str(df_avid.at[idx, bp_col])
         new_bp = None
