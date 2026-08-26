@@ -34,6 +34,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import sys
@@ -1119,13 +1120,21 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
     The avid (or any reduced-intensity) cohort is a strict subset of
     the parent audience, so for every shared (category, brand) pair:
 
-      UPWARD CAP: avid_raw must not exceed parent_raw. In BP terms,
-        avid_bp <= parent_bp * (parent_sample / avid_sample). Dylan's
-        avid shipped 91+ rows violating this (up to 4.67x, e.g. avid
-        Tumblr 22.57 vs parent 4.64). Violators are capped just below
-        the ceiling with a subject-salted epsilon so the avid keeps
-        its legitimate over-index direction without breaking subset
-        arithmetic.
+      UPWARD CAP: avid_raw must not exceed parent_raw, verified at
+        the Raw level (round(bp/100 x sample) on both sides) on EVERY
+        shared non-exempt row, full range, including parent rows at
+        0.0000 BP (2026-08-25 partner finding: Bethenny avid carried
+        Real Housewives of New York at 3.4x the parent's panelist
+        count; the pre-fix pass skipped parent_bp <= 0 rows and could
+        nudge a capped value back across the ceiling). Violators are
+        re-derived as a plausible engaged-tier read anchored to the
+        parent BP: a subject+brand-salted fraction of the way from
+        the parent BP up to the subset ceiling, floored to 4dp (never
+        rounded up across the ceiling), walked DOWN off 2dp
+        boundaries and parent 4dp collisions, raw-verified. Brands
+        mirrored across categories at the same parent BP land on the
+        same new value (seed is brand-normed, category-free) so the
+        MPB mirror survives.
 
       DOWNWARD LIFT: on mass-digital-behavior categories
         (_MEGA_REACH_CATS) where parent_bp > `down_parent_min_bp` and
@@ -1201,6 +1210,42 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
                                                     span=0.0014))
         return round(new_bp, 4)
 
+    def _cap_below_parent_raw(parent_bp, parent_raw, seed):
+        """Re-derive a violating avid BP as an engaged-tier read
+        anchored to the parent BP: a salted fraction of the way from
+        the parent BP up to the subset ceiling, floored to 4dp so
+        rounding can never re-cross the ceiling, then walked DOWNWARD
+        off 2dp boundaries / parent 4dp collisions, with the actual
+        Raw comparison (round(avid_sample x bp / 100) <= parent_raw)
+        verified at every step. parent_raw == 0 lands the avid where
+        its own Raw rounds to 0 too."""
+        u = int(hashlib.md5(f"{seed}|frac".encode()).hexdigest()[:8],
+                16) / 0xFFFFFFFF
+        # Largest BP whose Raw still rounds to <= parent_raw.
+        feas = (parent_raw + 0.499) * 100.0 / avid_sample
+        if parent_raw <= 0:
+            target = feas * (0.25 + 0.50 * u)
+        else:
+            hi = min(parent_bp / ratio, feas, 99.49)
+            lo = min(parent_bp, hi)
+            span = max(hi - lo, 0.0)
+            target = min(lo + (0.30 + 0.55 * u) * span,
+                         hi - max(0.0003, 0.02 * span))
+        target = max(target, 0.0001)
+        bp = math.floor(target * 10000.0) / 10000.0
+        p4 = round(parent_bp, 4)
+        step = 0.0007 + abs(_seed_jitter(f"{seed}|dstep", span=0.0014))
+        for _ in range(4000):
+            n4 = round(bp, 4)
+            if n4 <= 0.0001:
+                return 0.0001
+            raw_ok = round(avid_sample * n4 / 100.0) <= parent_raw
+            on_boundary = abs(n4 - round(n4, 2)) < 0.00005
+            if raw_ok and not on_boundary and n4 != p4:
+                return n4
+            bp = (min(n4, feas) if not raw_ok else n4) - step
+        return round(max(bp, 0.0001), 4)
+
     for idx in df_avid.index:
         cu = str(df_avid.at[idx, "Column"]).strip().upper()
         if cu in _SUBSET_COHERENCE_SKIP_CATS or cu in DEMO_CATS_TF:
@@ -1215,21 +1260,22 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
         if avid_bp >= 99.49 and _norm_pin(vu) in pin_aliases:
             continue
         parent_bp = parent_idx.get((cu, vu))
-        if parent_bp is None or parent_bp <= 0:
+        if parent_bp is None or parent_bp < 0:
             continue
 
         had_pct = "%" in str(df_avid.at[idx, bp_col])
         new_bp = None
-        max_bp = parent_bp / ratio  # avid_raw == parent_raw at this BP
+        parent_raw = round(parent_sample * parent_bp / 100.0)
+        avid_raw = round(avid_sample * avid_bp / 100.0)
+        max_bp = (parent_bp / ratio) if parent_bp > 0 else 0.0
 
-        if avid_bp > max_bp:
-            # UPWARD violation: avid raw exceeds parent raw.
-            eps = 0.004 + abs(_seed_jitter(
-                f"{subject}|{cu}|{vu}|subset-cap-eps", span=0.032,
-            ))
-            new_bp = _finalize(max_bp * (1.0 - eps), parent_bp,
-                               f"{subject}|{cu}|{vu}|subset-cap")
-            if new_bp < avid_bp:
+        if avid_raw > parent_raw:
+            # UPWARD violation: avid Raw exceeds parent Raw. Full
+            # range (any parent BP, including 0), raw-level verified.
+            new_bp = _cap_below_parent_raw(
+                parent_bp, parent_raw,
+                f"{subject}|{_norm_pin(vu)}|subset-cap")
+            if new_bp is not None and new_bp < avid_bp:
                 stats["capped_up"] += 1
                 if len(stats["examples_up"]) < 5:
                     stats["examples_up"].append(

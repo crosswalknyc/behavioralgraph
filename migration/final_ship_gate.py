@@ -58,6 +58,20 @@ Invariants asserted (each returns structured violations):
                          gender / geo cuts legitimately pin one bucket
                          to ~99.99. Deterministic backstop under the
                          reasoned migration/demo_plausibility_gate.
+  I11 reach above 100%   no row's BP may exceed 100.0 anywhere except
+                         metadata rows and subject self-pins within
+                         float noise of 100.
+  I12 avid subset raws   avid cuts only, parent TU resolvable: every
+                         shared non-exempt (category, brand) row must
+                         satisfy round(cut BP/100 x cut sample) <=
+                         round(parent BP/100 x parent sample). The
+                         avid tier may over-index on penetration but
+                         can never out-COUNT its parent (2026-08-25
+                         partner finding: Bethenny avid shipped Real
+                         Housewives of New York at 3.4x the parent's
+                         panelist count). Parent lookup is fail-open:
+                         unresolvable / unfetchable parent skips with
+                         a log line, never blocks on infrastructure.
 
 Gate behavior: `run_final_ship_gate(df_or_bytes, s3_key, subject)`.
 On violations the caller's upload MUST NOT happen: the gate writes the
@@ -609,7 +623,7 @@ def _skip_gate_reason(s3_key):
 
 
 # ---------------------------------------------------------------------------
-# The invariants (I1-I11)
+# The invariants (I1-I12)
 # ---------------------------------------------------------------------------
 
 def _v(code, name, where, value, plain):
@@ -1190,6 +1204,103 @@ def _check_i11(rows, subject, s3_key):
     return out
 
 
+def _check_i12(rows, sample, subject, s3_key, s3_client, verbose):
+    """Avid subset Raw ceiling (2026-08-25 partner finding: BETHENNY
+    FRANKEL - Avid Fan shipped Real Housewives of New York at 7,509
+    panelists vs the parent TU's 2,236, a 3.4x impossibility, and 13
+    more rows like it under I4's 10x blocking threshold).
+
+    The avid tier is a strict subset of its parent audience: its
+    penetration may exceed the parent's, its panelist COUNT may not.
+    For every shared non-exempt (category, brand) row:
+
+        round(cut_bp / 100 x cut_sample)
+            <= round(parent_bp / 100 x parent_sample)
+
+    Exempt: metadata rows, demographic categories, LOCATION, fan
+    anchor rows, and subject self-pin forms (their 100-vs-100 case is
+    safe by sizing, which I4 enforces). Fail-open on infrastructure:
+    an unresolvable or unfetchable parent skips with a log line. The
+    whole-file sizing defect (cut sample >= parent sample) stays I4's
+    verdict; per-row raw comparisons are meaningless there and are
+    skipped."""
+    out = []
+    if sample is None or not _is_avid_cut_key(s3_key):
+        return out
+    try:
+        parent_key, parent_body = _resolve_parent_tu(
+            s3_key, s3_client, verbose=verbose)
+    except Exception as e:
+        if verbose:
+            print(f"[ship-gate] I12 parent resolution errored: {e}; "
+                  f"subset raw check skipped")
+        return out
+    if not parent_key:
+        if verbose:
+            print(f"[ship-gate] I12: no parent TU resolvable for "
+                  f"{_display_name(s3_key)}; subset raw check skipped")
+        return out
+    _, parent_rows = _parse_rows(parent_body)
+    parent_sample = _extract_sample(parent_rows)
+    if not parent_sample or sample >= parent_sample:
+        return out
+
+    full, mono = _subject_forms(subject, s3_key, rows)
+    parent_bp = {}
+    for r in parent_rows:
+        cu = r["cat_u"]
+        if (cu in DEMO_CATS or cu in META_CATS or cu in FAN_CATS
+                or cu == "LOCATION"):
+            continue
+        bp = _num(r["bp_s"])
+        if bp is None:
+            continue
+        k = (cu, _norm_token(r["val"]))
+        if bp > parent_bp.get(k, -1.0):
+            parent_bp[k] = bp
+
+    n_flagged = 0
+    for r in rows:
+        cu = r["cat_u"]
+        if (cu in DEMO_CATS or cu in META_CATS or cu in FAN_CATS
+                or cu == "LOCATION"):
+            continue
+        bp = _num(r["bp_s"])
+        if bp is None:
+            continue
+        vn = _norm_token(r["val"])
+        if vn in full or vn in mono:
+            continue
+        pbp = parent_bp.get((cu, vn))
+        if pbp is None:
+            continue
+        cut_raw = round(sample * bp / 100.0)
+        parent_raw = round(parent_sample * pbp / 100.0)
+        if cut_raw > parent_raw:
+            n_flagged += 1
+            if n_flagged <= 25:
+                out.append(_v(
+                    "I12", "avid subset raws",
+                    f"{r['cat']} / {r['val']}",
+                    f"cut {cut_raw:,} vs parent {parent_raw:,}",
+                    f"{r['val']} in {r['cat']}: this avid tier counts "
+                    f"{cut_raw:,} panelists ({_fmt_pct(bp)} of "
+                    f"{sample:,}) but the parent file "
+                    f"{_display_name(parent_key)} counts only "
+                    f"{parent_raw:,} ({_fmt_pct(pbp)} of "
+                    f"{parent_sample:,}). A subset can never hold "
+                    f"more panelists than its parent audience.",
+                ))
+    if n_flagged > 25:
+        out.append(_v(
+            "I12", "avid subset raws", "(additional rows)",
+            str(n_flagged - 25),
+            f"{n_flagged - 25} additional row(s) out-count the parent "
+            f"file the same way.",
+        ))
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -1248,6 +1359,8 @@ def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
     violations += _safe("I9", _check_i9, rows, verbose)
     violations += _safe("I10", _check_i10, rows, s3_key)
     violations += _safe("I11", _check_i11, rows, subject, s3_key)
+    violations += _safe("I12", _check_i12, rows, sample, subject, s3_key,
+                        s3_client, verbose)
 
     meta = {"n_rows": len(rows), "sample": sample,
             "is_cut": _is_cut_key(s3_key)}
