@@ -19136,7 +19136,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                             <option value="journeyIQ" {% if not has_journey_iq_access and 'journey_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🗺️ Digital Journey IQ</option>
                             <option value="trendsIQ" {% if not has_trends_iq_access %}disabled{% endif %}>📈 Trends</option>
                             <option value="cultureRankerIQ" {% if not has_rankers_iq_access %}disabled{% endif %}>📊 Talent Ranker</option>
-                            <option value="microdramasIQ" {% if not has_microdramas_iq_access %}disabled{% endif %}>📱 Microdramas</option>
+                            <option value="microdramasIQ" {% if not has_microdramas_iq_access %}disabled{% endif %}>📱 Micro-Series</option>
                             <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
                             <option value="llmoIQ" {% if not has_llmo_iq_access %}disabled{% endif %}>🤖 LLMO IQ</option>
@@ -25382,7 +25382,7 @@ https://www.instagram.com/p/..."></textarea>
         </style>
         <div id="microdramasIQView">
             <div class="miq-header">
-                <h2 class="miq-title">📱 Microdramas</h2>
+                <h2 class="miq-title">📱 Micro-Series</h2>
             </div>
             <!-- Unified filter bar: applies to whichever tab is active.
                  Peacock uses Look back + Genre; competitor tabs also
