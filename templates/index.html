@@ -61431,7 +61431,8 @@ https://www.instagram.com/p/..."></textarea>
         function _pmLooksLikeDeckAsk(text) {
             var t = String(text || '').trim();
             if (!t || _pmDeckInFlight) return false;
-            if (/\b(build|make|create|generate|put together|spin up)\b[^.]{0,40}\b(deck|slides|presentation)\b/i.test(t)) return true;
+            if (/\b(build|make|create|generate|put together|spin up|prepare|draft)\b[^.!?]{0,60}\b(deck|slides|presentation|one[- ]?pagers?|pptx)\b/i.test(t)) return true;
+            if (/\binsights? deck\b|\b(pitch|talent[- ]value|audience[- ]value|partnership) deck\b|\bdeck (on|about|for)\b|\bone[- ]?pager (on|about|for)\b/i.test(t)) return true;
             if (_pmPendingDeckAngle &&
                 /^(y(es|ep|eah)?|sure|ok(ay)?|do it|go ahead|please( do)?|build it|make it|lets do it|let's do it)\b/i.test(t)) return true;
             return false;
@@ -61922,28 +61923,29 @@ https://www.instagram.com/p/..."></textarea>
 
         async function _pmStartDeck(text) {
             var ctx = _pmCollectPageContext();
-            if (!ctx || !ctx.primary) {
-                synthChatPushTurn('agent',
-                    'Open a profile first (Select Profile), then ask for ' +
-                    'the deck again.');
-                return;
-            }
             var angle = _pmPendingDeckAngle ||
                 String(text || 'The strongest commercial story in this data.');
             _pmPendingDeckAngle = null;
             _pmDeckInFlight = true;
-            synthChatPushTurn('agent',
-                'Building the deck now. It renders in the Crosswalk deck ' +
-                'system from the data on this page. This takes a minute or ' +
-                'two; the download link lands here when it is ready.');
             var _end = _synthChatBeginThinking('deck');
             try {
                 var _fr = await _synthChatFetchJson('/api/brief-chat/deck', {
+                    text: String(text || ''),
                     angle: angle,
                     page_context: ctx,
                     history: synthChatHistory.slice(-14)
                 });
                 var data = _fr.data;
+                if (data && data.success && data.clarify) {
+                    var copts = (data.clarify.options || []).map(function(o) {
+                        return { label: o, send: o };
+                    });
+                    _synthChatPushTurnWithMeta('agent',
+                        data.clarify.question ||
+                            'Which profile should the deck cover?',
+                        { options: copts });
+                    return;
+                }
                 if (!data || !_fr.r.ok || !data.success || !data.job_id) {
                     console.error('[brief-chat] deck start reply not ok');
                     if (!data) {
@@ -61957,8 +61959,15 @@ https://www.instagram.com/p/..."></textarea>
                     return;
                 }
                 var job = data.job_id;
+                synthChatPushTurn('agent',
+                    'Building the ' +
+                    (data.subject ? data.subject + ' ' : '') +
+                    'insights deck now. It renders in the Crosswalk deck ' +
+                    'system as a finished deliverable. This takes a few ' +
+                    'minutes; the download link lands here when it is ' +
+                    'ready.');
                 var waited = 0;
-                while (waited < 360000) {
+                while (waited < 600000) {
                     await new Promise(function(res) { setTimeout(res, 5000); });
                     waited += 5000;
                     var st = null;

@@ -53712,44 +53712,185 @@ def _pm_deck_status_write(job_id, payload):
         ContentType='application/json')
 
 
+_PM_DECK_FILE_PREFIX = 'generated_decks/'
+
+
+def _pm_resolve_deck_subject(text, ctx):
+    """Resolve a typed deck ask to a profile in the catalog.
+
+    Returns (resolution, err). resolution is a dict:
+      {'ctx': page-context-shaped dict, 'subject': display subject,
+       'partner': partner or '', 'ask': the ask text,
+       'clarify': None | {'question', 'options'}}
+    err is a (jsonify, status) tuple when the ask cannot proceed.
+
+    Order: a subject named in the ask wins over the open profile; the
+    open profile covers subject-less asks ("Build a deck from this");
+    multiple plausible catalog matches come back as clarify options
+    (the existing clarify-chip pattern); no subject anywhere is a
+    guidance error."""
+    import prometheus_analysis as pma
+    brief = pma.extract_deck_brief(text) if text else \
+        {'subject': '', 'partner': ''}
+    partner = brief.get('partner') or ''
+    wanted = (brief.get('subject') or '').strip()
+
+    def _norm(s):
+        return _normalize_for_match(str(s or ''))
+
+    def _match(phrase):
+        """Catalog candidates for a subject phrase, TU files only
+        (cuts are attached separately). Returns a list of catalog
+        entries, best first, deduped by subject."""
+        pn = _norm(phrase)
+        if not pn:
+            return []
+        exact, prefix, contains = [], [], []
+        for entry in _profile_catalog_for_chat():
+            disp = str(entry.get('display_name') or '')
+            if ' - ' in disp:
+                continue  # cuts never lead a deck; the TU does
+            dn = _norm(disp)
+            sn = _norm(entry.get('subject'))
+            if not dn:
+                continue
+            if pn in (dn, sn):
+                exact.append(entry)
+            elif dn.startswith(pn) or sn.startswith(pn):
+                prefix.append(entry)
+            elif pn in dn or pn in sn:
+                contains.append(entry)
+        seen, out = set(), []
+        for entry in exact + prefix + contains:
+            k = _norm(entry.get('display_name'))
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append(entry)
+        return out
+
+    chosen, resolved_partner = None, partner
+    if wanted:
+        cands = _match(wanted)
+        if not cands and partner:
+            # "deck for Noah Wyle" reads partner-shaped but names the
+            # subject; if the partner matches a profile, it IS the
+            # subject.
+            cands = _match(partner)
+            if cands:
+                resolved_partner = ''
+        if len(cands) == 1:
+            chosen = cands[0]
+        elif len(cands) > 1:
+            if _norm(cands[0].get('display_name')) == _norm(wanted) or \
+                    _norm(cands[0].get('subject')) == _norm(wanted):
+                chosen = cands[0]
+            else:
+                opts = []
+                for c in cands[:4]:
+                    nm = str(c.get('display_name') or '').strip()
+                    if nm:
+                        opts.append(f"Build the {nm} insights deck")
+                return ({'clarify': {
+                    'question': 'Which profile should the deck cover?',
+                    'options': opts}}, None)
+    elif partner and not (ctx and ctx.get('primary')):
+        cands = _match(partner)
+        if len(cands) == 1:
+            chosen = cands[0]
+            resolved_partner = ''
+
+    if chosen is not None:
+        p_key = str(chosen.get('s3_key') or '').strip()
+        ok, err = _require_profile_run_access(p_key)
+        if not ok:
+            return None, err
+        subject = str(chosen.get('subject')
+                      or chosen.get('display_name') or '').strip()
+        cuts = []
+        base_norm = _norm(chosen.get('display_name'))
+        for entry in _profile_catalog_for_chat():
+            disp = str(entry.get('display_name') or '')
+            if ' - ' not in disp:
+                continue
+            head, _, tail = disp.partition(' - ')
+            if _norm(head) == base_norm and 'avid' in tail.lower():
+                ck = str(entry.get('s3_key') or '').strip()
+                c_ok, _c = _require_profile_run_access(ck)
+                if c_ok and ck and ck != p_key:
+                    cuts.append({'s3_key': ck, 'name': disp[:200]})
+                break
+        new_ctx = {'primary': {'s3_key': p_key,
+                               'name': str(chosen.get('display_name')
+                                           or subject)[:200]},
+                   'cuts': cuts, 'extras': [],
+                   'view_context': (ctx or {}).get('view_context')}
+        return ({'ctx': new_ctx, 'subject': subject,
+                 'partner': resolved_partner, 'clarify': None}, None)
+
+    if ctx and ctx.get('primary'):
+        name = str((ctx.get('primary') or {}).get('name') or '').strip()
+        subject = name.split(' - ')[0].strip() or name or 'this audience'
+        return ({'ctx': ctx, 'subject': subject,
+                 'partner': resolved_partner, 'clarify': None}, None)
+
+    if wanted:
+        return None, (jsonify({
+            'success': False, 'guidance': True,
+            'error': (f'I could not find a profile for "{wanted}" in the '
+                      'library. Open the profile from Select Profile, or '
+                      'build it first, then ask for the deck again.')}), 404)
+    return None, (jsonify({
+        'success': False, 'guidance': True,
+        'error': ('Name the subject ("build the Paige Bueckers insights '
+                  'deck") or open a profile first, then ask for the deck '
+                  'again.')}), 400)
+
+
 def _pm_run_deck_job(job_id, username, ctx, history, angle,
-                     charge_user=''):
-    """Background deck build: digest -> slide plan -> PPTX -> S3 ->
-    presigned URL. Status written to S3 at every phase so any worker
-    can serve the poll. `charge_user` is the billing username charged
-    at kickoff; refunded here if the build fails."""
+                     charge_user='', subject='', partner=''):
+    """Background insights-deck build: digest -> full slide plan ->
+    finished PPTX in the Crosswalk deck system -> S3 -> presigned URL.
+    Status written to S3 at every phase so any worker can serve the
+    poll. `charge_user` is the billing username charged at kickoff;
+    refunded here if the build fails."""
     import tempfile
     base = {'job_id': job_id, 'user': username, 'angle': angle,
             'started_at': time.time()}
     try:
         import prometheus_analysis as pma
-        import prometheus_deck as pmd
+        import deck_builder
         _pm_deck_status_write(job_id, {**base, 'status': 'planning'})
         digest, p_meta = pma.get_digest_bundle(s3_client, S3_BUCKET, ctx)
+        subject = subject or p_meta.get('name') or 'this audience'
         plan_result = _pm_claude_json(
-            pma.DECK_PLAN_SYSTEM_PROMPT,
-            pma.build_deck_user_prompt(digest, history, angle),
-            max_tokens=7000, temperature=0.4, surface='deck')
+            pma.INSIGHTS_DECK_SYSTEM_PROMPT,
+            pma.build_insights_deck_user_prompt(
+                subject, partner, digest, history, angle),
+            max_tokens=20000, temperature=0.4, surface='deck')
         if not plan_result.get('success'):
             raise RuntimeError(plan_result.get('error')
                                or 'slide plan failed')
         plan = plan_result.get('data') or {}
         if isinstance(plan, list):
             plan = next((d for d in plan if isinstance(d, dict)), {})
+        plan = pma.enforce_insights_plan(plan, subject)
         if not plan.get('slides'):
             raise RuntimeError('slide plan came back empty')
         _pm_deck_status_write(job_id, {**base, 'status': 'rendering'})
         stem = re.sub(r'[^A-Za-z0-9_]+', '_',
                       str(plan.get('filename_stem')
+                          or subject
                           or p_meta.get('name')
-                          or 'Profile_IQ')).strip('_')[:60] or 'Profile_IQ'
-        fname = f"{stem}_Profile_IQ_Deck.pptx"
+                          or 'Insights')).strip('_')[:60] or 'Insights'
+        fname = f"{stem}_Insights.pptx"
         local = os.path.join(tempfile.gettempdir(),
                              f"pm_deck_{job_id}.pptx")
         static_dir = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), 'static')
-        pmd.render_deck(plan, local, static_dir=static_dir)
-        s3_key = f"{_PM_DECK_PREFIX}{job_id}/{fname}"
+        deck_builder.render_insights_deck(plan, local,
+                                          static_dir=static_dir)
+        s3_key = f"{_PM_DECK_FILE_PREFIX}{job_id}/{fname}"
         with open(local, 'rb') as fh:
             s3_client.put_object(
                 Bucket=S3_BUCKET, Key=s3_key, Body=fh.read(),
@@ -53790,8 +53931,11 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
 @requires_auth
 @_chatbot_route_guard('brief-chat/deck')
 def api_synth_chat_deck():
-    """Kick off an async deck build from the open page's data.
-    Returns a job_id the frontend polls via deck-status."""
+    """Kick off an async insights-deck build. The ask can name any
+    profile in the library ("build the Paige Bueckers insights deck")
+    or lean on the open page's profile ("Build a deck from this").
+    Returns a job_id the frontend polls via deck-status, or a clarify
+    payload when several profiles match the named subject."""
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
@@ -53800,7 +53944,9 @@ def api_synth_chat_deck():
     except Exception as e:
         _chatbot_error_email('brief-chat/deck', e)
         return jsonify(_chatbot_calm_payload())
+    text = str(body.get('text') or '').strip()[:600]
     angle = ((body.get('angle') or '').strip()
+             or text
              or 'The strongest commercial story in this data.')[:400]
     history = body.get('history') or []
     if not isinstance(history, list):
@@ -53808,11 +53954,20 @@ def api_synth_chat_deck():
     ctx, ctx_err = _pm_validate_page_context(body.get('page_context'))
     if ctx_err:
         return ctx_err
-    if not ctx or not ctx.get('primary'):
-        return jsonify({'success': False,
-                        'guidance': True,
-                        'error': ('Open a profile first, then ask for '
-                                  'the deck again.')}), 400
+    try:
+        resolution, res_err = _pm_resolve_deck_subject(text, ctx)
+    except Exception as e:
+        traceback.print_exc()
+        _chatbot_error_email('brief-chat/deck', e,
+                             payload={'text': text[:200]})
+        return jsonify(_chatbot_calm_payload())
+    if res_err:
+        return res_err
+    if resolution.get('clarify'):
+        return jsonify({'success': True, 'clarify': resolution['clarify']})
+    ctx = resolution['ctx']
+    deck_subject = resolution.get('subject') or ''
+    deck_partner = resolution.get('partner') or ''
     job_id = uuid.uuid4().hex[:12]
     username = (user.get('username') or user.get('email') or '').strip()
     # Credit preflight + charge (2026-08-21): deck builds are tracked
@@ -53843,10 +53998,11 @@ def api_synth_chat_deck():
         'angle': angle, 'started_at': time.time()})
     t = threading.Thread(target=_pm_run_deck_job,
                          args=(job_id, username, ctx, history[-14:], angle,
-                               _charge_user),
+                               _charge_user, deck_subject, deck_partner),
                          daemon=True)
     t.start()
-    return jsonify({'success': True, 'job_id': job_id})
+    return jsonify({'success': True, 'job_id': job_id,
+                    'subject': deck_subject})
 
 
 @app.route('/api/brief-chat/deck-status/<job_id>', methods=['GET'])

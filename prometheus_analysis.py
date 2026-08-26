@@ -2262,6 +2262,177 @@ def build_reasoned_metrics_user_prompt(text, history, metric_request=None,
     )
 
 
+# ===========================================================================
+# INSIGHTS DECK (2026-08-26, Jenna): a typed deck ask produces the finished
+# client-ready deliverable, shaped on the Paige Bueckers audience-value
+# reference deck: the audience case from Profile IQ plus the clickstream
+# proof (CTR, search, second screen, journeys, cart, spend, paths). The
+# plan below is rendered by deck_builder.render_insights_deck.
+# ===========================================================================
+
+_DECK_ASK_PATTERNS = (
+    r'\b(?:build|make|create|generate|put together|spin up|prepare|draft)'
+    r'\b[^.!?]{0,60}\b(?:deck|slides|presentation|one[- ]pagers?|pptx)\b',
+    r'\binsights? deck\b',
+    r'\b(?:pitch|talent[- ]value|audience[- ]value|partnership) deck\b',
+    r'\bdeck (?:on|about|for)\b',
+    r'\bone[- ]pager (?:on|about|for)\b',
+)
+_DECK_ASK_COMPILED = tuple(re.compile(p, re.IGNORECASE)
+                           for p in _DECK_ASK_PATTERNS)
+
+
+def detect_deck_intent(text):
+    """True when the message asks for a deck / one-pager deliverable.
+    Conservative: an analysis question that merely mentions slides in
+    passing must not get hijacked."""
+    t = str(text or '')
+    if not t.strip():
+        return False
+    return any(rx.search(t) for rx in _DECK_ASK_COMPILED)
+
+
+_DECK_NOUN = r'(?:insights? deck|deck|slides|presentation|one[- ]pagers?|pptx)'
+_DECK_SUBJ_TAIL_RE = re.compile(
+    r'\b' + _DECK_NOUN + r'\s+(?:on|about|around|covering)\s+(.+)$',
+    re.IGNORECASE)
+_DECK_SUBJ_MID_RE = re.compile(
+    r'\b(?:build|make|create|generate|put together|spin up|prepare|draft)'
+    r'\s+(?:me\s+|us\s+)?(?:an?\s+|the\s+)?(.+?)\s+'
+    r'(?:insights?|value|audience|talent|pitch|partnership)?\s*'
+    + _DECK_NOUN + r'\b',
+    re.IGNORECASE)
+_DECK_PARTNER_RE = re.compile(
+    r'\bfor\s+(?:the\s+)?([A-Z][\w&\.\'\+-]*(?:\s+[A-Z][\w&\.\'\+-]*){0,3})'
+    r'(?:\s+(?:pitch|meeting|deal|renewal|rfp))?\s*[.!?]?$')
+_DECK_GENERIC_TAIL_RE = re.compile(
+    r'\s+for\s+(?:the\s+|a\s+|an\s+|our\s+|my\s+)?'
+    r'(?:pitch|meeting|deal|renewal|rfp|client|presentation|upfront)'
+    r's?\s*[.!?]?$', re.IGNORECASE)
+_DECK_SUBJ_STOPWORDS = {
+    'this', 'that', 'it', 'the data', 'this data', 'the profile',
+    'this profile', 'the page', 'this page', 'these', 'me', 'us', 'a', 'an',
+    'insights', 'insight', 'pitch', 'value', 'audience', 'talent',
+    'partnership', 'audience value', 'talent value',
+}
+
+
+def extract_deck_brief(text):
+    """Pull {subject, partner} out of a deck ask. subject='' means
+    use whatever profile is open on the page. partner='' means no
+    named buyer; the deck reads as a general audience-value case."""
+    t = ' '.join(str(text or '').split())
+    if not t:
+        return {'subject': '', 'partner': ''}
+    t = _DECK_GENERIC_TAIL_RE.sub('', t)
+    partner = ''
+    pm = _DECK_PARTNER_RE.search(t)
+    if pm:
+        cand = pm.group(1).strip()
+        if cand.lower() not in ('the', 'a', 'an', 'us', 'q4', 'q1', 'q2',
+                                'q3', 'monday', 'tuesday', 'wednesday',
+                                'thursday', 'friday'):
+            partner = cand
+            t = t[:pm.start()].rstrip(' ,.')
+    subject = ''
+    m = _DECK_SUBJ_TAIL_RE.search(t)
+    if m:
+        subject = m.group(1)
+    else:
+        m = _DECK_SUBJ_MID_RE.search(t)
+        if m:
+            subject = m.group(1)
+    subject = subject.strip(' \'"`,.!?')
+    subject = re.sub(r'^(?:a|an|the)\s+', '', subject, flags=re.IGNORECASE)
+    subject = re.sub(r'\s+(?:insights?|audience value|talent value|'
+                     r'audience|value)$', '', subject,
+                     flags=re.IGNORECASE).strip()
+    if subject.lower() in _DECK_SUBJ_STOPWORDS:
+        subject = ''
+    return {'subject': subject[:120], 'partner': partner[:80]}
+
+
+INSIGHTS_DECK_SYSTEM_PROMPT = """You are Prometheus, Crosswalk's senior audience strategist, producing the slide plan for a FINISHED client-ready insights deck. This is a final deliverable a seller walks into a pitch with, not an outline. You get the subject's Profile IQ digest (first-party audience data), the recent conversation, and the ask. Return a strict JSON slide plan; a renderer lays it out in the Crosswalk deck system.
+
+THE ARC (14 to 20 slides, in this shape)
+1. cover: the single sharpest commercial sentence as the headline, one intro line naming what the deck contains and the window, three proof stats (audience scale, the best conversion or behavior number, the best unit-performance number).
+2. argument: "The case, in four reads." Four numbered cards: the consumer, where they already spend, how the unit performs, what completes.
+3. tiles_facts: the universe. Projected US audience, audience in file, avid tier share when the digest carries an avid cut, the defining demo. Fact rows: age, ethnicity or household shape, DMA concentration, the subject's own anchor properties with penetration and index.
+4-8. the audience case from the digest, one read per slide: interests (bars), the category retail or channel read (bars with show_index), the wallet or premium read (split_stats_bars or tiles_facts), adjacency or talent graph (bars), distribution and social (bars with show_index or tiles_facts). Pick the categories where the digest is strongest; every number on these slides comes from the digest.
+9-17. the behavior proof, one read per slide, reasoned from the subject's real-world scale: a hero slide (ground=accent) with the single sharpest behavioral stat; CTR or engagement vs the peer set (bars); search demand (split_stats_bars: unique searchers + query mix); second-screen or live-moment behavior (split_stats_bars) when the subject has live events; ad response (tiles_row: first-impression clicks, cart timing, repeat rate); same-session cross-shop (split_stats_bars); journeys (table: conversion with the subject on the path vs peers vs no talent); cart (table: start, complete, abandon, recover, AOV); spend per engager (hero_proof).
+18. paths: 9 to 12 example clickstream rows (kind: search/click/cart/play, url: realistic lowercase urls involving the subject and the relevant retail or platform domains, lit: true on cart and play rows).
+19. argument (ground=light): the buy. Four categories where the file and the journeys agree, each with its numbers.
+20. close: four numbered cards restating the case, each ending on a number.
+
+Omit slides the data cannot carry (no live events means no second-screen slide; no avid cut means no avid tier tile). Never pad: a 14-slide deck that is all signal beats a 20-slide deck with filler.
+
+SLIDE TYPES (exact JSON shapes)
+- cover: {"type":"cover","eyebrow":"SUBJECT  \\u00b7  PREPARED FOR PARTNER  \\u00b7  CONTEXT","title":...,"intro":...,"stats":[{"big","label"}x3],"accent_index":1}
+- argument: {"type":"argument","ground":"dark"|"light","eyebrow","title","sub","cards":[{"head","body"}x4]}
+- tiles_facts: {"type":"tiles_facts","eyebrow","title","sub","source","tiles":[{"big","label"}x3-4],"accent_index":int|null,"facts":[{"label","fig","note"}x0-6],"read":optional}
+- bars: {"type":"bars","ground":"light"|"dark","eyebrow","title","sub","source","show_index":bool,"value_suffix":"%"|"x"|"","rows":[{"label","value":number,"index":int optional,"accent":bool}x4-9],"read":one sentence}
+- split_stats_bars: {"type":"split_stats_bars","eyebrow","title","sub","source","stat_cards":[{"kicker","big","label","accent":bool}x2],"bars_title":"CAPS LABEL","value_suffix","rows":[...x4-8],"read"}
+- tiles_row: {"type":"tiles_row","eyebrow","title","sub","source","tiles":[{"big","label","body"}x3],"accent_index":0,"read"}
+- hero: {"type":"hero","ground":"accent"|"dark","eyebrow","title","sub","big":"2.73%","line":one sentence with the comparison,"support":one sentence on why it matters}
+- table: {"type":"table","eyebrow","title","sub","source","columns":[3-6 strings, first is the row label],"rows":[[cells]x3-5],"accent_col":int|null,"accent_row":int|null,"read":sentence,"read2":optional second sentence}
+- hero_proof: {"type":"hero_proof","eyebrow","title","sub","source","big":"$419","line":...,"proofs":[{"fig","label"}x3]}
+- paths: {"type":"paths","eyebrow","title","sub","source","rows":[{"kind":"search"|"click"|"cart"|"play","url","lit":bool}x9-12]}
+- close: {"type":"close","eyebrow":"Close","title","cards":[{"head","body"}x4]}
+
+NUMBERS
+- Digest numbers are the source of truth for everything the digest covers: penetrations, indexes, demos, sample, projection, avid share. Quote them exactly as the digest states them.
+- Behavior-proof numbers (searchers, CTR, journey conversion, cart rates, AOV, spend per engager, co-visit multiples) are Crosswalk Unique ID reads you produce at realistic magnitude for the subject's actual fame and category: CTR on talent-tagged units runs 0.9 to 3.2 percent; journey conversion with a talent node runs 5 to 14 percent vs 2 to 5 without; cart completion 25 to 45 percent; AOV plausible for the category; unique searchers scaled to the subject's real search interest (a top-10 athlete or A-list name reads 8M to 25M unique US searchers over 12 months, a mid-tier name 1M to 6M, a niche name under 1M).
+- Every integer count is messy: the last digit is 1 to 9, never a round number, never a trailing zero. 542,306 not 542,000. 18,247,631 not 18,000,000. Display millions as 17.9M style. Percentages carry one decimal. Indexes are whole numbers and may be quoted bare (683). Dollar AOVs carry cents ($87.43).
+- Counts are viewers, users, people, accounts, engagers, searchers. Never households.
+- Externally reported figures (box office, league viewership records) are quoted at their reported precision and attributed in the sentence, never invented.
+- Peer comparisons name real peers from the subject's world and keep the subject believable inside the set: near the top on its strongest metric, not sweeping every row.
+
+VOICE
+- Titles are sentences in sentence case and end with a full stop. They state the finding: "They over-shop the sneaker channel at 3x." not "Channel Overview".
+- Eyebrows are one or two words (Argument, Universe, Interests, Channel, Wallet, Graph, Click, Search, Journeys, Cart, Spend, Paths, Buy, Close).
+- source lines name the read and window in product language: "Profile IQ interest rows, Jul 1 2025 to Jun 30 2026." or "Crosswalk Unique ID journeys, Jul 1 2025 to Jun 30 2026. n=84,213 subject-path sessions." Never name any internal system, model, vendor, or process.
+- reads are one or two sentences stating what the slide proves, with the key number. Hard counts stated flat; interpretive lines use leans, skews, reads as.
+- NEVER use em dashes or en dashes anywhere. No "actually", no "absolutely", no "real-time". Never the word "household".
+- Use each brand's CURRENT name as it appears in the digest (MS NOW, not MSNBC).
+
+TOP-LEVEL JSON
+{"title": deck title sentence, "filename_stem": "Subject_Name" (letters, digits, underscores only), "slides": [...]}
+Return strict JSON only."""
+
+
+def build_insights_deck_user_prompt(subject, partner, digest_bundle,
+                                    history, ask):
+    hist_lines = []
+    for turn in (history or [])[-10:]:
+        role = 'USER' if turn.get('role') == 'user' else 'PROMETHEUS'
+        txt = str(turn.get('text') or '')[:600]
+        if txt:
+            hist_lines.append(f"{role}: {txt}")
+    hist_block = '\n'.join(hist_lines) or '(none)'
+    partner_block = (partner or
+                     '(none named; build the general audience-value case '
+                     'and pick the categories the data argues for)')
+    return (
+        "SUBJECT\n"
+        "=======\n"
+        f"{subject}\n\n"
+        "PREPARED FOR (partner / buyer)\n"
+        "==============================\n"
+        f"{partner_block}\n\n"
+        "FIRST-PARTY PROFILE DATA\n"
+        "========================\n"
+        f"{digest_bundle}\n\n"
+        "RECENT CONVERSATION\n"
+        "===================\n"
+        f"{hist_block}\n\n"
+        "THE ASK\n"
+        "=======\n"
+        f"{ask}\n\n"
+        "Return the strict JSON slide plan described in the system "
+        "prompt. JSON only."
+    )
+
+
 _PCT_UNITS = {'pct', 'percent', 'percentage', '%'}
 
 
@@ -2344,3 +2515,77 @@ def format_generated_metrics_reply(res):
         for r in reads:
             lines.append(f"- {r}")
     return scrub_user_text('\n'.join(lines).strip())
+
+
+_INSIGHTS_SLIDE_TYPES = (
+    'cover', 'argument', 'tiles_facts', 'bars', 'split_stats_bars',
+    'tiles_row', 'hero', 'table', 'hero_proof', 'paths', 'close',
+)
+_ROUND_INT_RE = re.compile(
+    r'(?<![\d.,+-])(\d{1,3}(?:,\d{3})+|\d{4,9})(?![\d.,%xX+-])')
+_IDX_BEFORE_RE = re.compile(r'index\s*$', re.IGNORECASE)
+
+
+def _messy_int_in_text(subject, text):
+    """Rewrite standalone round integer counts (>= 1000, trailing zero)
+    inside a display string to messy variants. Indexes, years, decimals,
+    percentages, M/K-suffixed display figures, and ranges are left
+    alone."""
+    s = str(text or '')
+    if not s:
+        return s
+
+    def _fix(m):
+        raw = m.group(1)
+        try:
+            v = int(raw.replace(',', ''))
+        except ValueError:
+            return raw
+        if v % 10 != 0 or v < 1000:
+            return raw
+        if 1900 <= v <= 2100:
+            return raw
+        if _IDX_BEFORE_RE.search(s[:m.start()][-12:]):
+            return raw
+        nv = _messy(subject, 'deck_count', v) or v
+        return f"{nv:,}" if ',' in raw else str(nv)
+
+    return _ROUND_INT_RE.sub(_fix, s)
+
+
+def _clean_deck_value(subject, v):
+    if isinstance(v, str):
+        return _messy_int_in_text(subject, scrub_user_text(v))
+    if isinstance(v, list):
+        return [_clean_deck_value(subject, i) for i in v]
+    if isinstance(v, dict):
+        return {k: _clean_deck_value(subject, i) for k, i in v.items()}
+    return v
+
+
+def enforce_insights_plan(plan, subject):
+    """Validate + scrub an insights-deck slide plan: known slide types
+    only, every string field through the vocabulary scrub, every
+    standalone round count re-jittered messy, slide count capped.
+    Returns the cleaned plan dict."""
+    if not isinstance(plan, dict):
+        return {'title': '', 'filename_stem': '', 'slides': []}
+    out = {
+        'title': _messy_int_in_text(
+            subject, scrub_user_text(str(plan.get('title') or ''))),
+        'filename_stem': re.sub(
+            r'[^A-Za-z0-9_]+', '_',
+            str(plan.get('filename_stem') or '')).strip('_')[:60],
+    }
+    slides = []
+    for sl in (plan.get('slides') or [])[:22]:
+        if not isinstance(sl, dict):
+            continue
+        stype = str(sl.get('type') or '').strip().lower()
+        if stype not in _INSIGHTS_SLIDE_TYPES:
+            continue
+        cleaned = _clean_deck_value(subject, sl)
+        cleaned['type'] = stype
+        slides.append(cleaned)
+    out['slides'] = slides
+    return out
