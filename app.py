@@ -51554,33 +51554,75 @@ def _spec_from_draft(draft):
         except Exception:
             pass
 
-    # ── Sanity ceiling on car-brand self-pins (2026-08-19 same defect
-    # cluster: Paul Anka shipped with AUTOMOBILE > Lincoln at 94% BP
-    # because Claude proposed a subject_row hard-pin as if Lincoln were
-    # Paul Anka's affiliation). No talent / musician / actor / creator
-    # / athlete / podcaster subject should self-pin a car brand at 100
-    # unless the subject IS the car brand or a documented ambassador —
-    # and even then the reasoning engine should handle it, not a
-    # subject_row hard-pin. Drop AUTOMOBILE/luxury-car subject_rows
-    # that don't have the subject in their Value.
-    _car_columns = {'AUTOMOBILE'}
+    # ── Affinity-pin guard (2026-08-25, generalizing the 2026-08-19
+    # car-pin guard after run vQGroDyp7TLjjA: a QSR subject's spec
+    # carried peer/affinity brands in subject_rows - Pressed Juicery,
+    # Whole Foods - which the engine pins at 100, so the quality gate
+    # held the file twice and the run burned 67 minutes before failing
+    # terminally). subject_rows are HARD PINS; a value that is not the
+    # subject itself may only pin in the columns where the interpret
+    # contract legitimately pins a non-subject value (distribution
+    # homes for consumers-scope IP, leagues/teams for sports, IP
+    # content columns whose value is the title). Everything else
+    # (QSR, GROCERY, CPG, RETAILERS, AUTOMOBILE, ...) demotes to
+    # extra_rows: the research is preserved unpinned and the row-by-row
+    # engine assigns a plausible BP from baseline + persona lift.
+    _PIN_LEGAL_COLUMNS = {
+        # Distribution / platform homes (consumers-scope IP pin rule)
+        'STREAMING/PLATFORM', 'STREAMING VIDEO', 'BROADCAST/CABLE',
+        'APP/PLATFORM', 'VMVPD/FAST', 'VIRTUAL MVPD/FAST',
+        'VIRTUAL MVPD FAST', 'VMVPD', 'FAST PLATFORM', 'FAST CHANNEL',
+        'MOVIE THEATER', 'WHERE THEY SHOP', 'STREAMING MUSIC',
+        # Sports companions (team + league + conference pins)
+        'SPORTS TEAM', 'MLB', 'NBA', 'NFL', 'NHL', 'MLS', 'WNBA',
+        'MILB', 'EPL', 'LA LIGA', 'SERIE A', 'LIGUE 1', 'BUNDESLIGA',
+        'CFB', 'SOCCER', 'AL', 'NL', 'AFC', 'NFC',
+        'SPORTS ORGANIZATIONS', 'SPORTS ORGANIZATION',
+        # IP content columns (value is the title, subject may be
+        # '<Title> Viewers')
+        'SERIES', 'MOVIE', 'PODCAST', 'GAMES', 'GAME PLAYERS',
+        'VERTICAL SHORTS',
+        # Metadata rows are never affinity pins
+        'SUBJECT', 'BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY',
+    }
     _norm_subj = ''.join(ch for ch in subject.lower() if ch.isalnum())
+    _entity_part = subject.split(' - ', 1)[0].strip()
+    _norm_entity = ''.join(ch for ch in _entity_part.lower()
+                           if ch.isalnum())
     _clean_subject_rows_v3 = []
+    _demoted_pins = []
     for col, val in subject_rows:
         col_up = str(col).strip().upper()
         val_norm = ''.join(ch for ch in str(val).lower() if ch.isalnum())
-        if col_up in _car_columns and val_norm != _norm_subj:
-            try:
-                print(
-                    f"[car-pin-guard] {subject!r}: dropping AUTOMOBILE "
-                    f"self-pin ({col}, {val!r}) — subject is not the car "
-                    f"brand. Row-by-row reasoning will assign a plausible "
-                    f"BP for {val!r} from baseline + persona lift."
-                )
-            except Exception:
-                pass
+        _is_subject_val = (
+            val_norm and (val_norm == _norm_subj or val_norm == _norm_entity
+                          or (len(val_norm) >= 4
+                              and (val_norm in _norm_subj
+                                   or val_norm in _norm_entity))))
+        if col_up not in _PIN_LEGAL_COLUMNS and not _is_subject_val:
+            _demoted_pins.append([col, val])
             continue
         _clean_subject_rows_v3.append((col, val))
+    if _demoted_pins:
+        try:
+            print(
+                f"[affinity-pin-guard] {subject!r}: demoted "
+                f"{len(_demoted_pins)} non-subject subject_row pin(s) to "
+                f"extra_rows: {_demoted_pins[:6]}"
+                + (f' ...+{len(_demoted_pins) - 6} more'
+                   if len(_demoted_pins) > 6 else '')
+            )
+        except Exception:
+            pass
+        _existing_extra_norms = {
+            ''.join(ch for ch in str(e[1]).lower() if ch.isalnum())
+            for e in extra_rows if len(e) >= 2}
+        for _dp in _demoted_pins:
+            _dpn = ''.join(ch for ch in str(_dp[1]).lower()
+                           if ch.isalnum())
+            if _dpn and _dpn not in _existing_extra_norms:
+                extra_rows.append([_dp[0], _dp[1]])
+                _existing_extra_norms.add(_dpn)
     subject_rows = _clean_subject_rows_v3
 
     # ── subject_rows backstop (2026-08-20, Jenna's 5-platform batch:
@@ -53369,6 +53411,15 @@ def _scrub_v1_freetext(raw: str, cap: int = 700) -> str:
     return text
 
 
+# The one partner-facing failure reason for a run that reached the
+# engine and could not be delivered (2026-08-25 client finding: a
+# 67-minute run ended status "failed" with success:true and no reason
+# field at all). Approved-catalog phrasing only - the internal cause
+# stays in failed_reason_internal on the box.
+_V1_FAILED_REASON = ('this build could not be completed and was not '
+                     'delivered')
+
+
 def _scrub_v1_status(raw_status: dict | None) -> dict:
     """Take the raw Hetzner status dict and return ONLY the partner-safe
     fields with normalized values. Never let unknown keys through — if
@@ -53394,6 +53445,23 @@ def _scrub_v1_status(raw_status: dict | None) -> dict:
         'completed_at': raw_status.get('completed_at'),
         'subject': raw_status.get('subject'),
     }
+    # Failed-run contract (2026-08-25 client finding #2): a terminal
+    # failure always carries a reason string plus the refunded credit
+    # count when the engine recorded one. WHITELIST-ONLY: the engine's
+    # deliberate partner-facing failure message (the 'This build could
+    # not be completed...' family written by the terminal-fail path)
+    # passes the fail-closed free-text scrub; every other error shape
+    # (crash paths, internal holds) ships the approved catalog phrase.
+    # The internal cause never leaves the box.
+    if mapped == 'failed':
+        _raw_err = str(raw_status.get('error') or '').strip()
+        _reason = ''
+        if _raw_err.lower().startswith('this build could not be'):
+            _reason = _scrub_v1_freetext(_raw_err, cap=200)
+        out['reason'] = _reason or _V1_FAILED_REASON
+        _cr = raw_status.get('credits_refunded')
+        if isinstance(_cr, (int, float)) and _cr > 0:
+            out['credits_refunded'] = int(_cr)
     return out
 
 
@@ -55834,22 +55902,29 @@ def _normalize_v1_decision(draft):
 # --------------------------------------------------------------------
 
 def _v1_subject_verified(draft, decision, ex_key, candidates=None):
-    """Return (verified: bool, subject_string). Deterministic
-    auto-verify beats the model attestation: a decision anchored to an
-    existing catalog file (existing_match / refresh / derive parent)
-    or a subject that collapses to a catalog entity is real by
-    construction. Otherwise the interpret model's subject_verified
-    attestation stands; a missing field defaults to verified (older
-    cached drafts, defensive)."""
+    """Return (verified: bool, subject_string).
+
+    Ladder (2026-08-25, hardened same day after the round-2 stress
+    test slipped two plausible-sounding invented brands past the model
+    attestation into paid-build quotes):
+      1. Catalog anchor (existing_match / refresh / derive parent key)
+         -> verified by construction. Never refuses.
+      2. Subject collapses to a catalog entity (case / punctuation
+         insensitive, one-typo tolerant) -> verified by construction.
+         Typo resolutions of real profiles never refuse.
+      3. Model attested subject_verified=False -> refuse.
+      4. Fresh paid build of a non-catalog subject -> require POSITIVE
+         live web evidence (_v1_subject_web_evidence). A confident
+         "no verifiable web presence" refuses; errors and timeouts
+         fail open so an outage never blocks real builds.
+    Niche-but-real subjects pass at step 4 (they are findable, just
+    small); generic persona/behavioral cohort labels are not entity
+    claims and pass by design (the evidence prompt distinguishes)."""
     subj = str(draft.get('subject') or '').split(' - ', 1)[0].strip()
     if ex_key or decision == 'existing_match':
         return True, subj
-    attested = draft.get('subject_verified')
-    if attested is not False:
-        return True, subj
-    # Model said unverifiable - double-check against the catalog
-    # shortlist before refusing (never refuse a subject we already
-    # carry).
+    # Catalog collapse-match beats everything else - never refuse a
+    # subject we already carry (typos of real profiles resolve here).
     try:
         subj_c = _collapse_for_match(subj)
         for c in (candidates or []):
@@ -55861,7 +55936,197 @@ def _v1_subject_verified(draft, decision, ex_key, candidates=None):
                 return True, subj
     except Exception:
         pass
-    return False, subj
+    attested = draft.get('subject_verified')
+    if attested is False:
+        return False, subj
+    # Attestation alone no longer clears a PAID fresh build of a
+    # non-catalog subject: the interpret model believed two invented
+    # brands in the round-2 stress test. Positive live web evidence
+    # required; resolved via globals() so offline harnesses without
+    # the helper degrade to fail-open (same posture as _scrub above).
+    if decision in ('new_build', 'cut_needs_parent'):
+        _web = globals().get('_v1_subject_web_evidence')
+        if callable(_web):
+            try:
+                _ev = _web(subj)
+            except Exception:
+                _ev = None
+            if _ev is False:
+                return False, subj
+    return True, subj
+
+
+# Cache for the live web-evidence verdicts: subject -> (verdict, ts).
+# Bounds the added interpret latency to one search per subject per
+# process per TTL - a check-then-run pair costs one lookup, not two.
+_v1_subject_evidence_cache: dict = {}
+_V1_SUBJECT_EVIDENCE_TTL_SECONDS = 6 * 3600
+
+
+def _v1_subject_web_evidence(subject):
+    """Live web check: does `subject` exist as a real, verifiable
+    entity? Returns True (positive evidence found), False (confident
+    there is NO verifiable web presence - refuse), or None (could not
+    determine: no client, error, timeout - callers fail open).
+
+    Same web-search precedent as the event-window research
+    (migration/event_window.py). Generic audience / persona / cohort
+    descriptions are NOT entity claims and must return True - only a
+    proper-noun brand, company, person, or title with zero verifiable
+    web presence is a False."""
+    subj = str(subject or '').strip()
+    if not subj or len(subj) < 2:
+        return None
+    cache_key = subj.lower()
+    now_ts = time.time()
+    hit = _v1_subject_evidence_cache.get(cache_key)
+    if hit and (now_ts - hit[1]) < _V1_SUBJECT_EVIDENCE_TTL_SECONDS:
+        return hit[0]
+    try:
+        from claude_client import claude_messages
+    except Exception:
+        return None
+    system = (
+        "You verify whether a subject is a real, findable entity. Use "
+        "the web_search tool. Respond with one JSON object and nothing "
+        "else:\n"
+        '{"exists": true|false, "kind": "brand|person|title|persona|'
+        'unknown", "confident": true|false}\n'
+        "Rules:\n"
+        "- exists=true when the subject is a real brand, company, "
+        "person, place, product, or title with any verifiable web "
+        "presence, however small or niche.\n"
+        "- exists=true when the subject is a generic audience, "
+        "persona, interest, or behavioral description (e.g. 'Protein "
+        "Enthusiasts', 'Potential Digital Banking Customer') - those "
+        "are audience definitions, not entity claims.\n"
+        "- exists=false ONLY when the subject reads as a specific "
+        "proper-noun brand, company, person, or title AND your "
+        "searches find no verifiable presence for it.\n"
+        "- Set confident=false whenever the searches were ambiguous.")
+    web_tool = {"type": "web_search_20260209", "name": "web_search",
+                "max_uses": 4}
+    web_tool_legacy = {"type": "web_search_20250305", "name": "web_search",
+                       "max_uses": 4}
+    raw = ''
+    try:
+        raw = claude_messages(
+            system=system, user=f"Subject: {subj}",
+            model=(os.environ.get('CLAUDE_EVENT_WINDOW_MODEL')
+                   or 'claude-sonnet-4-6'),
+            max_tokens=500, temperature=0.0, tools=[web_tool])
+        if not (raw or '').strip():
+            raw = claude_messages(
+                system=system, user=f"Subject: {subj}",
+                model='claude-sonnet-4-6', max_tokens=500,
+                temperature=0.0, tools=[web_tool_legacy])
+    except Exception as e:
+        try:
+            print(f"[v1-subject-evidence] search errored for "
+                  f"{subj!r}: {e}")
+        except Exception:
+            pass
+        return None
+    parsed = _extract_json_object(raw or '')
+    if not isinstance(parsed, dict) or 'exists' not in parsed:
+        return None
+    verdict = None
+    if parsed.get('exists') is True:
+        verdict = True
+    elif parsed.get('exists') is False and parsed.get('confident') is True:
+        # Confident no-evidence only - ambiguity fails open.
+        verdict = False
+    if verdict is not None:
+        _v1_subject_evidence_cache[cache_key] = (verdict, now_ts)
+        try:
+            print(f"[v1-subject-evidence] {subj!r} -> exists={verdict} "
+                  f"kind={parsed.get('kind')!r}")
+        except Exception:
+            pass
+    return verdict
+
+
+# Minimum composite match confidence for serving an existing catalog
+# file at no cost (2026-08-25 round-2 finding #5). Distribution check
+# against known-good picks: exact-identity matches score 0.85 to 1.0
+# (identity 0.55 + qualifier 0.25 + window 0.10, category neutral or
+# better); majority-token near-matches land 0.62 to 0.70; minority-
+# token lookalikes land at or under 0.58. The 0.65 bar clears every
+# exact-identity match with margin and demotes the lookalikes.
+_V1_MATCH_SCORE_FLOOR = 0.65
+
+
+def _v1_match_confidence(prompt, draft, candidate):
+    """Composite 0..1 confidence that the picked catalog profile IS
+    the audience the prompt asked for. This is the partner-facing
+    match_score (2026-08-25): the raw shortlist score it replaces
+    measures prompt-token coverage, so filler words diluted a perfect
+    identity match down to 0.433 while it was served as a free file.
+
+    Components (weights sum to 1.0):
+      0.55  brand/title identity: candidate entity vs resolved subject
+            (collapse-insensitive, one-typo tolerant; partial credit
+            by token overlap).
+      0.25  audience qualifier: the prompt's universe qualifiers are
+            compatible with the candidate's cohort suffix (same test
+            the qualifier gate enforces).
+      0.10  category: draft brand_category vs the candidate's catalog
+            category (0.5 neutral credit when either side is unknown).
+      0.10  window: not a historical-year skin the prompt never asked
+            for; half credit when the file sits outside the freshness
+            window.
+    Returns None when there is no scored candidate to corroborate
+    against (never fabricated)."""
+    if not isinstance(candidate, dict):
+        return None
+    subj = str(draft.get('subject') or '').split(' - ', 1)[0].strip()
+    disp = str(candidate.get('display_name') or candidate.get('subject')
+               or '').strip()
+    ent = disp.split(' - ', 1)[0].strip()
+    if not subj or not ent:
+        return None
+    identity = 0.0
+    try:
+        subj_c = _collapse_for_match(subj)
+        ent_c = _collapse_for_match(ent)
+        if subj_c and ent_c and _collapsed_same_entity(subj_c, ent_c):
+            identity = 1.0
+        else:
+            s_toks = set(t for t in _normalize_for_match(subj).split()
+                         if len(t) >= 3)
+            e_toks = set(t for t in _normalize_for_match(ent).split()
+                         if len(t) >= 3)
+            if s_toks and e_toks:
+                identity = (len(s_toks & e_toks)
+                            / max(len(s_toks | e_toks), 1))
+    except Exception:
+        identity = 0.0
+    try:
+        qualifier = 1.0 if _universe_qualifiers_compatible(
+            prompt or '', disp) else 0.0
+    except Exception:
+        qualifier = 0.0
+    cat_d = str(draft.get('brand_category') or '').strip().upper()
+    cat_c = str(candidate.get('category') or '').strip().upper()
+    if cat_d and cat_c:
+        category = 1.0 if cat_d == cat_c else 0.0
+    else:
+        category = 0.5
+    window = 1.0
+    try:
+        disp_years = set(_HISTORICAL_YEAR_RE.findall(disp))
+        prompt_years = set(_HISTORICAL_YEAR_RE.findall(prompt or ''))
+        if disp_years and not (disp_years & prompt_years):
+            window = 0.0
+        else:
+            _days = draft.get('existing_match_days_old')
+            if isinstance(_days, int) and _days > SYNTH_CHAT_FRESH_DAYS:
+                window = 0.5
+    except Exception:
+        window = 1.0
+    score = (0.55 * identity + 0.25 * qualifier
+             + 0.10 * category + 0.10 * window)
+    return round(max(0.0, min(1.0, score)), 3)
 
 
 # --------------------------------------------------------------------
@@ -56161,6 +56426,105 @@ def _v1_conclude(prompt, run_avid=True):
         _stamp_existing_match_age(draft)
     except Exception:
         pass
+
+    # Deliverable add-on cuts: resolved defs only (pin category +
+    # buckets, or a compound pin set). This SAME list prices the
+    # quote, triggers the cuts conversion below, and is what survives
+    # into spec.addon_cuts - so a /check quote of N cuts is exactly N
+    # delivered files (2026-08-25 round-2 finding #1).
+    cuts = [c for c in (draft.get('addon_cuts') or [])
+            if isinstance(c, dict) and c.get('cut_id')
+            and ((c.get('pin_category') and c.get('pin_buckets'))
+                 or isinstance(c.get('compound'), dict))]
+
+    # Fresh-parent refresh demotion (2026-08-25 round-2 finding #3,
+    # the price inversion): the model asked to REFRESH a parent that
+    # sits inside the freshness window, so the same request priced 8
+    # credits at 0 days old and 3 credits at 1 day old. A refresh of a
+    # fresh same-entity parent IS the existing match - demote
+    # deterministically so the same request prices the same on any
+    # day. Mirrors the normalizer's own fresh/stale line
+    # (SYNTH_CHAT_FRESH_DAYS).
+    if decision == 'time_shifted_refresh' and ex_key:
+        _days = draft.get('existing_match_days_old')
+        _same = False
+        try:
+            _subj_c = _collapse_for_match(
+                str(draft.get('subject') or '').split(' - ', 1)[0])
+            _disp_c = _collapse_for_match(
+                str(draft.get('existing_match_display_name')
+                    or '').split(' - ', 1)[0])
+            _same = bool(_subj_c and _disp_c
+                         and _collapsed_same_entity(_subj_c, _disp_c))
+        except Exception:
+            _same = False
+        if _same and isinstance(_days, int) \
+                and 0 <= _days <= SYNTH_CHAT_FRESH_DAYS:
+            try:
+                print(f"[v1_conclude] fresh-parent refresh demoted to "
+                      f"existing_match (days_old={_days}, "
+                      f"key={ex_key[:120]!r})")
+            except Exception:
+                pass
+            decision = 'existing_match'
+            d_type = ''
+            draft['decision'] = 'existing_match'
+            draft['derive_type'] = ''
+
+    # Match-confidence floor (2026-08-25 round-2 finding #5): the
+    # partner-facing match_score is a composite confidence (brand or
+    # title identity, audience qualifier, category, window), NOT the
+    # shortlist ranking heuristic - the old raw score punished long
+    # prompts for filler words (a correct Nike pick scored 0.433). A
+    # pick below the floor never serves a free file: it demotes to
+    # new_build with the nearby profile named in related_profile.
+    match_score = None
+    if decision == 'existing_match' and ex_key:
+        _picked = None
+        for _c in (candidates or []):
+            if str(_c.get('s3_key') or '') == ex_key:
+                _picked = _c
+                break
+        match_score = _v1_match_confidence(prompt, draft, _picked)
+        if match_score is not None and match_score < _V1_MATCH_SCORE_FLOOR:
+            _rel = str(draft.get('existing_match_display_name')
+                       or (_picked or {}).get('display_name')
+                       or (_picked or {}).get('subject') or '').strip()
+            if _rel:
+                draft['related_profile_display_name'] = _rel
+            try:
+                print(f"[v1_conclude] match confidence {match_score} "
+                      f"below the {_V1_MATCH_SCORE_FLOOR} floor - "
+                      f"demoting existing_match to new_build "
+                      f"(key={ex_key[:120]!r})")
+            except Exception:
+                pass
+            decision = 'new_build'
+            d_type = ''
+            ex_key = ''
+            draft['decision'] = 'new_build'
+            draft['existing_match_s3_key'] = ''
+
+    # Quoted cuts convert an existing match into a cuts-only derive
+    # (2026-08-25 round-2 finding #1, the most serious): /check priced
+    # the add-on cuts, but /run's existing_match path returned the
+    # bare parent at 0 credits with the cuts silently dropped. When
+    # the pick carries deliverable cuts, the verdict IS a derive off
+    # that parent: same price /check quoted, cuts actually queued and
+    # delivered. Same conversion the dashboard's embedded-cuts
+    # promoter applies to new_build picks.
+    if decision == 'existing_match' and ex_key and cuts:
+        try:
+            print(f"[v1_conclude] existing_match with {len(cuts)} "
+                  f"add-on cut(s) converts to cuts-only derive off "
+                  f"{ex_key[:120]!r}")
+        except Exception:
+            pass
+        decision = 'derive_cut'
+        d_type = 'addon_cuts'
+        draft['decision'] = 'derive_cut'
+        draft['derive_type'] = 'addon_cuts'
+
     # Subject verification (2026-08-25 client finding #2): an
     # unverifiable subject refuses cleanly on both routes, zero
     # credits, before any spec work.
@@ -56217,8 +56581,10 @@ def _v1_conclude(prompt, run_avid=True):
         _bind_relative_window(draft, prompt, decision=decision)
     _ensure_cut_window_echo(draft, decision=decision)
     _guard_future_window(draft, decision=decision, allow_ask=False)
-    cuts = [c for c in (draft.get('addon_cuts') or [])
-            if isinstance(c, dict) and c.get('cut_id')]
+    # `cuts` was computed above (deliverable defs only), BEFORE the
+    # refresh demotion / confidence floor / cuts conversion that hang
+    # off it. `match_score` (composite confidence) rides from the same
+    # block. Pricing uses that exact list so quote == delivery.
     if d_type == 'addon_cuts' and cuts:
         # cuts-only derive: the cuts ARE the deliverable - no base fee
         price = ADDON_CUT_CREDITS * len(cuts)
@@ -56226,18 +56592,30 @@ def _v1_conclude(prompt, run_avid=True):
         price = (_V1_CREDITS.get(decision, CREDITS_PROFILE_ANALYSIS)
                  + ADDON_CUT_CREDITS * len(cuts))
 
-    # Computed match score (2026-08-25 client ask #4): the shortlist
-    # score of the picked candidate, surfaced as a numeric field on
-    # existing_match responses. Real computed value only - None when
-    # no scored candidate matches the picked key.
-    match_score = None
-    if decision == 'existing_match' and ex_key:
-        for _c in (candidates or []):
-            if str(_c.get('s3_key') or '') == ex_key:
-                _s = _c.get('_score')
-                if isinstance(_s, (int, float)):
-                    match_score = round(float(_s), 3)
-                break
+    # related_profile backstop (2026-08-25 round-2 finding #4): when
+    # the model itself decides new_build (so the qualifier gate never
+    # fired and nothing stamped related_profile_display_name), the
+    # closest same-entity catalog profile still gets NAMED on the
+    # response - the field exists for exactly this case. Name only,
+    # never a key, never a free download.
+    if decision in ('new_build', 'cut_needs_parent') \
+            and not str(draft.get('related_profile_display_name')
+                        or '').strip():
+        try:
+            _subj_ent = str(draft.get('subject') or '').split(' - ', 1)[0]
+            _s_toks = set(t for t in _normalize_for_match(_subj_ent).split()
+                          if len(t) >= 3)
+            for _c in (candidates or [])[:3]:
+                _disp = str(_c.get('display_name') or _c.get('subject')
+                            or '').strip()
+                _e_toks = set(
+                    t for t in _normalize_for_match(
+                        _disp.split(' - ', 1)[0]).split() if len(t) >= 3)
+                if _disp and _s_toks and _e_toks and (_s_toks & _e_toks):
+                    draft['related_profile_display_name'] = _disp
+                    break
+        except Exception:
+            pass
 
     conclusion = {
         'draft': draft,
@@ -56676,6 +57054,12 @@ def api_v1_profiles_run():
         'source': 'partner_api_v1',
         'partner_username': username,
         'decision': decision,
+        # Exact credits charged for this run (2026-08-25 round-2
+        # finding #2b: the engine-side refund helper priced refunds
+        # from the decision tier and under-refunded a cut-bearing run
+        # by the add-on cut credits). The worker passes this straight
+        # to the refund so refund == charge, always.
+        'credits_charged': price,
     }
     # Attach decision-specific derivation metadata that the Hetzner
     # worker will honor to actually derive/refresh from the parent
@@ -56739,7 +57123,13 @@ def api_v1_profiles_run():
             charged = bool(consume_credit(
                 username,
                 description=f"Chatbot Profile IQ [{decision}] - {spec.get('name', 'profile')}",
-                job_id='',   # run_id not known yet - patched below
+                # run_id is not known yet at charge time, so this
+                # ledger entry cannot be found by run_id later. The
+                # exact amount rides the queue payload as
+                # credits_charged and ownership rides
+                # system/api_run_owners.json - the refund helper uses
+                # both, never the decision-tier fallback.
+                job_id='',
                 pull_type=f'Chatbot Profile IQ v1 ({decision})',
                 credits_used=price,
             ))
@@ -56932,6 +57322,13 @@ def api_v1_profiles_status(run_id):
     # mentions internal jargon. Only known-safe keys are ever forwarded.
     resp = {'success': True, 'run_id': run_id}
     resp.update(_scrub_v1_status(status))
+
+    # Failed-run contract (2026-08-25 client finding #2): a run that
+    # terminally failed must never poll back success:true. The scrubbed
+    # status already carries `reason` (approved catalog phrasing) and
+    # `credits_refunded` when the engine recorded a refund.
+    if (resp.get('status') or '').lower() == 'failed':
+        resp['success'] = False
 
     if (resp['status'] or '').lower() == 'complete':
         # Only echo s3_key / avid_s3_key back to the partner when we ACTUALLY
