@@ -609,7 +609,7 @@ def _skip_gate_reason(s3_key):
 
 
 # ---------------------------------------------------------------------------
-# The nine invariants
+# The invariants (I1-I11)
 # ---------------------------------------------------------------------------
 
 def _v(code, name, where, value, plain):
@@ -1143,13 +1143,60 @@ def _check_i10(rows, s3_key):
     return out
 
 
+def _check_i11(rows, subject, s3_key):
+    """Reach above 100% is impossible, everywhere (2026-08-25, partner
+    finding: Bethenny refresh shipped CPG HEINZ at 100.965% while the
+    deployed hard-ceiling enforcer crash-skipped on a str-dtype frame).
+
+    I1 only covers non-exempt categories and waves through rows whose
+    Gen Pop baseline is >= 30, so a >100 row in a demo bucket, a
+    companion sport category, or on a high-baseline brand could still
+    ship. This invariant is the unconditional backstop: ANY row above
+    100.0 blocks, with exactly two carve-outs:
+
+      - metadata rows (META_CATS): their =100 contract is I2's job;
+      - subject self-pin rows within float noise of 100 (<= 100.005):
+        the pin itself is legitimate, only real overflow blocks.
+
+    Tolerance is float-repr only (1e-6); a 4dp cell reading 100.0001
+    blocks, because a client reading the file sees a number above 100.
+    """
+    out = []
+    full, mono = _subject_forms(subject, s3_key, rows)
+    by_cat = {}
+    for r in rows:
+        by_cat.setdefault(r["cat_u"], []).append(r)
+    for cat_u, cat_rows in by_cat.items():
+        if cat_u in META_CATS:
+            continue
+        cat_has_full_subject = any(
+            _norm_token(r["val"]) in full for r in cat_rows)
+        for r in cat_rows:
+            bp = _num(r["bp_s"])
+            if bp is None or bp <= 100.0 + 1e-6:
+                continue
+            vn = _norm_token(r["val"])
+            is_subject = (vn in full
+                          or (vn in mono and not cat_has_full_subject))
+            if is_subject and bp <= 100.005:
+                continue
+            out.append(_v(
+                "I11", "reach above 100%",
+                f"{r['cat']} / {r['val']}", _fmt_pct(bp),
+                f"{r['val']} shows {_fmt_pct(bp)} reach in {r['cat']}. "
+                f"No row can reach more than 100% of the audience; "
+                f"this value is impossible and the file cannot ship.",
+            ))
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
                                 s3_client=None, verbose=True):
-    """Run all nine invariants read-only. Returns (violations, meta).
+    """Run all invariants read-only. Returns (violations, meta).
 
     Never raises on violations; internal errors in a single invariant
     degrade to a loud log + skip so an unrelated infrastructure hiccup
@@ -1200,6 +1247,7 @@ def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
     violations += _safe("I8", _check_i8, rows)
     violations += _safe("I9", _check_i9, rows, verbose)
     violations += _safe("I10", _check_i10, rows, s3_key)
+    violations += _safe("I11", _check_i11, rows, subject, s3_key)
 
     meta = {"n_rows": len(rows), "sample": sample,
             "is_cut": _is_cut_key(s3_key)}

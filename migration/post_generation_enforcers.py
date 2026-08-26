@@ -14575,6 +14575,10 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
          Rosalía TU / every-large-TU-pull signature.
       2. ``normalize_final_format`` -- strip '%' from BP/CS, blank
          BRAND CATEGORY numerics, zero phantom Raw=0/BP>0 rows.
+      2b. ``enforce_bp_hard_ceiling`` (2026-08-25) -- no row may ship
+         above 100%; baseline-aware subject-salted repair. Wired here
+         because the derived-cut paths run only this net and used to
+         bypass the ceiling entirely.
       3. ``recompute_raw_and_projection`` -- Raw = BP/100 * sample_size,
          Proj = Raw/10M * 329.9M.
       4. ``enforce_streaming_share_health`` -- catches the
@@ -14622,6 +14626,16 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
         # consolidated shape (single Disney+/Hulu row instead of two
         # sibling rows that could look like a duplicate).
         ("apply_disney_hulu_rollup", apply_disney_hulu_rollup),
+        # BP hard ceiling (wired 2026-08-25, partner HEINZ 100.965
+        # finding): the derived-cut paths (audience_cut_synthesis,
+        # addon_cut_synthesis) run ONLY this safety net, never
+        # run_all_enforcers, so an over-100 row written by a cut
+        # engine used to bypass the ceiling entirely. Cheap (Gen Pop
+        # map is process-cached), idempotent, no-op when nothing
+        # exceeds 100. Runs BEFORE the MPB mirror so repairs
+        # propagate, and BEFORE recompute_raw_and_projection so the
+        # repaired BPs cascade into Raw/Proj.
+        ("enforce_bp_hard_ceiling", enforce_bp_hard_ceiling),
         # Rule #3b (wired 2026-08-22): exact MPB mirror re-asserted at
         # write time so cut paths (which skip run_all_enforcers) hold
         # the invariant too. Runs before the Raw/Proj + CS recomputes.
