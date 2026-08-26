@@ -39,6 +39,18 @@ DEMO_COLS = {
 _digest_cache = {}       # {s3_key: (etag+norms_ver, built_ts, digest_str, meta)}
 _genpop_cache = {'ts': 0.0, 'map': None}
 _norms_cache = {'ts': 0.0, 'etag': None, 'data': None}
+# Parsed-profile cache (2026-08-26 latency work): profile CSVs are
+# 400-900KB and were re-downloaded + re-parsed on every analyze turn
+# even when the digest itself was cached. A HEAD revalidates the ETag
+# on every call (in-place corrections at the same key are seen
+# immediately, per in-place-corrections rules); the body is fetched
+# and parsed only when the content actually changed. DataFrames are
+# read-only downstream, so sharing across threads is safe.
+_df_cache = {}           # {s3_key: (etag, last_used_ts, df)}
+_DF_CACHE_MAX = 24
+# Cut-divergence text cache: keyed by parent+cut ETags + norms version
+# so a change to either file rebuilds the divergence block.
+_cutdiv_cache = {}       # {(p_key, c_key): (etag_pair, built_ts, text)}
 _cache_lock = threading.Lock()
 
 GENPOP_KEY = 'Gen_Pop_2026.csv'
@@ -77,11 +89,34 @@ def _parse_bp(v):
 
 
 def load_profile_df(s3_client, bucket, s3_key):
-    """Fetch a profile CSV from S3. Returns (df, etag)."""
+    """Fetch a profile CSV from S3, ETag-revalidated. Returns (df, etag).
+
+    A cached parse is reused only after a HEAD confirms the S3 object
+    is byte-identical (same ETag), so freshness semantics match the
+    old fetch-every-time behavior while skipping the repeat download
+    and pandas parse on warm turns."""
+    with _cache_lock:
+        cached = _df_cache.get(s3_key)
+    if cached:
+        try:
+            head = s3_client.head_object(Bucket=bucket, Key=s3_key)
+            h_etag = (head.get('ETag') or '').strip('"')
+            if h_etag and h_etag == cached[0]:
+                with _cache_lock:
+                    _df_cache[s3_key] = (cached[0], time.time(), cached[2])
+                return cached[2], cached[0]
+        except Exception:
+            pass  # fall through to the plain GET
     resp = s3_client.get_object(Bucket=bucket, Key=s3_key)
     etag = (resp.get('ETag') or '').strip('"')
     content = resp['Body'].read().decode('utf-8', 'replace')
     df = pd.read_csv(io.StringIO(content)).fillna('')
+    with _cache_lock:
+        _df_cache[s3_key] = (etag, time.time(), df)
+        if len(_df_cache) > _DF_CACHE_MAX:
+            for k, _ in sorted(_df_cache.items(),
+                               key=lambda kv: kv[1][1])[:8]:
+                _df_cache.pop(k, None)
     return df, etag
 
 
@@ -481,12 +516,15 @@ def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
 
     p_df, p_etag = load_profile_df(s3_client, bucket, p_key)
     p_cache_key = f"{p_etag}|{norms_ver}"
-    p_meta = _profile_meta(p_df, primary.get('name'))
     with _cache_lock:
         cached = _digest_cache.get(p_key)
     if cached and cached[0] == p_cache_key:
-        p_digest = cached[2]
+        # Same bytes + same norms version: the stored meta was built
+        # from identical content, so reuse it instead of re-walking
+        # the full DataFrame.
+        p_digest, p_meta = cached[2], cached[3]
     else:
+        p_meta = _profile_meta(p_df, primary.get('name'))
         p_digest = build_profile_digest(p_df, p_meta, genpop, norms=norms)
         with _cache_lock:
             _digest_cache[p_key] = (p_cache_key, time.time(), p_digest,
@@ -503,10 +541,24 @@ def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
         if not c_key or c_key == p_key:
             continue
         try:
-            c_df, _ = load_profile_df(s3_client, bucket, c_key)
-            c_meta = _profile_meta(c_df, cut.get('name'))
-            parts.append(build_cut_divergence(
-                p_df, p_meta, c_df, c_meta, genpop))
+            c_df, c_etag = load_profile_df(s3_client, bucket, c_key)
+            cd_ver = f"{p_etag}|{c_etag}|{norms_ver}"
+            with _cache_lock:
+                cd_cached = _cutdiv_cache.get((p_key, c_key))
+            if cd_cached and cd_cached[0] == cd_ver:
+                parts.append(cd_cached[2])
+            else:
+                c_meta = _profile_meta(c_df, cut.get('name'))
+                cd_text = build_cut_divergence(
+                    p_df, p_meta, c_df, c_meta, genpop)
+                with _cache_lock:
+                    _cutdiv_cache[(p_key, c_key)] = (cd_ver, time.time(),
+                                                     cd_text)
+                    if len(_cutdiv_cache) > 60:
+                        for k, _ in sorted(_cutdiv_cache.items(),
+                                           key=lambda kv: kv[1][1])[:15]:
+                            _cutdiv_cache.pop(k, None)
+                parts.append(cd_text)
         except Exception as e:
             parts.append(f"CUT: {cut.get('name') or c_key} "
                          f"(failed to load: {e})")
@@ -520,12 +572,12 @@ def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
         try:
             e_df, e_etag = load_profile_df(s3_client, bucket, e_key)
             e_cache_key = f"{e_etag}|{norms_ver}"
-            e_meta = _profile_meta(e_df, ex.get('name'))
             with _cache_lock:
                 e_cached = _digest_cache.get(e_key)
             if e_cached and e_cached[0] == e_cache_key:
                 e_digest = e_cached[2]
             else:
+                e_meta = _profile_meta(e_df, ex.get('name'))
                 e_digest = build_profile_digest(e_df, e_meta, genpop,
                                                 norms=norms)
                 with _cache_lock:

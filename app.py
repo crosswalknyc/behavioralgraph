@@ -1197,22 +1197,76 @@ S3_USERS_KEY = 'system/users.json'  # S3 key for persistent user storage
 # never silently clobbered by a stale full-document save.
 _users_baseline = threading.local()
 
+# users.json read cache (2026-08-26 Prometheus latency work): the doc
+# is ~10MB and load_users() runs several times per request (auth gate,
+# run-access checks, credit preflight, the charge itself). An
+# ETag-conditional GET turns the repeat fetches into 304s served from
+# process memory, and the local mirror file is rewritten only when the
+# content actually changed. Every call still revalidates against S3,
+# so freshness semantics are unchanged, and every caller still gets
+# its own freshly-parsed doc (no shared mutable state).
+_users_s3_cache = {'etag': None, 'raw': None, 'mirror_etag': None}
+_users_s3_cache_lock = threading.Lock()
+
+
+def _users_s3_cache_store(raw_body, etag, mirror_written=False):
+    """Remember the exact users.json bytes now current in S3."""
+    if not etag or raw_body is None:
+        return
+    with _users_s3_cache_lock:
+        _users_s3_cache['etag'] = etag
+        _users_s3_cache['raw'] = raw_body
+        if mirror_written:
+            _users_s3_cache['mirror_etag'] = etag
+
+
 def load_users():
     """Load users from S3 (persistent) or local file (fallback)."""
     _users_baseline.raw = None
     # Try S3 first for persistence across Render restarts
     if s3_client:
         try:
-            response = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_USERS_KEY)
-            raw_body = response['Body'].read().decode('utf-8')
+            with _users_s3_cache_lock:
+                c_etag = _users_s3_cache.get('etag')
+                c_raw = _users_s3_cache.get('raw')
+            raw_body, etag = None, None
+            if c_etag and c_raw is not None:
+                try:
+                    response = s3_client.get_object(
+                        Bucket=S3_BUCKET, Key=S3_USERS_KEY,
+                        IfNoneMatch=c_etag)
+                    raw_body = response['Body'].read().decode('utf-8')
+                    etag = (response.get('ETag') or '').strip('"') or None
+                except ClientError as ce:
+                    meta = ce.response.get('ResponseMetadata') or {}
+                    code = (ce.response.get('Error') or {}).get('Code', '')
+                    if (meta.get('HTTPStatusCode') == 304
+                            or code in ('304', 'NotModified')):
+                        raw_body, etag = c_raw, c_etag  # unchanged in S3
+                    else:
+                        raise
+            if raw_body is None:
+                response = s3_client.get_object(Bucket=S3_BUCKET,
+                                                Key=S3_USERS_KEY)
+                raw_body = response['Body'].read().decode('utf-8')
+                etag = (response.get('ETag') or '').strip('"') or None
             data = json.loads(raw_body)
             print(f"✅ Loaded users from S3")
             # Remember the exact doc this caller starts from, so a later
             # save_users(data) can replay only the caller's own changes.
             _users_baseline.raw = raw_body
-            # Also save locally for faster subsequent reads
-            with open(USERS_FILE, 'w') as f:
-                json.dump(data, f, indent=2)
+            with _users_s3_cache_lock:
+                _users_s3_cache['etag'] = etag
+                _users_s3_cache['raw'] = raw_body
+                mirror_stale = (etag is None
+                                or _users_s3_cache.get('mirror_etag') != etag)
+                if mirror_stale:
+                    _users_s3_cache['mirror_etag'] = etag
+            # Also save locally for faster subsequent reads (skipped
+            # when the bytes have not changed since the last write).
+            if mirror_stale or not os.path.exists(USERS_FILE):
+                with open(USERS_FILE, 'w') as f:
+                    json.dump(data, f, indent=2)
             return data
         except s3_client.exceptions.NoSuchKey:
             print("📁 No users.json in S3 yet, will create on first save")
@@ -1335,6 +1389,14 @@ def _users_cas_mutate(mutate_fn):
             if final is not None:
                 print(f"✅ Users saved to S3")
                 try:
+                    # Same serialization as _s3_json_cas_update's body,
+                    # so the cached bytes match what landed in S3.
+                    _users_s3_cache_store(
+                        json.dumps(final, indent=2, default=str), _etag,
+                        mirror_written=True)
+                except Exception:
+                    pass
+                try:
                     with open(USERS_FILE, 'w') as f:
                         json.dump(final, f, indent=2)
                 except Exception as e:
@@ -1393,6 +1455,15 @@ def save_users(data):
                 S3_BUCKET, S3_USERS_KEY, _apply_caller_changes,
                 log_name='users.json')
             print(f"✅ Users saved to S3")
+            if final is not None:
+                try:
+                    # The local mirror already holds this doc (written
+                    # above, or refreshed just below when merged).
+                    _users_s3_cache_store(
+                        json.dumps(final, indent=2, default=str), _etag,
+                        mirror_written=True)
+                except Exception:
+                    pass
             if final is not None and final is not data:
                 # Keep the local fallback copy aligned with the merged
                 # doc that actually landed in S3.
@@ -52814,6 +52885,24 @@ def _pm_validate_page_context(page_context):
             'extras': clean_extras}, None
 
 
+def _pm_charge_async(username, description):
+    """Record a chatbot-analysis charge without blocking the response.
+
+    The debit is a ~10MB users.json read-modify-write on S3; both call
+    sites already ignored its return value and swallowed failures, so
+    moving it to a daemon thread changes nothing semantically - it
+    just takes the write off the user's wait. consume_credit runs a
+    fresh CAS read internally and needs no request context."""
+    def _charge():
+        try:
+            consume_credit(username, description=description, job_id='',
+                           pull_type='Chatbot Analysis',
+                           credits_used=CREDITS_CHATBOT_ANALYZE)
+        except Exception:
+            traceback.print_exc()
+    threading.Thread(target=_charge, daemon=True).start()
+
+
 def _pm_search_demand_response(user, text, history):
     """Search-journey demand read (2026-08-26 Jenna directive): how
     people find, search for, and first touch a title or brand. Shaped
@@ -52871,16 +52960,10 @@ def _pm_search_demand_response(user, text, history):
                  for f in (data.get('followups') or [])
                  if str(f).strip()][:4]
     if _pm_user:
-        try:
-            consume_credit(
-                _pm_user,
-                description=(f"Chatbot Analysis [search demand] - "
-                             f"{study.get('subject') or 'search demand'}"),
-                job_id='',
-                pull_type='Chatbot Analysis',
-                credits_used=CREDITS_CHATBOT_ANALYZE)
-        except Exception:
-            traceback.print_exc()
+        _pm_charge_async(
+            _pm_user,
+            f"Chatbot Analysis [search demand] - "
+            f"{study.get('subject') or 'search demand'}")
     return jsonify({
         'success': True, 'action': 'answer', 'reply': reply,
         'followups': followups, 'offer_deck': False, 'deck_angle': None,
@@ -52990,18 +53073,13 @@ def api_synth_chat_analyze():
     deck_angle = data.get('deck_angle')
     # Record the successful analysis as tracked usage (unlimited users
     # included - their history + credits_used counters still move).
+    # Deferred to a daemon thread so the S3 write is off the reply path.
     if _pm_user:
-        try:
-            consume_credit(
-                _pm_user,
-                description=(f"Chatbot Analysis"
-                             f"{' [' + mode + ']' if mode else ''} - "
-                             f"{p_meta.get('name') or 'open profile'}"),
-                job_id='',
-                pull_type='Chatbot Analysis',
-                credits_used=CREDITS_CHATBOT_ANALYZE)
-        except Exception:
-            traceback.print_exc()
+        _pm_charge_async(
+            _pm_user,
+            f"Chatbot Analysis"
+            f"{' [' + mode + ']' if mode else ''} - "
+            f"{p_meta.get('name') or 'open profile'}")
     return jsonify({
         'success': True, 'action': action, 'reply': reply,
         'followups': followups,
