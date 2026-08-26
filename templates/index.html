@@ -61077,6 +61077,27 @@ https://www.instagram.com/p/..."></textarea>
             return null;
         }
 
+        // ============= SEARCH-JOURNEY DEMAND ROUTING (2026-08-26) =============
+        // Questions about how people FIND a title or brand (search
+        // demand, first touch, rival-platform hunt, destination search)
+        // route to the analyze endpoint with mode='search_demand'. They
+        // carry their own subject, so no open profile is required.
+        // Mirrors detect_search_demand_intent in prometheus_analysis.py.
+        function _pmLooksSearchDemand(text) {
+            var t = String(text || '');
+            if (!t.trim()) return false;
+            if (/\bsearch demand\b/i.test(t)) return true;
+            if (/\bsearch[- ]journey\b/i.test(t)) return true;
+            if (/\bsearch[- ]to[- ]play\b/i.test(t)) return true;
+            if (/\bfirst[- ]touch(ed|ing)?\b/i.test(t)) return true;
+            if (/\bdestination (search|share)\b/i.test(t)) return true;
+            if (/\b(netflix|hulu|hbo max|max|prime video|prime|disney\+?|peacock|paramount\+?|apple tv\+?|tubi|starz|youtube) hunt\b/i.test(t)) return true;
+            if (/\bhow (are|were|do|did|is|was) (people|viewers|users|searchers|audiences?|everyone|subscribers) (find|finding|discover|discovering|first[- ]touch)/i.test(t)) return true;
+            if (/\bwhat('?s| is| was) the search (demand|interest|volume)\b/i.test(t)) return true;
+            if (/\bwhere[- ]to[- ]watch search/i.test(t)) return true;
+            return false;
+        }
+
         // Other profiles open as dashboard tabs (beyond the active one).
         function _pmOtherOpenTabs(ctx) {
             var out = [];
@@ -61270,7 +61291,7 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         async function _pmAnalyze(text, ctx, mode) {
-            if (!ctx) {
+            if (!ctx && mode !== 'search_demand') {
                 synthChatPushTurn('agent',
                     'Nothing is open to analyze yet. Open a profile from ' +
                     'Select Profile (and check any Data Cuts you want ' +
@@ -61580,6 +61601,11 @@ https://www.instagram.com/p/..."></textarea>
             if (_pmIsCompareOthersAsk(text)) {
                 _pmShowComparePicker(_pmCtx);
                 return;
+            }
+            if (_pmLooksSearchDemand(text)) {
+                var _pmOutcomeSd = await _pmAnalyze(text, _pmCtx,
+                                                    'search_demand');
+                if (_pmOutcomeSd !== 'reroute') return;
             }
             var _pmMode = _pmModeForText(text);
             if (_pmMode && _pmCtx) {

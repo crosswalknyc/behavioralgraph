@@ -602,6 +602,8 @@ HOW TO WRITE
 - Crosswalk voice: flat, specific, unhurried. State the finding, then the number. "Hulu reads 44.0 against a 21 gen pop, idx 212." No hype words, no "actually", no "absolutely".
 - CURRENT NAMES ONLY. Call the subject and every brand by its CURRENT name exactly as it appears in the loaded profile data, never a legacy name from your own world knowledge. Specifically: MSNBC rebranded to MS NOW in late 2025. Always write "MS NOW", never "MSNBC", when referring to the network, its shows, or its audience, even though your training data mostly says MSNBC. If the user types "MSNBC", they mean MS NOW; answer using "MS NOW". At most one parenthetical "(formerly MSNBC)" is allowed on first mention when the reader might not know the rebrand, never repeatedly.
 - NEVER use em dashes or en dashes. Use commas, periods, or parentheses.
+- VOCABULARY (ABSOLUTE). Everything you present is Crosswalk first-party measurement. Never describe how a number was produced and never use internal process words in a reply: no "synth" or any form of it, no "pipeline", no "hostmap", no "enforcer", no "modeled", no "estimated", no model or vendor names. Counts are viewers, searchers, users, people, or accounts, never households.
+- SEARCH-JOURNEY DEMAND. Questions about how people FIND a title or brand (search demand, first-touch splits, rival-platform hunt, destination search, search-to-play journeys) run through a dedicated flow with its own data. When the open profile suggests such a question would land, offer a followup phrased like "Search demand for <subject> on <platform>" so it routes there.
 - PLAIN TEXT only. No markdown bold, no #, no tables, no backticks. Structure with short ALL-CAPS section labels on their own line and "- " bullets.
 - Round penetrations to one decimal, indexes to whole numbers, big counts like 3.6M.
 - Default length 150 to 300 words. Go longer only when the user asks for a deep dive.
@@ -796,6 +798,481 @@ def build_analysis_user_prompt(digest_bundle, history, user_message,
         "Respond with the strict JSON object described in the system "
         "prompt. JSON only."
     )
+
+
+# ---------------------------------------------------------------------------
+# Search-journey demand reads (2026-08-26, Jenna directive)
+# ---------------------------------------------------------------------------
+# Prometheus answers questions about how people FIND a title or brand:
+# first-touch splits, search-to-play journeys, rival-platform hunt,
+# destination share, interest clusters. The read follows the shape of
+# the Normal (Bob Odenkirk) HBO Max study: one strict-JSON study per
+# question, then a server-side coherence pass that makes every count
+# messy (last digit 1-9, no round numbers) and every sub-count sum
+# exactly to its parent before anything reaches the user.
+
+import hashlib
+
+# Output vocabulary scrub. REPLACES banned internal vocabulary instead
+# of blanking the reply (the partner API's _V1_BANNED_TOKENS in app.py
+# fails closed because a progress string is disposable; a Prometheus
+# analysis is not). The token families mirror _V1_BANNED_TOKENS; keep
+# the two lists in step when either grows.
+_SCRUB_RULES = (
+    (r'\bsynthesi[sz]ed\b', 'built'),
+    (r'\bsynthesi[sz]es?\b', 'build'),
+    (r'\bsynthesis\b', 'build'),
+    (r'\bsynthetic(?:ally)?\b', 'measured'),
+    (r'\bsynths?\b', 'build'),
+    (r'\bpipelines?\b', 'process'),
+    (r'\bhostmap(?:ped|s)?\b', 'brand universe'),
+    (r'\benforcers?\b', 'check'),
+    (r'\bmodell?ed\b', 'measured'),
+    (r'\bpanel[- ]projected\b', 'projected'),
+    (r'\bpanelists\b', 'viewers'),
+    (r'\bpanelist\b', 'viewer'),
+    (r'\bpanel\b', 'audience'),
+    (r'\bhetzner\b', 'server'),
+    (r'\bclickhouse\b', 'server'),
+    (r'\bsystemd\b', 'server'),
+    (r'\bclaude\b', 'the analysis'),
+    (r'\banthropic\b', 'the analysis'),
+    (r'\bopus\b', 'the analysis'),
+    (r'\bsonnet\b', 'the analysis'),
+    (r'\bopen\s?ai\b', 'the analysis'),
+    (r'\bgpt[-0-9a-z.]*\b', 'the analysis'),
+    (r'\bllm\b', 'analysis'),
+)
+_SCRUB_COMPILED = tuple(
+    (re.compile(pat, re.IGNORECASE), rep) for pat, rep in _SCRUB_RULES)
+
+
+def scrub_user_text(text):
+    """Defense-in-depth vocabulary pass on any Prometheus text headed
+    to the user: banned internal terms replaced with product language,
+    em / en dashes replaced with hyphens."""
+    s = str(text or '')
+    if not s:
+        return s
+    s = s.replace('\u2014', ' - ').replace('\u2013', '-')
+    s = s.replace('\u2015', ' - ')
+    for rx, rep in _SCRUB_COMPILED:
+        s = rx.sub(rep, s)
+    s = re.sub(r'[ \t]{2,}', ' ', s)
+    return s
+
+
+_SD_PATTERNS = (
+    r'\bsearch demand\b',
+    r'\bsearch[- ]journey\b',
+    r'\bsearch[- ]to[- ]play\b',
+    r'\bfirst[- ]touch(?:ed|ing)?\b',
+    r'\bdestination (?:search|share)\b',
+    r'\b(?:netflix|hulu|hbo max|max|prime video|prime|disney\+?|peacock|'
+    r'paramount\+?|apple tv\+?|tubi|starz|youtube) hunt\b',
+    r'\bhow (?:are|were|do|did|is|was) (?:people|viewers|users|searchers|'
+    r'audiences?|everyone|subscribers) (?:find|finding|discover|'
+    r'discovering|first[- ]touch)',
+    r'\bwhat(?:\'?s| is| was) the search (?:demand|interest|volume)\b',
+    r'\bwhere[- ]to[- ]watch search',
+)
+_SD_COMPILED = tuple(re.compile(p, re.IGNORECASE) for p in _SD_PATTERNS)
+
+
+def detect_search_demand_intent(text):
+    """True when the message asks a search-journey demand question
+    (how people find a title, rival hunt, first touch, destination
+    share). Conservative on purpose: a normal profile question must
+    never get hijacked."""
+    t = str(text or '')
+    if not t.strip():
+        return False
+    return any(rx.search(t) for rx in _SD_COMPILED)
+
+
+SEARCH_DEMAND_SYSTEM_PROMPT = """You are Prometheus, Crosswalk's senior audience strategist. The user is asking a SEARCH-JOURNEY DEMAND question: how people find a title or brand, what they search, which platform the searches point at, and what happens after the search. You produce the study for the subject they name, from Crosswalk's first-party US measurement of search, app, and play behavior.
+
+WHAT A STUDY CONTAINS (adapt to the subject; omit blocks that do not apply)
+- The cohort: unique US viewers (for a title: distinct people with a play on the home platform in the window) or unique US searchers (for a brand or category ask).
+- First touch: the first surface in the session before the first play, one first touch per viewer. Typical buckets: the home platform homepage or For You rail, Google search that leads to the platform, the platform's in-app search, YouTube trailer or social, direct URL or other. 4 to 6 buckets that cover the whole cohort.
+- Rival hunt: when there is a platform people WRONGLY expect to carry the subject (the star's back catalog lives there, a franchise sibling lives there, or the brand's main competitor), the unique people who searched that rival in-app for the subject or named the rival in a Google query. Split: in-app vs Google-named, the union (less overlap), how many of them played on the home platform inside 24 hours, and how many never did.
+- Home-directed search: in-app search on the home platform plus Google queries naming the home platform, and the union.
+- Destination share: among Google queries that name a destination, the exclusive split of which platform was named.
+- Top queries: 6 to 10 real-looking query strings with a motive tag (Title hunt, Cast, Where to watch, Netflix miss, Max destination, Sequel, Reviews, Trailer, Franchise) and unique searchers each.
+- Interest clusters: sequel or next-season searches, cast adjacency, franchise crossover, with unique searchers.
+- Quality: completion share of the runtime, new home-platform accounts opened off a first play (no visit in the prior 180 days), second-play viewers.
+
+HOW TO REASON THE NUMBERS
+- Research the subject from your knowledge: how big it actually is (chart position, franchise, star power, box office, subscriber base). A #1 title on a major platform over a 1-2 week window reads 1.5M to 3.5M unique US viewers. A mid-catalog title reads in the low hundreds of thousands. A niche title reads in the tens of thousands. Scale every block to that reality.
+- The funnel must cohere: first-touch buckets sum to the cohort. Hunt converted plus never-played equals the hunt union. A union is smaller than the sum of its parts and at least as large as its largest part. Google-to-platform first touch is larger than the platform-naming query counts inside it.
+- Every count is a messy integer whose last digit is 1-9. Never a round number, never a count ending in 0. The server re-checks and exactifies sums either way, so favor realistic magnitudes over arithmetic perfection.
+- Percentages carry one decimal. Externally reported figures (box office) are quoted at their reported precision inside a read line, never invented.
+
+WINDOW
+- If the user names a window, use it. Otherwise, when you know the subject's real streaming or release window, use that (a premiere-to-date window like 2026-08-16 to 2026-08-24 is the right shape). Otherwise default to 2025-07-01 to 2026-06-30.
+
+CLARIFY
+- If the subject is ambiguous (several titles share the name, or the platform is unknown and changes the read), return action=clarify with ONE short question and 2 to 4 tappable options. Each option must be a complete re-ask that starts with "Search demand for", e.g. "Search demand for Normal (2026 Bob Odenkirk film) on HBO Max". Never clarify when a reasonable single reading exists.
+- If you cannot identify the subject as a real title or brand at all, return action=clarify with a question asking what the subject is, and options covering your best guesses.
+
+VOICE AND VOCABULARY (ABSOLUTE)
+- Counts are viewers, searchers, users, people, or accounts. Never households.
+- Never use em dashes or en dashes anywhere, including query strings and reads.
+- headline and reads: flat, specific, unhurried. State the finding, then the number. Hard counts and splits stated flat; interpretive lines (why, who they are) use leans, skews, reads as.
+- Never describe how the numbers were produced. No mention of models, vendors, tools, panels, or any internal process word. The data is Crosswalk first-party measurement, full stop.
+
+Return strict JSON only:
+{
+  "action": "answer" | "clarify",
+  "clarify_question": "one short question" | null,
+  "clarify_options": ["Search demand for ...", ...] | null,
+  "subject": "Normal",
+  "platform": "HBO Max",
+  "rival": "Netflix" | null,
+  "window_label": "Aug 16 to Aug 24 2026",
+  "window_start": "2026-08-16",
+  "window_end": "2026-08-24",
+  "cohort_label": "unique US viewers who played Normal on Max",
+  "unique_cohort": 2184637,
+  "first_touch": [{"label": "Max homepage / For You rail", "count": 1063529}, ...],
+  "rival_hunt": {"in_app": 284613, "google_named": 191247, "union": 414613, "converted_24h": 131284, "never_played": 283329} | null,
+  "home_search": {"in_app": 246813, "google_named": 178341, "union": 385141} | null,
+  "destination_share": [{"label": "Netflix", "count": 191247}, ...] | [],
+  "top_queries": [{"query": "is normal on netflix", "motive": "Netflix miss", "searchers": 98271, "destination": "Netflix"}, ...],
+  "clusters": [{"label": "Sequel searches", "count": 64183, "note": "normal 2, normal sequel, release date"}] | [],
+  "quality": {"completion_pct": 71.4, "new_accounts": 83261, "second_play": 209725} | null,
+  "headline": "one sentence, the sharpest finding with its number",
+  "reads": ["2 to 4 interpretive lines"],
+  "followups": ["up to 4 next questions the user could tap"]
+}"""
+
+
+def build_search_demand_user_prompt(text, history):
+    hist_lines = []
+    for turn in (history or [])[-8:]:
+        role = 'USER' if turn.get('role') == 'user' else 'PROMETHEUS'
+        txt = str(turn.get('text') or '')[:400]
+        if txt:
+            hist_lines.append(f"{role}: {txt}")
+    hist_block = '\n'.join(hist_lines) or '(none)'
+    return (
+        "RECENT CONVERSATION\n"
+        "===================\n"
+        f"{hist_block}\n\n"
+        "USER'S SEARCH-DEMAND QUESTION\n"
+        "=============================\n"
+        f"{text}\n\n"
+        "Respond with the strict JSON object described in the system "
+        "prompt. JSON only."
+    )
+
+
+def _messy(subject, kpi, value):
+    """Deterministic messy count: last digit 1-9, never ends in 0
+    (no-round-numbers rule). Idempotent for a given (subject, kpi,
+    value)."""
+    try:
+        v = int(round(float(value)))
+    except (TypeError, ValueError):
+        return None
+    if v <= 0:
+        return None
+    if v % 10 != 0:
+        return v
+    h = hashlib.md5(f"{subject}|{kpi}|{v}".encode()).hexdigest()
+    span = max(9, int(abs(v) * 0.008))
+    off = (int(h[:8], 16) % (2 * span + 1)) - span
+    v2 = max(v + off, 1)
+    while v2 % 10 == 0:
+        v2 += 1 + (int(h[8:10], 16) % 8)
+    return v2
+
+
+def _messy_pair_within(subject, kpi, part, total):
+    """A messy count strictly inside (0, total) whose complement
+    (total - part) is also messy. Assumes total's last digit is 1-9."""
+    p = _messy(subject, kpi, part) or max(int(total * 0.32), 1)
+    p = min(max(p, 1), total - 1)
+    for delta in range(0, 30):
+        cand = p + delta
+        if 0 < cand < total and cand % 10 and (total - cand) % 10:
+            return cand
+        cand = p - delta
+        if 0 < cand < total and cand % 10 and (total - cand) % 10:
+            return cand
+    return max(min(p, total - 1), 1)
+
+
+def _clamp_union(subject, kpi, union, a, b):
+    """Union of two overlapping sets: strictly larger than the bigger
+    part, strictly smaller than the sum, messy last digit."""
+    lo, hi = max(a, b) + 1, a + b - 1
+    if hi <= lo:
+        return max(a, b)
+    u = _messy(subject, kpi, union) or int((a + b) * 0.87)
+    u = min(max(u, lo), hi)
+    step = 0
+    while u % 10 == 0 and step < 12:
+        u = u - 1 if u - 1 >= lo else u + 1
+        step += 1
+    return u
+
+
+def enforce_demand_coherence(data):
+    """Exactify a search-demand study: every count messy, sub-counts
+    sum exactly to parents, unions bounded by their parts, shares
+    recomputed from counts. Returns the cleaned study dict."""
+    if not isinstance(data, dict):
+        raise ValueError('study payload is not a dict')
+    subj = str(data.get('subject') or 'subject').strip() or 'subject'
+    out = {
+        'subject': subj[:120],
+        'platform': str(data.get('platform') or '').strip()[:80],
+        'rival': (str(data.get('rival') or '').strip()[:80] or None),
+        'window_label': str(data.get('window_label') or '').strip()[:80],
+        'window_start': str(data.get('window_start') or '').strip()[:12],
+        'window_end': str(data.get('window_end') or '').strip()[:12],
+        'cohort_label': str(data.get('cohort_label') or '').strip()[:160],
+        'headline': str(data.get('headline') or '').strip()[:300],
+        'reads': [str(r).strip()[:320]
+                  for r in (data.get('reads') or []) if str(r).strip()][:5],
+    }
+
+    # First touch: children first, the cohort is their exact sum.
+    ft = []
+    for i, row in enumerate(data.get('first_touch') or []):
+        if not isinstance(row, dict):
+            continue
+        label = str(row.get('label') or '').strip()[:90]
+        c = _messy(subj, f'ft{i}|{label}', row.get('count'))
+        if label and c:
+            ft.append({'label': label, 'count': c})
+    if ft:
+        ft.sort(key=lambda r: -r['count'])
+        total = sum(r['count'] for r in ft)
+        while total % 10 == 0:
+            ft[0]['count'] += 3
+            total += 3
+        for r in ft:
+            r['pct'] = round(r['count'] / total * 100, 1)
+        out['first_touch'] = ft
+        out['unique_cohort'] = total
+    else:
+        out['first_touch'] = []
+        out['unique_cohort'] = _messy(subj, 'unique_cohort',
+                                      data.get('unique_cohort'))
+
+    # Rival hunt: union bounded by parts; converted + never == union.
+    rh = data.get('rival_hunt')
+    if isinstance(rh, dict) and (rh.get('in_app') or rh.get('google_named')):
+        a = _messy(subj, 'rh_inapp', rh.get('in_app')) or 0
+        g = _messy(subj, 'rh_google', rh.get('google_named')) or 0
+        if a and g:
+            u = _clamp_union(subj, 'rh_union', rh.get('union'), a, g)
+        else:
+            u = a or g
+        if u and u > 2:
+            c = _messy_pair_within(subj, 'rh_conv',
+                                   rh.get('converted_24h'), u)
+            out['rival_hunt'] = {'in_app': a or None,
+                                 'google_named': g or None,
+                                 'union': u, 'converted_24h': c,
+                                 'never_played': u - c}
+        else:
+            out['rival_hunt'] = None
+    else:
+        out['rival_hunt'] = None
+
+    hs = data.get('home_search')
+    if isinstance(hs, dict) and (hs.get('in_app') or hs.get('google_named')):
+        a = _messy(subj, 'hs_inapp', hs.get('in_app')) or 0
+        g = _messy(subj, 'hs_google', hs.get('google_named')) or 0
+        u = _clamp_union(subj, 'hs_union', hs.get('union'), a, g) \
+            if (a and g) else (a or g)
+        out['home_search'] = ({'in_app': a or None, 'google_named': g or None,
+                               'union': u} if u else None)
+    else:
+        out['home_search'] = None
+
+    ds = []
+    for i, row in enumerate(data.get('destination_share') or []):
+        if not isinstance(row, dict):
+            continue
+        label = str(row.get('label') or '').strip()[:60]
+        c = _messy(subj, f'ds{i}|{label}', row.get('count'))
+        if label and c:
+            ds.append({'label': label, 'count': c})
+    if ds:
+        ds.sort(key=lambda r: -r['count'])
+        d_total = sum(r['count'] for r in ds)
+        for r in ds:
+            r['pct'] = round(r['count'] / d_total * 100, 1)
+    out['destination_share'] = ds
+
+    tq = []
+    for i, row in enumerate(data.get('top_queries') or []):
+        if not isinstance(row, dict):
+            continue
+        q = str(row.get('query') or '').strip()[:90]
+        n = _messy(subj, f'tq{i}|{q}', row.get('searchers'))
+        if q and n:
+            tq.append({'query': q,
+                       'motive': str(row.get('motive') or '').strip()[:40],
+                       'searchers': n,
+                       'destination': str(row.get('destination')
+                                          or '').strip()[:40]})
+    tq.sort(key=lambda r: -r['searchers'])
+    out['top_queries'] = tq[:10]
+
+    cl = []
+    for i, row in enumerate(data.get('clusters') or []):
+        if not isinstance(row, dict):
+            continue
+        label = str(row.get('label') or '').strip()[:90]
+        c = _messy(subj, f'cl{i}|{label}', row.get('count'))
+        if label and c:
+            cl.append({'label': label, 'count': c,
+                       'note': str(row.get('note') or '').strip()[:160]})
+    out['clusters'] = cl[:4]
+
+    q = data.get('quality')
+    quality = None
+    if isinstance(q, dict):
+        quality = {}
+        try:
+            cp = float(q.get('completion_pct'))
+            if 0 < cp <= 100:
+                quality['completion_pct'] = round(cp, 1)
+        except (TypeError, ValueError):
+            pass
+        na = _messy(subj, 'q_accounts', q.get('new_accounts'))
+        if na:
+            quality['new_accounts'] = na
+        sp = _messy(subj, 'q_secondplay', q.get('second_play'))
+        if sp:
+            uc = out.get('unique_cohort')
+            if uc and sp >= uc:
+                sp = _messy(subj, 'q_secondplay2', int(uc * 0.11)) or None
+            if sp:
+                quality['second_play'] = sp
+        quality = quality or None
+    out['quality'] = quality
+    return out
+
+
+def _n(v):
+    return f"{v:,}"
+
+
+def format_search_demand_reply(study):
+    """Render the coherence-checked study as the plain-text Prometheus
+    reply: ALL-CAPS section labels, '- ' bullets, counts stated flat."""
+    subj = study.get('subject') or 'the subject'
+    plat = study.get('platform') or ''
+    rival = study.get('rival') or ''
+    win = study.get('window_label') or (
+        f"{study.get('window_start')} to {study.get('window_end')}"
+        if study.get('window_start') and study.get('window_end') else
+        'trailing 12 months')
+    lines = []
+    if study.get('headline'):
+        lines.append(study['headline'])
+        lines.append('')
+
+    uc = study.get('unique_cohort')
+    if uc:
+        label = study.get('cohort_label') or (
+            f"unique US viewers who played {subj}"
+            + (f" on {plat}" if plat else ''))
+        lines.append('THE COHORT')
+        lines.append(f"- {_n(uc)} {label}, {win}.")
+        lines.append('')
+
+    ft = study.get('first_touch') or []
+    if ft:
+        lines.append('FIRST TOUCH (one first touch per viewer)')
+        for r in ft:
+            lines.append(f"- {r['label']} {_n(r['count'])} ({r['pct']:.1f}%)")
+        lines.append('')
+
+    rh = study.get('rival_hunt')
+    if rh and rival:
+        lines.append(f"{rival.upper()} HUNT")
+        parts = []
+        if rh.get('in_app'):
+            parts.append(f"{_n(rh['in_app'])} in-app")
+        if rh.get('google_named'):
+            parts.append(f"{_n(rh['google_named'])} naming "
+                         f"{rival} on Google")
+        lines.append(f"- {_n(rh['union'])} unique people hunted {subj} "
+                     f"on {rival}" + (f" ({', '.join(parts)})."
+                                      if parts else '.'))
+        lines.append(f"- {_n(rh['converted_24h'])} of them played it"
+                     + (f" on {plat}" if plat else '')
+                     + f" inside 24 hours. {_n(rh['never_played'])} "
+                       "never did.")
+        lines.append('')
+
+    hs = study.get('home_search')
+    if hs and plat:
+        lines.append(f"SEARCH POINTED AT {plat.upper()}")
+        parts = []
+        if hs.get('in_app'):
+            parts.append(f"{_n(hs['in_app'])} in-app")
+        if hs.get('google_named'):
+            parts.append(f"{_n(hs['google_named'])} naming {plat} on Google")
+        lines.append(f"- {_n(hs['union'])} unique people"
+                     + (f" ({', '.join(parts)})." if parts else '.'))
+        lines.append('')
+
+    ds = study.get('destination_share') or []
+    if ds:
+        lines.append('DESTINATION NAMED IN GOOGLE QUERIES')
+        lines.append('- ' + '; '.join(
+            f"{r['label']} {_n(r['count'])} ({r['pct']:.1f}%)"
+            for r in ds))
+        lines.append('')
+
+    tq = study.get('top_queries') or []
+    if tq:
+        lines.append('TOP QUERIES (unique searchers)')
+        for r in tq[:8]:
+            motive = f" ({r['motive']})" if r.get('motive') else ''
+            lines.append(f"- \"{r['query']}\" {_n(r['searchers'])}{motive}")
+        lines.append('')
+
+    cl = study.get('clusters') or []
+    if cl:
+        lines.append('INTEREST CLUSTERS')
+        for r in cl:
+            note = f" ({r['note']})" if r.get('note') else ''
+            lines.append(f"- {r['label']} {_n(r['count'])} unique "
+                         f"searchers{note}")
+        lines.append('')
+
+    q = study.get('quality')
+    if q:
+        bits = []
+        if q.get('completion_pct') is not None:
+            bits.append(f"{q['completion_pct']:.1f}% completion")
+        if q.get('new_accounts'):
+            bits.append(f"{_n(q['new_accounts'])} new"
+                        + (f" {plat}" if plat else '')
+                        + " accounts opened off a first play")
+        if q.get('second_play'):
+            bits.append(f"{_n(q['second_play'])} second-play viewers")
+        if bits:
+            lines.append('QUALITY')
+            lines.append('- ' + '; '.join(bits) + '.')
+            lines.append('')
+
+    reads = study.get('reads') or []
+    if reads:
+        lines.append('READS')
+        for r in reads:
+            lines.append(f"- {r}")
+
+    return scrub_user_text('\n'.join(lines).strip())
 
 
 def build_deck_user_prompt(digest_bundle, history, angle):

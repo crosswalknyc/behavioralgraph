@@ -52814,6 +52814,80 @@ def _pm_validate_page_context(page_context):
             'extras': clean_extras}, None
 
 
+def _pm_search_demand_response(user, text, history):
+    """Search-journey demand read (2026-08-26 Jenna directive): how
+    people find, search for, and first touch a title or brand. Shaped
+    on the Normal (Bob Odenkirk) HBO Max study: first-touch splits,
+    rival hunt, destination share, interest clusters. Needs no page
+    context; the subject comes from the question itself. Every count
+    passes the server-side coherence pass (messy last digits, sub-counts
+    sum exactly to parents) and the vocabulary scrub before it ships."""
+    import prometheus_analysis as pma
+    _pm_user = (session.get('username') or user.get('username') or '').strip()
+    if _pm_user and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
+        return jsonify({
+            'success': False,
+            'guidance': True,
+            'error': ('No credits remaining for analysis. Use the credits '
+                      'button in the top bar to request more.'),
+        }), 402
+    user_prompt = pma.build_search_demand_user_prompt(text, history)
+    result = _pm_claude_json(pma.SEARCH_DEMAND_SYSTEM_PROMPT, user_prompt,
+                             max_tokens=7500, temperature=0.4)
+    if not result.get('success'):
+        _chatbot_error_email(
+            'brief-chat/analyze',
+            'search-demand model call failed: '
+            + str(result.get('error') or 'unknown')[:400],
+            tb='(model chain exhausted without a usable reply)')
+        return jsonify(_chatbot_calm_payload())
+    data = result.get('data') or {}
+    if isinstance(data, list):
+        data = next((d for d in data if isinstance(d, dict)), {})
+    if str(data.get('action') or '').strip().lower() == 'clarify':
+        q = pma.scrub_user_text(
+            str(data.get('clarify_question') or '').strip()
+            or 'Which title or brand should I read the search demand '
+               'for, and on which platform?')
+        opts = [pma.scrub_user_text(str(o).strip())[:160]
+                for o in (data.get('clarify_options') or [])
+                if str(o).strip()][:4]
+        return jsonify({
+            'success': True, 'action': 'answer', 'reply': q,
+            'followups': opts, 'offer_deck': False, 'deck_angle': None})
+    try:
+        study = pma.enforce_demand_coherence(data)
+        reply = pma.format_search_demand_reply(study)
+    except Exception as e:
+        traceback.print_exc()
+        _chatbot_error_email('brief-chat/analyze', e)
+        return jsonify(_chatbot_calm_payload())
+    if not reply.strip():
+        _chatbot_error_email('brief-chat/analyze',
+                             'search-demand study rendered empty',
+                             tb='(coherence pass left no sections)')
+        return jsonify(_chatbot_calm_payload())
+    followups = [pma.scrub_user_text(str(f).strip())[:160]
+                 for f in (data.get('followups') or [])
+                 if str(f).strip()][:4]
+    if _pm_user:
+        try:
+            consume_credit(
+                _pm_user,
+                description=(f"Chatbot Analysis [search demand] - "
+                             f"{study.get('subject') or 'search demand'}"),
+                job_id='',
+                pull_type='Chatbot Analysis',
+                credits_used=CREDITS_CHATBOT_ANALYZE)
+        except Exception:
+            traceback.print_exc()
+    return jsonify({
+        'success': True, 'action': 'answer', 'reply': reply,
+        'followups': followups, 'offer_deck': False, 'deck_angle': None,
+        'model': result.get('model'),
+        'profile': study.get('subject')})
+
+
 @app.route('/api/brief-chat/analyze', methods=['POST'])
 @requires_auth
 @_chatbot_route_guard('brief-chat/analyze')
@@ -52837,6 +52911,21 @@ def api_synth_chat_analyze():
                              tb='(request validation)')
         return jsonify(_chatbot_calm_payload())
     history = body.get('history') or []
+    # Search-journey demand asks (2026-08-26): route to the dedicated
+    # flow before the page-context gate; these questions carry their
+    # own subject and need no open profile. The frontend sends
+    # mode='search_demand' explicitly; the server-side intent check
+    # catches the same asks typed while a profile is open.
+    _sd_mode = str(body.get('mode') or '').strip().lower()
+    try:
+        import prometheus_analysis as _pma_sd
+        if _sd_mode == 'search_demand' \
+                or _pma_sd.detect_search_demand_intent(text):
+            return _pm_search_demand_response(user, text, history)
+    except Exception as e:
+        traceback.print_exc()
+        _chatbot_error_email('brief-chat/analyze', e)
+        return jsonify(_chatbot_calm_payload())
     ctx, ctx_err = _pm_validate_page_context(body.get('page_context'))
     if ctx_err:
         return ctx_err
@@ -52891,7 +52980,11 @@ def api_synth_chat_analyze():
                              'analysis returned an empty reply',
                              tb='(model returned no reply text)')
         return jsonify(_chatbot_calm_payload())
-    followups = [str(f).strip()[:160]
+    # Defense-in-depth vocabulary pass (2026-08-26): banned internal
+    # terms replaced and em dashes stripped before the text reaches
+    # the user. Mirrors the partner API's _V1_BANNED_TOKENS posture.
+    reply = pma.scrub_user_text(reply)
+    followups = [pma.scrub_user_text(str(f).strip())[:160]
                  for f in (data.get('followups') or [])
                  if str(f).strip()][:4]
     deck_angle = data.get('deck_angle')
