@@ -71289,25 +71289,64 @@ https://www.instagram.com/p/..."></textarea>
             });
 
             if (isCategorical) {
-                // Sort by % descending so the biggest behaviors anchor
-                // the left side of the chart (visual hierarchy).
+                // Cluster layout (no time scale): pin "Fully engaged" to the
+                // top-right and pack the remaining behaviors into a bubble
+                // cloud, biggest-first, via a golden-angle spiral seed plus
+                // pairwise overlap relaxation. Deterministic (no random).
                 rows.sort(function(a, b) { return b.pct - a.pct; });
-                // Evenly distribute across full canvas width, leaving
-                // ~80px buffer on each side so the leftmost / rightmost
-                // bubble labels don't clip.
-                var nCat = rows.length;
-                var xL = padL + 80;
-                var xR = W - padR - 80;
-                var stepX = (nCat > 1) ? (xR - xL) / (nCat - 1) : 0;
+                var feIdx = -1;
+                for (var _fi = 0; _fi < rows.length; _fi++) {
+                    if (/fully\s*engaged/i.test(rows[_fi].vertical)) { feIdx = _fi; break; }
+                }
+                var feRow = (feIdx >= 0) ? rows.splice(feIdx, 1)[0] : null;
+                var clusterCx = padL + (W - padL - padR) * 0.42;
+                var clusterCy = padT + (H - padT - padB) * 0.52;
+                var GA = Math.PI * (3 - Math.sqrt(5));
+                var avgR = rows.length
+                    ? rows.reduce(function(s, e) { return s + e.r; }, 0) / rows.length
+                    : 36;
+                var seedStep = avgR * 1.7;
                 rows.forEach(function(e, i) {
-                    e.cx = xL + i * stepX;
-                    e.laneIdx = i % MAX_LANES;
-                    e.blockW = Math.max(
-                        _jiqCompanionLabelWidth(_truncLabel(e.vertical)),
-                        e.typical_window ? _jiqCompanionLabelWidth(_truncWindow(e.typical_window)) : 0
-                    );
-                    e.labelW = e.blockW;
+                    var rad = seedStep * Math.sqrt(i + 0.5);
+                    var ang = i * GA;
+                    e.cx = clusterCx + rad * Math.cos(ang);
+                    e.cy = clusterCy + rad * Math.sin(ang);
                 });
+                if (feRow) {
+                    feRow.cx = W - padR - feRow.r - 24;
+                    feRow.cy = padT + feRow.r + 6;
+                }
+                var _allB = feRow ? rows.concat([feRow]) : rows;
+                var _GAP = 10;
+                for (var _it = 0; _it < 220; _it++) {
+                    for (var _a = 0; _a < _allB.length; _a++) {
+                        for (var _b = _a + 1; _b < _allB.length; _b++) {
+                            var A = _allB[_a], B = _allB[_b];
+                            var dx = B.cx - A.cx, dy = B.cy - A.cy;
+                            var dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+                            var minD = A.r + B.r + _GAP;
+                            if (dist < minD) {
+                                var push = (minD - dist) / 2;
+                                var ux = dx / dist, uy = dy / dist;
+                                if (A === feRow) { B.cx += ux * push * 2; B.cy += uy * push * 2; }
+                                else if (B === feRow) { A.cx -= ux * push * 2; A.cy -= uy * push * 2; }
+                                else {
+                                    A.cx -= ux * push; A.cy -= uy * push;
+                                    B.cx += ux * push; B.cy += uy * push;
+                                }
+                            }
+                        }
+                    }
+                    rows.forEach(function(e) {
+                        e.cx = Math.max(padL + e.r + 40, Math.min(W - padR - e.r - 40, e.cx));
+                        e.cy = Math.max(padT + e.r + 30, Math.min(H - padB - e.r - 30, e.cy));
+                    });
+                    if (feRow) { feRow.cx = W - padR - feRow.r - 24; feRow.cy = padT + feRow.r + 6; }
+                }
+                rows = feRow ? rows.concat([feRow]) : rows;
+                var _cenX = rows.reduce(function(s, e) { return s + e.cx; }, 0) / rows.length;
+                var _cenY = rows.reduce(function(s, e) { return s + e.cy; }, 0) / rows.length;
+                rows.forEach(function(e) { e._cenX = _cenX; e._cenY = _cenY; });
             } else {
                 _jiqSpreadCompanionRows(rows, 148, padL, padR, W, MAX_LANES);
             }
@@ -71361,16 +71400,20 @@ https://www.instagram.com/p/..."></textarea>
                     }
                 });
             }
-            rows.forEach(function(e) {
-                e.cy = axisY + laneOffsetY(e.laneIdx);
-            });
+            if (!isCategorical) {
+                rows.forEach(function(e) {
+                    e.cy = axisY + laneOffsetY(e.laneIdx);
+                });
+            }
 
             var parts = [];
             parts.push('<rect width="' + W + '" height="' + H + '" fill="transparent"/>');
 
-            // Horizontal divider line (time axis in time-anchored mode;
-            // just a visual separator in categorical mode).
-            parts.push('<line x1="' + padL + '" y1="' + axisY + '" x2="' + (W - padR) + '" y2="' + axisY + '" stroke="var(--border-color)" stroke-width="1.5"/>');
+            // Horizontal divider line (time axis) - time-anchored mode only.
+            // The cluster (categorical) view is a bubble cloud with no axis.
+            if (!isCategorical) {
+                parts.push('<line x1="' + padL + '" y1="' + axisY + '" x2="' + (W - padR) + '" y2="' + axisY + '" stroke="var(--border-color)" stroke-width="1.5"/>');
+            }
 
             if (isCategorical) {
                 // ── Categorical mode: no time ticks, single anchor pill
@@ -71410,26 +71453,21 @@ https://www.instagram.com/p/..."></textarea>
                 });
             }
 
-            // Connectors from axis to each bubble (thin guide lines)
-            rows.forEach(function(e) {
-                parts.push('<line x1="' + e.cx + '" y1="' + axisY + '" x2="' + e.cx + '" y2="' + e.cy + '" stroke="' + e.color + '" stroke-width="1" opacity="0.35"/>');
-            });
+            // Connectors from axis to each bubble (thin guide lines) -
+            // time-anchored mode only; the cluster view has no axis.
+            if (!isCategorical) {
+                rows.forEach(function(e) {
+                    parts.push('<line x1="' + e.cx + '" y1="' + axisY + '" x2="' + e.cx + '" y2="' + e.cy + '" stroke="' + e.color + '" stroke-width="1" opacity="0.35"/>');
+                });
+            }
 
             // Bubbles + labels (timing text lives in tooltip to avoid subtext collisions)
             // Long labels wrap onto up to 3 lines via _wrapLabel(); we
             // emit them as <tspan dy>s so the full label is visible.
             var LABEL_LINE_HEIGHT = 12;     // px between wrapped label lines
             rows.forEach(function(e) {
-                var labelAbove = (e.cy < axisY);
                 var cleanLabel = _truncLabel(e.vertical);
                 var labelLines = _wrapLabel(cleanLabel, 22, 3);
-                // Anchor the FIRST line so the whole block sits the same
-                // distance from the bubble regardless of line count:
-                //   above the bubble → top line is highest
-                //   below the bubble → top line is just under the bubble
-                var labelY0 = labelAbove
-                    ? (e.cy - e.r - 14 - (labelLines.length - 1) * LABEL_LINE_HEIGHT)
-                    : (e.cy + e.r + 16);
 
                 parts.push('<g>'
                      + '<circle cx="' + e.cx + '" cy="' + e.cy + '" r="' + e.r + '" fill="' + e.color + '" opacity="0.92" stroke="#fff" stroke-width="2"/>'
@@ -71437,6 +71475,32 @@ https://www.instagram.com/p/..."></textarea>
                      + '<title>' + _jiqEsc(e.vertical + ' - ' + e.pct.toFixed(1) + '% - ' + e.typical_window) + (e.top_sites.length ? ' - ' + _jiqEsc(e.top_sites.join(', ')) : '') + '</title>'
                      + '</g>');
 
+                if (isCategorical) {
+                    // Cluster mode: fan each label radially outward from the
+                    // cluster centroid so labels don't stack in a line. The
+                    // pinned "Fully engaged" bubble labels straight up.
+                    var isFE = /fully\s*engaged/i.test(e.vertical);
+                    var ddx = e.cx - (e._cenX != null ? e._cenX : e.cx);
+                    var ddy = e.cy - (e._cenY != null ? e._cenY : e.cy);
+                    var dmag = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
+                    var uxL = ddx / dmag, uyL = ddy / dmag;
+                    if (isFE) { uxL = 0; uyL = -1; }
+                    var lx = Math.max(padL + 8, Math.min(W - padR - 8, e.cx + uxL * (e.r + 12)));
+                    var startDy = (uyL < -0.2) ? -((labelLines.length - 1) * LABEL_LINE_HEIGHT) : 0;
+                    var ly = e.cy + uyL * (e.r + 15) + startDy;
+                    var anchorC = (uxL > 0.35) ? 'start' : (uxL < -0.35 ? 'end' : 'middle');
+                    var tspansC = labelLines.map(function(line, idx) {
+                        var dy = (idx === 0) ? 0 : LABEL_LINE_HEIGHT;
+                        return '<tspan x="' + lx + '" dy="' + dy + '">' + _jiqEsc(line) + '</tspan>';
+                    }).join('');
+                    parts.push('<text x="' + lx + '" y="' + ly + '" text-anchor="' + anchorC + '" fill="var(--text-primary)" font-weight="600" font-size="10.5">' + tspansC + '</text>');
+                    return;
+                }
+
+                var labelAbove = (e.cy < axisY);
+                var labelY0 = labelAbove
+                    ? (e.cy - e.r - 14 - (labelLines.length - 1) * LABEL_LINE_HEIGHT)
+                    : (e.cy + e.r + 16);
                 var labelX = Math.max(padL + 50, Math.min(W - padR - 50, e.cx));
                 var tspans = labelLines.map(function(line, idx) {
                     var dy = (idx === 0) ? 0 : LABEL_LINE_HEIGHT;
@@ -71447,7 +71511,7 @@ https://www.instagram.com/p/..."></textarea>
 
             var anchorWord = anchorIsPurchase ? 'purchase' : 'showtime';
             var footerSub = isCategorical
-                ? 'Bubble size = share of viewers · bubbles are evenly spaced (no time scale - all behaviors happen during the same window) · sorted by share, biggest on the left · hover for timing + top sites'
+                ? 'Bubble size = share of viewers · clustered view (no time scale - all behaviors happen during the same window) · hover for timing + top sites'
                 : 'Bubble size = share of visitors · horizontal position = typical time relative to ' + anchorWord + ' · hover for timing window + top sites';
             return '<div style="overflow-x:auto;padding:2px 0;">'
                  + '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="display:block;width:100%;height:auto;max-height:600px;min-width:820px;">'
