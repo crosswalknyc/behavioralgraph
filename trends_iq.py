@@ -3320,13 +3320,26 @@ def _annotate_fast_channels_with_views(fast_trending: dict,
     views and give an estimate of how many views each channel had").
     """
     if not fast_trending:
+        logger.info("fast channel ranker: no fast_trending payload; "
+                    "channels view will render 'warming up'")
         return
     items_lookup = ((estimates or {}).get('items') or {})
+    # Per-platform diagnostic counts. Logged after the loop so an
+    # operator can grep 'fast channel ranker' in server logs and see
+    # exactly which platform's channel list dried up (raw count),
+    # which lost its view estimates (annotated count), or whether
+    # stream_estimates.json is missing entirely (all zeros across
+    # platforms). Silent-empty was the failure mode reported on
+    # 2026-08-26 ('channel rankers not populating anything'); this
+    # log line converts that into a diagnosable signal.
+    stats: dict[str, tuple[int, int]] = {}
     for panel_slug, panel in (fast_trending or {}).items():
         if not panel:
+            stats[panel_slug] = (0, 0)
             continue
         channels = panel.get('channels') or []
         if not channels:
+            stats[panel_slug] = (0, 0)
             continue
         # Stamp us_streams on every channel row.
         for row in channels:
@@ -3362,6 +3375,15 @@ def _annotate_fast_channels_with_views(fast_trending: dict,
         channels.sort(key=_sort_key)
         for i, row in enumerate(channels, 1):
             row['rank'] = i
+
+        annotated = sum(1 for r in channels
+                        if (r.get('us_streams') or {}).get('us_estimate'))
+        stats[panel_slug] = (len(channels), annotated)
+
+    if stats:
+        summary = ', '.join(f'{k}={a}/{n}' for k, (n, a) in stats.items())
+        logger.info("fast channel ranker: %s (per-platform "
+                    "annotated/total channels)", summary)
 
 
 def _annotate_gaming_with_streams(gaming_trending: dict,
