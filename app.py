@@ -46805,16 +46805,41 @@ def _promote_subiq_intent(draft, text):
     IQ can never hijack a Subscriber IQ ask. Profile builds, cohort
     definitions, demographic asks, search-demand questions, and count
     questions never promote - subiq_intent.py owns the negative
-    guards. Returns True when it promoted. Never raises."""
+    guards. Returns True when it promoted. Never raises.
+
+    Ambiguous churn fork (2026-08-26 Jenna refinement: "it would
+    prompt the user, do you want a profile on this or subscriber iq
+    kind of thing"): a churn / retention ask with no title event
+    attached (bare 'churn', 'Peacock churn', 'churned Netflix
+    subscribers') never routes silently in either direction. The
+    promoter flags ask_subiq_or_profile so the clarify flow asks the
+    fork question with two chips - the churn and cancellation read
+    (Subscriber IQ) or an audience profile of the churned subscribers
+    (Profile IQ build) - carrying the platform or title into whichever
+    path the user picks. Title-tied churn still promotes directly."""
     try:
         if not isinstance(draft, dict):
             return False
-        if str(draft.get('decision')
-               or '').strip().lower() == 'subscriber_iq':
-            return False
-        from subiq_intent import subiq_intent_family
+        from subiq_intent import (subiq_intent_family,
+                                  ambiguous_churn_subject)
         family = subiq_intent_family(text)
         if not family:
+            ambig, subj = ambiguous_churn_subject(text)
+            if ambig:
+                draft['ask_subiq_or_profile'] = True
+                draft['subiq_or_profile_data'] = {'subject': subj}
+                # The fork question replaces any catalog-match or
+                # scoping asks Claude attached - the pick re-enters
+                # the flow as its own request.
+                for k in ('ask_existing_profile', 'existing_profile_data',
+                          'ask_qualifier_match', 'qualifier_match_data',
+                          'ask_parent_link', 'parent_link_candidates'):
+                    draft.pop(k, None)
+                print(f"[subiq-intent] ambiguous churn ask -> fork "
+                      f"question (subject={subj!r})")
+            return False
+        if str(draft.get('decision')
+               or '').strip().lower() == 'subscriber_iq':
             return False
         draft['decision'] = 'subscriber_iq'
         draft['decision_reason'] = (
@@ -49579,7 +49604,8 @@ def api_synth_chat_clarify():
     if step not in ('goal', 'strategy', 'region', 'cuts', 'parent_link',
                     'age_breaks', 'ip_scope', 'identity',
                     'existing_profile', 'qualifier_match',
-                    'subiq_window', 'subiq_upsell') \
+                    'subiq_window', 'subiq_upsell',
+                    'subiq_or_profile') \
             or not isinstance(draft, dict):
         _chatbot_error_email('brief-chat/clarify',
                              f'bad clarify step: {step!r}',
@@ -49953,6 +49979,51 @@ def api_synth_chat_clarify():
                         f"run), or pull fresh for an updated read."),
             'next_step': 'existing_profile',
         })
+
+    if step == 'subiq_or_profile':
+        # Ambiguous churn fork (2026-08-26 Jenna: "it would prompt the
+        # user, do you want a profile on this or subscriber iq kind of
+        # thing"). The pick re-enters the flow as its own request via
+        # reinterpret_text so each path keeps its full clarify chain
+        # (dates/season confirmation for the read, the build brief for
+        # the profile) and the platform or title rides along.
+        data = draft.get('subiq_or_profile_data') or {}
+        subj = str(data.get('subject') or '').strip()
+        low = answer.lower()
+        wants_profile = bool(_re.search(
+            r'\b(?:2|profile|audience|cohort|who they are)\b', low))
+        wants_read = bool(_re.search(
+            r'\b(?:1|read|tracker|subscriber iq|sub ?iq|churn|'
+            r'cancel\w*|win ?back)\b', low))
+        draft.pop('ask_subiq_or_profile', None)
+        draft.pop('subiq_or_profile_data', None)
+        if wants_read and not wants_profile:
+            target = ('Subscriber IQ for ' + subj) if subj \
+                else 'Subscriber IQ'
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': ('On it - the churn and cancellation read'
+                            + ((' for ' + subj) if subj else '')
+                            + '.'),
+                'reinterpret_text': target,
+                'next_step': 'reinterpret'})
+        if wants_profile:
+            aud = ('churned ' + subj + ' subscribers') if subj \
+                else 'churned subscribers'
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': f"On it - an audience profile of {aud}.",
+                'reinterpret_text': f"Build an audience profile of {aud}",
+                'next_step': 'reinterpret'})
+        draft['ask_subiq_or_profile'] = True
+        draft['subiq_or_profile_data'] = {'subject': subj}
+        return jsonify({
+            'success': True, 'draft': draft,
+            'message': ('Which one - the churn and cancellation read, '
+                        'or an audience profile of the churned '
+                        'subscribers? Tap one below or say read or '
+                        'profile.'),
+            'next_step': 'subiq_or_profile'})
 
     if step == 'subiq_window':
         # Subscriber IQ dates/season confirmation (2026-08-25, bind-or-
@@ -51246,6 +51317,16 @@ def api_synth_chat_interpret():
                 clarify_steps.append('subiq_window')
             if spec_draft.get('ask_subiq_upsell'):
                 clarify_steps.append('subiq_upsell')
+        # Ambiguous churn fork (2026-08-26 Jenna): a churn / retention
+        # ask with no title event leads with the two-chip question -
+        # the churn and cancellation read, or an audience profile of
+        # the churned subscribers - before every other step. The pick
+        # re-enters the flow as its own request, so downstream steps
+        # queued here never run.
+        if spec_draft.get('ask_subiq_or_profile') and \
+                spec_draft.get('subiq_or_profile_data') is not None:
+            clarify_steps = ['subiq_or_profile'] + [
+                s for s in clarify_steps if s != 'subiq_or_profile']
         # Estimated audience band on the approval brief (2026-08-24
         # Jenna): same helper the Partner API quotes from, derived from
         # the exact sample pinned on this draft, so the brief, the

@@ -61613,6 +61613,29 @@ https://www.instagram.com/p/..."></textarea>
             }
             return false;
         }
+        // Ambiguous churn / retention asks (2026-08-26): churn
+        // vocabulary with no title event ('Peacock churn', bare
+        // 'retention') falls through to the interpret flow, which
+        // asks whether the user wants the churn and cancellation
+        // read or an audience profile of the churned subscribers.
+        // Mirrors subiq_intent.ambiguous_churn_subject.
+        var _PM_SUBIQ_CHURN_HINT = /\b(?:churn\w*|retention|cancell?ations?)\b/;
+        var _PM_SUBIQ_CHURN_COHORT = [
+            /\b(?:build|make|create|pull|run|generate|queue|derive|spin up)\b[^.?!]{0,50}\b(?:profile|audience|universe|persona|cut)s?\b/,
+            /\b(?:profile|audience|universe|cohort|persona)s? (?:of|for|on)\b/,
+            /\bpeople who\b/,
+            /\b(?:viewers|users|subscri\w*|fans|members|customers|households|adults|shoppers|buyers) who\b/
+        ];
+        function _pmLooksAmbiguousChurn(text) {
+            var t = _pmSubIqNormalize(text);
+            if (!t) return false;
+            if (_pmLooksSubscriberIq(text)) return false;
+            if (!_PM_SUBIQ_CHURN_HINT.test(t)) return false;
+            for (var i = 0; i < _PM_SUBIQ_CHURN_COHORT.length; i++) {
+                if (_PM_SUBIQ_CHURN_COHORT[i].test(t)) return false;
+            }
+            return true;
+        }
 
         // Other profiles open as dashboard tabs (beyond the active one).
         function _pmOtherOpenTabs(ctx) {
@@ -62104,7 +62127,8 @@ https://www.instagram.com/p/..."></textarea>
             // Subscriber IQ asks bypass the page-aware analysis
             // routing entirely (2026-08-26): they are build requests
             // for the interpret flow, even when a profile is open.
-            var _pmSubIqAsk = _pmLooksSubscriberIq(text);
+            var _pmSubIqAsk = _pmLooksSubscriberIq(text) ||
+                _pmLooksAmbiguousChurn(text);
             // Analysis mode menu (2026-08-21 Jenna): the bare "Analyze
             // this data" chip opens a menu of analysis modes instead of
             // firing one generic read. Specific asks still flow straight
@@ -62627,6 +62651,17 @@ https://www.instagram.com/p/..."></textarea>
                 ao.push({label: 'All ages', send: 'all ages'});
                 return ao;
             }
+            if (step === 'subiq_or_profile') {
+                // 2026-08-26: ambiguous churn ask - fork between the
+                // churn and cancellation read and an audience profile
+                // of the churned subscribers.
+                return [
+                    {label: 'Churn and cancellation read',
+                     send: 'the churn read'},
+                    {label: 'Audience profile of churned subscribers',
+                     send: 'audience profile'}
+                ];
+            }
             if (step === 'subiq_window') {
                 // 2026-08-25 Subscriber IQ: confirm the researched
                 // air window (or resolve conflicts / movie scope)
@@ -62905,6 +62940,19 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 return _plLines.join('\n');
             }
+            if (step === 'subiq_or_profile') {
+                var _spQD = synthChatCurrentDraft || {};
+                var _spQ = _spQD.subiq_or_profile_data || {};
+                var _spS = String(_spQ.subject || '').trim();
+                return 'Two ways to go with this. Do you want the ' +
+                    'churn and cancellation read' +
+                    (_spS ? ' for ' + _spS : '') +
+                    ' (subscribers lost, when they left, and who ' +
+                    'came back), or an audience profile of the ' +
+                    'churned' + (_spS ? ' ' + _spS : '') +
+                    ' subscribers (who they are and what they ' +
+                    'engage with)?';
+            }
             if (step === 'subiq_window') {
                 // 2026-08-25 Subscriber IQ: the window question is
                 // built from the researched air-window data stashed
@@ -63021,6 +63069,19 @@ https://www.instagram.com/p/..."></textarea>
                     synthChatClarify = null;
                     synthChatCurrentDraft = null;
                     synthChatPushTurn('agent', data.message || 'Noted.');
+                    return;
+                }
+                if (data.reinterpret_text) {
+                    // Fork answered (2026-08-26 ambiguous churn): the
+                    // pick re-enters the flow as its own request,
+                    // carrying the platform or title, so each path
+                    // keeps its full clarify chain.
+                    synthChatClarify = null;
+                    synthChatCurrentDraft = null;
+                    if (data.message) {
+                        synthChatPushTurn('agent', String(data.message));
+                    }
+                    synthChatChipSend(String(data.reinterpret_text));
                     return;
                 }
                 var next = String(data.next_step || '').toLowerCase();

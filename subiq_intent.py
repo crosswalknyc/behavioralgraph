@@ -262,6 +262,82 @@ def detect_subscriber_iq_intent(text):
     return subiq_intent_family(text) is not None
 
 
+# ---------------------------------------------------------------------------
+# Ambiguous churn / retention asks (2026-08-26 Jenna refinement,
+# verbatim: "it would prompt the user, do you want a profile on this
+# or subscriber iq kind of thing"). A churn-family ask WITHOUT a title
+# event attached (bare 'churn', 'retention', 'Peacock churn', 'churned
+# Netflix subscribers') never routes silently in either direction -
+# the dashboard asks a fork question with two chips: the churn and
+# cancellation read (Subscriber IQ) or an audience profile of the
+# churned subscribers (Profile IQ build with a churned universe).
+# Title-tied churn ('cancellations after the finale') keeps routing
+# straight to Subscriber IQ via subiq_intent_family, no prompt.
+# ---------------------------------------------------------------------------
+
+_CHURN_HINT_RX = re.compile(r'\b(?:churn\w*|retention|cancell?ations?)\b')
+
+# Explicit cohort / build framings stay Profile IQ with no prompt:
+# 'build a profile of churned Peacock subscribers', 'audience of
+# churned subscribers', 'viewers who churned from Hulu'. Same shapes
+# as the first four entries of _VETO_PATTERNS, compiled separately so
+# a veto-list reorder can never silently change fork behavior.
+_AMBIG_COHORT_VETOES = [re.compile(p) for p in (
+    r'\b(?:build|make|create|pull|run|generate|queue|derive|spin up)\b[^.?!]{0,50}\b(?:profile|audience|universe|persona|cut)s?\b',
+    r'\b(?:profile|audience|universe|cohort|persona)s? (?:of|for|on)\b',
+    r'\bpeople who\b',
+    r'\b(?:viewers|users|subscri\w*|fans|members|customers|households|adults|shoppers|buyers) who\b',
+)]
+
+# Tokens dropped when pulling the platform / title out of the ask so
+# the pick carries it forward ('Peacock churn' -> 'Peacock'). Lowercase;
+# checked after typo canonicalization so 'subsciber' drops too.
+_CHURN_SUBJECT_DROP = frozenset((
+    'churn', 'churns', 'churned', 'churning', 'retention',
+    'cancellation', 'cancellations', 'cancelation', 'cancelations',
+    'cancelled', 'canceled', 'unsubscribed',
+    'subscriber', 'subscribers', 'subscription', 'subscriptions',
+    'subs', 'sub', 'users', 'user', 'viewers', 'viewer', 'members',
+    'member', 'accounts', 'account', 'customers', 'customer',
+    'rate', 'rates', 'read', 'numbers', 'number', 'analysis',
+    'report', 'data', 'story', 'breakdown', 'look', 'side', 'from',
+    'for', 'of', 'on', 'in', 'at', 'to', 'the', 'a', 'an', 'my',
+    'our', 'me', 'us', 'i', 'we', 'you', 'please', 'can', 'could',
+    'would', 'want', 'need', 'get', 'give', 'show', 'see', 'pull',
+    'run', 'do', 'is', 'are', 'was', 'what', 'whats', 'hows', 'how',
+    'about', 'over', 'last', 'this', 'that', 'their', 'and', 'or',
+    'looking', 'look', 'like', 'kind', 'thing', 'right', 'now',
+    'week', 'month', 'quarter', 'year', 'recently', 'lately',
+    'currently', 'these', 'days',
+))
+
+
+def ambiguous_churn_subject(text):
+    """(matched, subject) for churn / retention asks that should fork
+    to a user prompt instead of routing silently. matched is True when
+    the ask carries churn-family vocabulary but no title event and no
+    explicit profile-build or cohort framing. subject is the platform
+    or title pulled from the ask in its original casing ('' when the
+    ask is bare), so whichever path the user picks preloads it."""
+    raw = str(text or '')
+    t = normalize_subiq_text(raw)
+    if not t:
+        return (False, '')
+    if subiq_intent_family(raw) is not None:
+        return (False, '')  # routes straight to Subscriber IQ
+    if not _CHURN_HINT_RX.search(t):
+        return (False, '')
+    for rx in _AMBIG_COHORT_VETOES:
+        if rx.search(t):
+            return (False, '')  # explicit cohort / build: Profile IQ
+    keep = []
+    for tok in re.findall(r"[A-Za-z0-9&+'-]+", raw):
+        canon = _fuzzy_canon_token(re.sub(r"[^a-z0-9+]", '', tok.lower()))
+        if canon and canon not in _CHURN_SUBJECT_DROP:
+            keep.append(tok)
+    return (True, ' '.join(keep)[:60].strip())
+
+
 # Literals the client-side mirror (_pmLooksSubscriberIq in
 # templates/index.html) must contain. scripts/test_subiq_intent_coverage.py
 # enforces the sync: every token below has to appear inside the mirror
@@ -290,4 +366,6 @@ CLIENT_MIRROR_TOKENS = (
     'switcher',
     'people who',
     'avid',
+    '_pmLooksAmbiguousChurn',
+    'retention',
 )
