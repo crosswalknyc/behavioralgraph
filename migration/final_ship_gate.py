@@ -201,7 +201,8 @@ _MASTER_CATEGORIES_FALLBACK = {
     "CREDIT PROVIDER", "DIGITAL BANKING", "EVENTS", "FOOTWEAR",
     "FRANCHISE", "GROCERY", "INTIMATES", "JEWELRY", "MEMBERSHIP",
     "NON PROFIT/CHARITY", "PHARMA", "QSR", "RETAILERS", "SECURITY",
-    "SHOPPING INTENT", "TELECOM", "TICKETING", "TOY", "TRAVEL",
+    "SHOPPING INTENT", "SWEEPSTAKES", "TECHNOLOGY/DEVICE", "TELECOM",
+    "TICKETING", "TOY", "TRADING", "TRAVEL",
     "VENUE", "WHERE THEY SHOP", "WORKOUT FACILITY",
     # TALENT
     "ACTOR", "ATHLETE", "COMEDIAN", "INFLUENCER/CREATOR",
@@ -431,9 +432,19 @@ def _load_master_categories(verbose=True):
             import ast
             tree = ast.parse(open(path, encoding="utf-8").read())
             for node in ast.walk(tree):
-                if (isinstance(node, ast.Assign)
-                        and any(getattr(t, "id", "") == "MASTER_CATEGORIES"
-                                for t in node.targets)):
+                # Plain assign AND annotated assign (the live iq_rankers
+                # declares `MASTER_CATEGORIES: dict[str, list[str]] = {...}`,
+                # which is an AnnAssign; matching only Assign silently fell
+                # back to the stale snapshot - found 2026-08-26).
+                is_match = (
+                    (isinstance(node, ast.Assign)
+                     and any(getattr(t, "id", "") == "MASTER_CATEGORIES"
+                             for t in node.targets))
+                    or (isinstance(node, ast.AnnAssign)
+                        and getattr(node.target, "id", "") ==
+                        "MASTER_CATEGORIES" and node.value is not None)
+                )
+                if is_match:
                     parsed = ast.literal_eval(node.value)
                     flat = set()
                     if isinstance(parsed, dict):
@@ -825,16 +836,19 @@ def _check_i1(rows, subject, s3_key, s3_client, verbose):
                         must_pin_100 as _i1_pin,
                         is_owner_platform_row as _i1_owner,
                         is_subject_own as _i1_own,
+                        is_principal_cast as _i1_cast,
                     )
                 except ImportError:
                     from self_property_coherence import (  # type: ignore
                         must_pin_100 as _i1_pin,
                         is_owner_platform_row as _i1_owner,
                         is_subject_own as _i1_own,
+                        is_principal_cast as _i1_cast,
                     )
                 if (_i1_pin(subject, cat_u, r["val"])
                         or _i1_owner(subject, r["val"])
-                        or _i1_own(subject, r["val"])):
+                        or _i1_own(subject, r["val"])
+                        or _i1_cast(subject, cat_u, r["val"])):
                     continue
                 # Cut-defining row: on a platform-scoped cut ("Reba
                 # McEntire - Apple Music Fan") the named platform row

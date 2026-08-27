@@ -368,6 +368,40 @@ SUBJECT_OWN_ALIASES = {
 }
 
 
+# Principal cast of scripted titles (2026-08-27, reasoning-wins): a
+# viewer of a scripted title has by definition watched its lead cast,
+# so principal cast reads at jittered ~99.x in TALENT/ACTOR on that
+# title's viewer universe and cuts. Fact-explained, NOT forced to 100
+# (only the subject property itself pins exact). Principals only,
+# never guest stars. Keyed by normalized title token.
+PRINCIPAL_CAST = {
+    "CHILLINGADVENTURESOFSABRINA": {
+        "KIERNANSHIPKA", "ROSSLYNCH", "LUCYDAVIS", "MIRANDAOTTO",
+        "MICHELLEGOMEZ", "CHANCEPERDOMO", "JAZSINCLAIR",
+        "LACHLANWATSON", "GAVINLEATHERWOOD", "TATIGABRIELLE",
+        "ADELINERUDOLPH", "RICHARDCOYLE",
+    },
+}
+
+_CAST_CATS = {"ACTOR", "TALENT", "TALENT SUB", "EMERGING TALENT"}
+
+
+def is_principal_cast(subject, cat_u, value) -> bool:
+    """True when the row names a principal cast member of the scripted
+    title this viewer universe is scoped to (TALENT/ACTOR categories
+    only). Such rows legitimately read jittered near-100."""
+    if str(cat_u or "").strip().upper() not in _CAST_CATS:
+        return False
+    joined_subj = "".join(_words(subject))
+    vj = "".join(_words(value))
+    if not vj:
+        return False
+    for title, cast in PRINCIPAL_CAST.items():
+        if title in joined_subj and vj in cast:
+            return True
+    return False
+
+
 def _alias_own_match(subject, sval) -> bool:
     joined_subj = "".join(_words(subject))
     for skey, rowset in SUBJECT_OWN_ALIASES.items():

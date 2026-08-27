@@ -65,6 +65,12 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
         "NON PROFIT/CHARITY", "PHARMA", "QSR", "RETAILERS", "SECURITY",
         "SHOPPING INTENT",
         "SWEEPSTAKES",
+        # 2026-08-27: TECHNOLOGY/DEVICE added as a canonical BRAND
+        # category (mirrors the hostmap section name). Covers TV/device
+        # maker universes (Vizio TV Owners, LG TV Owners, Samsung TV)
+        # that don't fit RETAILERS or B2B. Icon 💻 (already wired in
+        # the behavioral maps).
+        "TECHNOLOGY/DEVICE",
         # 2026-08-25 (Jenna): TRADING added as a new canonical BRAND
         # category for the finance family (Robinhood, E*TRADE, Coinbase,
         # Charles Schwab active-trader tools, options/crypto/forex

@@ -12194,6 +12194,9 @@ RECLASSIFY_SECTIONS = [
     'Sports',
     'Sports Organizations',
     'Sports Team',
+    # 2026-08-27: 'Sweepstakes' canonical (BRAND CATEGORY =
+    # SWEEPSTAKES; Omaze / lottery / prize-draw universes).
+    'Sweepstakes',
     'Streaming',
     'Streaming/Channel',
     'Streaming/Music',

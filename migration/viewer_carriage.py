@@ -214,6 +214,24 @@ def _split_host_path(u):
     return host, segs
 
 
+# Sanctioned transaction-path prefixes (clickstream-slug rule 4c-i
+# case 4, EST Buyers precedent): these prefix slugs identify PURCHASE
+# and RENTAL behavior on a storefront and are the canonical way to
+# scope EST / TVOD / digital-purchaser universes. They are never the
+# landing-page defect even when their first segment ("movies") reads
+# generic.
+SANCTIONED_TRANSACTION_PREFIXES = {
+    "amazon.com/gp/video/detail",
+    "apple.com/itunes/movies",
+    "vudu.com/movies",
+    "fandangonow.com/details/movie",
+    "play.google.com/store/movies/details",
+    "microsoft.com/en-us/p",
+    "youtube.com/movies",
+    "youtube.com/paid_memberships",
+}
+
+
 def is_generic_landing_url(u, require_platform_domain=True):
     """True when a URL-ish token is a platform landing page rather than
     a specific title path: bare domain, or a path whose ONLY segment is
@@ -224,6 +242,10 @@ def is_generic_landing_url(u, require_platform_domain=True):
     host, segs = _split_host_path(u)
     if not host or "." not in host or " " in host:
         return False
+    normalized = "/".join([host] + segs)
+    for pref in SANCTIONED_TRANSACTION_PREFIXES:
+        if normalized == pref or normalized.startswith(pref + "/"):
+            return False
     if require_platform_domain and host not in PLATFORM_DOMAINS:
         return False
     if len(segs) >= 2:

@@ -4302,6 +4302,66 @@ def pin_target_matches_value(target, value):
     return v in _comps(target)
 
 
+def spec_pin_disposition(subject, cat_u, value):
+    """Classify an approved-spec subject_rows pin. Added 2026-08-27
+    after the Chobani Buyers hold (run 2mSR3dbumpc1bA): the interpret
+    step listed the subject's retail destinations (WHERE THEY SHOP /
+    Walmart, Target, Whole Foods) in subject_rows, and the exact-100
+    fall-through in enforce_spec_pin_rows pinned two retailers at 100
+    on a universe no single retailer covers. The I18 de-pin autofix
+    then parked them just under 100, where ship-gate I1 correctly held
+    the file - three times, deterministically, because the spec rode
+    along into every rebuild.
+
+    Returns one of:
+      'pin_100'  - the subject's own row, its verified owner platform,
+                   a restatement of the universe definition ('Florida
+                   Voters' on '2026 Florida Gubernatorial Voters'), or
+                   a sports-companion row: exact 100 per convention.
+      'pin_soft' - non-subject carrier in a platform / carriage grid:
+                   subject-salted messy near-100 (existing behavior).
+      'demote'   - affinity / adjacency pin (retailers a CPG sells
+                   through, peer brands, cast members, ...): never
+                   pin; the reasoned value stands.
+    """
+    cu = str(cat_u or "").strip().upper()
+    sval = str(value or "").strip()
+    if not sval:
+        return "demote"
+    try:
+        try:
+            from migration.self_property_coherence import (
+                is_subject_own as _spd_own,
+                is_owner_platform_row as _spd_owner,
+            )
+        except ImportError:
+            from self_property_coherence import (  # type: ignore
+                is_subject_own as _spd_own,
+                is_owner_platform_row as _spd_owner,
+            )
+        if _spd_own(subject, sval) or _spd_owner(subject, sval):
+            return "pin_100"
+    except Exception:
+        # Standalone fallback: normalized equality / containment, the
+        # same shape as the interpret-side affinity-pin guard.
+        _ns = _re.sub(r"[^a-z0-9]", "", str(subject or "").lower())
+        _nv = _re.sub(r"[^a-z0-9]", "", sval.lower())
+        if _nv and _ns and (_nv == _ns or (len(_nv) >= 4
+                            and (_nv in _ns or _ns in _nv))):
+            return "pin_100"
+    # Universe restatement: every word of the value appears in the
+    # subject name (pseudo-anchor rows that re-say the cohort).
+    subj_words = set(_re.findall(r"[a-z0-9]+", str(subject or "").lower()))
+    val_words = _re.findall(r"[a-z0-9]+", sval.lower())
+    if val_words and subj_words and all(w in subj_words for w in val_words):
+        return "pin_100"
+    if cu in COMPANION_PIN_CATS:
+        return "pin_100"
+    if cu in CARRIER_PIN_SOFT_CATS:
+        return "pin_soft"
+    return "demote"
+
+
 def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True):
     """Re-assert the approved spec's subject_rows pins late in the write
     path: every (category, name) pin must land at exactly BP=100 on the
@@ -4331,21 +4391,6 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True):
     if (not pin_rows or df is None or len(df) == 0
             or 'Column' not in df.columns or 'Value' not in df.columns):
         return df, 0, []
-
-    try:
-        try:
-            from migration.self_property_coherence import (
-                is_subject_own as _spc_is_own,
-                is_owner_platform_row as _spc_owner,
-            )
-        except ImportError:
-            from self_property_coherence import (  # type: ignore
-                is_subject_own as _spc_is_own,
-                is_owner_platform_row as _spc_owner,
-            )
-    except Exception:
-        _spc_is_own = None
-        _spc_owner = None
 
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     if bp_col not in df.columns:
@@ -4390,6 +4435,7 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True):
                   f"spec's category name")
             continue
         hit = 0
+        skip_logged = False
         for idx in df.index[cat_mask]:
             if not pin_target_matches_value(name, df.at[idx, 'Value']):
                 continue
@@ -4397,17 +4443,29 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True):
             row_val = str(df.at[idx, 'Value'])
             # Exact 100 belongs to the subject's own property AND its
             # owning / universe-defining platform (2026-08-26 Jenna:
-            # Paramount+ = 100 on Paw Patrol). Only a non-subject,
-            # non-owner pin in a platform/carriage category lands at
-            # a subject-salted messy near-100.
-            subject_own = True
-            if _spc_is_own is not None:
-                subject_own = (_spc_is_own(subject, name)
-                               or _spc_is_own(subject, row_val))
-            if not subject_own and _spc_owner is not None:
-                subject_own = (_spc_owner(subject, name)
-                               or _spc_owner(subject, row_val))
-            if subject_own or cu not in CARRIER_PIN_SOFT_CATS:
+            # Paramount+ = 100 on Paw Patrol). A non-subject, non-owner
+            # pin in a platform/carriage category lands at a
+            # subject-salted messy near-100. Every OTHER non-subject
+            # pin is an affinity/adjacency pin and is SKIPPED outright
+            # (2026-08-27 Chobani Buyers hold: WHERE THEY SHOP /
+            # Walmart+Target spec pins at 100 held the file at ship
+            # gate I1 three times); the reasoned value stands.
+            _rank = {"pin_100": 2, "pin_soft": 1, "demote": 0}
+            disp = max(
+                spec_pin_disposition(subject, cu, name),
+                spec_pin_disposition(subject, cu, row_val),
+                key=lambda d: _rank[d],
+            )
+            if disp == "demote":
+                if not skip_logged:
+                    skip_logged = True
+                    print(f"   🚫 SPEC PIN SKIPPED (non-subject affinity "
+                          f"pin): {cu} | {name!r} - not the subject, its "
+                          f"owner platform, or a carriage/companion row; "
+                          f"the reasoned value stands "
+                          f"(cur={df.at[idx, bp_col]})")
+                continue
+            if disp == "pin_100":
                 target_bp = 100.0
             else:
                 import hashlib as _hl_pin
