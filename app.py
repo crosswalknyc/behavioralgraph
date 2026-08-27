@@ -52007,11 +52007,15 @@ def _spec_from_draft(draft):
     # extra_rows: the research is preserved unpinned and the row-by-row
     # engine assigns a plausible BP from baseline + persona lift.
     _PIN_LEGAL_COLUMNS = {
-        # Distribution / platform homes (consumers-scope IP pin rule)
+        # Distribution / platform homes (consumers-scope IP pin rule).
+        # 2026-08-27: WHERE THEY SHOP removed after the Chobani Buyers
+        # hold - retailers a CPG sells through are affinity rows, never
+        # pins; a retailer-scoped universe ("Sephora Shoppers") still
+        # pins via the subject-value match below.
         'STREAMING/PLATFORM', 'STREAMING VIDEO', 'BROADCAST/CABLE',
         'APP/PLATFORM', 'VMVPD/FAST', 'VIRTUAL MVPD/FAST',
         'VIRTUAL MVPD FAST', 'VMVPD', 'FAST PLATFORM', 'FAST CHANNEL',
-        'MOVIE THEATER', 'WHERE THEY SHOP', 'STREAMING MUSIC',
+        'MOVIE THEATER', 'STREAMING MUSIC',
         # Sports companions (team + league + conference pins)
         'SPORTS TEAM', 'MLB', 'NBA', 'NFL', 'NHL', 'MLS', 'WNBA',
         'MILB', 'EPL', 'LA LIGA', 'SERIE A', 'LIGUE 1', 'BUNDESLIGA',
