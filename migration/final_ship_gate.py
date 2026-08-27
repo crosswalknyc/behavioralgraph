@@ -536,16 +536,78 @@ def _list_root_csvs(s3_client=None, force=False):
     return keys
 
 
+_ERA_RE = re.compile(r"\b(20\d{2})(\s*[/-]\s*20\d{2})?(\s+YTD)?\b")
+
+
+def _era_token(cut_suffix):
+    """Era/window token in a cut suffix ('2023', '2023/2024',
+    '2026 YTD'), normalized for comparison. None when the cut isn't
+    window-scoped."""
+    m = _ERA_RE.search(str(cut_suffix or ""))
+    if not m:
+        return None
+    return _norm_token(m.group(0))
+
+
+def _era_parent_key(base, stem_norm, era_norm, listing):
+    """Same-era parent for an era-scoped cut: '{Stem} - {Era} Total
+    Universe', '{Stem} - {Era} TU', or bare '{Stem} - {Era}'. Never
+    the cut itself."""
+    base_norm = _norm_token(base)
+    wanted = {stem_norm + era_norm + suffix
+              for suffix in ("TOTALUNIVERSE", "TU", "")}
+    for k, _lm in listing:
+        kb = _display_name(k)
+        if " - " not in kb:
+            continue
+        kb_norm = _norm_token(kb)
+        if kb_norm != base_norm and kb_norm in wanted:
+            return k
+    return None
+
+
 def _resolve_parent_tu(s3_key, s3_client=None, verbose=True):
     """For a cut named '{Subject} - {Cut}.csv', find the latest TU file
     for the same subject in the bucket root. TU keys either equal the
     subject stem or carry a trailing dated suffix (digits/underscores).
-    Returns (parent_key, parent_bytes) or (None, None)."""
+    Returns (parent_key, parent_bytes) or (None, None).
+
+    Era/window-scoped cuts ('Vin Diesel - 2023 Avid Fan', 'Costco -
+    2025 Avid Fan', 'Reba - 2023/2024 TU') answer to THEIR OWN era,
+    never the current TU (skins rule: the window in the name IS the
+    window; comparing a 2023-window cut against the 2026 TU is
+    wrong-parent math). They resolve a same-era parent when one
+    exists, otherwise they are standalone for subset purposes (no
+    I4/I12 binding against a different-window TU)."""
     base = _display_name(s3_key)
     stem = base.split(" - ")[0].strip()
     stem_norm = _norm_token(stem)
     if not stem_norm:
         return None, None
+
+    cut_suffix = base.split(" - ", 1)[1].strip() if " - " in base else ""
+    era_norm = _era_token(cut_suffix)
+    if era_norm:
+        listing = _list_root_csvs(s3_client)
+        pkey = _era_parent_key(base, stem_norm, era_norm, listing)
+        if pkey is None:
+            listing = _list_root_csvs(s3_client, force=True)
+            pkey = _era_parent_key(base, stem_norm, era_norm, listing)
+        if pkey is None:
+            if verbose:
+                print(f"[ship-gate] era-scoped cut '{base}' has no "
+                      f"same-era parent; standalone (no subset "
+                      f"binding)")
+            return None, None
+        try:
+            body = _s3(s3_client).get_object(
+                Bucket=BUCKET, Key=pkey)["Body"].read()
+            return pkey, body
+        except Exception as e:
+            if verbose:
+                print(f"[ship-gate] era parent fetch failed for "
+                      f"{pkey}: {e}")
+            return None, None
 
     def _candidates(listing):
         found = []
