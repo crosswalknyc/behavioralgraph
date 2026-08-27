@@ -2381,6 +2381,35 @@ def dejitter_fractional_ladders(df, subject, verbose=True):
             if placed is not None:
                 break
         if placed is None:
+            # FINAL exhaustive micro-scan: thin decades (e.g. a X.0102
+            # ladder whose only legal landings are X.0101 / X.0103) hold
+            # 1-3 legal 4dp slots the coarse u/step walk usually misses.
+            # Enumerate every 4dp value in the relaxed interval, rotated
+            # by the row hash so files don't pile onto the same slot,
+            # and take the first that passes every guard.
+            lb = max(_lower_bound(i, 0.01) for i in members)
+            lo_eff = max(lb, decade_floor)
+            if old - lo_eff < 0.0002:
+                lo_eff = lb
+            n_slots = int(round((old4 - lo_eff) * 10000)) - 1
+            if 0 < n_slots <= 3000:
+                start = h % n_slots
+                for t in range(n_slots):
+                    c4 = round(lo_eff + 0.0001 * (1 + (start + t) % n_slots), 4)
+                    if not (lo_eff < c4 < old4):
+                        continue
+                    s4 = suffix4(c4)
+                    if (s4 == old_suffix or s4 in flagged_suffixes
+                            or s4 == '0000'):
+                        continue
+                    if _looks_round_any(c4):
+                        continue
+                    if any(c4 in used_by_cat.get(c, set())
+                           for c in member_cats):
+                        continue
+                    placed = c4
+                    break
+        if placed is None:
             # Unplaceable: the row keeps its old value, so it must act
             # as a rank bound for everything processed after it.
             for i in members:
