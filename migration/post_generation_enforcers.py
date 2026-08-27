@@ -7535,11 +7535,24 @@ def normalize_brand_names_to_sheet4(df, subject, verbose=True):
         return canon_upper
 
     # Categories EXCLUDED from name normalization (demographics: their
-    # values come from PIPELINE_DEMO_SCHEMA, not hostmap)
+    # values come from PIPELINE_DEMO_SCHEMA, not hostmap).
+    #
+    # 2026-08-27 (Toca Boca hold): ALL metadata rows are excluded, not
+    # just BRAND INPUT / SUBJECT. The BRAND CATEGORY row's Value is a
+    # canonical category label, not a brand name - the plural variant
+    # matcher in _safe_canonical_rewrite found the hostmap brand 'Toys'
+    # for the label 'TOY' and rewrote the metadata row to 'TOYS', which
+    # the final ship gate then (correctly) held as non-canonical.
     DEMO_SKIP = {'GENDER', 'AGE', 'ETHNICITY', 'INCOME', 'OCCUPATION',
                  'PARENTAL_STATUS', 'PARENTAL STATUS', 'RELATIONSHIP',
                  'SEXUAL_ORIENTATION', 'SEXUAL ORIENTATION', 'EDUCATION',
-                 'LOCATION', 'BRAND INPUT', 'SUBJECT'}
+                 'LOCATION', 'BRAND INPUT', 'SUBJECT',
+                 'BRAND CATEGORY', 'SAMPLE SIZE', 'SAMPLE_SIZE',
+                 'AVID FAN', 'CASUAL FAN',
+                 'INPUT_METADATA', 'INPUT METADATA',
+                 'AGE_OF_CHILDREN', 'AGE OF CHILDREN',
+                 'NUMBER_OF_CHILDREN', 'NUMBER OF CHILDREN',
+                 'PRIMARY_LANGUAGE', 'PRIMARY LANGUAGE'}
 
     fixed = 0
     examples = []
@@ -11605,6 +11618,24 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
     except Exception as e:
         print(f"   ⚠️ small_sample_hardening import failed: {e}")
 
+    # 2026-08-27 (YMCA income crater): structural bracket-crater
+    # tripwire+repair. MUST run AFTER enforce_canonical_demo_buckets /
+    # renormalize / enforce_canonical_demo_schema - that is where the
+    # demo shape settles, and exactly where the YMCA defect was
+    # manufactured (orphan-dropped bracket -> epsilon back-fill). An
+    # ordered demo bracket (INCOME, AGE) below 1% with both ordered
+    # neighbors above 8% is never a real audience shape on a full-shape
+    # file; repair it deterministically so the class self-corrects
+    # before the ship gate / vetting stage. Pinned cuts (any bucket >=
+    # 85) and international frames are skipped inside.
+    try:
+        df, n = repair_demo_bracket_craters(
+            df, subject=subject, verbose=verbose,
+        )
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer repair_demo_bracket_craters failed: {e}")
+
     # 2026-07-28 (pipeline hardening rail #5, WoF Avid defects 5/6/7/8):
     # final format normalizer. Runs immediately BEFORE
     # recompute_raw_and_projection so the recompute pass finalizes
@@ -13950,6 +13981,192 @@ def apply_income_monotonicity_fix(df, subject=None, verbose=True,
               f'INCOME repaired {before} -> {after_final} '
               f'({n} bucket(s); full block sums to {full_sum:.2f}%)')
     return df, n
+
+
+# ---------------------------------------------------------------------------
+# Structural bracket-crater repair (2026-08-27, YMCA income crater)
+# ---------------------------------------------------------------------------
+# Ordered demo categories where a near-zero interior bucket between two
+# heavy neighbors is structurally impossible on a full-universe file.
+# Bucket order mirrors migration/canonical_demos.PIPELINE_DEMO_SCHEMA
+# (AGE's 'Other' is unordered and excluded from the sequence).
+_CRATER_ORDERED_CATS = {
+    'INCOME': [
+        'Less than $25,000', '$25,000 - $49,999', '$50,000 - $74,999',
+        '$75,000 - $99,999', '$100,000 - $149,999', '$150,000 - $249,999',
+        '$250,000 or More',
+    ],
+    'AGE': [
+        '17 and Under', '18-24', '25-34', '35-44', '45-54', '55-64',
+        '65 or Older',
+    ],
+}
+_CRATER_BP = 1.0          # a bucket below this is a crater candidate
+_CRATER_NEIGHBOR_BP = 8.0  # ...when BOTH ordered neighbors exceed this
+_CRATER_PIN_GUARD = 85.0   # any bucket at/above this = pinned cut, skip
+
+
+def repair_demo_bracket_craters(df, *, subject=None, verbose=True):
+    """Deterministic repair for structurally-impossible demo craters.
+
+    2026-08-27 (YMCA, run j0fVMWrE_r_8gq class): a malformed spec label
+    (`25,000 - $49,999`, missing `$`) orphaned in
+    enforce_canonical_demo_buckets, the bracket's ~17pp of mass was
+    dropped + redistributed, and enforce_canonical_demo_schema
+    back-filled the canonical bucket at its 0.3 epsilon floor. The file
+    shipped INCOME = [10.5, 0.31, 21.0, 22.5, 24.0, 16.8, 5.0] to the
+    gate - sums to 100, every deterministic check passed, and only the
+    pre-ship vetting stage caught the demographically impossible shape.
+
+    This enforcer is the settle-point tripwire+repair: after all bucket
+    relabel / drop / back-fill churn is done, no ORDERED demo bracket
+    (INCOME, AGE) may sit below 1% while BOTH its ordered neighbors sit
+    above 8%. A shape like that is never a genuine audience signal on a
+    full-shape file; it is the signature of a destroyed bucket.
+
+    Repair: lift the crater bucket to a subject-salted 72-92% of its
+    neighbor mean, rescale the remaining buckets proportionally so the
+    category still sums to exactly 100, keep 4dp messy values off clean
+    2dp boundaries, and recompute Raw / Proj / Category Share via
+    _set_bp.
+
+    Gating (why cuts are safe without name-based checks):
+      * any bucket >= 85 in the category -> pinned cut (an income- or
+        age-pinned cut legitimately zeroes its other brackets) -> skip;
+      * gender / geo / avid cuts inherit full-shape demos from their
+        parent, so a healthy parent never trips this;
+      * international frames keep country-native bands -> skip.
+
+    Idempotent: a repaired bucket sits far above the 1% trigger.
+    Returns (df, n_repaired).
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None or bp_col not in df.columns:
+        return df, 0
+    _ctry = _frame_country(df)
+    if _ctry:
+        return df, 0
+    try:
+        from migration.canonical_demos import canonical_value
+    except Exception:
+        try:
+            from canonical_demos import canonical_value  # type: ignore
+        except Exception:
+            return df, 0
+
+    import hashlib as _hl
+
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+    col_series = df['Column'].astype(str).str.strip().str.upper()
+    n_repaired = 0
+
+    for cat, ordered_buckets in _CRATER_ORDERED_CATS.items():
+        mask = col_series == cat
+        if not mask.any():
+            continue
+
+        # Map each row onto its canonical ordered slot (canonical_value
+        # handles casing + punctuation-mangled variants).
+        slot_by_bucket = {b: i for i, b in enumerate(ordered_buckets)}
+        seq: list = [None] * len(ordered_buckets)   # slot -> (idx, bp)
+        extra_idxs = []
+        for idx in df.index[mask]:
+            bp = _bp(df.at[idx, bp_col])
+            if bp is None:
+                continue
+            canon = canonical_value(cat, df.at[idx, 'Value'])
+            if isinstance(canon, str) and canon in slot_by_bucket \
+                    and seq[slot_by_bucket[canon]] is None:
+                seq[slot_by_bucket[canon]] = (idx, bp)
+            else:
+                extra_idxs.append(idx)
+
+        present = [(slot, pair) for slot, pair in enumerate(seq)
+                   if pair is not None]
+        if len(present) < 3:
+            continue
+        # Pinned-cut guard: a ~99.99 bucket means this file is an
+        # income-/age-pinned cut whose other brackets are legitimately
+        # near zero.
+        if any(bp >= _CRATER_PIN_GUARD for _, (_, bp) in present):
+            continue
+
+        craters = []
+        for k in range(1, len(present) - 1):
+            slot, (idx, bp) = present[k]
+            _, (_, bp_lo) = present[k - 1]
+            _, (_, bp_hi) = present[k + 1]
+            if (bp < _CRATER_BP and bp_lo > _CRATER_NEIGHBOR_BP
+                    and bp_hi > _CRATER_NEIGHBOR_BP):
+                craters.append((k, idx, bp, bp_lo, bp_hi))
+        if not craters:
+            continue
+
+        before = [round(bp, 2) for _, (_, bp) in present]
+
+        # Lift each crater to a salted 72-92% of the neighbor mean.
+        new_by_idx = {}
+        for k, idx, bp, bp_lo, bp_hi in craters:
+            h = _hl.md5(f"{subject}|{cat}|crater|{k}".encode()).hexdigest()
+            factor = 0.72 + (int(h[:8], 16) % 2001) / 10000.0  # 0.72-0.92
+            target = round(((bp_lo + bp_hi) / 2.0) * factor, 4)
+            new_by_idx[idx] = target
+
+        # Rescale everything else in the category so the block still
+        # sums to exactly 100.
+        all_rows = []
+        for idx in df.index[mask]:
+            bp = _bp(df.at[idx, bp_col])
+            if bp is not None:
+                all_rows.append((idx, bp))
+        other_total = sum(bp for idx, bp in all_rows
+                          if idx not in new_by_idx)
+        crater_total = sum(new_by_idx.values())
+        if other_total <= 0 or crater_total >= 100.0:
+            continue
+        scale = (100.0 - crater_total) / other_total
+
+        final_by_idx = dict(new_by_idx)
+        for idx, bp in all_rows:
+            if idx not in new_by_idx:
+                final_by_idx[idx] = round(bp * scale, 4)
+
+        # Keep values off clean 2dp boundaries (salted nudge), then
+        # absorb the rounding residual on the largest non-crater bucket.
+        for idx in list(final_by_idx):
+            v = final_by_idx[idx]
+            if abs(v * 100 - round(v * 100)) < 1e-9:
+                h = _hl.md5(f"{subject}|{cat}|depin|{idx}".encode()
+                            ).hexdigest()
+                final_by_idx[idx] = round(
+                    v + 0.0011 + (int(h[:6], 16) % 60) / 10000.0, 4)
+        residual = round(100.0 - sum(final_by_idx.values()), 4)
+        if abs(residual) >= 0.0001:
+            big_idx = max(
+                (i for i in final_by_idx if i not in new_by_idx),
+                key=lambda i: final_by_idx[i], default=None)
+            if big_idx is not None:
+                final_by_idx[big_idx] = round(
+                    final_by_idx[big_idx] + residual, 4)
+
+        for idx, v in final_by_idx.items():
+            df = _set_bp(df, idx, v, bp_col, cs_col, raw_col, proj_col,
+                         sample_size)
+        n_repaired += len(craters)
+
+        if verbose:
+            after = []
+            for slot, (idx, _old) in present:
+                after.append(round(final_by_idx.get(idx, _old), 2))
+            print(f'   🩹 repair_demo_bracket_craters [{subject or ""}]: '
+                  f'{cat} crater(s) at '
+                  f'{[ordered_buckets[present[k][0]] for k, *_ in craters]} '
+                  f'repaired {before} -> {after} (block sums to '
+                  f'{sum(final_by_idx.values()):.4f}%)')
+
+    return df, n_repaired
 
 
 def validate_income_monotonicity(df, *, subject=None, verbose=True):

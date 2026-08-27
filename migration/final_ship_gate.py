@@ -1476,6 +1476,56 @@ def _check_i10(rows, s3_key):
                 f"one-bucket demographic belongs on a derived cut, not "
                 f"a TU.",
             ))
+
+    # Structural bracket-crater tripwire (2026-08-27 YMCA income
+    # crater): an ORDERED demo bracket (INCOME, AGE) below 1% while
+    # BOTH ordered neighbors sit above 8% is the signature of a
+    # destroyed bucket (orphan-dropped label -> epsilon back-fill),
+    # never a real audience shape on a TU. The repair lives in
+    # post_generation_enforcers.repair_demo_bracket_craters; this is
+    # the dumb backstop for writes that bypass the enforcer chain.
+    # Pinned categories (any bucket >= 85) are skipped - those belong
+    # to income-/age-pinned cuts, and cuts skip this check anyway.
+    try:
+        from migration.canonical_demos import canonical_value
+        from migration.post_generation_enforcers import (
+            _CRATER_ORDERED_CATS, _CRATER_BP, _CRATER_NEIGHBOR_BP,
+            _CRATER_PIN_GUARD,
+        )
+    except ImportError:
+        return out
+    for cu, ordered_buckets in _CRATER_ORDERED_CATS.items():
+        pairs = by_cat.get(cu) or []
+        if len(pairs) < 3:
+            continue
+        if any(bp >= _CRATER_PIN_GUARD for _, bp in pairs):
+            continue
+        slot_by_bucket = {b: i for i, b in enumerate(ordered_buckets)}
+        seq = [None] * len(ordered_buckets)
+        for r, bp in pairs:
+            canon = canonical_value(cu, r["val"])
+            if isinstance(canon, str) and canon in slot_by_bucket \
+                    and seq[slot_by_bucket[canon]] is None:
+                seq[slot_by_bucket[canon]] = (r, bp)
+        present = [p for p in seq if p is not None]
+        if len(present) < 3:
+            continue
+        for k in range(1, len(present) - 1):
+            r, bp = present[k]
+            _, bp_lo = present[k - 1]
+            _, bp_hi = present[k + 1]
+            if (bp < _CRATER_BP and bp_lo > _CRATER_NEIGHBOR_BP
+                    and bp_hi > _CRATER_NEIGHBOR_BP):
+                out.append(_v(
+                    "I10", "degenerate demos",
+                    f"{r['cat']} / {r['val']}", _fmt_pct(bp),
+                    f"{r['cat']} bracket {r['val']} sits at "
+                    f"{_fmt_pct(bp)} while its ordered neighbors sit at "
+                    f"{_fmt_pct(bp_lo)} and {_fmt_pct(bp_hi)}. A hollow "
+                    f"interior bracket between two heavy neighbors on a "
+                    f"Total Universe is a destroyed bucket, not an "
+                    f"audience shape.",
+                ))
     return out
 
 

@@ -395,11 +395,73 @@ def _norm(s: str) -> str:
     return s
 
 
+def _loose_norm(s: str) -> str:
+    """Alphanumeric-only fold of `_norm` for punctuation-mangled labels.
+
+    2026-08-27 (YMCA income crater): the interpret step emitted the
+    INCOME bucket label `25,000 - $49,999` (leading `$` missing). The
+    strict `_norm` key did not match the canonical `$25,000 - $49,999`,
+    the row orphaned in `enforce_canonical_demo_buckets`, its ~17pp of
+    mass was dropped + redistributed, and the schema back-fill
+    re-created the bucket at an epsilon floor (0.31%). This fold makes
+    `$`-and-punctuation variants collapse onto the canonical bucket so
+    a cosmetic label defect can never destroy a bracket's mass.
+    """
+    import re as _re
+    return _re.sub(r'[^A-Z0-9]', '', _norm(s))
+
+
 # Precomputed norm-key sets for fast canonical membership check.
 _CANONICAL_NORM: dict[str, dict[str, str]] = {
     cat: {_norm(v): v for v in vals}
     for cat, vals in PIPELINE_DEMO_SCHEMA.items()
 }
+
+
+def _build_loose_maps():
+    """Loose-key lookup maps with collision guards.
+
+    A loose key that maps to two DIFFERENT canonical buckets within the
+    same category is ambiguous and excluded (strict matching only for
+    those); same for aliases whose loose keys collide with a canonical
+    loose key that resolves to a different target.
+    """
+    canon_loose: dict[str, dict[str, str]] = {}
+    alias_loose: dict[str, dict[str, str | None]] = {}
+    for cat, vals in PIPELINE_DEMO_SCHEMA.items():
+        m: dict[str, str] = {}
+        ambiguous: set[str] = set()
+        for v in vals:
+            k = _loose_norm(v)
+            if not k:
+                continue
+            if k in m and m[k] != v:
+                ambiguous.add(k)
+            else:
+                m[k] = v
+        for k in ambiguous:
+            m.pop(k, None)
+        canon_loose[cat] = m
+        am: dict[str, str | None] = {}
+        a_ambiguous: set[str] = set()
+        for alias_raw, target in _ALIASES.get(cat, {}).items():
+            k = _loose_norm(alias_raw)
+            if not k:
+                continue
+            if k in m and m[k] != target:
+                # canonical loose key wins; skip conflicting alias key
+                continue
+            if k in am and am[k] != target:
+                a_ambiguous.add(k)
+            else:
+                am[k] = target
+        for k in a_ambiguous:
+            am.pop(k, None)
+        alias_loose[cat] = am
+    return canon_loose, alias_loose
+
+
+_CANONICAL_LOOSE, _ALIAS_LOOSE = _build_loose_maps()
 
 
 def canonical_value(category: str, value: str) -> str | None:
@@ -427,7 +489,18 @@ def canonical_value(category: str, value: str) -> str | None:
     for alias_raw, target in aliases.items():
         if _norm(alias_raw) == nkey:
             return target  # may be None -> DROP
-    # 3. Orphan: no canonical match and no alias. Caller decides.
+    # 3. Loose (alphanumeric-only) fallback: catches punctuation-mangled
+    #    labels like `25,000 - $49,999` (missing `$` - 2026-08-27 YMCA
+    #    income crater). Collision-guarded maps built at module load.
+    lkey = _loose_norm(value)
+    if lkey:
+        hit = _CANONICAL_LOOSE.get(cat, {}).get(lkey)
+        if hit is not None:
+            return hit
+        am = _ALIAS_LOOSE.get(cat, {})
+        if lkey in am:
+            return am[lkey]  # may be None -> DROP
+    # 4. Orphan: no canonical match and no alias. Caller decides.
     return _ORPHAN
 
 
