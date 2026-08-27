@@ -20043,6 +20043,30 @@ def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
     """
     if not missing:
         return
+    # 2026-08-27 PM (Jenna): false-gap suppression. A brand the hostmap
+    # already covers under any fold or token spelling ('Ninja' / 'Shark'
+    # vs the combined 'Shark Ninja' row) must never be proposed as a
+    # gap. Fail-open: if coverage is unreachable nothing is filtered.
+    try:
+        try:
+            from migration.hostmap_gap_mapping import (
+                partition_false_gaps as _gap_partition,
+            )
+        except ImportError:
+            from hostmap_gap_mapping import (  # type: ignore
+                partition_false_gaps as _gap_partition,
+            )
+        missing, _suppressed_gaps = _gap_partition(missing)
+        for _e, _canon in _suppressed_gaps:
+            print(f"   [gap-mapping] suppressed false gap "
+                  f"{str(_e.get('value'))!r} - already in the hostmap "
+                  f"as {_canon!r}")
+        if not missing:
+            print("   [gap-mapping] every queued gap row was already in "
+                  "the hostmap; no email sent")
+            return
+    except Exception:
+        pass
     try:
         import boto3 as _boto3
         ses = _boto3.client('ses', region_name='us-east-2')
@@ -20138,7 +20162,8 @@ def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
                     m for m in missing
                     if m.get('source') != 'gate_wrong_category_dup'
                 ]
-                _csv_text = _map_csv_text(_csv_candidates)
+                _csv_text = _map_csv_text(_csv_candidates,
+                                          research_domains=True)
                 _csv_name = _map_csv_name(subject_name)
             except Exception as _ce:
                 print(f"   ⚠️ mapping CSV build failed: {_ce}")
@@ -31098,6 +31123,7 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
     # mirrors stay strictly hostmap-gated per rule 0b.
     try:
         from migration.hostmap_gap_mapping import (
+            already_mapped as _gap_already_mapped,
             keep_allowed_for_column as _gap_keep_allowed,
             propose_canonical_casing as _gap_propose_casing,
             register_kept_gap_brand as _gap_register_kept,
@@ -31105,11 +31131,13 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
     except ImportError:
         try:
             from hostmap_gap_mapping import (  # type: ignore
+                already_mapped as _gap_already_mapped,
                 keep_allowed_for_column as _gap_keep_allowed,
                 propose_canonical_casing as _gap_propose_casing,
                 register_kept_gap_brand as _gap_register_kept,
             )
         except ImportError:
+            _gap_already_mapped = None  # type: ignore[assignment]
             _gap_keep_allowed = None  # type: ignore[assignment]
             _gap_propose_casing = None  # type: ignore[assignment]
             _gap_register_kept = None  # type: ignore[assignment]
@@ -31145,6 +31173,15 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
                 bp_val = float(row.get(bp_col, 0)) if bp_col in df.columns else 0.0
             except Exception:
                 bp_val = 0.0
+            # Subject self-pin guard (2026-08-27 PM): the subject's own
+            # pinned row (BP ~100, or Value fold-equal to the subject
+            # name) is NEVER a gap. 'Netflix AVOD Subscribers' at 100.0
+            # must not collapse to 'Netflix' (token-superset cover) and
+            # get dropped as a dup, and must not be kept / emailed /
+            # Gen-Popped as a mapping proposal. Leave the row alone.
+            _subj_n = _norm(str(project_name or ''))
+            if bp_val >= 99.5 or (_subj_n and n == _subj_n):
+                continue
             entry = {
                 'category': str(row.get(cat_col, '')),
                 'value': val,
@@ -31157,37 +31194,86 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
                 drop_idx.append(idx)
                 silent_drops.append(entry)
                 continue
-            # 2026-08-27: KEEP the row at its reasoned BP when the column
-            # is outside the purchase family. Casing is canonicalized to
-            # match the proposed mapping CSV row.
-            if (_gap_keep_allowed is not None
-                    and _gap_keep_allowed(cat)):
+            # 2026-08-27 PM (Jenna, Joe & The Juice CSV): covered-brand
+            # collapse. A brand the hostmap already carries under any
+            # fold (case / punctuation / whitespace / accents) or as a
+            # token-subset / superset spelling of a mapped brand with a
+            # compatible section ('Ninja' -> 'Shark Ninja', 'Silversea
+            # Cruise' -> 'Silversea Cruises') is NOT a gap. Rewrite the
+            # row to the hostmap-canonical spelling and fall through to
+            # the normal in-hostmap checks; never keep/email/Gen-Pop it
+            # as a gap.
+            _covered = None
+            if _gap_already_mapped is not None:
                 try:
-                    proposed = _gap_propose_casing(val) if _gap_propose_casing else val
+                    _covered = _gap_already_mapped(val, cat)
                 except Exception:
-                    proposed = val
-                if proposed and proposed != val:
-                    df.at[idx, 'Value'] = proposed
-                entry = dict(entry)
-                entry['value'] = proposed or val
-                entry['reason'] = 'kept_not_in_hostmap'
-                keep_log.append(entry)
-                if _gap_register_kept is not None:
+                    _covered = None
+            if _covered:
+                _new_n = _norm(_covered)
+                if _new_n in norm_to_canon:
+                    _canon_val = norm_to_canon[_new_n]
+                    if (cat, _new_n) in existing_pairs:
+                        # Canonical brand already has a row in this
+                        # category - this spelling is a duplicate.
+                        drop_idx.append(idx)
+                        drop_log.append({
+                            'category': str(row.get(cat_col, '')),
+                            'value': _canon_val,
+                            'bp': bp_val,
+                            'reason': 'wrong_category_dup',
+                            'hostmap_categories': sorted(
+                                norm_to_cats.get(_new_n, set())),
+                        })
+                        print(f"      🔁 [{cat}] {val!r} → hostmap "
+                              f"{_canon_val!r} already present - dropped dup")
+                        continue
+                    df.at[idx, 'Value'] = _canon_val
+                    existing_pairs.add((cat, _new_n))
+                    print(f"      🔁 [{cat}] {val!r} → collapsed to hostmap "
+                          f"canonical {_canon_val!r} (not a gap)")
+                    val = _canon_val
+                    n = _new_n
+                    # No continue: run the normal in-hostmap category
+                    # checks below on the canonical spelling.
+                else:
+                    # Covered by an all-Hidden hostmap group: never
+                    # ships, never emailed.
+                    drop_idx.append(idx)
+                    silent_drops.append(dict(entry, value=_covered))
+                    continue
+            else:
+                # 2026-08-27: KEEP the row at its reasoned BP when the
+                # column is outside the purchase family. Casing is
+                # canonicalized to match the proposed mapping CSV row.
+                if (_gap_keep_allowed is not None
+                        and _gap_keep_allowed(cat)):
                     try:
-                        _gap_register_kept(
-                            subject=project_name or '',
-                            brand=proposed or val,
-                            column=str(row.get(cat_col, '')),
-                            bp=bp_val,
-                            source='bg_hostmap_gate',
-                        )
+                        proposed = _gap_propose_casing(val) if _gap_propose_casing else val
                     except Exception:
-                        pass
+                        proposed = val
+                    if proposed and proposed != val:
+                        df.at[idx, 'Value'] = proposed
+                    entry = dict(entry)
+                    entry['value'] = proposed or val
+                    entry['reason'] = 'kept_not_in_hostmap'
+                    keep_log.append(entry)
+                    if _gap_register_kept is not None:
+                        try:
+                            _gap_register_kept(
+                                subject=project_name or '',
+                                brand=proposed or val,
+                                column=str(row.get(cat_col, '')),
+                                bp=bp_val,
+                                source='bg_hostmap_gate',
+                            )
+                        except Exception:
+                            pass
+                    continue
+                # Purchase family (rule 0b): still strictly gated - drop.
+                drop_idx.append(idx)
+                drop_log.append(entry)
                 continue
-            # Purchase family (rule 0b): still strictly gated - drop.
-            drop_idx.append(idx)
-            drop_log.append(entry)
-            continue
         allowed = norm_to_cats.get(n, set())
         allowed_keys = norm_to_cat_keys.get(n, set())
         if cat_k not in allowed_keys:
