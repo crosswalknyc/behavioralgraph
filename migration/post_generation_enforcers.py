@@ -9561,11 +9561,27 @@ def normalize_final_format(df, subject, verbose=True):
                     loc_sum = df.loc[m_loc, bp_col].apply(_bp).fillna(0).sum()
                     if loc_sum > 0 and abs(loc_sum - 100.0) > 0.01:
                         scale = 100.0 / loc_sum
+                        import hashlib as _hl_loc
                         for idx in df.index[m_loc]:
                             v = _bp(df.at[idx, bp_col])
                             if v is None or v <= 0:
                                 continue
                             new_v = round(v * scale, 4)
+                            # Never round a dominant DMA up to exactly
+                            # 100.0000 (2026-08-26 Liz QA / I18: geo-cut
+                            # convention is ~99.9x jittered, and exact
+                            # 100 on a non-subject row is a reach-pin
+                            # defect the ship gate blocks).
+                            if new_v >= 99.995:
+                                h = int(_hl_loc.sha256(
+                                    f'{subject}|LOCATION|'
+                                    f'{df.at[idx, "Value"]}|loc-renorm'
+                                    .encode()).hexdigest()[:8], 16)
+                                new_v = round(
+                                    99.90 + (h % 900) / 10000.0, 4)
+                                if int(round(new_v * 10000)) % 100 == 0:
+                                    new_v = round(
+                                        new_v + (1 + h % 89) / 10000.0, 4)
                             df.at[idx, bp_col] = f'{new_v:.4f}'
                             # Let recompute_raw_and_projection handle
                             # Raw/Proj downstream.
