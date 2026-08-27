@@ -38,6 +38,7 @@ import io
 import re
 import threading
 import time
+import unicodedata
 
 import pandas as pd
 
@@ -80,7 +81,12 @@ def _norm_cat(c):
 
 
 def _norm_brand(b):
-    return re.sub(r"[^a-z0-9]+", "", str(b or "").lower())
+    # Accent fold first (2026-08-27): 'Timothée' must match 'Timothee'
+    # instead of silently dropping the accented letter. Mirrors
+    # migration/hostmap_norm.norm_key.
+    s = unicodedata.normalize("NFKD", str(b or ""))
+    s = s.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", "", s.lower())
 
 
 def _parse_bp(v):
