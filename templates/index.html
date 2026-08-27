@@ -108613,13 +108613,9 @@ https://www.instagram.com/p/..."></textarea>
                   matchNames: ['spotify'],
                   buyingNote: 'Audio ads + video takeover + podcast pre-roll (Megaphone). Real-time context targeting available.' },
                 { key: 'pandora_iheart', icon: '📻', name: 'Pandora / iHeart / SiriusXM', bucket: 'audio',
-                  panelCats: ['STREAMING/MUSIC', 'PODCAST', 'RADIO'],
+                  panelCats: ['STREAMING/MUSIC', 'RADIO'],
                   matchNames: ['pandora', 'iheart', 'siriusxm', 'sirius'],
                   buyingNote: 'SiriusXM Media (owns Pandora + Stitcher). Strong for older demos + streaming audio + podcast bundling.' },
-                { key: 'podcast', icon: '🎙️', name: 'Podcast Networks (host-read + programmatic)', bucket: 'podcast',
-                  panelCats: ['PODCAST', 'STREAMING/MUSIC'],
-                  matchNames: ['podcast', 'apple podcast', 'wondery', 'spotify podcast'],
-                  buyingNote: 'Blend host-read (Wondery, iHeart, SXM Media) + programmatic dynamic insertion (Triton, Megaphone). Attribute via Podscribe / Barometric.' },
                 { key: 'twitch_gaming', icon: '🎮', name: 'Twitch + Gaming/In-app', bucket: 'gaming',
                   panelCats: ['GAMING', 'GAMES', 'GAMING/CONSOLE', 'STREAMING/PLATFORM'],
                   matchNames: ['twitch', 'xbox', 'playstation', 'nintendo', 'steam', 'roblox', 'fortnite'],
@@ -108639,7 +108635,6 @@ https://www.instagram.com/p/..."></textarea>
                 ctv:         { label: 'Connected TV / OTT',    icon: '📺', baseline: 10, description: 'Hulu, Netflix, Peacock, Max, YouTube TV, Roku, Tubi/Pluto. Sized to streaming panel reach.' },
                 onlineVideo: { label: 'Online Video (YouTube)',icon: '▶️', baseline:  8, description: 'YouTube pre-roll + Shorts + in-feed. Sized to YouTube panel reach.' },
                 audio:       { label: 'Streaming Audio',       icon: '🎧', baseline:  4, description: 'Spotify, Pandora/iHeart/SXM. Sized to music-streaming panel reach.' },
-                podcast:     { label: 'Podcast',               icon: '🎙️', baseline:  4, description: 'Host-read + programmatic. Sized to podcast panel reach.' },
                 gaming:      { label: 'Gaming / In-app',       icon: '🎮', baseline:  3, description: 'Twitch, in-app rewarded video, Roblox/Fortnite when relevant.' },
                 retail:      { label: 'Retail Media',          icon: '🛒', baseline:  8, description: 'Amazon Ads/DSP, Walmart Connect, Target Roundel, Instacart. Sized to shopper reach.' },
                 display:     { label: 'Programmatic Display',  icon: '🌐', baseline: 12, description: 'Trade Desk / DV360. Always-on contextual, retargeting, and custom lookalikes.' }
@@ -108778,12 +108773,6 @@ https://www.instagram.com/p/..."></textarea>
                     { name: 'Podcast host-read / DAI',               pct: 25, note: 'iHeart podcasts + SXM Media' },
                     { name: 'Sponsorship of stations / shows',       pct: 15, note: 'SiriusXM programming' },
                     { name: 'Companion display',                     pct:  5, note: 'Attribution layer' }
-                ],
-                podcast: [
-                    { name: 'Host-read baked-in (60s)',              pct: 40, note: 'Highest CPM, best attribution' },
-                    { name: 'Dynamic Ad Insertion (30-60s)',         pct: 35, note: 'Scale + measurement' },
-                    { name: 'Programmatic (Triton, Megaphone)',      pct: 15, note: 'Efficient reach' },
-                    { name: 'Series sponsorship / branded content',  pct: 10, note: 'Tentpole shows' }
                 ],
                 twitch_gaming: [
                     { name: 'Twitch mid-roll video',                 pct: 30, note: 'Live streamer inventory' },
@@ -109386,7 +109375,7 @@ https://www.instagram.com/p/..."></textarea>
                 'APPAREL/FOOTWEAR', 'APPAREL', 'FOOTWEAR', 'ACTIVEWEAR',
                 'BEAUTY', 'INTIMATES', 'JEWELRY',
                 'ACCESSORIES', 'CPG', 'BEVERAGE',
-                'QSR', 'CASUAL DINING', 'FRANCHISE',
+                'QSR', 'CASUAL DINING',
                 'RETAIL', 'RETAILERS', 'GROCERY',
                 'TRAVEL', 'AUTOMOBILE',
                 'BANK', 'BANKS', 'BANKING', 'DIGITAL BANKING',
@@ -109459,8 +109448,7 @@ https://www.instagram.com/p/..."></textarea>
                 const items = _mkItemsFromCats([
                     'SOCIAL MEDIA', 'SOCIAL MEDIA/USE',
                     'STREAMING/PLATFORM', 'STREAMING VIDEO',
-                    'STREAMING/MUSIC', 'STREAMING MUSIC',
-                    'PODCAST'
+                    'STREAMING/MUSIC', 'STREAMING MUSIC'
                 ]);
                 return items
                     .filter(x => x && x.name && Number(x.pct) > 0)
