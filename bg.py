@@ -19991,12 +19991,37 @@ def _flush_hostmap_email_buffer(subject_name: str) -> None:
         items.extend(orphan_items)
         if isinstance(orphan_display, list) and orphan_display and not display_name:
             display_name = orphan_display[0].get('name', display_name)
-    if not items:
-        return
+    if items:
+        try:
+            _send_missing_hostmap_email(display_name, items)
+        except Exception as _e:
+            print(f"   ⚠️ consolidated missing-hostmap flush failed: {_e}")
+    # 2026-08-27 (Jenna): gap brands kept in the profile also enter Gen
+    # Pop at research-anchored values (same methodology as the nightly
+    # sync: approved-source US anchors, hard ceiling, floors, anchor
+    # trail, skip on research failure). Runs after the email so a slow
+    # research pass never delays the data-team notification. Non-fatal.
     try:
-        _send_missing_hostmap_email(display_name, items)
-    except Exception as _e:
-        print(f"   ⚠️ consolidated missing-hostmap flush failed: {_e}")
+        from migration.hostmap_gap_mapping import (
+            drain_kept_gap_brands as _gap_drain,
+            insert_gap_brands_into_genpop as _gap_genpop_insert,
+        )
+    except ImportError:
+        try:
+            from hostmap_gap_mapping import (  # type: ignore
+                drain_kept_gap_brands as _gap_drain,
+                insert_gap_brands_into_genpop as _gap_genpop_insert,
+            )
+        except ImportError:
+            _gap_drain = None  # type: ignore[assignment]
+            _gap_genpop_insert = None  # type: ignore[assignment]
+    if _gap_drain is not None:
+        try:
+            _kept = _gap_drain(display_name)
+            if _kept:
+                _gap_genpop_insert(_kept)
+        except Exception as _ge:
+            print(f"   ⚠️ gap-brand Gen Pop insert skipped: {_ge}")
 
 
 def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
@@ -20035,9 +20060,10 @@ def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
         # report: persona-affiliations first, then hostmap-gate drops.
         _SRC_LABELS = {
             'affiliations': '🎬 Persona-affiliation brands',
-            'gate_not_in_hostmap': '🛡 Hostmap-gate drops (brand not in hostmap)',
+            'gate_kept_not_in_hostmap': '✅ Kept in profile (not in hostmap yet - mapping proposed in attached CSV)',
+            'gate_not_in_hostmap': '🛡 Hostmap-gate drops (purchase category - excluded until mapping lands)',
             'gate_wrong_category_dup': '🛡 Hostmap-gate drops (wrong category, canonical already filled)',
-            'audit_taxonomy_gap': '🗂 Auditor-flagged taxonomy gaps (brand never appeared — please add to hostmap)',
+            'audit_taxonomy_gap': '🗂 Auditor-flagged taxonomy gaps (brand never appeared - please add to hostmap)',
             '': '📋 Other',
         }
         from collections import defaultdict as _dd
@@ -20046,7 +20072,7 @@ def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
             by_src[m.get('source', '') or ''].append(m)
         sections_html: list[str] = []
         sections_text: list[str] = []
-        for src in ('affiliations', 'gate_not_in_hostmap', 'gate_wrong_category_dup', 'audit_taxonomy_gap', ''):
+        for src in ('gate_kept_not_in_hostmap', 'affiliations', 'gate_not_in_hostmap', 'gate_wrong_category_dup', 'audit_taxonomy_gap', ''):
             rows = by_src.get(src, [])
             if not rows:
                 continue
@@ -20081,28 +20107,72 @@ def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
             sections_text.append(f'\n{label} ({len(rows)}):\n{text_rows}')
         rows_html = ''.join(sections_html)
         rows_text = '\n'.join(sections_text)
+
+        # 2026-08-27 (Jenna): attach a proposed-mapping CSV in the
+        # Mapping_Table_V1 format (BRAND, HOSTNAME, CATEGORY, SECTION;
+        # one row per hostname variant) so the rows are paste-ready.
+        # Wrong-category dups are excluded from the CSV (those brands
+        # already have a hostmap row; only categorization needs review).
+        _csv_text = ''
+        _csv_name = 'hostmap_mapping_proposals.csv'
+        try:
+            from migration.hostmap_gap_mapping import (
+                mapping_csv_text as _map_csv_text,
+                mapping_csv_filename as _map_csv_name,
+                build_gap_email_mime as _map_build_mime,
+            )
+        except ImportError:
+            try:
+                from hostmap_gap_mapping import (  # type: ignore
+                    mapping_csv_text as _map_csv_text,
+                    mapping_csv_filename as _map_csv_name,
+                    build_gap_email_mime as _map_build_mime,
+                )
+            except ImportError:
+                _map_csv_text = None  # type: ignore[assignment]
+                _map_csv_name = None  # type: ignore[assignment]
+                _map_build_mime = None  # type: ignore[assignment]
+        if _map_csv_text is not None:
+            try:
+                _csv_candidates = [
+                    m for m in missing
+                    if m.get('source') != 'gate_wrong_category_dup'
+                ]
+                _csv_text = _map_csv_text(_csv_candidates)
+                _csv_name = _map_csv_name(subject_name)
+            except Exception as _ce:
+                print(f"   ⚠️ mapping CSV build failed: {_ce}")
+                _csv_text = ''
+
         html = f"""<html><body style="font-family:-apple-system,Helvetica,Arial,sans-serif;color:#333;">
-<h2 style="color:#cc7000;">📨 Missing Hostmap Brands — Profile: {subject_name}</h2>
+<h2 style="color:#cc7000;">📨 Missing Hostmap Brands - Profile: {subject_name}</h2>
 <p>This is a <b>single consolidated report</b> covering all hostmap issues surfaced
-during this run of <b>{subject_name}</b> — <b>{len(missing)}</b> brand(s) total across
+during this run of <b>{subject_name}</b> - <b>{len(missing)}</b> brand(s) total across
 the persona-affiliation step and the downstream hostmap gate.
-None of these have a row in <code>reference.host_mapping</code>, so they can't be
-attached to panel data on future runs unless added.</p>
-<p><b>Please add these brands to hostmap so they're picked up on the next run.</b>
-The Domain column shows the suggested primary owned domain — please review and replace
+None of these have a row in <code>reference.host_mapping</code> yet.</p>
+<p><b>The attached CSV contains ready-to-paste mapping proposals</b>
+(BRAND, HOSTNAME, CATEGORY, SECTION; one row per hostname variant) -
+please review hostnames and sections, then add to the mapping table.
+The Domain column below shows the suggested primary owned domain - review and replace
 with the actual hostname pattern(s) you want the brand to match on.</p>
+<p>Brands in the "Kept in profile" section now ship in the profile and Gen Pop
+at reasoned values, so adding the mapping row completes the loop for future runs.
+Purchase categories (Most Purchased Brands family) stay excluded until the mapping lands.</p>
 {rows_html}
 <p style="color:#999;font-size:12px;margin-top:24px;">
-Behavioral Graph by Crosswalk NYC — automated affiliation auditor</p>
+Behavioral Graph by Crosswalk NYC - automated affiliation auditor</p>
 </body></html>"""
-        text = (f"Missing Hostmap Brands — Profile: {subject_name}\n\n"
-                f"Single consolidated report — {len(missing)} brand(s) total across "
+        text = (f"Missing Hostmap Brands - Profile: {subject_name}\n\n"
+                f"Single consolidated report - {len(missing)} brand(s) total across "
                 f"the persona-affiliation step and the downstream hostmap gate.\n"
-                f"Please add these to hostmap so they're picked up on the next run.\n"
-                f"(Domain shown is a suggested primary owned domain — review and "
+                f"The attached CSV contains ready-to-paste mapping proposals "
+                f"(BRAND, HOSTNAME, CATEGORY, SECTION; one row per hostname variant).\n"
+                f"Brands marked kept-in-profile now ship in the profile and Gen Pop at "
+                f"reasoned values; purchase categories stay excluded until the mapping lands.\n"
+                f"(Domain shown is a suggested primary owned domain - review and "
                 f"replace with the actual hostname pattern.)\n"
                 f"{rows_text}\n")
-        _ses_subject = f'📨 Hostmap brands needed for {subject_name} ({len(missing)}) — consolidated'
+        _ses_subject = f'📨 Hostmap brands needed for {subject_name} ({len(missing)}) - mapping CSV attached'
         _ses_payload = {
             'Source': 'no_reply@crosswalknyc.com',
             'Destination': {
@@ -20122,9 +20192,31 @@ Behavioral Graph by Crosswalk NYC — automated affiliation auditor</p>
             },
         }
         try:
-            ses.send_email(**_ses_payload)
-            print(f"   📧 Sent missing-hostmap email to jenna@ (cc jessie@, anastasia@, liz@) "
-                  f"for {len(missing)} brand(s)")
+            if _map_build_mime is not None and _csv_text:
+                # One email, one CSV attachment, per run (send_raw_email
+                # MIME path; same precedent as the internal deliverable
+                # sender in the queue worker).
+                _mime = _map_build_mime(
+                    _ses_subject, html, text, _csv_name, _csv_text,
+                )
+                ses.send_raw_email(
+                    Source='no_reply@crosswalknyc.com',
+                    Destinations=[
+                        'jenna@crosswalknyc.com',
+                        'jessie@crosswalknyc.com',
+                        'anastasia@crosswalknyc.com',
+                        'liz@crosswalknyc.com',
+                    ],
+                    RawMessage={'Data': _mime.as_string()},
+                )
+                print(f"   📧 Sent missing-hostmap email to jenna@ (cc jessie@, anastasia@, liz@) "
+                      f"for {len(missing)} brand(s) with mapping CSV {_csv_name}")
+            else:
+                # Fallback: no mapping module or nothing to propose —
+                # send the plain consolidated email as before.
+                ses.send_email(**_ses_payload)
+                print(f"   📧 Sent missing-hostmap email to jenna@ (cc jessie@, anastasia@, liz@) "
+                      f"for {len(missing)} brand(s)")
         except Exception as _se:
             _msg = str(_se)
             if 'Throttling' in _msg or 'quota' in _msg.lower() or 'Daily message' in _msg:
@@ -20141,8 +20233,10 @@ Behavioral Graph by Crosswalk NYC — automated affiliation auditor</p>
                             'ses_subject': _ses_subject,
                             'html': html,
                             'text': text,
+                            'csv_name': _csv_name,
+                            'csv_text': _csv_text,
                         }) + '\n')
-                    print(f"   📥 SES throttled — queued hostmap email for retry ({_q})")
+                    print(f"   📥 SES throttled - queued hostmap email for retry ({_q})")
                 except Exception as _qe:
                     print(f"   ⚠️ SES throttled AND queue write failed: {_qe}")
             else:
@@ -30995,6 +31089,30 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
     drop_log: list[dict] = []
     silent_drops: list[dict] = []
     move_log: list[dict] = []  # wrong-category rows we relabeled instead of dropping
+    keep_log: list[dict] = []  # gap brands KEPT at reasoned BP (2026-08-27)
+
+    # 2026-08-27 (Jenna): gap brands are no longer dropped. The gap email
+    # now carries a proposed-mapping CSV, so a not-in-hostmap brand KEEPS
+    # its reasoned BP in the profile (and is inserted into Gen Pop at the
+    # end of the run). Exception: MOST PURCHASED BRANDS and its purchase
+    # mirrors stay strictly hostmap-gated per rule 0b.
+    try:
+        from migration.hostmap_gap_mapping import (
+            keep_allowed_for_column as _gap_keep_allowed,
+            propose_canonical_casing as _gap_propose_casing,
+            register_kept_gap_brand as _gap_register_kept,
+        )
+    except ImportError:
+        try:
+            from hostmap_gap_mapping import (  # type: ignore
+                keep_allowed_for_column as _gap_keep_allowed,
+                propose_canonical_casing as _gap_propose_casing,
+                register_kept_gap_brand as _gap_register_kept,
+            )
+        except ImportError:
+            _gap_keep_allowed = None  # type: ignore[assignment]
+            _gap_propose_casing = None  # type: ignore[assignment]
+            _gap_register_kept = None  # type: ignore[assignment]
 
     # Pre-compute (category_upper, normalized_value) pairs already present
     # in the df. Used to avoid moving a brand into a category where it
@@ -31023,7 +31141,6 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
             continue
         if n not in norm_to_canon:
             # Violation A: brand not in hostmap
-            drop_idx.append(idx)
             try:
                 bp_val = float(row.get(bp_col, 0)) if bp_col in df.columns else 0.0
             except Exception:
@@ -31036,10 +31153,40 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
                 'hostmap_categories': [],
             }
             if n in SUPPRESS_FROM_EMAIL:
-                # Known merged/deprecated brand — drop quietly, no email.
+                # Known merged/deprecated brand - drop quietly, no email.
+                drop_idx.append(idx)
                 silent_drops.append(entry)
-            else:
-                drop_log.append(entry)
+                continue
+            # 2026-08-27: KEEP the row at its reasoned BP when the column
+            # is outside the purchase family. Casing is canonicalized to
+            # match the proposed mapping CSV row.
+            if (_gap_keep_allowed is not None
+                    and _gap_keep_allowed(cat)):
+                try:
+                    proposed = _gap_propose_casing(val) if _gap_propose_casing else val
+                except Exception:
+                    proposed = val
+                if proposed and proposed != val:
+                    df.at[idx, 'Value'] = proposed
+                entry = dict(entry)
+                entry['value'] = proposed or val
+                entry['reason'] = 'kept_not_in_hostmap'
+                keep_log.append(entry)
+                if _gap_register_kept is not None:
+                    try:
+                        _gap_register_kept(
+                            subject=project_name or '',
+                            brand=proposed or val,
+                            column=str(row.get(cat_col, '')),
+                            bp=bp_val,
+                            source='bg_hostmap_gate',
+                        )
+                    except Exception:
+                        pass
+                continue
+            # Purchase family (rule 0b): still strictly gated - drop.
+            drop_idx.append(idx)
+            drop_log.append(entry)
             continue
         allowed = norm_to_cats.get(n, set())
         allowed_keys = norm_to_cat_keys.get(n, set())
@@ -31085,8 +31232,8 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
                 'hostmap_categories': sorted(allowed),
             })
 
-    if not drop_idx and not move_log:
-        print(f"   🛡  hostmap gate: 0 drops, 0 moves")
+    if not drop_idx and not move_log and not keep_log:
+        print(f"   🛡  hostmap gate: 0 drops, 0 moves, 0 gap keeps")
         return df, []
 
     df_kept = df.drop(index=drop_idx).reset_index(drop=True) if drop_idx else df.reset_index(drop=True)
@@ -31095,10 +31242,15 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
     n_b = sum(1 for d in drop_log if d['reason'] == 'wrong_category_dup')
     n_silent = len(silent_drops)
     n_moved = len(move_log)
+    n_kept = len(keep_log)
     silent_label = f", {n_silent} silent (merged/deprecated)" if n_silent else ""
     print(f"   🛡  hostmap gate: dropped {len(drop_idx)} rows "
-          f"({n_a} not-in-hostmap, {n_b} wrong-category dups{silent_label}), "
-          f"moved {n_moved} wrong-category rows to canonical category")
+          f"({n_a} not-in-hostmap purchase-family, {n_b} wrong-category dups{silent_label}), "
+          f"moved {n_moved} wrong-category rows to canonical category, "
+          f"kept {n_kept} gap brand(s) at reasoned BP (mapping proposed)")
+    if keep_log:
+        for k in sorted(keep_log, key=lambda d: -float(d.get('bp') or 0))[:10]:
+            print(f"      ✅ [{k['category']}] {k['value']} bp={k['bp']:.2f} - kept; mapping row proposed in gap email CSV")
     if silent_drops:
         for d in silent_drops[:5]:
             print(f"      🤫 [{d['category']}] {d['value']} bp={d['bp']:.2f} — silently dropped (merged into a canonical brand; no email)")
@@ -31121,6 +31273,15 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
     if send_email:
         try:
             email_payload: list[dict] = []
+            for k in keep_log:
+                email_payload.append({
+                    'category': k['category'],
+                    'value': k['value'],
+                    'type': 'agent_inserted_unmapped_brand',
+                    'evidence': f'kept in profile ({k["category"]}) at BP {k["bp"]:.2f}; '
+                                f'not in reference.host_mapping yet - proposed mapping row in attached CSV',
+                    'source': 'gate_kept_not_in_hostmap',
+                })
             for d in drop_log:
                 if d['reason'] == 'not_in_hostmap':
                     email_payload.append({
@@ -31128,7 +31289,7 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
                         'value': d['value'],
                         'type': 'agent_inserted_unmapped_brand',
                         'evidence': f'agent placed in {d["category"]} at BP {d["bp"]:.2f}; '
-                                    f'not in reference.host_mapping',
+                                    f'not in reference.host_mapping; purchase category stays excluded until mapping lands',
                         'source': 'gate_not_in_hostmap',
                     })
                 else:
