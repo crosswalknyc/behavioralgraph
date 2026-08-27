@@ -1174,27 +1174,31 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
     if bp_col is None or p_bp_col is None:
         return df_avid, stats
 
-    # 2026-08-26 (Liz QA, Paw Patrol avid): OWN-ROW DIRECTION. On the
-    # subject's own franchise/property rows the avid tier must read AT
-    # OR ABOVE the parent (avid fans always over-index on their own
-    # property; the shipped avid read FRANCHISE PAW PATROL at 3.9665 vs
-    # the parent's 82.7367 after the engine's reasoning fallback landed
-    # on a gen-pop baseline and the sanity lift was quarantined).
-    # Violators are re-derived from the parent BP with a subject-salted
-    # engaged-tier premium, raw-verified so the subset invariant
-    # (avid_raw <= parent_raw) still holds - always satisfiable since
-    # the avid sample is a strict fraction of the parent's.
+    # 2026-08-26 (Liz QA, Paw Patrol avid; corrected same day by
+    # Jenna's convention): OWN-ROW DIRECTION on the subject's own
+    # NON-PIN rows (own merch grids). Rows covered by the
+    # own-property / owner-platform pin convention (must_pin_100:
+    # FRANCHISE own row, owning platform) are EXCLUDED here - they
+    # pin at exactly 100 in base and cuts via pin_own_property_rows,
+    # so no direction logic applies to them. For the remaining own
+    # rows (TOYS/GAMES/MPB own merch) the avid tier must read AT OR
+    # ABOVE the parent; violators are re-derived from the parent BP
+    # with a subject-salted engaged-tier premium, raw-verified so the
+    # subset invariant (avid_raw <= parent_raw) still holds.
     try:
         try:
             from migration.self_property_coherence import (
                 is_subject_own as _spc_is_own,
+                must_pin_100 as _spc_must_pin,
             )
         except ImportError:
             from self_property_coherence import (  # type: ignore
                 is_subject_own as _spc_is_own,
+                must_pin_100 as _spc_must_pin,
             )
     except Exception:
         _spc_is_own = None
+        _spc_must_pin = None
 
     avid_sample = _read_sample_size(df_avid, raw_col)
     parent_sample = _read_sample_size(df_parent, p_raw_col)
@@ -1333,9 +1337,13 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
             else:
                 new_bp = None
         elif (_spc_is_own is not None and avid_bp < parent_bp - 0.0005
-                and parent_bp < 99.2 and _spc_is_own(subject, vu)):
+                and parent_bp < 99.2 and _spc_is_own(subject, vu)
+                and not (_spc_must_pin is not None
+                         and _spc_must_pin(subject, cu, vu))):
             # OWN-ROW DIRECTION violation: avid below parent on the
-            # subject's own property row. Re-derive from the parent BP
+            # subject's own NON-PIN row (own merch). Pin-convention
+            # rows are excluded (they go to exactly 100 via
+            # pin_own_property_rows). Re-derive from the parent BP
             # with a salted engaged-tier premium, raw-verified.
             u = int(hashlib.md5(
                 f"{subject}|{cu}|{_norm_pin(vu)}|own-direction".encode()

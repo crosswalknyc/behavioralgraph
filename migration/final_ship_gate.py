@@ -1698,77 +1698,41 @@ def _check_i16(rows, subject, s3_key):
 
 
 def _check_i17(rows, sample, subject, s3_key, s3_client, verbose):
-    """Avid own-row direction (2026-08-26 Liz QA, Paw Patrol: the avid
-    cut shipped FRANCHISE PAW PATROL at 3.9665 vs the parent TU's
-    82.7367 - avid fans reading BELOW the broad audience on their own
-    franchise is logically impossible). For every own-property row
-    shared with the resolvable parent TU, avid BP must be >= parent
-    BP. Fail-open on infrastructure like I12."""
+    """Own-property pin (2026-08-26 Jenna convention correction,
+    verbatim: "if it is its own property it should be 100%"). The
+    subject's own property row (FRANCHISE 'Paw Patrol') and the
+    owning / universe-defining platform row (Paramount+ on a Paw
+    Patrol universe, Apple TV+ on an Apple TV+-scoped universe) read
+    exactly 100.0000 in the base file AND every derived cut. This
+    REPLACES the earlier avid-direction form (avid >= parent on own
+    rows): a pinned row needs no direction check. Runs on every file,
+    base and cuts alike; no parent resolution needed."""
     out = []
-    if sample is None or not _is_avid_cut_key(s3_key):
-        return out
-    is_own, _ = _spc()
-    if is_own is None:
-        return out
     try:
-        parent_key, parent_body = _resolve_parent_tu(
-            s3_key, s3_client, verbose=verbose)
-    except Exception as e:
-        if verbose:
-            print(f"[ship-gate] I17 parent resolution errored: {e}; "
-                  f"own-row direction check skipped")
+        try:
+            from migration.self_property_coherence import must_pin_100
+        except ImportError:
+            from self_property_coherence import (  # type: ignore
+                must_pin_100,
+            )
+    except Exception:
         return out
-    if not parent_key:
-        if verbose:
-            print(f"[ship-gate] I17: no parent TU resolvable for "
-                  f"{_display_name(s3_key)}; own-row direction check "
-                  f"skipped")
-        return out
-    _, parent_rows = _parse_rows(parent_body)
-
-    parent_bp = {}
-    for r in parent_rows:
-        cu = r["cat_u"]
-        if (cu in DEMO_CATS or cu in META_CATS or cu in FAN_CATS
-                or cu == "LOCATION"):
-            continue
-        bp = _num(r["bp_s"])
-        if bp is None:
-            continue
-        k = (cu, _norm_token(r["val"]))
-        if bp > parent_bp.get(k, -1.0):
-            parent_bp[k] = bp
-
     for r in rows:
         cu = r["cat_u"]
-        if (cu in DEMO_CATS or cu in META_CATS or cu in FAN_CATS
-                or cu == "LOCATION"):
+        if cu in META_CATS or cu in DEMO_CATS or cu in FAN_CATS:
             continue
         bp = _num(r["bp_s"])
-        if bp is None:
+        if bp is None or abs(bp - 100.0) <= 0.00005:
             continue
-        vn = _norm_token(r["val"])
-        if not is_own(subject, r["val"]):
-            continue
-        # No _subject_forms skip here: the subject-OWN rows are exactly
-        # what this check measures (BRAND INPUT seeds put the property
-        # name in the full-forms set). True self-pin rows are excluded
-        # by the parent-pin guard below (a pinned parent row can never
-        # sit under it).
-        pbp = parent_bp.get((cu, vn))
-        if pbp is None or pbp >= 99.2:
-            continue
-        if bp < pbp - 0.0005:
+        if must_pin_100(subject, cu, r["val"]):
             out.append(_v(
-                "I17", "avid own-row direction",
-                f"{r['cat']} / {r['val']}",
-                f"avid {_fmt_pct(bp)} vs parent {_fmt_pct(pbp)}",
-                f"{r['val']} in {r['cat']}: the avid tier reads "
-                f"{_fmt_pct(bp)} but the parent audience "
-                f"({_display_name(parent_key)}) reads {_fmt_pct(pbp)}. "
-                f"Avid fans always over-index on the subject's own "
-                f"property; reading below the broad audience there is "
-                f"logically impossible.",
+                "I17", "own-property pin",
+                f"{r['cat']} / {r['val']}", _fmt_pct(bp),
+                f"{r['val']} in {r['cat']} is the subject's own "
+                f"property (or its owning / universe-defining "
+                f"platform) and must read exactly 100.0000 in the "
+                f"base file and every derived cut; it reads "
+                f"{_fmt_pct(bp)}.",
             ))
     return out
 
@@ -1776,12 +1740,47 @@ def _check_i17(rows, sample, subject, s3_key, s3_client, verbose):
 def _check_i18(rows, subject, s3_key):
     """Exact-100 non-subject pin (2026-08-26 Liz QA, Paw Patrol:
     Paramount+ shipped at exactly 100.0000 in STREAMING/PLATFORM on a
-    universe defined across Netflix/Amazon/Philo/Fubo). Exact 100
-    belongs to metadata rows and the subject's own self-pin family
-    (companion sports pins included); any other row at 100.0000 is an
-    impossible universal-reach claim plus a messy-value violation."""
+    universe defined across Netflix/Amazon/Philo/Fubo).     Exact 100
+    belongs to metadata rows, the subject's own self-pin family
+    (companion sports pins included), and - per the 2026-08-26 Jenna
+    convention correction - the owning / universe-defining platform
+    row on viewer/subscriber universes (Paramount+ on Paw Patrol,
+    Apple TV+ on an Apple TV+-scoped universe, the cut-defining
+    platform of a platform cut, the single carrier of a one-platform
+    universe); any other row at 100.0000 is an impossible
+    universal-reach claim plus a messy-value violation."""
     out = []
     is_own, _ = _spc()
+    try:
+        try:
+            from migration.self_property_coherence import (
+                exact_100_exempt as _e100,
+            )
+        except ImportError:
+            from self_property_coherence import (  # type: ignore
+                exact_100_exempt as _e100,
+            )
+    except Exception:
+        _e100 = None
+    # Cut label (the ' - ' suffix of the deliverable name) and the
+    # count of platform domains in BRAND INPUT feed the exemption.
+    _base = str(s3_key or "").rsplit("/", 1)[-1]
+    _base = _base[:-4] if _base.lower().endswith(".csv") else _base
+    cut_label = (_base.split(" - ", 1)[1].strip()
+                 if " - " in _base else None)
+    carrier_domains = []
+    try:
+        try:
+            from migration.viewer_carriage import PLATFORM_DOMAINS
+        except ImportError:
+            from viewer_carriage import PLATFORM_DOMAINS  # type: ignore
+        for r in rows:
+            if r["cat_u"] == "BRAND INPUT":
+                bi = str(r["val"] or "").lower()
+                carrier_domains = [d for d in PLATFORM_DOMAINS if d in bi]
+                break
+    except Exception:
+        carrier_domains = []
     full, mono = _subject_forms(subject, s3_key, rows)
     for r in rows:
         cu = r["cat_u"]
@@ -1802,6 +1801,10 @@ def _check_i18(rows, subject, s3_key):
         if vn in full or vn in mono:
             continue
         if is_own is not None and is_own(subject, r["val"]):
+            continue
+        if _e100 is not None and _e100(subject, cu, r["val"],
+                                       cut_label=cut_label,
+                                       carrier_domains=carrier_domains):
             continue
         out.append(_v(
             "I18", "exact-100 non-subject pin",

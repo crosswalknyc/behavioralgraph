@@ -81,6 +81,130 @@ MERCH_CATS = {
 ANCHOR_MIN = 40.0     # below this the franchise row makes no strong claim
 RATIO_FLOOR = 0.14    # own merch must be >= 14% of the franchise anchor
 
+# ---------------------------------------------------------------------------
+# Own-property / owner-platform pin convention (Jenna 2026-08-26,
+# verbatim: "for paw patrol paramount+ should be 100% as should paw
+# patrol ... if it is its own property it should be 100%. also please
+# vet apple tv+ cuts to make sure apple tv+ is 100%").
+#
+# The subject's OWN PROPERTY row (FRANCHISE "Paw Patrol") and the
+# OWNING / UNIVERSE-DEFINING platform row (Paramount+ on a Paw Patrol
+# universe; Apple TV+ on an Apple TV+-scoped universe; the standing
+# viewers-carriage precedent Jimmy Kimmel viewers -> Disney+/Hulu)
+# read exactly 100.0000 in the BASE file AND every derived cut. This
+# is the standard subject self-pin exception, extended through the
+# audience-suffix-stripped matcher and a verified-ownership map.
+# Merch grids (TOYS/GAMES/MPB) stay at reasoned levels - the pin is
+# for the property row and the platform row only.
+# ---------------------------------------------------------------------------
+
+# Content categories where the subject's own row IS the property.
+OWN_PROPERTY_PIN_CATS = {
+    "FRANCHISE", "MOVIE", "TV SHOW", "PODCAST", "VERTICAL SHORTS",
+    "CONTENT",
+}
+
+# Streaming/platform categories where a universe-defining platform row
+# pins at exact 100 (the REQUIREMENT set - deliberately narrower than
+# the exemption set below).
+PLATFORM_PIN_CATS = {
+    "STREAMING/PLATFORM", "STREAMING VIDEO", "STREAMING MUSIC",
+    "VMVPD/FAST", "VIRTUAL MVPD/FAST", "VIRTUAL MVPD FAST", "VMVPD",
+    "FAST PLATFORM", "FAST CHANNEL", "APP/PLATFORM", "PLATFORMS",
+}
+
+# Platform / carriage categories where an exact-100 row is EXEMPT from
+# the I18 reach-pin flag when it is owner-verified, cut-defining, or
+# the single carrier of a consumption-scoped universe (mirrors
+# CARRIER_PIN_SOFT_CATS in post_generation_enforcers).
+CARRIER_EXEMPT_CATS = PLATFORM_PIN_CATS | {
+    "BROADCAST/CABLE", "MOVIE THEATER", "MEDIA", "SOCIAL MEDIA",
+    "SEARCH ENGINE/AI",
+}
+
+# Curated verified-ownership map: own-property token -> normalized
+# platform tokens whose row pins at exact 100 on that subject's files.
+# Seeded per Jenna 2026-08-26 (Paw Patrol is a Paramount property).
+# Extend only with VERIFIED ownership/carriage; the live source for
+# future builds is migration/viewer_carriage.research_carriage.
+OWNER_PLATFORM_MAP = {
+    "PAWPATROL": {"PARAMOUNT", "PARAMOUNTPLUS"},
+}
+
+
+def is_own_property_pin_cat(cat_u) -> bool:
+    cu = str(cat_u or "").strip().upper()
+    return cu in OWN_PROPERTY_PIN_CATS or cu.startswith("SERIES")
+
+
+def _value_parts(value):
+    sval = str(value or "")
+    parts = [sval]
+    if "/" in sval:
+        parts += [p for p in sval.split("/") if p.strip()]
+    return parts
+
+
+def is_owner_platform_row(subject, value) -> bool:
+    """True when the row Value is a platform verified as OWNING /
+    carrying the subject's property (curated OWNER_PLATFORM_MAP)."""
+    owners = OWNER_PLATFORM_MAP.get(own_token(subject))
+    if not owners:
+        return False
+    return any(_norm(p) in owners for p in _value_parts(value))
+
+
+def must_pin_100(subject, cat_u, value) -> bool:
+    """True when this row is REQUIRED at exactly 100.0000 (base file
+    and every derived cut) by the own-property / owner-platform pin
+    convention. Gate I17 flags rows where this is true and BP != 100;
+    the pin_own_property_rows enforcer sets them to 100."""
+    cu = str(cat_u or "").strip().upper()
+    if is_own_property_pin_cat(cu) and is_subject_own_exact(subject, value):
+        return True
+    if cu in PLATFORM_PIN_CATS and (
+            is_owner_platform_row(subject, value)
+            or is_subject_own(subject, value)):
+        return True
+    return False
+
+
+def exact_100_exempt(subject, cat_u, value, cut_label=None,
+                     carrier_domains=None) -> bool:
+    """True when an exact-100 reading on this row is LEGITIMATE (so
+    I18 must not flag it and the de-pin enforcer must not touch it):
+    required pins, owner-verified platform rows in any carriage
+    category, the cut-defining platform of a platform-scoped cut, and
+    the single carrier of a single-platform viewer universe.
+
+    `carrier_domains` is the list of platform domains found in the
+    file's BRAND INPUT; when exactly one is present AND its root
+    matches this row's value, the row IS the universe's one carrier
+    and its exact 100 stands (a Landman viewer by definition reached
+    Paramount+). A different platform at 100 on the same file is NOT
+    exempt."""
+    cu = str(cat_u or "").strip().upper()
+    if must_pin_100(subject, cu, value):
+        return True
+    if is_owner_platform_row(subject, value):
+        return True
+    if cu in CARRIER_EXEMPT_CATS:
+        doms = list(carrier_domains or [])
+        if len(doms) == 1:
+            root = re.sub(r"[^a-z0-9]", "",
+                          str(doms[0]).lower().split("/")[0].split(".")[0])
+            if root:
+                for p in _value_parts(value):
+                    pn = _norm(p).lower()
+                    if pn and (root in pn or pn in root):
+                        return True
+        cn = _norm(cut_label)
+        if cn and len(cn) >= 3:
+            vn = _norm(value)
+            if cn in vn or vn in cn:
+                return True
+    return False
+
 
 def _norm(s) -> str:
     return re.sub(r"[^A-Z0-9]", "", str(s or "").upper())

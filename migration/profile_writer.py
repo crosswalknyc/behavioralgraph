@@ -364,12 +364,29 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
         _append_gp = None
 
     n_fixed = 0
-    if any(v.get("code") in ("I12", "I17") for v in fixable):
-        # I12 (avid subset raws) and I17 (avid own-row direction) share
-        # one fixer: enforce_avid_subset_coherence caps out-counting
-        # rows AND lifts subject-own rows reading below the parent
-        # (2026-08-26 Paw Patrol: avid FRANCHISE 3.9665 vs parent
-        # 82.7367), raw-verified so neither fix re-breaks the other.
+    if any(v.get("code") == "I17" for v in fixable):
+        # I17 (2026-08-26 Jenna convention correction): own-property /
+        # owner-platform rows pin at exactly 100.0000 in base and
+        # every cut. Deterministic, no parent needed.
+        try:
+            try:
+                from migration.post_generation_enforcers import (
+                    pin_own_property_rows as _own_pin_fix,
+                )
+            except ImportError:
+                from post_generation_enforcers import (  # type: ignore
+                    pin_own_property_rows as _own_pin_fix,
+                )
+            df, _n_own = _own_pin_fix(df, subject, verbose=verbose)
+            n_fixed += int(_n_own or 0)
+            print(f"  [profile_writer] I17 own-property pin fix: "
+                  f"{_n_own} row(s) pinned to 100")
+        except Exception as e:
+            print(f"  [profile_writer] I17 own-property pin fix raised "
+                  f"({type(e).__name__}: {e}); gate keeps the verdict")
+    if any(v.get("code") == "I12" for v in fixable):
+        # I12 (avid subset raws): enforce_avid_subset_coherence caps
+        # out-counting rows vs the resolved parent, raw-verified.
         df_parent = None
         parent_label = None
         if tu_source_key:
@@ -385,7 +402,7 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
                         keep_default_na=False)
                     parent_label = parent_key
             except Exception as e:
-                print(f"  [profile_writer] I12/I17 parent resolution "
+                print(f"  [profile_writer] I12 parent resolution "
                       f"failed ({e}); subset fix skipped")
         if df_parent is not None:
             try:
@@ -403,11 +420,11 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
                 n_lifted = int(_st.get("lifted_down", 0) or 0)
                 n_dir = int(_st.get("direction_lifted", 0) or 0)
                 n_fixed += n_capped + n_lifted + n_dir
-                print(f"  [profile_writer] I12/I17 subset fix vs "
+                print(f"  [profile_writer] I12 subset fix vs "
                       f"{parent_label}: capped_up={n_capped} "
                       f"lifted_down={n_lifted} direction_lifted={n_dir}")
             except Exception as e:
-                print(f"  [profile_writer] I12/I17 subset fix raised "
+                print(f"  [profile_writer] I12 subset fix raised "
                       f"({type(e).__name__}: {e}); gate keeps the "
                       f"verdict")
     if any(v.get("code") == "I11" for v in fixable):

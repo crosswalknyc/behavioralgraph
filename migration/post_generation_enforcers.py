@@ -4300,16 +4300,15 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True):
     rows. Demo categories are excluded (GENDER pins etc. are owned by
     the cut transforms); metadata rows are excluded.
 
-    2026-08-26 (Liz QA, Paw Patrol): a viewers-universe interpret step
-    listed the carrying platform ('STREAMING/PLATFORM', 'Paramount+')
-    in subject_rows, and this enforcer re-asserted it to exactly
-    100.0000 - overwriting the viewer-carriage constraint's plausible
-    messy near-total (99.3245) and shipping an impossible universal-
-    reach claim on a multi-platform universe. Exact 100 is reserved
-    for the subject's own property: a pin whose target is NOT the
-    subject in a platform/carriage category now lands at a subject-
-    salted messy near-100 instead (the pin intent - "this carrier is
-    ~universal" - is honored without the exact-100 defect signature).
+    2026-08-26 (Jenna convention correction, superseding the earlier
+    same-day Liz-QA softening): a spec pin on the subject's OWN
+    property or its OWNING / universe-defining platform (Paramount+
+    on a Paw Patrol universe, per OWNER_PLATFORM_MAP / must_pin_100)
+    lands at exactly 100.0000 - "for paw patrol paramount+ should be
+    100% as should paw patrol". Only a non-subject, non-owner pin in
+    a platform/carriage category lands at a subject-salted messy
+    near-100 (the pin intent - "this carrier is ~universal" - is
+    honored without asserting unverified universal reach).
 
     Returns (df, n_changed, unmatched_pins).
     """
@@ -4321,13 +4320,16 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True):
         try:
             from migration.self_property_coherence import (
                 is_subject_own as _spc_is_own,
+                is_owner_platform_row as _spc_owner,
             )
         except ImportError:
             from self_property_coherence import (  # type: ignore
                 is_subject_own as _spc_is_own,
+                is_owner_platform_row as _spc_owner,
             )
     except Exception:
         _spc_is_own = None
+        _spc_owner = None
 
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     if bp_col not in df.columns:
@@ -4377,15 +4379,18 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True):
                 continue
             hit += 1
             row_val = str(df.at[idx, 'Value'])
-            # Exact 100 belongs to the subject's own property only.
-            # A non-subject pin in a platform/carriage category lands
-            # at a subject-salted messy near-100 (2026-08-26 Paw
-            # Patrol: Paramount+ pinned to 100.0000 on a universe
-            # defined across Netflix/Amazon/Philo/Fubo).
+            # Exact 100 belongs to the subject's own property AND its
+            # owning / universe-defining platform (2026-08-26 Jenna:
+            # Paramount+ = 100 on Paw Patrol). Only a non-subject,
+            # non-owner pin in a platform/carriage category lands at
+            # a subject-salted messy near-100.
             subject_own = True
             if _spc_is_own is not None:
                 subject_own = (_spc_is_own(subject, name)
                                or _spc_is_own(subject, row_val))
+            if not subject_own and _spc_owner is not None:
+                subject_own = (_spc_owner(subject, name)
+                               or _spc_owner(subject, row_val))
             if subject_own or cu not in CARRIER_PIN_SOFT_CATS:
                 target_bp = 100.0
             else:
@@ -4508,6 +4513,55 @@ def enforce_self_property_coherence(df, subject, verbose=True):
     return df, n
 
 
+def pin_own_property_rows(df, subject, verbose=True):
+    """I17 (2026-08-26 Jenna convention correction, verbatim: "if it
+    is its own property it should be 100%"): the subject's own
+    property row (FRANCHISE 'Paw Patrol') and the owning /
+    universe-defining platform row (Paramount+ on a Paw Patrol
+    universe, Apple TV+ on an Apple TV+-scoped universe) pin at
+    exactly 100.0000 in the base file and every derived cut.
+    must_pin_100 in self_property_coherence decides which rows
+    qualify. Only BP is set here; Raw/Projection recompute
+    downstream. Merch grids (TOYS/GAMES/MPB) are not touched."""
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+    try:
+        try:
+            from migration.self_property_coherence import must_pin_100
+        except ImportError:
+            from self_property_coherence import (  # type: ignore
+                must_pin_100,
+            )
+    except Exception as e:
+        if verbose:
+            print(f'   [own-pin] module unavailable; skipping ({e})')
+        return df, 0
+    skip_cats = METADATA_COLS | DEPIN_DEMO_CATS | {'SUBJECT'}
+    n = 0
+    for idx in df.index:
+        cu = str(df.at[idx, 'Column']).strip().upper()
+        if cu in skip_cats:
+            continue
+        bp = _bp(df.at[idx, bp_col])
+        if bp is None or abs(bp - 100.0) <= 0.00005:
+            continue
+        val = str(df.at[idx, 'Value']).strip()
+        if not must_pin_100(subject, cu, val):
+            continue
+        cur_cell = str(df.at[idx, bp_col])
+        had_pct = cur_cell.strip().endswith('%')
+        df[bp_col] = df[bp_col].astype(object)
+        df.at[idx, bp_col] = '100.0000%' if had_pct else '100.0000'
+        n += 1
+        if verbose:
+            print(f'   📌 own-property pin: {cu} | {val!r} '
+                  f'{bp:.4f} -> 100.0000')
+    return df, n
+
+
 def depin_exact_100_non_subject(df, subject, verbose=True, cut_label=None):
     """I18 (2026-08-26 Liz QA, Paw Patrol): a row at exactly 100.0000
     that is NOT the subject's own property (and not metadata, not a
@@ -4517,16 +4571,17 @@ def depin_exact_100_non_subject(df, subject, verbose=True, cut_label=None):
     De-pin to a subject-salted messy near-100. Positioned AFTER the
     pin/carriage passes and BEFORE recompute_raw_and_projection.
 
-    Band selection (corpus scan 2026-08-26): a CUT-DEFINING row (the
-    row that IS the cut, e.g. SPOTIFY on 'Reba McEntire - Spotify
-    Fan', the DMA row on a geo cut) follows the gender-cut convention
-    from the avid/cut-skin rules (~99.99 jittered, never exact 100),
-    so it lands in [99.90, 99.99]. Same for the carrier on a
-    SINGLE-platform viewer universe (a Landman viewer by definition
-    reached Paramount+). Everything else (accidental reach pins like
-    Paw Patrol's Paramount+ on a four-platform universe) lands in the
-    lower [99.01, 99.69] band. Pass cut_label='Spotify Fan' (the
-    ' - ' suffix of the deliverable name) when the caller knows it.
+    2026-08-26 Jenna convention correction: rows where exact 100 is
+    LEGITIMATE are exempt and left untouched - the subject's own
+    property, the owner-verified platform (OWNER_PLATFORM_MAP), the
+    cut-defining platform of a platform cut (Apple TV+ on an Apple
+    TV+-scoped cut), and the single carrier of a one-platform viewer
+    universe (exact_100_exempt in self_property_coherence). Of the
+    rows that DO get de-pinned: a cut-defining non-platform row (the
+    DMA row on a geo cut, per the cut-skin gender convention) lands
+    in [99.90, 99.99]; everything else (accidental reach pins) lands
+    in [99.01, 99.69]. Pass cut_label='Spotify Fan' (the ' - '
+    suffix of the deliverable name) when the caller knows it.
     """
     if df is None or len(df) == 0 or 'Column' not in df.columns:
         return df, 0
@@ -4537,13 +4592,16 @@ def depin_exact_100_non_subject(df, subject, verbose=True, cut_label=None):
         try:
             from migration.self_property_coherence import (
                 is_subject_own as _spc_is_own,
+                exact_100_exempt as _spc_e100,
             )
         except ImportError:
             from self_property_coherence import (  # type: ignore
                 is_subject_own as _spc_is_own,
+                exact_100_exempt as _spc_e100,
             )
     except Exception:
         _spc_is_own = None
+        _spc_e100 = None
 
     # LOCATION deliberately NOT skipped (a geo cut's own DMA pin is
     # cut-defining and moves to the high band); demo-shaped bucket
@@ -4558,8 +4616,9 @@ def depin_exact_100_non_subject(df, subject, verbose=True, cut_label=None):
 
     cut_norm = _canon(cut_label)
     # Single-carrier universes read near-total on their one carrier:
-    # count distinct platform domains in BRAND INPUT.
-    n_domains = 0
+    # collect the platform domains present in BRAND INPUT (the
+    # exemption matches the row value against the single domain).
+    carrier_domains = []
     try:
         try:
             from migration.viewer_carriage import PLATFORM_DOMAINS
@@ -4569,9 +4628,9 @@ def depin_exact_100_non_subject(df, subject, verbose=True, cut_label=None):
         bi_idx = df.index[col_u == 'BRAND INPUT']
         if len(bi_idx):
             bi_val = str(df.at[bi_idx[0], 'Value'] or '').lower()
-            n_domains = sum(1 for d in PLATFORM_DOMAINS if d in bi_val)
+            carrier_domains = [d for d in PLATFORM_DOMAINS if d in bi_val]
     except Exception:
-        n_domains = 0
+        carrier_domains = []
 
     import hashlib as _hl_dp
     n = 0
@@ -4585,17 +4644,19 @@ def depin_exact_100_non_subject(df, subject, verbose=True, cut_label=None):
         val = str(df.at[idx, 'Value']).strip()
         if _spc_is_own is not None and _spc_is_own(subject, val):
             continue  # legitimate subject self-pin
+        # 2026-08-26 Jenna convention: owner-verified platforms,
+        # cut-defining platforms, and single-carrier rows keep their
+        # legitimate exact 100 - never de-pinned.
+        if _spc_e100 is not None and _spc_e100(
+                subject, cu, val, cut_label=cut_label,
+                carrier_domains=carrier_domains):
+            continue
         vn = _canon(val)
         cut_defining = bool(cut_norm) and len(cut_norm) >= 3 and (
             cut_norm in vn or vn in cut_norm)
-        # Exactly one platform domain in BRAND INPUT = a true
-        # single-platform viewer universe whose carrier reads
-        # near-total by definition. Zero domains = not consumption
-        # scoped; a platform pin there is accidental -> low band.
-        single_carrier = (cu in CARRIER_PIN_SOFT_CATS and n_domains == 1)
         h = int(_hl_dp.sha256(
             f'{subject}|{cu}|{val}|depin-100'.encode()).hexdigest()[:8], 16)
-        if cut_defining or single_carrier or cu == 'LOCATION':
+        if cut_defining or cu == 'LOCATION':
             new_bp = round(99.90 + (h % 900) / 10000.0, 4)
         else:
             new_bp = round(99.0 + (120 + h % 6800) / 10000.0, 4)
@@ -11440,11 +11501,23 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         print(f"   ⚠️ enforcer enforce_viewer_carriage_constraint "
               f"failed: {e}")
 
+    # 2026-08-26 (Jenna convention correction): own-property /
+    # owner-platform pin. The subject's own property row and its
+    # owning / universe-defining platform row pin at exactly 100.0000
+    # in base and every cut. Runs BEFORE the exact-100 de-pin (which
+    # exempts these same rows) and BEFORE recompute_raw_and_projection.
+    try:
+        df, n = pin_own_property_rows(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer pin_own_property_rows failed: {e}")
+
     # 2026-08-26 (Liz QA, Paw Patrol): exact-100 non-subject de-pin.
     # Runs AFTER every pin/carriage pass so nothing re-pins behind it
     # (the spec-pin enforcer itself now lands non-subject carrier pins
     # at a salted near-100, this is the catch-all) and BEFORE
-    # recompute_raw_and_projection.
+    # recompute_raw_and_projection. Owner-verified platform rows,
+    # cut-defining platforms, and single-carrier rows are exempt.
     try:
         df, n = depin_exact_100_non_subject(df, subject, verbose=verbose)
         total += n
