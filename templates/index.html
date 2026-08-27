@@ -21350,8 +21350,18 @@ https://www.instagram.com/p/..."></textarea>
         /* Eyebrow-style subtitle per Crosswalk brand: tracked caps,
            muted grey, sits under the title like a spec label. */
         #prometheusSub { font-size: 9.5px; color: #9AA09B; line-height: 1.2;
-            margin-top: 3px; text-transform: uppercase;
+            margin-top: 3px; text-transform: uppercase !important;
             letter-spacing: 0.14em; font-weight: 500; }
+        /* Chat body copy opts out of the site-wide uppercase (the
+           widget carries .no-uppercase) so replies read in sentence
+           case per the brand voice (Jenna 2026-08-27: "kinda hard to
+           read can you clean it up"). Eyebrow labels stay tracked
+           caps deliberately: !important + higher specificity wins
+           the cascade against `.no-uppercase *`. */
+        #prometheusWidget .pm-speaker {
+            text-transform: uppercase !important;
+            letter-spacing: 0.08em;
+        }
         #prometheusCollapseBtn {
             width: 28px; height: 28px; border-radius: 8px; background: transparent;
             border: 1px solid #3B3D38; color: #9AA09B; display: inline-flex;
@@ -21420,7 +21430,7 @@ https://www.instagram.com/p/..."></textarea>
             text-align: center; margin-bottom: 0.35rem;
         }
         #prometheusBody .pm-empty-sub {
-            font-size: 9.5px; color: #9AA09B; text-transform: uppercase;
+            font-size: 9.5px; color: #9AA09B; text-transform: uppercase !important;
             letter-spacing: 0.14em; font-weight: 500; text-align: center;
             margin-bottom: 1.1rem;
         }
@@ -21477,7 +21487,7 @@ https://www.instagram.com/p/..."></textarea>
             <svg width="24" height="24" viewBox="0 0 64 64" aria-hidden="true"><g transform="skewX(-14)" fill="#E9E8E1"><rect x="24" y="10" width="8.5" height="44" rx="1.75"/><rect x="37" y="10" width="8.5" height="44" rx="1.75"/><rect x="50" y="10" width="8.5" height="44" rx="1.75"/></g></svg>
             <span id="prometheusLauncherDot" aria-hidden="true"></span>
         </div>
-        <div id="prometheusWidget" role="dialog" aria-label="Prometheus">
+        <div id="prometheusWidget" class="no-uppercase" role="dialog" aria-label="Prometheus">
             <div class="pm-rs pm-rs-n" data-rs="n" aria-hidden="true"></div>
             <div class="pm-rs pm-rs-s" data-rs="s" aria-hidden="true"></div>
             <div class="pm-rs pm-rs-e" data-rs="e" aria-hidden="true"></div>
@@ -21580,6 +21590,8 @@ https://www.instagram.com/p/..."></textarea>
                                     font-size: 0.7rem;
                                     opacity: 0.7;
                                     margin-bottom: 0.25rem;
+                                    text-transform: uppercase !important;
+                                    letter-spacing: 0.08em;
                                 }
                                 .synth-thinking-bubble .synth-thinking-status {
                                     font-size: 0.85rem;
@@ -21598,7 +21610,10 @@ https://www.instagram.com/p/..."></textarea>
                                     width: 6px;
                                     height: 6px;
                                     border-radius: 50%;
-                                    background: rgba(84, 141, 255, 0.85);
+                                    /* Signal Green working mark on the
+                                       dark surface - the one accent
+                                       doing one job. */
+                                    background: #C7F23E;
                                     animation: synthDotPulse 1.2s
                                         infinite ease-in-out;
                                 }
@@ -21608,8 +21623,15 @@ https://www.instagram.com/p/..."></textarea>
                                 .synth-thinking-dots .synth-dot:nth-child(3) {
                                     animation-delay: 0.4s;
                                 }
-                                .synth-thinking-text {
-                                    transition: opacity 0.25s ease;
+                                body[data-theme="light"] .synth-thinking-dots .synth-dot {
+                                    /* Twin rule: Signal Green never
+                                       sits on the light surface -
+                                       Olive does. */
+                                    background: #5E7E12;
+                                }
+                                .synth-thinking-quiet {
+                                    color: var(--text-secondary);
+                                    font-size: 0.8rem;
                                 }
                                 .synth-thinking-elapsed {
                                     margin-left: auto;
@@ -60358,13 +60380,14 @@ https://www.instagram.com/p/..."></textarea>
                     }
                 }
                 return '<div style="margin-bottom: 0.55rem; padding: 0.55rem 0.7rem; background: ' + bg + '; border-radius: 8px;">' +
-                    '<div style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 0.25rem;">' + label + '</div>' +
+                    '<div class="pm-speaker" style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 0.25rem;">' + label + '</div>' +
                     bodyHtml +
                     linkHtml +
                     chipsHtml +
                     '</div>';
             }).join('');
             box.innerHTML = rows;
+            _pmReattachLiveBubbles(box);
             if (!box._synthOptWired) {
                 box._synthOptWired = true;
                 box.addEventListener('click', function(ev) {
@@ -60556,7 +60579,7 @@ https://www.instagram.com/p/..."></textarea>
                 el.id = 'synthChatWelcomeBubble';
                 el.style.cssText = 'margin-bottom: 0.55rem; padding: 0.55rem 0.7rem; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 2px solid rgba(139,92,246,0.45);';
                 el.innerHTML =
-                    '<div style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 0.25rem;">Prometheus</div>' +
+                    '<div class="pm-speaker" style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 0.25rem;">Prometheus</div>' +
                     '<div style="font-size: 0.85rem; line-height: 1.4; margin-bottom: 0.5rem;">' +
                         _synthChatEscapeHtml(lead) + '</div>' +
                     '<div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">' +
@@ -60717,55 +60740,30 @@ https://www.instagram.com/p/..."></textarea>
             synthChatStashedBatchData = null;
         }
 
-        // Animated 'agent is thinking' indicator.
+        // Animated working indicator (2026-08-27, Jenna: "instead of
+        // saying these things which arent tied to the query can it
+        // just show graphics that it is working instead").
         //
         // Pushes a live bubble into #synthChatMessages (NOT into
         // synthChatHistory, so it does not get persisted or replayed)
-        // with a pulsing 3-dot spinner, a rotating status line, and
-        // an elapsed-seconds counter. Returns a cleanup function the
-        // caller must invoke when the round-trip finishes so the
-        // bubble is removed and the interval cleared.
+        // with a pulsing 3-dot mark and an elapsed counter. No
+        // narration: the old rotating status lines were generic
+        // filler that said nothing about the query. The optional
+        // `label` renders only when the caller has something
+        // query-tied to show (e.g. the subject of a long build).
         //
-        // Copy is plain English (no 'reasoning', 'modeled', 'panel',
-        // 'queue', 'pipeline' internals per the no-modeled-or-source-
-        // language rule).
-        function _synthChatBeginThinking(kind) {
+        // Live bubbles are tracked in _pmLiveBubbles so a mid-flight
+        // rerender (synthChatRerender rebuilds #synthChatMessages
+        // wholesale) re-attaches them instead of losing the graphic.
+        var _pmLiveBubbles = [];
+        function _pmReattachLiveBubbles(box) {
+            for (var i = 0; i < _pmLiveBubbles.length; i++) {
+                if (_pmLiveBubbles[i]) box.appendChild(_pmLiveBubbles[i]);
+            }
+        }
+        function _synthChatBeginThinking(kind, label) {
             var box = document.getElementById('synthChatMessages');
             if (!box) return function() {};
-            var stages;
-            if (kind === 'approve') {
-                stages = [
-                    'Sending your ask over...',
-                    'Reserving a spot...',
-                    'Confirming...',
-                ];
-            } else if (kind === 'analyze') {
-                stages = [
-                    'Reading the data on this page...',
-                    'Lining up penetrations and indexes...',
-                    'Comparing against US gen pop...',
-                    'Checking the cuts against the base...',
-                    'Working out what it means commercially...',
-                    'Writing it up...',
-                ];
-            } else if (kind === 'deck') {
-                stages = [
-                    'Framing the story...',
-                    'Picking the numbers that carry it...',
-                    'Laying out slides in the Crosswalk system...',
-                    'Rendering the deck...',
-                    'Uploading and signing the link...',
-                ];
-            } else {
-                stages = [
-                    'Reading your ask...',
-                    'Checking what we already have...',
-                    'Comparing against past profiles...',
-                    'Working out the shape of the audience...',
-                    'Estimating time and credits...',
-                    'Almost there...',
-                ];
-            }
             var bubbleId = 'synthThinkingBubble_' +
                 Math.random().toString(36).slice(2, 8);
             var startedAt = Date.now();
@@ -60773,48 +60771,57 @@ https://www.instagram.com/p/..."></textarea>
             el.className = 'synth-thinking-bubble';
             el.id = bubbleId;
             el.innerHTML =
-                '<div class="synth-thinking-label">Prometheus</div>' +
+                '<div class="synth-thinking-label pm-speaker">Prometheus</div>' +
                 '<div class="synth-thinking-status">' +
                     '<span class="synth-thinking-dots">' +
                         '<span class="synth-dot"></span>' +
                         '<span class="synth-dot"></span>' +
                         '<span class="synth-dot"></span>' +
                     '</span>' +
-                    '<span class="synth-thinking-text">' +
-                        _synthChatEscapeHtml(stages[0]) +
-                    '</span>' +
+                    (label
+                        ? '<span class="synth-thinking-quiet">' +
+                            _synthChatEscapeHtml(String(label)) + '</span>'
+                        : '') +
                     '<span class="synth-thinking-elapsed">0s</span>' +
                 '</div>';
             box.appendChild(el);
+            _pmLiveBubbles.push(el);
             box.scrollTop = box.scrollHeight;
 
-            var idx = 0;
-            var textEl = el.querySelector('.synth-thinking-text');
             var elapsedEl = el.querySelector('.synth-thinking-elapsed');
-            var rotateTimer = setInterval(function() {
-                idx = (idx + 1) % stages.length;
-                if (!textEl) return;
-                textEl.style.opacity = '0';
-                setTimeout(function() {
-                    if (!textEl) return;
-                    textEl.textContent = stages[idx];
-                    textEl.style.opacity = '1';
-                }, 220);
-            }, 2400);
             var elapsedTimer = setInterval(function() {
                 if (!elapsedEl) return;
                 var secs = Math.floor((Date.now() - startedAt) / 1000);
-                elapsedEl.textContent = secs + 's';
+                elapsedEl.textContent = secs < 60
+                    ? secs + 's'
+                    : Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
             }, 1000);
 
             return function _synthChatEndThinking() {
-                clearInterval(rotateTimer);
                 clearInterval(elapsedTimer);
+                var at = _pmLiveBubbles.indexOf(el);
+                if (at !== -1) _pmLiveBubbles.splice(at, 1);
                 var node = document.getElementById(bubbleId);
                 if (node && node.parentNode) {
                     node.parentNode.removeChild(node);
                 }
             };
+        }
+
+        // Long-build working indicator: the same graphic, kept alive
+        // for the life of a queued run (~20 min) with a quiet
+        // query-tied label (the subject). Shown by the status poll,
+        // removed on a terminal status.
+        var _pmBuildIndEnd = null;
+        function _pmBuildIndicatorShow(subject) {
+            _pmBuildIndicatorHide();
+            _pmBuildIndEnd = _synthChatBeginThinking('build',
+                subject ? 'Building ' + subject : '');
+        }
+        function _pmBuildIndicatorHide() {
+            if (!_pmBuildIndEnd) return;
+            try { _pmBuildIndEnd(); } catch (_) {}
+            _pmBuildIndEnd = null;
         }
 
         // In-flight abort controller for interpret/approve fetches
@@ -60876,26 +60883,31 @@ https://www.instagram.com/p/..."></textarea>
                 var name = subject ||
                     _synthChatSubjectForRun(runId) ||
                     'Your profile';
-                var lines = ['' + name + ' -> ' + label + '.'];
+                var head;
+                switch (String(cur).toLowerCase()) {
+                    case 'queued':    head = name + ' is queued.'; break;
+                    case 'running':   head = name + ' is building.'; break;
+                    case 'tu_done':   head = name + ': the primary profile is ready.'; break;
+                    case 'avid_done': head = name + ': the avid cut is ready.'; break;
+                    case 'complete':  head = name + ' is finished and ready in the Select Profile dropdown.'; break;
+                    default:          head = name + ': ' + label + '.';
+                }
+                var lines = [head];
                 if (typeof st.pending_position === 'number' && cur === 'queued') {
                     lines.push('Position ' + st.pending_position + ' in queue.');
                 }
                 if (cur === 'tu_done' && st.tu_key) {
-                    lines.push('Primary file ready: ' + st.tu_key);
+                    lines.push('File: ' + st.tu_key);
                 }
                 if (cur === 'avid_done' && st.avid_key) {
-                    lines.push('Avid file ready: ' + st.avid_key);
+                    lines.push('Avid file: ' + st.avid_key);
                 }
                 if (cur === 'complete') {
                     if (st.tu_key)   lines.push('File: ' + st.tu_key);
                     if (st.avid_key) lines.push('Avid file: ' + st.avid_key);
-                    lines.push('Reload the Select Profile dropdown to see them.');
                 }
                 if (cur === 'error' || cur === 'failed') {
                     lines = [SYNTH_CHAT_CALM_MSG];
-                }
-                if (cur !== 'complete' && cur !== 'error' && cur !== 'failed') {
-                    lines.push("I'll keep updating this thread as it progresses.");
                 }
                 synthChatPushTurn('agent', lines.join('\n'));
                 try { _synthChatPatchLastMetaStatus(runId, cur); } catch (_) {}
@@ -60958,7 +60970,7 @@ https://www.instagram.com/p/..."></textarea>
                 runs.forEach(function (rn) {
                     var name = rn.subject || rn.run_id || 'Untitled profile';
                     var label = _synthChatStatusLabel(rn.status || 'running');
-                    var head  = '' + name + ' -> ' + label;
+                    var head  = '' + name + ': ' + label;
                     if (typeof rn.step_index === 'number' &&
                         typeof rn.step_total === 'number' &&
                         rn.step_total > 0) {
@@ -60976,8 +60988,7 @@ https://www.instagram.com/p/..."></textarea>
                     if (elapsed) lines.push('  ' + elapsed + '.');
                     lines.push('');
                 });
-                lines.push("I'll keep updating this thread as they progress.");
-                synthChatPushTurn('agent', lines.join('\n'));
+                synthChatPushTurn('agent', lines.join('\n').replace(/\n+$/, ''));
                 runs.forEach(function (rn) {
                     try { _synthChatPatchLastMetaStatus(rn.run_id, rn.status); }
                     catch (_) {}
@@ -62110,10 +62121,8 @@ https://www.instagram.com/p/..."></textarea>
                 synthChatPushTurn('agent',
                     'Building the ' +
                     (data.subject ? data.subject + ' ' : '') +
-                    'insights deck now. It renders in the Crosswalk deck ' +
-                    'system as a finished deliverable. This takes a few ' +
-                    'minutes; the download link lands here when it is ' +
-                    'ready.');
+                    'insights deck. The download link lands here when ' +
+                    'it is ready.');
                 var waited = 0;
                 while (waited < 600000) {
                     await new Promise(function(res) { setTimeout(res, 5000); });
@@ -62663,7 +62672,7 @@ https://www.instagram.com/p/..."></textarea>
             }
             if (typeof totalCredits === 'number' && totalCredits >= 0) {
                 lines.push('');
-                lines.push('Total cost: ' + totalCredits + ' credit' + (totalCredits === 1 ? '' : 's') + ' when you approve.');
+                lines.push('Total cost: ' + totalCredits + ' credit' + (totalCredits === 1 ? '' : 's') + ' on approval.');
             }
             if (Array.isArray(failures) && failures.length) {
                 lines.push('');
@@ -63362,10 +63371,10 @@ https://www.instagram.com/p/..."></textarea>
                     'both.';
             }
             if (step === 'goal') {
-                return 'Quick context so I can recommend the right ' +
-                    'cuts: what is this for? A pitch, media ' +
-                    'planning, content strategy, competitive ' +
-                    'research... one line is plenty. Or say skip.';
+                return 'Optional: tell me what this is for (a pitch, ' +
+                    'media planning, content strategy, competitive ' +
+                    'research...) and I will recommend the right cuts. ' +
+                    'One line is plenty, or say skip.';
             }
             if (step === 'strategy') {
                 return 'Want any add-on cuts? Female only, male ' +
@@ -63482,10 +63491,10 @@ https://www.instagram.com/p/..."></textarea>
                 })
             };
             _synthChatPushQuestion(
-                'Quick scoping question for the batch: what are these for? ' +
-                'A pitch, media planning, content strategy... one line is ' +
-                'plenty and I will suggest the right cuts for all ' +
-                drafts.length + '. Or say skip and approve whenever you are ready.',
+                'Optional: tell me what these are for (a pitch, media ' +
+                'planning, content strategy...) and I will recommend ' +
+                'the right cuts for all ' + drafts.length + '. One ' +
+                'line is plenty, or say skip.',
                 'goal', null);
         }
 
@@ -63596,17 +63605,23 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         function _synthChatBuildActionSummary(s) {
+            // Confirmation card, restructured (Jenna 2026-08-27:
+            // "kinda hard to read can you clean it up"). One lead
+            // sentence naming subject + action, then a compact
+            // labeled block (one fact per line), then the approve
+            // line. No sentence shards.
             s = s || {};
             var subject = s.subject || 'this profile';
             var parentName = s.existing_match_display_name || subject;
             var mins = s.estimated_run_minutes;
-            var eta = (mins ? ' (~' + mins + ' min)' : '');
             var deriveHint = (s.derive_type || '').trim().toLowerCase();
             var refreshHint = (s.refresh_row_hypothesis || '').trim();
-            var line = '';
-            switch ((s.decision || '').toLowerCase()) {
+            var _dec = (s.decision || 'new_build').toLowerCase();
+            var _dcCutLbl = String(s.cut_label || '').trim();
+            var lead = '';
+            switch (_dec) {
                 case 'existing_match':
-                    line = 'I already have ' + parentName + '' +
+                    lead = 'I already have ' + parentName + '' +
                         (s.existing_match_days_old != null
                             ? ' from ' + s.existing_match_days_old + ' days ago'
                             : '') +
@@ -63617,51 +63632,50 @@ https://www.instagram.com/p/..."></textarea>
                     // was renamed '{Parent} - {Cut}', lead with that
                     // so the user sees exactly what gets built and
                     // what it ladders up to.
-                    var _dcCutLbl = String(s.cut_label || '').trim();
                     if (subject && parentName && subject !== parentName) {
-                        line = 'Creating ' + subject + ' as a cut ' +
-                            'of the existing ' + parentName +
-                            ' data' + eta + '. The numbers ladder ' +
-                            'up to that parent.';
+                        lead = 'Creating ' + subject + ' as a cut of the ' +
+                            'existing ' + parentName + ' data. The ' +
+                            'numbers ladder up to that parent.';
                     } else {
-                        line = 'Creating a cut of the existing ' + parentName + ' data' +
-                            (_dcCutLbl ? ' - ' + _dcCutLbl
-                                : (deriveHint && deriveHint !== 'intersect_cut'
-                                    ? ' for ' + deriveHint : '')) +
-                            eta + '.';
+                        lead = 'New cut of the existing ' + parentName +
+                            ' data, ready to run.';
                     }
                     break;
                 case 'time_shifted_refresh':
-                    line = 'Refreshing the existing ' + parentName + ' data for the new window' +
-                        eta + '.';
-                    if (refreshHint) line += '\n\n' + refreshHint;
+                    lead = parentName + ' refresh, ready to run.';
                     break;
                 case 'cut_needs_parent':
-                    line = 'Building ' + subject + ' first, then producing your cut' +
-                        (deriveHint ? ' (' + deriveHint + ')' : '') +
-                        eta + '.';
+                    lead = 'New ' + subject + ' profile plus your cut, ' +
+                        'ready to run.';
                     break;
                 case 'new_build':
                 default:
-                    line = 'Building a new ' + subject + ' profile' + eta + '.';
+                    lead = 'New ' + subject + ' profile, ready to run.';
                     break;
             }
+            // Compact labeled block. Skips any line it has no value
+            // for. Numbers keep their full precision.
+            var facts = [];
             // Resolved identity (2026-08-24 Furious defect): show
             // exactly which real-world entity this build is about so a
             // wrong resolution is visible before approving.
-            var _ridLine = String(s.resolved_identity || '').trim();
-            if (_ridLine) {
-                line = 'Subject: ' + _ridLine + '.\n\n' + line;
+            var _rid = String(s.resolved_identity || '').trim()
+                .replace(/\.$/, '');
+            if (_rid) facts.push('Subject: ' + _rid);
+            if (_dec === 'derive_cut' || _dec === 'cut_needs_parent') {
+                if (_dcCutLbl) {
+                    facts.push('Cut: ' + _dcCutLbl);
+                } else if (deriveHint && deriveHint !== 'intersect_cut') {
+                    facts.push('Cut: ' + deriveHint);
+                }
             }
-            var _dec = (s.decision || 'new_build').toLowerCase();
             // Time frame (2026-08-20 Jenna: the confirm card must
             // list the window). Shown for decisions that pull a
             // fresh window; reuse/derive ship the parent's window.
             if (_dec === 'new_build' || _dec === 'time_shifted_refresh' ||
                 _dec === 'cut_needs_parent') {
-                var _winLbl = _synthChatFormatRange(s.date_range)
-                    || 'July 1, 2025 to June 30, 2026';
-                line += '\n\nWindow: ' + _winLbl + '.';
+                facts.push('Window: ' + (_synthChatFormatRange(s.date_range)
+                    || 'July 1, 2025 to June 30, 2026'));
             }
             var _tuEst = s.subject_raw_tu;
             if (typeof _tuEst === 'number' && _tuEst > 0 &&
@@ -63670,24 +63684,32 @@ https://www.instagram.com/p/..."></textarea>
                 var _incPct = _tuEst / 10000000 * 100;
                 var _incStr = _incPct >= 1 ? _incPct.toFixed(2)
                     : (_incPct >= 0.01 ? _incPct.toFixed(3) : _incPct.toFixed(4));
-                if (s.estimated_audience_sentence) {
-                    line += '\n\n' + s.estimated_audience_sentence +
-                        ' (' + _incStr + '% incidence).';
-                } else {
-                    line += '\n\nEst. sample: ' +
-                        _tuEst.toLocaleString('en-US') + ' individuals (' +
-                        _incStr + '% incidence).';
-                }
+                var _audLine = s.estimated_audience_sentence
+                    ? String(s.estimated_audience_sentence)
+                        .trim().replace(/\.$/, '')
+                    : 'Estimated audience: ' +
+                        _tuEst.toLocaleString('en-US') + ' individuals';
+                facts.push(_audLine + ' (' + _incStr + '% incidence)');
                 var _avEst = s.subject_raw_avid;
                 if (s.run_avid !== false && typeof _avEst === 'number' && _avEst > 0) {
-                    line += ' Avid tier ~' + _avEst.toLocaleString('en-US') + '.';
+                    facts.push('Avid tier: ~' + _avEst.toLocaleString('en-US'));
                 }
             }
             var _rs = s.region_scope;
             if (_rs && _rs.mode === 'regional' && _rs.dmas && _rs.dmas.length) {
-                line += '\n\nMarkets: ' + _rs.dmas.join(', ') +
-                    ' (location mix locked to these only).';
+                facts.push('Markets: ' + _rs.dmas.join(', ') +
+                    ' (location mix locked to these only)');
             }
+            var credits = s.estimated_credits;
+            if (typeof credits === 'number') {
+                facts.push(credits === 0
+                    ? 'Cost: 0 credits (reusing the existing file)'
+                    : 'Cost: ' + credits + ' credit' +
+                        (credits === 1 ? '' : 's') + ' on approval');
+            }
+            if (mins) facts.push('Build time: ~' + mins + ' min');
+            var line = lead;
+            if (facts.length) line += '\n\n' + facts.join('\n');
             var _cuts = s.addon_cuts;
             if (_cuts && _cuts.length) {
                 line += '\n\nAdd-on cuts (3 credits each):';
@@ -63695,15 +63717,8 @@ https://www.instagram.com/p/..."></textarea>
                     line += '\n- ' + (_cuts[_ci].label || _cuts[_ci].cut_id);
                 }
             }
-            var credits = s.estimated_credits;
-            if (typeof credits === 'number') {
-                if (credits === 0) {
-                    line += '\n\nCost: 0 credits (reusing an existing file).';
-                } else {
-                    line += '\n\nCost: ' + credits +
-                        ' credit' + (credits === 1 ? '' : 's') +
-                        ' when you approve.';
-                }
+            if (refreshHint && _dec === 'time_shifted_refresh') {
+                line += '\n\n' + refreshHint;
             }
             return line + '\n\nApprove to run, or send another message to adjust.';
         }
@@ -63812,7 +63827,7 @@ https://www.instagram.com/p/..."></textarea>
                 _synthChatPushTurnWithMeta('agent',
                     'Queued ' + data.subject + '' +
                     (data.pending_position ? ' (position ' + data.pending_position + ' in queue)' : '') +
-                    '. I will update this thread as it progresses.',
+                    '.',
                     { run_id: data.run_id, status: 'queued', subject: data.subject });
                 _synthChatStartPolling(data.run_id, data.subject);
             } catch (e) {
@@ -63887,7 +63902,7 @@ https://www.instagram.com/p/..."></textarea>
                         _synthChatPushTurnWithMeta('agent',
                             'Queued ' + (r.subject || subj) + '' +
                                 (r.pending_position ? ' (position ' + r.pending_position + ' in queue)' : '') +
-                                '. I will update this thread as it progresses.',
+                                '.',
                             { run_id: r.run_id, status: 'queued', subject: r.subject || subj });
                         _synthChatStartPolling(r.run_id, r.subject || subj);
                     } else if (r && r.success && r.reused_existing) {
@@ -63981,6 +63996,11 @@ https://www.instagram.com/p/..."></textarea>
             if (synthChatPollTimer) clearInterval(synthChatPollTimer);
             var lastStatus = null;
             var subject = subjectHint || _synthChatSubjectForRun(runId) || 'Your profile';
+            // Working graphic for the life of the run (2026-08-27,
+            // Jenna): pulsing dots + the subject, no narration.
+            // Status turns below stay query-tied (subject +
+            // milestone + file names) only.
+            _pmBuildIndicatorShow(subject);
             synthChatPollTimer = setInterval(async function() {
                 try {
                     var r = await fetch('/api/brief-chat/status/' + encodeURIComponent(runId), {
@@ -63993,17 +64013,26 @@ https://www.instagram.com/p/..."></textarea>
                     if (cur !== lastStatus) {
                         lastStatus = cur;
                         try { _synthChatPatchLastMetaStatus(runId, cur); } catch (_) {}
-                        var label = _synthChatStatusLabel(cur);
-                        var msg = '' + subject + ' -> ' + label;
+                        var msg;
+                        switch (String(cur).toLowerCase()) {
+                            case 'queued':    msg = subject + ' is queued.'; break;
+                            case 'running':   msg = subject + ' is building.'; break;
+                            case 'tu_done':   msg = subject + ': the primary profile is ready.'; break;
+                            case 'avid_done': msg = subject + ': the avid cut is ready.'; break;
+                            case 'complete':  msg = subject + ' is finished and ready in the Select Profile dropdown.'; break;
+                            default:          msg = subject + ': ' + _synthChatStatusLabel(cur) + '.';
+                        }
                         if (cur === 'tu_done' && st.tu_key) msg += '\nFile: ' + st.tu_key;
                         if (cur === 'avid_done' && st.avid_key) msg += '\nAvid file: ' + st.avid_key;
                         if (cur === 'complete') {
-                            msg += '\nFinished. Reload the Select Profile dropdown to see the new files.';
                             if (st.tu_key) msg += '\nFile: ' + st.tu_key;
                             if (st.avid_key) msg += '\nAvid file: ' + st.avid_key;
                         }
                         if (cur === 'error' || cur === 'failed') {
                             msg = SYNTH_CHAT_CALM_MSG;
+                        }
+                        if (cur === 'complete' || cur === 'error' || cur === 'failed') {
+                            _pmBuildIndicatorHide();
                         }
                         synthChatPushTurn('agent', msg);
                         if (cur === 'complete' || cur === 'error' || cur === 'failed') {
