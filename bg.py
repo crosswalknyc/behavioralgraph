@@ -23785,6 +23785,123 @@ def enforce_canonical_columns(df):
 # supplied, it inserts the row right after SAMPLE SIZE. If the row
 # exists with an empty/UNKNOWN value AND brand_category is supplied,
 # it overwrites with the correct value. Idempotent.
+#
+# --- D111 canonical-list safety net (wired 2026-08-27) ---------------
+# Jenna's 2026-06-13 mandate: whenever a non-canonical BRAND CATEGORY
+# value is used, the 'Create New Category' notification goes to the 4
+# stakeholders. The rule docs promised this check lived here since
+# June; the actual wiring landed 2026-08-27. Behavior:
+#   * Canonical set = flattened bg-webapp/iq_rankers.py
+#     MASTER_CATEGORIES (loaded via migration/final_ship_gate's
+#     ast-based loader, aligned fallback snapshot behind it) plus the
+#     documented JS-side aliases (_FALLBACK_ALIAS_EXTRAS, e.g.
+#     CREATOR/INFLUENCER). Comparison is case-insensitive, whitespace
+#     stripped. Any 'SERIES - *' variant is canonical per the rule and
+#     always passes.
+#   * FAIL-SAFE: if the canonical list cannot be produced (import
+#     failure / empty result) the check is SKIPPED entirely; a load
+#     failure must never fire the notification.
+#   * The send dedupes to one email per category per day via the
+#     shared S3 stamp at
+#     s3://dashboard-inputs/system/new_category_seen.json
+#     (migration/email_new_category.py), so repeat write passes and a
+#     manual CLI send for the same category collapse to a no-op.
+#   * Never raises, never blocks the write.
+# Coverage note: the worker write path (migration/profile_writer.py)
+# is additionally protected by the final ship gate's I2, which BLOCKS
+# non-canonical categories outright; this net is the email signal on
+# the legacy BG.py write paths and any caller of
+# enforce_brand_category_row that bypasses the writer.
+# Regression test: scripts/test_d111_category_safety_net.py.
+def _d111_canonical_categories():
+    """Flattened canonical BRAND CATEGORY set (UPPERCASE), or None when
+    the list cannot be loaded. Callers MUST skip the check on None -
+    never treat a load failure as 'everything is new'."""
+    try:
+        import os as _os
+        import sys as _sys
+        try:
+            from migration.final_ship_gate import (
+                _load_master_categories as _lmc,
+                _FALLBACK_ALIAS_EXTRAS as _alias_extras,
+            )
+        except ImportError:
+            _mig_dir = _os.path.join(
+                _os.path.dirname(_os.path.abspath(__file__)), 'migration')
+            if _mig_dir not in _sys.path:
+                _sys.path.insert(0, _mig_dir)
+            from final_ship_gate import (  # type: ignore
+                _load_master_categories as _lmc,
+                _FALLBACK_ALIAS_EXTRAS as _alias_extras,
+            )
+        cats = _lmc(verbose=False)
+        if not cats:
+            return None
+        canon = {str(c).strip().upper() for c in cats}
+        canon |= {str(a).strip().upper() for a in _alias_extras}
+        return canon or None
+    except Exception:
+        return None
+
+
+def _d111_notify_noncanonical(df, settled_value):
+    """Fire the 'Create New Category' notification when the settled
+    BRAND CATEGORY value is not in the canonical list. Best-effort by
+    construction: any failure logs and returns; the write proceeds."""
+    try:
+        val = str(settled_value or '').strip()
+        if not val or val.upper() in ('UNKNOWN', 'NAN', 'NONE'):
+            return
+        val_u = val.upper()
+        if val_u.startswith('SERIES'):
+            return
+        canon = _d111_canonical_categories()
+        if canon is None:
+            return
+        if val_u in canon:
+            return
+        subject = ''
+        try:
+            _col_meta = df['Column'].astype(str).str.strip().str.upper()
+            for _meta_cat in ('SUBJECT', 'BRAND INPUT'):
+                _meta_idx = df.index[_col_meta == _meta_cat].tolist()
+                if _meta_idx:
+                    _meta_val = str(df.at[_meta_idx[0], 'Value']).strip()
+                    if _meta_val and _meta_val.upper() not in ('NAN', 'NONE'):
+                        subject = _meta_val[:120]
+                        break
+        except Exception:
+            subject = ''
+        try:
+            import os as _os
+            import sys as _sys
+            try:
+                from migration.email_new_category import notify_new_category
+            except ImportError:
+                _mig_dir = _os.path.join(
+                    _os.path.dirname(_os.path.abspath(__file__)), 'migration')
+                if _mig_dir not in _sys.path:
+                    _sys.path.insert(0, _mig_dir)
+                from email_new_category import (  # type: ignore
+                    notify_new_category,
+                )
+        except ImportError:
+            print(f"   \u26A0 D111 safety net: non-canonical BRAND CATEGORY "
+                  f"{val_u!r} but the notifier is unavailable here; "
+                  f"skipping the email")
+            return
+        notify_new_category(
+            val_u,
+            subjects=[subject or '(unknown subject)'],
+            rationale='write-time safety net: value not in canonical list',
+        )
+        print(f"   \u26A0 D111 safety net: BRAND CATEGORY {val_u!r} is not "
+              f"in the canonical list; 'Create New Category' notification "
+              f"sent (deduped per category per day)")
+    except Exception as _e:
+        print(f"   \u26A0 D111 category safety net skipped ({_e})")
+
+
 def enforce_brand_category_row(df, brand_category, force=False):
     """Insert / overwrite BRAND CATEGORY row using the supplied category.
 
@@ -23811,6 +23928,15 @@ def enforce_brand_category_row(df, brand_category, force=False):
               if brand_category else '')
         if bc in ('', 'UNKNOWN', 'NAN', 'NONE'):
             # Nothing to write; can't synthesize a category from thin air.
+            # An existing row's value is still the final written value at
+            # this point, so the canonical-list safety net reviews it.
+            try:
+                _col_u0 = df['Column'].astype(str).str.strip().str.upper()
+                _idx0 = df.index[_col_u0 == 'BRAND CATEGORY'].tolist()
+                if _idx0:
+                    _d111_notify_noncanonical(df, df.at[_idx0[0], 'Value'])
+            except Exception:
+                pass
             return df
         col_u = df['Column'].astype(str).str.strip().str.upper()
         bc_idx = df.index[col_u == 'BRAND CATEGORY'].tolist()
@@ -23835,6 +23961,9 @@ def enforce_brand_category_row(df, brand_category, force=False):
             elif force and cur != bc:
                 df.at[i, 'Value'] = bc
                 print(f"   \u2713 enforce_brand_category_row(force=True): overwrote BRAND CATEGORY {cur!r} → {bc!r}")
+            # Canonical-list safety net on the settled (kept or written)
+            # value. Fail-safe + deduped; see _d111_notify_noncanonical.
+            _d111_notify_noncanonical(df, df.at[i, 'Value'])
             return df
         # Missing: insert right after SAMPLE SIZE (or at index 2 as fallback).
         ss_idx = df.index[col_u == 'SAMPLE SIZE'].tolist()
@@ -23850,6 +23979,9 @@ def enforce_brand_category_row(df, brand_category, force=False):
             ignore_index=True,
         )
         print(f"   \u2713 enforce_brand_category_row: INSERTED missing BRAND CATEGORY row with {bc!r} at index {insert_at}")
+        # Canonical-list safety net on the inserted value. Fail-safe +
+        # deduped; see _d111_notify_noncanonical.
+        _d111_notify_noncanonical(df_new, bc)
         return df_new
     except Exception as _e:
         print(f"   \u26A0 enforce_brand_category_row error (continuing): {_e}")
