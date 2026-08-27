@@ -52526,18 +52526,41 @@ def _spec_from_draft(draft):
     # the primary line of defense, this is the safety net.
     _bc_raw = str(draft.get('brand_category') or 'BRAND').strip()
     _bc_upper = _bc_raw.upper()
-    _NONCANON_TO_CANON = {
-        'STREAMING PLATFORM': 'STREAMING/PLATFORM',
-        'STREAMING PLATFORMS': 'STREAMING/PLATFORM',
-        'STREAMING SERVICE': 'STREAMING/PLATFORM',
-        'STREAMING SERVICES': 'STREAMING/PLATFORM',
-        'SVOD': 'STREAMING/PLATFORM',
-        'BROADCAST CABLE': 'BROADCAST/CABLE',
-        'SEARCH ENGINE AI': 'SEARCH ENGINE/AI',
-    }
-    if _bc_upper in _NONCANON_TO_CANON:
-        _bc_upper = _NONCANON_TO_CANON[_bc_upper]
-        _bc_raw = _bc_upper
+    # Canonical validation + normalization at spec time (2026-08-27,
+    # Toca Boca hold). Exact match against MASTER_CATEGORIES first,
+    # then alias / separator / singular-plural normalization (TOYS ->
+    # TOY), then closest-canonical with a logged note. An unresolvable
+    # label passes through so the final ship gate stays the LAST line
+    # of defense, not the first. Shared implementation:
+    # migration/brand_category_canon.py (the worker runs the same
+    # normalization at build entry, so direct queue posts inherit it;
+    # the partner API v1 builds specs through THIS function).
+    try:
+        from migration.brand_category_canon import (
+            canonicalize_brand_category as _canon_bc,
+        )
+        _bc_canon, _bc_note = _canon_bc(_bc_raw)
+        if _bc_note:
+            print(f"[brand_category-normalize] {subject!r}: {_bc_note}")
+        _bc_raw = _bc_canon or _bc_raw
+        _bc_upper = _bc_raw.upper()
+    except Exception as _bc_exc:
+        # Fallback: the pre-2026-08-27 inline synonym map, so a module
+        # load failure never regresses below the old behavior.
+        print(f"[brand_category-normalize] {subject!r}: shared "
+              f"canonicalizer unavailable ({_bc_exc}); inline map only")
+        _NONCANON_TO_CANON = {
+            'STREAMING PLATFORM': 'STREAMING/PLATFORM',
+            'STREAMING PLATFORMS': 'STREAMING/PLATFORM',
+            'STREAMING SERVICE': 'STREAMING/PLATFORM',
+            'STREAMING SERVICES': 'STREAMING/PLATFORM',
+            'SVOD': 'STREAMING/PLATFORM',
+            'BROADCAST CABLE': 'BROADCAST/CABLE',
+            'SEARCH ENGINE AI': 'SEARCH ENGINE/AI',
+        }
+        if _bc_upper in _NONCANON_TO_CANON:
+            _bc_upper = _NONCANON_TO_CANON[_bc_upper]
+            _bc_raw = _bc_upper
 
     # If the subject is a TV series / movie / podcast and Claude
     # tagged it as a streaming platform / broadcaster instead, flip it
