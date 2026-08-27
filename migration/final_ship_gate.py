@@ -2215,6 +2215,35 @@ def _email_hold_notice(s3_key, violations, quarantine_key, verbose):
         "Next step: fix the source and rerun the build. The file will "
         "publish automatically once every check passes.",
     ]
+    payload = {
+        "subject_line": f"Profile held before delivery: {name}",
+        "body": "\n".join(lines),
+        "to": list(HOLD_NOTICE_TO),
+        "source": HOLD_NOTICE_FROM,
+    }
+    # Debounced delivery (Jenna 2026-08-27: "yes I only want real
+    # emails not gate blocks, just if the final cannnot ship"). The
+    # notice is recorded as pending; a gate-green republish of the same
+    # deliverable cancels it silently, and it only emails if the hold
+    # outlives the debounce window or the run turns terminal. On any
+    # recording failure the notice sends immediately (fail-safe).
+    try:
+        try:
+            from migration.hold_notice_debounce import record_pending
+        except ImportError:
+            from hold_notice_debounce import record_pending  # type: ignore
+        disposition = record_pending(
+            s3_key, "ship_gate", payload,
+            quarantine_key=quarantine_key, n_findings=len(violations),
+            verbose=verbose,
+        )
+        if verbose:
+            print(f"[ship-gate] hold notice {disposition} "
+                  f"(debounced delivery)")
+        return
+    except Exception as e:
+        print(f"[ship-gate] hold-notice debounce unavailable "
+              f"({type(e).__name__}: {e}); sending immediately")
     try:
         import boto3
         ses = boto3.client("ses", region_name="us-east-2")
@@ -2222,10 +2251,8 @@ def _email_hold_notice(s3_key, violations, quarantine_key, verbose):
             Source=HOLD_NOTICE_FROM,
             Destination={"ToAddresses": HOLD_NOTICE_TO},
             Message={
-                "Subject": {
-                    "Data": f"Profile held before delivery: {name}",
-                },
-                "Body": {"Text": {"Data": "\n".join(lines)}},
+                "Subject": {"Data": payload["subject_line"]},
+                "Body": {"Text": {"Data": payload["body"]}},
             },
         )
         if verbose:
@@ -2241,8 +2268,11 @@ def run_final_ship_gate(df_or_bytes, s3_key, subject, *, enforce=True,
     """Terminal gate. Returns (ok, violations).
 
     enforce=True (the default on EVERY external path): violations
-    quarantine the rejected bytes, email the hold notice, and raise
-    ShipGateError so the caller cannot upload. There is deliberately
+    quarantine the rejected bytes, record a debounced hold notice
+    (migration/hold_notice_debounce: emails only if the hold outlives
+    the window or the run turns terminal; a gate-green republish
+    cancels it silently), and raise ShipGateError so the caller cannot
+    upload. There is deliberately
     no environment-variable downgrade; enforce=False exists only for
     the local ops override (migration/local_override_profile.py) and
     read-only audits, and must be passed explicitly by the caller.

@@ -1065,10 +1065,11 @@ def synthesize_and_upload_super_fan(source: str, subject_label: str,
     # gap: this path wrote direct to S3 with no terminal gate). Same
     # terminal pair every other publish path runs: the mechanical
     # invariant check on the exact bytes, then the research-backed
-    # review. On a violation or judgment hold the bytes quarantine,
-    # the hold notice emails, and ShipGateError / PreShipVettingError
-    # raises so the put below never happens. Deliberately NOT wrapped
-    # in a swallowing try/except.
+    # review. On a violation or judgment hold the bytes quarantine, a
+    # debounced hold notice is recorded (hold_notice_debounce), and
+    # ShipGateError / PreShipVettingError raises so the put below
+    # never happens. Deliberately NOT wrapped in a swallowing
+    # try/except.
     try:
         from migration.final_ship_gate import run_final_ship_gate
         from migration.pre_ship_vetting import vet_before_publish

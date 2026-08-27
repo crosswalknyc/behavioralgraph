@@ -647,12 +647,16 @@ def write_profile_csv(
       6.9 FINAL SHIP GATE (2026-08-24 Jenna mandate): the independent
          terminal invariant check in migration/final_ship_gate.py runs
          on the EXACT bytes about to upload. On any violation the
-         write is BLOCKED: the rejected bytes land in _quarantine/,
-         Jenna + Jessie get a hold notice, and ShipGateError
+         write is BLOCKED: the rejected bytes land in _quarantine/, a
+         debounced hold notice is recorded for Jenna + Jessie (emails
+         only if the hold outlives the window; see
+         migration/hold_notice_debounce), and ShipGateError
          propagates to the caller. ship_gate=False (local ops override
          only, via migration/local_override_profile.py) downgrades to
          report-only. There is NO env-flag downgrade.
       7. Upload df to `s3://dashboard-inputs/<s3_key>`
+      7.5 cancel_on_publish(s3_key): a gate-green publish silently
+         resolves any pending hold notice for this deliverable.
       8. If register: register_profile_in_dashboard(s3_key, ...)
 
     Returns a dict with everything the caller needs to log, including
@@ -1172,6 +1176,20 @@ def write_profile_csv(
     if verbose:
         print(f"  [profile_writer] uploaded ({len(body):,} bytes) -> "
               f"s3://{BUCKET}/{s3_key}")
+
+    # 7.5 A gate-green publish resolves any pending hold notice for
+    # this deliverable (2026-08-27 debounce policy): the machinery
+    # repaired and republished, so the earlier hold is cancelled
+    # silently and logged as auto-resolved. Best-effort, never blocks.
+    try:
+        try:
+            from migration.hold_notice_debounce import cancel_on_publish
+        except ImportError:
+            from hold_notice_debounce import cancel_on_publish  # type: ignore
+        cancel_on_publish(s3_key, s3_client=s3, verbose=verbose)
+    except Exception as e:
+        print(f"  [profile_writer] hold-notice cancel skipped "
+              f"({type(e).__name__}: {e})")
 
     # 8. Register
     register_result = None

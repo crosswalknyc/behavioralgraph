@@ -1255,6 +1255,35 @@ def _email_hold_notice(s3_key, findings, quarantine_key, verbose):
         "addressed, rerun the build and the file will publish "
         "automatically when every check passes.",
     ]
+    payload = {
+        "subject_line": f"Profile held for review: {name}",
+        "body": "\n".join(lines),
+        "to": list(HOLD_NOTICE_TO),
+        "source": HOLD_NOTICE_FROM,
+    }
+    # Debounced delivery (Jenna 2026-08-27: "yes I only want real
+    # emails not gate blocks, just if the final cannnot ship"). A
+    # judgment hold an agent or the machinery resolves inside the
+    # window (republish of the same deliverable) never emails; one that
+    # persists is exactly the final-cannot-ship case and sends once.
+    # On any recording failure the notice sends immediately (fail-safe).
+    try:
+        try:
+            from migration.hold_notice_debounce import record_pending
+        except ImportError:
+            from hold_notice_debounce import record_pending  # type: ignore
+        disposition = record_pending(
+            s3_key, "vetting_hold", payload,
+            quarantine_key=quarantine_key, n_findings=len(findings),
+            verbose=verbose,
+        )
+        if verbose:
+            print(f"[pre-ship-vetting] hold notice {disposition} "
+                  f"(debounced delivery)")
+        return
+    except Exception as e:
+        print(f"[pre-ship-vetting] hold-notice debounce unavailable "
+              f"({type(e).__name__}: {e}); sending immediately")
     try:
         import boto3
         ses = boto3.client("ses", region_name="us-east-2")
@@ -1262,10 +1291,8 @@ def _email_hold_notice(s3_key, findings, quarantine_key, verbose):
             Source=HOLD_NOTICE_FROM,
             Destination={"ToAddresses": HOLD_NOTICE_TO},
             Message={
-                "Subject": {
-                    "Data": f"Profile held for review: {name}",
-                },
-                "Body": {"Text": {"Data": "\n".join(lines)}},
+                "Subject": {"Data": payload["subject_line"]},
+                "Body": {"Text": {"Data": payload["body"]}},
             },
         )
         if verbose:
@@ -1309,8 +1336,9 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
     """Reasoned pre-publish review. Returns (df, report).
 
     enforce=True: a FAIL verdict with judgment-required findings
-    quarantines the frame, emails the hold notice, and raises
-    PreShipVettingError (a ShipGateError subclass). enforce=False
+    quarantines the frame, records a debounced hold notice (emails only
+    if the hold outlives the window; see hold_notice_debounce), and
+    raises PreShipVettingError (a ShipGateError subclass). enforce=False
     (audits, dry runs, local ops override) reports without holding.
 
     is_new: True forces the review (cut engines: a re-derived cut is

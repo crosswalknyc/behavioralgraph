@@ -44,8 +44,10 @@ def finalize_cut_for_upload(df, subject, *, parent_df=None, out_key='',
 
     ship_gate=True (default) runs the independent final ship gate
     (migration/final_ship_gate.py) as the LAST step: on any invariant
-    violation the frame is quarantined, the hold notice is emailed,
-    and ShipGateError raises so the engine's upload never happens.
+    violation the frame is quarantined, a debounced hold notice is
+    recorded (emails only if the hold outlives the window; see
+    migration/hold_notice_debounce), and ShipGateError raises so the
+    engine's upload never happens.
     Engines pass ship_gate=False only for dry runs (the gate still
     runs report-only so violations are visible in the log). There is
     no env-flag downgrade.
@@ -151,7 +153,7 @@ def finalize_cut_for_upload(df, subject, *, parent_df=None, out_key='',
     # enforcer helpers. Runs on the finalized frame; the engines only
     # append the two Gen Pop baseline columns after this (values
     # untouched) before serializing. On violations with
-    # ship_gate=True: quarantine + hold-notice email + ShipGateError.
+    # ship_gate=True: quarantine + debounced hold notice + ShipGateError.
     # Deliberately NOT wrapped in a swallowing try/except; engine call
     # sites re-raise ShipGateError from their own wrappers.
     try:
