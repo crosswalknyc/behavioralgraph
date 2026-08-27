@@ -13201,11 +13201,19 @@ class DemoSumViolationError(Exception):
 # North West and other new synth builds landed with 7-bucket EDUCATION
 # schemas ('Less than High School', 'HS Diploma / GED', 'Some College',
 # 'Associate Degree', 'Bachelor's Degree', 'Master's Degree', 'Doctorate /
-# Professional Degree') and legacy 'Widowed' in RELATIONSHIP -- neither is
-# in the canonical demos.csv distinct set from userdata.user_data_sanitized.
-# Enforcer collapses aliases -> canonical, drops orphan/aliased-to-None
-# buckets and merges duplicates. Runs BEFORE renormalize_demographics_to_100
-# so the sum-to-100 pass sees the collapsed distribution.
+# Professional Degree') -- not in the canonical demos.csv distinct set from
+# userdata.user_data_sanitized. Enforcer collapses aliases -> canonical,
+# drops orphan/aliased-to-None buckets and merges duplicates. Runs BEFORE
+# renormalize_demographics_to_100 so the sum-to-100 pass sees the collapsed
+# distribution.
+# 2026-08-27 (RELATIONSHIP Widowed schema-drift fix): 'Widowed' is
+# PIPELINE-canonical (both BG.py / bg-webapp/bg.py prompt templates emit
+# it, Gen_Pop_2026.csv carries WIDOWED 5.51, every TU shipped since
+# 2026-08-14 carries the row) and is no longer drop-aliased in
+# canonical_demos. Before the fix this pass dropped the reasoned Widowed
+# value on every run and small_sample_hardening's
+# enforce_canonical_demo_schema re-inserted the bucket at its 2.0 floor.
+# Regression: scripts/test_demo_bracket_crater.py section [F].
 # ---------------------------------------------------------------------------
 def enforce_canonical_demo_buckets(df, *, subject=None, verbose=True):
     """Collapse non-canonical demographic bucket labels to the canonical
@@ -13223,11 +13231,10 @@ def enforce_canonical_demo_buckets(df, *, subject=None, verbose=True):
       row's BP is SUMMED into the canonical bucket's existing row (or
       the row is relabeled if no canonical row exists yet), and the
       duplicate is dropped.
-    * If ``Value`` is aliased to ``None`` (e.g. ``Widowed`` in
-      RELATIONSHIP, ``Prefer Not to Say`` in INCOME/OCCUPATION), the
-      row is dropped. Its BP will be redistributed proportionally to
-      the remaining canonical buckets by
-      :func:`renormalize_demographics_to_100`.
+    * If ``Value`` is aliased to ``None`` (e.g. ``Prefer Not to Say``
+      in INCOME/OCCUPATION), the row is dropped. Its BP will be
+      redistributed proportionally to the remaining canonical buckets
+      by :func:`renormalize_demographics_to_100`.
     * If ``Value`` is orphan (no canonical match, no alias),
       :func:`migration.canonical_demos.orphan_fallback` is consulted:
       if a fallback bucket exists for the category (e.g. ``Other`` for

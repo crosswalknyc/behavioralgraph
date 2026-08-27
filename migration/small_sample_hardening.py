@@ -110,7 +110,19 @@ def _recompute_row(df, idx, subject_raw):
         df.at[idx, "US Gen Pop Projection"] = pj
 
 
-# Canonical bucket lists per demo (per reference/demos.csv)
+# Canonical bucket lists per demo - the REQUIRED set the back-fill inserts.
+#
+# AGREEMENT INVARIANT (2026-08-27, RELATIONSHIP Widowed drift): every
+# bucket listed here must be kept-as-is by
+# migration/canonical_demos.canonical_value (never drop-aliased, never
+# relabeled). Otherwise the enforcer chain drops what this rail
+# re-inserts and the reasoned value is destroyed on every run (Widowed
+# shipped at the ~2.0 floor instead of its reasoned value until
+# 2026-08-27). This list MAY be a strict subset of
+# canonical_demos.PIPELINE_DEMO_SCHEMA (the keep-list): e.g.
+# SEXUAL_ORIENTATION's expanded shape, AGE 'Other', and RELATIONSHIP's
+# panel-only 'Prefer Not to Say' are kept when present but never
+# back-filled. Regression: scripts/test_demo_bracket_crater.py [F].
 CANONICAL_BUCKETS = {
     "GENDER": [
         "Male", "Female", "Non-Binary", "Trans Male", "Trans Female",

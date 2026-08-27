@@ -1,11 +1,25 @@
-"""Canonical demographic buckets — pipeline source of truth.
+"""Canonical demographic buckets - pipeline source of truth.
 
 Derived from `reference/demos.csv` (2026-08-06 snapshot of the
 `userdata.user_data_sanitized` DISTINCT scan; ~36M rows). Only
 buckets with material Row_Count (> a few hundred) are treated as
-canonical. Legacy / accidental variants (Widowed at 2 rows, Student
-at 1 row, "$75,000 – $99,999" with en-dash at 5 rows, etc.) are NOT
-canonical — the pipeline must collapse them.
+canonical. Legacy / accidental variants (Student at 1 row,
+"$75,000 – $99,999" with en-dash at 5 rows, etc.) are NOT
+canonical - the pipeline must collapse them.
+
+RELATIONSHIP 'Widowed' is the one deliberate exception to the
+demos.csv row-count bar (2026-08-27 schema-drift verdict): the panel
+scan carries it at only 2 rows, but the PIPELINE emits it everywhere
+- both BG.py / bg-webapp/bg.py LLM demo prompt templates, the persona
+writer's _EXPECTED_DEMO_BUCKETS injection list, and the small-sample
+schema back-fill (migration/small_sample_hardening.CANONICAL_BUCKETS)
+- and deployed reality agrees: Gen_Pop_2026.csv RELATIONSHIP carries
+WIDOWED at 5.51 and every TU shipped since 2026-08-14 carries a
+Widowed row. Per rule 5a the pipeline is the source of truth, so
+Widowed is canonical. Before this verdict, this module drop-aliased
+Widowed while the back-fill re-inserted it, so every run destroyed
+the reasoned Widowed value and replaced it with the ~2.0 back-fill
+floor. Regression: scripts/test_demo_bracket_crater.py section [F].
 
 Rule 5a of `.cursor/rules/profile-iq-pipeline-rules.mdc`:
     "Pipeline is the source of truth for demographic schema. Gen Pop
@@ -51,8 +65,12 @@ PIPELINE_DEMO_SCHEMA: dict[str, list[str]] = {
         'Prefer Not to Say',
     ],
     'RELATIONSHIP': [
+        # 'Widowed' is pipeline-canonical (2026-08-27 verdict, see module
+        # docstring). 'Prefer Not to Say' is a panel keep (4.7M rows in
+        # demos.csv) but is NOT back-fill-required - the prompt schema
+        # does not emit it and no shipped file carries it.
         'Single', 'In a Relationship', 'Married', 'Divorced or Separated',
-        'Prefer Not to Say',
+        'Widowed', 'Prefer Not to Say',
     ],
     'SEXUAL_ORIENTATION': [
         'Straight / Heterosexual', 'Gay or Lesbian',
@@ -246,9 +264,9 @@ _ALIASES: dict[str, dict[str, str]] = {
         'PROMOTION': 'Graduate or Professional Degree',
     },
     'RELATIONSHIP': {
-        # Widowed is legacy (2 rows in ~36M). Canonical is 5 buckets
-        # without Widowed. Enforcer drops + redistributes.
-        'WIDOWED': None,
+        # NOTE: 'WIDOWED' was drop-aliased (None) here until 2026-08-27.
+        # It is now canonical (see module docstring) and matches directly
+        # in _CANONICAL_NORM - no alias needed.
         'SINGLE (NOT LIVING WITH A PARTNER)': 'Single',
         'DATING': 'In a Relationship',
         'PARTNERED': 'In a Relationship',
@@ -470,8 +488,8 @@ def canonical_value(category: str, value: str) -> str | None:
     Returns:
         * The canonical bucket string if ``value`` matches (via norm-key
           or alias). Canonical form always no-apostrophe.
-        * ``None`` if the value is aliased to DROP (e.g. Widowed,
-          Prefer Not to Say in INCOME/OCCUPATION).
+        * ``None`` if the value is aliased to DROP (e.g. Prefer Not to
+          Say in INCOME/OCCUPATION).
         * The original value unchanged if the category isn't in the
           canonical schema.
     """
