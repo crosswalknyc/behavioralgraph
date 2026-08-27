@@ -792,6 +792,28 @@ def _check_i1(rows, subject, s3_key, s3_client, verbose):
                             for c in carriage["carriers"])):
                 # Verified carrier of a consumption-scoped universe.
                 continue
+            # 2026-08-26 Jenna convention: the subject's own property
+            # row and its owning / universe-defining platform pin at
+            # exactly 100 in base and cuts - never an I1 violation.
+            try:
+                try:
+                    from migration.self_property_coherence import (
+                        must_pin_100 as _i1_pin,
+                        is_owner_platform_row as _i1_owner,
+                        is_subject_own as _i1_own,
+                    )
+                except ImportError:
+                    from self_property_coherence import (  # type: ignore
+                        must_pin_100 as _i1_pin,
+                        is_owner_platform_row as _i1_owner,
+                        is_subject_own as _i1_own,
+                    )
+                if (_i1_pin(subject, cat_u, r["val"])
+                        or _i1_owner(subject, r["val"])
+                        or _i1_own(subject, r["val"])):
+                    continue
+            except Exception:
+                pass
             if baselines is not None:
                 base_bp = baselines.get(vn)
                 if base_bp is not None and base_bp >= 30.0:
