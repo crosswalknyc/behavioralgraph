@@ -53406,6 +53406,97 @@ def _pm_usage_extras(user):
         return None
 
 
+_PM_BASE_GENERIC_TOKENS = {
+    'viewers', 'viewer', 'fans', 'fan', 'series', 'audience', 'buyers',
+    'buyer', 'shoppers', 'shopper', 'watchers', 'universe', 'total',
+    'tu', 'the', 'of', 'and', 'a', 'an', 'profile', 'consumers',
+    'consumer', 'customers', 'customer', 'avid', 'casual', 'movie',
+    'show', 'subscribers', 'members', 'users',
+}
+
+
+def _pm_generation_base(subject_hint, text, ctx=None):
+    """Resolve the base that authorizes a generated read.
+
+    Jenna 2026-08-27 (verbatim): "it can't pull full data on something
+    that doesnt have a base profile. if someone asks for paw patrol
+    data but there is no paw patrol base TU profile they would have to
+    pay the 5 credits to run that profile first ... the synth can
+    never superceed a topic not already pulled somewhere."
+
+    A generated read is only ever a derivation of a subject already
+    pulled somewhere: the profile open on the page, a profile in the
+    Select Profile catalog, or a Subscriber IQ run. Returns
+    {'subject', 's3_key', 'source'} or None (None = hard refuse; the
+    caller steers to the 5-credit build instead of generating).
+    """
+    import prometheus_analysis as pma
+    # 1. The profile open on the page IS the base.
+    if ctx and ctx.get('primary'):
+        pk = str(ctx['primary'].get('s3_key') or '').strip()
+        nm = str(ctx['primary'].get('name') or '').strip()
+        if pk:
+            return {'subject': nm or pk, 's3_key': pk, 'source': 'page'}
+
+    def _tokens(s):
+        return [w for w in _normalize_for_match(s).split()
+                if w not in _PM_BASE_GENERIC_TOKENS]
+
+    q_tokens = set(_normalize_for_match(text).split())
+    hint_tokens = set(_normalize_for_match(subject_hint).split())
+    guessed = ''
+    try:
+        guessed = pma.guess_subject_from_text(text)
+    except Exception:
+        pass
+    guess_tokens = set(_normalize_for_match(guessed).split())
+
+    # 2. Profile catalog: a profile whose distinctive subject tokens
+    # all appear in the ask (or the subject hint). TU files win over
+    # cuts; more distinctive subjects win over shorter ones.
+    best, best_score = None, (0, 0)
+    try:
+        for entry in _profile_catalog_for_chat():
+            for field in ('subject', 'display_name'):
+                toks = _tokens(entry.get(field))
+                if not toks or sum(len(t) for t in toks) < 4:
+                    continue
+                tset = set(toks)
+                if not (tset <= q_tokens or tset <= hint_tokens
+                        or tset <= guess_tokens):
+                    continue
+                is_tu = ' - ' not in str(entry.get('display_name') or '')
+                score = (1 if is_tu else 0, len(toks))
+                if score > best_score:
+                    best_score = score
+                    best = {'subject': str(entry.get('subject')
+                                           or entry.get('display_name')
+                                           or '').strip(),
+                            's3_key': str(entry.get('s3_key') or ''),
+                            'source': 'catalog'}
+    except Exception:
+        traceback.print_exc()
+    if best:
+        return best
+
+    # 3. Subscriber IQ runs count as pulled bases too.
+    try:
+        import prometheus_analysis as _pma_si
+        idx = _pma_si._load_subiq_index(s3_client, SUBSCRIBER_S3_BUCKET)
+        shows = [v[0] for v in idx.values()]
+        named = _pma_si._xmod_subject_from_text(
+            f"{subject_hint or ''} {text or ''}", shows)
+        if named:
+            tk = _pma_si._xmod_title_key(named)
+            if tk and tk in idx:
+                return {'subject': idx[tk][0],
+                        's3_key': f"subiq:{idx[tk][1]}",
+                        'source': 'subscriber_iq'}
+    except Exception:
+        traceback.print_exc()
+    return None
+
+
 def _pm_search_demand_response(user, text, history):
     """Search-journey demand read (2026-08-26 Jenna directive): how
     people find, search for, and first touch a title or brand. Shaped
@@ -53489,6 +53580,24 @@ def _pm_search_demand_response(user, text, history):
         _chatbot_error_email('brief-chat/analyze', e)
         _pm_ask_hint(outcome='error')
         return jsonify(_chatbot_calm_payload())
+    # Base-profile boundary (2026-08-27, Jenna): a generated search
+    # study only ships for a subject already pulled somewhere (profile
+    # catalog or a Subscriber IQ run). No base = steer to the build,
+    # no numbers.
+    _sd_base = None
+    try:
+        _sd_base = _pm_generation_base(study.get('subject'), text)
+    except Exception:
+        traceback.print_exc()
+    if not _sd_base:
+        _b_reply, _b_chips = pma.build_profile_required_reply(
+            study.get('subject') or pma.guess_subject_from_text(text))
+        _pm_ask_hint(outcome='declined_no_base_profile',
+                     subject=study.get('subject'))
+        return jsonify({
+            'success': True, 'action': 'answer', 'reply': _b_reply,
+            'followups': _b_chips, 'offer_deck': False,
+            'deck_angle': None, 'build_required': True})
     if not reply.strip():
         _chatbot_error_email('brief-chat/analyze',
                              'search-demand study rendered empty',
@@ -53511,7 +53620,8 @@ def _pm_search_demand_response(user, text, history):
             window_start=study.get('window_start'),
             window_end=study.get('window_end'),
             window_label=study.get('window_label'),
-            reply=reply, followups=followups)
+            reply=reply, followups=followups,
+            base_profile_key=_sd_base.get('s3_key'))
     except Exception:
         traceback.print_exc()
     _pm_ask_hint(outcome='answered', subject=study.get('subject'))
@@ -53528,18 +53638,29 @@ def _pm_search_demand_response(user, text, history):
 
 
 def _pm_generate_metrics_response(user, text, history, metric_request=None,
-                                  anchors_block='', charge_done=False):
+                                  anchors_block='', charge_done=False,
+                                  ctx=None, digest_block=''):
     """Reasoned measurement read (2026-08-26, Jenna): a concrete
     number for a digitally observable ask the open data does not
-    cover. The insights ledger is the consistency surface: identical
-    asks replay the stored reply verbatim, prior published numbers
-    ride the prompt as binding constraints, and every delivered read
-    persists back to the ledger before it ships.
+    cover, or the read for a sub-cohort the open data does not
+    directly carry (2026-08-27, Paw Patrol kids-4-6). The insights
+    ledger is the consistency surface: identical asks replay the
+    stored reply verbatim, prior published numbers ride the prompt as
+    binding constraints, and every delivered read persists back to
+    the ledger before it ships.
+
+    Base-profile boundary (2026-08-27, Jenna): a generated read only
+    exists as a derivation of a subject already pulled (the open
+    profile, a catalog profile, or a Subscriber IQ run). A subject
+    with no base anywhere gets the steer-to-build reply, never
+    numbers.
 
     `metric_request` comes from the analysis pass (action=
     generate_metrics); the direct no-context path passes None and the
     subject resolves from the question. `charge_done` skips the credit
-    preflight when the caller already ran it."""
+    preflight when the caller already ran it. `digest_block` carries
+    the open profile's digest so sub-cohort reads stay bound to the
+    covering first-party rows."""
     import prometheus_analysis as pma
     import insights_ledger as il
     _pm_ask_hint(route='reasoned_metrics')
@@ -53556,6 +53677,25 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         }), 402
     mr = metric_request if isinstance(metric_request, dict) else {}
     subj_hint = str(mr.get('subject') or '').strip()
+    # HARD GATE (2026-08-27, Jenna): resolve the base that authorizes
+    # this generated read BEFORE anything is generated. No base
+    # anywhere = no numbers; the subject needs its 5-credit Total
+    # Universe build first.
+    base = None
+    try:
+        base = _pm_generation_base(subj_hint, text, ctx=ctx)
+    except Exception:
+        traceback.print_exc()
+    if not base:
+        subj_name = (subj_hint or pma.guess_subject_from_text(text)
+                     or 'that subject')
+        reply, followups = pma.build_profile_required_reply(subj_name)
+        _pm_ask_hint(outcome='declined_no_base_profile',
+                     subject=subj_name)
+        return jsonify({
+            'success': True, 'action': 'answer', 'reply': reply,
+            'followups': followups, 'offer_deck': False,
+            'deck_angle': None, 'build_required': True})
     led = {'block': '', 'exact': None, 'entries': []}
     try:
         led = il.consult(subject=subj_hint or None, question=text,
@@ -53600,7 +53740,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             anchors_block = ''
     user_prompt = pma.build_reasoned_metrics_user_prompt(
         text, history, metric_request=mr or None,
-        anchors_block=anchors_block, ledger_block=led.get('block'))
+        anchors_block=anchors_block, ledger_block=led.get('block'),
+        profile_rows_block=digest_block)
     result = _pm_claude_json(pma.REASONED_METRICS_SYSTEM_PROMPT,
                              user_prompt, max_tokens=4000,
                              temperature=0.4, usage_extras=_pm_ppu)
@@ -53651,7 +53792,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             window_start=res.get('window_start'),
             window_end=res.get('window_end'),
             window_label=res.get('window_label'),
-            reply=reply, followups=followups)
+            reply=reply, followups=followups,
+            base_profile_key=base.get('s3_key'))
     except Exception:
         traceback.print_exc()
     _pm_ask_hint(outcome='answered', subject=res.get('subject'))
@@ -53743,10 +53885,14 @@ def api_synth_chat_analyze():
         # Direct metric question with nothing open (2026-08-26): a
         # digitally observable count is answerable without a profile -
         # route it to the measured-read pass instead of bouncing the
-        # user. Everything else keeps the open-something nudge.
+        # user. Sub-cut asks (2026-08-27) route the same way; the
+        # measured-read pass resolves the base from the catalog and
+        # hard-refuses (steer to build) when no base exists anywhere.
+        # Everything else keeps the open-something nudge.
         try:
             import prometheus_analysis as _pma_gen
-            if _pma_gen.detect_generate_intent(text):
+            if _pma_gen.detect_generate_intent(text) \
+                    or _pma_gen.detect_subcut_intent(text):
                 return _pm_generate_metrics_response(user, text, history)
         except Exception:
             traceback.print_exc()
@@ -53854,13 +54000,33 @@ def api_synth_chat_analyze():
         return _pm_generate_metrics_response(
             user, text, history,
             metric_request=data.get('metric_request'),
-            anchors_block=xmod_block, charge_done=True)
+            anchors_block=xmod_block, charge_done=True,
+            ctx=ctx, digest_block=digest or '')
     reply = str(data.get('reply') or '').strip()
     if action != 'build_profile' and not reply:
         _chatbot_error_email('brief-chat/analyze',
                              'analysis returned an empty reply',
                              tb='(model returned no reply text)')
         return jsonify(_chatbot_calm_payload())
+    # Sub-cut safety net (2026-08-27, Jenna / Paw Patrol kids-4-6):
+    # if the analysis pass answered a sub-cut ask by disclosing a
+    # coverage gap ("there is no 4 to 6 row", "not cut to child age")
+    # instead of returning generate_metrics, reroute to the
+    # measured-read pass. The gap disclosure never ships.
+    if action == 'answer' and ctx.get('primary'):
+        try:
+            if pma.detect_subcut_intent(text) \
+                    and pma.contains_gap_disclosure(reply):
+                return _pm_generate_metrics_response(
+                    user, text, history,
+                    metric_request={
+                        'subject': p_meta.get('name') or '',
+                        'cohort': text[:200],
+                        'needed': text[:200]},
+                    anchors_block=xmod_block, charge_done=True,
+                    ctx=ctx, digest_block=digest or '')
+        except Exception:
+            traceback.print_exc()
     # Defense-in-depth vocabulary pass (2026-08-26): banned internal
     # terms replaced and em dashes stripped before the text reaches
     # the user. Mirrors the partner API's _V1_BANNED_TOKENS posture.

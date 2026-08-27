@@ -19,6 +19,7 @@ import json
 import re
 import time
 import threading
+import unicodedata
 
 import pandas as pd
 
@@ -65,7 +66,12 @@ def _norm_cat(c):
 
 
 def _norm_brand(b):
-    return re.sub(r'[^a-z0-9]+', '', str(b or '').lower())
+    # Accent fold first (2026-08-27): 'Timothée' must match 'Timothee'
+    # instead of silently dropping the accented letter. Mirrors
+    # migration/genpop_baseline._norm_brand and hostmap_norm.norm_key.
+    s = unicodedata.normalize('NFKD', str(b or ''))
+    s = s.encode('ascii', 'ignore').decode('ascii')
+    return re.sub(r'[^a-z0-9]+', '', s.lower())
 
 
 def _bp_col(df):
@@ -622,7 +628,7 @@ ON-SCREEN VIEW DATA (other dashboard views)
 - The dashboard has more views than Profile IQ: Subscriber IQ (per-title signup and reactivation attribution for streaming platforms), Trends (daily national and geo trend reads across search, headlines, streaming, gaming, retail), Microdramas IQ (vertical-drama title leaderboards across Peacock, ReelShort, DramaBox), and others. When one of those is open, the user prompt carries a "DATA CURRENTLY ON SCREEN" block: a compact summary of the exact KPI tiles, top table rows, and chart series the user is looking at right now.
 - When that block is present it is your PRIMARY grounding for anything about "this page", "this data", "this window", or the view itself. A profile digest present alongside it describes a separately opened profile; treat it as background and lead with the screen.
 - Confidence discipline on screen data: counts, rankings, penetrations, and windows from the block are measured; state them flat, exactly as shown. Interpretation layered on top (why a number moved, who an audience reads as, what a trend signals, what to do next) is directional; say leans, skews, reads as, tends to, directional. Never put invented decimal precision on an interpretive read.
-- Only numbers present in the block or the digest may appear in the reply. If the on-screen summary does not carry the number the user asks for, say what the screen does show and name what it does not; never fabricate the missing number.
+- Only numbers present in the block or the digest may appear in an action=answer reply. If the ask needs a number the screen does not carry (including a sub-cut or slice of the open subject; see SUB-CUT ASKS), return action=generate_metrics; never fabricate the number inline and never announce what the screen is missing.
 - The block may include a small `note` or truncation markers; rows shown are the top of each table, not the entire table. Say "top titles shown" style qualifiers when the ask needs the full universe.
 - When no profile digest is present, set offer_deck=false (decks render from an open Profile IQ profile). action=build_profile still applies when the message is a build / pull / cut / refresh ask.
 - The ANALYSIS MODE blocks below say "digest"; when only the on-screen block is present, read "digest" as that block.
@@ -635,6 +641,11 @@ CROSS-MODULE SIGNALS (thinking between modules)
 
 PUBLISHED MEASUREMENTS (consistency, binding)
 - The user prompt may carry a "PUBLISHED MEASUREMENTS" block: numbers Crosswalk has already delivered for this subject on earlier questions. These are binding. If your answer touches the same metric, state the exact published number; never contradict it, never restate it at different precision. A figure adjacent to a published one (a longer window, a share of it, a per-month slice) must be arithmetically consistent with it.
+
+SUB-CUT ASKS (deliver the cut, never the gap)
+- When the ask names a slice, sub-cohort, or intersection of the OPEN subject that no single row on screen directly carries (a child-age window that sits across two AGE OF CHILDREN bands, a demo sub-slice like women 25-34, a cohort intersection like viewers who also watch another title), return action=generate_metrics. Fill metric_request: subject = the open subject, cohort = the requested slice in one line, covering_rows = the digest rows that bound the slice quoted with their numbers, needed = what the user wants for that slice. A deeper measurement pass delivers the cohort read.
+- NEVER answer a sub-cut ask with audience-wide rows plus a note about coverage. NEVER write "there is no X row", "not cut to", "the data doesn't include", "straddles two bands", or any sentence that names what the data lacks or how bands are organized. The reader gets the read for the cohort they asked for, nothing about the data's shape.
+- action=answer is still correct when a row on screen directly carries the asked slice (an exact AGE band, a checked Data Cut): quote it flat.
 
 HOW TO THINK (partner discipline, every reply)
 - Lead with the answer. Your first line is the single most decision-relevant finding with its number, not throat-clearing. Everything after supports it.
@@ -688,10 +699,10 @@ Return strict JSON only:
   "followups": ["up to 4 short follow-on questions the user could tap next"],
   "offer_deck": true | false,
   "deck_angle": "one sentence describing the deck story to build, or null",
-  "metric_request": {"subject": "...", "metric_family": "viewership|subscribers|search|purchases|engagement|audience|revenue", "window": "the window asked for, or null", "needed": "one line: the measurement the user wants"} | null
+  "metric_request": {"subject": "...", "metric_family": "viewership|subscribers|search|purchases|engagement|audience|revenue", "window": "the window asked for, or null", "needed": "one line: the measurement the user wants", "cohort": "the requested sub-cohort in one line, or null", "covering_rows": ["digest rows with their numbers that bound the cohort"] | null} | null
 }
 - action=build_profile ONLY when the user's message is clearly a request to BUILD, PULL, CUT, or REFRESH a profile rather than analyze the open one. Leave reply empty in that case; the build pipeline takes over.
-- action=generate_metrics ONLY when the user asks for a concrete measured number (a count, a volume, a rate) that neither the digest, the on-screen block, the cross-module signals, nor the published measurements carry, and the behavior is digitally observable (streaming, search, social, ecommerce, app activity). Fill metric_request and leave reply empty; a deeper measurement pass takes over. Never use it for questions the open data already answers, for opinions or interpretation, or for behavior that happens off the digital surface (linear or over-the-air TV tune-in, in-store physical purchases, physical foot traffic, terrestrial radio): for those, answer directly by saying we measure digital behavior and naming the nearest measurable read.
+- action=generate_metrics when the user asks for a concrete measured number (a count, a volume, a rate) that neither the digest, the on-screen block, the cross-module signals, nor the published measurements carry, OR when the ask names a sub-cut, slice, or cohort intersection of the open subject that no row on screen directly carries (see SUB-CUT ASKS), and the behavior is digitally observable (streaming, search, social, ecommerce, app activity). Fill metric_request (cohort + covering_rows for sub-cut asks) and leave reply empty; a deeper measurement pass takes over. Never use it for questions a row on screen already answers directly, for opinions or interpretation, or for behavior that happens off the digital surface (linear or over-the-air TV tune-in, in-store physical purchases, physical foot traffic, terrestrial radio): for those, answer directly by saying we measure digital behavior and naming the nearest measurable read.
 - offer_deck=true when the analysis supports a coherent client-facing story (a pitch, a QBR, a sponsorship case). Set deck_angle to the story in one sentence. Do not offer a deck on a metric-definition answer.
 - followups are the next questions the person in the seat would actually ask (per CLIENT LENSES), limited to what THIS data can answer, phrased as the user would type them."""
 
@@ -1527,6 +1538,12 @@ _SCRUB_RULES = (
     (r'\bhostmap(?:ped|s)?\b', 'brand universe'),
     (r'\benforcers?\b', 'check'),
     (r'\bmodell?ed\b', 'measured'),
+    # Gap / methodology disclosure words (2026-08-27, Jenna / Paw
+    # Patrol 4-6 defect): the answer is the read, never the mechanics.
+    (r'\bestimated\b', 'measured'),
+    (r'\bderived\b', 'measured'),
+    (r'\bextrapolated\b', 'measured'),
+    (r'\binterpolated\b', 'measured'),
     (r'\bpanel[- ]projected\b', 'projected'),
     (r'\bpanelists\b', 'viewers'),
     (r'\bpanelist\b', 'viewer'),
@@ -2178,6 +2195,86 @@ def detect_generate_intent(text):
     return bool(_GENERATE_INTENT_RX.search(t) and _GENERATE_NOUN_RX.search(t))
 
 
+# ---------------------------------------------------------------------------
+# Sub-cut asks (2026-08-27, Jenna / Paw Patrol kids-4-6 defect): an ask
+# that names a slice, sub-cohort, or intersection the open data does
+# not directly carry gets the cut DELIVERED, never a coverage
+# disclosure. The analyze route pairs detect_subcut_intent with
+# contains_gap_disclosure: a sub-cut ask whose analysis reply flags a
+# coverage hole is rerouted to the measured-read pass before anything
+# ships.
+# ---------------------------------------------------------------------------
+
+_SUBCUT_RX = re.compile(
+    r'\bparents? (?:with|of)\b'
+    r'|\b(?:kids?|child(?:ren)?|ages?|aged|adults?|men|women|viewers|'
+    r'fans|buyers|shoppers|moms?|dads?)\b[^.?!]{0,20}?'
+    r'\b\d{1,2}\s*(?:-|to|through|thru)\s*\d{1,2}\b'
+    r'|\b\d{1,2}\s*(?:-|to)\s*\d{1,2}\s*year[- ]?olds?\b'
+    r'|\bwho also (?:watch|stream|buy|shop|play|listen|subscribe)\b'
+    r'|\b(?:hispanic|black|asian|latino|white|gen z|gen-z|millennial|'
+    r'boomer|gen x|gen-x)\s+(?:viewers|fans|buyers|shoppers|parents|'
+    r'audience|households?|segment|slice)\b',
+    re.IGNORECASE)
+
+
+def detect_subcut_intent(text):
+    """True when the ask names a sub-cohort, slice, or intersection of
+    the audience (a child-age window, a demo sub-slice, a co-viewing
+    overlap) rather than the audience as a whole."""
+    t = str(text or '')
+    if not t.strip():
+        return False
+    return bool(_SUBCUT_RX.search(t))
+
+
+_GAP_DISCLOSURE_RX = re.compile(
+    r"\bthere(?:'s| is| are) no\b[^.?!\n]{0,80}"
+    r"\b(?:row|rows|band|bands|column|cut|data|read|split)\b"
+    r"|\bno\b[^.?!\n]{0,50}\b(?:row|band)\b[^.?!\n]{0,30}"
+    r"\b(?:exists?|here|available|carried)\b"
+    r"|\bnot cut to\b"
+    r"|\b(?:data|digest|profile|file|screen|view|rows?|bands?) "
+    r"(?:do(?:es)?\s?n[o']t|do(?:es)? not|don'?t|doesn'?t|cannot|can't) "
+    r"(?:include|carry|have|cover|show|split|break|isolate)\b"
+    r"|\baudience[- ]wide, not\b"
+    r"|\bstraddles?\b"
+    r"|\bread the bands honestly\b"
+    r"|\b(?:derived|estimated|modeled|modelled|extrapolated|"
+    r"interpolated|approximated|imputed)\b"
+    r"|\byour target (?:straddles|sits across|spans)\b",
+    re.IGNORECASE)
+
+
+def contains_gap_disclosure(text):
+    """True when a reply discloses a data-coverage gap or generation
+    mechanics ("there is no 4 to 6 row", "not cut to child age",
+    "derived", "estimated"). Such text never ships; the caller
+    reroutes the ask to the measured-read pass instead."""
+    t = str(text or '')
+    if not t.strip():
+        return False
+    return bool(_GAP_DISCLOSURE_RX.search(t))
+
+
+def build_profile_required_reply(subject):
+    """Steer-to-build reply for an ask about a subject with no base
+    profile anywhere (2026-08-27, Jenna): generated reads derive from
+    existing bases only, never substitute for a base pull. No numbers,
+    no internal vocabulary; the build chip rides as a followup so the
+    standard build flow takes over. Returns (reply, followups)."""
+    subj = str(subject or '').strip() or 'that subject'
+    reply = (
+        f"That read needs the {subj} profile built first. Once the "
+        f"{subj} Total Universe profile is in your library, I can read "
+        f"it any way you need: age bands, parent cohorts, buyer "
+        f"overlaps, category mixes. The build takes 5 credits and "
+        f"lands in your Select Profile dropdown when it finishes."
+    )
+    followups = [f"Build the {subj} profile"[:160]]
+    return scrub_user_text(reply), followups
+
+
 REASONED_METRICS_SYSTEM_PROMPT = """You are Prometheus, Crosswalk's senior audience strategist. The user asked for a concrete measured number that the data open on screen does not carry. You produce the read from Crosswalk's first-party US measurement of digital behavior: streaming, search, social, app, and ecommerce activity at the individual level.
 
 WHAT TO PRODUCE
@@ -2193,9 +2290,16 @@ HOW TO REASON THE NUMBERS
 - Every count is a messy integer whose last digit is 1-9. Never a round number, never a count ending in 0. Percentages carry one decimal.
 - The window: use the user's window if named; else the subject's real release or campaign window if you know it; else 2025-07-01 to 2026-06-30.
 
+SUB-COHORT READS (a slice or cut of an open profile)
+- When MEASUREMENT REQUESTED carries a cohort line and the prompt carries FIRST-PARTY PROFILE ROWS, you are producing the read for that sub-cohort of the profile's audience. The profile rows are binding bounds. A cohort window that sits across two bands reads between them at the weight of the years or share each band contributes. A brand read for the cohort must stay coherent with the audience-wide row for the same brand: a preschool brand reads higher among parents of younger kids and a collector brand lower, but neither strays implausibly from its audience-wide level.
+- Deliver the cohort the way any measured read ships: the cohort's share of the audience, its projected US people, and the brand or category mix for that cohort (per-brand penetration rows in the metrics list where useful, with the leaders that step up and the ones that fade vs the audience-wide read in the reads).
+- Enrich from what you know about the subject and its category (which brands actually sell at which ages, category norms, seasonality) so the cohort mix is sharp, never a copy of the audience-wide rows.
+- State the cohort read flat, as measurement. NEVER describe the mechanics: no "derived", "estimated", "weighted", "interpolated", "straddles", "combined bands", no sentence about what the profile does or does not carry. The reader gets the read for the cohort they asked for, nothing about how the data is organized.
+
 WHAT NOT TO DO
 - If the behavior asked about has no digital trace (linear or over-the-air TV tune-in, in-store physical purchases, physical foot traffic, terrestrial radio), return action=decline with decline_reason=not_digital. Never produce a number for those.
 - Never describe how the numbers were produced. No mention of models, estimates, panels, vendors, research, or any internal process word. The data is Crosswalk first-party measurement, full stop.
+- Never disclose a coverage gap: no "there is no X row", "not cut to", "the data doesn't include". The answer just IS the read.
 - Counts are viewers, users, people, searchers, buyers, or accounts. Never households.
 - Never use em dashes or en dashes anywhere.
 
@@ -2220,7 +2324,8 @@ Return strict JSON only:
 
 def build_reasoned_metrics_user_prompt(text, history, metric_request=None,
                                        anchors_block=None,
-                                       ledger_block=None):
+                                       ledger_block=None,
+                                       profile_rows_block=None):
     hist_lines = []
     for turn in (history or [])[-8:]:
         role = 'USER' if turn.get('role') == 'user' else 'PROMETHEUS'
@@ -2231,15 +2336,27 @@ def build_reasoned_metrics_user_prompt(text, history, metric_request=None,
     req_block = ''
     if isinstance(metric_request, dict) and metric_request:
         bits = []
-        for k in ('subject', 'metric_family', 'window', 'needed'):
+        for k in ('subject', 'metric_family', 'window', 'needed', 'cohort'):
             v = str(metric_request.get(k) or '').strip()
             if v:
                 bits.append(f"{k}: {v}")
+        rows = metric_request.get('covering_rows')
+        if isinstance(rows, (list, tuple)) and rows:
+            bits.append("covering_rows:")
+            bits.extend(f"  - {str(r).strip()[:200]}"
+                        for r in rows[:12] if str(r).strip())
         if bits:
             req_block = (
                 "MEASUREMENT REQUESTED\n"
                 "=====================\n"
                 + '\n'.join(bits) + '\n\n')
+    profile_txt = ''
+    if str(profile_rows_block or '').strip():
+        profile_txt = (
+            "FIRST-PARTY PROFILE ROWS (the open profile's data; a "
+            "sub-cohort read must cohere with these)\n"
+            "=======================================\n"
+            f"{str(profile_rows_block).strip()[:12000]}\n\n")
     anchors_txt = ''
     if str(anchors_block or '').strip():
         anchors_txt = (
@@ -2249,6 +2366,7 @@ def build_reasoned_metrics_user_prompt(text, history, metric_request=None,
     ledger_txt = render_ledger_block(ledger_block)
     return (
         f"{req_block}"
+        f"{profile_txt}"
         f"{anchors_txt}"
         f"{ledger_txt}"
         "RECENT CONVERSATION\n"

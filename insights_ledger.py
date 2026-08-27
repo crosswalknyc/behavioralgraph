@@ -269,9 +269,16 @@ def _put_entry_object(entry):
 
 def make_entry(*, subject, metric_family, question, route, metrics,
                anchors=None, window_start='', window_end='',
-               window_label='', reply='', followups=None):
+               window_label='', reply='', followups=None,
+               base_profile_key=''):
     """Build one ledger entry. `metrics` is a list of dicts with
-    name/label/value/unit/definition (extra keys dropped)."""
+    name/label/value/unit/definition (extra keys dropped).
+
+    `base_profile_key` (2026-08-27, Jenna): the s3 key of the base
+    profile (or the pulled read, e.g. a Subscriber IQ run) the
+    generated numbers derive from. Generated reads only exist as
+    derivations of an existing base; callers on the generation paths
+    always pass it."""
     clean_metrics = []
     for m in (metrics or [])[:MAX_METRICS_PER_ENTRY]:
         if not isinstance(m, dict):
@@ -302,6 +309,7 @@ def make_entry(*, subject, metric_family, question, route, metrics,
         'wl': str(window_label or '')[:80],
         'metrics': clean_metrics,
         'anchors': [str(a)[:120] for a in (anchors or []) if str(a)][:6],
+        'base': str(base_profile_key or '')[:220],
         'reply': str(reply or '')[:MAX_REPLY_CHARS],
         'followups': [str(f)[:160] for f in (followups or [])
                       if str(f)][:4],
@@ -333,7 +341,8 @@ def _record_entry_now(entry):
 
 def persist(*, subject, metric_family, question, route, metrics,
             anchors=None, window_start='', window_end='',
-            window_label='', reply='', followups=None):
+            window_label='', reply='', followups=None,
+            base_profile_key=''):
     """Persist one delivered read. Never raises; never blocks the
     caller (daemon thread) unless _SYNC_FOR_TESTS."""
     try:
@@ -342,7 +351,8 @@ def persist(*, subject, metric_family, question, route, metrics,
             question=question, route=route, metrics=metrics,
             anchors=anchors, window_start=window_start,
             window_end=window_end, window_label=window_label,
-            reply=reply, followups=followups)
+            reply=reply, followups=followups,
+            base_profile_key=base_profile_key)
         if not entry['metrics'] and not entry['reply']:
             return
         if _SYNC_FOR_TESTS:
