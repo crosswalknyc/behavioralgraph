@@ -828,6 +828,23 @@ def _check_i1(rows, subject, s3_key, s3_client, verbose):
                     vn2 = re.sub(r"[^A-Z0-9]", "", str(r["val"]).upper())
                     if len(vn2) >= 3 and (vn2 in cl or cl in vn2):
                         continue
+                    # Cut scoped to a title whose carrier is in the
+                    # owner map ("Reba McEntire - Happy's Place Fan"
+                    # -> Peacock): strip the audience noun off the
+                    # cut label and consult the map.
+                    try:
+                        from migration.self_property_coherence import (
+                            OWNER_PLATFORM_MAP as _opm,
+                            own_token_words as _otw,
+                        )
+                    except ImportError:
+                        from self_property_coherence import (  # type: ignore
+                            OWNER_PLATFORM_MAP as _opm,
+                            own_token_words as _otw,
+                        )
+                    cl_tok = "".join(_otw(base.split(" - ", 1)[1]))
+                    if vn2 in _opm.get(cl_tok, ()):
+                        continue
             except Exception:
                 pass
             if baselines is not None:

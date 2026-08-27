@@ -52,6 +52,9 @@ AUDIENCE_SUFFIX_WORDS = {
     "PLAYERS", "PLAYER", "USERS", "USER", "SWITCHERS", "SWITCHER",
     "AVID", "CASUAL", "TOTAL", "STREAMERS", "STREAMER", "READERS",
     "READER", "COLLECTORS", "COLLECTOR", "HOUSEHOLDS",
+    # Transaction-type qualifiers that ride ahead of Buyers/Renters in
+    # consumption-scoped universe names ("Apple TV+ EST Buyers").
+    "EST", "TVOD", "SVOD", "PVOD", "AVOD",
 }
 
 # Real titles whose final word collides with a suffix noun and must
@@ -151,6 +154,8 @@ OWNER_PLATFORM_MAP = {
     "THEVIRGINANDTHEBILLIONAIRE": {"REELSHORT"},
     "VIRGINANDTHEBILLIONAIRE": {"REELSHORT"},
     "TRACKER": {"PARAMOUNT", "PARAMOUNTPLUS"},
+    "THEGRINCH": {"PEACOCK"},
+    "GRINCH": {"PEACOCK"},
     "WHITESPANISHPRINCESS": {"STARZ"},
     "ELTONJOHNAPPLEMUSIC": {"APPLEMUSIC"},
 }
@@ -187,6 +192,22 @@ def is_owner_platform_row(subject, value) -> bool:
     return any(_norm(p) in owners for p in _value_parts(value))
 
 
+def is_subject_own_variant_exact(subject, value) -> bool:
+    """A subject token variant EQUALS the row value (word-joined), so
+    the row IS the subject's platform/property with no extension.
+    "Apple TV+" on subject "Apple TV+ EST Buyers" qualifies;
+    "GOOGLE TV" on subject "GOOGLE" does NOT (an extension row for a
+    different product must never inherit the platform pin)."""
+    variants = _token_variants(subject)
+    if not variants:
+        return False
+    for p in _value_parts(value):
+        vj = "".join(_words(p))
+        if vj and any("".join(tw) == vj for tw in variants):
+            return True
+    return False
+
+
 def must_pin_100(subject, cat_u, value) -> bool:
     """True when this row is REQUIRED at exactly 100.0000 (base file
     and every derived cut) by the own-property / owner-platform pin
@@ -197,7 +218,7 @@ def must_pin_100(subject, cat_u, value) -> bool:
         return True
     if cu in PLATFORM_PIN_CATS and (
             is_owner_platform_row(subject, value)
-            or is_subject_own(subject, value)):
+            or is_subject_own_variant_exact(subject, value)):
         return True
     return False
 
@@ -340,6 +361,10 @@ SUBJECT_OWN_ALIASES = {
     "SHARKNINJA": {"SHARK", "NINJA"},
     "IJUSTINE": {"JUSTINEEZARIK"},
     "ANIDOM": {"ANIMATIONONFOX"},
+    "THETWILIGHTSAGA": {"TWILIGHTSAGA"},
+    "CURRENTBANK": {"CURRENTBANKING"},
+    "NIMRODSAGREENDAYCOMEDY": {"GREENDAY"},
+    "TRACKER": {"SHOWSTRACKER"},
 }
 
 
