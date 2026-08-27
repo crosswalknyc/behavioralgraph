@@ -109,6 +109,7 @@ OWN_PROPERTY_PIN_CATS = {
 # the exemption set below).
 PLATFORM_PIN_CATS = {
     "STREAMING/PLATFORM", "STREAMING VIDEO", "STREAMING MUSIC",
+    "STREAMING/MUSIC",
     "VMVPD/FAST", "VIRTUAL MVPD/FAST", "VIRTUAL MVPD FAST", "VMVPD",
     "FAST PLATFORM", "FAST CHANNEL", "APP/PLATFORM", "PLATFORMS",
 }
@@ -129,6 +130,29 @@ CARRIER_EXEMPT_CATS = PLATFORM_PIN_CATS | {
 # future builds is migration/viewer_carriage.research_carriage.
 OWNER_PLATFORM_MAP = {
     "PAWPATROL": {"PARAMOUNT", "PARAMOUNTPLUS"},
+    # 2026-08-26 held-corpus vet: verified title -> owning/carrying
+    # platform pairs (each is public ownership/exclusive-carriage
+    # fact; the viewer universe is defined by consumption there).
+    "DUNE": {"HBOMAX", "MAX"},
+    "HALANDHARPER": {"MUBI"},
+    "HALHARPER": {"MUBI"},
+    "HAPPYSPLACE": {"PEACOCK"},
+    "INVADERZIM": {"PARAMOUNT", "PARAMOUNTPLUS"},
+    "LANDMAN": {"PARAMOUNT", "PARAMOUNTPLUS"},
+    "LOVELIFE": {"HBOMAX", "MAX"},
+    "MADEAGOESTOJAIL": {"STARZ"},
+    "MANHUNT": {"APPLETV"},
+    "PVALLEY": {"STARZ"},
+    "ROBINHOOD": {"MGM", "MGMPLUS"},
+    "SWIMMINGWITHSHARKS": {"THEROKUCHANNEL", "ROKUCHANNEL"},
+    "THEHAILMARY": {"MGM", "MGMPLUS"},
+    "HAILMARY": {"MGM", "MGMPLUS"},
+    "THESTUDIO": {"APPLETV"},
+    "THEVIRGINANDTHEBILLIONAIRE": {"REELSHORT"},
+    "VIRGINANDTHEBILLIONAIRE": {"REELSHORT"},
+    "TRACKER": {"PARAMOUNT", "PARAMOUNTPLUS"},
+    "WHITESPANISHPRINCESS": {"STARZ"},
+    "ELTONJOHNAPPLEMUSIC": {"APPLEMUSIC"},
 }
 
 
@@ -315,6 +339,7 @@ def _match_words(tok_words, val_words) -> bool:
 SUBJECT_OWN_ALIASES = {
     "SHARKNINJA": {"SHARK", "NINJA"},
     "IJUSTINE": {"JUSTINEEZARIK"},
+    "ANIDOM": {"ANIMATIONONFOX"},
 }
 
 

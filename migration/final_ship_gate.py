@@ -816,6 +816,18 @@ def _check_i1(rows, subject, s3_key, s3_client, verbose):
                         or _i1_owner(subject, r["val"])
                         or _i1_own(subject, r["val"])):
                     continue
+                # Cut-defining row: on a platform-scoped cut ("Reba
+                # McEntire - Apple Music Fan") the named platform row
+                # legitimately reads ~100.
+                base = os.path.basename(str(s3_key or ""))
+                if base.lower().endswith(".csv"):
+                    base = base[:-4]
+                if " - " in base:
+                    cl = re.sub(r"[^A-Z0-9]", "",
+                                base.split(" - ", 1)[1].upper())
+                    vn2 = re.sub(r"[^A-Z0-9]", "", str(r["val"]).upper())
+                    if len(vn2) >= 3 and (vn2 in cl or cl in vn2):
+                        continue
             except Exception:
                 pass
             if baselines is not None:
@@ -1163,11 +1175,21 @@ def _check_i7(rows):
             continue
         by_cat.setdefault(cu, []).append(r)
     for cu, cat_rows in by_cat.items():
+        if cu in ("NUMBER_OF_CHILDREN", "NUMBER OF CHILDREN",
+                  "AGE_OF_CHILDREN", "AGE OF CHILDREN"):
+            # Legacy demo-family categories: partial bucket sets by
+            # construction, shares mirror reach and cannot sum to 100.
+            continue
         cs_vals = [_num(r["cs_s"]) for r in cat_rows]
         populated = [v for v in cs_vals if v is not None]
         if len(cat_rows) < 2 or len(populated) < max(2, len(cat_rows) // 2):
             continue
         total = sum(populated)
+        if total == 0.0 and all((_num(r["bp_s"]) or 0.0) == 0.0
+                                for r in cat_rows):
+            # All-zero category (e.g. every nonzero row was a hidden
+            # brand): there is no share to refresh.
+            continue
         if not (85.0 <= total <= 115.0):
             out.append(_v(
                 "I7", "share coherence", cu, f"{total:.1f}",
