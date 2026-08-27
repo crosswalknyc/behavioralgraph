@@ -306,6 +306,30 @@ def _match_words(tok_words, val_words) -> bool:
     return False
 
 
+# Curated subject-own aliases (2026-08-26): entity names that the
+# word-level matcher cannot derive but that ARE the subject's own
+# rows. Keyed by the normalized (space-free, alnum) subject token;
+# values are normalized row tokens. Verified identities only:
+#   - SharkNinja's two product brands are Shark and Ninja.
+#   - iJustine is the public handle of Justine Ezarik.
+SUBJECT_OWN_ALIASES = {
+    "SHARKNINJA": {"SHARK", "NINJA"},
+    "IJUSTINE": {"JUSTINEEZARIK"},
+}
+
+
+def _alias_own_match(subject, sval) -> bool:
+    joined_subj = "".join(_words(subject))
+    for skey, rowset in SUBJECT_OWN_ALIASES.items():
+        if skey in joined_subj:
+            parts = [sval] + ([p for p in sval.split("/") if p.strip()]
+                              if "/" in sval else [])
+            for p in parts:
+                if "".join(_words(p)) in rowset:
+                    return True
+    return False
+
+
 def is_subject_own(subject, value) -> bool:
     """True when a row Value names the subject's own property.
 
@@ -313,20 +337,22 @@ def is_subject_own(subject, value) -> bool:
     "PAW PATROL" matches subject "Paw Patrol Series Viewers" but
     "SERIES", "PARAMOUNT+", and different-entity near-names (LEXUS vs
     ALEXUS, MICHAELS vs AL MICHAELS) do not. Slash-separated values
-    match on any part (Disney+/Hulu is Hulu's own row).
+    match on any part (Disney+/Hulu is Hulu's own row). Curated
+    aliases (SUBJECT_OWN_ALIASES) cover verified identities the
+    matcher cannot derive (SharkNinja -> Shark / Ninja, iJustine ->
+    Justine Ezarik).
     """
     variants = _token_variants(subject)
-    if not variants:
-        return False
     sval = str(value or "")
-    parts = [sval]
-    if "/" in sval:
-        parts += [p for p in sval.split("/") if p.strip()]
-    for tw in variants:
-        for p in parts:
-            if _match_words(tw, _words(p)):
-                return True
-    return False
+    if variants:
+        parts = [sval]
+        if "/" in sval:
+            parts += [p for p in sval.split("/") if p.strip()]
+        for tw in variants:
+            for p in parts:
+                if _match_words(tw, _words(p)):
+                    return True
+    return _alias_own_match(subject, sval)
 
 
 def is_subject_own_exact(subject, value) -> bool:

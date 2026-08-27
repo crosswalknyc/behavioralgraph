@@ -770,6 +770,10 @@ def _check_i1(rows, subject, s3_key, s3_client, verbose):
         if (cat_u in DEMO_CATS or cat_u in META_CATS or cat_u in FAN_CATS
                 or cat_u == "LOCATION"):
             continue
+        if cat_u in ("AGE_OF_CHILDREN", "AGE OF CHILDREN"):
+            # Demo-family readout ("No Kids" legitimately reads 100 on
+            # adult universes); exempted here exactly as in I18.
+            continue
         if (cat_u in COMPANION_SPORT_CATS
                 or _COMPANION_DIVISION_RE.search(cat_u)):
             continue
