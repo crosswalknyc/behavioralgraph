@@ -147,8 +147,17 @@ def _value_parts(value):
 
 def is_owner_platform_row(subject, value) -> bool:
     """True when the row Value is a platform verified as OWNING /
-    carrying the subject's property (curated OWNER_PLATFORM_MAP)."""
-    owners = OWNER_PLATFORM_MAP.get(own_token(subject))
+    carrying the subject's property: the curated OWNER_PLATFORM_MAP,
+    plus subjects that NAME their carrier ("THE Studio ON Apple TV+"
+    -> Apple TV+ is the carrier by construction: the words after the
+    last ON join to the platform token)."""
+    tw = own_token_words(subject)
+    owners = set(OWNER_PLATFORM_MAP.get("".join(tw), ()))
+    if "ON" in tw:
+        i = len(tw) - 1 - tw[::-1].index("ON")
+        tail = "".join(tw[i + 1:])
+        if len(tail) >= 3:
+            owners.add(tail)
     if not owners:
         return False
     return any(_norm(p) in owners for p in _value_parts(value))
