@@ -2272,6 +2272,22 @@ def dejitter_fractional_ladders(df, subject, verbose=True):
             clusters.setdefault(('mirror', b, bp4), []).append(idx)
         else:
             clusters.setdefault(('row', idx), []).append(idx)
+    # A mirror cluster must carry EVERY row of that (brand, bp4) - the
+    # unflagged twins too (an MPB source row often escapes the detector
+    # because its category is huge). Moving only the flagged twin lets
+    # the MPB-mirror safety net copy the old ladder value straight back,
+    # deadlocking the fix (Swimming With Sharks, 2026-08-26).
+    for key in list(clusters):
+        if key[0] != 'mirror':
+            continue
+        _, b_key, bp4_key = key
+        members = set(clusters[key])
+        for c, pairs in cat_rows.items():
+            for idx, v in pairs:
+                if (round(v, 4) == bp4_key and idx not in members
+                        and _norm_brand(str(df.at[idx, 'Value'] or '')) == b_key):
+                    members.add(idx)
+        clusters[key] = sorted(members)
 
     # Current value + used-value books per category (live-updated).
     cur = {idx: float(v) for c, pairs in cat_rows.items() for idx, v in pairs}
