@@ -2615,6 +2615,14 @@
             color: var(--text-secondary);
             opacity: 0.85;
         }
+        .marketing-fit-derivation {
+            margin-top: 0.4rem;
+            font-size: 0.68rem;
+            line-height: 1.4;
+            color: var(--text-secondary);
+            opacity: 0.8;
+            font-style: italic;
+        }
         .marketing-plat-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.15rem; }
         .marketing-plat-tag {
             background: rgba(139, 92, 246, 0.14);
@@ -109682,6 +109690,7 @@ https://www.instagram.com/p/..."></textarea>
                                     <span style="font-size:0.72rem;color:var(--text-secondary);font-weight:500;letter-spacing:0.03em;">${items.length} shown</span>
                                 </div>
                                 <div class="marketing-partners-group-note">${g.note}</div>
+                                <div class="marketing-fit-derivation">FIT = overlap % × √(index ÷ 100) — reach weighted by affinity; the index is dampened (square root) so a sky-high index on a tiny audience can&#39;t dominate. It ranks talent within a group and is a score, not a percentage.</div>
                             </div>
                             <div class="marketing-platform-grid">${cards}</div>
                         </div>`;
@@ -109787,6 +109796,7 @@ https://www.instagram.com/p/..."></textarea>
                                     <span class="marketing-tier ${g.tier}">${g.title}</span>
                                 </div>
                                 <div class="marketing-partners-group-note">${g.note}</div>
+                                <div class="marketing-fit-derivation">FIT = overlap % × √(index ÷ 100) — reach weighted by affinity; the index is dampened (square root) so a sky-high index on a tiny audience can&#39;t dominate. It ranks talent within a group and is a score, not a percentage.</div>
                             </div>
                             <div class="marketing-partners-cards">${cards}</div>
                         </div>`;
