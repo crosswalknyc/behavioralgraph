@@ -566,7 +566,27 @@ def _resolve_parent_tu(s3_key, s3_client=None, verbose=True):
         cands = _candidates(listing)
     if not cands:
         return None, None
-    cands.sort(key=lambda t: (t[1] is not None, t[1]), reverse=True)
+
+    def _build_ts(k, lm):
+        # Prefer the build timestamp embedded in dated TU filenames
+        # ('..._MM_DD_YYYY_HH_MM.csv') over S3 LastModified: in-place
+        # corrections churn LastModified, so a stale TU touched by a
+        # sweep can outrank the current build (Bethenny 2026-08-27:
+        # the June TU beat the 08-24 parent after a credit-grid sweep
+        # bumped its LastModified, producing false I4/I12 flags).
+        m = re.search(r"(\d{2})_(\d{2})_(\d{4})_(\d{2})_(\d{2})\.csv$", k)
+        if m:
+            mo, d, y, hh, mi = (int(x) for x in m.groups())
+            try:
+                return datetime(y, mo, d, hh, mi, tzinfo=timezone.utc)
+            except ValueError:
+                pass
+        return lm
+
+    cands.sort(
+        key=lambda t: (_build_ts(t[0], t[1]) is not None,
+                       _build_ts(t[0], t[1])),
+        reverse=True)
     parent_key = cands[0][0]
     try:
         body = _s3(s3_client).get_object(

@@ -226,6 +226,59 @@ def subject_is_seed_marker(subject) -> bool:
     return (not s) or s.upper() in SEED_FILE_MARKERS
 
 
+def _norm_alnum(s) -> str:
+    return re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+
+
+def strip_variant_list_subject(subject) -> str:
+    """Collapse a BRAND INPUT-style comma variant list to the clean
+    leading name ('BETHENNY FRANKEL, Bethenny' -> 'BETHENNY FRANKEL').
+
+    2026-08-27 (Bethenny 'FRANKEL, Bethenny - Avid Fan' defect): rule
+    4c-i makes BRAND INPUT a clickstream slug list (name + variants +
+    social handles), never a deliverable name. The earlier URL-variant
+    strip required 3+ segments with URL-ish tails, so a two-segment
+    plain name variant slipped through and minted a comma filename.
+
+    A tail segment reads as a slug variant of the lead when any of:
+      - its alnum-normalized form is contained in the lead's (or vice
+        versa): 'Bethenny' in 'BETHENNYFRANKEL'; 'SamsungTv' vs
+        'Samsung Tv' squashed/punctuation variants
+      - it is URL-ish ('/', '%20', or a dot inside a spaceless token)
+      - it is a handle-like run-together lowercase token with no
+        spaces ('yourtaytay')
+
+    Only when EVERY tail reads as a variant do we strip to the lead, so
+    legit comma subjects ('Crosby, Stills & Nash', 'Earth, Wind &
+    Fire') survive intact."""
+    s = str(subject or '').strip()
+    if ',' not in s:
+        return s
+    segs = [t.strip() for t in s.split(',') if t.strip()]
+    if len(segs) < 2:
+        return s
+    lead = segs[0]
+    lead_norm = _norm_alnum(lead)
+    if not lead_norm:
+        return s
+
+    def _is_variant(seg):
+        n = _norm_alnum(seg)
+        if not n:
+            return True
+        if n in lead_norm or lead_norm in n:
+            return True
+        if '/' in seg or '%20' in seg or '.' in seg.replace(' ', ''):
+            return True
+        if ' ' not in seg and seg == seg.lower():
+            return True
+        return False
+
+    if all(_is_variant(t) for t in segs[1:]):
+        return lead
+    return s
+
+
 def subject_from_input_metadata(df):
     """Recover the subject from the INPUT_METADATA 'BRAND:<slug>' stamp
     ('BRAND:HAPPYS-PLACE_SAMPLE_START:...' -> 'HAPPYS PLACE').
@@ -256,21 +309,29 @@ def build_source_snapshot(df) -> dict:
     category by BP. Compact enough to fit comfortably in a Claude
     context window."""
     cats_upper = df['Column'].astype(str).str.strip().str.upper()
-    bi = df[cats_upper == 'BRAND INPUT']
-    subject = str(bi['Value'].iloc[0]).strip() if len(bi) else ''
+    # 2026-08-27 (Bethenny comma-variant defect): the SUBJECT metadata
+    # row is the clean deliverable name by construction; prefer it over
+    # BRAND INPUT, which per rule 4c-i is a clickstream slug list
+    # ('BETHENNY FRANKEL, Bethenny') and minted a comma filename when
+    # used as the subject.
+    subject = ''
+    subj_rows = df[cats_upper == 'SUBJECT']
+    if len(subj_rows):
+        _sv = str(subj_rows['Value'].iloc[0]).strip()
+        if _sv and not subject_is_seed_marker(_sv):
+            subject = _sv
+    if not subject:
+        bi = df[cats_upper == 'BRAND INPUT']
+        subject = str(bi['Value'].iloc[0]).strip() if len(bi) else ''
     # 2026-08-21 (Google Play TVOD Renters): new-era parents carry the
     # URL-variant seed list in BRAND INPUT ("Google Play, GooglePlay,
     # ..., play.google.com/store/..."). The subject is the FIRST
     # segment; keeping the raw list produced a derived cut literally
-    # NAMED after the whole seed string. Only strip when the tail
-    # segments look like URL/squashed variants, so legit comma subjects
-    # ("Crosby, Stills & Nash") survive.
-    if ',' in subject:
-        _segs = [s.strip() for s in subject.split(',') if s.strip()]
-        if len(_segs) >= 3 and any(
-                ('/' in s or '%20' in s or '.' in s.replace(' ', ''))
-                for s in _segs[1:]):
-            subject = _segs[0]
+    # NAMED after the whole seed string. strip_variant_list_subject
+    # (2026-08-27, generalized from the 3+-URL-segment guard) collapses
+    # any comma list whose tails all read as slug variants of the lead
+    # name, so legit comma subjects ("Crosby, Stills & Nash") survive.
+    subject = strip_variant_list_subject(subject)
     # 2026-08-25 (Happys Place 'CSV - Avid Fan' defect): on file-fed
     # universes BRAND INPUT is the literal seed-file marker 'CSV', not
     # the subject. Deriving the subject from it shipped an avid cut
@@ -1082,6 +1143,8 @@ __all__ = [
     'prompt_super_fan',
     'find_latest_subject_profile_in_s3',
     'build_source_snapshot',
+    'subject_is_seed_marker',
+    'strip_variant_list_subject',
     'reason_super_fan',
     'synthesize_super_fan',
     'synthesize_and_upload_super_fan',
