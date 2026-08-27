@@ -261,6 +261,16 @@ BENCHMARK_BANDS = {
 # composition instead).
 YOUTH_ADVISORY_SHARE = 25.0
 
+# Seed map of single-homing categories: on a brand-scoped universe
+# (customers / subscribers / members / buyers / switchers of X), rivals
+# in these categories are EXPECTED to read below general-population
+# consensus, and a rival at gen-pop level is itself suspect. This is a
+# small seed, not a rulebook: the reasoner makes the actual call
+# (Jenna 2026-08-26: consensus is a base, the call is per-audience).
+SINGLE_HOMING_CATS = (
+    "BANKING", "BANKS", "TELECOM", "INSURANCE", "SECURITY",
+)
+
 _WEB_SEARCH_TOOL = {
     "type": "web_search_20260209", "name": "web_search", "max_uses": 5,
 }
@@ -750,29 +760,68 @@ PASS when everything is defensible. BORDERLINE when something deviates \
 pattern exists that does not block delivery. FAIL only for material, \
 demographic-inexplicable deviations or integrity findings.
 
-4b. DIRECTION AND INTENSITY. The defect class this review exists to catch \
-is the DEPRESSION: a value materially BELOW what the audience's composition \
-supports (the Visa case). Treat depressions as the fail class. \
-Over-indexing is different: engaged audiences legitimately run hot on \
-engagement grids (streaming, social, media, fan-adjacent brands), and \
-derived intensity cuts (Avid Fan and similar) legitimately index 150-300 \
-there. When the file is a derived cut, a high index on an engagement grid \
-is expected intensity, NOT a defect; mark it info, or borderline at most. \
-Above-band reads are a fail only when they are outright impossible for the \
-audience definition itself, and even then they are judgment calls \
-(fixable=false), never trims.
+4b. REASONING WINS WHEN ROOTED IN FACT (Jenna, 2026-08-26). Published \
+consensus figures and the benchmark bands below are a BASE, never a \
+target. Your job is the per-audience call: does the consensus apply to \
+THIS audience? A reasoned call that cites concrete, verifiable facts \
+(a researched anchor from an approved source, the file's demographic \
+composition, the subject's competitive context, carriage reality) \
+OVERRIDES the band. A call with no citable factual basis does NOT \
+override anything: it defers to the default and lands as a borderline \
+review item. Mathematical invariants are outside your jurisdiction and \
+stay absolute (subset coherence, demo sums, BP ceiling, self-pins); \
+everything statistical is a default your fact-rooted reasoning may beat.
 
-5. FIXES. fixable=true is reserved for DEPRESSIONS in benchmarkable grids: \
-a value below the expected band that a benchmark-backed RAISE corrects. \
+4c. DIRECTION AND INTENSITY. The canonical defect is the DEPRESSION: a \
+value materially BELOW what the audience's composition supports (the Visa \
+case). But direction alone decides nothing; the fact pattern does. \
+Engaged audiences legitimately run hot on engagement grids (streaming, \
+social, media, fan-adjacent brands), and derived intensity cuts (Avid Fan \
+and similar) legitimately index 150-300 there: that is a fact-explained \
+high read, leave it untouched (info, or borderline at most). A high read \
+is a defect only when a concrete fact makes it wrong for this audience, \
+and then the correct fix is a reasoned TRIM with the fact cited.
+
+4d. COMPETITIVE EXCLUSIVITY. When the universe is scoped to a brand \
+(customers, subscribers, members, buyers, or switchers of X), rival \
+brands in the SAME category are EXPECTED to read below general-population \
+consensus in single-homing categories: primary banking, wireless carrier, \
+home insurer, internet provider (seed grids: BANKING, TELECOM, \
+INSURANCE, SECURITY; reason beyond the seed when the facts call for it). \
+A Bank of \
+America customer is not likely also a Chase customer; Chase depressed on \
+a Bank of America universe is truth, never a defect, never a raise. The \
+converse also holds: a single-homing rival sitting AT general-population \
+consensus on a brand-scoped universe is an over-read, and a fact-rooted \
+trim is the correct call. Multi-homing categories (streaming, QSR, social \
+media, betting, credit-card networks like Visa/Mastercard co-holding) are \
+different: rival co-usage is normal and can legitimately be high.
+
+4e. DEMOGRAPHIC ELIGIBILITY. Age- and income-gated products (American \
+Express and premium cards, mortgages, investment platforms, LinkedIn) \
+must be judged against the file's composition, not adult-population \
+consensus. A tween/teen-skewing audience with near-zero Amex is CORRECT; \
+never raise it. The same gated product reading at full adult consensus on \
+a composition that cannot hold it is an over-read: a fact-rooted trim is \
+the correct call. The Bethenny Frankel case was the opposite pattern (a \
+mid-income 35-54 adult audience at index 70 on Visa, not composition- \
+explainable): that is exactly when a raise is right.
+
+5. FIXES. fixable=true means you are confident enough to re-level the row \
+yourself, in EITHER direction, and every fix must be rooted in fact. \
 Provide: the expected index band for THIS audience, a concrete corrected \
-penetration value (fix_bp, in percent of this audience), and the benchmark \
-source you anchored on. fix_bp must equal (target index / 100) x the Gen \
-Pop baseline shown for that row, kept inside the expected band, and must be \
-HIGHER than the current value. Never propose a downward fix_bp; a value you \
-believe is too high is a judgment finding (fixable=false, borderline unless \
-impossible). For findings that require rebuild-level judgment (wrong \
-audience definition, contaminated qualifier, structural artifacts you \
-cannot re-level row by row), set fixable=false.
+penetration value (fix_bp, in percent of this audience), the benchmark \
+source you anchored on, and fact_basis: one sentence naming the concrete \
+fact that justifies the move (the researched anchor and source class, the \
+composition fact, or the competitive-context fact). A RAISE corrects a \
+depression the composition cannot explain. A TRIM corrects an over-read \
+that a concrete fact (eligibility gating, single-homing rivalry, carriage \
+impossibility) makes wrong for this audience; never trim expected \
+avid/fan intensity. A fix without a citable fact_basis will not be \
+applied; it becomes a review item. For findings that require \
+rebuild-level judgment (wrong audience definition, contaminated \
+qualifier, structural artifacts you cannot re-level row by row), set \
+fixable=false.
 
 6. SYNTHETIC SIGNATURES. You are given the outputs of mechanical detectors \
 (shared-suffix value ladders, cross-grid duplicate values, coverage gaps). \
@@ -797,6 +846,8 @@ Output STRICT JSON only, no prose outside it:
     "expected_index_band": [<lo>, <hi>] or null,
     "fix_bp": <number or null>,
     "benchmark": "<source, one line>",
+    "fact_basis": "<the concrete fact justifying a fix, one line; \
+required for every fixable=true finding>",
     "fixable": true|false,
     "plain": "<one sentence, client-safe>"}]}
 
@@ -844,6 +895,12 @@ def _build_user_prompt(df, subject, s3_key, category, facts, genpop_map):
         f"({facts['naming'].get('kind', 'TU')})",
         f"BRAND CATEGORY: {(category or facts['coherence'].get('brand_category') or 'UNKNOWN')}",
         f"AUDIENCE SIZE: {facts.get('sample') or 'unknown'}",
+        "COMPETITIVE CONTEXT: if the subject or deliverable name scopes "
+        "this universe to a brand (customers, subscribers, members, "
+        "buyers, switchers of X), apply rule 4d: same-category rivals "
+        "in single-homing grids are expected to read low; never raise "
+        "them, and a rival at general-population level there is itself "
+        "suspect.",
     ]
     coh0 = facts.get("coherence", {})
     if coh0.get("is_cut"):
@@ -1030,24 +1087,44 @@ def _write_cell_like(df, idx, col, new_float, decimals=4, as_count=False):
         df.at[idx, col] = v
 
 
+def _fact_basis(finding):
+    """The concrete fact a fix cites (fact_basis field). Raises without
+    one still apply under the benchmark-band discipline (the band table
+    itself carries the published source); trims and out-of-band moves
+    require it."""
+    basis = str(finding.get("fact_basis") or "").strip()
+    return basis if len(basis) >= 12 else ""
+
+
 def _fix_sanity(finding, cur_bp, genpop_bp):
     """Validate a proposed fix. Returns (ok, corrected_target or reason).
-    The reasoner proposes; this disposes. A fix must be a plausible
-    penetration, must move TOWARD the stated band, and must stay a
-    bounded distance from the current value."""
+    The reasoner proposes; this disposes.
+
+    Per Jenna 2026-08-26 ("reasoning should always win when rooted in
+    fact"): fixes are bidirectional. The band is a DEFAULT, not a cage:
+    a fix that cites a concrete fact_basis may land outside the band
+    (eligibility-gated products on ineligible compositions, single-
+    homing rivals on brand-scoped universes legitimately sit far below
+    it). A fix with NO citable factual basis never overrides anything:
+    raises without a basis fall back to the benchmark band discipline,
+    downward fixes without a basis are rejected outright. Mathematical
+    plausibility (range, bounded move, non-noop) stays absolute."""
     fix = _num(finding.get("fix_bp"))
     if fix is None:
         return False, "no fix value"
     if not (0.01 <= fix <= 99.49):
         return False, f"fix {fix} outside plausible range"
-    if cur_bp is not None and fix <= cur_bp:
-        # Autofix corrects depressions (raises). Trims are judgment
-        # calls; they never apply automatically.
-        return False, "downward fix needs judgment"
+    basis = _fact_basis(finding)
+    if cur_bp is not None and abs(fix - cur_bp) < 0.005:
+        return False, "fix is a no-op"
+    if cur_bp is not None and fix < cur_bp and not basis:
+        # No-fact-no-override: a trim must cite the concrete fact
+        # (eligibility gate, single-homing rivalry, carriage reality).
+        return False, "downward fix without a factual basis"
     if cur_bp is not None and abs(fix - cur_bp) > MAX_FIX_MOVE_PP:
         return False, f"fix moves {abs(fix - cur_bp):.1f}pp (cap {MAX_FIX_MOVE_PP})"
     band = finding.get("expected_index_band")
-    if (isinstance(band, (list, tuple)) and len(band) == 2
+    if (not basis and isinstance(band, (list, tuple)) and len(band) == 2
             and genpop_bp and genpop_bp > 0):
         lo, hi = _num(band[0]), _num(band[1])
         if lo is not None and hi is not None and lo < hi:
@@ -1121,7 +1198,10 @@ def _apply_fixes(df, findings, subject, genpop_map, verbose=True):
         applied.append({
             "category": cu, "brand": str(f.get("brand")),
             "old_bp": cur, "new_bp": newv,
+            "direction": ("trim" if cur is not None and newv < cur
+                          else "raise"),
             "benchmark": str(f.get("benchmark") or "")[:200],
+            "fact_basis": str(f.get("fact_basis") or "")[:300],
         })
         if verbose:
             print(f"[pre-ship-vetting] fix applied: {cu} / "
@@ -1327,17 +1407,21 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
         report["summary"] = str(verdict_obj.get("summary") or "")[:600]
         report["findings"] = findings
 
-        # Deterministic direction guard: the fail class this review
-        # enforces is the DEPRESSION. A band-backed fail whose current
-        # value sits ABOVE its band is an intensity read (engaged
-        # audiences and derived cuts legitimately run hot), and a
-        # proposed downward fix is a trim: both downgrade to borderline
-        # here regardless of what the reasoner returned. Structural
-        # findings without a band (ladders, contamination, coherence)
-        # keep their severity.
+        # Direction guard, fact-conditional (Jenna 2026-08-26:
+        # "reasoning should always win when rooted in fact"). An
+        # above-band fail or a proposed trim WITHOUT a citable factual
+        # basis downgrades to borderline: engaged audiences and derived
+        # cuts legitimately run hot, and an unfounded trim must never
+        # apply. When the reasoner cites a concrete fact_basis
+        # (eligibility gating, single-homing rivalry, carriage
+        # impossibility), the reasoned call stands and the fix flows to
+        # the sanity gate like any other. Structural findings without a
+        # band (ladders, contamination, coherence) keep their severity.
         n_intensity_downgrades = 0
         for f in findings:
             if str(f.get("severity", "")).lower() != "fail":
+                continue
+            if _fact_basis(f):
                 continue
             band = f.get("expected_index_band")
             if not (isinstance(band, (list, tuple)) and len(band) == 2):
