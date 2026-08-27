@@ -52498,22 +52498,23 @@ https://www.instagram.com/p/..."></textarea>
                     } else {
                         var chLis = channels.map(function(ch, i) {
                             var ct = ch.content_type
-                                ? '<span style="margin-left:8px; padding:1px 6px; background:#eef2ff; color:#4338ca; border-radius:9999px; font-size:10px; font-weight:600; letter-spacing:.02em;">' + _tiqEsc(ch.content_type) + '</span>'
+                                ? '<span style="padding:1px 7px; background:#eef2ff; color:#4338ca; border-radius:9999px; font-size:10px; font-weight:600; letter-spacing:.02em; flex:none;">' + _tiqEsc(ch.content_type) + '</span>'
                                 : '';
-                            // Weekly US viewers chip replaces the
-                            // airings/wk pill. Same helper as every
-                            // other panel so the styling stays
-                            // consistent across FAST / streaming /
-                            // music / etc.
+                            // Weekly US viewers chip. Rendered on its own
+                            // line beneath the channel name so the long
+                            // "WEEKLY US VIEWERS" label never squeezes the
+                            // name out or runs off the card's right edge.
                             var viewsChip = _tiqAudienceChip(ch.us_streams);
-                            var viewsHtml = viewsChip
-                                ? '<span style="margin-left:auto; white-space:nowrap;">' + viewsChip + '</span>'
-                                : '';
-                            return '<div style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:#fff; border:1px solid #e5e7eb; border-radius:8px;">' +
-                                   '<span style="color:#94a3b8; font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; min-width:22px; text-align:right;">' + (ch.rank || (i+1)) + '</span>' +
-                                   '<span style="color:#0f172a; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + _tiqEsc(ch.name) + '</span>' +
-                                   ct +
-                                   viewsHtml +
+                            var chName = _tiqEsc(ch.name);
+                            return '<div style="display:flex; flex-direction:column; gap:6px; padding:8px 12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">' +
+                                   '<div style="display:flex; align-items:center; gap:8px; min-width:0;">' +
+                                     '<span style="color:var(--text-secondary); font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; min-width:22px; text-align:right; flex:none;">' + (ch.rank || (i+1)) + '</span>' +
+                                     '<span style="color:var(--text-primary); font-size:13px; font-weight:600; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + chName + '">' + chName + '</span>' +
+                                   '</div>' +
+                                   '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">' +
+                                     ct +
+                                     (viewsChip || '') +
+                                   '</div>' +
                                    '</div>';
                         }).join('');
                         channelsHtml =
