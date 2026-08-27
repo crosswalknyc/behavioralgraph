@@ -676,6 +676,22 @@ def apply_avid_transform(df, audience: dict, category_decisions: dict,
     cat_col = "Column"
     val_col = "Value"
 
+    # At-birth ladder guard (2026-08-26 Liz QA, Bethenny avid): within
+    # one category batch the model sometimes reuses a single fractional
+    # part across many rows, stepping only the integer (67.8912 /
+    # 55.8912 / ... / 3.8912). Re-salt those suffixes per (subject,
+    # category, label) BEFORE the decisions land in the frame; integer
+    # parts (the model's magnitude calls) are preserved.
+    try:
+        try:
+            from migration.fractional_ladders import deladder_decision_map
+        except ImportError:
+            from fractional_ladders import deladder_decision_map  # type: ignore
+        category_decisions, _n_deladder = deladder_decision_map(
+            category_decisions, subject)
+    except Exception as _dl_err:
+        print(f"    [deladder] guard skipped ({_dl_err})")
+
     cohort_fraction = float(audience.get("cohort_fraction", 0.20))
     us_pop_fraction = float(audience.get("us_pop_fraction",
                                          0.05))
@@ -1152,10 +1168,33 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
     """
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df_avid)
     p_bp_col, _, p_raw_col, _ = _detect_cols(df_parent)
-    stats = {"capped_up": 0, "lifted_down": 0, "skipped": 0,
-             "examples_up": [], "examples_down": []}
+    stats = {"capped_up": 0, "lifted_down": 0, "direction_lifted": 0,
+             "skipped": 0, "examples_up": [], "examples_down": [],
+             "examples_direction": []}
     if bp_col is None or p_bp_col is None:
         return df_avid, stats
+
+    # 2026-08-26 (Liz QA, Paw Patrol avid): OWN-ROW DIRECTION. On the
+    # subject's own franchise/property rows the avid tier must read AT
+    # OR ABOVE the parent (avid fans always over-index on their own
+    # property; the shipped avid read FRANCHISE PAW PATROL at 3.9665 vs
+    # the parent's 82.7367 after the engine's reasoning fallback landed
+    # on a gen-pop baseline and the sanity lift was quarantined).
+    # Violators are re-derived from the parent BP with a subject-salted
+    # engaged-tier premium, raw-verified so the subset invariant
+    # (avid_raw <= parent_raw) still holds - always satisfiable since
+    # the avid sample is a strict fraction of the parent's.
+    try:
+        try:
+            from migration.self_property_coherence import (
+                is_subject_own as _spc_is_own,
+            )
+        except ImportError:
+            from self_property_coherence import (  # type: ignore
+                is_subject_own as _spc_is_own,
+            )
+    except Exception:
+        _spc_is_own = None
 
     avid_sample = _read_sample_size(df_avid, raw_col)
     parent_sample = _read_sample_size(df_parent, p_raw_col)
@@ -1293,6 +1332,31 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
                     )
             else:
                 new_bp = None
+        elif (_spc_is_own is not None and avid_bp < parent_bp - 0.0005
+                and parent_bp < 99.2 and _spc_is_own(subject, vu)):
+            # OWN-ROW DIRECTION violation: avid below parent on the
+            # subject's own property row. Re-derive from the parent BP
+            # with a salted engaged-tier premium, raw-verified.
+            u = int(hashlib.md5(
+                f"{subject}|{cu}|{_norm_pin(vu)}|own-direction".encode()
+            ).hexdigest()[:8], 16) / 0xFFFFFFFF
+            prem = 0.015 + 0.060 * u
+            feas = (parent_raw + 0.499) * 100.0 / avid_sample
+            target = min(parent_bp * (1.0 + prem), feas * 0.999, 99.2)
+            if target > avid_bp:
+                new_bp = _finalize(target, parent_bp,
+                                   f"{subject}|{cu}|{vu}|own-direction")
+                if new_bp > avid_bp and round(
+                        avid_sample * new_bp / 100.0) <= parent_raw:
+                    stats["direction_lifted"] += 1
+                    if len(stats["examples_direction"]) < 5:
+                        stats["examples_direction"].append(
+                            f"{cu}/{vu}: {avid_bp:.4f} -> {new_bp:.4f} "
+                            f"(parent {parent_bp:.4f}, own-row "
+                            f"direction)"
+                        )
+                else:
+                    new_bp = None
         elif (cu in _MEGA_REACH_CATS
                 and parent_bp > down_parent_min_bp
                 and (parent_bp - avid_bp) > down_gap_pp):

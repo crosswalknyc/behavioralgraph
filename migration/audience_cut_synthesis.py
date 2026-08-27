@@ -620,6 +620,19 @@ def apply_audience_cut_transform(df, audience: dict, category_decisions: dict,
     val_col = "Value"
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
 
+    # At-birth ladder guard (2026-08-26 Liz QA, Bethenny avid): re-salt
+    # model decision batches that reuse one fractional part across many
+    # rows before they land in the frame. Integer parts preserved.
+    try:
+        try:
+            from migration.fractional_ladders import deladder_decision_map
+        except ImportError:
+            from fractional_ladders import deladder_decision_map  # type: ignore
+        category_decisions, _n_deladder = deladder_decision_map(
+            category_decisions, subject)
+    except Exception as _dl_err:
+        print(f"    [deladder] guard skipped ({_dl_err})")
+
     demo_targets = audience.get("audience_demo_targets", {}) or {}
     cohort_fraction = float(audience.get("cohort_fraction", 0.20) or 0.20)
     us_pop_fraction = float(audience.get("us_pop_fraction", 0.05) or 0.05)

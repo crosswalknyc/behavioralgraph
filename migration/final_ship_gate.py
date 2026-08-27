@@ -85,6 +85,38 @@ Invariants asserted (each returns structured violations):
                          writer's autofix pass (2026-08-26 Jenna
                          JKL/Rosie mandate).
 
+  I16 self-property       content/franchise subjects: the subject's own
+      coherence            merch/games/media rows must be coherent with
+                           its own FRANCHISE anchor (>= 14% of it when
+                           the anchor reads >= 40). 2026-08-26 Liz QA:
+                           Paw Patrol shipped FRANCHISE 82.74 with own
+                           TOYS/GAMES at 6.20. Deterministically fixed
+                           by enforce_self_property_coherence (peer-
+                           anchored, mirror-preserving arithmetic).
+  I17 avid own-row        avid cuts only, parent TU resolvable: on the
+      direction            subject's OWN property rows the avid BP must
+                           read >= the parent's (avid fans always over-
+                           index on their own property; Paw Patrol avid
+                           shipped FRANCHISE at 3.97 vs parent 82.74).
+                           Deterministically fixed by the own-row
+                           direction pass in enforce_avid_subset_
+                           coherence (parent-anchored premium, raw-
+                           verified so I12 still holds).
+  I18 exact-100           no non-subject row may sit at exactly
+      non-subject pin      100.0000 (only metadata and the subject's
+                           own self-pin family; companion sports pins
+                           exempt). Paw Patrol shipped Paramount+ at
+                           100.0000 on a universe defined across four
+                           platforms. Deterministically fixed by
+                           depin_exact_100_non_subject.
+  I19 BRAND INPUT         URL-bearing BRAND INPUTs must not carry a
+      landing page         generic platform landing page (fubo.tv/
+                           welcome, netflix.com bare) - every visitor
+                           of the platform would qualify. NOT auto-
+                           fixed: the correct title URL is a research
+                           judgment; the gate quarantines with a clear
+                           reason instead.
+
 Gate behavior: `run_final_ship_gate(df_or_bytes, s3_key, subject)`.
 On violations the caller's upload MUST NOT happen: the gate writes the
 rejected bytes to s3://dashboard-inputs/_quarantine/, emails Jenna +
@@ -1513,6 +1545,318 @@ def _check_i13(rows, subject, s3_key, s3_client, verbose):
     return out
 
 
+def _check_i14(rows, s3_key):
+    """Seeded fractional-part ladders (2026-08-26 Liz QA: BETHENNY
+    FRANKEL - Avid Fan shipped 15 TALENT rows all ending .8912
+    (67.8912 / 55.8912 / ... / 3.8912), 16 at .8234, 76 rows at .2847
+    file-wide with unit-step ladders in AMUSEMENT PARKS and
+    HOST/PERSONALITY). Many rows sharing one 4dp fractional part at
+    integer-stepped values is a generation artifact, not data.
+
+    Detection + thresholds live in migration/fractional_ladders.py
+    (shared with the dejitter enforcer and profile_writer's autofix so
+    the three can never drift): a category group fires at
+    6 + cat_rows//1000 shared-suffix rows, a file-wide group at
+    20 + in_scope_rows//2000 (organic max observed 3-4 / 9-10; the
+    defect file hit 16 / 233).
+
+    Deterministically fixable by dejitter_fractional_ladders
+    (downward-only per-row re-salt), so profile_writer's autofix pass
+    remediates before quarantine.
+    """
+    out = []
+    try:
+        from migration.fractional_ladders import (
+            detect_fractional_ladders, ladder_in_scope,
+        )
+    except ImportError:
+        from fractional_ladders import (  # type: ignore
+            detect_fractional_ladders, ladder_in_scope,
+        )
+    triples = []
+    for r in rows:
+        v = _num(r["bp_s"])
+        if v is None:
+            continue
+        if ladder_in_scope(r["cat_u"], v):
+            triples.append((r["n"], r["cat_u"], v))
+    if not triples:
+        return out
+    det = detect_fractional_ladders(triples)
+    for cat_u, sfx, n, thr in det["percat_groups"][:20]:
+        out.append(_v(
+            "I14", "fractional-part ladder",
+            f"{cat_u} / .{sfx}", f"{n} rows",
+            f"{n} rows in {cat_u} share the identical 4-decimal "
+            f"fractional part .{sfx} (threshold {thr}); integer-stepped "
+            f"values with one shared suffix are a generation artifact.",
+        ))
+    for sfx, n, thr in det["filewide_groups"][:10]:
+        out.append(_v(
+            "I14", "fractional-part ladder",
+            f"(file-wide) / .{sfx}", f"{n} rows",
+            f"{n} rows across the file share the identical 4-decimal "
+            f"fractional part .{sfx} (threshold {thr}); one suffix "
+            f"repeated at this scale is a generation artifact.",
+        ))
+    return out
+
+
+def _check_i15(rows, subject, s3_key):
+    """TALENT umbrella self-inclusion (2026-08-26 Liz QA DEFECT 2:
+    BETHENNY FRANKEL - Avid Fan carried a 490-row TALENT grid with no
+    Bethenny row; she self-pinned only in HOST/PERSONALITY). A
+    talent-archetype subject (BRAND CATEGORY in the TALENT family) must
+    appear in the TALENT grid at exactly 100 whenever the profile
+    carries one.
+
+    Deterministically fixable by enforce_native_cluster_self_pin (the
+    archetype clusters with TALENT in NATIVE_CLUSTERS), so
+    profile_writer's autofix pass remediates before quarantine.
+    """
+    out = []
+    talent_archetypes = {
+        "ACTOR", "ATHLETE", "COMEDIAN", "INFLUENCER/CREATOR",
+        "CREATOR/INFLUENCER", "EMERGING TALENT", "HOST/PERSONALITY",
+        "MUSICIAN/BAND", "PODCASTER", "POLITICS/ACTIVIST",
+        "WRITER/DIRECTOR/AUTHOR/ARTIST",
+    }
+    bc = ""
+    for r in _rows_for_cat(rows, "BRAND CATEGORY"):
+        bc = str(r["val"] or "").strip().upper()
+        break
+    if bc not in talent_archetypes:
+        return out
+    talent_rows = _rows_for_cat(rows, "TALENT")
+    if not talent_rows:
+        return out          # no TALENT grid in this profile: nothing to pin
+    full, _mono = _subject_forms(subject, s3_key, rows)
+    self_rows = [r for r in talent_rows if _norm_token(r["val"]) in full]
+    if not self_rows:
+        out.append(_v(
+            "I15", "TALENT self-inclusion",
+            f"TALENT / {subject}", "absent",
+            f"The subject is a {bc} but has no row in the "
+            f"{len(talent_rows)}-row TALENT grid; talent subjects must "
+            f"self-include in TALENT at 100%.",
+        ))
+        return out
+    for r in self_rows:
+        bp = _num(r["bp_s"])
+        if bp is None or abs(bp - 100.0) > 0.0001:
+            out.append(_v(
+                "I15", "TALENT self-inclusion",
+                f"TALENT / {r['val']}", _fmt_pct(bp),
+                f"The subject's own TALENT row reads {_fmt_pct(bp)}; a "
+                f"talent subject must self-include in TALENT at exactly "
+                f"100%.",
+            ))
+    return out
+
+
+def _spc():
+    """Lazy shared self-property helpers (2026-08-26 Paw Patrol). None
+    tuple when the module is unavailable (checks fail-open via _safe)."""
+    try:
+        try:
+            from migration.self_property_coherence import (
+                is_subject_own, check_self_property_coherence,
+            )
+        except ImportError:
+            from self_property_coherence import (  # type: ignore
+                is_subject_own, check_self_property_coherence,
+            )
+        return is_subject_own, check_self_property_coherence
+    except Exception:
+        return None, None
+
+
+def _check_i16(rows, subject, s3_key):
+    """Self-property coherence (2026-08-26 Liz QA, Paw Patrol: base
+    shipped FRANCHISE PAW PATROL 82.7367 alongside TOYS/GAMES PAW
+    PATROL at 6.1959 - a preschool-parent viewer base at 83% franchise
+    engagement cannot sit at 6% on the property's own toys). On a
+    subject with an own-FRANCHISE anchor >= 40, every own merch/games/
+    media row must read >= 14% of that anchor."""
+    out = []
+    is_own, check_spc = _spc()
+    if check_spc is None:
+        return out
+    items = [(r["cat_u"], r["val"], _num(r["bp_s"])) for r in rows]
+    anchor_bp, viols = check_spc(items, subject)
+    for v in viols:
+        out.append(_v(
+            "I16", "self-property coherence",
+            f"{v['cat']} / {v['val']}", _fmt_pct(v["bp"]),
+            f"{v['val']} reads {_fmt_pct(v['bp'])} in {v['cat']} while "
+            f"the subject's own FRANCHISE row reads "
+            f"{_fmt_pct(anchor_bp)}. An audience this engaged with the "
+            f"franchise cannot sit at noise level on the property's "
+            f"own {v['cat'].lower()} row (floor {_fmt_pct(v['floor'])}).",
+        ))
+    return out
+
+
+def _check_i17(rows, sample, subject, s3_key, s3_client, verbose):
+    """Avid own-row direction (2026-08-26 Liz QA, Paw Patrol: the avid
+    cut shipped FRANCHISE PAW PATROL at 3.9665 vs the parent TU's
+    82.7367 - avid fans reading BELOW the broad audience on their own
+    franchise is logically impossible). For every own-property row
+    shared with the resolvable parent TU, avid BP must be >= parent
+    BP. Fail-open on infrastructure like I12."""
+    out = []
+    if sample is None or not _is_avid_cut_key(s3_key):
+        return out
+    is_own, _ = _spc()
+    if is_own is None:
+        return out
+    try:
+        parent_key, parent_body = _resolve_parent_tu(
+            s3_key, s3_client, verbose=verbose)
+    except Exception as e:
+        if verbose:
+            print(f"[ship-gate] I17 parent resolution errored: {e}; "
+                  f"own-row direction check skipped")
+        return out
+    if not parent_key:
+        if verbose:
+            print(f"[ship-gate] I17: no parent TU resolvable for "
+                  f"{_display_name(s3_key)}; own-row direction check "
+                  f"skipped")
+        return out
+    _, parent_rows = _parse_rows(parent_body)
+
+    parent_bp = {}
+    for r in parent_rows:
+        cu = r["cat_u"]
+        if (cu in DEMO_CATS or cu in META_CATS or cu in FAN_CATS
+                or cu == "LOCATION"):
+            continue
+        bp = _num(r["bp_s"])
+        if bp is None:
+            continue
+        k = (cu, _norm_token(r["val"]))
+        if bp > parent_bp.get(k, -1.0):
+            parent_bp[k] = bp
+
+    for r in rows:
+        cu = r["cat_u"]
+        if (cu in DEMO_CATS or cu in META_CATS or cu in FAN_CATS
+                or cu == "LOCATION"):
+            continue
+        bp = _num(r["bp_s"])
+        if bp is None:
+            continue
+        vn = _norm_token(r["val"])
+        if not is_own(subject, r["val"]):
+            continue
+        # No _subject_forms skip here: the subject-OWN rows are exactly
+        # what this check measures (BRAND INPUT seeds put the property
+        # name in the full-forms set). True self-pin rows are excluded
+        # by the parent-pin guard below (a pinned parent row can never
+        # sit under it).
+        pbp = parent_bp.get((cu, vn))
+        if pbp is None or pbp >= 99.2:
+            continue
+        if bp < pbp - 0.0005:
+            out.append(_v(
+                "I17", "avid own-row direction",
+                f"{r['cat']} / {r['val']}",
+                f"avid {_fmt_pct(bp)} vs parent {_fmt_pct(pbp)}",
+                f"{r['val']} in {r['cat']}: the avid tier reads "
+                f"{_fmt_pct(bp)} but the parent audience "
+                f"({_display_name(parent_key)}) reads {_fmt_pct(pbp)}. "
+                f"Avid fans always over-index on the subject's own "
+                f"property; reading below the broad audience there is "
+                f"logically impossible.",
+            ))
+    return out
+
+
+def _check_i18(rows, subject, s3_key):
+    """Exact-100 non-subject pin (2026-08-26 Liz QA, Paw Patrol:
+    Paramount+ shipped at exactly 100.0000 in STREAMING/PLATFORM on a
+    universe defined across Netflix/Amazon/Philo/Fubo). Exact 100
+    belongs to metadata rows and the subject's own self-pin family
+    (companion sports pins included); any other row at 100.0000 is an
+    impossible universal-reach claim plus a messy-value violation."""
+    out = []
+    is_own, _ = _spc()
+    full, mono = _subject_forms(subject, s3_key, rows)
+    for r in rows:
+        cu = r["cat_u"]
+        if (cu in META_CATS or cu in DEMO_CATS or cu in FAN_CATS
+                or cu in COMPANION_SPORT_CATS
+                or _COMPANION_DIVISION_RE.search(cu)):
+            continue
+        bp = _num(r["bp_s"])
+        if bp is None or abs(bp - 100.0) > 0.00005:
+            continue
+        vn = _norm_token(r["val"])
+        if vn in full or vn in mono:
+            continue
+        if is_own is not None and is_own(subject, r["val"]):
+            continue
+        out.append(_v(
+            "I18", "exact-100 non-subject pin",
+            f"{r['cat']} / {r['val']}", "100.0000",
+            f"{r['val']} in {r['cat']} reads exactly 100.0000% but is "
+            f"not the subject's own row. Universal reach on a "
+            f"non-subject row is not a plausible measured value.",
+        ))
+    return out
+
+
+_I19_URLISH_RE = re.compile(r"^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(/|$)")
+
+
+def _check_i19(rows, subject, s3_key):
+    """BRAND INPUT landing page (2026-08-26 Liz QA, Paw Patrol:
+    fubo.tv/welcome shipped as a clickstream slug - every Fubo visitor
+    qualifies into the universe, violating rule 4c-i case 4). NOT
+    auto-fixable: replacing the slug requires researching the specific
+    title URL, so violations quarantine with a clear reason."""
+    out = []
+    try:
+        try:
+            from migration.viewer_carriage import is_generic_landing_url
+        except ImportError:
+            from viewer_carriage import (  # type: ignore
+                is_generic_landing_url,
+            )
+    except Exception:
+        return out
+    for r in rows:
+        if r["cat_u"] != "BRAND INPUT":
+            continue
+        toks = [t.strip() for t in str(r["val"] or "").split(",")
+                if t.strip()]
+        urlish = [t for t in toks
+                  if "/" in t or _I19_URLISH_RE.match(t)]
+        if not urlish:
+            continue
+        for t in urlish:
+            # Tokens WITH a path are real URLs: the generic check
+            # applies to any domain. Dotted no-path tokens are usually
+            # brand-name variants (PAW.Patrol, Samsung.Tv - rule 4c-i
+            # case 2), so those only flag on a known platform domain
+            # (netflix.com bare IS the defect; a variant is not).
+            if is_generic_landing_url(
+                    t, require_platform_domain=("/" not in t)):
+                out.append(_v(
+                    "I19", "BRAND INPUT landing page", "BRAND INPUT",
+                    t,
+                    f"BRAND INPUT carries {t!r}, a generic platform "
+                    f"landing page: every visitor of that platform "
+                    f"would qualify into this universe. The slug must "
+                    f"be the specific title path on that platform (or "
+                    f"the platform dropped if no title page exists); "
+                    f"this needs research judgment, not an automatic "
+                    f"rewrite.",
+                ))
+    return out
+
+
 def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
                                 s3_client=None, verbose=True):
     """Run all invariants read-only. Returns (violations, meta).
@@ -1571,6 +1915,13 @@ def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
                         s3_client, verbose)
     violations += _safe("I13", _check_i13, rows, subject, s3_key,
                         s3_client, verbose)
+    violations += _safe("I14", _check_i14, rows, s3_key)
+    violations += _safe("I15", _check_i15, rows, subject, s3_key)
+    violations += _safe("I16", _check_i16, rows, subject, s3_key)
+    violations += _safe("I17", _check_i17, rows, sample, subject, s3_key,
+                        s3_client, verbose)
+    violations += _safe("I18", _check_i18, rows, subject, s3_key)
+    violations += _safe("I19", _check_i19, rows, subject, s3_key)
 
     meta = {"n_rows": len(rows), "sample": sample,
             "is_cut": _is_cut_key(s3_key)}

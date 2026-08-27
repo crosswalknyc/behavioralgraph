@@ -166,6 +166,73 @@ def detect_consumption_scoped(subject, *extra_texts):
 # no tracking params, no fragment)
 # ---------------------------------------------------------------------------
 
+# Path segments that name a platform's generic landing surface, not a
+# specific title. A one-segment path made of one of these qualifies
+# EVERY visitor of the platform into the universe (2026-08-26 Liz QA:
+# fubo.tv/welcome shipped in Paw Patrol Series Viewers' BRAND INPUT).
+# Deep paths under these prefixes stay valid: fubo's real series pages
+# live at fubo.tv/welcome/series/<id>/<slug>.
+GENERIC_LANDING_SEGMENTS = {
+    "welcome", "home", "browse", "signup", "sign-up", "signin",
+    "sign-in", "login", "start", "live", "watch", "shows", "movies",
+    "series", "tv", "stream", "streaming", "app", "apps", "account",
+    "plans", "pricing", "deals", "offers", "gift", "help", "search",
+    "explore", "discover", "landing", "index", "default", "player",
+    "video", "videos", "channel", "channels", "program", "programs",
+    "schedule", "guide", "new", "popular", "trending",
+}
+
+# Streaming / carriage platform domains where a bare or generic URL in
+# a BRAND INPUT is always the landing-page defect (a brand's own
+# domain root can be a legitimate owned-site slug; a carrier's cannot).
+PLATFORM_DOMAINS = {
+    "netflix.com", "fubo.tv", "philo.com", "hulu.com",
+    "disneyplus.com", "paramountplus.com", "peacocktv.com", "max.com",
+    "hbomax.com", "appletv.com", "tv.apple.com", "primevideo.com",
+    "amazon.com", "youtube.com", "youtubetv.com", "tv.youtube.com",
+    "tubi.tv", "tubitv.com", "pluto.tv", "plutotv.com", "roku.com",
+    "therokuchannel.roku.com", "sling.com", "vudu.com",
+    "fandango.com", "fandangonow.com", "crackle.com", "freevee.com",
+    "starz.com", "showtime.com", "mgmplus.com", "amcplus.com",
+    "discoveryplus.com", "crunchyroll.com", "espn.com",
+    "plus.espn.com", "fox.com", "abc.com", "nbc.com", "cbs.com",
+    "paramount.com", "britbox.com", "acorn.tv", "shudder.com",
+    "hallmarkmovies.com", "hallmarkplus.com",
+}
+
+
+def _split_host_path(u):
+    s = str(u or "").strip()
+    if not s:
+        return "", []
+    s = re.sub(r"^[a-z][a-z0-9+.-]*://", "", s, flags=re.IGNORECASE)
+    s = s.split("#", 1)[0].split("?", 1)[0].strip().lstrip("/")
+    host, _, path = s.partition("/")
+    host = re.sub(r"^www\.", "", host.strip().lower())
+    segs = [p for p in re.sub(r"/{2,}", "/", path).strip("/").split("/")
+            if p]
+    return host, segs
+
+
+def is_generic_landing_url(u, require_platform_domain=True):
+    """True when a URL-ish token is a platform landing page rather than
+    a specific title path: bare domain, or a path whose ONLY segment is
+    a generic surface word (welcome / home / browse / ...). Deep paths
+    (>= 2 segments) are never generic. With require_platform_domain
+    (default), only known carriage-platform domains are flagged so a
+    brand's own site root never false-positives."""
+    host, segs = _split_host_path(u)
+    if not host or "." not in host or " " in host:
+        return False
+    if require_platform_domain and host not in PLATFORM_DOMAINS:
+        return False
+    if len(segs) >= 2:
+        return False
+    if not segs:
+        return True
+    return segs[0].lower() in GENERIC_LANDING_SEGMENTS
+
+
 def normalize_content_url(u):
     """'https://www.hulu.com/series/x?utm=1#t' -> 'hulu.com/series/x'.
     Returns '' when the value does not look like a real content URL."""
@@ -186,6 +253,14 @@ def normalize_content_url(u):
     # A bare domain is not a CONTENT url (that would be the platform
     # itself, which is a mass signal, not a title page).
     if not path:
+        return ""
+    # 2026-08-26 (Liz QA, Paw Patrol): a generic landing surface is
+    # not a CONTENT url either - fubo.tv/welcome qualifies every Fubo
+    # visitor. Specific deep paths (fubo.tv/welcome/series/<id>/<slug>)
+    # pass. Platform-domain gating off here: anything reaching this
+    # normalizer is already claimed as a content URL by research.
+    if is_generic_landing_url(f"{host}/{path}",
+                              require_platform_domain=False):
         return ""
     return f"{host}/{path}"
 

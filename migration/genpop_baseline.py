@@ -62,8 +62,21 @@ _cache = {"ts": 0.0, "map": None}
 _lock = threading.Lock()
 
 
+# Canonical alias pairs that name the SAME grid with a different
+# spelling (both live in MASTER_CATEGORIES as aliases). Folded so a
+# profile written with one spelling still matches Gen Pop rows stored
+# under the other (2026-08-26 Bethenny avid: 7 INFLUENCER/CREATOR rows
+# missed Gen Pop's CREATOR/INFLUENCER entries and shipped index-less).
+_CAT_ALIASES = {
+    "INFLUENCER/CREATOR": "CREATOR/INFLUENCER",
+    "VIRTUAL MVPD/FAST": "VIRTUAL MVPD FAST",
+    "VMVPD/FAST": "VIRTUAL MVPD FAST",
+}
+
+
 def _norm_cat(c):
-    return re.sub(r"[_\s]+", " ", str(c or "").strip().upper())
+    n = re.sub(r"[_\s]+", " ", str(c or "").strip().upper())
+    return _CAT_ALIASES.get(n, n)
 
 
 def _norm_brand(b):

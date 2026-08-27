@@ -228,7 +228,8 @@ def _is_avid_cut_basename(s3_key: str) -> bool:
 # these ever trigger the fix-and-regate pass below; every judgment-
 # required class (I1 rogue pins, I5 demo sums, I9 hidden brands, ...)
 # still quarantines on first block.
-_AUTOFIX_GATE_CODES = ("I11", "I12", "I13")
+_AUTOFIX_GATE_CODES = ("I11", "I12", "I13", "I14", "I15", "I16", "I17",
+                       "I18")
 
 
 def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
@@ -255,6 +256,14 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
           their union covers ~100%, reading the same cached carriage
           facts the gate checked against. Pure arithmetic on the
           reasoned tilt, no multipliers.
+      I14 fractional ladders -> dejitter_fractional_ladders
+          (2026-08-26 Liz QA, Bethenny avid): shared-4dp-suffix
+          integer-step ladders re-salted per (subject, brand,
+          category), downward-only so the I12 subset invariant is
+          never re-broken by the fix itself.
+      I15 TALENT self-inclusion -> enforce_native_cluster_self_pin
+          (same escalation, DEFECT 2): talent-archetype subjects
+          self-include in TALENT at exactly 100.
 
     Then Raw / Projection / Category Share recompute (write safety
     net), re-sort, numeric-artifact normalize, and Gen Pop baseline
@@ -324,7 +333,12 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
         _append_gp = None
 
     n_fixed = 0
-    if any(v.get("code") == "I12" for v in fixable):
+    if any(v.get("code") in ("I12", "I17") for v in fixable):
+        # I12 (avid subset raws) and I17 (avid own-row direction) share
+        # one fixer: enforce_avid_subset_coherence caps out-counting
+        # rows AND lifts subject-own rows reading below the parent
+        # (2026-08-26 Paw Patrol: avid FRANCHISE 3.9665 vs parent
+        # 82.7367), raw-verified so neither fix re-breaks the other.
         df_parent = None
         parent_label = None
         if tu_source_key:
@@ -340,7 +354,7 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
                         keep_default_na=False)
                     parent_label = parent_key
             except Exception as e:
-                print(f"  [profile_writer] I12 parent resolution "
+                print(f"  [profile_writer] I12/I17 parent resolution "
                       f"failed ({e}); subset fix skipped")
         if df_parent is not None:
             try:
@@ -356,12 +370,13 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
                                       verbose=verbose)
                 n_capped = int(_st.get("capped_up", 0) or 0)
                 n_lifted = int(_st.get("lifted_down", 0) or 0)
-                n_fixed += n_capped + n_lifted
-                print(f"  [profile_writer] I12 subset fix vs "
+                n_dir = int(_st.get("direction_lifted", 0) or 0)
+                n_fixed += n_capped + n_lifted + n_dir
+                print(f"  [profile_writer] I12/I17 subset fix vs "
                       f"{parent_label}: capped_up={n_capped} "
-                      f"lifted_down={n_lifted}")
+                      f"lifted_down={n_lifted} direction_lifted={n_dir}")
             except Exception as e:
-                print(f"  [profile_writer] I12 subset fix raised "
+                print(f"  [profile_writer] I12/I17 subset fix raised "
                       f"({type(e).__name__}: {e}); gate keeps the "
                       f"verdict")
     if any(v.get("code") == "I11" for v in fixable):
@@ -393,6 +408,76 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
                   f"{_n_car} row(s) lifted")
         except Exception as e:
             print(f"  [profile_writer] I13 viewer-carriage fix raised "
+                  f"({type(e).__name__}: {e}); gate keeps the verdict")
+    if any(v.get("code") == "I14" for v in fixable):
+        try:
+            try:
+                from migration.post_generation_enforcers import (
+                    dejitter_fractional_ladders as _ladder_fix,
+                )
+            except ImportError:
+                from post_generation_enforcers import (  # type: ignore
+                    dejitter_fractional_ladders as _ladder_fix,
+                )
+            # Downward-only per-row re-salt: Raw can only shrink, so
+            # the I12 subset invariant survives the fix by construction.
+            df, _n_lad = _ladder_fix(df, subject, verbose=verbose)
+            n_fixed += int(_n_lad or 0)
+            print(f"  [profile_writer] I14 fractional-ladder fix: "
+                  f"{_n_lad} row(s) re-salted")
+        except Exception as e:
+            print(f"  [profile_writer] I14 fractional-ladder fix raised "
+                  f"({type(e).__name__}: {e}); gate keeps the verdict")
+    if any(v.get("code") == "I15" for v in fixable):
+        try:
+            try:
+                from migration.post_generation_enforcers import (
+                    enforce_native_cluster_self_pin as _talent_pin_fix,
+                )
+            except ImportError:
+                from post_generation_enforcers import (  # type: ignore
+                    enforce_native_cluster_self_pin as _talent_pin_fix,
+                )
+            df, _n_pin = _talent_pin_fix(df, subject, verbose=verbose)
+            n_fixed += int(_n_pin or 0)
+            print(f"  [profile_writer] I15 TALENT self-inclusion fix: "
+                  f"{_n_pin} row(s) pinned/inserted")
+        except Exception as e:
+            print(f"  [profile_writer] I15 TALENT self-pin fix raised "
+                  f"({type(e).__name__}: {e}); gate keeps the verdict")
+    if any(v.get("code") == "I16" for v in fixable):
+        try:
+            try:
+                from migration.post_generation_enforcers import (
+                    enforce_self_property_coherence as _spc_fix,
+                )
+            except ImportError:
+                from post_generation_enforcers import (  # type: ignore
+                    enforce_self_property_coherence as _spc_fix,
+                )
+            df, _n_spc = _spc_fix(df, subject, verbose=verbose)
+            n_fixed += int(_n_spc or 0)
+            print(f"  [profile_writer] I16 self-property coherence "
+                  f"fix: {_n_spc} row(s) re-leveled")
+        except Exception as e:
+            print(f"  [profile_writer] I16 self-property fix raised "
+                  f"({type(e).__name__}: {e}); gate keeps the verdict")
+    if any(v.get("code") == "I18" for v in fixable):
+        try:
+            try:
+                from migration.post_generation_enforcers import (
+                    depin_exact_100_non_subject as _depin_fix,
+                )
+            except ImportError:
+                from post_generation_enforcers import (  # type: ignore
+                    depin_exact_100_non_subject as _depin_fix,
+                )
+            df, _n_dp = _depin_fix(df, subject, verbose=verbose)
+            n_fixed += int(_n_dp or 0)
+            print(f"  [profile_writer] I18 exact-100 de-pin fix: "
+                  f"{_n_dp} row(s) de-pinned")
+        except Exception as e:
+            print(f"  [profile_writer] I18 exact-100 de-pin fix raised "
                   f"({type(e).__name__}: {e}); gate keeps the verdict")
 
     # Recompute the downstream chain from the corrected BPs, re-sort,

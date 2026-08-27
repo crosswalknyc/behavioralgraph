@@ -38,7 +38,7 @@ import hashlib as _hl
 import os
 import re as _re
 import urllib.parse
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 import pandas as pd
 
@@ -895,6 +895,43 @@ DEPIN_META_CATS = {
     'INPUT_METADATA', 'BRAND INPUT', 'BRAND CATEGORY', 'SAMPLE SIZE',
     'AVID FAN', 'CASUAL FAN', 'GENERAL', 'LOCATION',
 }
+
+# 2026-08-26 (Liz QA, Paw Patrol): platform / carriage categories where
+# a NON-SUBJECT spec pin must land at a salted messy near-100 instead
+# of exactly 100.0000 (universal reach on a carrier is impossible in a
+# multi-platform universe, and exact-100 is reserved for the subject's
+# own property). Companion sports pins (SPORTS TEAM / leagues /
+# divisions) keep the exact-100 convention from the pipeline rules.
+CARRIER_PIN_SOFT_CATS = {
+    'STREAMING/PLATFORM', 'STREAMING VIDEO', 'STREAMING MUSIC',
+    'VMVPD/FAST', 'VIRTUAL MVPD/FAST', 'VIRTUAL MVPD FAST', 'VMVPD',
+    'FAST PLATFORM', 'FAST CHANNEL', 'BROADCAST/CABLE', 'APP/PLATFORM',
+    'PLATFORMS', 'MOVIE THEATER', 'MEDIA', 'SOCIAL MEDIA',
+    'SEARCH ENGINE/AI',
+}
+
+# Categories where a non-subject row legitimately carries an exact-100
+# companion pin (subject's own league/team/conference/division family
+# per profile-iq-pipeline-rules #3). The exact-100 depin skips these.
+COMPANION_PIN_CATS = {
+    'SPORTS TEAM', 'MLB', 'NBA', 'NFL', 'NHL', 'MLS', 'WNBA', 'MILB',
+    'EPL', 'LA LIGA', 'SERIE A', 'LIGUE 1', 'BUNDESLIGA', 'CFB',
+    'SOCCER', 'NASCAR', 'F1', 'AL', 'NL', 'AFC', 'NFC', 'AL/NL',
+    'AFC/NFC',
+}
+_COMPANION_PIN_PAT = None  # compiled lazily in _is_companion_pin_cat
+
+
+def _is_companion_pin_cat(cat_u: str) -> bool:
+    global _COMPANION_PIN_PAT
+    if cat_u in COMPANION_PIN_CATS:
+        return True
+    if _COMPANION_PIN_PAT is None:
+        import re as _re_cp
+        _COMPANION_PIN_PAT = _re_cp.compile(
+            r'\b(CONFERENCE|DIVISION|EAST|WEST|NORTH|SOUTH|CENTRAL|'
+            r'PACIFIC|ATLANTIC|METROPOLITAN)\b')
+    return bool(_COMPANION_PIN_PAT.search(cat_u))
 
 
 def depin_round_brand_bps(df, subject, verbose=True):
@@ -2131,6 +2168,244 @@ def dejitter_sequential_placeholders(df, subject, verbose=True,
 
 
 # ============================================================================
+# 4c. Fractional-part LADDER dejitter (2026-08-26 Liz QA escalation,
+#     BETHENNY FRANKEL avid derive_cut run 3jEG3Kw76rpoZA)
+#
+#     THE SIGNATURE: many rows share an IDENTICAL 4dp fractional part at
+#     integer-stepped values (TALENT 67.8912 / 55.8912 / ... / 3.8912 x15;
+#     AMUSEMENT PARKS 4.1847 / 3.1847 / 2.1847; .2847 on 76 rows
+#     file-wide). Born in row-by-row model output: within a chunk the
+#     model reuses one fractional part and steps only the integer.
+#     `dejitter_within_cat_4dp_collisions` only breaks EXACT 4dp identity
+#     and `dejitter_sequential_placeholders` only matches monotonic-digit
+#     fractions, so same-suffix-different-integer ladders shipped
+#     untouched.
+#
+#     Detection lives in migration/fractional_ladders.py (shared with
+#     ship-gate I14 and the profile_writer 6.8 auto-remediation so the
+#     three consumers can never drift). Thresholds are empirical - see
+#     that module's docstring (organic max 3-4 per category / 9-10
+#     file-wide; defect floor 12+ / 49+).
+#
+#     THE FIX: per-row salted fractional re-jitter, DOWNWARD-only.
+#       * salt = blake2b(subject|category|brand|frac-ladder-v1) - a
+#         per-(subject, brand, category) hash per workspace rule #1;
+#         no two rows can share an offset by construction.
+#       * integer part preserved (the magnitude call is respected).
+#       * category rank order preserved: rows move only within the open
+#         interval (next-lower current value, own value), processed
+#         ascending so already-moved lower rows bound the walk.
+#       * DOWNWARD-only means Raw can only shrink, so the avid subset
+#         invariant (avid Raw <= parent Raw, ship-gate I12) survives the
+#         re-jitter unconditionally - no parent frame needed here.
+#       * MPB mirror clusters (Rule #3b: same brand at the same 4dp in
+#         MOST PURCHASED BRANDS + sub-categories) move TOGETHER to one
+#         new value so the exact-mirror invariant holds.
+#     Raw / Projection / Category Share recompute through _set_bp.
+#     Idempotent: once a group is dissolved below threshold, the second
+#     pass is a no-op.
+# ============================================================================
+
+def dejitter_fractional_ladders(df, subject, verbose=True):
+    """Break seeded fractional-part ladders (see block comment above).
+
+    Returns (df, n_rows_moved).
+    """
+    try:
+        from migration.fractional_ladders import (
+            detect_fractional_ladders, ladder_in_scope, suffix4,
+        )
+    except ImportError:
+        from fractional_ladders import (  # type: ignore
+            detect_fractional_ladders, ladder_in_scope, suffix4,
+        )
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if not bp_col:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    df = df.copy()
+    for _c in (bp_col, cs_col, raw_col, proj_col):
+        if _c and _c in df.columns and df[_c].dtype.name not in ('object', 'O'):
+            df[_c] = df[_c].astype(object)
+
+    # In-scope triples + per-category value books.
+    triples = []
+    cat_rows = {}   # cat_u -> [(idx, bp)] every parseable row (scope or not)
+    for idx, r in df.iterrows():
+        cat_u = str(r.get('Column', '') or '').strip().upper()
+        v = _bp(r.get(bp_col))
+        if v is None or pd.isna(v):
+            continue
+        cat_rows.setdefault(cat_u, []).append((idx, float(v)))
+        if ladder_in_scope(cat_u, v):
+            triples.append((idx, cat_u, float(v)))
+    if not triples:
+        return df, 0
+
+    det = detect_fractional_ladders(triples)
+    flagged = det['flagged_ids']
+    if not flagged:
+        return df, 0
+    flagged_suffixes = set(det['flagged_suffixes'])
+
+    # Mirror clusters: the SAME brand at the SAME 4dp in more than one
+    # category is a deliberate mirror (MPB exact-mirror rule #3b, sports
+    # team -> league/conference/division companion sync, CPG subcats).
+    # Every row of that (brand, bp4) moves together to ONE new value so
+    # no mirror relationship desyncs. Rows are clustered on ALL
+    # categories' rows, not just MPB.
+    mirror_count = Counter()
+    for c, pairs in cat_rows.items():
+        for idx, v in pairs:
+            b = _norm_brand(str(df.at[idx, 'Value'] or ''))
+            mirror_count[(b, round(v, 4))] += 1
+    clusters = {}    # key -> [row idx]; key = ('mirror', brand, bp4) or ('row', idx)
+    for idx, cat_u, v in triples:
+        if idx not in flagged:
+            continue
+        b = _norm_brand(str(df.at[idx, 'Value'] or ''))
+        bp4 = round(v, 4)
+        if mirror_count[(b, bp4)] > 1:
+            clusters.setdefault(('mirror', b, bp4), []).append(idx)
+        else:
+            clusters.setdefault(('row', idx), []).append(idx)
+
+    # Current value + used-value books per category (live-updated).
+    cur = {idx: float(v) for c, pairs in cat_rows.items() for idx, v in pairs}
+    used_by_cat = {c: {round(v, 4) for _, v in pairs}
+                   for c, pairs in cat_rows.items()}
+    cat_of = {}
+    for c, pairs in cat_rows.items():
+        for idx, _ in pairs:
+            cat_of[idx] = c
+
+    # Rows still awaiting placement. A flagged row's CURRENT position is
+    # a fabricated ladder artifact (often micro-bands 3 ulps apart from
+    # prior jitter passes), so it must NOT bound its neighbours - only
+    # organic rows and already-PLACED rows carry rank meaning. Ascending
+    # processing + this bound preserves total order among flagged rows
+    # while letting a packed band spread across the decade's free space.
+    flagged_remaining = set(flagged)
+
+    def _lower_bound(idx, ignore_within=0.0):
+        """Highest value strictly below this row in its category among
+        organic + already-placed rows (0.0001 floor when the row is the
+        category minimum). `ignore_within` > 0 additionally skips
+        neighbours closer than that gap below the row: sub-0.01 BP
+        ordering is jitter noise, and honoring it can leave a packed
+        band with no room at 4dp (rows separated by >= the gap never
+        invert)."""
+        c = cat_of[idx]
+        mine = cur[idx]
+        lo = 0.0001
+        for j, _ in cat_rows[c]:
+            if j == idx or j in flagged_remaining:
+                continue
+            vj = cur[j]
+            if ignore_within and vj < mine and (mine - vj) < ignore_within:
+                continue
+            if lo < vj < mine:
+                lo = vj
+        return lo
+
+    n_moved = 0
+    # Suffixes already assigned to adjusted rows this pass: no two
+    # ADJUSTED rows share a 4dp fractional part (mirror clusters count
+    # once - one value by design). BEST-EFFORT under saturation: a file
+    # needing more adjustments than there are free 4dp suffixes (10,000
+    # minus flagged ones) cannot honor the guarantee by pigeonhole, so
+    # when a row's candidate walk exhausts with the guard on, one relax
+    # pass runs without it (still avoiding flagged suffixes, round
+    # values, and per-category value collisions).
+    used_new_suffixes = set()
+    # Ascending by value: lower rows settle first so upper rows walk
+    # down onto fresh bounds and rank order is preserved end-to-end.
+    ordered = sorted(clusters.items(),
+                     key=lambda kv: min(cur[i] for i in kv[1]))
+    for key, members in ordered:
+        old = cur[members[0]]
+        old4 = round(old, 4)
+        old_suffix = suffix4(old)
+        # Interval: strictly above every member's lower neighbour,
+        # strictly below the old value (downward-only), and inside the
+        # old value's integer decade when there is room. Bound stage 2
+        # (near-tie relax) additionally ignores neighbours within 0.01
+        # BP below the row - that micro-order is jitter noise and
+        # honoring it can leave a packed band unplaceable at 4dp.
+        brand_u = str(df.at[members[0], 'Value'] or '').strip().upper()
+        salt_cat = ('MIRROR' if key[0] == 'mirror'
+                    else cat_of[members[0]])
+        seed = f"{subject}|{salt_cat}|{brand_u}|frac-ladder-v1"
+        h = int(_hl.blake2b(seed.encode(), digest_size=8).hexdigest(), 16)
+        u = 0.10 + 0.80 * ((h % 100000) / 100000.0)
+        step = 0.0001 + ((h >> 20) % 9) * 0.0001
+        member_cats = {cat_of[i] for i in members}
+        decade_floor = float(int(old)) if old >= 1.0 else 0.0001
+        placed = None
+        for ignore_within in (0.0, 0.01):
+            lb = max(_lower_bound(i, ignore_within) for i in members)
+            lo_eff = max(lb, decade_floor)
+            if old - lo_eff < 0.0004:
+                lo_eff = lb        # decade has no room: allow the cross
+            if old - lo_eff < 0.0004:
+                continue           # nowhere to go at this bound stage
+            cand = old - u * (old - lo_eff)
+            for relax_suffix_guard in (False, True):
+                for k in range(20000):
+                    c4 = round(cand - k * step, 4)
+                    if c4 <= lo_eff:
+                        # walk back up from the initial pick instead
+                        c4 = round(cand + (k * step), 4)
+                        if c4 >= old4:
+                            break
+                    if not (lo_eff < c4 < old4):
+                        continue
+                    s4 = suffix4(c4)
+                    if (s4 == old_suffix or s4 in flagged_suffixes
+                            or s4 == '0000'):
+                        continue
+                    if not relax_suffix_guard and s4 in used_new_suffixes:
+                        continue
+                    if _looks_round_any(c4):
+                        continue
+                    if any(c4 in used_by_cat.get(c, set())
+                           for c in member_cats):
+                        continue
+                    placed = c4
+                    break
+                if placed is not None:
+                    break
+            if placed is not None:
+                break
+        if placed is None:
+            # Unplaceable: the row keeps its old value, so it must act
+            # as a rank bound for everything processed after it.
+            for i in members:
+                flagged_remaining.discard(i)
+            continue
+        used_new_suffixes.add(suffix4(placed))
+        for i in members:
+            df = _set_bp(df, i, placed, bp_col, cs_col, raw_col,
+                         proj_col, sample_size)
+            cur[i] = placed
+            flagged_remaining.discard(i)
+            used_by_cat[cat_of[i]].add(placed)
+            n_moved += 1
+
+    if verbose and n_moved:
+        pg = det['percat_groups'][:3]
+        fw = det['filewide_groups'][:3]
+        print(f"   🪜 fractional-ladder dejitter: {n_moved} row(s) re-salted "
+              f"per (subject, brand, category) | per-cat groups: "
+              f"{[(c, '.' + s, n) for c, s, n, _ in pg]} | file-wide: "
+              f"{[('.' + s, n) for s, n, _ in fw]}")
+    return df, n_moved
+
+
+# ============================================================================
 # 5. Hostmap-shape compliance (per Jessie / Ana feedback 2026-05-19)
 #    Hostmap tracks BRAND-level entries only. Corporate parents and product
 #    SKUs/lines do NOT have hostmap rows and so create unresolvable values in
@@ -2639,6 +2914,23 @@ NATIVE_CLUSTERS = {
     "VERTICAL SHORTS": {"VERTICAL SHORTS", "STREAMING VIDEO",
                         "STREAMING/PLATFORM"},
 }
+
+# 2026-08-26 (Liz QA, Bethenny Frankel avid DEFECT 2): talent-archetype
+# subjects must self-include in the TALENT umbrella grid at 100 in
+# addition to their specific talent subcategory. Bethenny (BRAND
+# CATEGORY = HOST/PERSONALITY) shipped pinned in HOST/PERSONALITY but
+# entirely ABSENT from the 490-row TALENT grid. Each archetype clusters
+# with TALENT; enforce_native_cluster_self_pin only touches grids
+# already present in the profile, so profiles without a TALENT grid are
+# unaffected. Mirrored as ship-gate I15 in migration/final_ship_gate.py.
+_TALENT_ARCHETYPES = (
+    'ACTOR', 'ATHLETE', 'COMEDIAN', 'INFLUENCER/CREATOR',
+    'CREATOR/INFLUENCER', 'EMERGING TALENT', 'HOST/PERSONALITY',
+    'MUSICIAN/BAND', 'PODCASTER', 'POLITICS/ACTIVIST',
+    'WRITER/DIRECTOR/AUTHOR/ARTIST',
+)
+for _arch in _TALENT_ARCHETYPES:
+    NATIVE_CLUSTERS.setdefault(_arch, {_arch, 'TALENT'})
 
 
 def enforce_native_cluster_self_pin(df, subject, verbose=True):
@@ -3970,11 +4262,34 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True):
     rows. Demo categories are excluded (GENDER pins etc. are owned by
     the cut transforms); metadata rows are excluded.
 
+    2026-08-26 (Liz QA, Paw Patrol): a viewers-universe interpret step
+    listed the carrying platform ('STREAMING/PLATFORM', 'Paramount+')
+    in subject_rows, and this enforcer re-asserted it to exactly
+    100.0000 - overwriting the viewer-carriage constraint's plausible
+    messy near-total (99.3245) and shipping an impossible universal-
+    reach claim on a multi-platform universe. Exact 100 is reserved
+    for the subject's own property: a pin whose target is NOT the
+    subject in a platform/carriage category now lands at a subject-
+    salted messy near-100 instead (the pin intent - "this carrier is
+    ~universal" - is honored without the exact-100 defect signature).
+
     Returns (df, n_changed, unmatched_pins).
     """
     if (not pin_rows or df is None or len(df) == 0
             or 'Column' not in df.columns or 'Value' not in df.columns):
         return df, 0, []
+
+    try:
+        try:
+            from migration.self_property_coherence import (
+                is_subject_own as _spc_is_own,
+            )
+        except ImportError:
+            from self_property_coherence import (  # type: ignore
+                is_subject_own as _spc_is_own,
+            )
+    except Exception:
+        _spc_is_own = None
 
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     if bp_col not in df.columns:
@@ -4023,23 +4338,47 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True):
             if not pin_target_matches_value(name, df.at[idx, 'Value']):
                 continue
             hit += 1
+            row_val = str(df.at[idx, 'Value'])
+            # Exact 100 belongs to the subject's own property only.
+            # A non-subject pin in a platform/carriage category lands
+            # at a subject-salted messy near-100 (2026-08-26 Paw
+            # Patrol: Paramount+ pinned to 100.0000 on a universe
+            # defined across Netflix/Amazon/Philo/Fubo).
+            subject_own = True
+            if _spc_is_own is not None:
+                subject_own = (_spc_is_own(subject, name)
+                               or _spc_is_own(subject, row_val))
+            if subject_own or cu not in CARRIER_PIN_SOFT_CATS:
+                target_bp = 100.0
+            else:
+                import hashlib as _hl_pin
+                h = int(_hl_pin.sha256(
+                    f"{subject}|{cu}|{name}|carrier-pin".encode()
+                ).hexdigest()[:8], 16)
+                target_bp = round(99.0 + (120 + h % 6800) / 10000.0, 4)
+                if int(round(target_bp * 10000)) % 100 == 0:
+                    target_bp = round(target_bp + (1 + h % 89) / 10000.0, 4)
             cur_cell = str(df.at[idx, bp_col])
             bpv = _fnum(cur_cell)
-            if bpv is not None and abs(bpv - 100.0) <= 0.00005:
+            if bpv is not None and abs(bpv - target_bp) <= 0.00005:
                 continue
             had_pct = cur_cell.strip().endswith('%')
             df[bp_col] = df[bp_col].astype(object)
-            df.at[idx, bp_col] = '100.0000%' if had_pct else '100.0000'
+            df.at[idx, bp_col] = (f'{target_bp:.4f}%' if had_pct
+                                  else f'{target_bp:.4f}')
             if raw_col and sample is not None:
                 df[raw_col] = df[raw_col].astype(object)
-                df.at[idx, raw_col] = int(round(sample))
+                df.at[idx, raw_col] = int(round(sample * target_bp / 100.0))
             if proj_col and universe is not None:
                 df[proj_col] = df[proj_col].astype(object)
-                df.at[idx, proj_col] = int(round(universe))
+                df.at[idx, proj_col] = int(round(
+                    universe * target_bp / 100.0))
             n += 1
             if verbose:
+                kind = ("100" if target_bp == 100.0
+                        else f"{target_bp:.4f} (non-subject carrier)")
                 print(f"   📌 spec pin re-asserted: {cu} | "
-                      f"{df.at[idx, 'Value']!r} -> 100 (was {bpv})")
+                      f"{df.at[idx, 'Value']!r} -> {kind} (was {bpv})")
         if not hit:
             unmatched.append((cat, name))
             print(f"   ⚠️⚠️ SPEC PIN TARGET MATCHED ZERO ROWS: {cu} | "
@@ -4047,6 +4386,188 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True):
                   f"target; the pin did NOT land. Row values present: "
                   f"{list(df.loc[cat_mask, 'Value'].astype(str).head(8))}")
     return df, n, unmatched
+
+
+def enforce_self_property_coherence(df, subject, verbose=True):
+    """I16 (2026-08-26 Liz QA, Paw Patrol): on a content/franchise
+    subject, the subject's own merch/games/media rows must be coherent
+    with its own FRANCHISE anchor. A viewer base at 82.74% franchise
+    engagement cannot sit at 6.20% on the property's own toys.
+
+    Detection + remediation arithmetic live in
+    migration/self_property_coherence.py (shared with ship-gate I16):
+    flagged rows are re-leveled to a peer-anchored, franchise-bounded,
+    subject-salted target, and every flagged row of the same brand
+    gets the SAME target so the Rule #3b subcategory mirror never
+    drifts on the fix. Positioned BEFORE recompute_raw_and_projection;
+    only BP is set here.
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+    try:
+        try:
+            from migration.self_property_coherence import (
+                check_self_property_coherence, coherence_target,
+                peer_max_in_category,
+            )
+        except ImportError:
+            from self_property_coherence import (  # type: ignore
+                check_self_property_coherence, coherence_target,
+                peer_max_in_category,
+            )
+    except Exception as e:
+        if verbose:
+            print(f'   [self-prop] module unavailable; skipping ({e})')
+        return df, 0
+
+    items = []
+    idx_by_key = {}
+    import re as _re_sp
+    for idx in df.index:
+        cu = str(df.at[idx, 'Column']).strip().upper()
+        val = str(df.at[idx, 'Value']).strip()
+        bp = _bp(df.at[idx, bp_col])
+        items.append((cu, val, bp))
+        idx_by_key[(cu, _re_sp.sub(r'[^A-Z0-9]', '', val.upper()))] = idx
+
+    anchor_bp, viols = check_self_property_coherence(items, subject)
+    if not viols:
+        return df, 0
+
+    # One target per brand group (mirror-preserving): compute the max
+    # per-category target across the group's grids, then apply it to
+    # every flagged row of that brand.
+    groups = {}
+    for v in viols:
+        bkey = _re_sp.sub(r'[^A-Z0-9]', '', str(v['val']).upper())
+        groups.setdefault(bkey, []).append(v)
+    n = 0
+    for bkey, vs in groups.items():
+        target = 0.0
+        for v in vs:
+            pm = peer_max_in_category(items, v['cat'], subject)
+            t = coherence_target(subject, v['val'], anchor_bp, pm)
+            if t > target:
+                target = t
+        for v in vs:
+            idx = idx_by_key.get((v['cat'], bkey))
+            if idx is None:
+                continue
+            cur_cell = str(df.at[idx, bp_col])
+            had_pct = cur_cell.strip().endswith('%')
+            df[bp_col] = df[bp_col].astype(object)
+            df.at[idx, bp_col] = (f'{target:.4f}%' if had_pct
+                                  else f'{target:.4f}')
+            n += 1
+            if verbose:
+                print(f"   🧸 self-property coherence: {v['cat']} | "
+                      f"{v['val']!r} {v['bp']:.4f} -> {target:.4f} "
+                      f"(franchise anchor {anchor_bp:.4f}, floor "
+                      f"{v['floor']:.4f})")
+    return df, n
+
+
+def depin_exact_100_non_subject(df, subject, verbose=True):
+    """I18 (2026-08-26 Liz QA, Paw Patrol): a row at exactly 100.0000
+    that is NOT the subject's own property (and not metadata, not a
+    demo bucket, not a companion sports pin) violates the messy-value
+    convention and usually asserts an impossible universal reach
+    (Paramount+ 100.0000 on a universe defined across four platforms).
+    De-pin to a subject-salted messy near-100. Positioned AFTER the
+    pin/carriage passes and BEFORE recompute_raw_and_projection.
+    """
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+    try:
+        try:
+            from migration.self_property_coherence import (
+                is_subject_own as _spc_is_own,
+            )
+        except ImportError:
+            from self_property_coherence import (  # type: ignore
+                is_subject_own as _spc_is_own,
+            )
+    except Exception:
+        _spc_is_own = None
+
+    skip_cats = (METADATA_COLS | DEPIN_DEMO_CATS | DEPIN_META_CATS
+                 | {'SUBJECT'})
+    import hashlib as _hl_dp
+    n = 0
+    for idx in df.index:
+        cu = str(df.at[idx, 'Column']).strip().upper()
+        if cu in skip_cats or _is_companion_pin_cat(cu):
+            continue
+        bp = _bp(df.at[idx, bp_col])
+        if bp is None or abs(bp - 100.0) > 0.00005:
+            continue
+        val = str(df.at[idx, 'Value']).strip()
+        if _spc_is_own is not None and _spc_is_own(subject, val):
+            continue  # legitimate subject self-pin
+        h = int(_hl_dp.sha256(
+            f'{subject}|{cu}|{val}|depin-100'.encode()).hexdigest()[:8], 16)
+        new_bp = round(99.0 + (120 + h % 6800) / 10000.0, 4)
+        if int(round(new_bp * 10000)) % 100 == 0:
+            new_bp = round(new_bp + (1 + h % 89) / 10000.0, 4)
+        cur_cell = str(df.at[idx, bp_col])
+        had_pct = cur_cell.strip().endswith('%')
+        df[bp_col] = df[bp_col].astype(object)
+        df.at[idx, bp_col] = (f'{new_bp:.4f}%' if had_pct
+                              else f'{new_bp:.4f}')
+        n += 1
+        if verbose:
+            print(f'   📍 exact-100 de-pin (non-subject): {cu} | '
+                  f'{val!r} 100.0000 -> {new_bp:.4f}')
+    return df, n
+
+
+def detect_brand_input_landing_pages(df, subject=None, verbose=True):
+    """I19 detection (2026-08-26 Liz QA, Paw Patrol): generic platform
+    landing pages (fubo.tv/welcome, netflix.com, hulu.com/home) in a
+    URL-bearing BRAND INPUT qualify EVERY visitor of that platform
+    into the universe, violating the clickstream-slug rule (4c-i case
+    4: specific title paths only). Returns a list of offending URL
+    tokens; judgment is required for the fix (research the specific
+    title URL or drop the platform slug), so this never auto-writes.
+    """
+    out = []
+    if df is None or len(df) == 0 or 'Column' not in df.columns:
+        return out
+    try:
+        try:
+            from migration.viewer_carriage import is_generic_landing_url
+        except ImportError:
+            from viewer_carriage import (  # type: ignore
+                is_generic_landing_url,
+            )
+    except Exception:
+        return out
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+    for idx in df.index[col_u == 'BRAND INPUT']:
+        value = str(df.at[idx, 'Value'] or '')
+        toks = [t.strip() for t in value.split(',') if t.strip()]
+        urlish = [t for t in toks if '/' in t or
+                  __import__('re').match(
+                      r'^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$', t)]
+        for t in urlish:
+            # Path-bearing tokens are real URLs (any domain); dotted
+            # no-path tokens are usually name variants (PAW.Patrol,
+            # Samsung.Tv) and only flag on known platform domains.
+            if is_generic_landing_url(t,
+                                      require_platform_domain=(
+                                          '/' not in t)):
+                out.append(t)
+                if verbose:
+                    print(f'   🚧 BRAND INPUT landing page: {t!r} is a '
+                          f'generic platform page (every visitor '
+                          f'qualifies); needs a specific title URL')
+    return out
 
 
 def audit_upload_invariants(df, subject='', context='',
@@ -9610,6 +10131,24 @@ def enforce_brand_share_plausibility(df, subject, verbose=True,
         return _re.sub(r'[^a-z0-9]+', '', str(b or '').lower())
 
     subj_norm = _norm_brand_bs(subject)
+    # 2026-08-26 (Liz QA, Paw Patrol): the one-way containment test
+    # below missed subject-own rows whenever the subject carries an
+    # audience suffix ("Paw Patrol Series Viewers" is not a substring
+    # of "PAW PATROL"), so the property's own TOYS/GAMES rows got
+    # micro-brand-trimmed to 6.1959 against a tiny toy-grid Gen Pop
+    # baseline while FRANCHISE stayed at 82.7367. Own-property rows
+    # are matched via the audience-suffix-stripped token both ways.
+    try:
+        try:
+            from migration.self_property_coherence import (
+                is_subject_own as _spc_is_own,
+            )
+        except ImportError:
+            from self_property_coherence import (  # type: ignore
+                is_subject_own as _spc_is_own,
+            )
+    except Exception:
+        _spc_is_own = None
     skip_cats = (METADATA_COLS | DEPIN_DEMO_CATS | DEPIN_META_CATS
                  | {'LOCATION', 'DMA', 'REGION'})
     n_fixed = 0
@@ -9634,8 +10173,13 @@ def enforce_brand_share_plausibility(df, subject, verbose=True,
         bp = _bp(df.at[idx, bp_col])
         if bp is None or bp <= 0:
             continue
-        # Self-pin / subject rows exempt (the subject IS the brand)
+        # Self-pin / subject rows exempt (the subject IS the brand).
+        # Bidirectional own-token match (2026-08-26 Paw Patrol fix):
+        # audience-suffixed subjects must still exempt their own
+        # property's rows from the micro-brand trim.
         if subj_norm and subj_norm in _norm_brand_bs(val):
+            continue
+        if _spc_is_own is not None and _spc_is_own(subject, val):
             continue
         bnorm = _norm_brand_bs(val)
         if cat_u not in _MPB_MIRROR_SKIP_CATS or \
@@ -10557,6 +11101,15 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         total += n
     except Exception as e:
         print(f"   ⚠️ enforcer dejitter_sequential_placeholders failed: {e}")
+    # 2026-08-26 (Liz QA, Bethenny Frankel avid): same-suffix ladders —
+    # many rows sharing one 4dp fractional part at integer steps
+    # (67.8912 / 55.8912 / ... / 3.8912). Exact-4dp and sequential-digit
+    # passes above don't catch these. Downward-only per-row re-salt.
+    try:
+        df, n = dejitter_fractional_ladders(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer dejitter_fractional_ladders failed: {e}")
     # 2026-05-27 (D8 mop-up): cross-cat / within-cat dejitter can shift
     # values onto a round band by coincidence — run dejitter_x5x0 once
     # more to clean.
@@ -10750,6 +11303,21 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
     except Exception as e:
         print(f"   ⚠️ enforcer enforce_brand_share_plausibility failed: {e}")
 
+    # 2026-08-26 (Liz QA, Paw Patrol): self-property coherence. On a
+    # content/franchise subject the property's own merch/games/media
+    # rows must be coherent with the FRANCHISE anchor (82.74% franchise
+    # with 6.20% own toys is the defect signature). Runs AFTER the
+    # brand-share pass (whose own-row exemption is fixed, but this is
+    # the backstop if any earlier pass re-trims) and BEFORE
+    # recompute_raw_and_projection.
+    try:
+        df, n = enforce_self_property_coherence(df, subject,
+                                                verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer enforce_self_property_coherence "
+              f"failed: {e}")
+
     # 2026-08-26 (Jenna, Jimmy Kimmel Live / Rosie hosted viewers):
     # viewer-carriage constraint. A consumption-scoped universe's
     # carrying platforms must jointly cover ~100% of the audience.
@@ -10769,6 +11337,17 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
     except Exception as e:
         print(f"   ⚠️ enforcer enforce_viewer_carriage_constraint "
               f"failed: {e}")
+
+    # 2026-08-26 (Liz QA, Paw Patrol): exact-100 non-subject de-pin.
+    # Runs AFTER every pin/carriage pass so nothing re-pins behind it
+    # (the spec-pin enforcer itself now lands non-subject carrier pins
+    # at a salted near-100, this is the catch-all) and BEFORE
+    # recompute_raw_and_projection.
+    try:
+        df, n = depin_exact_100_non_subject(df, subject, verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer depin_exact_100_non_subject failed: {e}")
 
     # 2026-05-27 (D-Proj): VERY LAST -- recompute Raw + Proj from final BP.
     # Every previous enforcer that touched BP may have left stale Raw/Proj
@@ -12072,6 +12651,9 @@ def run_post_vet_safety_sweep(df, subject, *, verbose=True):
         # brands AFTER the early sweep, so these must repeat late.
         (dejitter_within_cat_4dp_collisions, 'dejitter_within_cat_late'),
         (dejitter_sequential_placeholders,   'dejitter_seq_placeholders'),
+        # 2026-08-26 (Liz QA, Bethenny avid): same-suffix integer-step
+        # ladders — late re-pass so vet output can't re-introduce them.
+        (dejitter_fractional_ladders,        'dejitter_frac_ladders'),
     ):
         try:
             df, n = fn(df, subject, verbose=verbose)
@@ -14901,12 +15483,25 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
         # write time so cut paths (which skip run_all_enforcers) hold
         # the invariant too. Runs before the Raw/Proj + CS recomputes.
         ("enforce_mpb_exact_mirror", enforce_mpb_exact_mirror),
+        # 2026-08-26 (Liz QA, Bethenny avid DEFECT 2): talent-archetype
+        # subjects self-include in TALENT at 100. Cut paths skip
+        # run_all_enforcers, so the cluster pin must live here too.
+        # Runs before recompute_raw_and_projection so the inserted
+        # row's Raw/Proj land on the canonical chain.
+        ("enforce_native_cluster_self_pin", enforce_native_cluster_self_pin),
         # Mirror copies can land ON another brand's value; the mirror-
         # aware dejitter breaks those (never moving an intentional MPB
         # copy), and the second mirror pass re-propagates any MPB rows
         # the dejitter itself had to separate. Both idempotent.
         ("dejitter_within_cat_4dp_collisions",
          dejitter_within_cat_4dp_collisions),
+        # 2026-08-26 (Liz QA, Bethenny Frankel avid, run 3jEG3Kw76rpoZA):
+        # same-suffix integer-step ladders (15 TALENT rows ending .8912,
+        # 76 rows at .2847 file-wide). Cut paths skip run_all_enforcers,
+        # so the ladder breaker MUST live here. Downward-only per-row
+        # re-salt preserves the avid subset invariant; runs before the
+        # second mirror pass so MPB propagation follows the moved rows.
+        ("dejitter_fractional_ladders", dejitter_fractional_ladders),
         ("enforce_mpb_exact_mirror_2", enforce_mpb_exact_mirror),
         # LOCATION sum=100 re-asserted at write time (2026-08-25 Ari
         # Melber / Nicolle Wallace ship-gate holds): the mid-chain
