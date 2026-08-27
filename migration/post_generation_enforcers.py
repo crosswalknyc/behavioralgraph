@@ -98,6 +98,10 @@ _HOSTMAP_UPPER_TO_CANONICAL = None   # upper-case → GROUP canonical.
                                      # Hidden), so 'C-Net' safely resolves to
                                      # 'CNET' instead of needing to stay apart.
 _HOSTMAP_GAPS = []             # populated by lift attempts on non-hostmap brands
+HOSTMAP_GAPS = _HOSTMAP_GAPS   # public alias (2026-08-27): hybrid_reasoning
+                               # imports this name; before the alias the
+                               # import silently failed and its gap
+                               # appends were no-ops
 _HOSTMAP_HIDDEN = None         # set of NORM keys (_norm_brand) of brands whose
                                # ENTIRE norm-group is SECTION='Hidden'. The
                                # cache file only contains all-hidden groups
@@ -4302,7 +4306,7 @@ def pin_target_matches_value(target, value):
     return v in _comps(target)
 
 
-def spec_pin_disposition(subject, cat_u, value):
+def spec_pin_disposition(subject, cat_u, value, carriage_doc=None):
     """Classify an approved-spec subject_rows pin. Added 2026-08-27
     after the Chobani Buyers hold (run 2mSR3dbumpc1bA): the interpret
     step listed the subject's retail destinations (WHERE THEY SHOP /
@@ -4323,6 +4327,17 @@ def spec_pin_disposition(subject, cat_u, value):
       'demote'   - affinity / adjacency pin (retailers a CPG sells
                    through, peer brands, cast members, ...): never
                    pin; the reasoned value stands.
+
+    2026-08-27 (Golden Girls Viewers double hold): when the caller
+    supplies an enforceable carriage doc (consumption-scoped universe
+    with confident carrier research), the pin_soft branch is gated on
+    the value actually matching a VERIFIED carrier. The interpret step
+    pinned ('BROADCAST/CABLE', 'Hallmark Channel') because the title
+    airs there in linear syndication; linear airing is outside the
+    clickstream boundary, research correctly excluded it, and the
+    messy near-100 (99.0281) held the file at ship-gate I1 twice.
+    Non-carrier platform pins on a viewers universe demote: the
+    reasoned affinity value stands.
     """
     cu = str(cat_u or "").strip().upper()
     sval = str(value or "").strip()
@@ -4358,11 +4373,31 @@ def spec_pin_disposition(subject, cat_u, value):
     if cu in COMPANION_PIN_CATS:
         return "pin_100"
     if cu in CARRIER_PIN_SOFT_CATS:
+        try:
+            try:
+                from migration.viewer_carriage import (
+                    doc_is_enforceable as _spd_vc_ok,
+                    carrier_matches_row as _spd_vc_match,
+                )
+            except ImportError:
+                from viewer_carriage import (  # type: ignore
+                    doc_is_enforceable as _spd_vc_ok,
+                    carrier_matches_row as _spd_vc_match,
+                )
+            if _spd_vc_ok(carriage_doc):
+                carriers = carriage_doc.get("carriers") or []
+                if any(_spd_vc_match(c.get("platform", ""), sval)
+                       for c in carriers):
+                    return "pin_soft"
+                return "demote"
+        except Exception:
+            pass
         return "pin_soft"
     return "demote"
 
 
-def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True):
+def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True,
+                          carriage_doc=None):
     """Re-assert the approved spec's subject_rows pins late in the write
     path: every (category, name) pin must land at exactly BP=100 on the
     row it aliases to.
@@ -4452,8 +4487,10 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True):
             # gate I1 three times); the reasoned value stands.
             _rank = {"pin_100": 2, "pin_soft": 1, "demote": 0}
             disp = max(
-                spec_pin_disposition(subject, cu, name),
-                spec_pin_disposition(subject, cu, row_val),
+                spec_pin_disposition(subject, cu, name,
+                                     carriage_doc=carriage_doc),
+                spec_pin_disposition(subject, cu, row_val,
+                                     carriage_doc=carriage_doc),
                 key=lambda d: _rank[d],
             )
             if disp == "demote":
@@ -4461,8 +4498,8 @@ def enforce_spec_pin_rows(df, subject, pin_rows, verbose=True):
                     skip_logged = True
                     print(f"   🚫 SPEC PIN SKIPPED (non-subject affinity "
                           f"pin): {cu} | {name!r} - not the subject, its "
-                          f"owner platform, or a carriage/companion row; "
-                          f"the reasoned value stands "
+                          f"owner platform, or a verified carriage/"
+                          f"companion row; the reasoned value stands "
                           f"(cur={df.at[idx, bp_col]})")
                 continue
             if disp == "pin_100":
@@ -7314,9 +7351,29 @@ def _reset_non_hostmap_to_floor_for_categories(df, subject, categories, verbose=
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     sample_size = _detect_sample_size(df, bp_col, raw_col)
 
+    # 2026-08-27 (Jenna): gap brands KEPT in the profile under the
+    # proposed-mapping flow keep their reasoned BP - do not floor them.
+    # The purchase family (rule 0b) is excluded from the keep flow, so
+    # rows there still floor even if the brand was kept elsewhere.
+    try:
+        from migration.hostmap_gap_mapping import (
+            is_kept_gap_brand as _is_kept_gap,
+            MPB_STRICT_CATEGORIES as _GAP_MPB_STRICT,
+        )
+    except ImportError:
+        try:
+            from hostmap_gap_mapping import (  # type: ignore
+                is_kept_gap_brand as _is_kept_gap,
+                MPB_STRICT_CATEGORIES as _GAP_MPB_STRICT,
+            )
+        except ImportError:
+            _is_kept_gap = None  # type: ignore[assignment]
+            _GAP_MPB_STRICT = frozenset()
+
     cats_u = {str(c).upper().strip() for c in categories}
     fixed = 0
     examples = []
+    kept_gap_skips = 0
     touched_cats = set()
     for idx, r in df.iterrows():
         cat = str(r.get('Column', '') or '').strip().upper()
@@ -7326,6 +7383,10 @@ def _reset_non_hostmap_to_floor_for_categories(df, subject, categories, verbose=
         if not val_raw or val_raw.upper() in METADATA_COLS:
             continue
         if _is_in_hostmap(val_raw):
+            continue
+        if (_is_kept_gap is not None and cat not in _GAP_MPB_STRICT
+                and _is_kept_gap(val_raw)):
+            kept_gap_skips += 1
             continue
         old_bp = _bp(r.get(bp_col, 0))
         if old_bp <= 0.5:
@@ -7368,6 +7429,9 @@ def _reset_non_hostmap_to_floor_for_categories(df, subject, categories, verbose=
         print(f"   🧹 Non-hostmap brand reset to floor: {fixed} row(s) across {len(touched_cats)} category(ies)")
         for cat, v, old, new in examples:
             print(f"      [{cat}] {v:30s} {old:7.4f} → {new:7.4f}  (not in Sheet4)")
+    if verbose and kept_gap_skips:
+        print(f"   ✅ {kept_gap_skips} kept gap brand(s) left at reasoned BP "
+              f"(proposed mapping in gap email CSV)")
     return df, fixed
 
 
@@ -10899,6 +10963,94 @@ def enforce_viewer_carriage_constraint(df, subject, carriage_doc=None,
                               f"(carrier union covers ~100% of a "
                               f"viewers universe; reasoned tilt "
                               f"preserved)")
+
+    # ---- Non-carrier near-100 demotion (2026-08-27, Golden Girls
+    # Viewers double hold). A non-carrier platform row in the near-100
+    # band is always a defect on a consumption-scoped universe: only
+    # verified digital carriers can approach universal reach, and
+    # linear syndication (Hallmark Channel airing the title on cable)
+    # is outside the clickstream boundary. Scan the full carriage
+    # family - streaming aliases, vMVPD cats, and BROADCAST/CABLE -
+    # and demote any non-subject, non-owner, non-carrier row >= 99.0
+    # to a salted sub-95 affinity level anchored on the category's
+    # strongest organic row. Subject / title restatements and owner
+    # platforms (self_property_coherence) are exempt.
+    demote_family = list(dict.fromkeys(
+        list(vc.STREAMING_ALIAS_CATS) + list(vc.VMVPD_CATS)
+        + ['BROADCAST/CABLE']))
+
+    def _dnorm(s):
+        return _re.sub(r'[^a-z0-9]', '', str(s or '').lower())
+
+    subj_keys = {k for k in (_dnorm(str(subject or '').split(' - ')[0]),
+                             _dnorm(doc.get('title') or '')) if k}
+    _dm_own = _dm_owner = None
+    try:
+        try:
+            from migration.self_property_coherence import (
+                is_subject_own as _dm_own,
+                is_owner_platform_row as _dm_owner,
+            )
+        except ImportError:
+            from self_property_coherence import (  # type: ignore
+                is_subject_own as _dm_own,
+                is_owner_platform_row as _dm_owner,
+            )
+    except Exception:
+        _dm_own = _dm_owner = None
+    for cat in demote_family:
+        cat_mask = col_u == cat
+        if not cat_mask.any():
+            continue
+        organic_top = None
+        hot = []
+        for idx in df.index[cat_mask]:
+            val = str(df.at[idx, 'Value'])
+            bpv = _fnum(df.at[idx, bp_col])
+            if bpv is None:
+                continue
+            if any(vc.carrier_matches_row(c.get('platform', ''), val)
+                   for c in carriers):
+                continue
+            if _dnorm(val) in subj_keys:
+                continue
+            if _dm_own is not None:
+                try:
+                    if _dm_own(subject, val) or _dm_owner(subject, val):
+                        continue
+                except Exception:
+                    pass
+            if bpv >= 99.0:
+                hot.append((idx, val, bpv))
+            elif organic_top is None or bpv > organic_top:
+                organic_top = bpv
+        for idx, val, bpv in hot:
+            anchor = (organic_top if organic_top is not None
+                      else vc.salted_unit(subject,
+                                          f'demote-base|{cat}|{val}',
+                                          52.0, 68.0))
+            tgt = min(
+                anchor + vc.salted_unit(subject, f'demote|{cat}|{val}',
+                                        1.3, 6.9),
+                90.0 + vc.salted_unit(subject, f'demote-cap|{cat}|{val}',
+                                      0.5, 4.4),
+            )
+            tgt = round(tgt, 4)
+            if abs(tgt * 100 - round(tgt * 100)) < 1e-9:
+                tgt = round(tgt - vc.salted_unit(
+                    subject, f'demote-b|{cat}|{val}', 0.0003, 0.0041), 4)
+            if tgt >= bpv:
+                tgt = round(bpv - vc.salted_unit(
+                    subject, f'demote-f|{cat}|{val}', 4.5, 9.5), 4)
+            _write(idx, tgt)
+            touched_cats.add(cat)
+            n += 1
+            if verbose:
+                print(f"   📺 viewer carriage: {cat} | {val!r} "
+                      f"non-carrier at {bpv:.4f} demoted to {tgt:.4f} "
+                      f"(only verified carriers approach universal "
+                      f"reach on a viewers universe; linear airing is "
+                      f"outside the clickstream boundary)")
 
     for cat in touched_cats:
         try:

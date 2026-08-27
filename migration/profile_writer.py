@@ -1006,6 +1006,7 @@ def write_profile_csv(
                 )
             df, _n_pins, _unmatched_pins = enforce_spec_pin_rows(
                 df, subject, pin_rows, verbose=verbose,
+                carriage_doc=carriage_doc,
             )
             if _n_pins:
                 df, _ = _rwsn_pins(df, subject, verbose=False)

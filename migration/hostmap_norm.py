@@ -85,6 +85,7 @@ import os
 import re
 import sys
 import threading
+import unicodedata
 from typing import Iterable, NamedTuple, Optional
 
 HIDDEN_SECTION = 'Hidden'
@@ -93,9 +94,22 @@ _NORM_RE = re.compile(r'[^A-Z0-9]')
 
 
 def norm_key(brand) -> str:
-    """The standard hostmap brand norm: casefold + strip punctuation +
-    collapse whitespace (implemented as uppercase, keep A-Z0-9 only)."""
-    return _NORM_RE.sub('', str(brand or '').upper())
+    """The standard hostmap brand norm: accent fold (NFKD -> ASCII) +
+    casefold + strip punctuation + collapse whitespace (implemented as
+    uppercase, keep A-Z0-9 only).
+
+    Accent folding added 2026-08-27 (weekly sweep triage): profile rows
+    like 'TIMOTHEE CHALAMET' vs hostmap 'Timothée Chalamet' (and Mbappé,
+    Citroën, Mönchengladbach, ...) previously normalized to DIFFERENT
+    keys because the punctuation strip silently deleted the accented
+    letter instead of folding it. Verified against the live hostmap
+    that the fold introduces no norm-group merges with conflicting
+    visibility. NOTE: the ClickHouse-side SQL equivalent below does not
+    accent-fold; SQL consumers are simply more conservative (accent
+    twins stay separate there), which is fail-safe."""
+    s = unicodedata.normalize('NFKD', str(brand or ''))
+    s = s.encode('ascii', 'ignore').decode('ascii')
+    return _NORM_RE.sub('', s.upper())
 
 
 class HostmapGroup(NamedTuple):

@@ -896,12 +896,26 @@ def _check_i1(rows, subject, s3_key, s3_client, verbose):
                 # Mononym standing alone for the subject in this
                 # category (sole representation) is a subject pin.
                 continue
-            if (carriage and cat_u in _CARRIAGE_CATS
-                    and any(_carriage_row_match(c.get("platform", ""),
-                                                r["val"])
-                            for c in carriage["carriers"])):
-                # Verified carrier of a consumption-scoped universe.
-                continue
+            if carriage:
+                _cmatch = [c for c in carriage["carriers"]
+                           if _carriage_row_match(c.get("platform", ""),
+                                                  r["val"])]
+                if _cmatch and cat_u in _CARRIAGE_CATS:
+                    # Verified carrier of a consumption-scoped universe.
+                    continue
+                if (_cmatch and cat_u == "BROADCAST/CABLE"
+                        and any((c.get("kind") or "").strip().lower()
+                                == "network_app" for c in _cmatch)):
+                    # 2026-08-27 (Golden Girls Viewers hold): a
+                    # verified NETWORK-APP carrier (the network's own
+                    # app/site streams the title, e.g. abc.com full
+                    # episodes) legitimately extends its near-100 read
+                    # to the network's BROADCAST/CABLE row. Linear-only
+                    # networks never match here - research only returns
+                    # digital carriers, so a non-carrier cable row
+                    # (Hallmark Channel airing the title in linear
+                    # syndication) still violates.
+                    continue
             # 2026-08-26 Jenna convention: the subject's own property
             # row and its owning / universe-defining platform pin at
             # exactly 100 in base and cuts - never an I1 violation.
