@@ -1789,6 +1789,12 @@ def _check_i18(rows, subject, s3_key):
                 or cu in COMPANION_SPORT_CATS
                 or _COMPANION_DIVISION_RE.search(cu)):
             continue
+        # Demo-shaped bucket categories outside the canonical 9: a
+        # 100.0000 bucket there is a renormalization defect for the
+        # demo tooling, not an I18 reach pin (corpus scan 2026-08-26
+        # surfaced AGE_OF_CHILDREN / No Kids across content files).
+        if cu in {"AGE_OF_CHILDREN", "AGE OF CHILDREN"}:
+            continue
         bp = _num(r["bp_s"])
         if bp is None or abs(bp - 100.0) > 0.00005:
             continue

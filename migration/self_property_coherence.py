@@ -61,6 +61,16 @@ REAL_TITLE_EXCEPTIONS = {
     "STRANGERTHINGS",
 }
 
+# Extra leading words a row value may carry before the subject token and
+# still name the same property ("THE PAW PATROL MOVIE"). Content words
+# in front (PEREZ Hilton, FIRST Citizens Bank, KELDON Johnson) name a
+# DIFFERENT entity and must not match.
+_LEAD_ARTICLES = {"THE", "A", "AN"}
+
+# Device nouns that ride behind a brand in owner-universe subjects
+# ("Vizio TV Owners" -> VIZIO TV -> VIZIO also matches bare "Vizio").
+_DEVICE_TAIL_WORDS = {"TV", "TVS"}
+
 # I16 scope: the anchor grid asserts franchise-level engagement; the
 # checked grids are the property's own merch / games / media rows.
 ANCHOR_CATS = {"FRANCHISE"}
@@ -76,6 +86,24 @@ def _norm(s) -> str:
     return re.sub(r"[^A-Z0-9]", "", str(s or "").upper())
 
 
+def _words(s) -> list:
+    return [w for w in re.split(r"[^A-Za-z0-9]+", str(s or "").upper()) if w]
+
+
+def own_token_words(subject) -> list:
+    """Subject word list with trailing audience nouns stripped."""
+    words = _words(subject)
+    if not words:
+        return []
+    if "".join(words) in REAL_TITLE_EXCEPTIONS:
+        return words
+    while len(words) > 1 and words[-1] in AUDIENCE_SUFFIX_WORDS:
+        words = words[:-1]
+        if "".join(words) in REAL_TITLE_EXCEPTIONS:
+            break
+    return words
+
+
 def own_token(subject) -> str:
     """Normalized subject token with trailing audience nouns stripped.
 
@@ -83,38 +111,103 @@ def own_token(subject) -> str:
     "Bethenny Frankel"          -> "BETHENNYFRANKEL"
     "Steven Universe"           -> "STEVENUNIVERSE" (real-title exception)
     """
-    words = [w for w in re.split(r"[^A-Za-z0-9]+", str(subject or "").upper())
-             if w]
-    if not words:
-        return ""
-    if "".join(words) in REAL_TITLE_EXCEPTIONS:
-        return "".join(words)
-    while len(words) > 1 and words[-1] in AUDIENCE_SUFFIX_WORDS:
-        words = words[:-1]
-        if "".join(words) in REAL_TITLE_EXCEPTIONS:
-            break
-    return "".join(words)
+    return "".join(own_token_words(subject))
+
+
+def _token_variants(subject) -> list:
+    base = own_token_words(subject)
+    variants = [base] if base else []
+    if len(base) >= 2 and base[-1] in _DEVICE_TAIL_WORDS:
+        variants.append(base[:-1])
+    return variants
+
+
+def _match_words(tok_words, val_words) -> bool:
+    """Word-level own-property match (2026-08-26 precision pass).
+
+    The first cut of this matcher used joined-char containment and the
+    corpus scan showed why that cannot ship: LEXUS matched inside
+    ALEXUS, CELINE inside PRICELINE, HOMES inside MAHOMES, MICHAELS
+    against AL MICHAELS - all different entities that an auto-lift
+    would have corrupted. Matching is word-level with three forms:
+
+      1. exact join equality        (PAW PATROL == PAW.Patrol)
+      2. tok consecutive in value, extra LEADING words limited to
+         articles                   (THE PAW PATROL MOVIE yes;
+                                     PEREZ HILTON / FIRST CITIZENS
+                                     BANK no)
+      3. value (>= 2 words) an ordered subsequence of tok anchored on
+         tok's first word           (DWAYNE JOHNSON matches subject
+                                     Dwayne The Rock Johnson; JIMMY
+                                     KIMMEL matches Jimmy Kimmel Live
+                                     Viewers; CITIZENS BANK does NOT
+                                     match First Citizens Bank)
+    """
+    if not tok_words or not val_words:
+        return False
+    tok_join = "".join(tok_words)
+    if len(tok_join) < 2:
+        return False
+    if "".join(val_words) == tok_join:
+        return True
+    n, m = len(tok_words), len(val_words)
+    # Single very-short tokens (BET, NBC) extend into co-brand names
+    # that are NOT the subject's own (BET MGM, BET RIVERS): prefix
+    # extension needs a token of at least 4 chars.
+    if n == 1 and len(tok_join) < 4:
+        return False
+    if n <= m:
+        for i in range(m - n + 1):
+            if (val_words[i:i + n] == tok_words
+                    and all(w in _LEAD_ARTICLES for w in val_words[:i])):
+                return True
+    if m >= 2 and val_words[0] == tok_words[0]:
+        ti = 1
+        for v in val_words[1:]:
+            while ti < n and tok_words[ti] != v:
+                ti += 1
+            if ti >= n:
+                return False
+            ti += 1
+        return True
+    return False
 
 
 def is_subject_own(subject, value) -> bool:
     """True when a row Value names the subject's own property.
 
-    Containment runs against the audience-suffix-stripped token in
-    both directions with a 5-char guard on the contained side, so
+    Word-level match against the audience-suffix-stripped token, so
     "PAW PATROL" matches subject "Paw Patrol Series Viewers" but
-    "SERIES" and "PARAMOUNT+" do not.
+    "SERIES", "PARAMOUNT+", and different-entity near-names (LEXUS vs
+    ALEXUS, MICHAELS vs AL MICHAELS) do not. Slash-separated values
+    match on any part (Disney+/Hulu is Hulu's own row).
     """
-    tok = own_token(subject)
-    vn = _norm(value)
-    if not tok or not vn:
+    variants = _token_variants(subject)
+    if not variants:
         return False
-    if vn == tok:
-        return True
-    if len(tok) >= 5 and tok in vn:
-        return True
-    if len(vn) >= 5 and vn in tok:
-        return True
+    sval = str(value or "")
+    parts = [sval]
+    if "/" in sval:
+        parts += [p for p in sval.split("/") if p.strip()]
+    for tw in variants:
+        for p in parts:
+            if _match_words(tw, _words(p)):
+                return True
     return False
+
+
+def is_subject_own_exact(subject, value) -> bool:
+    """Strict form: the value IS the subject token (no extensions).
+
+    Used where remediation moves numbers on the matched row itself
+    (I16 merch rows): "PAW PATROL" qualifies, "DISNEY ARIEL" on
+    subject Disney+ does not - a sub-line SKU can legitimately sit
+    low without contradicting the franchise anchor.
+    """
+    vn = _norm(value)
+    if not vn:
+        return False
+    return any("".join(tw) == vn for tw in _token_variants(subject))
 
 
 def _salted(subject, value, salt, lo, hi) -> float:
@@ -171,7 +264,10 @@ def check_self_property_coherence(items, subject):
     for cu, val, bp in items:
         if cu not in MERCH_CATS or bp is None:
             continue
-        if not is_subject_own(subject, val):
+        # Exact-token rows only: the band asserts the property's own
+        # FLAGSHIP merch can't sit at noise. Extension rows (DISNEY
+        # ARIEL on subject Disney+) are sub-lines that may sit low.
+        if not is_subject_own_exact(subject, val):
             continue
         if bp < floor:
             out.append({"cat": cu, "val": val, "bp": bp, "floor": floor})

@@ -472,7 +472,15 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
                 from post_generation_enforcers import (  # type: ignore
                     depin_exact_100_non_subject as _depin_fix,
                 )
-            df, _n_dp = _depin_fix(df, subject, verbose=verbose)
+            # Cut-defining rows (the ' - ' suffix of the deliverable
+            # name, e.g. 'Spotify Fan', 'Los Angeles Ca') land in the
+            # high 99.9x band per the cut-skin convention.
+            _base = str(s3_key or "").rsplit("/", 1)[-1]
+            _base = _base[:-4] if _base.lower().endswith(".csv") else _base
+            _cut_label = (_base.split(" - ", 1)[1].strip()
+                          if " - " in _base else None)
+            df, _n_dp = _depin_fix(df, subject, verbose=verbose,
+                                   cut_label=_cut_label)
             n_fixed += int(_n_dp or 0)
             print(f"  [profile_writer] I18 exact-100 de-pin fix: "
                   f"{_n_dp} row(s) de-pinned")

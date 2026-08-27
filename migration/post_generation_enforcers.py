@@ -4470,7 +4470,7 @@ def enforce_self_property_coherence(df, subject, verbose=True):
     return df, n
 
 
-def depin_exact_100_non_subject(df, subject, verbose=True):
+def depin_exact_100_non_subject(df, subject, verbose=True, cut_label=None):
     """I18 (2026-08-26 Liz QA, Paw Patrol): a row at exactly 100.0000
     that is NOT the subject's own property (and not metadata, not a
     demo bucket, not a companion sports pin) violates the messy-value
@@ -4478,6 +4478,17 @@ def depin_exact_100_non_subject(df, subject, verbose=True):
     (Paramount+ 100.0000 on a universe defined across four platforms).
     De-pin to a subject-salted messy near-100. Positioned AFTER the
     pin/carriage passes and BEFORE recompute_raw_and_projection.
+
+    Band selection (corpus scan 2026-08-26): a CUT-DEFINING row (the
+    row that IS the cut, e.g. SPOTIFY on 'Reba McEntire - Spotify
+    Fan', the DMA row on a geo cut) follows the gender-cut convention
+    from the avid/cut-skin rules (~99.99 jittered, never exact 100),
+    so it lands in [99.90, 99.99]. Same for the carrier on a
+    SINGLE-platform viewer universe (a Landman viewer by definition
+    reached Paramount+). Everything else (accidental reach pins like
+    Paw Patrol's Paramount+ on a four-platform universe) lands in the
+    lower [99.01, 99.69] band. Pass cut_label='Spotify Fan' (the
+    ' - ' suffix of the deliverable name) when the caller knows it.
     """
     if df is None or len(df) == 0 or 'Column' not in df.columns:
         return df, 0
@@ -4496,8 +4507,34 @@ def depin_exact_100_non_subject(df, subject, verbose=True):
     except Exception:
         _spc_is_own = None
 
-    skip_cats = (METADATA_COLS | DEPIN_DEMO_CATS | DEPIN_META_CATS
-                 | {'SUBJECT'})
+    # LOCATION deliberately NOT skipped (a geo cut's own DMA pin is
+    # cut-defining and moves to the high band); demo-shaped bucket
+    # categories outside the canonical 9 ARE skipped - a 100 bucket
+    # there is a renormalization defect, not a reach pin.
+    skip_cats = (METADATA_COLS | DEPIN_DEMO_CATS
+                 | (DEPIN_META_CATS - {'LOCATION'})
+                 | {'SUBJECT', 'AGE_OF_CHILDREN', 'AGE OF CHILDREN'})
+
+    def _canon(s):
+        return __import__('re').sub(r'[^A-Z0-9]', '', str(s or '').upper())
+
+    cut_norm = _canon(cut_label)
+    # Single-carrier universes read near-total on their one carrier:
+    # count distinct platform domains in BRAND INPUT.
+    n_domains = 0
+    try:
+        try:
+            from migration.viewer_carriage import PLATFORM_DOMAINS
+        except ImportError:
+            from viewer_carriage import PLATFORM_DOMAINS  # type: ignore
+        col_u = df['Column'].astype(str).str.strip().str.upper()
+        bi_idx = df.index[col_u == 'BRAND INPUT']
+        if len(bi_idx):
+            bi_val = str(df.at[bi_idx[0], 'Value'] or '').lower()
+            n_domains = sum(1 for d in PLATFORM_DOMAINS if d in bi_val)
+    except Exception:
+        n_domains = 0
+
     import hashlib as _hl_dp
     n = 0
     for idx in df.index:
@@ -4510,9 +4547,20 @@ def depin_exact_100_non_subject(df, subject, verbose=True):
         val = str(df.at[idx, 'Value']).strip()
         if _spc_is_own is not None and _spc_is_own(subject, val):
             continue  # legitimate subject self-pin
+        vn = _canon(val)
+        cut_defining = bool(cut_norm) and len(cut_norm) >= 3 and (
+            cut_norm in vn or vn in cut_norm)
+        # Exactly one platform domain in BRAND INPUT = a true
+        # single-platform viewer universe whose carrier reads
+        # near-total by definition. Zero domains = not consumption
+        # scoped; a platform pin there is accidental -> low band.
+        single_carrier = (cu in CARRIER_PIN_SOFT_CATS and n_domains == 1)
         h = int(_hl_dp.sha256(
             f'{subject}|{cu}|{val}|depin-100'.encode()).hexdigest()[:8], 16)
-        new_bp = round(99.0 + (120 + h % 6800) / 10000.0, 4)
+        if cut_defining or single_carrier or cu == 'LOCATION':
+            new_bp = round(99.90 + (h % 900) / 10000.0, 4)
+        else:
+            new_bp = round(99.0 + (120 + h % 6800) / 10000.0, 4)
         if int(round(new_bp * 10000)) % 100 == 0:
             new_bp = round(new_bp + (1 + h % 89) / 10000.0, 4)
         cur_cell = str(df.at[idx, bp_col])
