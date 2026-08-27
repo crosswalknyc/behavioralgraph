@@ -232,6 +232,37 @@ _AUTOFIX_GATE_CODES = ("I11", "I12", "I13", "I14", "I15", "I16", "I17",
                        "I18")
 
 
+def _detect_ladder_rows(df):
+    """Count of rows still carrying the I14 fractional-ladder signature."""
+    try:
+        try:
+            from migration.fractional_ladders import (
+                detect_fractional_ladders, ladder_in_scope,
+            )
+        except ImportError:
+            from fractional_ladders import (  # type: ignore
+                detect_fractional_ladders, ladder_in_scope,
+            )
+        bp_col = next((c for c in df.columns
+                       if str(c).lower().startswith("brand penetration")),
+                      None)
+        if not bp_col or "Column" not in df.columns:
+            return 0
+        triples = []
+        for idx, cat, raw in zip(df.index, df["Column"], df[bp_col]):
+            s = str(raw or "").strip().rstrip("%").replace(",", "")
+            try:
+                v = float(s)
+            except ValueError:
+                continue
+            cat_u = str(cat or "").strip().upper()
+            if ladder_in_scope(cat_u, v):
+                triples.append((idx, cat_u, v))
+        return len(detect_fractional_ladders(triples)["flagged_ids"])
+    except Exception:
+        return 0
+
+
 def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
                             tu_source_key=None, sort=True, verbose=True):
     """Deterministic fix-and-regate ahead of the blocking ship gate
@@ -425,6 +456,25 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
             n_fixed += int(_n_lad or 0)
             print(f"  [profile_writer] I14 fractional-ladder fix: "
                   f"{_n_lad} row(s) re-salted")
+            # 2dp-era corner (N.0100 ladders): every in-decade downward
+            # landing is X.00xx round-banned, so the downward fixer can
+            # stall at 0 moved. The standing round-display dejitter
+            # relocates those rows (bidirectional ±0.013-0.04pp), then
+            # one more ladder pass clears leftover shared suffixes.
+            if _detect_ladder_rows(df):
+                try:
+                    from migration.post_generation_enforcers import (
+                        dejitter_x5x0_displays as _x5x0_fix,
+                    )
+                except ImportError:
+                    from post_generation_enforcers import (  # type: ignore
+                        dejitter_x5x0_displays as _x5x0_fix,
+                    )
+                df, _n_x5 = _x5x0_fix(df, subject, verbose=False)
+                df, _n_lad2 = _ladder_fix(df, subject, verbose=False)
+                n_fixed += int(_n_x5 or 0) + int(_n_lad2 or 0)
+                print(f"  [profile_writer] I14 second stage (round-display"
+                      f" dejitter): {_n_x5} + {_n_lad2} row(s)")
         except Exception as e:
             print(f"  [profile_writer] I14 fractional-ladder fix raised "
                   f"({type(e).__name__}: {e}); gate keeps the verdict")
