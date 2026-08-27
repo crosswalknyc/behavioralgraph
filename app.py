@@ -20909,7 +20909,7 @@ Be specific, data-driven, strategic, and actionable. Every insight MUST referenc
             
             insights = json.loads(ai_response)
         except Exception as e:
-            print(f"⚠️ Could not parse AI response as JSON: {e}")
+            print(f"⚠️ AI response JSON parse issue: {e}")
             # Fallback: wrap in structure
             insights = {
                 "executiveSummary": ai_response,
@@ -21055,7 +21055,7 @@ Be strategic, not descriptive. Think like a CMO presenting to the board. Use per
             
             insights = json.loads(ai_response)
         except Exception as e:
-            print(f"⚠️ Could not parse AI response as JSON: {e}")
+            print(f"⚠️ AI response JSON parse issue: {e}")
             # Fallback: wrap in structure
             insights = {
                 "executiveOverview": ai_response,
@@ -21304,7 +21304,7 @@ CRITICAL REQUIREMENTS:
             
             insights = json.loads(ai_response)
         except Exception as e:
-            print(f"⚠️ Could not parse AI response as JSON: {e}")
+            print(f"⚠️ AI response JSON parse issue: {e}")
             # Fallback: wrap in structure
             insights = {
                 "demographicsOverview": ai_response[:500] if len(ai_response) > 500 else ai_response,
@@ -46068,11 +46068,11 @@ def _sg_guard_negation(draft, text, hay, allow_ask):
             # target we cannot bind, and guessing risks the exact
             # opposite audience.
             return {'question': (
-                "Your request excludes part of the audience, but I "
-                "could not pin down exactly who to exclude. Reply "
-                "with the exclusion spelled out (for example "
-                "'exclude Hulu subscribers' or 'exclude parents') "
-                "and I will bind it.")}
+                "Your request excludes part of the audience - tell "
+                "me exactly who to leave out. Reply with the "
+                "exclusion spelled out (for example 'exclude Hulu "
+                "subscribers' or 'exclude parents') and I will "
+                "bind it.")}
         return None
     draft['exclusions'] = excl
     names = [str(e['brand']) for e in excl][:4]
@@ -49529,8 +49529,8 @@ def _parse_strategy_answer(answer, subject, draft):
 # generic error strings are documented partner behavior
 # (see partner-api-no-internal-terms.mdc).
 
-_CHATBOT_CALM_MESSAGE = ("Working on it - you'll receive an email "
-                         "when it's completed.")
+_CHATBOT_CALM_MESSAGE = ("Working on it. This one needs a closer look "
+                         "and will come back to you shortly.")
 _CHATBOT_ERROR_EMAIL_TO = ('jenna@crosswalknyc.com',
                            'jessie@crosswalknyc.com')
 _CHATBOT_ERROR_EMAIL_COOLDOWN_S = 900  # per route+signature, 15 minutes
@@ -49644,6 +49644,114 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
     except Exception as helper_err:
         try:
             print(f"[chatbot-error-email] helper failed: {helper_err}")
+        except Exception:
+            pass
+        return False
+
+
+# Manual-look heads-up (2026-08-27, Jenna, verbatim: "it should never
+# say it can't do it or show code it should say working on it and
+# email me and jessie"). Fired whenever Prometheus resolves an ask
+# only partially or not at all: the user sees calm, jargon-free copy
+# and Jenna + Jessie get one clean email per ask with the ask
+# verbatim, what the user was told, and the reason in plain language.
+# No tracebacks, no internal vocabulary - this is a workflow email,
+# not the ops debug email above.
+_PM_MANUAL_LOOK_COOLDOWN_S = 3600   # one email per ask, not per retry
+_PM_MANUAL_LOOK_STAMP_FILE = '/tmp/prometheus_manual_look_stamps.json'
+_pm_manual_look_stamps = {}
+_pm_manual_look_lock = threading.Lock()
+
+
+def _prometheus_manual_look_email(ask_text, told_user, reason,
+                                  user_email=None):
+    """Email Jenna + Jessie that a Prometheus ask needs a manual look.
+
+    Body carries the user, a short session fingerprint, the ask text
+    verbatim, exactly what the user was told, and the reason written
+    clean (plain language, no tracebacks, no internal vocabulary, no
+    em dashes). Deduped per user + ask text with a 1-hour cooldown so
+    a retried ask never stacks emails. Never raises; the SES send
+    runs on a daemon thread."""
+    try:
+        ask_text = str(ask_text or '').strip()[:600]
+        if not ask_text:
+            return False
+        if user_email is None:
+            try:
+                user_email = (session.get('username')
+                              or session.get('email') or '')
+            except Exception:
+                user_email = ''
+        session_tag = ''
+        try:
+            raw_cookie = request.cookies.get('session', '')
+            if raw_cookie:
+                session_tag = hashlib.md5(
+                    raw_cookie.encode('utf-8', 'replace')).hexdigest()[:10]
+        except Exception:
+            session_tag = ''
+        sig = hashlib.md5(
+            f"{user_email}|{ask_text.lower()}".encode(
+                'utf-8', 'replace')).hexdigest()
+        now = time.time()
+        with _pm_manual_look_lock:
+            stamps = dict(_pm_manual_look_stamps)
+            try:
+                with open(_PM_MANUAL_LOOK_STAMP_FILE,
+                          encoding='utf-8') as fh:
+                    on_disk = json.load(fh) or {}
+                for k, v in on_disk.items():
+                    if float(v) > float(stamps.get(k, 0)):
+                        stamps[k] = float(v)
+            except Exception:
+                pass
+            if now - float(stamps.get(sig, 0)) < \
+                    _PM_MANUAL_LOOK_COOLDOWN_S:
+                return False
+            stamps[sig] = now
+            fresh = {k: v for k, v in stamps.items()
+                     if now - float(v) < 4 * _PM_MANUAL_LOOK_COOLDOWN_S}
+            _pm_manual_look_stamps.clear()
+            _pm_manual_look_stamps.update(fresh)
+            try:
+                with open(_PM_MANUAL_LOOK_STAMP_FILE, 'w',
+                          encoding='utf-8') as fh:
+                    json.dump(fresh, fh)
+            except Exception:
+                pass
+        ts = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+        body_text = (
+            f"Timestamp: {ts}\n"
+            f"User: {user_email or '(unknown)'}\n"
+            f"Session: {session_tag or '(unknown)'}\n\n"
+            f"The ask, verbatim:\n{ask_text}\n\n"
+            f"What the user was told:\n"
+            f"{str(told_user or '').strip()[:1200] or '(nothing yet)'}\n\n"
+            f"Why it needs a look:\n"
+            f"{str(reason or '').strip()[:800] or '(no detail)'}\n"
+        )
+
+        def _send():
+            try:
+                ses = boto3.client('ses', region_name='us-east-2')
+                ses.send_email(
+                    Source='BehavioralGraph <jenna@crosswalknyc.com>',
+                    Destination={'ToAddresses':
+                                 list(_CHATBOT_ERROR_EMAIL_TO)},
+                    Message={'Subject': {'Data':
+                                         'Prometheus ask needs a '
+                                         'manual look'},
+                             'Body': {'Text': {'Data': body_text}}})
+                print(f"[pm-manual-look] sent sig={sig[:8]}")
+            except Exception as send_err:
+                print(f"[pm-manual-look] SES send failed: {send_err}")
+
+        threading.Thread(target=_send, daemon=True).start()
+        return True
+    except Exception as helper_err:
+        try:
+            print(f"[pm-manual-look] helper failed: {helper_err}")
         except Exception:
             pass
         return False
@@ -49764,7 +49872,22 @@ def api_synth_chat_clarify():
             real = [n for n in notes if n not in
                     ('parse_partial', 'parse_failed')][:4]
             if real:
-                msg = "Couldn't map: " + ", ".join(real) + ". " + msg
+                # Never a can't-do line (Jenna 2026-08-27): the user
+                # sees a calm working line and Jenna + Jessie get the
+                # manual-look email with the unmapped piece verbatim.
+                held = ", ".join(real)
+                msg = (f"Working on: {held}. That piece needs a "
+                       "closer look and I'll come back to you on it. "
+                       + msg)
+                try:
+                    _prometheus_manual_look_email(
+                        answer or held, msg,
+                        'The reply to the cut picker included '
+                        'something that does not match any known '
+                        'cut: ' + held + '. It may be a measurement '
+                        'question that arrived mid-draft.')
+                except Exception:
+                    traceback.print_exc()
         return jsonify({'success': True, 'draft': draft,
                         'message': msg, 'next_step': 'approve'})
 
@@ -50947,8 +51070,8 @@ def api_synth_chat_clarify():
         if cuts is None:
             return jsonify({
                 'success': True, 'draft': draft,
-                'message': ("I couldn't parse that. Reply with the "
-                            "numbers (\"1 and 3\"), \"all\", cut "
+                'message': ("Which ones would you like? Reply with "
+                            "the numbers (\"1 and 3\"), \"all\", cut "
                             "names (\"female\", \"Gen Z\", \"Dallas "
                             "only\") - or say none."),
                 'next_step': 'strategy',
@@ -50976,11 +51099,11 @@ def api_synth_chat_clarify():
         if not resolved:
             return jsonify({
                 'success': True, 'draft': draft,
-                'message': ("I couldn't map "
-                            f"{', '.join(unresolved) or 'that'} to a "
-                            "US media market. Name the metro areas or "
-                            "states (e.g. \"LA and San Diego\", "
-                            "\"Texas\"), or say national."),
+                'message': ("Help me pin down "
+                            f"{', '.join(unresolved) or 'that'} - "
+                            "name the metro areas or states (e.g. "
+                            "\"LA and San Diego\", \"Texas\"), or "
+                            "say national."),
                 'next_step': 'region',
             })
         dma_cuts = _normalize_cut_items(
@@ -50997,8 +51120,8 @@ def api_synth_chat_clarify():
             + "\n".join(f"  - {c['label']} (+{ADDON_CUT_CREDITS} "
                         "credits)" for c in dma_cuts)]
         if unresolved:
-            parts.append(f"(Couldn't map: {', '.join(unresolved)} - "
-                         "tell me the metro if you want them added.)")
+            parts.append(f"(For {', '.join(unresolved)}, tell me "
+                         "the metro if you want them added.)")
         parts.append("Want any other cuts? Female only, male "
                      "only, by generation, or an age band - "
                      f"{ADDON_CUT_CREDITS} credits each. Name them, "
@@ -51013,7 +51136,7 @@ def api_synth_chat_clarify():
     if cuts is None:
         return jsonify({
             'success': True, 'draft': draft,
-            'message': ("I couldn't parse that cut list. Try e.g. "
+            'message': ("Which cuts would you like? Try e.g. "
                         "\"female and male\", \"by generation\", "
                         "\"18-34\", \"Los Angeles only\" - or say "
                         "none."),
@@ -51380,16 +51503,23 @@ def api_synth_chat_interpret():
         # pronoun/noun is an interpret failure - ask for a rephrase
         # instead of shipping a garbage card.
         if _is_placeholder_subject(spec_draft.get('subject')):
+            guidance_msg = (
+                "Quick check on the audience: tell me who each "
+                "profile is for - e.g. 'Amazon EST buyers' or "
+                "'Vizio TV owners' - or list the segments and I'll "
+                "queue one profile per segment.")
+            try:
+                _prometheus_manual_look_email(
+                    text, guidance_msg,
+                    'The audience in this ask did not resolve to a '
+                    'named subject, so the user was asked to '
+                    'rephrase.')
+            except Exception:
+                traceback.print_exc()
             return jsonify({
                 'success': False,
                 'guidance': True,
-                'error': (
-                    "I couldn't pin down the audience from that "
-                    "phrasing. Tell me who each profile is for - "
-                    "e.g. 'Amazon EST buyers' or 'Vizio TV owners' - "
-                    "or list the segments and I'll queue one profile "
-                    "per segment."
-                ),
+                'error': guidance_msg,
             }), 400
 
         # Subscriber IQ intent net (2026-08-26): typo-tolerant
@@ -53764,7 +53894,8 @@ _PM_BASE_GENERIC_TOKENS = {
 }
 
 
-def _pm_generation_base(subject_hint, text, ctx=None):
+def _pm_generation_base(subject_hint, text, ctx=None,
+                        prefer_catalog=False):
     """Resolve the base that authorizes a generated read.
 
     Jenna 2026-08-27 (verbatim): "it can't pull full data on something
@@ -53778,14 +53909,25 @@ def _pm_generation_base(subject_hint, text, ctx=None):
     Select Profile catalog, or a Subscriber IQ run. Returns
     {'subject', 's3_key', 'source'} or None (None = hard refuse; the
     caller steers to the 5-credit build instead of generating).
+
+    `prefer_catalog` (2026-08-27, Paige Bueckers ad CTR): KPI asks
+    name their own subject in the question, which may not be the
+    profile open on screen. When set, a catalog subject named in the
+    ask wins over the open page; the page stays the fallback.
     """
     import prometheus_analysis as pma
-    # 1. The profile open on the page IS the base.
+    # 1. The profile open on the page IS the base (unless the caller
+    # asked for ask-named catalog subjects to win; the page is still
+    # the fallback below when the catalog names nothing).
+    page_base = None
     if ctx and ctx.get('primary'):
         pk = str(ctx['primary'].get('s3_key') or '').strip()
         nm = str(ctx['primary'].get('name') or '').strip()
         if pk:
-            return {'subject': nm or pk, 's3_key': pk, 'source': 'page'}
+            page_base = {'subject': nm or pk, 's3_key': pk,
+                         'source': 'page'}
+    if page_base is not None and not prefer_catalog:
+        return page_base
 
     def _tokens(s):
         return [w for w in _normalize_for_match(s).split()
@@ -53827,6 +53969,8 @@ def _pm_generation_base(subject_hint, text, ctx=None):
         traceback.print_exc()
     if best:
         return best
+    if page_base is not None:
+        return page_base
 
     # 3. Subscriber IQ runs count as pulled bases too.
     try:
@@ -54090,7 +54234,8 @@ def _pm_search_demand_response(user, text, history):
 
 def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                   anchors_block='', charge_done=False,
-                                  ctx=None, digest_block=''):
+                                  ctx=None, digest_block='',
+                                  prefer_catalog=False):
     """Reasoned measurement read (2026-08-26, Jenna): a concrete
     number for a digitally observable ask the open data does not
     cover, or the read for a sub-cohort the open data does not
@@ -54134,7 +54279,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # Universe build first.
     base = None
     try:
-        base = _pm_generation_base(subj_hint, text, ctx=ctx)
+        base = _pm_generation_base(subj_hint, text, ctx=ctx,
+                                   prefer_catalog=prefer_catalog)
     except Exception:
         traceback.print_exc()
     if not base:
@@ -54360,6 +54506,21 @@ def api_synth_chat_analyze():
     ctx, ctx_err = _pm_validate_page_context(body.get('page_context'))
     if ctx_err:
         return ctx_err
+    # Metric / KPI asks (2026-08-27, Jenna / Paige Bueckers ad CTR):
+    # KPI vocabulary (CTR, click-through, engagement rate, conversion
+    # rate, CPM, ROAS, ...) is a measurement ask by definition and is
+    # never carried by on-screen rows, so it routes straight to the
+    # measured-read pass whether or not anything is open. The base
+    # gate inside resolves the subject named in the ask (catalog
+    # first, then the open page, then Subscriber IQ) and steers to
+    # the 5-credit build when no base exists anywhere.
+    try:
+        import prometheus_analysis as _pma_kpi
+        if _pma_kpi.detect_metric_kpi_intent(text):
+            return _pm_generate_metrics_response(
+                user, text, history, ctx=ctx, prefer_catalog=True)
+    except Exception:
+        traceback.print_exc()
     if not ctx:
         # Direct metric question with nothing open (2026-08-26): a
         # digitally observable count is answerable without a profile -
@@ -54657,6 +54818,22 @@ def _pm_resolve_deck_subject(text, ctx):
             chosen = cands[0]
             resolved_partner = ''
 
+    # Session fallback (2026-08-27, Paige Bueckers ad CTR follow-up):
+    # "Build a deck from this data" right after a delivered read names
+    # no subject and may have nothing open, but the session remembers
+    # which subject the last read covered. Resolve that subject so the
+    # deck consumes the data just delivered instead of erroring.
+    if chosen is None and not wanted and not (ctx and ctx.get('primary')):
+        try:
+            _last_read = session.get('pm_csv_last') or {}
+        except Exception:
+            _last_read = {}
+        _last_subj = str(_last_read.get('subject') or '').strip()
+        if _last_subj:
+            cands = _match(_last_subj)
+            if cands:
+                chosen = cands[0]
+
     if chosen is not None:
         p_key = str(chosen.get('s3_key') or '').strip()
         ok, err = _require_profile_run_access(p_key)
@@ -54694,9 +54871,9 @@ def _pm_resolve_deck_subject(text, ctx):
     if wanted:
         return None, (jsonify({
             'success': False, 'guidance': True,
-            'error': (f'I could not find a profile for "{wanted}" in the '
-                      'library. Open the profile from Select Profile, or '
-                      'build it first, then ask for the deck again.')}), 404)
+            'error': (f'"{wanted}" is not in the library yet. Open the '
+                      'profile from Select Profile, or build it first, '
+                      'then ask for the deck again.')}), 404)
     return None, (jsonify({
         'success': False, 'guidance': True,
         'error': ('Name the subject ("build the Paige Bueckers insights '
@@ -54731,6 +54908,25 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
         subject = subject or p_meta.get('name') or 'this audience'
         _deck_prompt = pma.build_insights_deck_user_prompt(
             subject, partner, digest, history, angle)
+        # Delivered reads ride along (2026-08-27, ad CTR follow-up):
+        # "build a deck from this data" right after a measurement
+        # read must consume that read even when the visible history
+        # got truncated. The ledger holds every delivered number for
+        # the subject; a deck that restates them stays consistent
+        # with what the chat already said.
+        try:
+            import insights_ledger as _il_deck
+            _led = _il_deck.consult(subject=subject)
+            if _led.get('block'):
+                _deck_prompt = (
+                    f"{_deck_prompt}\n\n"
+                    "DELIVERED READS (numbers already shipped for "
+                    "this subject; keep any you restate consistent "
+                    "with these)\n"
+                    "==========================================\n"
+                    f"{_led['block']}")
+        except Exception:
+            traceback.print_exc()
         try:
             import prometheus_knowledge as _pmk
             _kb = _pmk.knowledge_block(

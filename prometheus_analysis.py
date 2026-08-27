@@ -2182,17 +2182,54 @@ _GENERATE_EXCLUDE_RX = re.compile(
     r'\b(profile|cut|audience|cohort)s?\b'
     r'|\bpanelists?\b|\bsample size\b|\bincidence\b', re.IGNORECASE)
 
+# Ad-metric / KPI vocabulary (2026-08-27, Jenna / Paige Bueckers ad CTR
+# defect): a KPI name IS a metric ask on its own - it needs no "how
+# many" phrasing and no behavior noun. These asks are never carried by
+# on-screen profile rows and must never fall through to the build
+# flow. "I want to know ad CTR for paige bueckers" routes here.
+_METRIC_KPI_RX = re.compile(
+    r'\bctr\b|\bclick[\s-]?through(?:\s+rates?)?\b|\bclick\s+rates?\b'
+    r'|\b(?:engagement|conversion|completion|response|open|bounce|'
+    r'view[\s-]?through|watch[\s-]?through|click[\s-]?to[\s-]?open|'
+    r'interaction|swipe[\s-]?up)\s+rates?\b'
+    r'|\bcpm\b|\bcpc\b|\bcpa\b|\bcpv\b|\bcpi\b|\becpm\b|\bcvr\b'
+    r'|\bvtr\b|\bctor\b|\broas\b'
+    r'|\bcost\s+per\s+(?:click|thousand|mille|acquisition|view|'
+    r'install|impression)\b'
+    r'|\breturn\s+on\s+ad\s+spend\b'
+    r'|\bad\s+(?:recall|impressions?|clicks?|frequency|'
+    r'performance|engagement|completions?|conversions?)\b',
+    re.IGNORECASE)
 
-def detect_generate_intent(text):
-    """True when the message is a direct metric question (a count, a
-    volume, a share) that can be measured without an open profile.
-    Conservative: build/pull asks and sample-size asks are excluded;
-    both quantity phrasing and a measurable behavior noun must appear."""
+
+def detect_metric_kpi_intent(text):
+    """True when the ask names an ad-metric / KPI (CTR, click-through,
+    engagement rate, conversion rate, CPM, CPC, ROAS, ad impressions,
+    ...). KPI vocabulary alone is a metric ask; build/pull asks are
+    still excluded so "build a profile of high-CTR shoppers" keeps
+    routing to the build flow."""
     t = str(text or '')
     if not t.strip() or len(t) > 600:
         return False
     if _GENERATE_EXCLUDE_RX.search(t):
         return False
+    return bool(_METRIC_KPI_RX.search(t))
+
+
+def detect_generate_intent(text):
+    """True when the message is a direct metric question (a count, a
+    volume, a share) that can be measured without an open profile.
+    Conservative: build/pull asks and sample-size asks are excluded;
+    both quantity phrasing and a measurable behavior noun must appear.
+    KPI vocabulary (CTR, CPM, conversion rate, ...) qualifies on its
+    own - a KPI name is a metric ask by definition."""
+    t = str(text or '')
+    if not t.strip() or len(t) > 600:
+        return False
+    if _GENERATE_EXCLUDE_RX.search(t):
+        return False
+    if _METRIC_KPI_RX.search(t):
+        return True
     return bool(_GENERATE_INTENT_RX.search(t) and _GENERATE_NOUN_RX.search(t))
 
 

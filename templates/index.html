@@ -61578,6 +61578,26 @@ https://www.instagram.com/p/..."></textarea>
             return false;
         }
 
+        // Ad-metric / KPI vocabulary (2026-08-27, Jenna / Paige Bueckers
+        // ad CTR defect). Mirrors detect_metric_kpi_intent in
+        // prometheus_analysis.py: a KPI name (CTR, click-through,
+        // engagement rate, CPM, ROAS, ...) is a measurement ask on its
+        // own and must never fall through to the build flow or be
+        // swallowed by an armed clarify step.
+        function _pmLooksMetricKpi(text) {
+            var t = String(text || '').trim();
+            if (!t || t.length > 600) return false;
+            if (/\b(build|create|make|pull|queue|launch|refresh)\b[^.?!]{0,40}\b(profile|cut|audience|cohort)s?\b/i.test(t)) return false;
+            return (
+                /\bctr\b|\bclick[\s-]?through(?:\s+rates?)?\b|\bclick\s+rates?\b/i.test(t) ||
+                /\b(?:engagement|conversion|completion|response|open|bounce|view[\s-]?through|watch[\s-]?through|click[\s-]?to[\s-]?open|interaction|swipe[\s-]?up)\s+rates?\b/i.test(t) ||
+                /\bcpm\b|\bcpc\b|\bcpa\b|\bcpv\b|\bcpi\b|\becpm\b|\bcvr\b|\bvtr\b|\bctor\b|\broas\b/i.test(t) ||
+                /\bcost\s+per\s+(?:click|thousand|mille|acquisition|view|install|impression)\b/i.test(t) ||
+                /\breturn\s+on\s+ad\s+spend\b/i.test(t) ||
+                /\bad\s+(?:recall|impressions?|clicks?|frequency|performance|engagement|completions?|conversions?)\b/i.test(t)
+            );
+        }
+
         function _pmShouldAnalyze(text, ctx) {
             var t = String(text || '').trim();
             if (!t) return false;
@@ -61585,6 +61605,9 @@ https://www.instagram.com/p/..."></textarea>
             if (/\b(run|build|pull|create|queue|start|launch|generate)\b[^.]{0,60}\bprofiles?\b/i.test(t)) return false;
             if (/\b(cut|slice)\b[^.]{0,40}\bby\b/i.test(t)) return false;
             if (/\brefresh\b|\bsample size\b|\bincidence\b|\bstatus\b|\bcredits?\b/i.test(t)) return false;
+            // Metric / KPI asks route to the analyze path whether or
+            // not a profile is open (base resolution happens there).
+            if (_pmLooksMetricKpi(t)) return true;
             var analytic = /\banaly[sz]|\binsight|\bsummar|\bcompare|\bmoneti[sz]|\bmoney\b|\brevenue\b|\bsponsor|\bpitch\b|\bsell\b|\bmedia plan|\breach\b|\bwhat (stands|does|do|is|are|should)\b|\bhow (can|do|would|should|does|is)\b|\bwhy\b|\bwho (is|are|should|would)\b|\bwhich\b|\btop \d|\bexplain|\bmean(s|ing)?\b|\btakeaway|\bopportunit|\btell me about\b|\bstands? out\b|\binteresting\b/i.test(t);
             if (analytic) return true;
             if (ctx && _pmAnalysisActive) return true;
@@ -62287,14 +62310,21 @@ https://www.instagram.com/p/..."></textarea>
             // Batch scoping follow-through (2026-08-20): one goal
             // question + one cut-recommendation round for the whole
             // batch; picked cuts clone to every draft.
-            if (synthChatBatchClarify) {
+            // Metric / KPI pivot (2026-08-27, ad CTR defect): a KPI
+            // ask mid-clarify is a measurement question, never an
+            // answer to the region / cuts picker. Skip the clarify
+            // and date-confirm interceptions so it reaches the
+            // analyze routing below; the draft stays open and the
+            // picker can still be answered afterward.
+            var _pmKpiPivot = _pmLooksMetricKpi(text);
+            if (!_pmKpiPivot && synthChatBatchClarify) {
                 if (synthChatBatchDrafts && synthChatBatchDrafts.length) {
                     await _synthChatBatchClarifyAnswer(text);
                     return;
                 }
                 synthChatBatchClarify = null;
             }
-            if (synthChatClarify && synthChatClarify.steps &&
+            if (!_pmKpiPivot && synthChatClarify && synthChatClarify.steps &&
                 synthChatClarify.idx < synthChatClarify.steps.length) {
                 await _synthChatClarifyAnswer(text);
                 return;
@@ -62306,7 +62336,7 @@ https://www.instagram.com/p/..."></textarea>
             // any other reply gets combined with the stashed
             // original ask so Claude sees the full request in one
             // shot.
-            if (synthChatAwaitingDateConfirm) {
+            if (synthChatAwaitingDateConfirm && !_pmKpiPivot) {
                 if (_synthChatIsDateConfirmation(text)) {
                     // Batch release (2026-08-20): the whole batch
                     // was stashed pending the window answer.
@@ -63066,7 +63096,7 @@ https://www.instagram.com/p/..."></textarea>
         // renders an error. Failures show this line; the real detail
         // reaches ops by email (server-side, or via the beacon below
         // when the backend never saw the failure).
-        var SYNTH_CHAT_CALM_MSG = "Working on it - you'll receive an email when it's completed.";
+        var SYNTH_CHAT_CALM_MSG = "Working on it. This one needs a closer look and will come back to you shortly.";
         function _synthChatReportClientError(route, err) {
             // Backend-unreachable / unparseable-reply beacon: fires
             // the same ops email as a server-side failure. Dropped
@@ -63735,8 +63765,8 @@ https://www.instagram.com/p/..."></textarea>
             synthChatDiscoveryOffer = null;
             synthChatStashedClarifySteps = null;
             synthChatPushTurn('agent',
-                wasBatch ? 'Batch cancelled. Send another message to try again.'
-                         : 'Draft cancelled. Send another message to try again.');
+                wasBatch ? 'Batch closed. Ask me anything else when ready.'
+                         : 'Draft closed. Ask me anything else when ready.');
         }
 
         async function synthChatApproveBrief() {
