@@ -49718,7 +49718,8 @@ def api_synth_chat_clarify():
     answer = str(body.get('answer') or '').strip()
     draft = body.get('draft') or {}
     if step not in ('goal', 'strategy', 'region', 'cuts', 'parent_link',
-                    'age_breaks', 'ip_scope', 'identity',
+                    'age_breaks', 'ip_scope', 'viewer_scope',
+                    'viewer_audience', 'identity',
                     'existing_profile', 'qualifier_match',
                     'subiq_window', 'subiq_upsell',
                     'subiq_or_profile') \
@@ -50453,8 +50454,23 @@ def api_synth_chat_clarify():
             except Exception as _sc_err:
                 print(f"[ip-scope] consumer sample scale skipped: "
                       f"{_sc_err}")
+            # Viewer season/film scope (2026-08-27): the subject just
+            # became a viewers universe - research the title's
+            # structure and, when it is a multi-season series or a
+            # film franchise, chain the scope question next. Runs
+            # before the head line so a scope the words already named
+            # (renamed subject) is what the confirmation echoes.
+            try:
+                _apply_viewer_scope_guard(draft, answer, allow_ask=True)
+            except Exception as _vsg_err:
+                print(f"[ip-scope] viewer-scope chain skipped: "
+                      f"{_vsg_err}")
             head = (f"Got it - building on {verb} only. The profile "
                     f"is now {draft.get('subject') or subject}.")
+            for _note_key in ('viewer_audience_note', 'viewer_scope_note'):
+                _vs_note = str(draft.get(_note_key) or '').strip()
+                if _vs_note:
+                    head += ' ' + _vs_note
         else:
             past = {'viewers': 'watched', 'watchers': 'watched',
                     'readers': 'read', 'listeners': 'listened to',
@@ -50470,7 +50486,19 @@ def api_synth_chat_clarify():
                 'next_step': 'ip_scope',
             })
         draft.pop('ip_scope_data', None)
-        # Continue the normal flow, same chaining as age_breaks.
+        # Continue the normal flow, same chaining as age_breaks. The
+        # kids-title definition (WHO the universe is) asks before the
+        # season/film scope (WHICH content it covers).
+        if draft.get('ask_viewer_audience') and \
+                draft.get('viewer_audience_data'):
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head,
+                            'next_step': 'viewer_audience'})
+        if draft.get('ask_viewer_scope') and \
+                draft.get('viewer_scope_data'):
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head,
+                            'next_step': 'viewer_scope'})
         if draft.get('ask_age_breaks') and draft.get('age_break_data'):
             return jsonify({'success': True, 'draft': draft,
                             'message': head, 'next_step': 'age_breaks'})
@@ -50493,6 +50521,192 @@ def api_synth_chat_clarify():
                         'message': head + " Review the brief below "
                         "and approve to queue.",
                         'next_step': 'approve'})
+
+    if step == 'viewer_audience':
+        # Kids-title definition (2026-08-27 Jenna, Paw Patrol
+        # directive): a preschool/kids title asks whether the universe
+        # is the actual under-18 viewers or the parents of the
+        # viewers. Data was stashed by _apply_viewer_scope_guard.
+        from migration.viewer_content_scope import (
+            audience_from_text as _va_from_text,
+        )
+        data = draft.get('viewer_audience_data') or {}
+        title = str(data.get('title') or subject)
+        low = answer.lower().strip()
+        choice = _va_from_text(answer)
+        if not choice:
+            if _re.search(r'\bparents?\b|\bmoms?\b|\bdads?\b'
+                          r'|\badults?\b', low):
+                choice = 'parents'
+            elif _re.search(r'\bkids?\b|\bchild(?:ren)?\b|\bactual\b'
+                            r'|\bunder\b|\b17\b|\b18\b|\byoung\b', low):
+                choice = 'under18'
+        if not choice:
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (f"{title} is made for a young audience - "
+                            f"should the profile cover the actual "
+                            f"under-18 viewers, or the parents of the "
+                            f"viewers? Pick below, or reply parents "
+                            f"or kids."),
+                'next_step': 'viewer_audience',
+            })
+        _bind_viewer_audience(draft, data, choice)
+        draft.pop('viewer_audience_data', None)
+        who = ('the parents and co-viewing adults' if choice == 'parents'
+               else 'the actual under-18 viewers')
+        head = (f"Got it - building on {who}. The profile is now "
+                f"{draft.get('subject') or subject}.")
+        if draft.get('ask_viewer_scope') and \
+                draft.get('viewer_scope_data'):
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head,
+                            'next_step': 'viewer_scope'})
+        if draft.get('ask_age_breaks') and draft.get('age_break_data'):
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head, 'next_step': 'age_breaks'})
+        if draft.get('ask_parent_link') and \
+                draft.get('parent_link_candidates'):
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head, 'next_step': 'parent_link'})
+        if str(draft.get('decision') or '').strip().lower() in (
+                'new_build', 'time_shifted_refresh', 'cut_needs_parent'):
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': (head + " Quick scoping question: what's "
+                            "the business goal for this one? "
+                            "(One line - a pitch, a renewal, a media "
+                            "plan. Say skip to jump straight to "
+                            "the build.)"),
+                'next_step': 'goal',
+            })
+        return jsonify({'success': True, 'draft': draft,
+                        'message': head + " Review the brief below "
+                        "and approve to queue.",
+                        'next_step': 'approve'})
+
+    if step == 'viewer_scope':
+        # Viewer season/film scope (2026-08-27 Jenna directive): a
+        # series asks all seasons / most recent / a specific season
+        # (then lists the researched seasons); a film franchise asks
+        # whole franchise / most recent film / a specific film (then
+        # lists the films). Data was stashed by
+        # _apply_viewer_scope_guard; viewer_scope_data.mode flips
+        # 'scope' -> 'pick' for the second ask.
+        from migration.viewer_content_scope import (
+            scope_from_text as _vs_from_text,
+        )
+        data = draft.get('viewer_scope_data') or {}
+        kind = str(data.get('kind') or 'series')
+        is_series = kind == 'series'
+        unit = 'season' if is_series else 'film'
+        seasons = data.get('seasons') or []
+        films = data.get('films') or []
+        low = answer.lower().strip()
+        mode = str(data.get('mode') or 'scope')
+
+        def _vs_bind_and_continue(req):
+            _bind_viewer_scope(draft, data, req)
+            draft.pop('viewer_scope_data', None)
+            vs = draft.get('viewer_scope') or {}
+            note = str(draft.get('viewer_scope_note') or '').strip()
+            if vs.get('mode') in ('latest', 'specific'):
+                head = (f"Locked to {vs.get('label') or 'that scope'} - "
+                        f"the profile is now "
+                        f"{draft.get('subject') or subject}.")
+            else:
+                head = note or "Covering the full title."
+            if draft.get('ask_age_breaks') and \
+                    draft.get('age_break_data'):
+                return jsonify({'success': True, 'draft': draft,
+                                'message': head,
+                                'next_step': 'age_breaks'})
+            if draft.get('ask_parent_link') and \
+                    draft.get('parent_link_candidates'):
+                return jsonify({'success': True, 'draft': draft,
+                                'message': head,
+                                'next_step': 'parent_link'})
+            if str(draft.get('decision') or '').strip().lower() in (
+                    'new_build', 'time_shifted_refresh',
+                    'cut_needs_parent'):
+                return jsonify({
+                    'success': True, 'draft': draft,
+                    'message': (head + " Quick scoping question: "
+                                "what's the business goal for this "
+                                "one? (One line - a pitch, a renewal, "
+                                "a media plan. Say skip to jump "
+                                "straight to the build.)"),
+                    'next_step': 'goal',
+                })
+            return jsonify({'success': True, 'draft': draft,
+                            'message': head + " Review the brief "
+                            "below and approve to queue.",
+                            'next_step': 'approve'})
+
+        def _vs_pick_question():
+            opts = seasons if is_series else films
+            lines = [f"Which {unit}?"]
+            for _i, _o in enumerate(opts[:24], start=1):
+                lines.append(f"  {_i}. {_o.get('label')}")
+            lines.append(f"Pick below, or reply with the {unit} "
+                         f"(or all).")
+            return "\n".join(lines)
+
+        # Direct picks work at either step ('season 5', a film name).
+        direct = _vs_from_text(answer, data)
+        if direct and direct.get('mode') == 'specific':
+            if is_series and direct.get('season') is not None:
+                have = {int(s.get('number') or 0) for s in seasons}
+                if int(direct['season']) not in have:
+                    return jsonify({
+                        'success': True, 'draft': draft,
+                        'message': (f"Season {direct['season']} isn't "
+                                    f"in the researched run.\n"
+                                    + _vs_pick_question()),
+                        'next_step': 'viewer_scope',
+                    })
+            return _vs_bind_and_continue(direct)
+        if _re.search(r'\b(most\s+recent|latest|newest|current)\b', low):
+            return _vs_bind_and_continue({'mode': 'latest'})
+        if mode == 'pick':
+            m_idx = _re.match(r'^(?:option\s*|#\s*)?(\d{1,2})\b', low)
+            opts = seasons if is_series else films
+            if m_idx and 1 <= int(m_idx.group(1)) <= len(opts):
+                pick = opts[int(m_idx.group(1)) - 1]
+                req = ({'mode': 'specific', 'season': pick.get('number')}
+                       if is_series
+                       else {'mode': 'specific',
+                             'film': pick.get('title')})
+                return _vs_bind_and_continue(req)
+            if _re.search(r'\b(all|every|whole|entire|full)\b', low):
+                return _vs_bind_and_continue({'mode': 'all'})
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': _vs_pick_question(),
+                'next_step': 'viewer_scope',
+            })
+        if _re.search(r'\b(specific|pick|choose|list|which)\b', low):
+            data['mode'] = 'pick'
+            draft['viewer_scope_data'] = data
+            return jsonify({
+                'success': True, 'draft': draft,
+                'message': _vs_pick_question(),
+                'next_step': 'viewer_scope',
+            })
+        if _re.search(r'\b(all|every|whole|entire|full|everything|'
+                      r'franchise)\b', low):
+            return _vs_bind_and_continue({'mode': 'all'})
+        n_units = len(seasons) if is_series else len(films)
+        scope_words = ('all seasons, most recent season, or a '
+                       'specific season' if is_series else
+                       'the whole franchise, the most recent film, '
+                       'or a specific film')
+        return jsonify({
+            'success': True, 'draft': draft,
+            'message': (f"{data.get('title') or subject} has "
+                        f"{n_units} {unit}s. Cover {scope_words}?"),
+            'next_step': 'viewer_scope',
+        })
 
     if step == 'age_breaks':
         # Requested age range doesn't line up with the panel's breaks
@@ -51287,6 +51501,20 @@ def api_synth_chat_interpret():
         except Exception as _ip_err:
             print(f"[synth-chat interpret] ip-scope error: {_ip_err}")
 
+        # Viewer content scope (2026-08-27 Jenna): a viewers universe
+        # researches what the title IS (series / franchise film /
+        # standalone) and scopes to seasons or films - chips when the
+        # ask didn't say, silent binding when it did. Runs after the
+        # ip-scope normalizer so an already-viewers subject scopes
+        # now; while the broad-vs-viewers question is still pending,
+        # the scope question chains after that answer instead (see the
+        # ip_scope clarify handler).
+        try:
+            if not spec_draft.get('ask_ip_scope'):
+                _apply_viewer_scope_guard(spec_draft, text, allow_ask=True)
+        except Exception as _vsc_err:
+            print(f"[synth-chat interpret] viewer-scope error: {_vsc_err}")
+
         # Sample-lock passthrough (2026-08-19 incidence check): when
         # the user ran a sample check and replied "run it", the
         # frontend resends the ask with the checked sample pinned.
@@ -51514,6 +51742,20 @@ def api_synth_chat_interpret():
         if spec_draft.get('ask_age_breaks') and \
                 spec_draft.get('age_break_data'):
             clarify_steps = ['age_breaks'] + clarify_steps
+        # Viewer season/film scope (2026-08-27): which seasons or
+        # films the viewers universe covers. Runs after ip_scope
+        # (broad vs viewers decides whether it applies at all) and
+        # before every other refinement.
+        if spec_draft.get('ask_viewer_scope') and \
+                spec_draft.get('viewer_scope_data'):
+            clarify_steps = ['viewer_scope'] + clarify_steps
+        # Kids-title definition (2026-08-27 Paw Patrol directive):
+        # actual under-18 viewers vs parents of the viewers. WHO the
+        # universe is comes before WHICH seasons it covers, so this
+        # prepends ahead of viewer_scope (one question per turn).
+        if spec_draft.get('ask_viewer_audience') and \
+                spec_draft.get('viewer_audience_data'):
+            clarify_steps = ['viewer_audience'] + clarify_steps
         # IP-scope question runs FIRST - broad engagers vs consumers
         # defines the universe itself (pins, naming, sample) before
         # any other refinement makes sense.
@@ -52446,6 +52688,74 @@ def _spec_from_draft(draft):
                                             field='identity_qualifier',
                                             subject=subject, max_len=60,
                                             single_line=True)
+    # Viewer season/film scope (2026-08-27): the bound scope rides the
+    # spec so the engine host resolves the scoped content URLs, folds
+    # them into BRAND INPUT, and inserts the verified rows into the
+    # content mapping reference. Structure lists (seasons/films) ride
+    # along so the host never has to re-research what the chatbot
+    # already resolved.
+    _vsc = draft.get('viewer_scope')
+    if isinstance(_vsc, dict) and _vsc.get('mode'):
+        try:
+            _vs_out = {
+                'mode': str(_vsc.get('mode'))[:12],
+                'label': _scrub(_vsc.get('label') or '',
+                                field='viewer_scope_label',
+                                subject=subject, max_len=120,
+                                single_line=True),
+                'title': _scrub(_vsc.get('title') or '',
+                                field='viewer_scope_title',
+                                subject=subject, max_len=120,
+                                single_line=True),
+                'kind': str(_vsc.get('kind') or '')[:20],
+                'franchise': _scrub(_vsc.get('franchise') or '',
+                                    field='viewer_scope_franchise',
+                                    subject=subject, max_len=120,
+                                    single_line=True),
+                'production': _scrub(_vsc.get('production') or '',
+                                     field='viewer_scope_production',
+                                     subject=subject, max_len=80,
+                                     single_line=True),
+                'assumed': bool(_vsc.get('assumed')),
+            }
+            if _vsc.get('season') is not None:
+                _vs_out['season'] = int(_vsc['season'])
+                _vs_out['season_year'] = str(
+                    _vsc.get('season_year') or '')[:9]
+            if _vsc.get('film'):
+                _vs_out['film'] = _scrub(_vsc['film'],
+                                         field='viewer_scope_film',
+                                         subject=subject, max_len=120,
+                                         single_line=True)
+                _vs_out['film_year'] = str(_vsc.get('film_year') or '')[:9]
+            _vs_seasons = []
+            for _s in (_vsc.get('seasons') or [])[:60]:
+                try:
+                    _vs_seasons.append({
+                        'number': int(_s.get('number')),
+                        'year': str(_s.get('year') or '')[:9]})
+                except (TypeError, ValueError):
+                    continue
+            if _vs_seasons:
+                _vs_out['seasons'] = _vs_seasons
+            _vs_films = []
+            for _f in (_vsc.get('films') or [])[:40]:
+                _ft = str((_f or {}).get('title') or '').strip()
+                if _ft:
+                    _vs_films.append({
+                        'title': _ft[:120],
+                        'year': str(_f.get('year') or '')[:9]})
+            if _vs_films:
+                _vs_out['films'] = _vs_films
+            spec['viewer_scope'] = _vs_out
+        except Exception as _vs_spec_err:
+            print(f"[spec_from_draft] viewer_scope passthrough "
+                  f"skipped: {_vs_spec_err}")
+    # Kids-title definition (2026-08-27 Paw Patrol directive): parents
+    # vs under-18 rides the spec; the membership sentence already rides
+    # persona_notes and the definition rides the subject name whole.
+    if draft.get('viewer_audience') in ('parents', 'under18'):
+        spec['viewer_audience'] = draft['viewer_audience']
     # ---- Semantic-guard spec contract (2026-08-25, bind-or-ask
     # mandate). Every field below was either bound by
     # _apply_semantic_guards or emitted directly by the interpret step;
@@ -56370,6 +56680,214 @@ def _maybe_ask_ip_scope(draft, prompt):
 
 
 # --------------------------------------------------------------------
+# Viewer content scope (2026-08-27 Jenna): a viewers universe
+# researches what the title IS (series / franchise film / standalone
+# film / special) and scopes to seasons or films. Dashboard chatbot:
+# chips ask "all seasons / most recent / a specific season" (then the
+# researched season list). Partner API: one-shot, never asks - a
+# scope named in the prompt binds; otherwise the build covers all
+# seasons / the whole franchise and the response prose says so.
+# Research + parsing live in migration/viewer_content_scope.py.
+# --------------------------------------------------------------------
+
+def _bind_viewer_scope(draft, structure, req, assumed=False):
+    """In-place: resolve the requested scope against the researched
+    structure, rename the subject so the deliverable carries the scope
+    ('Yellowstone Season 5 Viewers'), scale the sample for a single
+    season/film out of a larger body, and stamp draft['viewer_scope']
+    (the spec passthrough) + draft['viewer_scope_note'] (partner-safe
+    prose for briefs/summaries)."""
+    from migration.viewer_content_scope import (
+        resolve_scope, scope_prose, scope_sample_fraction,
+        scoped_subject_name,
+    )
+    scope = resolve_scope(structure, req)
+    subj_now = str(draft.get('subject') or draft.get('name') or '').strip()
+    new_subj = scoped_subject_name(subj_now, structure, scope)
+    if new_subj and new_subj != subj_now:
+        draft['subject'] = new_subj
+        draft['name'] = new_subj
+        draft.pop('file_stem', None)
+    draft['viewer_scope'] = {
+        'mode': scope['mode'],
+        'season': scope.get('season'),
+        'season_year': scope.get('season_year') or '',
+        'film': scope.get('film') or '',
+        'film_year': scope.get('film_year') or '',
+        'label': scope.get('label') or '',
+        'title': str(structure.get('title') or '').strip(),
+        'kind': str(structure.get('kind') or '').strip(),
+        'franchise': str(structure.get('franchise') or '').strip(),
+        'production': str(structure.get('production') or '').strip(),
+        'seasons': structure.get('seasons') or [],
+        'films': structure.get('films') or [],
+        'assumed': bool(assumed),
+    }
+    draft.pop('ask_viewer_scope', None)
+    if scope['mode'] in ('latest', 'specific'):
+        try:
+            frac = scope_sample_fraction(subj_now, structure, scope)
+            if 0 < frac < 1:
+                tu_now = int(draft.get('subject_raw_tu') or 0)
+                if tu_now > 0:
+                    draft['subject_raw_tu'] = max(800, int(tu_now * frac))
+                av_now = int(draft.get('subject_raw_avid') or 0)
+                if av_now > 0:
+                    draft['subject_raw_avid'] = max(400, int(av_now * frac))
+                anchor = int(draft.get('universe_anchor') or 0)
+                if anchor > 0:
+                    draft['universe_anchor'] = max(1000, int(anchor * frac))
+                _jitter_draft_est_sample(draft)
+        except Exception as _sf_err:
+            print(f"[viewer-scope] sample scale skipped: {_sf_err}")
+    note = scope_prose(structure, scope, assumed=assumed)
+    if note:
+        draft['viewer_scope_note'] = note
+    try:
+        print(f"[viewer-scope] bound {draft.get('subject')!r} -> "
+              f"{scope.get('label') or 'all'}"
+              f"{' (assumed)' if assumed else ''}")
+    except Exception:
+        pass
+    return draft
+
+
+def _bind_viewer_audience(draft, structure, choice, assumed=False):
+    """In-place: bind the kids-title universe definition (2026-08-27
+    Jenna, Paw Patrol directive). 'parents' = the adult cohort managing
+    and co-viewing; 'under18' = the actual child audience. Renames the
+    subject so the definition rides the TU name whole (naming rule 6b),
+    stamps draft['viewer_audience'] for the spec, appends the
+    membership sentence to persona_notes, and sets
+    draft['viewer_audience_note'] (partner-safe prose)."""
+    from migration.viewer_content_scope import (
+        audience_persona_note, audience_prose, audience_subject_name,
+    )
+    if choice not in ('parents', 'under18'):
+        return draft
+    subj_now = str(draft.get('subject') or draft.get('name') or '').strip()
+    new_subj = audience_subject_name(subj_now, choice)
+    if new_subj and new_subj != subj_now:
+        draft['subject'] = new_subj
+        draft['name'] = new_subj
+        draft.pop('file_stem', None)
+    draft['viewer_audience'] = choice
+    draft['viewer_audience_assumed'] = bool(assumed)
+    draft.pop('ask_viewer_audience', None)
+    note = audience_prose(structure, choice, assumed=assumed)
+    if note:
+        draft['viewer_audience_note'] = note
+    pnote = audience_persona_note(structure, choice)
+    if pnote:
+        existing = str(draft.get('persona_notes') or '').rstrip()
+        if pnote not in existing:
+            draft['persona_notes'] = (existing + (' ' if existing else '')
+                                      + pnote).strip()
+    try:
+        print(f"[viewer-audience] bound {draft.get('subject')!r} -> "
+              f"{choice}{' (assumed)' if assumed else ''}")
+    except Exception:
+        pass
+    return draft
+
+
+def _apply_viewer_scope_guard(draft, raw_text='', allow_ask=True,
+                              decision=None):
+    """In-place bind-or-ask for the viewers season/film scope AND the
+    kids-title audience definition.
+
+    Fresh-build viewers universes only (cuts / existing matches keep
+    their parent's scope). Researches the title's structure
+    (cache-first), binds what the user's own words named, and:
+      * dashboard (allow_ask=True): stashes ask_viewer_audience /
+        ask_viewer_scope + data so the chip steps run one question per
+        turn (definition first, then season/film scope); returns True
+        when anything was stashed.
+      * partner API (allow_ask=False): binds the defaults - parents
+        for a preschool/kids title (the adult cohort the panel
+        measures), all seasons / whole franchise for the scope - with
+        the assumptions stated in draft['viewer_audience_note'] /
+        draft['viewer_scope_note'].
+    Standalone films and specials skip the season scope; the kids
+    definition applies to any title kind. Fail-open: any research
+    failure leaves the draft untouched."""
+    try:
+        if not isinstance(draft, dict):
+            return False
+        dec = str(decision or draft.get('decision')
+                  or 'new_build').strip().lower()
+        if dec not in ('new_build', 'time_shifted_refresh',
+                       'cut_needs_parent'):
+            return False
+        from migration.viewer_carriage import detect_consumption_scoped
+        from migration.viewer_content_scope import (
+            audience_from_text, ensure_structure, needs_audience_clarify,
+            audience_chip_payload, needs_scope_clarify,
+            scope_chip_payload, scope_from_text,
+        )
+        subj = str(draft.get('subject') or draft.get('name') or '').strip()
+        det = detect_consumption_scoped(subj)
+        if not det:
+            return False
+        structure = ensure_structure(det['title_hint'])
+        if structure.get('research_failed'):
+            return False
+        asked = False
+        words = ' '.join([subj, str(raw_text or '')])
+
+        # Kids-title definition (2026-08-27 Paw Patrol directive):
+        # actual under-18 viewers or parents of the viewers. Applies
+        # to any title kind whose primary audience is preschool/kids.
+        if draft.get('viewer_audience') not in ('parents', 'under18') \
+                and needs_audience_clarify(structure):
+            aud_req = audience_from_text(words)
+            if aud_req:
+                _bind_viewer_audience(draft, structure, aud_req)
+            elif allow_ask:
+                draft['ask_viewer_audience'] = True
+                draft['viewer_audience_data'] = \
+                    audience_chip_payload(structure)
+                asked = True
+                try:
+                    print(f"[viewer-audience] {subj!r} reads as a "
+                          f"{structure.get('audience')} title - asking "
+                          f"under-18 vs parents")
+                except Exception:
+                    pass
+            else:
+                _bind_viewer_audience(draft, structure, 'parents',
+                                      assumed=True)
+
+        # Season/film scope: series and film franchises only.
+        vs_now = draft.get('viewer_scope')
+        scope_bound = isinstance(vs_now, dict) and vs_now.get('mode')
+        if not scope_bound and structure.get('kind') in (
+                'series', 'franchise_film'):
+            req = scope_from_text(words, structure)
+            if req:
+                _bind_viewer_scope(draft, structure, req)
+            elif not needs_scope_clarify(structure):
+                _bind_viewer_scope(draft, structure, {'mode': 'all'})
+            elif allow_ask:
+                draft['ask_viewer_scope'] = True
+                draft['viewer_scope_data'] = scope_chip_payload(structure)
+                asked = True
+                try:
+                    print(f"[viewer-scope] {subj!r} is a "
+                          f"{structure.get('kind')} with a scope "
+                          f"choice - asking")
+                except Exception:
+                    pass
+            else:
+                _bind_viewer_scope(draft, structure, {'mode': 'all'},
+                                   assumed=True)
+        return asked
+    except Exception as _vs_err:
+        print(f"[viewer-scope] guard skipped (non-fatal): {_vs_err}")
+        return False
+
+
+# --------------------------------------------------------------------
 # Subject identity resolution (2026-08-24, the Furious defect).
 #
 # LIVE DEFECT: "run one on furious show on hulu" resolved the subject
@@ -57950,6 +58468,16 @@ def _v1_conclude(prompt, run_avid=True):
     # Identical on /check and /run by construction (both call here).
     _apply_semantic_guards(draft, prompt, allow_ask=False,
                            decision=decision)
+    # Viewer season/film scope (2026-08-27): the one-shot surface
+    # never asks - a season/film named in the prompt binds to it;
+    # otherwise the build covers all seasons / the whole franchise and
+    # the assumed scope is stated in the brief summary below. Never an
+    # override field (prompt-only contract).
+    try:
+        _apply_viewer_scope_guard(draft, prompt, allow_ask=False,
+                                  decision=decision)
+    except Exception as _vs_err:
+        print(f"[v1_conclude] viewer-scope guard skipped: {_vs_err}")
     # Event-scoped window (2026-08-24): resolved event dates override
     # the default window on the v1 surface too. The v1 contract has no
     # clarify round-trip, so an UNRESOLVED event window rides
@@ -58117,6 +58645,21 @@ def _v1_conclude(prompt, run_avid=True):
         if conclusion.get('estimated_audience'):
             conclusion['brief_summary'] += ' ' + _estimated_audience_sentence(
                 conclusion['estimated_audience'])
+        # Viewer scope + kids-definition statements (2026-08-27): the
+        # check/run prose states what the build covers - bound from
+        # the prompt's own words, or the assumed defaults (all seasons
+        # / whole franchise; parents for a preschool/kids title) with
+        # how to narrow or flip them.
+        if decision in ('new_build', 'time_shifted_refresh',
+                        'cut_needs_parent'):
+            for _note_key in ('viewer_audience_note', 'viewer_scope_note'):
+                _vs_note = str(draft.get(_note_key) or '').strip()
+                if _vs_note:
+                    conclusion['brief_summary'] = (
+                        conclusion['brief_summary'].rstrip()
+                        + (' ' if conclusion['brief_summary'].strip()
+                           else '')
+                        + _vs_note)
     return conclusion, None
 
 

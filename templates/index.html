@@ -62834,6 +62834,70 @@ https://www.instagram.com/p/..."></textarea>
                         _ioVerb.slice(1) + ' only', send: _ioVerb}
                 ];
             }
+            if (step === 'viewer_audience') {
+                // 2026-08-27 (Paw Patrol directive): a preschool/kids
+                // title picks its universe - actual under-18 viewers
+                // or parents of the viewers. Sends match the Python
+                // parser branches exactly.
+                return [
+                    {label: 'Actual under-18 viewers',
+                     send: 'actual under-18 viewers'},
+                    {label: 'Parents of the viewers',
+                     send: 'parents of the viewers'}
+                ];
+            }
+            if (step === 'viewer_scope') {
+                // 2026-08-27: viewers universes scope to seasons
+                // (series) or films (franchise). Two-stage: 'scope'
+                // asks the level, 'pick' lists the researched
+                // seasons/films. Sends match the Python parser
+                // branches exactly.
+                var _vsD = ((synthChatCurrentDraft || d || {})
+                    .viewer_scope_data) || {};
+                var _vsSeries = String(_vsD.kind || 'series') === 'series';
+                var _vsList = (_vsSeries ? _vsD.seasons : _vsD.films) || [];
+                if (String(_vsD.mode || 'scope') === 'pick') {
+                    var _vsOut = [];
+                    for (var _vi = 0; _vi < _vsList.length && _vi < 24;
+                         _vi++) {
+                        var _vLbl = String((_vsList[_vi] || {}).label ||
+                            '').trim();
+                        if (_vLbl.length > 58) {
+                            _vLbl = _vLbl.slice(0, 55) + '...';
+                        }
+                        if (_vLbl) {
+                            _vsOut.push({label: _vLbl,
+                                         send: String(_vi + 1)});
+                        }
+                    }
+                    _vsOut.push({
+                        label: _vsSeries ? 'All seasons'
+                                         : 'Whole franchise',
+                        send: _vsSeries ? 'all seasons'
+                                        : 'whole franchise'});
+                    return _vsOut;
+                }
+                var _vsLast = _vsList.length ?
+                    String((_vsList[_vsList.length - 1] || {}).label ||
+                        '').trim() : '';
+                if (_vsSeries) {
+                    return [
+                        {label: 'All seasons', send: 'all seasons'},
+                        {label: 'Most recent season' +
+                            (_vsLast ? ' (' + _vsLast + ')' : ''),
+                         send: 'most recent season'},
+                        {label: 'A specific season',
+                         send: 'a specific season'}
+                    ];
+                }
+                return [
+                    {label: 'Whole franchise', send: 'whole franchise'},
+                    {label: 'Most recent film' +
+                        (_vsLast ? ' (' + _vsLast + ')' : ''),
+                     send: 'most recent film'},
+                    {label: 'A specific film', send: 'a specific film'}
+                ];
+            }
             if (step === 'goal') {
                 return [
                     {label: 'Pitch', send: 'pitch'},
@@ -63113,6 +63177,55 @@ https://www.instagram.com/p/..."></textarea>
                 _ipLines.push('Pick one below, or reply broad or ' +
                     _ipVerb + '.');
                 return _ipLines.join('\n');
+            }
+            if (step === 'viewer_audience') {
+                // 2026-08-27 (Paw Patrol directive): preschool/kids
+                // title - actual under-18 viewers vs parents of the
+                // viewers. Data rides the draft (stashed by the
+                // interpret step).
+                var _vaDraft = synthChatCurrentDraft || {};
+                var _vaD = _vaDraft.viewer_audience_data || {};
+                var _vaT = String(_vaD.title || _vaDraft.subject ||
+                    'This title');
+                return _vaT + ' is made for a young audience. ' +
+                    'Should the profile cover the actual under-18 ' +
+                    'viewers, or the parents of the viewers?';
+            }
+            if (step === 'viewer_scope') {
+                // 2026-08-27: which seasons/films the viewers build
+                // covers. Data rides the draft (stashed by the
+                // interpret step); mode 'pick' lists the researched
+                // seasons/films.
+                var _vsQDraft = synthChatCurrentDraft || {};
+                var _vsQD = _vsQDraft.viewer_scope_data || {};
+                var _vsQSeries = String(_vsQD.kind || 'series') ===
+                    'series';
+                var _vsQUnit = _vsQSeries ? 'season' : 'film';
+                var _vsQList = (_vsQSeries ? _vsQD.seasons
+                                           : _vsQD.films) || [];
+                var _vsQTitle = String(_vsQD.title ||
+                    _vsQDraft.subject || 'This title');
+                if (String(_vsQD.mode || 'scope') === 'pick') {
+                    var _vsQLines = ['Which ' + _vsQUnit + '?'];
+                    for (var _vq = 0; _vq < _vsQList.length &&
+                         _vq < 24; _vq++) {
+                        _vsQLines.push('  ' + (_vq + 1) + '. ' +
+                            String((_vsQList[_vq] || {}).label || ''));
+                    }
+                    _vsQLines.push('');
+                    _vsQLines.push('Pick below, or reply with the ' +
+                        _vsQUnit + ' (or all).');
+                    return _vsQLines.join('\n');
+                }
+                if (_vsQSeries) {
+                    return _vsQTitle + ' has ' + _vsQList.length +
+                        ' seasons. Cover all seasons, the most ' +
+                        'recent season, or a specific season?';
+                }
+                var _vsQFr = String(_vsQD.franchise || _vsQTitle);
+                return _vsQFr + ' is a ' + _vsQList.length +
+                    '-film franchise. Cover the whole franchise, ' +
+                    'the most recent film, or a specific film?';
             }
             if (step === 'age_breaks') {
                 // 2026-08-20: requested age range doesn't line up
