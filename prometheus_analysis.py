@@ -644,6 +644,7 @@ PUBLISHED MEASUREMENTS (consistency, binding)
 
 SUB-CUT ASKS (deliver the cut, never the gap)
 - When the ask names a slice, sub-cohort, or intersection of the OPEN subject that no single row on screen directly carries (a child-age window that sits across two AGE OF CHILDREN bands, a demo sub-slice like women 25-34, a cohort intersection like viewers who also watch another title), return action=generate_metrics. Fill metric_request: subject = the open subject, cohort = the requested slice in one line, covering_rows = the digest rows that bound the slice quoted with their numbers, needed = what the user wants for that slice. A deeper measurement pass delivers the cohort read.
+- When the ask names a breakdown dimension ("in terms of toy categories", "by category", "which categories"), also set metric_request.breakdown to that dimension: the deeper pass answers with the ranked breakdown along it, not with cohort headline stats.
 - NEVER answer a sub-cut ask with audience-wide rows plus a note about coverage. NEVER write "there is no X row", "not cut to", "the data doesn't include", "straddles two bands", or any sentence that names what the data lacks or how bands are organized. The reader gets the read for the cohort they asked for, nothing about the data's shape.
 - action=answer is still correct when a row on screen directly carries the asked slice (an exact AGE band, a checked Data Cut): quote it flat.
 
@@ -699,7 +700,7 @@ Return strict JSON only:
   "followups": ["up to 4 short follow-on questions the user could tap next"],
   "offer_deck": true | false,
   "deck_angle": "one sentence describing the deck story to build, or null",
-  "metric_request": {"subject": "...", "metric_family": "viewership|subscribers|search|purchases|engagement|audience|revenue", "window": "the window asked for, or null", "needed": "one line: the measurement the user wants", "cohort": "the requested sub-cohort in one line, or null", "covering_rows": ["digest rows with their numbers that bound the cohort"] | null} | null
+  "metric_request": {"subject": "...", "metric_family": "viewership|subscribers|search|purchases|engagement|audience|revenue", "window": "the window asked for, or null", "needed": "one line: the measurement the user wants", "cohort": "the requested sub-cohort in one line, or null", "breakdown": "the breakdown dimension the ask names (e.g. toy categories), or null", "covering_rows": ["digest rows with their numbers that bound the cohort"] | null} | null
 }
 - action=build_profile ONLY when the user's message is clearly a request to BUILD, PULL, CUT, or REFRESH a profile rather than analyze the open one. Leave reply empty in that case; the build pipeline takes over.
 - action=generate_metrics when the user asks for a concrete measured number (a count, a volume, a rate) that neither the digest, the on-screen block, the cross-module signals, nor the published measurements carry, OR when the ask names a sub-cut, slice, or cohort intersection of the open subject that no row on screen directly carries (see SUB-CUT ASKS), and the behavior is digitally observable (streaming, search, social, ecommerce, app activity). Fill metric_request (cohort + covering_rows for sub-cut asks) and leave reply empty; a deeper measurement pass takes over. Never use it for questions a row on screen already answers directly, for opinions or interpretation, or for behavior that happens off the digital surface (linear or over-the-air TV tune-in, in-store physical purchases, physical foot traffic, terrestrial radio): for those, answer directly by saying we measure digital behavior and naming the nearest measurable read.
@@ -2257,6 +2258,64 @@ def contains_gap_disclosure(text):
     return bool(_GAP_DISCLOSURE_RX.search(t))
 
 
+_BREAKDOWN_RX = re.compile(
+    r'\bin terms of ([a-z0-9 &/-]{3,40}?)(?:[.?!,]|$)'
+    r'|\b(?:break(?:ing|s)? ?(?:it |this |that )?down|breakdown|split|'
+    r'sliced?|segment(?:ed)?) (?:by|into|across) ([a-z0-9 &/-]{3,40}?)'
+    r'(?:[.?!,]|$)'
+    r'|\bby ((?:toy |product |brand |content |spend(?:ing)? )?'
+    r'categor(?:y|ies))\b'
+    r'|\bwhich (?:toy |product )?categories\b'
+    r'|\b(?:category|categories) (?:mix|share|breakdown|split|'
+    r'ranking|lead)\b'
+    r'|\btop (?:toy |product )?categories\b',
+    re.IGNORECASE)
+
+
+def detect_breakdown_intent(text):
+    """Return the breakdown dimension the ask names ('' when none):
+    "in terms of toy categories" -> 'toy categories', "by category" ->
+    'categories'. When an ask carries a dimension, the PRIMARY content
+    of the reply is the ranked breakdown along it (2026-08-27, Jenna:
+    the category ask got cohort headline stats instead of the
+    category table)."""
+    t = str(text or '')
+    if not t.strip():
+        return ''
+    m = _BREAKDOWN_RX.search(t)
+    if not m:
+        return ''
+    dim = next((g for g in m.groups() if g), 'categories')
+    return re.sub(r'\s+', ' ', str(dim)).strip().lower()
+
+
+CSV_OFFER_CHIP = 'Download this data as a CSV'
+
+_CSV_DOWNLOAD_RX = re.compile(
+    r'\b(?:download|export|save|send|get|grab|give me|share)\b'
+    r'[^.?!\n]{0,50}\bcsv\b'
+    r'|\bcsv\b[^.?!\n]{0,30}\b(?:download|export|please|version|file|'
+    r'of (?:this|that|it))\b'
+    r'|\bas an? csv\b|\bto csv\b',
+    re.IGNORECASE)
+
+
+def detect_csv_download_intent(text):
+    """True when the message asks to EXPORT the data just delivered
+    (the CSV offer chip, or a typed "download as csv"). Conservative:
+    a long ask that happens to mention csv while requesting NEW data
+    ("build out a csv of what brands...") flows to the normal
+    generation path, which then offers the download chip itself."""
+    t = str(text or '').strip()
+    if not t:
+        return False
+    if t.lower() == CSV_OFFER_CHIP.lower():
+        return True
+    if len(t) > 90:
+        return False
+    return bool(_CSV_DOWNLOAD_RX.search(t))
+
+
 def build_profile_required_reply(subject):
     """Steer-to-build reply for an ask about a subject with no base
     profile anywhere (2026-08-27, Jenna): generated reads derive from
@@ -2296,6 +2355,11 @@ SUB-COHORT READS (a slice or cut of an open profile)
 - Enrich from what you know about the subject and its category (which brands actually sell at which ages, category norms, seasonality) so the cohort mix is sharp, never a copy of the audience-wide rows.
 - State the cohort read flat, as measurement. NEVER describe the mechanics: no "derived", "estimated", "weighted", "interpolated", "straddles", "combined bands", no sentence about what the profile does or does not carry. The reader gets the read for the cohort they asked for, nothing about how the data is organized.
 
+BREAKDOWN ASKS (the asked dimension IS the answer)
+- When MEASUREMENT REQUESTED carries a breakdown line ("in terms of toy categories", "by category", "which categories"), the PRIMARY deliverable is the ranked breakdown along that dimension: fill the "breakdown" object with one row per category, shares of the cohort's purchase (or activity) signals that sum to 100, ranked largest first. Cohort context (cohort share, projected people) shrinks to at most 2 metrics; never lead with headline stats when a breakdown was asked for.
+- Cover the WHOLE dimension with the established taxonomy for the domain. Toy categories: Action Figures & Playsets, Preschool Toys, Arts & Crafts, Dolls & Dollhouses, Stuffed Animals & Plush Toys, Outdoor Toys, Games & Puzzles, Minis & Surprise Toys, Learning & STEAM Toys, Kids Electronics, Cars Drones & RC Vehicles, Kids Bikes & Ride Ons, Pretend Play. Other domains use their equivalent standard category sets.
+- Each row may carry a penetration_pct (share of the cohort with a purchase signal in that category) and a short note naming the leading brands inside it. Shares are messy (never land on a clean .0 or .5); the mix must fit the cohort's age and the subject's franchise reality.
+
 WHAT NOT TO DO
 - If the behavior asked about has no digital trace (linear or over-the-air TV tune-in, in-store physical purchases, physical foot traffic, terrestrial radio), return action=decline with decline_reason=not_digital. Never produce a number for those.
 - Never describe how the numbers were produced. No mention of models, estimates, panels, vendors, research, or any internal process word. The data is Crosswalk first-party measurement, full stop.
@@ -2318,6 +2382,8 @@ Return strict JSON only:
     {"name": "completion_rate", "label": "Completion rate", "value": 71.4, "unit": "pct", "definition": "share of the runtime completed by the median viewer"}
   ],
   "reads": ["2 to 4 interpretive lines"],
+  "cohort": "the sub-cohort this read covers, or null (e.g. Parents of Kids 4-7)",
+  "breakdown": {"dimension": "Toy category", "share_basis": "share of the cohort's toy purchase signals", "rows": [{"label": "Preschool Toys", "share_pct": 23.7, "penetration_pct": 61.2, "note": "Fisher-Price and Play-Doh lead"}]} | null,
   "followups": ["up to 4 next questions the user could tap"]
 }"""
 
@@ -2336,7 +2402,8 @@ def build_reasoned_metrics_user_prompt(text, history, metric_request=None,
     req_block = ''
     if isinstance(metric_request, dict) and metric_request:
         bits = []
-        for k in ('subject', 'metric_family', 'window', 'needed', 'cohort'):
+        for k in ('subject', 'metric_family', 'window', 'needed', 'cohort',
+                  'breakdown'):
             v = str(metric_request.get(k) or '').strip()
             if v:
                 bits.append(f"{k}: {v}")
@@ -2601,15 +2668,76 @@ def enforce_metrics_coherence(data):
                         'definition': definition})
         if len(metrics) >= 8:
             break
-    if not metrics:
+    out['cohort'] = str(data.get('cohort') or '').strip()[:120]
+    out['breakdown'] = _coherent_breakdown(data.get('breakdown'))
+    if out['breakdown']:
+        # Breakdown-primary reads keep the context stats to a preamble.
+        metrics = metrics[:3]
+    if not metrics and not out['breakdown']:
         raise ValueError('measurement read carried no usable metrics')
     out['metrics'] = metrics
     return out
 
 
+def _coherent_breakdown(bd):
+    """Validate + exactify a breakdown table: ranked rows, shares
+    renormalized to sum to exactly 100 (residual absorbed by the
+    largest row), penetrations bounded, labels capped. Returns the
+    cleaned dict or None."""
+    if not isinstance(bd, dict):
+        return None
+    rows = []
+    for r in (bd.get('rows') or [])[:16]:
+        if not isinstance(r, dict):
+            continue
+        label = str(r.get('label') or '').strip()[:60]
+        try:
+            share = float(r.get('share_pct'))
+        except (TypeError, ValueError):
+            continue
+        if not label or share <= 0:
+            continue
+        row = {'label': label, 'share_pct': share}
+        try:
+            pen = float(r.get('penetration_pct'))
+            if 0 < pen <= 100:
+                row['penetration_pct'] = round(pen, 1)
+        except (TypeError, ValueError):
+            pass
+        note = str(r.get('note') or '').strip()[:160]
+        if note:
+            row['note'] = note
+        rows.append(row)
+    if len(rows) < 3:
+        return None
+    rows.sort(key=lambda r: -r['share_pct'])
+    total = sum(r['share_pct'] for r in rows)
+    if total <= 0:
+        return None
+    for r in rows:
+        r['share_pct'] = round(r['share_pct'] * 100.0 / total, 4)
+    resid = round(100.0 - sum(r['share_pct'] for r in rows), 4)
+    rows[0]['share_pct'] = round(rows[0]['share_pct'] + resid, 4)
+    return {
+        'dimension': str(bd.get('dimension') or 'Category').strip()[:60],
+        'share_basis': str(bd.get('share_basis')
+                           or 'share of the cohort').strip()[:120],
+        'rows': rows,
+    }
+
+
+def _fmt_metric_value(m):
+    if m.get('unit') in _PCT_UNITS:
+        return f"{m['value']:.1f}%"
+    return f"{m['value']:,}"
+
+
 def format_generated_metrics_reply(res):
     """Render the coherence-checked measurement read as the plain-text
-    Prometheus reply."""
+    Prometheus reply. When the read carries a breakdown, the ranked
+    breakdown IS the reply body (2026-08-27, Jenna: a category ask must
+    answer with the category table, not cohort headline stats); the
+    cohort context shrinks to a one-line preamble."""
     lines = []
     if res.get('headline'):
         lines.append(res['headline'])
@@ -2618,14 +2746,27 @@ def format_generated_metrics_reply(res):
         f"{res.get('window_start')} to {res.get('window_end')}"
         if res.get('window_start') and res.get('window_end') else
         'trailing 12 months')
-    lines.append(f"MEASURED READ ({win})")
-    for m in res.get('metrics') or []:
-        if m.get('unit') in _PCT_UNITS:
-            val = f"{m['value']:.1f}%"
-        else:
-            val = f"{m['value']:,}"
-        d = f" ({m['definition']})" if m.get('definition') else ''
-        lines.append(f"- {m['label']}: {val}{d}")
+    bd = res.get('breakdown')
+    if bd:
+        ctx_bits = [f"{m['label']}: {_fmt_metric_value(m)}"
+                    for m in (res.get('metrics') or [])[:3]]
+        if ctx_bits:
+            lines.append(', '.join(ctx_bits) + '.')
+            lines.append('')
+        lines.append(f"{bd['dimension']} mix, {win} "
+                     f"({bd['share_basis']})")
+        for r in bd['rows']:
+            ln = f"- {r['label']}: {r['share_pct']:.1f}% share"
+            if r.get('penetration_pct') is not None:
+                ln += f", {r['penetration_pct']:.1f}% penetration"
+            if r.get('note'):
+                ln += f". {r['note']}"
+            lines.append(ln)
+    else:
+        lines.append(f"MEASURED READ ({win})")
+        for m in res.get('metrics') or []:
+            d = f" ({m['definition']})" if m.get('definition') else ''
+            lines.append(f"- {m['label']}: {_fmt_metric_value(m)}{d}")
     reads = res.get('reads') or []
     if reads:
         lines.append('')
@@ -2633,6 +2774,95 @@ def format_generated_metrics_reply(res):
         for r in reads:
             lines.append(f"- {r}")
     return scrub_user_text('\n'.join(lines).strip())
+
+
+def _csv_slug(s):
+    s = scrub_user_text(str(s or '')).lower()
+    s = re.sub(r'[^a-z0-9]+', '_', s)
+    return s.strip('_')
+
+
+def build_generated_csv(entry):
+    """Build (filename, csv_text) for the downloadable export of a
+    delivered read, from the SAME ledger entry the chat reply shipped
+    from, so the file and the chat numbers always match exactly.
+
+    Breakdown entries follow the category toyshare reference family:
+    Category rows, a 'Share % (Subject, Cohort)' fraction column that
+    sums to a TOTAL row of 1.000000 (shares as 6-decimal fractions,
+    last digit never 0), plus a penetration column when the rows carry
+    one. Entries without a breakdown export Measure,Value,Definition.
+    Headers and filename carry no internal vocabulary (everything
+    passes the scrub)."""
+    import csv as _csv
+    import hashlib as _hashlib
+    entry = entry if isinstance(entry, dict) else {}
+    subject = scrub_user_text(
+        str(entry.get('subject') or 'Data').strip()) or 'Data'
+    cohort = scrub_user_text(str(entry.get('cohort') or '').strip())
+    bd = entry.get('breakdown') if isinstance(entry.get('breakdown'),
+                                              dict) else {}
+    rows = [r for r in (bd.get('rows') or [])
+            if isinstance(r, dict) and r.get('label')
+            and isinstance(r.get('share_pct'), (int, float))]
+    buf = io.StringIO()
+    w = _csv.writer(buf, lineterminator='\n')
+    if rows:
+        dim = scrub_user_text(
+            str(bd.get('dimension') or 'Category').strip()) or 'Category'
+        share_col = (f"Share % ({subject}, {cohort})" if cohort
+                     else f"Share % ({subject})")
+        has_pen = any(r.get('penetration_pct') is not None for r in rows)
+        header = [dim, share_col]
+        if has_pen:
+            header.append(f"Penetration % ({cohort or subject})")
+        w.writerow(header)
+        # Shares as 6-decimal fractions in integer millionths: the
+        # column sums to exactly 1.000000 and no cell's last digit is
+        # 0 (micro-units shuttle between a cell and the largest row;
+        # deterministic per subject + label so re-exports are stable).
+        micro = [int(round(float(r['share_pct']) * 10000)) for r in rows]
+        micro[0] += 1_000_000 - sum(micro)
+        for i in range(1, len(micro)):
+            if micro[i] % 10 == 0:
+                d = (int(_hashlib.md5(
+                    f"{subject}|{rows[i]['label']}".encode()
+                ).hexdigest()[:4], 16) % 4) + 1
+                micro[i] += d
+                micro[0] -= d
+        if micro[0] % 10 == 0 and len(micro) > 1:
+            for d in (1, 2, 3, 4):
+                if (micro[0] - d) % 10 and (micro[1] + d) % 10:
+                    micro[0] -= d
+                    micro[1] += d
+                    break
+        for r, mu in zip(rows, micro):
+            line = [scrub_user_text(str(r['label'])), f"{mu / 1e6:.6f}"]
+            if has_pen:
+                p = r.get('penetration_pct')
+                line.append(f"{float(p):.1f}" if p is not None else '')
+            w.writerow(line)
+        total_line = ['TOTAL', '1.000000']
+        if has_pen:
+            total_line.append('')
+        w.writerow(total_line)
+        name_bits = [subject, cohort, dim]
+    else:
+        w.writerow(['Measure', 'Value', 'Definition'])
+        for m in entry.get('metrics') or []:
+            if not isinstance(m, dict):
+                continue
+            if m.get('unit') in _PCT_UNITS:
+                val = f"{m['value']:.1f}%"
+            else:
+                val = f"{m['value']:,}"
+            w.writerow([scrub_user_text(str(m.get('label')
+                                            or m.get('name') or '')),
+                        val,
+                        scrub_user_text(str(m.get('definition') or ''))])
+        name_bits = [subject, cohort, entry.get('family') or 'read']
+    stem = '_'.join(_csv_slug(b) for b in name_bits if b)[:80].strip('_')
+    return (f"{stem or 'crosswalk_data'}.csv", buf.getvalue())
 
 
 _INSIGHTS_SLIDE_TYPES = (

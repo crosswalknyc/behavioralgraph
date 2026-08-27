@@ -270,7 +270,7 @@ def _put_entry_object(entry):
 def make_entry(*, subject, metric_family, question, route, metrics,
                anchors=None, window_start='', window_end='',
                window_label='', reply='', followups=None,
-               base_profile_key=''):
+               base_profile_key='', cohort='', breakdown=None):
     """Build one ledger entry. `metrics` is a list of dicts with
     name/label/value/unit/definition (extra keys dropped).
 
@@ -278,7 +278,13 @@ def make_entry(*, subject, metric_family, question, route, metrics,
     profile (or the pulled read, e.g. a Subscriber IQ run) the
     generated numbers derive from. Generated reads only exist as
     derivations of an existing base; callers on the generation paths
-    always pass it."""
+    always pass it.
+
+    `cohort` + `breakdown` (2026-08-27): the sub-cohort the read
+    covers and its ranked breakdown table ({dimension, share_basis,
+    rows: [{label, share_pct, penetration_pct?, note?}]}). The CSV
+    export builds from these same stored values, so the file always
+    matches the chat reply exactly."""
     clean_metrics = []
     for m in (metrics or [])[:MAX_METRICS_PER_ENTRY]:
         if not isinstance(m, dict):
@@ -310,11 +316,43 @@ def make_entry(*, subject, metric_family, question, route, metrics,
         'metrics': clean_metrics,
         'anchors': [str(a)[:120] for a in (anchors or []) if str(a)][:6],
         'base': str(base_profile_key or '')[:220],
+        'cohort': str(cohort or '')[:120],
+        'breakdown': _clean_breakdown(breakdown),
         'reply': str(reply or '')[:MAX_REPLY_CHARS],
         'followups': [str(f)[:160] for f in (followups or [])
                       if str(f)][:4],
     }
     return entry
+
+
+def _clean_breakdown(breakdown):
+    """Bound-checked copy of a breakdown table, or None."""
+    if not isinstance(breakdown, dict):
+        return None
+    rows = []
+    for r in (breakdown.get('rows') or [])[:16]:
+        if not isinstance(r, dict):
+            continue
+        label = str(r.get('label') or '').strip()[:60]
+        share = r.get('share_pct')
+        if not label or not isinstance(share, (int, float)):
+            continue
+        row = {'label': label, 'share_pct': float(share)}
+        pen = r.get('penetration_pct')
+        if isinstance(pen, (int, float)):
+            row['penetration_pct'] = float(pen)
+        note = str(r.get('note') or '').strip()[:160]
+        if note:
+            row['note'] = note
+        rows.append(row)
+    if not rows:
+        return None
+    return {
+        'dimension': str(breakdown.get('dimension')
+                         or 'Category').strip()[:60],
+        'share_basis': str(breakdown.get('share_basis') or '')[:120],
+        'rows': rows,
+    }
 
 
 def _record_entry_now(entry):
@@ -342,7 +380,7 @@ def _record_entry_now(entry):
 def persist(*, subject, metric_family, question, route, metrics,
             anchors=None, window_start='', window_end='',
             window_label='', reply='', followups=None,
-            base_profile_key=''):
+            base_profile_key='', cohort='', breakdown=None):
     """Persist one delivered read. Never raises; never blocks the
     caller (daemon thread) unless _SYNC_FOR_TESTS."""
     try:
@@ -352,7 +390,8 @@ def persist(*, subject, metric_family, question, route, metrics,
             anchors=anchors, window_start=window_start,
             window_end=window_end, window_label=window_label,
             reply=reply, followups=followups,
-            base_profile_key=base_profile_key)
+            base_profile_key=base_profile_key, cohort=cohort,
+            breakdown=breakdown)
         if not entry['metrics'] and not entry['reply']:
             return
         if _SYNC_FOR_TESTS:
@@ -411,6 +450,13 @@ def render_block(entries, limit=12):
             d = f" ({m['definition']})" if m.get('definition') else ''
             lines.append(f"- {e.get('subject')} | {e.get('family')} | "
                          f"{win}: {m.get('label')} = {val}{d}")
+        bd = e.get('breakdown') or {}
+        coh = f", {e.get('cohort')}" if e.get('cohort') else ''
+        for r in (bd.get('rows') or [])[:6]:
+            lines.append(
+                f"- {e.get('subject')}{coh} | {e.get('family')} | {win}: "
+                f"{bd.get('dimension') or 'Category'} share, "
+                f"{r.get('label')} = {float(r.get('share_pct') or 0):.1f}%")
         if len(lines) >= 30:
             break
     return '\n'.join(lines[:30])

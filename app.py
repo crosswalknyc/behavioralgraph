@@ -53807,6 +53807,93 @@ def _pm_generation_base(subject_hint, text, ctx=None):
     return None
 
 
+_PM_DATA_FILE_PREFIX = 'generated_data/'
+
+
+def _pm_csv_point(subject, question, family):
+    """Remember which ledger entry the CSV offer chip points at, so
+    the download builds from the SAME entry the chat reply shipped
+    from. Session-scoped; failures never block the reply."""
+    try:
+        session['pm_csv_last'] = {
+            'subject': str(subject or '')[:120],
+            'question': str(question or '')[:300],
+            'family': str(family or '')[:32]}
+    except Exception:
+        pass
+
+
+def _pm_csv_download_response(user, text, history=None):
+    """Serve the CSV export of the most recent delivered read
+    (2026-08-27, Jenna: every generated-data reply offers its CSV
+    download). The file is built from the SAME ledger entry the chat
+    reply shipped from, so the file and the chat numbers always match
+    exactly. Uploaded under generated_data/ with a 7-day presigned
+    link (the generated-decks pattern). No charge: exporting an
+    already-delivered read is a formatting step, not a new analysis."""
+    import prometheus_analysis as pma
+    import insights_ledger as il
+    _pm_ask_hint(route='csv_download')
+    entry = None
+    ptr = {}
+    try:
+        ptr = session.get('pm_csv_last') or {}
+    except Exception:
+        ptr = {}
+    if ptr.get('subject') and ptr.get('question'):
+        try:
+            led = il.consult(subject=ptr['subject'],
+                             question=ptr['question'],
+                             metric_family=ptr.get('family'))
+            entry = led.get('exact')
+        except Exception:
+            traceback.print_exc()
+    if entry is None:
+        # Fallback: the last data-bearing ask in the visible history.
+        for turn in reversed(history or []):
+            t = str((turn or {}).get('text') or '')
+            if (turn or {}).get('role') == 'user' and t.strip() \
+                    and not pma.detect_csv_download_intent(t):
+                try:
+                    led = il.consult(question=t)
+                    entry = led.get('exact')
+                except Exception:
+                    entry = None
+                break
+    if not entry or not (entry.get('breakdown') or entry.get('metrics')):
+        _pm_ask_hint(outcome='declined_no_csv_source')
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': ('I do not have a recent data read to export yet. '
+                      'Ask me for the data first, then tap the '
+                      'download chip on the reply.'),
+            'followups': [], 'offer_deck': False, 'deck_angle': None})
+    try:
+        fname, csv_text = pma.build_generated_csv(entry)
+        s3_key = f"{_PM_DATA_FILE_PREFIX}{uuid.uuid4().hex[:12]}/{fname}"
+        s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
+                             Body=csv_text.encode('utf-8'),
+                             ContentType='text/csv')
+        url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': S3_BUCKET, 'Key': s3_key,
+                    'ResponseContentDisposition':
+                        f'attachment; filename="{fname}"'},
+            ExpiresIn=7 * 24 * 3600)
+    except Exception as e:
+        traceback.print_exc()
+        _chatbot_error_email('brief-chat/analyze', e)
+        _pm_ask_hint(outcome='error')
+        return jsonify(_chatbot_calm_payload())
+    _pm_ask_hint(outcome='answered', subject=entry.get('subject'))
+    reply = (f"Your CSV is ready: {fname}. The link below is good for "
+             f"7 days.\n{url}")
+    return jsonify({
+        'success': True, 'action': 'answer', 'reply': reply,
+        'followups': [], 'offer_deck': False, 'deck_angle': None,
+        'download_url': url, 'filename': fname})
+
+
 def _pm_search_demand_response(user, text, history):
     """Search-journey demand read (2026-08-26 Jenna directive): how
     people find, search for, and first touch a title or brand. Shaped
@@ -53848,10 +53935,14 @@ def _pm_search_demand_response(user, text, history):
                 _pm_user,
                 f"Chatbot Analysis [search demand] - "
                 f"{led.get('subject') or 'search demand'}")
+        _replay_chips = list(exact.get('followups') or [])[:3]
+        if pma.CSV_OFFER_CHIP not in _replay_chips:
+            _replay_chips.append(pma.CSV_OFFER_CHIP)
+        _pm_csv_point(led.get('subject'), text, 'search')
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': exact['reply'],
-            'followups': exact.get('followups') or [],
+            'followups': _replay_chips,
             'offer_deck': False, 'deck_angle': None,
             'profile': led.get('subject')})
     user_prompt = pma.build_search_demand_user_prompt(
@@ -53916,7 +54007,9 @@ def _pm_search_demand_response(user, text, history):
         return jsonify(_chatbot_calm_payload())
     followups = [pma.scrub_user_text(str(f).strip())[:160]
                  for f in (data.get('followups') or [])
-                 if str(f).strip()][:4]
+                 if str(f).strip()][:3]
+    if pma.CSV_OFFER_CHIP not in followups:
+        followups.append(pma.CSV_OFFER_CHIP)
     try:
         il.persist(
             subject=study.get('subject'), metric_family='search',
@@ -53934,6 +54027,7 @@ def _pm_search_demand_response(user, text, history):
             base_profile_key=_sd_base.get('s3_key'))
     except Exception:
         traceback.print_exc()
+    _pm_csv_point(study.get('subject'), text, 'search')
     _pm_ask_hint(outcome='answered', subject=study.get('subject'))
     if _pm_user and _pm_ppu is None:
         _pm_charge_async(
@@ -54023,10 +54117,15 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 _pm_user,
                 f"Chatbot Analysis [measured read] - "
                 f"{led.get('subject') or subj_hint or 'measured read'}")
+        _replay_chips = list(exact.get('followups') or [])[:3]
+        if pma.CSV_OFFER_CHIP not in _replay_chips:
+            _replay_chips.append(pma.CSV_OFFER_CHIP)
+        _pm_csv_point(led.get('subject') or subj_hint, text,
+                      exact.get('family'))
         return jsonify({
             'success': True, 'action': 'answer',
             'reply': exact['reply'],
-            'followups': exact.get('followups') or [],
+            'followups': _replay_chips,
             'offer_deck': False, 'deck_angle': None,
             'profile': led.get('subject') or subj_hint or None})
     # First-party anchors: when the caller (analyze path) already built
@@ -54086,7 +54185,9 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         return jsonify(_chatbot_calm_payload())
     followups = [pma.scrub_user_text(str(f).strip())[:160]
                  for f in (data.get('followups') or [])
-                 if str(f).strip()][:4]
+                 if str(f).strip()][:3]
+    if pma.CSV_OFFER_CHIP not in followups:
+        followups.append(pma.CSV_OFFER_CHIP)
     try:
         anchor_names = []
         for ln in (anchors_block or '').splitlines():
@@ -54103,9 +54204,12 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             window_end=res.get('window_end'),
             window_label=res.get('window_label'),
             reply=reply, followups=followups,
-            base_profile_key=base.get('s3_key'))
+            base_profile_key=base.get('s3_key'),
+            cohort=res.get('cohort'),
+            breakdown=res.get('breakdown'))
     except Exception:
         traceback.print_exc()
+    _pm_csv_point(res.get('subject'), text, res.get('metric_family'))
     _pm_ask_hint(outcome='answered', subject=res.get('subject'))
     if _pm_user and _pm_ppu is None:
         _pm_charge_async(
@@ -54153,6 +54257,16 @@ def api_synth_chat_analyze():
     # every model call this request makes, and switches billing from
     # credits to per-session dollar usage.
     _pm_ppu = _pm_usage_extras(user)
+    # CSV download of an already-delivered read (2026-08-27, Jenna):
+    # the offer chip on every generated-data reply lands here. Runs
+    # before every other branch and before any charge; exporting an
+    # already-delivered read costs nothing.
+    try:
+        import prometheus_analysis as _pma_csv
+        if _pma_csv.detect_csv_download_intent(text):
+            return _pm_csv_download_response(user, text, history)
+    except Exception:
+        traceback.print_exc()
     # Quantifiability gate (2026-08-26, Jenna): asks about behavior
     # with no digital trace (linear / over-the-air tune-in, in-store
     # physical purchases, foot traffic, terrestrial radio) decline
