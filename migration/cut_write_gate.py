@@ -168,4 +168,31 @@ def finalize_cut_for_upload(df, subject, *, parent_df=None, out_key='',
         'n_violations': len(ship_violations or []),
     }
 
+    # 7. PRE-SHIP REASONED VETTING (2026-08-26 Jenna mandate: research
+    # and reasoning before shipping). Runs after the mechanical gate
+    # approves the frame. is_new=True: a re-derived cut is new
+    # reasoning even when it overwrites an existing deliverable key.
+    # PASS publishes; deterministic benchmark-backed fixes apply in
+    # place and re-run the mechanical gate; judgment holds raise
+    # PreShipVettingError (a ShipGateError subclass, so engine call
+    # sites' existing re-raise handling applies). Infra failures fail
+    # OPEN. Deliberately NOT wrapped in a swallowing try/except.
+    try:
+        from migration.pre_ship_vetting import run_pre_ship_vetting
+    except ImportError:
+        from pre_ship_vetting import (  # type: ignore
+            run_pre_ship_vetting,
+        )
+    df, vet_report = run_pre_ship_vetting(
+        df, subject, out_key,
+        enforce=bool(ship_gate), is_new=True,
+        sort_fn=_sort_within_category, verbose=verbose,
+    )
+    report['vetting'] = {
+        'verdict': vet_report.get('verdict'),
+        'skipped': vet_report.get('skipped'),
+        'n_findings': len(vet_report.get('findings') or []),
+        'n_autofix': len(vet_report.get('autofix') or []),
+    }
+
     return df, report

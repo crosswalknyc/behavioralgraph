@@ -1134,6 +1134,31 @@ def write_profile_csv(
         s3_client=s3, verbose=verbose,
     )
 
+    # 6.95 PRE-SHIP REASONED VETTING (2026-08-26 Jenna mandate: "there
+    # has to be research and reasoning done before shipping a
+    # profile"). After the mechanical gate approves the bytes, a
+    # consolidated research-backed review (migration/pre_ship_vetting)
+    # judges face validity per category against the audience's demo
+    # composition, benchmark-anchored plausibility on high-stakes
+    # grids, subject coherence, and slug/naming sanity. New keys only
+    # (existing keys are in-place corrections of already-reviewed
+    # content). PASS publishes; deterministic benchmark-backed fixes
+    # apply in place and re-run the mechanical gate; judgment holds
+    # quarantine via PreShipVettingError (a ShipGateError subclass, so
+    # every caller's existing hold handling applies). Infra failures
+    # inside the review fail OPEN so an outage cannot wedge publishes.
+    try:
+        from migration.pre_ship_vetting import vet_before_publish
+    except ImportError:
+        from pre_ship_vetting import (  # type: ignore
+            vet_before_publish,
+        )
+    df, body, _vet_report = vet_before_publish(
+        df, body, subject, s3_key,
+        category=category, s3_client=s3,
+        enforce=bool(ship_gate), verbose=verbose,
+    )
+
     # 7. Upload. s3_metadata (e.g. refresh-generation for refresh
     # chains) rides the object so the next refresh can read it back
     # via head_object.

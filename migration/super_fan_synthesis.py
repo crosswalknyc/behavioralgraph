@@ -998,9 +998,32 @@ def synthesize_and_upload_super_fan(source: str, subject_label: str,
                f"{n_touchpoints}Plus_{ts}.csv")
     out_buf = io.StringIO()
     df.to_csv(out_buf, index=False)
+    body = out_buf.getvalue().encode('utf-8')
+
+    # FINAL SHIP GATE + PRE-SHIP REASONED VETTING (2026-08-26 audit
+    # gap: this path wrote direct to S3 with no terminal gate). Same
+    # terminal pair every other publish path runs: the mechanical
+    # invariant check on the exact bytes, then the research-backed
+    # review. On a violation or judgment hold the bytes quarantine,
+    # the hold notice emails, and ShipGateError / PreShipVettingError
+    # raises so the put below never happens. Deliberately NOT wrapped
+    # in a swallowing try/except.
+    try:
+        from migration.final_ship_gate import run_final_ship_gate
+        from migration.pre_ship_vetting import vet_before_publish
+    except ImportError:
+        from final_ship_gate import run_final_ship_gate  # type: ignore
+        from pre_ship_vetting import vet_before_publish  # type: ignore
+    run_final_ship_gate(body, out_key, subject_label,
+                        enforce=True, s3_client=s3, verbose=True)
+    df, body, _vet = vet_before_publish(
+        df, body, subject_label, out_key, s3_client=s3,
+        enforce=True, verbose=True,
+    )
+
     s3.put_object(
         Bucket='dashboard-inputs', Key=out_key,
-        Body=out_buf.getvalue().encode('utf-8'),
+        Body=body,
         ContentType='text/csv',
         Metadata={
             'super-fan-synth': f'n{n_touchpoints}_cohort_{reasoning["cohort_fraction"]:.4f}',
