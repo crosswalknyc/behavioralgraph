@@ -1,0 +1,251 @@
+{
+ "version": 1,
+ "content_hash": "dc2960ae82f5089d63a164a54fdd46148e4518c82460609d86ac34447446d598",
+ "decisions": [
+  {
+   "id": "kids_viewers_default",
+   "decided": "2026-08-27",
+   "statement": "A viewers universe for a kids or preschool title defaults to parents and co-viewing adults unless under-18 viewers was explicitly chosen; the two reads are named 'Parents of {Title} Viewers' and '{Title} Under-18 Viewers'.",
+   "match_terms": [
+    "kids",
+    "kid",
+    "child",
+    "children",
+    "preschool",
+    "parents",
+    "parent",
+    "under 18",
+    "under-18",
+    "paw patrol",
+    "cocomelon",
+    "bluey",
+    "co-viewing"
+   ],
+   "sources": [
+    "viewer-carriage-constraint.mdc"
+   ]
+  },
+  {
+   "id": "individual_level",
+   "decided": "2026-08-18",
+   "statement": "Every audience count names individuals: viewers, users, people, accounts, searchers, or subscribers. An ask framed in home-level terms is answered at the individual level with the individual noun stated.",
+   "match_terms": [
+    "families",
+    "family",
+    "homes",
+    "home level",
+    "individuals",
+    "people count"
+   ],
+   "sources": [
+    "individual-level-language.mdc"
+   ]
+  },
+  {
+   "id": "base_profile_boundary",
+   "decided": "2026-08-27",
+   "statement": "A generated read exists only for a subject already in the library (open profile, catalog profile, or Subscriber IQ run). A subject with no base profile gets pointed to the 5-credit Total Universe build first, never numbers.",
+   "match_terms": [
+    "no profile",
+    "not in the library",
+    "base profile",
+    "build first",
+    "new subject",
+    "never pulled"
+   ],
+   "sources": [
+    "reasoned-answers-clickstream-boundary.mdc"
+   ]
+  },
+  {
+   "id": "date_window_default",
+   "decided": "2026-08-17",
+   "statement": "Date windows default to Jul 1 2025 to Jun 30 2026 unless the ask names a window or the subject's real release or campaign window applies.",
+   "match_terms": [
+    "window",
+    "date range",
+    "trailing",
+    "last 12",
+    "this year",
+    "time period"
+   ],
+   "sources": [
+    "default-date-range.mdc"
+   ]
+  },
+  {
+   "id": "tu_avid_subset",
+   "decided": "2026-08-24",
+   "statement": "The Total Universe is the subject's full engager pool and IS the casual audience; the Avid Fan cut is a strict subset of it (the highest-intensity tier). An avid count never exceeds the TU count; avid and casual are never two separate pools.",
+   "match_terms": [
+    "avid",
+    "casual",
+    "total universe",
+    "tu",
+    "superfan",
+    "fan tiers",
+    "intensity"
+   ],
+   "sources": [
+    "avid-and-cut-skin-rules.mdc"
+   ]
+  },
+  {
+   "id": "cut_naming",
+   "decided": "2026-08-20",
+   "statement": "A Total Universe deliverable is named with the clean subject name only; every cut is named '{Subject} - {Cut}' ('Go-GURT - Avid Fan', 'Reba McEntire - Female', 'Yellowstone - 18-24').",
+   "match_terms": [
+    "name",
+    "named",
+    "naming",
+    "called",
+    "title of",
+    "label",
+    "rename"
+   ],
+   "sources": [
+    "avid-and-cut-skin-rules.mdc"
+   ]
+  },
+  {
+   "id": "in_place_corrections",
+   "decided": "2026-08-25",
+   "statement": "Profile files are corrected in place under the same dated filename; the date in the filename is the build date, and a fresh download at the same name always returns the current best data. Corrections are part of the product, never new deliverables.",
+   "match_terms": [
+    "file changed",
+    "different numbers",
+    "redownload",
+    "re-download",
+    "filename",
+    "dated",
+    "version",
+    "changed since"
+   ],
+   "sources": [
+    "in-place-corrections.mdc"
+   ]
+  },
+  {
+   "id": "shared_catalog",
+   "decided": "2026-08-25",
+   "statement": "The profile library is shared: a profile already built is available to every user at no build cost, and builds are mutually discoverable across the library.",
+   "match_terms": [
+    "library",
+    "catalog",
+    "already built",
+    "existing",
+    "someone else",
+    "shared",
+    "reuse"
+   ],
+   "sources": [
+    "partner-api-shared-catalog.mdc"
+   ]
+  },
+  {
+   "id": "ms_now_rebrand",
+   "decided": "2026-08-21",
+   "statement": "MSNBC rebranded to MS NOW in late 2025. Always write MS NOW, with at most one '(formerly MSNBC)' on first mention when the reader might not know the rebrand.",
+   "match_terms": [
+    "msnbc",
+    "ms now",
+    "rebrand",
+    "network name"
+   ],
+   "sources": [
+    "no-modeled-or-source-language.mdc"
+   ]
+  },
+  {
+   "id": "viewers_carriage",
+   "decided": "2026-08-26",
+   "statement": "A viewers universe is defined by having watched the title, so the platforms that actually carry it jointly account for roughly all of that audience; platforms that do not carry it still read at organic rates. Clips on social platforms do not make those platforms carriers.",
+   "match_terms": [
+    "viewers",
+    "watched",
+    "carrier",
+    "carries",
+    "exclusive",
+    "only on",
+    "where to watch",
+    "streaming home"
+   ],
+   "sources": [
+    "viewer-carriage-constraint.mdc"
+   ]
+  },
+  {
+   "id": "published_binding",
+   "decided": "2026-08-26",
+   "statement": "Numbers already delivered for a subject are binding: a repeat of the same measurement restates the exact published number, and adjacent figures (longer windows, shares, per-month slices) stay arithmetically consistent with what was published.",
+   "match_terms": [
+    "said before",
+    "last time",
+    "earlier",
+    "again",
+    "consistent",
+    "published",
+    "you told"
+   ],
+   "sources": [
+    "reasoned-answers-clickstream-boundary.mdc"
+   ]
+  },
+  {
+   "id": "clickstream_boundary",
+   "decided": "2026-08-26",
+   "statement": "Crosswalk measures digital behavior at the individual level. Linear and over-the-air TV tune-in, physical in-store purchases, foot traffic, and terrestrial radio have no measured read: say we measure digital behavior and offer the nearest digital read on the same subject.",
+   "match_terms": [
+    "linear",
+    "over the air",
+    "over-the-air",
+    "cable",
+    "broadcast tune",
+    "in-store",
+    "in store",
+    "foot traffic",
+    "radio",
+    "nielsen"
+   ],
+   "sources": [
+    "reasoned-answers-clickstream-boundary.mdc"
+   ]
+  },
+  {
+   "id": "season_scope_default",
+   "decided": "2026-08-27",
+   "statement": "A series viewers read covers all seasons unless a season is named; a franchise film read covers the whole franchise unless one film is named. A named scope binds silently and carries into the audience's name ('Yellowstone Season 5 Viewers').",
+   "match_terms": [
+    "season",
+    "franchise",
+    "film",
+    "movie",
+    "sequel",
+    "installment",
+    "latest season",
+    "most recent"
+   ],
+   "sources": [
+    "viewer-carriage-constraint.mdc"
+   ]
+  },
+  {
+   "id": "engager_definition",
+   "decided": "2026-05-28",
+   "statement": "An Engager had at least one digital touchpoint with the subject over the trailing 12 months across search, social, media, ecommerce, or owned channels. Engagers index at or above the US average on digital behaviors; composition explains the deviations.",
+   "match_terms": [
+    "engager",
+    "engagers",
+    "definition",
+    "touchpoint",
+    "who counts",
+    "qualify",
+    "membership"
+   ],
+   "sources": [
+    "crosswalk-audience-vetting-framework.mdc"
+   ]
+  }
+ ],
+ "generated_at": "2026-08-27T19:05:21Z"
+}

@@ -53540,7 +53540,23 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
 
     2026-08-26: `usage_extras` (from _pm_usage_extras) rides the usage
     tag so a pay-as-you-go user's calls land with user + session
-    attribution and the billed amount."""
+    attribution and the billed amount.
+
+    2026-08-27 (Jenna): the compiled house canon (voice, vocabulary,
+    confidence calibration, number rules, boundaries, window default)
+    appends to every Prometheus system prompt here, at the single choke
+    point all four surfaces share. The block is byte-stable per pack
+    content hash (prometheus_knowledge caches it), so the assembled
+    system prompt stays byte-identical across calls and the provider
+    prompt cache keeps holding. On any failure the base prompt ships
+    unchanged."""
+    try:
+        import prometheus_knowledge as _pmk
+        system_prompt = _pmk.with_canon(system_prompt,
+                                        s3_client=s3_client,
+                                        bucket=S3_BUCKET)
+    except Exception:
+        pass
     last = None
     for m in _pm_model_chain():
         result = _run_nflx_claude_agent(
@@ -53947,6 +53963,14 @@ def _pm_search_demand_response(user, text, history):
             'profile': led.get('subject')})
     user_prompt = pma.build_search_demand_user_prompt(
         text, history, ledger_block=led.get('block'))
+    try:
+        import prometheus_knowledge as _pmk
+        _kb = _pmk.knowledge_block('search_demand', text=text,
+                                   s3_client=s3_client, bucket=S3_BUCKET)
+        if _kb:
+            user_prompt = f"{user_prompt}\n\n{_kb}"
+    except Exception:
+        pass
     result = _pm_claude_json(pma.SEARCH_DEMAND_SYSTEM_PROMPT, user_prompt,
                              max_tokens=7500, temperature=0.4,
                              usage_extras=_pm_ppu)
@@ -54151,6 +54175,14 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         text, history, metric_request=mr or None,
         anchors_block=anchors_block, ledger_block=led.get('block'),
         profile_rows_block=digest_block)
+    try:
+        import prometheus_knowledge as _pmk
+        _kb = _pmk.knowledge_block('measured_read', text=text,
+                                   s3_client=s3_client, bucket=S3_BUCKET)
+        if _kb:
+            user_prompt = f"{user_prompt}\n\n{_kb}"
+    except Exception:
+        pass
     result = _pm_claude_json(pma.REASONED_METRICS_SYSTEM_PROMPT,
                              user_prompt, max_tokens=4000,
                              temperature=0.4, usage_extras=_pm_ppu)
@@ -54400,6 +54432,16 @@ def api_synth_chat_analyze():
         view_context=ctx.get('view_context'),
         cross_module_block=xmod_block,
         ledger_block=_led_block)
+    try:
+        import prometheus_knowledge as _pmk
+        _kb = _pmk.knowledge_block(
+            'analysis', text=text, ctx=ctx, mode=mode or None,
+            subject=(p_meta.get('name') if ctx.get('primary') else '') or '',
+            s3_client=s3_client, bucket=S3_BUCKET)
+        if _kb:
+            user_prompt = f"{user_prompt}\n\n{_kb}"
+    except Exception:
+        pass
     _max_tok = 7500 if mode in ('cross_profile', 'personas',
                                 'whitespace') else 6000
     result = _pm_claude_json(pma.ANALYSIS_SYSTEM_PROMPT, user_prompt,
@@ -54664,10 +54706,19 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
         _pm_deck_status_write(job_id, {**base, 'status': 'planning'})
         digest, p_meta = pma.get_digest_bundle(s3_client, S3_BUCKET, ctx)
         subject = subject or p_meta.get('name') or 'this audience'
+        _deck_prompt = pma.build_insights_deck_user_prompt(
+            subject, partner, digest, history, angle)
+        try:
+            import prometheus_knowledge as _pmk
+            _kb = _pmk.knowledge_block(
+                'deck', text=str(angle or ''), subject=subject,
+                s3_client=s3_client, bucket=S3_BUCKET)
+            if _kb:
+                _deck_prompt = f"{_deck_prompt}\n\n{_kb}"
+        except Exception:
+            pass
         plan_result = _pm_claude_json(
-            pma.INSIGHTS_DECK_SYSTEM_PROMPT,
-            pma.build_insights_deck_user_prompt(
-                subject, partner, digest, history, angle),
+            pma.INSIGHTS_DECK_SYSTEM_PROMPT, _deck_prompt,
             max_tokens=20000, temperature=0.4, surface='deck',
             usage_extras=_ppu_extras)
         if not plan_result.get('success'):
