@@ -42692,6 +42692,29 @@ SYNTH_CHAT_FRESH_DAYS = 120
 SYNTH_CHAT_MAX_CANDIDATES = 12
 
 
+_ADMIN_HIDDEN_CACHE = {'ts': 0.0, 'keys': frozenset()}
+
+
+def _admin_hidden_profile_keys():
+    """Set of profile s3_keys the admin has explicitly hidden
+    (admin_quick_selects.json profiles[key] is False). 60s TTL; fails
+    open to an empty set so interpret never breaks on a registry read."""
+    import time as _time
+    nowt = _time.time()
+    if nowt - _ADMIN_HIDDEN_CACHE['ts'] < 60:
+        return _ADMIN_HIDDEN_CACHE['keys']
+    keys = frozenset()
+    try:
+        qs = load_json_from_s3(QUICK_SELECTS_FILE) or {}
+        keys = frozenset(
+            k for k, v in (qs.get('profiles') or {}).items() if v is False)
+    except Exception:
+        pass
+    _ADMIN_HIDDEN_CACHE['ts'] = nowt
+    _ADMIN_HIDDEN_CACHE['keys'] = keys
+    return keys
+
+
 def _profile_catalog_for_chat():
     """Return a compact list of every profile in the dashboard catalog:
     [{s3_key, display_name, subject, category, last_modified, days_old}, ...]
@@ -42721,12 +42744,21 @@ def _profile_catalog_for_chat():
         jobs = list((s3_cache or {}).get('jobs') or [])
     except Exception:
         jobs = []
+    # Admin-hidden profiles (admin_quick_selects False) are invisible in
+    # the Select Profile dropdown, so they must be invisible to interpret
+    # matching too - otherwise a retired-but-kept-for-lineage file (e.g.
+    # a superseded year-old TU) can win existing_match and hand a stale
+    # window to a partner (Bethenny June TU, 2026-08-27). 60s TTL cache;
+    # any load failure fails open (empty hidden set).
+    hidden = _admin_hidden_profile_keys()
     out = []
     for j in jobs:
         if not isinstance(j, dict):
             continue
         s3_key = j.get('s3_key') or j.get('key')
         if not s3_key:
+            continue
+        if s3_key in hidden:
             continue
         display = (j.get('display_name') or j.get('project_name')
                     or j.get('profile_subject') or s3_key).strip()
