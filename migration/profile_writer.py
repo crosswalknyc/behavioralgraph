@@ -229,7 +229,7 @@ def _is_avid_cut_basename(s3_key: str) -> bool:
 # required class (I1 rogue pins, I5 demo sums, I9 hidden brands, ...)
 # still quarantines on first block.
 _AUTOFIX_GATE_CODES = ("I11", "I12", "I13", "I14", "I15", "I16", "I17",
-                       "I18")
+                       "I18", "I20")
 
 
 def _detect_ladder_rows(df):
@@ -295,6 +295,10 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
       I15 TALENT self-inclusion -> enforce_native_cluster_self_pin
           (same escalation, DEFECT 2): talent-archetype subjects
           self-include in TALENT at exactly 100.
+      I20 top-cluster convergence -> respread_top_cluster_convergence
+          (2026-08-27 Liz batch, YMCA/Toca streaming grids): converged
+          category leaders re-spread with salted downward gaps, rank
+          order preserved.
 
     Then Raw / Projection / Category Share recompute (write safety
     net), re-sort, numeric-artifact normalize, and Gen Pop baseline
@@ -553,6 +557,25 @@ def _ship_gate_autofix_pass(df, subject, s3_key, s3, *,
                   f"{_n_dp} row(s) de-pinned")
         except Exception as e:
             print(f"  [profile_writer] I18 exact-100 de-pin fix raised "
+                  f"({type(e).__name__}: {e}); gate keeps the verdict")
+    if any(v.get("code") == "I20" for v in fixable):
+        try:
+            try:
+                from migration.post_generation_enforcers import (
+                    respread_top_cluster_convergence as _conv_fix,
+                )
+            except ImportError:
+                from post_generation_enforcers import (  # type: ignore
+                    respread_top_cluster_convergence as _conv_fix,
+                )
+            # Salted downward descent, order preserved; downward-only
+            # so the I12 subset invariant survives by construction.
+            df, _n_conv = _conv_fix(df, subject, verbose=verbose)
+            n_fixed += int(_n_conv or 0)
+            print(f"  [profile_writer] I20 convergence re-spread fix: "
+                  f"{_n_conv} row(s) re-spread")
+        except Exception as e:
+            print(f"  [profile_writer] I20 convergence re-spread raised "
                   f"({type(e).__name__}: {e}); gate keeps the verdict")
 
     # Recompute the downstream chain from the corrected BPs, re-sort,
@@ -1176,6 +1199,21 @@ def write_profile_csv(
     if verbose:
         print(f"  [profile_writer] uploaded ({len(body):,} bytes) -> "
               f"s3://{BUCKET}/{s3_key}")
+
+    # 7.2 Ship-ledger record for cross-file constant detection
+    # (2026-08-27 Liz batch: Visa inside a 2.1-index window on seven
+    # unrelated same-day avids). One tiny JSON object per shipped
+    # file; the vetting prescan on FUTURE files reads the trailing
+    # window. Best-effort, never blocks a publish.
+    try:
+        try:
+            from migration.cross_file_constants import record_ship
+        except ImportError:
+            from cross_file_constants import record_ship  # type: ignore
+        record_ship(df, subject, s3_key, s3_client=s3)
+    except Exception as e:
+        print(f"  [profile_writer] ship-ledger record skipped "
+              f"({type(e).__name__}: {e})")
 
     # 7.5 A gate-green publish resolves any pending hold notice for
     # this deliverable (2026-08-27 debounce policy): the machinery

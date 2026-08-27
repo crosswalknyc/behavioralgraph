@@ -2745,6 +2745,38 @@ def strip_phantom_zero_rows(df, subject, verbose=True):
 # inserting the subject row at 100% if missing.
 # ============================================================================
 
+# Audience nouns that mark a deliverable label ("Netflix SVOD
+# Subscribers", "Golden Girls Viewers", "Toca Boca - Avid Fan") rather
+# than a brand entity. A label subject must never be fabricated into a
+# brand grid (2026-08-27 Liz template-artifact flag). Multi-word check
+# only - a real single-word brand can never trip this.
+_AUDIENCE_LABEL_NOUNS = frozenset({
+    'SUBSCRIBER', 'SUBSCRIBERS', 'VIEWER', 'VIEWERS', 'MEMBER',
+    'MEMBERS', 'FAN', 'FANS', 'BUYER', 'BUYERS', 'CUSTOMER',
+    'CUSTOMERS', 'CONSUMER', 'CONSUMERS', 'USER', 'USERS', 'OWNER',
+    'OWNERS', 'RENTER', 'RENTERS', 'SHOPPER', 'SHOPPERS', 'LISTENER',
+    'LISTENERS', 'ENTHUSIAST', 'ENTHUSIASTS', 'SWITCHER', 'SWITCHERS',
+    'VOTER', 'VOTERS', 'WATCHER', 'WATCHERS', 'READER', 'READERS',
+    'EATER', 'EATERS', 'DINER', 'DINERS', 'TRAVELER', 'TRAVELERS',
+    'GAMER', 'GAMERS', 'PLAYER', 'PLAYERS', 'HOUSEHOLDS', 'AUDIENCE',
+    'AUDIENCES', 'PARENTS', 'MOMS', 'DADS',
+})
+
+
+def _is_audience_label_subject(name) -> bool:
+    """True when the subject string reads as an audience/universe label
+    (trailing audience noun, or a ' - ' derived-cut suffix) rather than
+    a brand/talent/title entity. Used to keep deliverable labels out of
+    brand grids."""
+    s = str(name or '').strip()
+    if not s:
+        return False
+    if ' - ' in s:
+        return True
+    words = _re.findall(r'[A-Za-z]+', s.upper())
+    return len(words) >= 2 and words[-1] in _AUDIENCE_LABEL_NOUNS
+
+
 def ensure_subject_in_native_category(df, subject, verbose=True):
     """Insert subject row at 100% in the BRAND CATEGORY native category if
     missing. Uses the BRAND CATEGORY metadata row (already in every profile)
@@ -2875,6 +2907,24 @@ def ensure_subject_in_native_category(df, subject, verbose=True):
                     print(f"   ⚠️ renormalize {native_cat} failed "
                           f"(non-fatal): {_re_err}")
         return df, n_pinned
+
+    # 2026-08-27 (Liz Netflix flag b: SUBJECT string "Netflix SVOD
+    # Subscribers" echoed as a 100% row inside STREAMING/PLATFORM
+    # alongside the real NETFLIX row): the subject label is never a
+    # brand row in a brand grid unless it IS the brand. Audience-label
+    # deliverables ("<Brand> SVOD Subscribers", "<Title> Viewers",
+    # "Air Fryer Enthusiasts", any " - " cut) describe WHO is in the
+    # universe - their identity lives in the SUBJECT / BRAND INPUT
+    # metadata rows and, for carriage universes, in the real carrier
+    # pin the spec already emits. Fabricating the label into the grid
+    # is the template artifact Liz flagged on all four Netflix files.
+    if _is_audience_label_subject(subject_name):
+        if verbose:
+            print(f"   🚫 ensure_subject_in_native_category: subject "
+                  f"{subject_name!r} is an audience-label universe, not "
+                  f"a {native_cat} brand - skipping the grid insert "
+                  f"(identity stays in SUBJECT/BRAND INPUT metadata)")
+        return df, 0
 
     # Insert subject at 100% above the first native-category row.
     insert_at = df.index[cat_mask][0]
@@ -3480,6 +3530,18 @@ def enforce_netflix_leads_streaming_platform(df, subject, verbose=True):
             r'[^A-Z0-9]', '',
             str(subject or '').split(' - ')[0].upper())
         if nx_bp_now is not None and nx_bp_now < 95.0 and sample_size and sample_size > 0:
+            # 2026-08-27 (Liz batch verdict - streaming grid convergence):
+            # the old cap set EVERY leading peer to the identical
+            # nx_bp - 0.1, so 2-3 platforms landed on one shared value
+            # and the within-cat 4dp collision dejitter then separated
+            # them by ~0.005-0.013pp. Result: top streaming rows within
+            # 0.11pp and Prime = Netflix minus exactly 0.1000 (YMCA
+            # base/avid, Toca base, 2026-08-27). Fixed increments and
+            # shared targets are forbidden (rule #1 NO PINNING): each
+            # capped peer now descends below Netflix by a subject+brand
+            # salted gap, preserving the peers' own relative order, so
+            # the corrected grid reads as an organic descent.
+            leading = []
             for i in sp_idx:
                 if i == nx_idx:
                     continue
@@ -3497,16 +3559,34 @@ def enforce_netflix_leads_streaming_platform(df, subject, verbose=True):
                             and _vn.startswith(subj_pin_norm))):
                     continue  # subject / parent-anchor row, not a peer
                 if bp_i > nx_bp_now + 1e-9:
-                    cap_val = round(nx_bp_now - 0.1, 4)
-                    if cap_val < 1.0:
-                        cap_val = 1.0
-                    if verbose:
-                        print(f"   ⤵ peer-cap {df.at[i, 'Value']} "
-                              f"{bp_i:.4f}% -> {cap_val:.4f}% "
-                              f"(was leading NETFLIX {nx_bp_now:.4f}%)")
-                    _set_bp(df, i, cap_val, bp_col, cs_col, raw_col,
-                            proj_col, sample_size)
-                    n_changes += 1
+                    leading.append((i, bp_i))
+            # Highest first so the strongest peer sits closest to
+            # Netflix and the original inter-peer order is preserved.
+            leading.sort(key=lambda t: -t[1])
+            prev = nx_bp_now
+            for rank, (i, bp_i) in enumerate(leading):
+                lo, hi = (0.35, 1.10) if rank == 0 else (0.25, 0.90)
+                gap = _jitter_for(subject, str(df.at[i, 'Value']),
+                                  salt='nx-peer-respread', lo=lo, hi=hi)
+                cap_val = round(prev - gap, 4)
+                if cap_val < 1.0:
+                    cap_val = round(1.0 + _jitter_for(
+                        subject, str(df.at[i, 'Value']),
+                        salt='nx-peer-floor', lo=0.0011, hi=0.0913), 4)
+                # Never on a 2dp boundary (rule #1 depin discipline).
+                if abs(cap_val * 100 - round(cap_val * 100)) < 1e-6:
+                    cap_val = round(cap_val - _jitter_for(
+                        subject, str(df.at[i, 'Value']),
+                        salt='nx-peer-offgrid', lo=0.0011, hi=0.0097), 4)
+                if verbose:
+                    print(f"   ⤵ peer-respread {df.at[i, 'Value']} "
+                          f"{bp_i:.4f}% -> {cap_val:.4f}% "
+                          f"(was leading NETFLIX {nx_bp_now:.4f}%; "
+                          f"salted gap, order preserved)")
+                _set_bp(df, i, cap_val, bp_col, cs_col, raw_col,
+                        proj_col, sample_size)
+                prev = cap_val
+                n_changes += 1
             # Renormalize Category Share for the grid after any cap
             if n_changes > 0:
                 try:
@@ -3531,6 +3611,160 @@ def enforce_netflix_leads_streaming_platform(df, subject, verbose=True):
     except Exception as _rn_err:
         if verbose:
             print(f"   ⚠️ S/P share renormalize skipped: {_rn_err}")
+    return df, n_changes
+
+
+# ============================================================================
+# Top-cluster convergence detection + re-spread (2026-08-27, Liz batch
+# verdict: "Streaming grid convergence pinning (release-blocking)")
+# ============================================================================
+#
+# Defect signature: the TOP rows of a brand grid sit within a fraction
+# of a point of each other (YMCA base Netflix 39.5742 / Prime 39.4742 /
+# Disney+/Hulu 39.4612; Toca base four platforms within 0.1054pp). Real
+# audiences separate their top platforms by whole points; a <0.15pp
+# spread across 3+ leaders at meaningful levels is mechanical output
+# (shared cap targets, band-edge fixes, collision dejitter separating
+# identical values by epsilon), never organic signal.
+#
+# Detection is shared by three consumers: this enforcer (fixer, wired
+# into run_all_enforcers + run_write_safety_net), the final ship gate
+# invariant I15, and the pre-ship vetting prescan (nominates the
+# cluster to the reasoner). Fix philosophy per Jenna ("reasoning wins
+# when rooted in fact"): the top row's level is the audience's reasoned
+# anchor and KEEPS its value; every other cluster member descends by a
+# subject+brand salted gap, preserving the original rank order, bounded
+# so the cluster never crosses below the first non-cluster row.
+
+CONVERGENCE_MIN_CLUSTER = 3     # 3+ converged leaders = flag
+CONVERGENCE_EPS_PP = 0.15       # max spread across the converged top
+CONVERGENCE_MIN_LEVEL = 5.0     # only meaningful grids (skip micro-BP)
+
+_CONVERGENCE_EXEMPT_CATS = frozenset({
+    'GENDER', 'AGE', 'ETHNICITY', 'EDUCATION', 'INCOME', 'OCCUPATION',
+    'PARENTAL_STATUS', 'PARENTAL STATUS', 'RELATIONSHIP',
+    'SEXUAL_ORIENTATION', 'SEXUAL ORIENTATION',
+    'BRAND INPUT', 'SAMPLE SIZE', 'BRAND CATEGORY', 'SUBJECT',
+    'INPUT_METADATA', 'INPUT METADATA', 'LOCATION',
+    'AVID FAN', 'CASUAL FAN',
+})
+
+
+def detect_top_cluster_convergence(df, bp_col=None):
+    """Scan every non-exempt category for a converged top cluster.
+
+    Returns [(cat, [(row_idx, brand, bp), ...])] - one entry per
+    category whose top CONVERGENCE_MIN_CLUSTER+ non-self-pin rows sit
+    within CONVERGENCE_EPS_PP of each other at levels above
+    CONVERGENCE_MIN_LEVEL. The row list is the converged cluster in
+    descending BP order.
+    """
+    out = []
+    if df is None or len(df) == 0:
+        return out
+    if bp_col is None:
+        bp_col, _, _, _ = _detect_cols(df)
+    if bp_col is None:
+        return out
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+    for cat in col_u.unique():
+        if not cat or cat in _CONVERGENCE_EXEMPT_CATS:
+            continue
+        rows = []
+        for idx in df.index[col_u == cat]:
+            try:
+                v = float(str(df.at[idx, bp_col])
+                          .replace('%', '').replace(',', '').strip())
+            except (ValueError, TypeError):
+                continue
+            if v >= 95.0 or v <= 0.0001:   # self-pins / zeroes exempt
+                continue
+            rows.append((idx, str(df.at[idx, 'Value']).strip(), v))
+        if len(rows) < CONVERGENCE_MIN_CLUSTER:
+            continue
+        rows.sort(key=lambda t: -t[2])
+        top = rows[0][2]
+        if top < CONVERGENCE_MIN_LEVEL:
+            continue
+        k = 1
+        while k < len(rows) and (top - rows[k][2]) <= CONVERGENCE_EPS_PP:
+            k += 1
+        if k >= CONVERGENCE_MIN_CLUSTER:
+            out.append((cat, rows[:k]))
+    return out
+
+
+def respread_top_cluster_convergence(df, subject, verbose=True):
+    """Break converged top clusters with a salted, order-preserving
+    downward re-spread. The top row keeps its reasoned level; each
+    subsequent cluster member descends by a subject+brand salted gap
+    in [0.18, 0.85]pp, scaled down when needed so the cluster stays
+    above the first non-cluster row. Downward-only, so the avid subset
+    invariant is preserved on cut frames. Idempotent: a re-spread grid
+    no longer matches the detector. Returns (df, n_changes).
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+    clusters = detect_top_cluster_convergence(df, bp_col)
+    if not clusters:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+    col_u = df['Column'].astype(str).str.strip().str.upper()
+    n_changes = 0
+    for cat, cluster in clusters:
+        # First non-cluster value = lower bound for the descent.
+        below = []
+        cluster_ids = {i for i, _, _ in cluster}
+        for idx in df.index[col_u == cat]:
+            if idx in cluster_ids:
+                continue
+            try:
+                v = float(str(df.at[idx, bp_col])
+                          .replace('%', '').replace(',', '').strip())
+            except (ValueError, TypeError):
+                continue
+            if 0.0001 < v < 95.0:
+                below.append(v)
+        floor = max(below) if below else None
+
+        top_val = cluster[0][2]
+        gaps = []
+        for (idx, brand, _v) in cluster[1:]:
+            gaps.append(_jitter_for(subject, brand,
+                                    salt='convergence-respread',
+                                    lo=0.18, hi=0.85))
+        total_descent = sum(gaps)
+        if floor is not None:
+            headroom = top_val - floor - 0.05
+            if headroom <= 0.02 * len(gaps):
+                headroom = 0.02 * len(gaps) + 0.01
+            if total_descent > headroom:
+                scale = headroom / total_descent
+                gaps = [max(0.02, g * scale) for g in gaps]
+
+        prev = top_val
+        for (idx, brand, old_v), gap in zip(cluster[1:], gaps):
+            new_v = round(prev - gap, 4)
+            if new_v <= 0.0102:
+                new_v = round(0.0102 + _jitter_for(
+                    subject, brand, salt='convergence-floor',
+                    lo=0.0001, hi=0.0091), 4)
+            # Off any 2dp boundary (rule #1 depin discipline).
+            if abs(new_v * 100 - round(new_v * 100)) < 1e-6:
+                new_v = round(new_v - _jitter_for(
+                    subject, brand, salt='convergence-offgrid',
+                    lo=0.0011, hi=0.0097), 4)
+            if verbose:
+                print(f"   🪜 convergence re-spread [{cat}] {brand} "
+                      f"{old_v:.4f}% -> {new_v:.4f}% (top cluster of "
+                      f"{len(cluster)} within {CONVERGENCE_EPS_PP}pp)")
+            _set_bp(df, idx, new_v, bp_col, cs_col, raw_col,
+                    proj_col, sample_size)
+            prev = new_v
+            n_changes += 1
     return df, n_changes
 
 
@@ -8932,6 +9166,18 @@ def reground_clamped_sample_size(df, subject, verbose=True):
     """
     if df is None or len(df) == 0:
         return df, 0
+    # 2026-08-27 (Golden Girls Viewers - Avid Fan, Liz release block):
+    # NEVER re-ground a derived cut. Cut sample sizes are the ONE place
+    # the avid-skin rules allow a calculation - deterministically
+    # anchored to the parent (avid = parent AVID FAN BP / 100; gender =
+    # parent gender split). The Golden Girls avid was correctly anchored
+    # at 104,024 (26.8473% of the TU's 387,464), which lands inside the
+    # [99K, 110K] clamp band by coincidence; this enforcer then treated
+    # the anchored size as a BG.py 100K-floor artifact and re-ground it
+    # to 29,415 (7.6% of base), breaking the declared AVID FAN fraction.
+    # The ' - ' naming convention identifies every derived cut.
+    if ' - ' in str(subject or ''):
+        return df, 0
     bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
     if bp_col is None or raw_col is None:
         return df, 0
@@ -8950,6 +9196,15 @@ def reground_clamped_sample_size(df, subject, verbose=True):
 
     # Detect clamp band — 99K-110K is the writer-side ~100K floor signature
     if not (99_000 <= bi_raw <= 110_000):
+        return df, 0
+
+    # 2026-08-27 (same incident, second guard): the BG.py 100K-clamp
+    # artifact this enforcer exists for always lands on a multiple of 10
+    # (floor 100_000 plus step noise: 100,010 / 100,020 / 100,040 ...).
+    # Deliberately anchored sizes are messy by standing rule (a sample
+    # size never ends in 0 - no-round-sample-sizes.mdc), so a last digit
+    # of 1-9 means the size was reasoned/anchored, not clamped. Leave it.
+    if bi_raw % 10 != 0:
         return df, 0
 
     # Choose new sample_size. By construction every file in the [99K, 110K]
@@ -10899,15 +11154,29 @@ def enforce_viewer_carriage_constraint(df, subject, carriage_doc=None,
                 tgt = canonical_bp[key]
             else:
                 cur = vals[i]
-                if abs(cur - 100.0) <= 0.00005:
+                if doc.get('exclusive') and len(carriers) == 1:
+                    # E1 anchor convention (Jenna standing ruling,
+                    # codified 2026-08-27 from the Liz batch review):
+                    # the EXCLUSIVE verified carrier of a viewers
+                    # universe pins at exactly 100 (Paw Patrol /
+                    # Paramount+ precedent) - by definition every
+                    # viewer used it. Multi-carrier universes take the
+                    # organic-high path below and never get exact 100;
+                    # the pair of conventions is deliberate, not an
+                    # inconsistency. I18 + the depin enforcer exempt
+                    # this pin via exact_100_exempt.
+                    tgt = 100.0
+                    canonical_bp[key] = tgt
+                elif abs(cur - 100.0) <= 0.00005:
                     # Exact-100 spec pin (Furious flow) is authoritative.
                     canonical_bp[key] = cur
                     continue
-                if cur >= 99.0:
+                elif cur >= 99.0:
                     canonical_bp[key] = cur
                     continue
-                tgt = vc.messy_near_total(subject, key)
-                canonical_bp[key] = tgt
+                else:
+                    tgt = vc.messy_near_total(subject, key)
+                    canonical_bp[key] = tgt
             if abs(vals[i] - tgt) > 0.00005:
                 _write(i, tgt)
                 touched_cats.add(cat)
@@ -11904,6 +12173,19 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
     except Exception as e:
         print(f"   ⚠️ enforcer enforce_netflix_leads_streaming_platform "
               f"(final pass) failed: {e}")
+
+    # 2026-08-27 (Liz batch verdict - streaming grid convergence): break
+    # any converged top cluster the caps/floors/dejitter passes above
+    # may have produced. MUST run after the final Netflix pass (whose
+    # peer handling historically created the shared values) and before
+    # apply_platform_pin (a 100-pin, exempt from detection anyway).
+    try:
+        df, n = respread_top_cluster_convergence(df, subject,
+                                                 verbose=verbose)
+        total += n
+    except Exception as e:
+        print(f"   ⚠️ enforcer respread_top_cluster_convergence "
+              f"failed: {e}")
 
     # 2026-07-09 (Jenna consolidation): apply_platform_pin — self-anchor
     # pin driven by BG_PIN_PLATFORM env var set by the caller (dispatcher
@@ -16127,6 +16409,14 @@ def run_write_safety_net(df, subject, *, verbose: bool = True):
         # re-salt preserves the avid subset invariant; runs before the
         # second mirror pass so MPB propagation follows the moved rows.
         ("dejitter_fractional_ladders", dejitter_fractional_ladders),
+        # 2026-08-27 (Liz batch verdict - streaming grid convergence):
+        # converged top clusters break here too so the cut paths and
+        # the post-vetting-fix recompute (which both run only this net)
+        # cannot ship a <0.15pp top spread. Downward-only, order-
+        # preserving, subset-safe; runs before the second mirror pass
+        # so MPB propagation follows any moved rows.
+        ("respread_top_cluster_convergence",
+         respread_top_cluster_convergence),
         ("enforce_mpb_exact_mirror_2", enforce_mpb_exact_mirror),
         # LOCATION sum=100 re-asserted at write time (2026-08-25 Ari
         # Melber / Nicolle Wallace ship-gate holds): the mid-chain
@@ -17065,7 +17355,13 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
                        'TECHNOLOGY BRAND', 'HOME/OUTDOOR', 'CPG',
                        'BEVERAGES', 'FRANCHISE'}
                 )
-                if (subj_g13 and native_g13 and native_g13 not in _g13_skip):
+                # 2026-08-27 (Liz Netflix template-artifact flag): the
+                # subject label is never a brand row in a brand grid
+                # unless it IS the brand - audience-label universes
+                # ("Netflix SVOD Subscribers", "<Title> Viewers", cuts)
+                # skip the G13 auto-insert exactly like the enforcer.
+                if (subj_g13 and native_g13 and native_g13 not in _g13_skip
+                        and not _is_audience_label_subject(subj_g13)):
                     cat_rows_g13 = df.loc[cat_u_g13 == native_g13]
                     if len(cat_rows_g13) > 0:
                         subj_norm = _re.sub(r'[^A-Z0-9]', '', subj_g13)

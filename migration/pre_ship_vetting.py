@@ -155,6 +155,18 @@ HOLD_NOTICE_FROM = "Crosswalk Ops <jenna@crosswalknyc.com>"
 MAX_AUTOFIX_ROWS = 40
 MAX_FIX_MOVE_PP = 45.0
 
+# Cross-file constant nomination threshold (mirrors
+# migration/cross_file_constants.MIN_PEERS; fallback keeps the prompt
+# text sane if that module is unavailable).
+try:
+    from migration.cross_file_constants import MIN_PEERS as MIN_XFILE_PEERS
+except Exception:  # pragma: no cover
+    try:
+        from cross_file_constants import (  # type: ignore
+            MIN_PEERS as MIN_XFILE_PEERS)
+    except Exception:
+        MIN_XFILE_PEERS = 3
+
 DEMO_CATS = {
     "GENDER", "AGE", "ETHNICITY", "EDUCATION", "INCOME", "OCCUPATION",
     "PARENTAL_STATUS", "PARENTAL STATUS",
@@ -517,6 +529,8 @@ def _deterministic_prescan(df, subject, s3_key, genpop_map, verbose=True):
         "benchmark_candidates": [],
         "genpop_gaps": {"n_brand_rows": 0, "n_missing": 0, "examples": []},
         "ladders": {"n_flagged": 0, "groups": []},
+        "convergence": [],
+        "cross_file_constants": [],
         "cross_grid_dupes": [],
         "coherence": {},
         "brand_input": {},
@@ -633,6 +647,49 @@ def _deterministic_prescan(df, subject, s3_key, genpop_map, verbose=True):
         }
     except Exception as e:
         facts["errors"].append(f"ladder scan: {e}")
+
+    # Top-cluster convergence (2026-08-27 Liz batch verdict: YMCA/Toca
+    # streaming grids with 3-4 leaders within 0.11pp). Shared detection
+    # with the enforcer chain + ship gate I15; nominated to the
+    # reasoner like benchmark candidates so an unaddressed cluster
+    # downgrades a PASS.
+    try:
+        try:
+            from migration.post_generation_enforcers import (
+                detect_top_cluster_convergence,
+            )
+        except ImportError:
+            from post_generation_enforcers import (  # type: ignore
+                detect_top_cluster_convergence,
+            )
+        _clusters = detect_top_cluster_convergence(df, cols["bp"])
+        facts["convergence"] = [
+            {"category": cat,
+             "rows": [{"brand": b, "bp": round(v, 4)}
+                      for _i, b, v in cluster]}
+            for cat, cluster in _clusters[:6]
+        ]
+    except Exception as e:
+        facts["errors"].append(f"convergence scan: {e}")
+
+    # Cross-file constants (2026-08-27 Liz: seven same-day avid files
+    # all landed Visa at index 68.1-70.2 while their bases varied - a
+    # constant across independent audiences is mechanical, not signal).
+    # Compares this frame's watchlist brands against the values other
+    # files shipped in the trailing window via the S3 ship ledger.
+    try:
+        try:
+            from migration.cross_file_constants import (
+                scan_frame_for_constants,
+            )
+        except ImportError:
+            from cross_file_constants import (  # type: ignore
+                scan_frame_for_constants,
+            )
+        facts["cross_file_constants"] = scan_frame_for_constants(
+            df, subject, s3_key, cols, genpop_map)
+    except Exception as e:
+        facts["errors"].append(f"cross-file constant scan: {e}")
 
     # Subject coherence facts.
     coh = {}
@@ -807,6 +864,40 @@ the correct call. The Bethenny Frankel case was the opposite pattern (a \
 mid-income 35-54 adult audience at index 70 on Visa, not composition- \
 explainable): that is exactly when a raise is right.
 
+4f. CARRIAGE ANCHOR CONVENTION (standing ruling, 2026-08-27). On a \
+viewers/fans universe for a specific title, the streaming platform that \
+is the title's EXCLUSIVE verified carrier is pinned at exactly 100: by \
+definition every viewer uses that platform (Paw Patrol viewers / \
+Paramount+ is the precedent). When the title streams on MULTIPLE \
+carriers (for example a catalog title on Hulu and Disney+ plus Philo \
+and DirecTV), NO platform gets an exact-100 pin; the lead carrier reads \
+as an organically high value (high 90s is normal) and the rest \
+distribute below it. A lead carrier at 99.9x on a multi-carrier \
+universe next to an exact 100 on an exclusive-carrier universe is BOTH \
+conventions working correctly, not an inconsistency; never flag the \
+pair as one.
+
+4g. DEMO-AWARE STREAMING ORDER (standing ruling, 2026-08-27). \
+"Netflix leads, Prime above Disney+/Hulu" is the GENERAL-population \
+expectation, not a law. Kids/preschool-parent and family-household \
+audiences legitimately read Disney+/Hulu (and kids-content platforms) \
+above Prime Video; that ordering is composition-explained and PASSES \
+with the demographic justification named. Spanish-language and \
+international-reality audiences are judged on composition too \
+(Hispanic-household streaming mixes run ViX/Telemundo-heavy and can \
+reorder the general grid). Flag streaming ORDER only when the \
+composition cannot explain it, and never mechanically re-order rows to \
+match the general expectation.
+
+4h. UBIQUITY BANDS (standing ruling, 2026-08-27). Near-universal \
+utilities (Google Search at 85-92 panel-reach) have a published \
+ceiling band; a value OVER the band (for example 95.9 on a paid-app \
+buyer universe) is only correct when the audience is composition-gated \
+toward heavy digital use (app-store buyers, digitally-screened \
+panels). If no such gating exists, trim to the fact-rooted band level \
+with the source cited; if it does, record the justification as an info \
+finding so the over-band read is documented rather than silent.
+
 5. FIXES. fixable=true means you are confident enough to re-level the row \
 yourself, in EITHER direction, and every fix must be rooted in fact. \
 Provide: the expected index band for THIS audience, a concrete corrected \
@@ -824,12 +915,22 @@ qualifier, structural artifacts you cannot re-level row by row), set \
 fixable=false.
 
 6. SYNTHETIC SIGNATURES. You are given the outputs of mechanical detectors \
-(shared-suffix value ladders, cross-grid duplicate values, coverage gaps). \
-Do not re-detect; judge. A ladder group above threshold that survived to \
-this stage is a FAIL with fixable=false (the repair is a re-draw, not a \
-re-level). A handful of shared suffixes below threshold is BORDERLINE at \
-most. Cross-grid duplicates outside required mirror families are BORDERLINE \
-unless systematic.
+(shared-suffix value ladders, cross-grid duplicate values, top-cluster \
+convergence, cross-file constants, coverage gaps). Do not re-detect; judge. \
+A ladder group above threshold that survived to this stage is a FAIL with \
+fixable=false (the repair is a re-draw, not a re-level). A handful of \
+shared suffixes below threshold is BORDERLINE at most. Cross-grid \
+duplicates outside required mirror families are BORDERLINE unless \
+systematic. A TOP-CLUSTER CONVERGENCE (3+ category leaders within ~0.15 \
+points of each other, e.g. Netflix 39.57 / Prime 39.47 / Disney+/Hulu \
+39.46) is a mechanical signature: independent platforms do not tie; \
+address it as a finding on that category (fixable=false; the re-spread is \
+deterministic downstream). A CROSS-FILE CONSTANT (this file's value for a \
+ubiquitous brand sitting inside a tight index window that 3+ unrelated \
+recent files also shipped) is likewise mechanical: independent audiences \
+do not agree to within ~2 index points; address it with a per-audience \
+reasoned fix (fixable=true with fact_basis) or flag fixable=false if the \
+right level needs a rebuild.
 
 7. LANGUAGE. Write every "plain" string for a client reader: plain English, \
 specific, no internal tooling or vendor or model names, no hedging \
@@ -940,6 +1041,26 @@ def _build_user_prompt(df, subject, s3_key, category, facts, genpop_map):
         det_lines.append(
             f"    {g['category']}: suffix .{g['suffix']} x{g['count']} "
             f"(threshold {g['threshold']})")
+    conv = facts.get("convergence", [])
+    det_lines.append(
+        f"  top-cluster convergence (leaders within ~0.15pp): "
+        f"{len(conv)} categor{'y' if len(conv) == 1 else 'ies'}")
+    for c in conv[:4]:
+        row_s = ", ".join(f"{r['brand']} {r['bp']:.4f}"
+                          for r in c.get("rows", [])[:5])
+        det_lines.append(f"    {c['category']}: {row_s}")
+    xfc = facts.get("cross_file_constants", [])
+    det_lines.append(
+        f"  cross-file constants (same brand inside a tight window on "
+        f"{MIN_XFILE_PEERS}+ unrelated recent files): {len(xfc)}")
+    for c in xfc[:4]:
+        idx_s = (f", index {c['index']:.1f}" if c.get("index") is not None
+                 else "")
+        det_lines.append(
+            f"    {c['brand']} @ {c['bp']:.4f}{idx_s} matches "
+            f"{c['n_peer_files']} other file(s), e.g. "
+            + "; ".join(f"{p['subject']} {p['bp']:.4f}"
+                        for p in c.get("peer_examples", [])[:3]))
     dupes = facts.get("cross_grid_dupes", [])
     det_lines.append(f"  cross-grid duplicate values outside mirror "
                      f"families: {len(dupes)}")
@@ -1176,10 +1297,37 @@ def _apply_fixes(df, findings, subject, genpop_map, verbose=True):
             rejected.append((f, res))
             continue
         target = float(res)
-        # Subject-salted jitter so the fix never lands on a shared or
-        # round value; re-drawn until off any 2dp boundary.
-        j = (_unit(f"vetting-fix|{subject}|{cu}|{bn}") - 0.5) * 0.08
-        newv = round(max(0.0102, min(99.4899, target + j)), 4)
+        # Subject-salted spread so the fix never lands on a shared or
+        # round value. 2026-08-27 (Liz avid Visa constant): the old
+        # ±0.04pp jitter around a SHARED benchmark target put every
+        # same-day fix within a tenth of a point of the same number -
+        # a manufactured cross-file constant (the exact defect family
+        # this stage exists to prevent). The benchmark now anchors a
+        # RANGE: each file lands at target ± up to 3% of the target
+        # (min ±0.35pp), salted per subject, then clamped inside the
+        # reasoner's expected index band when one was provided with a
+        # resolvable baseline - so the spread stays fact-rooted while
+        # no two files share a value.
+        span = max(0.35, 0.03 * abs(target))
+        j = (_unit(f"vetting-fix|{subject}|{cu}|{bn}") - 0.5) * 2.0 * span
+        newv = target + j
+        band = f.get("expected_index_band")
+        if (isinstance(band, (list, tuple)) and len(band) == 2
+                and gp_hit and gp_hit[0]):
+            lo_i, hi_i = _num(band[0]), _num(band[1])
+            if lo_i is not None and hi_i is not None and hi_i > lo_i:
+                lo_bp = gp_hit[0] * lo_i / 100.0
+                hi_bp = gp_hit[0] * hi_i / 100.0
+                # The clamp exists to keep the SPREAD from escaping the
+                # band, never to override the reasoned target: a
+                # fact-cited fix deliberately outside the band (an Amex
+                # eligibility trim below the floor) already passed
+                # _fix_sanity and must land where reasoning put it, so
+                # only in-band targets are clamped.
+                if lo_bp <= target <= hi_bp:
+                    pad = min(0.02, (hi_bp - lo_bp) * 0.05)
+                    newv = max(lo_bp + pad, min(hi_bp - pad, newv))
+        newv = round(max(0.0102, min(99.4899, newv)), 4)
         tries = 0
         while (_on_2dp_boundary(newv) or (cur is not None
                and abs(newv - cur) < 0.00005)) and tries < 9:
@@ -1403,6 +1551,9 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
             "genpop_brand_rows": facts["genpop_gaps"]["n_brand_rows"],
             "ladder_rows": facts["ladders"]["n_flagged"],
             "cross_grid_dupes": len(facts["cross_grid_dupes"]),
+            "convergence_clusters": len(facts.get("convergence", [])),
+            "cross_file_constants": len(
+                facts.get("cross_file_constants", [])),
         }
 
         user = _build_user_prompt(df, subject, key, category, facts,
@@ -1494,6 +1645,37 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                     f"{len(unaddressed)} nominated row(s) not "
                     f"addressed by the review")
 
+        # Same contract for the mechanical nominations added 2026-08-27
+        # (Liz batch): a convergence cluster or a cross-file constant
+        # the reasoner did not address never rides out on a clean PASS.
+        if verdict == "PASS" and (facts.get("convergence")
+                                  or facts.get("cross_file_constants")):
+            addressed_brands = {_norm_brand(f.get("brand"))
+                                for f in findings}
+            addressed_cats = {_norm_cat(f.get("category"))
+                              for f in findings}
+            open_conv = [
+                c for c in facts.get("convergence", [])
+                if _norm_cat(c.get("category")) not in addressed_cats
+            ]
+            open_const = [
+                c for c in facts.get("cross_file_constants", [])
+                if _norm_brand(c.get("brand")) not in addressed_brands
+            ]
+            if open_conv or open_const:
+                verdict = "BORDERLINE"
+                bits = []
+                if open_conv:
+                    bits.append(f"{len(open_conv)} converged top "
+                                f"cluster(s)")
+                if open_const:
+                    bits.append(f"{len(open_const)} cross-file "
+                                f"constant(s)")
+                prior = report.get("downgrade")
+                note = " and ".join(bits) + " not addressed by the review"
+                report["downgrade"] = (f"{prior}; {note}" if prior
+                                       else note)
+
         # Standing coverage-gap finding (audit gap 5): visible in the
         # ledger even when the reasoner did not comment. Brands in our
         # brand universe self-heal via the daily Gen Pop sync.
@@ -1518,10 +1700,20 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
         fail_findings = [f for f in findings
                          if str(f.get("severity", "")).lower() == "fail"]
 
-        if verdict == "FAIL" and fail_findings:
+        if fail_findings:
             fixable = [f for f in fail_findings if f.get("fixable")]
             judgment = [f for f in fail_findings if not f.get("fixable")]
-            if not judgment and 0 < len(fixable) <= MAX_AUTOFIX_ROWS:
+            # 2026-08-27 (Liz avid Visa constant): the fix gate used to
+            # require the OVERALL verdict to be FAIL, so a fail-severity
+            # finding with a benchmark target under a PASS/BORDERLINE
+            # verdict was silently dropped (Alofoke avid Visa @ index 68
+            # carried a fail finding on a PASS verdict and shipped
+            # unfixed). Fixable fail-severity findings now apply on any
+            # verdict; judgment holds still require a reasoner-level
+            # FAIL so a PASS with a judgment note never quarantines.
+            hold = verdict == "FAIL" and (
+                bool(judgment) or len(fixable) > MAX_AUTOFIX_ROWS)
+            if (not hold) and 0 < len(fixable) <= MAX_AUTOFIX_ROWS:
                 df = df.copy()
                 # Strip baseline columns so the fixes and the chain
                 # recompute see the canonical frame; re-appended by the
@@ -1545,9 +1737,12 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                     {"finding": f.get("code"), "reason": r}
                     for f, r in rejected_fixes]
                 if rejected_fixes and not applied:
-                    # Every proposed fix failed sanity: this is a
-                    # judgment hold, not an autofix.
+                    # Every proposed fix failed sanity: on a reasoner-
+                    # level FAIL this is a judgment hold, not an
+                    # autofix; on PASS/BORDERLINE it stays a logged
+                    # finding (the reasoner did not fail the file).
                     judgment = fixable
+                    hold = verdict == "FAIL"
                 else:
                     # Recompute the chain from the corrected BPs and
                     # re-run the mechanical gate on the fixed bytes.
@@ -1599,14 +1794,16 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                         )
                     except ImportError:
                         pass
-                    report["verdict"] = "FAIL_AUTOFIXED"
+                    report["verdict"] = (
+                        "FAIL_AUTOFIXED" if verdict == "FAIL"
+                        else f"{verdict}_AUTOFIXED")
                     if verbose:
-                        print(f"[pre-ship-vetting] {base}: FAIL with "
-                              f"{len(applied)} benchmark-backed fix(es) "
-                              f"applied; re-checked and publishing")
-            if judgment or (verdict == "FAIL"
-                            and len(fixable) > MAX_AUTOFIX_ROWS):
-                hold = judgment or fail_findings
+                        print(f"[pre-ship-vetting] {base}: {verdict} "
+                              f"with {len(applied)} benchmark-backed "
+                              f"fix(es) applied; re-checked and "
+                              f"publishing")
+            if hold:
+                hold_findings = judgment or fail_findings
                 report["verdict"] = "FAIL_HELD"
                 if ledger:
                     _ledger_append({
@@ -1624,8 +1821,8 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                     qkey = _quarantine_bytes(
                         buf.getvalue().encode("utf-8"), key, s3c,
                         verbose)
-                    _email_hold_notice(key, hold, qkey, verbose)
-                    raise PreShipVettingError(key, hold,
+                    _email_hold_notice(key, hold_findings, qkey, verbose)
+                    raise PreShipVettingError(key, hold_findings,
                                               quarantine_key=qkey)
                 return df, report
 

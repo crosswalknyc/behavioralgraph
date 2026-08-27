@@ -2104,6 +2104,67 @@ def _check_i19(rows, subject, s3_key):
     return out
 
 
+def _check_i20(rows, s3_key):
+    """Top-cluster convergence (2026-08-27 Liz batch: YMCA base shipped
+    Netflix 39.5742 / Prime 39.4742 / Disney+/Hulu 39.4612 and Toca
+    base had FOUR platforms within 0.11pp; Prime sat at Netflix minus
+    exactly 0.1000 - the retired fixed peer-cap increment). Independent
+    brands do not tie: 3+ category leaders inside ~0.15pp at meaningful
+    levels is a mechanical signature.
+
+    Thresholds live in migration/post_generation_enforcers
+    (CONVERGENCE_*), shared with the enforcer-chain re-spread and the
+    vetting prescan so the three can never drift. Deterministically
+    fixable by respread_top_cluster_convergence (salted downward
+    descent, order preserved), so profile_writer's autofix pass
+    remediates before quarantine.
+    """
+    out = []
+    try:
+        try:
+            from migration.post_generation_enforcers import (
+                CONVERGENCE_MIN_CLUSTER, CONVERGENCE_EPS_PP,
+                CONVERGENCE_MIN_LEVEL, _CONVERGENCE_EXEMPT_CATS,
+            )
+        except ImportError:
+            from post_generation_enforcers import (  # type: ignore
+                CONVERGENCE_MIN_CLUSTER, CONVERGENCE_EPS_PP,
+                CONVERGENCE_MIN_LEVEL, _CONVERGENCE_EXEMPT_CATS,
+            )
+    except Exception:
+        return out
+    by_cat = {}
+    for r in rows:
+        cat = r["cat_u"]
+        if not cat or cat in _CONVERGENCE_EXEMPT_CATS:
+            continue
+        v = _num(r["bp_s"])
+        if v is None or v >= 95.0 or v <= 0.0001:
+            continue
+        by_cat.setdefault(cat, []).append((str(r["val"] or "").strip(), v))
+    for cat, vals in by_cat.items():
+        if len(vals) < CONVERGENCE_MIN_CLUSTER:
+            continue
+        vals.sort(key=lambda t: -t[1])
+        top = vals[0][1]
+        if top < CONVERGENCE_MIN_LEVEL:
+            continue
+        k = 1
+        while k < len(vals) and (top - vals[k][1]) <= CONVERGENCE_EPS_PP:
+            k += 1
+        if k >= CONVERGENCE_MIN_CLUSTER:
+            cluster_s = ", ".join(f"{b} {v:.4f}" for b, v in vals[:k][:6])
+            out.append(_v(
+                "I20", "top-cluster convergence",
+                f"{cat} (top {k})", f"{top - vals[k - 1][1]:.4f}pp spread",
+                f"The top {k} rows in {cat} sit within "
+                f"{CONVERGENCE_EPS_PP}pp of each other ({cluster_s}); "
+                f"independent brands do not tie, so a converged leader "
+                f"cluster is a mechanical artifact.",
+            ))
+    return out
+
+
 def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
                                 s3_client=None, verbose=True):
     """Run all invariants read-only. Returns (violations, meta).
@@ -2169,6 +2230,7 @@ def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
                         s3_client, verbose)
     violations += _safe("I18", _check_i18, rows, subject, s3_key)
     violations += _safe("I19", _check_i19, rows, subject, s3_key)
+    violations += _safe("I20", _check_i20, rows, s3_key)
 
     meta = {"n_rows": len(rows), "sample": sample,
             "is_cut": _is_cut_key(s3_key)}

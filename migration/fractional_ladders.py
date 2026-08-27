@@ -34,11 +34,19 @@ organic ceiling and ~2x below the observed defect floor:
 
   per-category:  flag suffix shared by >= 6 + cat_rows // 1000 rows
   file-wide:     flag suffix shared by >= 20 + in_scope_rows // 2000
+  stepped rule:  flag suffix shared by >= 5 rows spanning >= 4 distinct
+                 integer parts, REGARDLESS of category size (2026-08-27
+                 Alofoke avid TALENT: six rows at .7343 across integers
+                 20/16/14/10/5/1 slid under the size-scaled threshold
+                 of 8 in a 2,355-row category)
 
 At 4dp there are 10,000 possible suffixes; for a 2,000-row category
 the expected multiplicity per suffix is 0.2, so P(one suffix reaching
 8) is ~1e-9 per suffix - organic false positives are effectively
-impossible at these bars.
+impossible at these bars. The stepped rule is even safer: it requires
+the shared suffix AND an integer-stepped structure that organic
+reasoning never produces (known-good corpus max: 3-4 shared suffixes
+in-category).
 
 Twin: bg-webapp/migration/fractional_ladders.py must stay
 byte-identical (scripts/test_module_twin_sync.py pins it).
@@ -67,6 +75,21 @@ FILEWIDE_BASE = 20
 # shared suffixes are never organic at 4 members; the at-birth guard
 # is deliberately more aggressive than the file-level detector.
 DECISION_BATCH_MIN = 4
+# Stepped-ladder structural rule (2026-08-27, Liz: Alofoke avid TALENT
+# six rows at .7343 across integer steps 20/16/14/10/5/1 shipped past
+# I14). The count thresholds above scale UP with category size
+# (2,355-row TALENT -> threshold 8), so a 6-row ladder slid under the
+# bar; and the at-birth guard only sees ONE ~200-row chunk at a time,
+# so a ladder accumulated ACROSS chunks never reaches DECISION_BATCH_MIN
+# within any single batch. The stepped rule keys on STRUCTURE instead
+# of count: a shared 4dp suffix at >= PERCAT_STEPPED_MIN members
+# spanning >= PERCAT_STEPPED_INTS distinct integer parts is flagged
+# regardless of category size. Organic odds of five rows sharing an
+# exact 4dp suffix at four+ integer levels are (1/10^4)^4-scale - the
+# known-good corpus (2026-08-26 measurement) never exceeded 3-4 shared
+# suffixes in-category at ANY integer spread.
+PERCAT_STEPPED_MIN = 5
+PERCAT_STEPPED_INTS = 4
 
 
 def suffix4(bp) -> str:
@@ -119,7 +142,7 @@ def detect_fractional_ladders(triples):
     filewide = Counter()
     for row_id, cat_u, bp in triples:
         s = suffix4(bp)
-        by_cat[cat_u].append((row_id, s))
+        by_cat[cat_u].append((row_id, s, float(bp)))
         filewide[s] += 1
 
     percat_groups = []
@@ -127,12 +150,20 @@ def detect_fractional_ladders(triples):
     flagged_suffixes = set()
     for cat_u, entries in by_cat.items():
         thr = percat_threshold(len(entries))
-        counts = Counter(s for _, s in entries)
+        counts = Counter(s for _, s, _ in entries)
         for s, c in counts.items():
-            if c >= thr:
-                percat_groups.append((cat_u, s, c, thr))
+            hit = c >= thr
+            if not hit and c >= PERCAT_STEPPED_MIN:
+                # Stepped-ladder structural rule: same 4dp suffix
+                # spanning distinct integer levels is fabricated
+                # regardless of how large the category is.
+                ints = {int(v) for _, sfx, v in entries if sfx == s}
+                hit = len(ints) >= PERCAT_STEPPED_INTS
+            if hit:
+                percat_groups.append((cat_u, s, c, min(thr, c)))
                 flagged_suffixes.add(s)
-                flagged_ids.update(rid for rid, sfx in entries if sfx == s)
+                flagged_ids.update(
+                    rid for rid, sfx, _ in entries if sfx == s)
 
     fw_thr = filewide_threshold(n_scope)
     filewide_groups = []
