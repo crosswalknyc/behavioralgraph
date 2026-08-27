@@ -2583,6 +2583,38 @@
             color: var(--text-secondary);
         }
         .marketing-plat-seed b { color: var(--text-primary); font-weight: 600; }
+        .marketing-reach-banner {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-left: 3px solid var(--accent-lime, #c8e600);
+            border-radius: 10px;
+            padding: 0.7rem 0.9rem;
+            margin: 0 0 1rem;
+        }
+        .marketing-reach-banner-title {
+            font-size: 0.7rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 700;
+            font-family: 'Space Mono', monospace;
+            color: var(--text-secondary);
+            margin-bottom: 0.4rem;
+        }
+        .marketing-reach-banner-body {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem 1.4rem;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+        }
+        .marketing-reach-banner-body b { color: var(--text-primary); font-weight: 600; }
+        .marketing-reach-banner-foot {
+            margin-top: 0.45rem;
+            font-size: 0.7rem;
+            line-height: 1.4;
+            color: var(--text-secondary);
+            opacity: 0.85;
+        }
         .marketing-plat-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.15rem; }
         .marketing-plat-tag {
             background: rgba(139, 92, 246, 0.14);
@@ -109314,6 +109346,22 @@ https://www.instagram.com/p/..."></textarea>
                 const i = Math.max(50, Number(index) || 100);
                 return p * Math.sqrt(i / 100);
             }
+            // Plain-language explainer for the FIT pill (shared by Creator
+            // Roster + Brand Partners). Makes clear it is a ranking score,
+            // not a percentage, so a value like 102 does not read as broken.
+            const _MK_FIT_TIP = 'FIT is a ranking score, not a percentage. It blends reach (overlap %) with affinity (index vs Gen Pop), dampening the index with a square root so a sky-high index on a tiny audience cannot dominate: overlap% × √(index ÷ 100). Higher means a stronger, more efficient match; it is only used to rank talent within each type.';
+            // Profile-level projected US universe (same source the Snapshot
+            // tiles use). Lets us turn an overlap % into a people count.
+            function _mkProjectedUniverse() {
+                const d = (typeof currentDashboardData !== 'undefined') ? currentDashboardData : null;
+                return d ? (Number(d.projectedUS) || 0) : 0;
+            }
+            // Estimated reachable audience = overlap share × projected universe.
+            function _mkReachPeople(pct) {
+                const u = _mkProjectedUniverse();
+                if (!u || !(pct > 0)) return 0;
+                return Math.round(u * pct / 100);
+            }
             // Top platforms the audience actually engages with, capped at N.
             // Returns [{name, pct}, ...] sorted by pct desc.
             function _mkTopEngagementPlatforms(N=3) {
@@ -109396,7 +109444,7 @@ https://www.instagram.com/p/..."></textarea>
                     ? platforms.map(p => `${p.name} (${p.pct.toFixed(0)}%)`).join(' · ')
                     : '';
                 const audienceBits = [];
-                if (median) audienceBits.push(`age ${Math.max(18, median-8).toFixed(2)}-${(median+10).toFixed(2)}`);
+                if (median) audienceBits.push(`ages ${Math.round(Math.max(18, median-8))}-${Math.round(median+10)}`);
                 if (gender.primary && gender.primary !== '—') {
                     audienceBits.push(`${gender.primary.toLowerCase()}-lean (${Math.round(gender.pct)}%)`);
                 }
@@ -109481,23 +109529,35 @@ https://www.instagram.com/p/..."></textarea>
                 }
 
                 // Rationale is data-grounded: reach + index + fit archetype.
+                // Incrementality read: combine reach (overlap %) with affinity
+                // (index) so two talents with the same index but different
+                // overlap get different guidance. This is the real decision -
+                // net-new reach vs. resonance within an audience you already have.
                 const rationaleFor = (r) => {
-                    const idxTxt = r.index > 0 ? Math.round(r.index) + ' idx' : 'no baseline';
-                    const parts = [`${r.pct.toFixed(1)}% of the audience overlaps with this talent's fan base (${idxTxt} vs Gen Pop).`];
-                    if (r.index >= 300) {
-                        parts.push('Extreme over-index - a signature cultural marker for this audience, ideal for identity-driven creative.');
-                    } else if (r.index >= 150) {
-                        parts.push('Strong over-index - this talent will feel like an authentic tastemaker, not a mass endorsement.');
-                    } else if (r.index >= 110) {
-                        parts.push('Slight over-index - safe mainstream choice with proven audience alignment.');
+                    const idxTxt = r.index > 0 ? Math.round(r.index) + ' idx' : 'no Gen Pop baseline';
+                    const hiReach = r.pct >= 15;
+                    const midReach = r.pct >= 5 && r.pct < 15;
+                    const strongIdx = r.index >= 150;
+                    const modIdx = r.index >= 110 && r.index < 150;
+                    let call;
+                    if (hiReach && strongIdx) {
+                        call = 'Anchor pick - broad overlap AND a sharp over-index, so this talent reaches your audience at scale and still feels native to it. Lead the roster with them.';
+                    } else if (hiReach && !strongIdx) {
+                        call = 'Mostly already your audience - large overlap but only a modest over-index means their fans largely sit inside your segment. Buy for resonance and frequency, not net-new reach.';
+                    } else if (!hiReach && strongIdx) {
+                        call = 'Incremental & identity-defining - smaller overlap but a strong over-index. Their fanbase is tightly aligned and only partly inside yours, so they extend reach into a like-minded pocket. Use as a signature, tastemaker face.';
+                    } else if (midReach && modIdx) {
+                        call = 'Solid mainstream fit - meaningful overlap with a slight over-index. A safe, on-audience choice for always-on content.';
                     } else {
-                        parts.push('Reach without strong over-index - use for scale, not for identity.');
+                        call = 'Scale play - limited over-index, so treat as reach / awareness rather than an identity signal.';
                     }
-                    return parts.join(' ');
+                    return r.pct.toFixed(1) + '% of the audience overlaps this talent&#39;s fan base (' + idxTxt + ' vs Gen Pop). ' + call;
                 };
 
                 const cardFor = (r, icon) => {
                     const catLabel = (r.cat || '').replace('/', ' / ');
+                    const reach = _mkReachPeople(r.pct);
+                    const reachTxt = reach > 0 ? '≈' + formatNumber(reach) + ' reachable' : '';
                     return `
                         <div class="marketing-plat-card">
                             <div class="marketing-plat-head">
@@ -109505,15 +109565,14 @@ https://www.instagram.com/p/..."></textarea>
                                     <span class="marketing-plat-icon">${icon || '🎤'}</span>
                                     ${(r.name || '').replace(/</g,'&lt;')}
                                 </div>
-                                <span class="marketing-fit-pill">${r.fit.toFixed(0)}<small>fit</small></span>
+                                <span class="marketing-fit-pill has-tooltip" data-tooltip="${_MK_FIT_TIP}">${r.fit.toFixed(0)}<small>fit</small></span>
                             </div>
                             <div class="marketing-plat-metrics">
                                 <div class="marketing-plat-metric"><b>${r.pct.toFixed(1)}% overlap</b></div>
                                 <div class="marketing-plat-metric"><b>${r.index > 0 ? Math.round(r.index) : '—'} idx</b></div>
+                                ${reachTxt ? `<div class="marketing-plat-metric"><b>${reachTxt}</b></div>` : ''}
                             </div>
                             <div class="marketing-plat-seed"><b>Category.</b> ${catLabel.replace(/</g,'&lt;')}</div>
-                            ${platformLine ? `<div class="marketing-plat-seed"><b>Best platforms to activate.</b> ${platformLine.replace(/</g,'&lt;')}</div>` : ''}
-                            <div class="marketing-plat-seed"><b>Audience match.</b> ${audienceLine.replace(/</g,'&lt;')}</div>
                             <div class="marketing-plat-seed"><b>Why.</b> ${rationaleFor(r).replace(/</g,'&lt;')}</div>
                         </div>`;
                 };
@@ -109545,7 +109604,18 @@ https://www.instagram.com/p/..."></textarea>
                         </div>`;
                 }).filter(Boolean).join('');
 
-                el.innerHTML = html || '<div class="marketing-empty">Talent overlap detected but no candidates cleared the minimum thresholds for any talent subcategory.</div>';
+                // De-boilerplate: the platform + audience facts are
+                // profile-level (identical for every talent), so surface them
+                // ONCE here instead of repeating them on each card.
+                const reachBits = [];
+                if (platformLine) reachBits.push('<span><b>Top platforms.</b> ' + platformLine.replace(/</g,'&lt;') + '</span>');
+                if (audienceLine && audienceLine !== 'demographic detail below') reachBits.push('<span><b>Audience.</b> ' + audienceLine.replace(/</g,'&lt;') + '</span>');
+                const reachBanner = reachBits.length
+                    ? '<div class="marketing-reach-banner"><div class="marketing-reach-banner-title">Where this audience is reachable</div><div class="marketing-reach-banner-body">' + reachBits.join('') + '</div><div class="marketing-reach-banner-foot">Profile-level - describes this audience, not each talent&#39;s own followers. Cards below show per-talent overlap, affinity, and estimated reachable audience.</div></div>'
+                    : '';
+                el.innerHTML = html
+                    ? (reachBanner + html)
+                    : '<div class="marketing-empty">Talent overlap detected but no candidates cleared the minimum thresholds for any talent subcategory.</div>';
             }
 
             // ---------- Brand Partners ----------
@@ -109610,6 +109680,8 @@ https://www.instagram.com/p/..."></textarea>
                     if (!items.length) return '';
                     const cards = items.map(r => {
                         const cat = (r.cat || '').replace('/', ' / ');
+                        const reach = _mkReachPeople(r.pct);
+                        const reachTxt = reach > 0 ? '≈' + formatNumber(reach) : '';
                         return `
                             <div class="marketing-partner-card">
                                 <div class="marketing-partner-card-head">
@@ -109619,7 +109691,8 @@ https://www.instagram.com/p/..."></textarea>
                                 <div class="marketing-partner-card-metrics">
                                     <span><b>${r.pct.toFixed(1)}%</b> overlap</span>
                                     <span><b>${r.index > 0 ? Math.round(r.index) : '—'}</b> idx</span>
-                                    <span class="marketing-fit-pill">${r.fit.toFixed(0)}<small>fit</small></span>
+                                    ${reachTxt ? `<span><b>${reachTxt}</b> reachable</span>` : ''}
+                                    <span class="marketing-fit-pill has-tooltip" data-tooltip="${_MK_FIT_TIP}">${r.fit.toFixed(0)}<small>fit</small></span>
                                 </div>
                             </div>`;
                     }).join('');
