@@ -41,6 +41,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Local-only Jenna low-confidence alerts (WIP; never commit or ship)
+jenna_alerts.local.jsonl
+
 # Cache
 .cache/
 ai_cache/
