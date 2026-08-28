@@ -2414,7 +2414,7 @@
                     <div class="card-header">
                         <h2>💵 Daily Spend</h2>
                         <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                            Day-by-day usage spend, newest first. Prometheus covers dashboard chat requests plus the profile builds approved from that chat. API covers partner API requests plus the builds they start. Custom Pulls covers every other profile build. Each build lands in exactly one bucket.
+                            Day-by-day usage spend, newest first. Prometheus covers dashboard chat and on-screen analysis requests. API covers partner API requests. Custom Pulls covers all profile builds plus profile maintenance runs. Each dollar lands in exactly one bucket. A ~ marks days that include estimated figures from before full tracking began; all other days carry actual billed usage or measured records.
                         </p>
                     </div>
                     <div style="padding: 1rem;">
@@ -6376,17 +6376,22 @@
                     return;
                 }
                 const fmt = (v) => '$' + Number(v || 0).toFixed(2);
-                let totP = 0, totA = 0, totC = 0, totT = 0;
+                const showOther = days.some(d => Number(d.other || 0) > 0);
+                let totP = 0, totA = 0, totC = 0, totO = 0, totT = 0;
+                const basisTitle = (b) => b === 'actual' ? 'Actual billed usage'
+                    : (b === 'measured' ? 'Measured records'
+                       : 'Includes estimated figures from before full tracking began');
                 const rows = days.map(d => {
-                    totP += d.prometheus; totA += d.api; totC += d.custom_pulls; totT += d.total;
-                    const estMark = d.basis && d.basis !== 'measured'
-                        ? ' <span title="Includes estimated figures for days before full tracking began" style="color: var(--text-secondary); font-size: 0.75rem;">~</span>'
+                    totP += d.prometheus; totA += d.api; totC += d.custom_pulls; totO += Number(d.other || 0); totT += d.total;
+                    const estMark = (d.basis === 'mixed' || d.basis === 'estimated')
+                        ? ' <span style="color: var(--text-secondary); font-size: 0.75rem;">~</span>'
                         : '';
                     return `<tr style="border-bottom: 1px solid var(--border-color);">
-                        <td style="padding: 0.5rem 0.75rem; white-space: nowrap;">${d.date}${estMark}</td>
+                        <td style="padding: 0.5rem 0.75rem; white-space: nowrap;" title="${basisTitle(d.basis)}">${d.date}${estMark}</td>
                         <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(d.prometheus)}</td>
                         <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(d.api)}</td>
                         <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(d.custom_pulls)}</td>
+                        ${showOther ? `<td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(d.other)}</td>` : ''}
                         <td style="padding: 0.5rem 0.75rem; text-align: right; font-weight: 600;">${fmt(d.total)}</td>
                     </tr>`;
                 }).join('');
@@ -6398,6 +6403,7 @@
                                 <th style="padding: 0.5rem 0.75rem; text-align: right;">Prometheus</th>
                                 <th style="padding: 0.5rem 0.75rem; text-align: right;">API</th>
                                 <th style="padding: 0.5rem 0.75rem; text-align: right;">Custom Pulls</th>
+                                ${showOther ? '<th style="padding: 0.5rem 0.75rem; text-align: right;">Other</th>' : ''}
                                 <th style="padding: 0.5rem 0.75rem; text-align: right;">Total</th>
                             </tr>
                         </thead>
@@ -6408,11 +6414,12 @@
                                 <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(totP)}</td>
                                 <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(totA)}</td>
                                 <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(totC)}</td>
+                                ${showOther ? `<td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(totO)}</td>` : ''}
                                 <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(totT)}</td>
                             </tr>
                         </tfoot>
                     </table>
-                    <p style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);">Rows marked ~ include estimated figures for days before full tracking began.</p>
+                    <p style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-secondary);">Rows marked ~ include estimated figures from before full tracking began. All other rows carry actual billed usage or measured records (hover a date for its source).</p>
                     <div id="payPerUseRollup" style="margin-top: 1.5rem;"></div>`;
                 loadPayPerUseRollup();
             } catch (e) {

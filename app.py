@@ -20711,6 +20711,7 @@ def get_admin_daily_costs():
                 'prometheus': round(float(e.get('prometheus') or 0.0), 2),
                 'api': round(float(e.get('api') or 0.0), 2),
                 'custom_pulls': round(float(e.get('custom_pulls') or 0.0), 2),
+                'other': round(float(e.get('other') or 0.0), 2),
                 'total': round(float(e.get('total') or 0.0), 2),
                 'basis': str(e.get('basis') or 'measured'),
             })
