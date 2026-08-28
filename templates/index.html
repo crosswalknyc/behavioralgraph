@@ -22319,6 +22319,64 @@ https://www.instagram.com/p/..."></textarea>
                                 <div class="demo-table-container" id="occupationTableContainer" style="display:none; max-height:600px;"></div>
                                 <div id="occupationGpActualsTable" style="margin-top:0.75rem;"></div>
                             </div>
+                            <!-- AGE_OF_CHILDREN + NUMBER_OF_CHILDREN promoted to first-class
+                                 Demographics tiles (2026-08-28, Jenna). Both are pipeline-
+                                 canonical (canonical_demos.PIPELINE_DEMO_SCHEMA); rendered
+                                 same as Parental Status via renderCharts(). -->
+                            <div class="chart-card" data-module="Age of Children">
+                                <h3>
+                                    <span class="chart-card-title-row">
+                                        <span class="has-tooltip" data-tooltip="Age of Children">🧒 AGE OF CHILDREN</span>
+                                    </span>
+                                </h3>
+                                <h3>
+                                    <span class="chart-card-controls-row">
+                                        <select id="ageOfChildrenChartType" onchange="changeChartType('ageOfChildren', this.value)" class="chart-type-select">
+                                            <option value="bar">📊</option>
+                                            <option value="column">▮ Col</option>
+                                            <option value="doughnut">🍩</option>
+                                            <option value="pie">🥧</option>
+                                            <option value="polarArea">🎯</option>
+                                            <option value="table">📋 Table</option>
+                                        </select>
+                                        <select id="ageOfChildrenSortSelect" onchange="sortAgeOfChildrenChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
+                                            <option value="value">%↓</option>
+                                            <option value="alpha">Ordinal</option>
+                                            <option value="index">Idx↓</option>
+                                        </select>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Age of Children')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Age of Children')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Age of Children')">➕</button></span>
+                                    </span>
+                                </h3>
+                                <div class="chart-container" id="ageOfChildrenChartContainer"><canvas id="ageOfChildrenChart"></canvas></div>
+                                <div class="demo-table-container" id="ageOfChildrenTableContainer" style="display:none;"></div>
+                            </div>
+                            <div class="chart-card" data-module="Number of Children">
+                                <h3>
+                                    <span class="chart-card-title-row">
+                                        <span class="has-tooltip" data-tooltip="Number of Children">👨‍👩‍👧 NUMBER OF CHILDREN</span>
+                                    </span>
+                                </h3>
+                                <h3>
+                                    <span class="chart-card-controls-row">
+                                        <select id="numberOfChildrenChartType" onchange="changeChartType('numberOfChildren', this.value)" class="chart-type-select">
+                                            <option value="bar">📊</option>
+                                            <option value="column">▮ Col</option>
+                                            <option value="doughnut">🍩</option>
+                                            <option value="pie">🥧</option>
+                                            <option value="polarArea">🎯</option>
+                                            <option value="table">📋 Table</option>
+                                        </select>
+                                        <select id="numberOfChildrenSortSelect" onchange="sortNumberOfChildrenChart(this.value)" class="chart-type-select has-tooltip" data-tooltip="Sort">
+                                            <option value="value">%↓</option>
+                                            <option value="alpha">Ordinal</option>
+                                            <option value="index">Idx↓</option>
+                                        </select>
+                                        <span class="module-action-btns"><button class="module-btn csv-btn has-tooltip" data-tooltip="Export CSV" onclick="exportModuleCSV('demographic', 'Number of Children')">CSV</button><button class="module-btn png-btn has-tooltip" data-tooltip="Export PNG" onclick="exportModulePNG('demographic', 'Number of Children')">PNG</button><button class="module-btn deck-btn has-tooltip" data-tooltip="Add to Deck" onclick="addModuleToDeck('demographic', 'Number of Children')">➕</button></span>
+                                    </span>
+                                </h3>
+                                <div class="chart-container" id="numberOfChildrenChartContainer"><canvas id="numberOfChildrenChart"></canvas></div>
+                                <div class="demo-table-container" id="numberOfChildrenTableContainer" style="display:none;"></div>
+                            </div>
                         </div>
                     </div>
             </div>
@@ -111363,10 +111421,10 @@ https://www.instagram.com/p/..."></textarea>
                 sampleSize: 0,
                 projectedUS: 0,
                 brandCategory: '',
-                demographics: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {} },
-                demographicsIndex: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {} },
-                demographicsGenPop: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {} },
-                demographicsProjection: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {} },
+                demographics: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {}, age_of_children: {}, number_of_children: {} },
+                demographicsIndex: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {}, age_of_children: {}, number_of_children: {} },
+                demographicsGenPop: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {}, age_of_children: {}, number_of_children: {} },
+                demographicsProjection: { age: {}, gender: {}, ethnicity: {}, income: {}, education: {}, relationship: {}, sexual_orientation: {}, parental_status: {}, occupation: {}, age_of_children: {}, number_of_children: {} },
                 demographicsAgeRaw: {}, // value -> Original Raw Numbers for AGE (used to build new buckets from counts)
                 behavioral: {},
                 categories: {},
@@ -111387,7 +111445,7 @@ https://www.instagram.com/p/..."></textarea>
                 isNonUsMarket: false
             };
 
-            const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'];
+            const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'AGE_OF_CHILDREN', 'NUMBER_OF_CHILDREN'];
             const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY'];
             const US_POPULATION = 329900000;
             
@@ -112094,6 +112152,23 @@ https://www.instagram.com/p/..."></textarea>
                     result.demographicsIndex.occupation[occKey] = index;
                     result.demographicsGenPop.occupation[occKey] = (result.demographicsGenPop.occupation[occKey] || 0) + genPopPct;
                     result.demographicsProjection.occupation[occKey] = (result.demographicsProjection.occupation[occKey] || 0) + usProjection;
+                }
+                // AGE_OF_CHILDREN + NUMBER_OF_CHILDREN (2026-08-28 promotion
+                // to first-class Demographics). Both are pipeline-canonical
+                // in canonical_demos.PIPELINE_DEMO_SCHEMA; the routing gate
+                // above now treats them as demographics so they render as
+                // tiles in the Demographics tab alongside Parental Status.
+                if (category === 'AGE_OF_CHILDREN' && value) {
+                    result.demographics.age_of_children[value] = pct;
+                    result.demographicsIndex.age_of_children[value] = index;
+                    result.demographicsGenPop.age_of_children[value] = genPopPct;
+                    result.demographicsProjection.age_of_children[value] = usProjection;
+                }
+                if (category === 'NUMBER_OF_CHILDREN' && value) {
+                    result.demographics.number_of_children[value] = pct;
+                    result.demographicsIndex.number_of_children[value] = index;
+                    result.demographicsGenPop.number_of_children[value] = genPopPct;
+                    result.demographicsProjection.number_of_children[value] = usProjection;
                 }
                 
                 // Interests category (handle both singular and plural)
@@ -115334,7 +115409,7 @@ https://www.instagram.com/p/..."></textarea>
         function _comparisonEntryHasUsableData(entry) {
             if (!entry || !entry.parsed || !entry.parsed.demographics) return false;
             if (typeof charts === 'undefined' || !charts) return true; // be permissive if charts aren't up yet
-            const demoCats = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
+            const demoCats = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation', 'age_of_children', 'number_of_children'];
             for (const cat of demoCats) {
                 const dict = entry.parsed.demographics[cat];
                 if (!dict || typeof dict !== 'object') continue;
@@ -115806,12 +115881,13 @@ https://www.instagram.com/p/..."></textarea>
             const series = (_comparisonRunsState.selectedKeys || [])
                 .map(k => _comparisonRunsState.runsByKey[k])
                 .filter(Boolean);
-            const demoChartKeys = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexualOrientation', 'parentalStatus', 'occupation'];
+            const demoChartKeys = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexualOrientation', 'parentalStatus', 'occupation', 'ageOfChildren', 'numberOfChildren'];
             const chartKeyToDataCat = {
                 age: 'age', gender: 'gender', ethnicity: 'ethnicity', income: 'income',
                 education: 'education', relationship: 'relationship',
                 sexualOrientation: 'sexual_orientation', parentalStatus: 'parental_status',
-                occupation: 'occupation'
+                occupation: 'occupation',
+                ageOfChildren: 'age_of_children', numberOfChildren: 'number_of_children'
             };
             // Demographic chart legends read "<cohort> <subject>" so the
             // base profile and each cohort cut both carry the subject
@@ -120305,6 +120381,162 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 if (charts.parentalStatus) { charts.parentalStatus._origKeys = psOrigKeys; charts.parentalStatus._origGenPop = psGenPop; charts.parentalStatus._demoCategory = 'parental_status'; }
             }
+
+            // Age of Children - bar chart with Gen Pop (2026-08-28)
+            if (demographics.age_of_children && Object.keys(demographics.age_of_children).length > 0) {
+                const aocSorted = getSortedAgeOfChildrenData(demographics.age_of_children, demographicsIndex.age_of_children);
+                const aocLabels = aocSorted.labels;
+                const aocOrigKeys = aocSorted.originalKeys;
+                const aocGenPop = aocOrigKeys.map(k => demographicsGenPop.age_of_children?.[k] || 0);
+                const aocPcts = aocSorted.values;
+                const aocData = isProjection ? aocOrigKeys.map(k => demographicsProjection.age_of_children?.[k] || 0) : aocPcts;
+                const aocChartType = _chartTypeForChartJs(chartTypePrefs.ageOfChildren);
+                const aocIsCircular = ['doughnut', 'pie', 'polarArea'].includes(aocChartType);
+                const aocMax = aocChartType === 'bar' ? Math.max(...aocData) * 1.5 : undefined;
+                charts.ageOfChildren = new Chart(document.getElementById('ageOfChildrenChart'), {
+                    type: aocChartType,
+                    data: { labels: aocLabels, datasets: [{ data: aocData, backgroundColor: colors, borderRadius: aocChartType === 'bar' ? 4 : 0 }] },
+                    options: {
+                        indexAxis: aocChartType === 'bar' ? 'y' : 'x',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: aocIsCircular ? doughnutCutout : 0,
+                        layout: { padding: aocIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
+                        plugins: {
+                            tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Age of Children') } },
+                            legend: aocIsCircular ? {
+                                ...legendOptionsCircular,
+                                display: true,
+                                labels: {
+                                    ...legendOptionsCircular.labels,
+                                    generateLabels: (chart) => {
+                                        const data = chart.data;
+                                        return data.labels.map((label, i) => {
+                                            const pct = aocPcts[i] || 0;
+                                            const genPop = aocGenPop[i] || 0;
+                                            const valStr = isProjection
+                                                ? formatNumber(Math.round(data.datasets[0].data[i]))
+                                                : pct.toFixed(2) + '%';
+                                            const gpStr = isGenPop ? '' : (isProjection
+                                                ? (genPop > 0 ? ` GP: ${formatNumber(Math.round((genPop / 100) * 329900000))}` : '')
+                                                : (genPop > 0 ? ` GP: ${genPop.toFixed(2)}%` : ''));
+                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.axisLabel));
+                                            return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
+                                        });
+                                    }
+                                }
+                            } : { display: false },
+                            datalabels: aocIsCircular ? doughnutDataLabels : {
+                                anchor: 'end',
+                                align: 'end',
+                                font: { size: dataLabelFontSize, weight: 'bold' },
+                                color: (ctx) => {
+                                    const pct = aocPcts[ctx.dataIndex] || 0;
+                                    const genPop = aocGenPop[ctx.dataIndex] || 0;
+                                    if (isGenPop) return ct.dataNeutral;
+                                    return (genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.dataNeutral);
+                                },
+                                formatter: (value, ctx) => {
+                                    const pct = aocPcts[ctx.dataIndex] || 0;
+                                    const idx = demographicsIndex.age_of_children?.[aocLabels[ctx.dataIndex]] || 0;
+                                    if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
+                                    const idxStr = idx > 0 ? ` ${Math.round(idx)}` : '';
+                                    const genPop = aocGenPop[ctx.dataIndex] || 0;
+                                    if (isProjection) {
+                                        const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
+                                        return formatNumber(Math.round(value)) + (gpVal > 0 ? ` GP: ${formatNumber(gpVal)}` : '') + idxStr;
+                                    }
+                                    return formatPct(pct) + (genPop > 0 ? ` GP: ${formatPct(genPop)}` : '') + idxStr;
+                                }
+                            }
+                        },
+                        scales: aocIsCircular ? {} : {
+                            x: { grid: { color: ct.grid }, ticks: { color: ct.axisMuted, font: { size: axisFontSize } }, suggestedMax: aocMax },
+                            y: { grid: { display: false }, ticks: { color: ct.axisLabel, font: { size: axisFontSize }, autoSkip: false } }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+                if (charts.ageOfChildren) { charts.ageOfChildren._origKeys = aocOrigKeys; charts.ageOfChildren._origGenPop = aocGenPop; charts.ageOfChildren._demoCategory = 'age_of_children'; }
+            }
+
+            // Number of Children - bar chart with Gen Pop (2026-08-28)
+            if (demographics.number_of_children && Object.keys(demographics.number_of_children).length > 0) {
+                const nocSorted = getSortedNumberOfChildrenData(demographics.number_of_children, demographicsIndex.number_of_children);
+                const nocLabels = nocSorted.labels;
+                const nocOrigKeys = nocSorted.originalKeys;
+                const nocGenPop = nocOrigKeys.map(k => demographicsGenPop.number_of_children?.[k] || 0);
+                const nocPcts = nocSorted.values;
+                const nocData = isProjection ? nocOrigKeys.map(k => demographicsProjection.number_of_children?.[k] || 0) : nocPcts;
+                const nocChartType = _chartTypeForChartJs(chartTypePrefs.numberOfChildren);
+                const nocIsCircular = ['doughnut', 'pie', 'polarArea'].includes(nocChartType);
+                const nocMax = nocChartType === 'bar' ? Math.max(...nocData) * 1.5 : undefined;
+                charts.numberOfChildren = new Chart(document.getElementById('numberOfChildrenChart'), {
+                    type: nocChartType,
+                    data: { labels: nocLabels, datasets: [{ data: nocData, backgroundColor: colors, borderRadius: nocChartType === 'bar' ? 4 : 0 }] },
+                    options: {
+                        indexAxis: nocChartType === 'bar' ? 'y' : 'x',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: nocIsCircular ? doughnutCutout : 0,
+                        layout: { padding: nocIsCircular ? layoutPaddingCircular : { right: 50, left: 10, top: 5, bottom: 5 } },
+                        plugins: {
+                            tooltip: { callbacks: { afterBody: () => profileIqDemoTooltipLines('Number of Children') } },
+                            legend: nocIsCircular ? {
+                                ...legendOptionsCircular,
+                                display: true,
+                                labels: {
+                                    ...legendOptionsCircular.labels,
+                                    generateLabels: (chart) => {
+                                        const data = chart.data;
+                                        return data.labels.map((label, i) => {
+                                            const pct = nocPcts[i] || 0;
+                                            const genPop = nocGenPop[i] || 0;
+                                            const valStr = isProjection
+                                                ? formatNumber(Math.round(data.datasets[0].data[i]))
+                                                : pct.toFixed(2) + '%';
+                                            const gpStr = isGenPop ? '' : (isProjection
+                                                ? (genPop > 0 ? ` GP: ${formatNumber(Math.round((genPop / 100) * 329900000))}` : '')
+                                                : (genPop > 0 ? ` GP: ${genPop.toFixed(2)}%` : ''));
+                                            const indexColor = isGenPop ? ct.axisLabel : ((genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.axisLabel));
+                                            return { text: `${label} ${valStr}${gpStr}`, fillStyle: colors[i], fontColor: indexColor, index: i };
+                                        });
+                                    }
+                                }
+                            } : { display: false },
+                            datalabels: nocIsCircular ? doughnutDataLabels : {
+                                anchor: 'end',
+                                align: 'end',
+                                font: { size: dataLabelFontSize, weight: 'bold' },
+                                color: (ctx) => {
+                                    const pct = nocPcts[ctx.dataIndex] || 0;
+                                    const genPop = nocGenPop[ctx.dataIndex] || 0;
+                                    if (isGenPop) return ct.dataNeutral;
+                                    return (genPop > 0 && pct >= genPop) ? getChartIndexOverColor() : (genPop > 0 ? getChartIndexUnderColor() : ct.dataNeutral);
+                                },
+                                formatter: (value, ctx) => {
+                                    const pct = nocPcts[ctx.dataIndex] || 0;
+                                    const idx = demographicsIndex.number_of_children?.[nocLabels[ctx.dataIndex]] || 0;
+                                    if (isGenPop) return isProjection ? formatNumber(Math.round(value)) : formatPct(pct);
+                                    const idxStr = idx > 0 ? ` ${Math.round(idx)}` : '';
+                                    const genPop = nocGenPop[ctx.dataIndex] || 0;
+                                    if (isProjection) {
+                                        const gpVal = genPop > 0 ? Math.round(329900000 * genPop / 100) : 0;
+                                        return formatNumber(Math.round(value)) + (gpVal > 0 ? ` GP: ${formatNumber(gpVal)}` : '') + idxStr;
+                                    }
+                                    return formatPct(pct) + (genPop > 0 ? ` GP: ${formatPct(genPop)}` : '') + idxStr;
+                                }
+                            }
+                        },
+                        scales: nocIsCircular ? {} : {
+                            x: { grid: { color: ct.grid }, ticks: { color: ct.axisMuted, font: { size: axisFontSize } }, suggestedMax: nocMax },
+                            y: { grid: { display: false }, ticks: { color: ct.axisLabel, font: { size: axisFontSize }, autoSkip: false } }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+                if (charts.numberOfChildren) { charts.numberOfChildren._origKeys = nocOrigKeys; charts.numberOfChildren._origGenPop = nocGenPop; charts.numberOfChildren._demoCategory = 'number_of_children'; }
+            }
             
             // Occupation - bar chart with Gen Pop
             if (demographics.occupation && Object.keys(demographics.occupation).length > 0) {
@@ -120509,6 +120741,8 @@ https://www.instagram.com/p/..."></textarea>
         let currentSexualOrientationSortMode = 'value';
         let currentParentalStatusSortMode = 'value';
         let currentOccupationSortMode = 'value';
+        let currentAgeOfChildrenSortMode = 'value';
+        let currentNumberOfChildrenSortMode = 'value';
         
         // Chart type preferences (stored per chart). Each demographic
         // chart can render as a Chart.js visual ('bar', 'column',
@@ -120537,7 +120771,9 @@ https://www.instagram.com/p/..."></textarea>
             relationship: 'bar',
             sexualOrientation: 'bar',
             parentalStatus: 'bar',
-            occupation: 'bar'
+            occupation: 'bar',
+            ageOfChildren: 'bar',
+            numberOfChildren: 'bar'
         };
         
         // Last demographics passed to renderCharts (so changing chart type never clears data)
@@ -120794,7 +121030,9 @@ https://www.instagram.com/p/..."></textarea>
                 education: 'education', relationship: 'relationship',
                 sexualOrientation: 'sexual_orientation',
                 parentalStatus: 'parental_status',
-                occupation: 'occupation'
+                occupation: 'occupation',
+                ageOfChildren: 'age_of_children',
+                numberOfChildren: 'number_of_children'
             };
             // Delegate to the shared window._looseKey so bucket
             // labels like "Bachelor's Degree" unify with Gen Pop's
@@ -121048,6 +121286,18 @@ https://www.instagram.com/p/..."></textarea>
         
         function sortOccupationChart(sortMode) {
             currentOccupationSortMode = sortMode;
+            if (currentDashboardData) {
+                renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
+            }
+        }
+        function sortAgeOfChildrenChart(sortMode) {
+            currentAgeOfChildrenSortMode = sortMode;
+            if (currentDashboardData) {
+                renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
+            }
+        }
+        function sortNumberOfChildrenChart(sortMode) {
+            currentNumberOfChildrenSortMode = sortMode;
             if (currentDashboardData) {
                 renderCharts(currentDashboardData.demographics, currentDashboardData.demographicsIndex, currentDashboardData.demographicsProjection, currentDashboardData.demographicsGenPop);
             }
@@ -121889,6 +122139,52 @@ https://www.instagram.com/p/..."></textarea>
 
         function getSortedOccupationData(occupationData, occupationIndex) {
             return getSortedDemoData(occupationData, occupationIndex, currentOccupationSortMode);
+        }
+
+        function getSortedAgeOfChildrenData(data, indexMap) {
+            // Canonical Age-of-Children ordering (canonical_demos.py
+            // PIPELINE_DEMO_SCHEMA). Used when sortMode is 'alpha' since
+            // 'No Kids, Under 3, 3 to 5, 6 to 10, 11 to 13, 14 to 17'
+            // alphabetized reads nonsensically ('11 to 13' before '3 to 5').
+            const canonicalOrder = ['No Kids', 'Under 3', '3 to 5', '6 to 10', '11 to 13', '14 to 17'];
+            const mode = currentAgeOfChildrenSortMode;
+            if (mode !== 'alpha') {
+                return getSortedDemoData(data, indexMap, mode);
+            }
+            // 'alpha' -> canonical ordinal order (falls back to alpha for
+            // any label not in canonicalOrder).
+            const entries = Object.entries(data || {});
+            entries.sort((a, b) => {
+                const ia = canonicalOrder.indexOf(a[0]);
+                const ib = canonicalOrder.indexOf(b[0]);
+                if (ia !== -1 && ib !== -1) return ia - ib;
+                if (ia !== -1) return -1;
+                if (ib !== -1) return 1;
+                return String(a[0]).localeCompare(String(b[0]));
+            });
+            const labels = entries.map(e => e[0]);
+            const values = entries.map(e => e[1]);
+            return { labels, values, originalKeys: labels };
+        }
+
+        function getSortedNumberOfChildrenData(data, indexMap) {
+            const canonicalOrder = ['0', '1', '2', '3', '4+'];
+            const mode = currentNumberOfChildrenSortMode;
+            if (mode !== 'alpha') {
+                return getSortedDemoData(data, indexMap, mode);
+            }
+            const entries = Object.entries(data || {});
+            entries.sort((a, b) => {
+                const ia = canonicalOrder.indexOf(String(a[0]));
+                const ib = canonicalOrder.indexOf(String(b[0]));
+                if (ia !== -1 && ib !== -1) return ia - ib;
+                if (ia !== -1) return -1;
+                if (ib !== -1) return 1;
+                return String(a[0]).localeCompare(String(b[0]));
+            });
+            const labels = entries.map(e => e[0]);
+            const values = entries.map(e => e[1]);
+            return { labels, values, originalKeys: labels };
         }
 
         function getSortedAgeData(ageData) {
@@ -136853,7 +137149,7 @@ https://www.instagram.com/p/..."></textarea>
             if (tabLabel === 'demographics') {
                 // Export all demographics data; map display names to internal keys (sexual orientation -> sexual_orientation, etc.)
                 csvContent = `${profileName} - Demographics\n\n`;
-                const demoCategoryList = [{ key: 'age', title: 'Age' }, { key: 'gender', title: 'Gender' }, { key: 'ethnicity', title: 'Ethnicity' }, { key: 'income', title: 'Income' }, { key: 'education', title: 'Education' }, { key: 'relationship', title: 'Relationship Status' }, { key: 'sexual_orientation', title: 'Sexual Orientation' }, { key: 'parental_status', title: 'Parental Status' }, { key: 'occupation', title: 'Occupation' }];
+                const demoCategoryList = [{ key: 'age', title: 'Age' }, { key: 'gender', title: 'Gender' }, { key: 'ethnicity', title: 'Ethnicity' }, { key: 'income', title: 'Income' }, { key: 'education', title: 'Education' }, { key: 'relationship', title: 'Relationship Status' }, { key: 'sexual_orientation', title: 'Sexual Orientation' }, { key: 'parental_status', title: 'Parental Status' }, { key: 'occupation', title: 'Occupation' }, { key: 'age_of_children', title: 'Age of Children' }, { key: 'number_of_children', title: 'Number of Children' }];
                 const soDisplayLabel = (raw) => { const u = (raw || '').trim(); if (!u) return u; const upper = u.toUpperCase(); if (upper === 'NO' || upper === 'STRAIGHT / HETEROSEXUAL') return 'STRAIGHT / HETEROSEXUAL'; if (upper === 'YES' || upper === 'GAY OR LESBIAN' || upper === 'LGBTQ+') return 'LGBTQ+'; if (upper === 'OTHER' || upper === 'ANOTHER SEXUAL ORIENTATION') return 'OTHER'; if (upper === 'PREFER NOT TO SAY') return 'PREFER NOT TO SAY'; return upper; };
                 const _pageDemoCohorts = _extraCohortsForCsv();
                 let _pageDemoCohortHead = '';
@@ -140239,7 +140535,7 @@ https://www.instagram.com/p/..."></textarea>
 
         function parseComparisonData(csvData) {
             const US_POPULATION = 329900000;
-            const demoKeys = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
+            const demoKeys = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation', 'age_of_children', 'number_of_children'];
             const result = {
                 sampleSize: 0,
                 projectedUS: 0,
@@ -140254,8 +140550,8 @@ https://www.instagram.com/p/..."></textarea>
                 locationsProjection: []
             };
 
-            const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION'];
-            const demoKeyByCategory = { AGE: 'age', GENDER: 'gender', ETHNICITY: 'ethnicity', INCOME: 'income', EDUCATION: 'education', RELATIONSHIP: 'relationship', SEXUAL_ORIENTATION: 'sexual_orientation', PARENTAL_STATUS: 'parental_status', OCCUPATION: 'occupation' };
+            const demoCategories = ['AGE', 'GENDER', 'ETHNICITY', 'INCOME', 'EDUCATION', 'RELATIONSHIP', 'SEXUAL_ORIENTATION', 'PARENTAL_STATUS', 'OCCUPATION', 'AGE_OF_CHILDREN', 'NUMBER_OF_CHILDREN'];
+            const demoKeyByCategory = { AGE: 'age', GENDER: 'gender', ETHNICITY: 'ethnicity', INCOME: 'income', EDUCATION: 'education', RELATIONSHIP: 'relationship', SEXUAL_ORIENTATION: 'sexual_orientation', PARENTAL_STATUS: 'parental_status', OCCUPATION: 'occupation', AGE_OF_CHILDREN: 'age_of_children', NUMBER_OF_CHILDREN: 'number_of_children' };
             const skipCategories = ['INPUT_METADATA', 'SAMPLE SIZE', 'BRAND INPUT', 'AVID FAN', 'CASUAL FAN', 'BRAND CATEGORY', 'MEDIAN AGE'];
 
             csvData.forEach(row => {
@@ -142431,7 +142727,7 @@ https://www.instagram.com/p/..."></textarea>
             profiles.forEach(p => {
                 // Add demographics data
                 if (p.demographics && p.demographicsIndex) {
-                    const demoCategories = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
+                    const demoCategories = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation', 'age_of_children', 'number_of_children'];
                     demoCategories.forEach(cat => {
                         const catData = p.demographics[cat] || {};
                         const catIndex = p.demographicsIndex[cat] || {};
@@ -142627,7 +142923,9 @@ https://www.instagram.com/p/..."></textarea>
             relationship: 'Relationship Status',
             sexual_orientation: 'Sexual Orientation',
             parental_status: 'Parental Status',
-            occupation: 'Occupation'
+            occupation: 'Occupation',
+            age_of_children: 'Age of Children',
+            number_of_children: 'Number of Children'
         };
         
         function renderBenchmarkAnalysis(profiles) {
@@ -143186,7 +143484,7 @@ https://www.instagram.com/p/..."></textarea>
             profiles.forEach(p => {
                 // Add demographics data
                 if (p.demographics && p.demographicsIndex) {
-                    const demoCategories = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation'];
+                    const demoCategories = ['age', 'gender', 'ethnicity', 'income', 'education', 'relationship', 'sexual_orientation', 'parental_status', 'occupation', 'age_of_children', 'number_of_children'];
                     demoCategories.forEach(cat => {
                         const catData = p.demographics[cat] || {};
                         const catIndex = p.demographicsIndex[cat] || {};
