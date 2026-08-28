@@ -51326,6 +51326,22 @@ def _ask_logged(surface):
                     route=route, outcome=outcome,
                     ms=int((time.time() - t0) * 1000),
                     mode=mode, subject=subject)
+                # Cross-session memory (2026-08-27, Jenna): every ask
+                # that resolved a subject feeds the per-user memory,
+                # unless the handler already recorded it with richer
+                # detail (cohort + ledger key on the analyze path).
+                try:
+                    if subject and not getattr(_g, '_pm_mem_recorded',
+                                               False) \
+                            and outcome not in ('error', 'clarify',
+                                                'memory_confirm'):
+                        import prometheus_memory as _pmm
+                        _pmm.remember(
+                            (session.get('username') or '').strip(),
+                            question, subject=subject, view=view,
+                            route=route)
+                except Exception:
+                    pass
             except Exception:
                 traceback.print_exc()
             return resp
@@ -51403,11 +51419,27 @@ def api_synth_chat_interpret():
             # the failure mode Jenna called out (2026-08-27, "What
             # category of toys do parents of paw patrol viewers aged
             # 4-7 buy for their kids").
-            _ask_is_analysis = _pma_route.detect_analysis_ask(text)
+            _ask_is_analysis = (_pma_route.detect_analysis_ask(text)
+                                or _pma_route.detect_strategy_intent(text))
+            # An underspecified analysis ask with no base named can
+            # still route to the measured-read pass when the USER'S
+            # cross-session memory holds a referent - the pass then
+            # asks the grounded confirm instead of the build flow
+            # composing a paid rebuild (2026-08-27, Jenna: "toy white
+            # space" must ask "do you mean for paw patrol viewers
+            # parents"). Memory is strictly per-user.
+            _has_ground = bool(_pm_generation_base('', text,
+                                                   prefer_catalog=True))
+            if not _has_ground:
+                try:
+                    import prometheus_memory as _pmm_route
+                    _has_ground = bool(_pmm_route.recent_referents(
+                        (session.get('username') or '').strip(), k=1))
+                except Exception:
+                    pass
             if (_ask_is_analysis
                     or _pma_route.analysis_ask_candidate(text)) \
-                    and _pm_generation_base('', text,
-                                            prefer_catalog=True):
+                    and _has_ground:
                 if not _ask_is_analysis:
                     _ask_is_analysis = (
                         _pma_route.classify_ask_semantic(
@@ -51457,6 +51489,13 @@ def api_synth_chat_interpret():
             # for the finished read when it lands.
             if _deflect_payload.get('read_job_id'):
                 _guid['read_job_id'] = _deflect_payload['read_job_id']
+            # Cross-session memory confirm (2026-08-27): the widget
+            # arms the confirm and renders the referent chips.
+            if _deflect_payload.get('memory_confirm'):
+                _guid['memory_confirm'] = \
+                    _deflect_payload['memory_confirm']
+                _guid['followups'] = list(
+                    _deflect_payload.get('followups') or [])
             return jsonify(_guid)
     except Exception:
         traceback.print_exc()
@@ -54433,6 +54472,25 @@ def _pm_search_demand_response(user, text, history):
         'profile': study.get('subject')})
 
 
+def _pm_remember_ask(pm_user, question, subject=None, cohort=None,
+                     ledger_key=None, route=None):
+    """Write one resolved ask into the user's cross-session memory
+    (fire-and-forget; the store is per-user and never informs another
+    user's session). Marks the request so the ask-log decorator does
+    not double-record."""
+    try:
+        import prometheus_memory as pmm
+        pmm.remember(pm_user, question, subject=subject, cohort=cohort,
+                     ledger_key=ledger_key, route=route)
+        try:
+            from flask import g as _g
+            _g._pm_mem_recorded = True
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def _pm_history_bind_text(history):
     """Referent text for an anaphoric ask ('this audience', 'them'):
     the last few thread turns, newest last, so subject inference can
@@ -54448,7 +54506,8 @@ def _pm_history_bind_text(history):
 def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                   anchors_block='', charge_done=False,
                                   ctx=None, digest_block='',
-                                  prefer_catalog=False, async_fresh=None):
+                                  prefer_catalog=False, async_fresh=None,
+                                  bind_subject=None, bind_cohort=None):
     """Reasoned measurement read (2026-08-26, Jenna): a concrete
     number for a digitally observable ask the open data does not
     cover, or the read for a sub-cohort the open data does not
@@ -54486,16 +54545,32 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         }), 402
     mr = metric_request if isinstance(metric_request, dict) else {}
     subj_hint = str(mr.get('subject') or '').strip()
+    # Confirmed memory referent (2026-08-27, Jenna: "know context
+    # between sessions and threads"): the widget's confirm chip sends
+    # the remembered subject explicitly; it resolves the base directly
+    # and rides the consult below so a banked read replays instantly.
+    bind_subject = str(bind_subject or '').strip()
+    bind_cohort = str(bind_cohort or '').strip()
+    if bind_subject and not subj_hint:
+        subj_hint = bind_subject
     # HARD GATE (2026-08-27, Jenna): resolve the base that authorizes
     # this generated read BEFORE anything is generated. No base
     # anywhere = no numbers; the subject needs its 5-credit Total
     # Universe build first.
     base = None
-    try:
-        base = _pm_generation_base(subj_hint, text, ctx=ctx,
-                                   prefer_catalog=prefer_catalog)
-    except Exception:
-        traceback.print_exc()
+    if bind_subject:
+        try:
+            base = _pm_generation_base(
+                bind_subject, f"{bind_subject} {bind_cohort}".strip(),
+                ctx=ctx, prefer_catalog=True)
+        except Exception:
+            traceback.print_exc()
+    if not base:
+        try:
+            base = _pm_generation_base(subj_hint, text, ctx=ctx,
+                                       prefer_catalog=prefer_catalog)
+        except Exception:
+            traceback.print_exc()
     if not base and history:
         # Anaphoric ask (2026-08-27, Jenna's white-space ask): "this
         # audience" names no subject; the thread does. Resolve the
@@ -54507,6 +54582,45 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                     base = _pm_generation_base(subj_hint, _hist_text,
                                                ctx=ctx,
                                                prefer_catalog=True)
+        except Exception:
+            traceback.print_exc()
+    if not base:
+        # RESOLUTION LADDER, last rung (2026-08-27, Jenna: "if I go
+        # back and ask for toy white space it can say do you mean for
+        # paw patrol viewers parents"). Thread and session referents
+        # bind silently above; a CROSS-SESSION memory hit never binds
+        # silently - it asks a grounded confirm with the remembered
+        # referent(s) as chips. Only for underspecified asks: an ask
+        # that names its own subject keeps the steer-to-build reply.
+        try:
+            import prometheus_memory as pmm
+            _named = (subj_hint
+                      or str(pma.guess_subject_from_text(text)
+                             or '').strip())
+            if _pm_user and not _named:
+                _refs = pmm.recent_referents(_pm_user, k=2)
+                _opts = []
+                for _r in _refs:
+                    _lab = pmm.referent_label(_r)
+                    if _lab:
+                        _opts.append({'label': _lab,
+                                      'subject': _r['subject'],
+                                      'cohort': _r.get('cohort')})
+                if _opts:
+                    if len(_opts) > 1:
+                        _q = (f"Do you mean for {_opts[0]['label']}, "
+                              f"or {_opts[1]['label']}?")
+                    else:
+                        _q = f"Do you mean for {_opts[0]['label']}?"
+                    _pm_ask_hint(outcome='memory_confirm')
+                    return jsonify({
+                        'success': True, 'action': 'answer',
+                        'reply': _q,
+                        'followups': ([o['label'] for o in _opts]
+                                      + ['Something else']),
+                        'offer_deck': False, 'deck_angle': None,
+                        'memory_confirm': {'question': text,
+                                           'options': _opts}})
         except Exception:
             traceback.print_exc()
     if not base:
@@ -54554,6 +54668,10 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     if exact and exact.get('reply'):
         _pm_ask_hint(outcome='answered',
                      subject=led.get('subject') or subj_hint)
+        _pm_remember_ask(_pm_user, text,
+                         subject=led.get('subject') or subj_hint,
+                         cohort=exact.get('cohort'),
+                         ledger_key=exact.get('k'), route='replay')
         if _pm_user:
             _pm_charge_async(
                 _pm_user,
@@ -54764,6 +54882,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             derivation=_derivation)
     except Exception:
         traceback.print_exc()
+    _pm_remember_ask(pm_user, text, subject=res.get('subject'),
+                     cohort=res.get('cohort'), route='generated')
     _pm_ask_hint(outcome='answered', subject=res.get('subject'))
     if pm_user and pm_ppu is None:
         _pm_charge_async(
@@ -54929,6 +55049,16 @@ def api_synth_chat_analyze():
     ctx, ctx_err = _pm_validate_page_context(body.get('page_context'))
     if ctx_err:
         return ctx_err
+    # Confirmed memory referent (2026-08-27, Jenna: cross-session
+    # memory). The confirm chip re-sends the original ask with the
+    # remembered subject; route it straight to the measured-read pass
+    # bound to that subject (instant replay when the read is banked).
+    _bind_subject = str(body.get('bind_subject') or '').strip()
+    if _bind_subject:
+        return _pm_generate_metrics_response(
+            user, text, history, ctx=ctx, prefer_catalog=True,
+            bind_subject=_bind_subject,
+            bind_cohort=str(body.get('bind_cohort') or '').strip())
     # Metric / KPI asks (2026-08-27, Jenna / Paige Bueckers ad CTR):
     # KPI vocabulary (CTR, click-through, engagement rate, conversion
     # rate, CPM, ROAS, ...) is a measurement ask by definition and is
@@ -54968,6 +55098,35 @@ def api_synth_chat_analyze():
                     or _pma_gen.detect_subcut_intent(text) \
                     or _pma_gen.detect_analysis_ask(text):
                 return _pm_generate_metrics_response(user, text, history)
+        except Exception:
+            traceback.print_exc()
+        # Grounded clarify (2026-08-27, Jenna): when the user's own
+        # memory holds a plausible referent, the open-something nudge
+        # leads with it instead of asking cold. The chip re-runs this
+        # ask bound to the remembered subject.
+        try:
+            import prometheus_memory as _pmm_nc
+            _nc_user = (session.get('username')
+                        or user.get('username') or '').strip()
+            _nc_refs = _pmm_nc.recent_referents(_nc_user, k=1) \
+                if _nc_user else []
+            if _nc_refs:
+                _nc_lab = _pmm_nc.referent_label(_nc_refs[0])
+                if _nc_lab:
+                    _pm_ask_hint(outcome='memory_confirm')
+                    return jsonify({
+                        'success': True, 'action': 'answer',
+                        'reply': (f"Nothing is open yet. Do you mean "
+                                  f"for {_nc_lab}?"),
+                        'followups': [_nc_lab, 'Something else'],
+                        'offer_deck': False, 'deck_angle': None,
+                        'memory_confirm': {
+                            'question': text,
+                            'options': [{
+                                'label': _nc_lab,
+                                'subject': _nc_refs[0]['subject'],
+                                'cohort': _nc_refs[0].get('cohort'),
+                            }]}})
         except Exception:
             traceback.print_exc()
         _pm_ask_hint(outcome='declined_no_context')

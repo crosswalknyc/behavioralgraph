@@ -61735,6 +61735,7 @@ https://www.instagram.com/p/..."></textarea>
                 synthChatAwaitingDateConfirm ||
                 synthChatDiscoveryOffer ||
                 synthChatIncidenceOffer ||
+                _pmMemoryConfirm ||
                 _pmCompareArmed);
         }
 
@@ -61749,6 +61750,7 @@ https://www.instagram.com/p/..."></textarea>
             synthChatStashedClarifySteps = null;
             _pmCompareArmed = false;
             _pmCompareCandidates = null;
+            _pmMemoryConfirm = null;
             _synthChatClearDateState();
         }
 
@@ -61777,6 +61779,12 @@ https://www.instagram.com/p/..."></textarea>
         // that compare across open tabs or pull in other profiles.
         var _pmCompareArmed = false;
         var _pmCompareCandidates = null;
+        // Cross-session memory confirm (2026-08-27, Jenna: "know
+        // context between sessions and threads"): an underspecified
+        // ask with a remembered referent asks "Do you mean for ...?"
+        // The pending confirm is an armed step - released on topic
+        // switch like every other pending question.
+        var _pmMemoryConfirm = null;
 
         function _pmIsAnalyzeMenuAsk(text) {
             return /^analy[sz]e (this|the) (data|open profile|profile)[.!]?$/i
@@ -62176,8 +62184,9 @@ https://www.instagram.com/p/..."></textarea>
             return false;
         }
 
-        async function _pmAnalyze(text, ctx, mode) {
-            if (!ctx && mode !== 'search_demand') {
+        async function _pmAnalyze(text, ctx, mode, extra) {
+            if (!ctx && mode !== 'search_demand' &&
+                !(extra && extra.bind_subject)) {
                 synthChatPushTurn('agent',
                     'Nothing is open to analyze yet. Open a profile from ' +
                     'Select Profile (and check any Data Cuts you want ' +
@@ -62189,12 +62198,17 @@ https://www.instagram.com/p/..."></textarea>
             if (btn) { btn.disabled = true; btn.textContent = 'Working...'; }
             var _end = _synthChatBeginThinking('analyze');
             try {
-                var _fr = await _synthChatFetchJson('/api/brief-chat/analyze', {
+                var _abody = {
                     text: text,
                     page_context: ctx,
                     history: synthChatHistory.slice(0, -1).slice(-12),
                     mode: mode || _pmModeForText(text) || ''
-                });
+                };
+                if (extra && extra.bind_subject) {
+                    _abody.bind_subject = extra.bind_subject;
+                    _abody.bind_cohort = extra.bind_cohort || '';
+                }
+                var _fr = await _synthChatFetchJson('/api/brief-chat/analyze', _abody);
                 var data = _fr.data;
                 if (data && data.success && data.pay_per_use_offer) {
                     // Not subscribed to analysis: show Jenna's offer
@@ -62231,6 +62245,11 @@ https://www.instagram.com/p/..."></textarea>
                         'it is ready.');
                     try { _pmPollReadJob(data.read_job_id); } catch (_) {}
                     return 'done';
+                }
+                if (data.memory_confirm) {
+                    // Arm the confirm; the next message binds a chip,
+                    // an affirmative, or "Something else".
+                    _pmMemoryConfirm = data.memory_confirm;
                 }
                 var opts = (data.followups || []).map(function(f) {
                     return { label: f, send: f };
@@ -62463,6 +62482,52 @@ https://www.instagram.com/p/..."></textarea>
                 }
             }
 
+            // Memory-confirm follow-through (2026-08-27): the
+            // grounded "Do you mean for ...?" is armed. A chip label
+            // or an affirmative binds the remembered referent and
+            // re-runs the original ask against it (instant replay
+            // when the read is banked); "Something else" falls back
+            // to the plain subject ask. A topic switch was already
+            // released above; anything else releases quietly and
+            // routes fresh.
+            if (_pmMemoryConfirm && !_pmKpiPivot) {
+                var _mc = _pmMemoryConfirm;
+                var _mcLow = text.trim().toLowerCase();
+                var _mcPick = null;
+                var _mcList = _mc.options || [];
+                for (var _mcI = 0; _mcI < _mcList.length; _mcI++) {
+                    if (_mcLow === String(_mcList[_mcI].label || '').toLowerCase()) {
+                        _mcPick = _mcList[_mcI];
+                        break;
+                    }
+                }
+                if (!_mcPick && _mcList.length &&
+                    /^(yes|yeah|yep|ok(ay)?|sure|correct|right|that'?s (right|it)|the first( one)?)[.! ]*$/i.test(_mcLow)) {
+                    _mcPick = _mcList[0];
+                }
+                if (!_mcPick && _mcList.length > 1 &&
+                    /^(the )?second( one)?[.! ]*$/i.test(_mcLow)) {
+                    _mcPick = _mcList[1];
+                }
+                if (_mcPick) {
+                    _pmMemoryConfirm = null;
+                    await _pmAnalyze(_mc.question || text,
+                        _pmCollectPageContext(), '',
+                        { bind_subject: _mcPick.subject,
+                          bind_cohort: _mcPick.cohort || '' });
+                    return;
+                }
+                if (/^something else[.! ]*$/i.test(_mcLow)) {
+                    _pmMemoryConfirm = null;
+                    synthChatPushTurn('agent',
+                        'No problem. Which audience should I use? ' +
+                        'Name it here, or open a profile from ' +
+                        'Select Profile and ask again.');
+                    return;
+                }
+                _pmMemoryConfirm = null;
+            }
+
             // Discovery-offer follow-through (2026-08-19 guided
             // flow). If we just proposed audience framings, map this
             // reply onto one: a number or ordinal picks that option;
@@ -62676,6 +62741,22 @@ https://www.instagram.com/p/..."></textarea>
                     var _gLead = _gMsg.trim().slice(0, 5);
                     if (_gLead.indexOf('{') === 0 || _gLead.indexOf('[') === 0 || _gLead.indexOf('```') === 0) {
                         _gMsg = '';
+                    }
+                    if (data.memory_confirm) {
+                        // Cross-session memory confirm riding the
+                        // guidance channel (2026-08-27): arm it and
+                        // render the remembered referent(s) as chips.
+                        _pmMemoryConfirm = data.memory_confirm;
+                        var _mcOpts = (data.memory_confirm.options || [])
+                            .map(function(o) {
+                                return { label: o.label, send: o.label };
+                            });
+                        _mcOpts.push({ label: 'Something else',
+                                       send: 'Something else' });
+                        _synthChatPushTurnWithMeta('agent',
+                            _gMsg || SYNTH_CHAT_CALM_MSG,
+                            { options: _mcOpts });
+                        return;
                     }
                     synthChatPushTurn('agent', _gMsg || SYNTH_CHAT_CALM_MSG);
                     if (data.read_job_id) {
@@ -63985,6 +64066,7 @@ https://www.instagram.com/p/..."></textarea>
             synthChatIncidenceOffer = null;
             _pmCompareArmed = false;
             _pmCompareCandidates = null;
+            _pmMemoryConfirm = null;
             _synthChatClearDateState();
             synthChatPushTurn('agent',
                 wasBatch ? 'Batch closed. Ask me anything else when ready.'
