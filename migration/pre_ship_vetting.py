@@ -460,6 +460,18 @@ def _env_enabled():
     return v not in ("0", "off", "false", "no")
 
 
+def _hold_notices_suppressed():
+    """Test-harness guard (2026-08-28: a test run of the cut gate wrote
+    real _quarantine/ copies and recorded a real debounced hold email
+    for the 'Furious - Male Millennials in Los Angeles' fixture).
+    BG_SUPPRESS_HOLD_NOTICES=1 silences the hold SIDE EFFECTS only
+    (quarantine copy, hold-notice email, review ledger): enforcement
+    semantics stay intact, a held file still raises and never ships.
+    Set by the regression harness; production leaves it unset."""
+    v = (os.environ.get("BG_SUPPRESS_HOLD_NOTICES") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 def _key_exists(s3_key, s3_client):
     try:
         s3_client.head_object(Bucket=BUCKET, Key=str(s3_key))
@@ -864,11 +876,28 @@ the correct call. The Bethenny Frankel case was the opposite pattern (a \
 mid-income 35-54 adult audience at index 70 on Visa, not composition- \
 explainable): that is exactly when a raise is right.
 
-4f. CARRIAGE ANCHOR CONVENTION (standing ruling, 2026-08-27). On a \
-viewers/fans universe for a specific title, the streaming platform that \
-is the title's EXCLUSIVE verified carrier is pinned at exactly 100: by \
-definition every viewer uses that platform (Paw Patrol viewers / \
-Paramount+ is the precedent). When the title streams on MULTIPLE \
+4f. CARRIAGE ANCHOR CONVENTION (standing rulings, 2026-08-27 and \
+2026-08-28). On a viewers/fans universe for a specific title, the \
+streaming platform that is the title's EXCLUSIVE verified carrier is \
+pinned at exactly 100: by definition every viewer uses that platform \
+(Paw Patrol viewers / Paramount+ is the precedent). That owning-carrier \
+row at exactly 100 (or ~100 jittered on a derived cut) is REQUIRED, \
+never a defect, on fresh builds and cuts alike; NEVER flag it. Bundled \
+platforms are ONE column: Disney+/Hulu is a single bundled row, so a \
+title exclusive to EITHER Hulu OR Disney+ pins the Disney+/Hulu row at \
+100 (Jenna, 2026-08-28: "if a show is on disney or on hulu \
+disney+/hulu would be 100% it is an either or kinda thing"). Netflix \
+originals pin Netflix, Paramount+ originals pin Paramount+, and \
+Peacock, Max, Apple TV+, and Prime Video originals pin their platforms \
+analogously. KNOWN FALSE-POSITIVE SIGNATURE: the reasoning "platform X \
+at 100 is impossible because the title streams exclusively on X" is \
+exactly backwards. The streaming grid measures which services the \
+AUDIENCE uses, not where the title is available: exclusive carriage is \
+precisely WHY the carrier row reads 100, and every OTHER service on \
+the same file reads at its organic reach among that audience. Netflix \
+at 60-75 on any streaming audience is normal (near its ~68% US \
+penetration); it is NOT a carriage conflict and NOT a \
+universe-definition defect. When the title streams on MULTIPLE \
 carriers (for example a catalog title on Hulu and Disney+ plus Philo \
 and DirecTV), NO platform gets an exact-100 pin; the lead carrier reads \
 as an organically high value (high 90s is normal) and the rest \
@@ -1248,6 +1277,70 @@ def _frame_bp_map(df):
     return out
 
 
+def _owning_carrier_rows(df, subject, s3_key):
+    """(norm category, norm brand) -> BP for rows in the carriage
+    family that the self-property convention verifies as the subject's
+    OWN carrier platform, carried at >= 99 (2026-08-28 Furious hold:
+    the owning-carrier pin is REQUIRED on a viewers universe and must
+    never be flagged). Verification reuses exact_100_exempt, the same
+    test the mechanical gate's I18 applies: the curated ownership map,
+    a single carrier domain in BRAND INPUT, the cut-defining platform,
+    or a subject-own platform variant. Slash-bundled values
+    (Disney+/Hulu) also key each half so a finding naming either
+    service matches. Fail-safe: any trouble returns {} (no
+    suppression)."""
+    out = {}
+    try:
+        try:
+            from migration.self_property_coherence import (
+                CARRIER_EXEMPT_CATS, exact_100_exempt)
+        except ImportError:
+            from self_property_coherence import (  # type: ignore
+                CARRIER_EXEMPT_CATS, exact_100_exempt)
+    except Exception:
+        return out
+    try:
+        cols = _detect_cols(df)
+        if not cols.get("cat") or not cols.get("val") or not cols.get("bp"):
+            return out
+        base = _display_name(s3_key)
+        cut_label = (base.split(" - ", 1)[1].strip()
+                     if " - " in base else None)
+        carrier_domains = []
+        try:
+            try:
+                from migration.viewer_carriage import PLATFORM_DOMAINS
+            except ImportError:
+                from viewer_carriage import (  # type: ignore
+                    PLATFORM_DOMAINS)
+            bi = _meta_value(df, cols, "BRAND INPUT").lower()
+            carrier_domains = [d for d in PLATFORM_DOMAINS if d in bi]
+        except Exception:
+            carrier_domains = []
+        for idx in df.index:
+            cu = _norm_cat(df.at[idx, cols["cat"]])
+            if cu not in CARRIER_EXEMPT_CATS:
+                continue
+            bp = _num(df.at[idx, cols["bp"]])
+            if bp is None or bp < 99.0:
+                continue
+            val = str(df.at[idx, cols["val"]]).strip()
+            if not exact_100_exempt(subject, cu, val,
+                                    cut_label=cut_label,
+                                    carrier_domains=carrier_domains):
+                continue
+            names = [val]
+            if "/" in val:
+                names += [p for p in val.split("/") if p.strip()]
+            for nm in names:
+                bn = _norm_brand(nm)
+                if bn:
+                    out[(cu, bn)] = bp
+    except Exception:
+        return {}
+    return out
+
+
 def _fix_sanity(finding, cur_bp, genpop_bp):
     """Validate a proposed fix. Returns (ok, corrected_target or reason).
     The reasoner proposes; this disposes.
@@ -1393,6 +1486,10 @@ def _apply_fixes(df, findings, subject, genpop_map, verbose=True):
 # ---------------------------------------------------------------------------
 
 def _quarantine_bytes(body, s3_key, s3_client, verbose):
+    if _hold_notices_suppressed():
+        print(f"[pre-ship-vetting] BG_SUPPRESS_HOLD_NOTICES set; "
+              f"quarantine copy for {s3_key} NOT written (test run)")
+        return None
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     base = _display_name(s3_key) or "profile"
     qkey = f"{QUARANTINE_PREFIX}{base}.vetting_hold_{ts}.csv"
@@ -1410,6 +1507,11 @@ def _quarantine_bytes(body, s3_key, s3_client, verbose):
 
 
 def _email_hold_notice(s3_key, findings, quarantine_key, verbose):
+    if _hold_notices_suppressed():
+        print(f"[pre-ship-vetting] BG_SUPPRESS_HOLD_NOTICES set; hold "
+              f"notice for {s3_key} NOT recorded or emailed (test run; "
+              f"{len(findings)} finding(s))")
+        return
     name = _display_name(s3_key)
     lines = [
         f"The file {name} was held before delivery: the final audience "
@@ -1484,6 +1586,11 @@ def _email_hold_notice(s3_key, findings, quarantine_key, verbose):
 def _ledger_append(entry, s3_client, verbose=True):
     """Append one JSON line to today's review ledger. Read-modify-write
     is fine at this volume; failures never block a publish."""
+    if _hold_notices_suppressed():
+        if verbose:
+            print("[pre-ship-vetting] BG_SUPPRESS_HOLD_NOTICES set; "
+                  "ledger entry not written (test run)")
+        return
     try:
         day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         key = f"{LEDGER_PREFIX}{day}.jsonl"
@@ -1623,6 +1730,48 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                     if isinstance(f, dict)]
         report["summary"] = str(verdict_obj.get("summary") or "")[:600]
         report["findings"] = findings
+
+        # Owning-carrier guard (2026-08-28, Furious hold email): on a
+        # viewers-of-a-title universe the owning / exclusive carrier
+        # platform row at ~100 is REQUIRED (Paw Patrol precedent; the
+        # bundled Disney+/Hulu column pins on a Hulu OR Disney+
+        # original). The reviewer reasoning "the carrier at 100 is
+        # impossible because the title is exclusive to it" is a known
+        # false-positive signature: it inverts what the grid measures
+        # (services the AUDIENCE uses, not where the title streams).
+        # Deterministic and narrow: only rows the self-property
+        # convention verifies as the subject's own carrier AND carried
+        # at >= 99 are protected; findings on non-owning platforms are
+        # untouched. Beats any model-supplied fact_basis by design.
+        n_carrier_suppressed = 0
+        carrier_rows = _owning_carrier_rows(df, subject, key)
+        if carrier_rows:
+            for f in findings:
+                sev = str(f.get("severity", "")).lower()
+                if sev not in ("fail", "borderline"):
+                    continue
+                fk = (_norm_cat(f.get("category")),
+                      _norm_brand(f.get("brand")))
+                bp_here = carrier_rows.get(fk)
+                if bp_here is None:
+                    continue
+                f["severity"] = "info"
+                f["fixable"] = False
+                f["fix_bp"] = None
+                f["suppressed_owning_carrier"] = round(bp_here, 4)
+                n_carrier_suppressed += 1
+        if n_carrier_suppressed:
+            report["carrier_pin_suppressed"] = n_carrier_suppressed
+            if verbose:
+                print(f"[pre-ship-vetting] {base}: "
+                      f"{n_carrier_suppressed} finding(s) on the "
+                      f"subject's own carrier platform row suppressed "
+                      f"(the exclusive-carrier pin at ~100 is the "
+                      f"required convention, never a defect)")
+            if verdict == "FAIL" and not any(
+                    str(f.get("severity", "")).lower() == "fail"
+                    for f in findings):
+                verdict = "BORDERLINE"
 
         # Direction guard, fact-conditional (Jenna 2026-08-26:
         # "reasoning should always win when rooted in fact"). An

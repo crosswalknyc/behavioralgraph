@@ -2260,7 +2260,22 @@ def check_final_ship_invariants(df_or_bytes, s3_key, subject, *,
     return violations, meta
 
 
+def _hold_notices_suppressed():
+    """Test-harness guard (2026-08-28: a test run of the cut gate wrote
+    real _quarantine/ copies and recorded a real debounced hold email).
+    BG_SUPPRESS_HOLD_NOTICES=1 silences the hold SIDE EFFECTS only
+    (quarantine copy + hold-notice email): enforcement semantics stay
+    intact, a blocked file still raises ShipGateError and never ships.
+    Set by the regression harness; production leaves it unset."""
+    v = (os.environ.get("BG_SUPPRESS_HOLD_NOTICES") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 def _quarantine_rejected(data, s3_key, s3_client, verbose):
+    if _hold_notices_suppressed():
+        print(f"[ship-gate] BG_SUPPRESS_HOLD_NOTICES set; quarantine "
+              f"copy for {s3_key} NOT written (test run)")
+        return None
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     base = os.path.basename(str(s3_key or "profile.csv"))
     if base.lower().endswith(".csv"):
@@ -2280,6 +2295,11 @@ def _quarantine_rejected(data, s3_key, s3_client, verbose):
 
 
 def _email_hold_notice(s3_key, violations, quarantine_key, verbose):
+    if _hold_notices_suppressed():
+        print(f"[ship-gate] BG_SUPPRESS_HOLD_NOTICES set; hold notice "
+              f"for {s3_key} NOT recorded or emailed (test run; "
+              f"{len(violations)} finding(s))")
+        return
     name = _display_name(s3_key)
     lines = [
         f"The file {name} was held before delivery because "

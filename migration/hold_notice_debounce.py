@@ -84,6 +84,17 @@ def _now():
     return datetime.now(timezone.utc)
 
 
+def _suppressed_by_env():
+    """Test-harness guard (2026-08-28: a test run recorded a real
+    pending vetting hold that the production flusher then emailed).
+    BG_SUPPRESS_HOLD_NOTICES=1 makes record_pending a logged no-op:
+    nothing lands in the shared pending state, so nothing ever sends.
+    Set by the regression harness; production leaves it unset. The
+    debounce machinery's own tests pop the var explicitly."""
+    v = (os.environ.get("BG_SUPPRESS_HOLD_NOTICES") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 def _parse_ts(value):
     try:
         dt = datetime.fromisoformat(str(value))
@@ -256,6 +267,12 @@ def record_pending(s3_key, reason_class, email_payload, *,
                     today; nothing recorded, nothing will send
       "sent_immediate_fallback" - state unavailable; emailed now
     """
+    if _suppressed_by_env():
+        print(f"[hold-notice] BG_SUPPRESS_HOLD_NOTICES set; notice for "
+              f"{os.path.basename(str(s3_key or ''))} "
+              f"({reason_class}) suppressed (test run; nothing "
+              f"recorded, nothing will send)")
+        return "suppressed"
     ident = deliverable_identity(s3_key)
     reason_class = str(reason_class or "hold").strip() or "hold"
     entry_key = f"{ident}|{reason_class}"
