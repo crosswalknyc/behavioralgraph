@@ -56039,11 +56039,17 @@ _V1_STATUS_MAP = {
     'waiting':   'queued',
     'running':   'running',
     # Intermediate per-cohort markers the worker writes internally.
-    # Partners get "running" for every mid-build state so cohort naming
-    # like "tu_done" / "avid_done" / "cut_done" never surfaces.
-    'tu_done':   'running',
-    'avid_done': 'running',
-    'cut_done':  'running',
+    # The cohort naming ("tu_done" / "avid_done" / "cut_done") never
+    # surfaces - but these states are only ever stamped AFTER the
+    # primary deliverable uploaded, passed its quality checks, and
+    # registered in the catalog. From that moment the file is
+    # downloadable, so partners see "complete" with the download
+    # fields immediately (2026-08-28 client finding: status read
+    # "running" with a null s3_key for 2h31m after the file shipped,
+    # while an add-on tier was still finishing).
+    'tu_done':   'complete',
+    'avid_done': 'complete',
+    'cut_done':  'complete',
     'starting':  'running',
     'unknown':   'unknown',
 }
@@ -56089,9 +56095,11 @@ _V1_PROGRESS_MAP = {
     'queued':    'queued',
     'starting':  'preparing',
     'running':   'building',
-    'tu_done':   'building',
-    'avid_done': 'building',
-    'cut_done':  'building',
+    # Deliverable shipped + registered at these markers (see
+    # _V1_STATUS_MAP note above): progress reads complete too.
+    'tu_done':   'complete',
+    'avid_done': 'complete',
+    'cut_done':  'complete',
     'complete':  'complete',
     'completed': 'complete',
     'failed':    'failed',
