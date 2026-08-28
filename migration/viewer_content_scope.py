@@ -762,6 +762,356 @@ def audience_persona_note(structure, choice):
 
 
 # ---------------------------------------------------------------------------
+# Kids-product audience definition (2026-08-27 Jenna, Toca Boca
+# directive: "This is a child's toy [app], but it built a parental
+# audience during the prompt process. It never asked me if I wanted the
+# end user which would be a child or the parent.") Generalizes the
+# kids-title clarify to non-show subjects: apps, games, toys, and
+# franchises whose END USERS are predominantly children.
+# ---------------------------------------------------------------------------
+
+PRODUCT_PREFIX = "system/kids_product_audience/"
+PRODUCT_TTL_DAYS = 30
+
+VALID_PRODUCT_TYPES = ("app", "game", "toy", "franchise", "brand", "other")
+
+_PRODUCT_USER_TAIL_RE = re.compile(
+    r"\s+(players?|kids?|children|users?|end[\s-]?users?)$",
+    re.IGNORECASE)
+_PARENTS_HEAD_RE = re.compile(
+    r"^parents\s+of\s+(?:the\s+)?", re.IGNORECASE)
+
+
+def _product_stem(subject):
+    """The clean product name behind a subject: cut suffixes, audience
+    noun tails ('Toca Boca players'), and 'Parents of ...' heads all
+    reduce to the product itself."""
+    subj = _clean(subject)
+    if not subj:
+        return subj
+    stem = subj.split(" - ")[0].strip()
+    stem = _PARENTS_HEAD_RE.sub("", stem).strip()
+    m = _PRODUCT_USER_TAIL_RE.search(stem)
+    if m:
+        stem = stem[:m.start()].strip()
+    return stem or subj
+
+
+def product_cache_key(subject):
+    n = norm_token(_product_stem(subject))
+    return f"{PRODUCT_PREFIX}{n}.json" if n else ""
+
+
+def normalize_product_doc(data, subject_hint=""):
+    """Coerce a raw research response into the canonical kids-product
+    doc. Returns None when unusable."""
+    if not isinstance(data, dict):
+        return None
+    if not isinstance(data.get("kids_product"), bool):
+        return None
+    ptype = _clean(data.get("product_type")).lower()
+    if ptype not in VALID_PRODUCT_TYPES:
+        ptype = "other"
+    age = str(data.get("end_user_age") or "").strip().lower()
+    if age not in ("preschool", "kids", "teens", "general"):
+        age = ""
+    return {
+        "kids_product_audience": True,
+        "subject": _clean(data.get("subject")) or _clean(subject_hint),
+        "kids_product": bool(data.get("kids_product")),
+        "product_type": ptype,
+        "end_user_age": age,
+        "confident": bool(data.get("confident", True)),
+        "research_failed": False,
+        "researched_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def failed_product_doc(subject, reason):
+    return {
+        "kids_product_audience": True,
+        "subject": _clean(subject),
+        "kids_product": False,
+        "product_type": "other",
+        "end_user_age": "",
+        "confident": False,
+        "research_failed": True,
+        "failure_reason": _clean(reason)[:300],
+        "researched_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def load_cached_product_doc(subject, s3_client=None,
+                            max_age_days=PRODUCT_TTL_DAYS):
+    key = product_cache_key(subject)
+    if not key:
+        return None
+    try:
+        body = _s3(s3_client).get_object(Bucket=BUCKET, Key=key)["Body"].read()
+        doc = json.loads(body.decode("utf-8"))
+    except Exception:
+        return None
+    if not isinstance(doc, dict) or not doc.get("kids_product_audience"):
+        return None
+    age_limit = 1 if doc.get("research_failed") else max_age_days
+    try:
+        ts = datetime.fromisoformat(str(doc.get("researched_at")))
+        age_days = (datetime.now(timezone.utc) - ts).total_seconds() / 86400.0
+        if age_days > age_limit:
+            return None
+    except Exception:
+        return None
+    return doc
+
+
+def save_product_doc_cache(subject, doc, s3_client=None):
+    key = product_cache_key(subject)
+    if not key or not isinstance(doc, dict):
+        return False
+    try:
+        _s3(s3_client).put_object(
+            Bucket=BUCKET, Key=key,
+            Body=json.dumps(doc, indent=1).encode("utf-8"),
+            ContentType="application/json")
+        return True
+    except Exception as e:
+        print(f"[product-audience] cache write failed for "
+              f"{subject!r}: {e}")
+        return False
+
+
+def research_product_audience(subject, run_id=""):
+    """One web-research call: is this subject a product whose END
+    USERS are predominantly children? Returns a canonical kids-product
+    doc (possibly research_failed=True). Never raises."""
+    hint = _clean(subject)
+    if not hint:
+        return failed_product_doc(subject, "empty subject")
+    try:
+        from migration.claude_client import claude_messages
+    except ImportError:
+        try:
+            from claude_client import claude_messages  # twin layout
+        except ImportError:
+            return failed_product_doc(hint, "claude client unavailable")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    system = (
+        "You are classifying a subject for a US audience build. Use "
+        "the web_search tool when unsure and cross-check sources.\n"
+        "Decide whether the subject is a KIDS' PRODUCT: a product, "
+        "app, game, toy, or franchise whose END USERS are "
+        "predominantly children (roughly under 13). Examples of the "
+        "class: kids play apps (Toca Boca, PBS Kids Games), "
+        "kid-dominant game platforms (Roblox), toy brands, preschool "
+        "character franchises.\n"
+        "NOT kids products: TV shows and films (a separate pathway "
+        "owns those), family co-viewing brands whose users span all "
+        "ages (Pixar, Nintendo), general brands with some child "
+        "users, and adult/general products.\n"
+        "Also classify the product type and the end users' age band:\n"
+        "  - preschool: end users roughly 2-6\n"
+        "  - kids: end users roughly 6-12\n"
+        "  - teens: end users predominantly 13-17\n"
+        "  - general: users span all ages\n"
+        "Respond with ONE JSON object and nothing else:\n"
+        '{"subject": "<canonical product name>",\n'
+        ' "kids_product": true|false,\n'
+        ' "product_type": "app|game|toy|franchise|brand|other",\n'
+        ' "end_user_age": "preschool|kids|teens|general",\n'
+        ' "confident": true|false}\n'
+        "Set confident false when sources disagree or the subject is "
+        "ambiguous. Plain hyphens only, never em dashes."
+    )
+    user = (f"Subject to classify: {hint}\n"
+            f"Today is {today}. JSON only.")
+    model = (os.environ.get("CLAUDE_CARRIAGE_MODEL")
+             or "claude-sonnet-4-6")
+    web_tool = {"type": "web_search_20260209", "name": "web_search",
+                "max_uses": 4}
+    web_tool_legacy = {"type": "web_search_20250305", "name": "web_search",
+                       "max_uses": 4}
+    raw = None
+    try:
+        raw = claude_messages(system=system, user=user, model=model,
+                              max_tokens=700, temperature=0.1,
+                              tools=[web_tool])
+        if not raw:
+            raw = claude_messages(system=system, user=user,
+                                  model="claude-sonnet-4-6",
+                                  max_tokens=700, temperature=0.1,
+                                  tools=[web_tool_legacy])
+    except Exception as e:
+        print(f"[{run_id}] kids-product research raised for "
+              f"{hint!r}: {e}")
+        return failed_product_doc(hint, str(e))
+    if not raw:
+        return failed_product_doc(hint, "empty response")
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`")
+        if cleaned.lstrip().lower().startswith("json"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned
+    i, j = cleaned.find("{"), cleaned.rfind("}")
+    if i < 0 or j <= i:
+        return failed_product_doc(hint, "no JSON in response")
+    try:
+        data = json.loads(cleaned[i:j + 1])
+    except Exception as e:
+        return failed_product_doc(hint, f"bad JSON: {e}")
+    doc = normalize_product_doc(data, subject_hint=hint)
+    if doc is None:
+        return failed_product_doc(hint, "unusable classification")
+    print(f"[{run_id}] kids-product read for {hint!r}: "
+          f"kids_product={doc['kids_product']} "
+          f"type={doc['product_type']} age={doc['end_user_age'] or '?'}")
+    return doc
+
+
+def ensure_product_audience(subject, s3_client=None, run_id=""):
+    """Cache-first kids-product lookup; researches and caches on a
+    miss. Research runs on the clean product stem ('Toca Boca
+    players' -> 'Toca Boca'). Never raises; returns a failed doc at
+    worst."""
+    try:
+        stem = _product_stem(subject)
+        cached = load_cached_product_doc(stem, s3_client=s3_client)
+        if cached is not None:
+            return cached
+        if not research_enabled():
+            return failed_product_doc(stem, "research disabled by env")
+        doc = research_product_audience(stem, run_id=run_id)
+        save_product_doc_cache(stem, doc, s3_client=s3_client)
+        return doc
+    except Exception as e:
+        print(f"[{run_id}] ensure_product_audience failed (non-fatal): {e}")
+        return failed_product_doc(subject, str(e))
+
+
+def is_kids_product(doc):
+    """True when the researched end users are predominantly
+    preschool/kids-age children. Mirrors is_kids_title's bar: teens
+    and all-ages products do not clarify."""
+    if not isinstance(doc, dict) or doc.get("research_failed"):
+        return False
+    if not doc.get("kids_product"):
+        return False
+    return str(doc.get("end_user_age") or "").lower() in (
+        "preschool", "kids")
+
+
+def needs_product_audience_clarify(doc):
+    return is_kids_product(doc)
+
+
+_PLAYERS_RE = re.compile(
+    r"\bplayers?\b|\b(?:kids?|child(?:ren)?)\s+who\s+play\b"
+    r"|\bend[\s-]?users?\b|\b(?:kid|child)\s+users?\b"
+    r"|\bthe\s+kids\s+themselves\b|\busers?\s+themselves\b",
+    re.IGNORECASE)
+_BUYERS_RE = re.compile(
+    r"\bbuyers?\b|\bpurchas(?:e|es|ers?|ing)\b|\bshoppers?\b"
+    r"|\bbuy(?:s|ing)?\b|\bgift[\s-]?(?:givers?|buyers?)\b"
+    r"|\bpay(?:ing|ers?)\s+(?:for|customers?)\b",
+    re.IGNORECASE)
+_PARENT_WORD_RE = re.compile(
+    r"\bparents?\b|\bmoms?\b|\bdads?\b|\bmothers?\b|\bfathers?\b",
+    re.IGNORECASE)
+
+
+def product_audience_from_text(text):
+    """Parse a kids-product audience definition out of free text.
+    Returns 'parents' | 'under18' | None. Play-framed words (players,
+    kids who play, end users) read as the under-18 end users;
+    purchase-framed words (buyers, purchase, parents) read as the
+    buying parents."""
+    t = _clean(text)
+    if not t:
+        return None
+    if _PARENTS_OF_RE.search(t):
+        return "parents"
+    if _UNDER18_RE.search(t) or _PLAYERS_RE.search(t):
+        return "under18"
+    if _BUYERS_RE.search(t) or _PARENT_WORD_RE.search(t):
+        return "parents"
+    return None
+
+
+def product_audience_chip_payload(doc):
+    """Clarify-step data for the kids-product definition ask. Rides
+    the draft as viewer_audience_data (same step as the kids-title
+    ask; kind='product' flips the wording + parse)."""
+    return {
+        "kind": "product",
+        "title": (doc or {}).get("subject") or "",
+        "audience": (doc or {}).get("end_user_age") or "kids",
+        "product_type": (doc or {}).get("product_type") or "other",
+    }
+
+
+def product_audience_subject_name(subject, choice):
+    """Deliverable name for a kids-product universe (Jenna 2026-08-27,
+    Toca Boca): the definition rides as the dash suffix:
+      parents -> '{Subject} - Parents of Players'
+      under18 -> '{Subject} - Players'
+    Idempotent; strips audience words the ask already carried
+    ('Toca Boca players' -> stem 'Toca Boca')."""
+    subj = _clean(subject)
+    if not subj:
+        return subj
+    stem = _product_stem(subj)
+    if choice == "parents":
+        return f"{stem} - Parents of Players"
+    if choice == "under18":
+        return f"{stem} - Players"
+    return subj
+
+
+def product_audience_prose(doc, choice, assumed=False):
+    """Partner-safe sentence stating the universe definition. Plain
+    audience language only."""
+    subject = _clean((doc or {}).get("subject")
+                     or (doc or {}).get("title")) or "the product"
+    if choice == "parents":
+        lead = (f"Defined as the parents and buying adults behind "
+                f"{subject}'s young users")
+        if assumed:
+            return (lead + "; say the players themselves to build "
+                    "the under-18 users instead.")
+        return lead + "."
+    if choice == "under18":
+        return (f"Defined as the under-18 players themselves - the "
+                f"kids who actually use {subject}.")
+    return ""
+
+
+def product_audience_persona_note(doc, choice):
+    """The sentence that rides persona_notes so the build reasons
+    against the chosen membership definition."""
+    subject = _clean((doc or {}).get("subject")
+                     or (doc or {}).get("title")) or "the product"
+    ptype = str((doc or {}).get("product_type") or "product")
+    if ptype not in VALID_PRODUCT_TYPES or ptype == "other":
+        ptype = "product"
+    if choice == "parents":
+        return (f"Universe definition: the PARENTS AND BUYING ADULTS "
+                f"behind {subject}'s young end users - the adults who "
+                f"download, purchase, subscribe, and manage the "
+                f"household around the {ptype}. Demo shape is adult "
+                f"(concentrated 25-44, parental status very high); "
+                f"every behavior reads as the managing parent, not "
+                f"the child.")
+    if choice == "under18":
+        return (f"Universe definition: the ACTUAL UNDER-18 END USERS "
+                f"of {subject} - the kids who play with and use it "
+                f"themselves. AGE concentrates in the youngest bucket "
+                f"(17 and Under); the behavioral shape stays "
+                f"kid-appropriate (kids content platforms, toys, "
+                f"games, family dining) and adult-only categories "
+                f"(betting, alcohol, finance) read near-floor.")
+    return ""
+
+
+# ---------------------------------------------------------------------------
 # Scoped-URL research (episode/season paths per carrier)
 # ---------------------------------------------------------------------------
 
