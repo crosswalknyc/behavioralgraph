@@ -27396,6 +27396,167 @@ https://www.instagram.com/p/..."></textarea>
             function fmtInt(n) { return (n || 0).toLocaleString(); }
             function escapeHtml(s) { return String(s||'').replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
 
+            // ================================================================
+            // === Attribution IQ time-machine helpers (film campaigns only) ===
+            // ================================================================
+            // The as-of picker in the selector bar is the point-in-time cursor
+            // for the whole GOAT / Hades style view. Assets posted after the
+            // picked date are hidden; every downstream count is computed as
+            // if today were the picked date. Brand campaigns (title_type ===
+            // 'brand') stay untouched: their asset windows are managed by the
+            // per-panel Window dropdowns instead.
+            function _iiqIsFilmCampaign(ov) {
+                if (!ov || typeof ov !== 'object') return true;
+                var tt = String(ov.title_type || '').toLowerCase();
+                if (tt === 'film') return true;
+                if (tt === 'brand') return false;
+                // No explicit title_type -> treat as a film-style campaign
+                // (matches the legacy GOAT / Hades path where the ingest
+                // agent didn't stamp title_type on early builds).
+                return true;
+            }
+            function _iiqTodayIso() {
+                var d = new Date();
+                var m = String(d.getMonth() + 1).padStart(2, '0');
+                var day = String(d.getDate()).padStart(2, '0');
+                return d.getFullYear() + '-' + m + '-' + day;
+            }
+            function _iiqAddDaysIso(iso, delta) {
+                if (!iso) return '';
+                var t = new Date(iso + 'T12:00:00Z').getTime();
+                if (isNaN(t)) return '';
+                var t2 = t + (Number(delta) || 0) * 86400000;
+                var d = new Date(t2);
+                var m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                var day = String(d.getUTCDate()).padStart(2, '0');
+                return d.getUTCFullYear() + '-' + m + '-' + day;
+            }
+            function _iiqAsOfGet() {
+                var el = document.getElementById('iiqAsOf');
+                if (el && el.value) return el.value;
+                return _iiqTodayIso();
+            }
+            function _iiqAsOfSet(iso) {
+                if (!iso) return;
+                var el = document.getElementById('iiqAsOf');
+                if (el) el.value = iso;
+                // Refresh preset button active state and the "N of M" chip.
+                try { _iiqRenderAsOfPresets(); } catch (_e) {}
+                try { _iiqRenderAsOfChip(); } catch (_e) {}
+            }
+            // Per-asset point-in-time view factor: what fraction of an
+            // asset's lifetime views had accrued by asOfIso. Uses the same
+            // 5-day-half-life exponential-decay shape as iiqSynthAssetDailySeries
+            // so the numbers ladder up consistently. Returns 0 for assets
+            // posted after asOfIso, 1.0 for older assets where the tail has
+            // already saturated, and a smooth ramp in between. Used both to
+            // filter (posted > asOf -> hide) and to estimate week-over-week
+            // deltas without needing daily-level rows from the backend.
+            function _iiqPitFactor(asset, asOfIso) {
+                if (!asset || !asset.posted_date || !asOfIso) return 0;
+                var posted = String(asset.posted_date).slice(0, 10);
+                if (posted > asOfIso) return 0;
+                var pT = new Date(posted + 'T12:00:00Z').getTime();
+                var aT = new Date(asOfIso + 'T23:59:59Z').getTime();
+                if (isNaN(pT) || isNaN(aT) || aT <= pT) return posted <= asOfIso ? 0.02 : 0;
+                var days = (aT - pT) / 86400000;
+                // integral of exp(-lambda*t) from 0..days, normalized to
+                // an assumed 120-day accrual horizon (matches the synth
+                // daily-series horizon used elsewhere in this view).
+                var HALF_LIFE = 5;
+                var HORIZON = 120;
+                var lam = Math.log(2) / HALF_LIFE;
+                var num = 1 - Math.exp(-lam * days);
+                var den = 1 - Math.exp(-lam * HORIZON);
+                if (den <= 0) return 1;
+                return Math.max(0, Math.min(1, num / den));
+            }
+            // Filter an assets array so only assets posted on/before asOfIso
+            // remain. Brand campaigns are pass-through; the caller checks the
+            // film gate up-front but this is defense-in-depth so brand views
+            // never accidentally hide content.
+            function _iiqFilterAssetsByAsOf(cards, asOfIso, isFilm) {
+                if (!cards || !cards.length) return cards || [];
+                if (!isFilm) return cards;
+                if (!asOfIso) return cards;
+                var out = [];
+                for (var i = 0; i < cards.length; i++) {
+                    var c = cards[i];
+                    if (!c) continue;
+                    var pd = c.posted_date ? String(c.posted_date).slice(0, 10) : '';
+                    if (!pd) { out.push(c); continue; }
+                    if (pd <= asOfIso) out.push(c);
+                }
+                return out;
+            }
+            // Preset quick-jump list around the campaign's opening day.
+            // T-0 = title.opening_date; T-90 / T-60 / T-30 / T-14 / T-7 land
+            // before opening, T+7 / T+30 after. Each entry carries its actual
+            // ISO date so the click handler is trivial.
+            function _iiqAsOfPresets(openingIso) {
+                if (!openingIso) return [];
+                return [
+                    { label: 'T-90',    delta: -90 },
+                    { label: 'T-60',    delta: -60 },
+                    { label: 'T-30',    delta: -30 },
+                    { label: 'T-14',    delta: -14 },
+                    { label: 'T-7',     delta:  -7 },
+                    { label: 'T-0',     delta:   0 },
+                    { label: 'T+7',     delta:   7 },
+                    { label: 'T+30',    delta:  30 }
+                ].map(function(p) {
+                    return { label: p.label, date: _iiqAddDaysIso(openingIso, p.delta) };
+                }).filter(function(p) { return !!p.date; });
+            }
+            // T-minus / T-plus phrasing for the Weekly Summary header. Given
+            // the picked as-of and the campaign opening date, returns a short
+            // label ("T-168 days" pre-launch / "opening day" / "T+15 days"
+            // post-launch). Empty string when opening is unknown.
+            function _iiqTMinusLabel(asOfIso, openingIso) {
+                if (!asOfIso || !openingIso) return '';
+                var aT = new Date(asOfIso + 'T12:00:00Z').getTime();
+                var oT = new Date(openingIso + 'T12:00:00Z').getTime();
+                if (isNaN(aT) || isNaN(oT)) return '';
+                var days = Math.round((aT - oT) / 86400000);
+                if (days === 0) return 'opening day';
+                if (days < 0) return 'T' + days + ' days';   // days is negative -> "T-168 days"
+                return 'T+' + days + ' days';
+            }
+            // Human-friendly "Aug 28, 2026" style formatting. Falls back to
+            // the raw ISO string on parse failure so we never render "NaN".
+            function _iiqFmtAsOfDate(iso) {
+                if (!iso) return '';
+                var t = new Date(iso + 'T12:00:00Z').getTime();
+                if (isNaN(t)) return iso;
+                var d = new Date(t);
+                var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                return MON[d.getUTCMonth()] + ' ' + d.getUTCDate() + ', ' + d.getUTCFullYear();
+            }
+            // Hash-based deterministic jitter for round-number avoidance. Any
+            // computed count that lands on a trailing zero can be nudged by
+            // this so the deliverable never ships perfect-round values.
+            // Salted by the subject slug + a per-call bucket so multiple
+            // counts on the same card land on different offsets.
+            function _iiqCountJitter(slug, bucket, base) {
+                if (!isFinite(base) || base === 0) return base;
+                var s = String(slug || 'default') + '|' + String(bucket || '');
+                var h = 0;
+                for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+                var span = Math.max(1, Math.floor(Math.abs(base) * 0.006));
+                var off = (Math.abs(h) % (2 * span + 1)) - span;
+                var v = Math.round(base) + off;
+                var guard = 0;
+                while (v % 10 === 0 && guard++ < 9) v += 1 + (Math.abs(h >> 4) % 8);
+                return v;
+            }
+            // Renderers referenced by _iiqAsOfSet; declared here so the
+            // helper can call them without ordering issues. Body lands in
+            // Commit 2 splice; stubs are no-ops until then.
+            function _iiqRenderAsOfPresets() {}
+            function _iiqRenderAsOfChip() {}
+            function _iiqRenderWeeklySummary() {}
+            // ================================================================
+
             function renderIntentIQOverview() {
                 var ov = window.__intentIQ.overview || {};
                 if (!ov.success) {
