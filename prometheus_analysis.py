@@ -2377,6 +2377,92 @@ def detect_analysis_ask(text):
     return bool(question and behavior and subcut)
 
 
+# ---------------------------------------------------------------------------
+# Semantic ask classification (2026-08-27, Jenna's rephrased toy ask):
+# pattern matching one phrasing at a time is the failure mode she has
+# called out ("too many checks, too formulaic, not enough reasoning").
+# The regex above stays the zero-cost fast path; when it does not fire
+# but the ask is question-shaped and a base profile exists for the
+# named subject, a small model call decides analysis vs build vs cut.
+# Any question form asking WHAT a cohort buys/watches/does is an
+# analysis ask regardless of word order.
+# ---------------------------------------------------------------------------
+
+_CUT_REQUEST_RX = re.compile(
+    r'\b(?:run|do|make|create|build|add)\b[^.?!]{0,40}\bcuts?\b'
+    r'|\bcut of\b', re.IGNORECASE)
+
+_ASK_CLASSIFY_SYSTEM = (
+    'You classify one dashboard chat message. Decide what the user '
+    'wants:\n'
+    '- "analysis": a question about what an audience or cohort does, '
+    'buys, watches, streams, searches, subscribes to, or how big or '
+    'valuable a slice of it is. Question forms in any word order '
+    'count ("what category of toys do X buy", "which toys are X '
+    'buying", "top toy categories for X", "what do X purchase for '
+    'their kids").\n'
+    '- "build": a request to build, create, pull, run, queue, or '
+    'refresh a profile or audience.\n'
+    '- "cut": a request to derive a cut (gender, age, geo, avid) '
+    'from an existing profile.\n'
+    '- "other": anything else (greetings, status checks, follow-up '
+    'chatter).\n'
+    'Answer with JSON only: {"kind": "analysis"|"build"|"cut"|'
+    '"other"}.')
+
+
+def analysis_ask_candidate(text):
+    """Cheap gate for the model-backed classification: the message is
+    question-shaped or names an audience behavior, and is not an
+    explicit build, cut, deck, or export request. Only candidates
+    that also bind an existing base profile are worth a model call."""
+    t = str(text or '').strip()
+    if not t or len(t) > 600:
+        return False
+    if _GENERATE_EXCLUDE_RX.search(t) or _CUT_REQUEST_RX.search(t):
+        return False
+    if detect_deck_intent(t) or detect_csv_download_intent(t):
+        return False
+    return bool(_ANALYSIS_QUESTION_RX.search(t)
+                or _ANALYSIS_BEHAVIOR_RX.search(t)
+                or re.match(r'\s*(?:do|does|are|is|top)\b', t,
+                            re.IGNORECASE)
+                or t.rstrip().endswith('?'))
+
+
+def classify_ask_semantic(text, claude_json_fn):
+    """Model-backed intent decision for asks the fast-path regex did
+    not catch. `claude_json_fn(system_prompt, user_prompt)` returns
+    the shared reasoning-call result dict. Hard guards run first so
+    explicit build/cut phrasing never reaches the model. Returns
+    'analysis', 'build', 'cut', or 'other' ('other' on any model
+    trouble, which keeps the normal build interpret as the fallback
+    path)."""
+    t = str(text or '').strip()
+    if not t:
+        return 'other'
+    if _GENERATE_EXCLUDE_RX.search(t):
+        return 'build'
+    if _CUT_REQUEST_RX.search(t):
+        return 'cut'
+    try:
+        result = claude_json_fn(_ASK_CLASSIFY_SYSTEM,
+                                f'Message: {t[:600]}')
+        data = (result or {}).get('data')
+        if isinstance(data, list):
+            data = next((d for d in data if isinstance(d, dict)), {})
+        kind = str((data or {}).get('kind') or '').strip().lower()
+        if kind in ('analysis', 'build', 'cut', 'other'):
+            return kind
+        raw = str((result or {}).get('response') or '')
+        m = re.search(r'"kind"\s*:\s*"(analysis|build|cut|other)"', raw)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return 'other'
+
+
 CSV_OFFER_CHIP = 'Download this data as a CSV'
 
 _CSV_DOWNLOAD_RX = re.compile(

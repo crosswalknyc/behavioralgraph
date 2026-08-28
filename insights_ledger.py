@@ -355,6 +355,33 @@ def _clean_breakdown(breakdown):
     }
 
 
+def _supersedes(new, old):
+    """A fresh read replaces the stored read it semantically repeats:
+    the same normalized question, or the same (family, cohort, slice
+    dimension) when both carry a ranked table. One canonical read per
+    meaning keeps paraphrase replays consistent instead of stacking
+    drifted regenerations (2026-08-27, the 21.9 / 21.3 / 21.9 toy-share
+    drift)."""
+    try:
+        if not isinstance(old, dict) or old.get('route') == ANCHOR_ROUTE:
+            return False
+        if new.get('qn') and new.get('qn') == old.get('qn'):
+            return True
+        if new.get('family') != old.get('family'):
+            return False
+        nb = new.get('breakdown') or {}
+        ob = old.get('breakdown') or {}
+        if not (nb.get('rows') and ob.get('rows')):
+            return False
+        if normalize_subject(nb.get('dimension')) != \
+                normalize_subject(ob.get('dimension')):
+            return False
+        return (cohort_signature(new.get('cohort'))
+                == cohort_signature(old.get('cohort')))
+    except Exception:
+        return False
+
+
 def _record_entry_now(entry):
     try:
         _put_entry_object(entry)
@@ -366,6 +393,7 @@ def _record_entry_now(entry):
         subj = doc['subjects'].setdefault(
             skey, {'subject': entry.get('subject') or skey, 'entries': []})
         ents = subj.get('entries') or []
+        ents = [e for e in ents if not _supersedes(entry, e)]
         ents.append(entry)
         subj['entries'] = ents[-MAX_ENTRIES_PER_SUBJECT:]
         doc['updated'] = entry['ts']
@@ -507,7 +535,12 @@ def _resolve_subject(index_doc, subject=None, question=None):
         for k, v in subjects.items():
             if normalize_subject(v.get('subject')) == norm:
                 return k
-        return None
+        # No bucket carries this exact subject name. A derived base
+        # name still resolves its parent bucket ("Parents of Paw
+        # Patrol Series Viewers" -> "Paw Patrol Series"): fall through
+        # to the token scan with the subject text folded in
+        # (2026-08-27, rephrased toy ask).
+        question = f"{subject} {question or ''}"
     qn = ' ' + normalize_question(question) + ' '
     best_key, best_len = None, 0
     for k, v in subjects.items():
@@ -590,6 +623,139 @@ def render_block(entries, limit=12):
     return '\n'.join(lines[:30])
 
 
+# ---------------------------------------------------------------------------
+# Semantic replay (2026-08-27, Jenna's rephrased toy ask): "What
+# category of toys do parents of paw patrol viewers aged 4-7 buy for
+# their kids" regenerated instead of replaying the stored 4-7 read,
+# because replay only matched the exact normalized question. Lookup
+# now also keys on MEANING: (metric family, cohort, slice dimension).
+# Any question form asking what a stored cohort buys/watches/does
+# replays the stored read, whatever the word order. Age ranges bind
+# the closest stored cohort; the stored reply names the cohort it
+# reports in its first line.
+# ---------------------------------------------------------------------------
+
+_COHORT_AGE_RX = re.compile(
+    r'\b(\d{1,2})\s*(?:-|to|thru|through|and)\s*(\d{1,2})\b')
+_PARENT_TOKENS = ('parent', 'famil', 'mom', 'dad', 'caregiver',
+                  'guardian')
+# Ask-text vocabulary -> canonical family. Ordered: purchase verbs win
+# over cohort nouns ("what do paw patrol VIEWERS buy" is a purchases
+# ask; 'viewers' names the cohort, not the metric).
+_ASK_FAMILY_RULES = (
+    ('purchases', ('buy', 'buying', 'purchas', 'shop', 'bought',
+                   'spending on', 'spend on', 'order')),
+    ('subscribers', ('subscri', 'signup', 'sign up', 'churn')),
+    ('search', ('search', 'quer', 'demand')),
+    ('viewership', ('watching', 'watch next', 'streaming', 'binge',
+                    'tune', 'viewing')),
+    ('revenue', ('revenue', 'arpu')),
+    ('engagement', ('engagement', 'session', 'follow')),
+)
+_DIM_STOP = {'category', 'categories', 'share', 'mix', 'breakdown',
+             'of', 'the', 'by', 'top'}
+_DIM_CLASS_WORDS = ('brand', 'retailer', 'store', 'platform', 'market',
+                    'dma', 'city', 'state', 'genre', 'network',
+                    'channel')
+
+
+def cohort_signature(text):
+    """Reduce free text (an ask, or a stored cohort label) to the
+    cohort facts that matter for replay: the age range named, and
+    whether it is a parent/family cohort."""
+    t = str(text or '').lower()
+    ages = None
+    m = _COHORT_AGE_RX.search(t)
+    if m:
+        lo, hi = int(m.group(1)), int(m.group(2))
+        if lo <= hi:
+            ages = (lo, hi)
+    parents = any(p in t for p in _PARENT_TOKENS)
+    return {'ages': ages, 'parents': parents}
+
+
+def family_from_question(question):
+    """Canonical metric family the ask is about, from its verbs
+    (None when no family vocabulary appears)."""
+    t = ' ' + normalize_question(question) + ' '
+    for canon, keys in _ASK_FAMILY_RULES:
+        if any(k in t for k in keys):
+            return canon
+    return None
+
+
+def _dimension_ok(entry, qn):
+    """The ask names the same slice the stored table ranks. A 'toy
+    category' table serves toy-category asks; it never serves a
+    'brand' or 'retailer' ask, and a categories ask never replays a
+    read that has no table."""
+    bd = entry.get('breakdown') or {}
+    dim = normalize_subject(bd.get('dimension') or '')
+    if not (bd.get('rows') or []):
+        if re.search(r'categor|breakdown|\bmix\b|top \d', qn):
+            return False
+        return True
+    for w in dim.split():
+        if w in _DIM_STOP:
+            continue
+        if w.rstrip('s') not in qn:
+            return False
+    for c in _DIM_CLASS_WORDS:
+        if c in qn and c not in dim:
+            return False
+    return True
+
+
+def find_semantic(entries, question):
+    """Meaning-level replay candidate: the newest stored read whose
+    (family, cohort, slice dimension) matches the ask. Overlapping
+    age ranges bind the closest stored cohort."""
+    fam = family_from_question(question)
+    qn = normalize_question(question)
+    qsig = cohort_signature(question)
+    best, best_dist = None, None
+    for e in reversed(entries):   # newest first; ties keep the newest
+        if not isinstance(e, dict) or not e.get('reply'):
+            continue
+        if e.get('route') == ANCHOR_ROUTE:
+            continue
+        if fam:
+            if e.get('family') != fam:
+                continue
+        else:
+            # No family verb in the ask ("top toy categories for
+            # parents of kids 4-7 ..."): the named slice dimension
+            # carries the meaning instead. Only a stored ranked table
+            # whose dimension the ask names qualifies.
+            bd = e.get('breakdown') or {}
+            dtoks = [w for w in
+                     normalize_subject(bd.get('dimension') or '').split()
+                     if w not in _DIM_STOP]
+            if not (bd.get('rows') and dtoks):
+                continue
+        esig = cohort_signature(e.get('cohort') or '')
+        if esig['parents'] != qsig['parents'] and e.get('cohort'):
+            continue
+        qa, ea = qsig['ages'], esig['ages']
+        if qa and ea:
+            if not (qa[0] <= ea[1] and ea[0] <= qa[1]):
+                continue
+            dist = abs(qa[0] - ea[0]) + abs(qa[1] - ea[1])
+        elif qa and not ea:
+            dist = 6
+        elif ea and not qa:
+            if not qsig['parents']:
+                continue
+            dist = 8
+        else:
+            dist = 0
+        if not _dimension_ok(e, qn):
+            continue
+        if best is None or dist < best_dist:
+            best, best_dist = e, dist
+    return best
+
+
 def find_exact(entries, question=None, key=None):
     """Most recent stored entry matching this exact ask: normalized
     question match first (strongest), else normalized key match with a
@@ -647,6 +813,10 @@ def consult(subject=None, question=None, metric_family=None,
             gkey, gexact = _find_exact_anywhere(subjects, question)
             if gexact:
                 exact = gexact
+        if not exact:
+            # Meaning-level replay (2026-08-27): same family + cohort +
+            # slice dimension = the same read, whatever the wording.
+            exact = find_semantic(entries, question)
         return {'subject': bucket.get('subject'), 'skey': skey,
                 'entries': entries, 'block': render_block(entries),
                 'exact': exact}

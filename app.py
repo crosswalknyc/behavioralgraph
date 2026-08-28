@@ -51324,6 +51324,30 @@ def api_synth_chat_interpret():
     try:
         import prometheus_analysis as _pma_route
         _deflect_payload = None
+        _ask_is_analysis = False
+        if not _pma_route.detect_csv_download_intent(text):
+            # Fast path first (zero cost). When it misses but the ask
+            # is question-shaped and the named subject has a base on
+            # file, a small model call decides analysis vs build vs
+            # cut - one-phrase-at-a-time pattern matching is exactly
+            # the failure mode Jenna called out (2026-08-27, "What
+            # category of toys do parents of paw patrol viewers aged
+            # 4-7 buy for their kids").
+            _ask_is_analysis = _pma_route.detect_analysis_ask(text)
+            if (_ask_is_analysis
+                    or _pma_route.analysis_ask_candidate(text)) \
+                    and _pm_generation_base('', text,
+                                            prefer_catalog=True):
+                if not _ask_is_analysis:
+                    _ask_is_analysis = (
+                        _pma_route.classify_ask_semantic(
+                            text,
+                            lambda s, u: _pm_claude_json(
+                                s, u, max_tokens=200, temperature=0.0,
+                                surface='ask_classify'))
+                        == 'analysis')
+            else:
+                _ask_is_analysis = False
         if _pma_route.detect_csv_download_intent(text):
             _csv_resp = _pm_csv_download_response(user, text,
                                                   history=history)
@@ -51332,8 +51356,7 @@ def api_synth_chat_interpret():
             _csv_data = _csv_obj.get_json(silent=True) or {}
             if _csv_data.get('success') and _csv_data.get('reply'):
                 _deflect_payload = _csv_data
-        elif _pma_route.detect_analysis_ask(text) \
-                and _pm_generation_base('', text, prefer_catalog=True):
+        elif _ask_is_analysis:
             _an_resp = _pm_generate_metrics_response(
                 user, text, history, prefer_catalog=True)
             _an_obj = _an_resp[0] if isinstance(_an_resp, tuple) \
@@ -54385,6 +54408,14 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                          metric_family=mr.get('metric_family'))
         if not led.get('entries') and subj_hint:
             led = il.consult(question=text)
+        if not led.get('entries') and base.get('subject'):
+            # The ask itself may name no subject ("what are parents
+            # of kids 4-7 buying in terms of toy categories"); the
+            # resolved base still knows whose history to consult
+            # (2026-08-27, rephrased toy ask).
+            led = il.consult(subject=base.get('subject'),
+                             question=text,
+                             metric_family=mr.get('metric_family'))
     except Exception:
         traceback.print_exc()
     exact = led.get('exact')
