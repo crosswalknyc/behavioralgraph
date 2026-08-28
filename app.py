@@ -159,6 +159,55 @@ def readiness_check():
     return 'ready', 200, {'Content-Type': 'text/plain'}
 
 # ----------------------------------------------------------------------------
+# Hostmap mapping-table one-click approval (Jenna 2026-08-28)
+# ----------------------------------------------------------------------------
+# Recipients click Approve / Reject straight from the mapping-proposal email,
+# so these routes take NO dashboard login. Security is the HMAC-signed token
+# (constant-time compare inside hostmap_ingest.verify_token) plus the
+# single-use state ledger (ETag CAS): a consumed link only ever re-renders
+# the recorded outcome and can never ingest twice. All logic lives in
+# migration/hostmap_ingest.py (twin-synced copy in bg-webapp/migration/).
+@app.route('/api/hostmap-mapping/<any(approve, reject):action>')
+def hostmap_mapping_action(action):
+    """One-click Approve / Reject for a staged mapping-table proposal."""
+    try:
+        try:
+            from migration.hostmap_ingest import handle_approval_action
+        except ImportError:
+            from hostmap_ingest import handle_approval_action  # type: ignore
+        html, status = handle_approval_action(
+            request.args.get('id', ''), action,
+            request.args.get('token', ''))
+        return html, status, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception as e:
+        print(f"hostmap-mapping {action} failed: {e}")
+        traceback.print_exc()
+        return ('<h3>Something went wrong. No changes were made. '
+                'Please try the link again in a few minutes.</h3>',
+                500, {'Content-Type': 'text/html; charset=utf-8'})
+
+
+@app.route('/api/hostmap-mapping/health')
+def hostmap_mapping_health():
+    """Reachability probe: can this service reach the mapping store?
+    Used to verify the one-click ingest works from the deployed
+    dashboard. Returns row count on success; error detail stays in
+    the server log."""
+    try:
+        try:
+            from migration.hostmap_ingest import mapping_store_health
+        except ImportError:
+            from hostmap_ingest import mapping_store_health  # type: ignore
+        h = mapping_store_health()
+        if h.get('ok'):
+            return jsonify({'ok': True, 'rows': h.get('rows')})
+        print(f"hostmap-mapping health probe failed: {h.get('error')}")
+        return jsonify({'ok': False}), 503
+    except Exception as e:
+        print(f"hostmap-mapping health route failed: {e}")
+        return jsonify({'ok': False}), 503
+
+# ----------------------------------------------------------------------------
 # App version / build identifier
 # ----------------------------------------------------------------------------
 # Render sets RENDER_GIT_COMMIT on every deploy. When it changes, every open
