@@ -2073,6 +2073,25 @@ def _check_i19(rows, subject, s3_key):
             )
     except Exception:
         return out
+    # Subject-owns-platform exemption (2026-08-27 Liz batch, Netflix
+    # SVOD/AVOD Subscribers): on a PLATFORM-scoped universe (the subject
+    # IS that platform's subscriber/member/user base), the platform's
+    # own domain slugs are the correct clickstream identification -
+    # "every visitor qualifies" is the definition, not the defect. A
+    # TITLE universe on a carrier stays flagged (Paw Patrol viewers vs
+    # fubo.tv/welcome: 'fubo' is not in the subject).
+    subj_norm = "".join(ch for ch in str(subject or "").lower()
+                        if ch.isalnum())
+
+    def _subject_owns(token):
+        dom = str(token).lower().strip()
+        for pre in ("https://", "http://", "www."):
+            if dom.startswith(pre):
+                dom = dom[len(pre):]
+        dom = dom.split("/")[0].split(".")[0]
+        dom = "".join(ch for ch in dom if ch.isalnum())
+        return len(dom) >= 4 and dom in subj_norm
+
     for r in rows:
         if r["cat_u"] != "BRAND INPUT":
             continue
@@ -2083,6 +2102,8 @@ def _check_i19(rows, subject, s3_key):
         if not urlish:
             continue
         for t in urlish:
+            if _subject_owns(t):
+                continue
             # Tokens WITH a path are real URLs: the generic check
             # applies to any domain. Dotted no-path tokens are usually
             # brand-name variants (PAW.Patrol, Samsung.Tv - rule 4c-i
