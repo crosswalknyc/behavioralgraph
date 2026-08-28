@@ -20180,9 +20180,6 @@ None of these have a row in <code>reference.host_mapping</code> yet.</p>
 please review hostnames and sections, then add to the mapping table.
 The Domain column below shows the suggested primary owned domain - review and replace
 with the actual hostname pattern(s) you want the brand to match on.</p>
-<p>Brands in the "Kept in profile" section now ship in the profile and Gen Pop
-at reasoned values, so adding the mapping row completes the loop for future runs.
-Purchase categories (Most Purchased Brands family) stay excluded until the mapping lands.</p>
 {rows_html}
 <p style="color:#999;font-size:12px;margin-top:24px;">
 Behavioral Graph by Crosswalk NYC - automated affiliation auditor</p>
@@ -20192,8 +20189,6 @@ Behavioral Graph by Crosswalk NYC - automated affiliation auditor</p>
                 f"the persona-affiliation step and the downstream hostmap gate.\n"
                 f"The attached CSV contains ready-to-paste mapping proposals "
                 f"(BRAND, HOSTNAME, CATEGORY, SECTION; one row per hostname variant).\n"
-                f"Brands marked kept-in-profile now ship in the profile and Gen Pop at "
-                f"reasoned values; purchase categories stay excluded until the mapping lands.\n"
                 f"(Domain shown is a suggested primary owned domain - review and "
                 f"replace with the actual hostname pattern.)\n"
                 f"{rows_text}\n")
