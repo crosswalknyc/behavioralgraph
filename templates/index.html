@@ -25808,18 +25808,27 @@ https://www.instagram.com/p/..."></textarea>
                     <label for="iiqTitleSelect">Title</label>
                     <select id="iiqTitleSelect" onchange="onIntentIQTitleChange()"><option value="">Loading...</option></select>
                 </div>
-                <div>
-                    <label for="iiqAsOf">As-of (in-flight)</label>
-                    <input type="date" id="iiqAsOf" />
+                <div style="flex: 1; min-width: 0;">
+                    <label for="iiqAsOf">As-of date <span id="iiqAsOfChip" style="margin-left: 0.35rem; font-size: 0.65rem; font-weight: 500; color: #C7F23E; background: rgba(199,242,62,0.10); border: 1px solid rgba(199,242,62,0.35); padding: 0.05rem 0.4rem; border-radius: 10px; white-space: nowrap; display: none;"></span></label>
+                    <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
+                        <input type="date" id="iiqAsOf" oninput="if (typeof iiqOnAsOfChange === 'function') iiqOnAsOfChange();" style="min-width: 140px;" />
+                        <div id="iiqAsOfPresets" style="display: flex; gap: 0.25rem; flex-wrap: wrap;"></div>
+                    </div>
                 </div>
                 <div>
                     <label>&nbsp;</label>
                     <button type="button" class="blue-iq-apply-btn" onclick="reloadIntentIQ()">Reload</button>
                 </div>
-                <div style="flex: 1; text-align: right; color: var(--text-secondary); font-size: 0.78rem;">
+                <div style="flex: 1; text-align: right; color: var(--text-secondary); font-size: 0.78rem; min-width: 180px;">
                     <span id="iiqStatus">Pick a title to begin.</span>
                 </div>
             </div>
+            <!-- ===== Weekly Summary card (film campaigns only) =====
+                 Populated by _iiqRenderWeeklySummary. Empty by default
+                 so brand campaigns and the "no title picked" state
+                 leave zero visual footprint. See index.html script
+                 blocks below for the render function. -->
+            <div id="iiqWeeklySummaryCard" style="display: none; margin: 0.75rem 0 0.85rem; background: #0C1618; border: 1px solid #27393D; border-radius: 10px; padding: 0.85rem 1rem; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;"></div>
             <div class="iiq-subtab-bar">
                 <button class="iiq-subtab active" data-iiq-subtab="overview" onclick="showIntentIQSubtab('overview')">📊 TIMELINE</button>
                 <button class="iiq-subtab" data-iiq-subtab="assets" onclick="showIntentIQSubtab('assets')">🎞️ ASSETS</button>
