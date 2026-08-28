@@ -21318,10 +21318,7 @@ https://www.instagram.com/p/..."></textarea>
             position: fixed; right: 22px; bottom: 22px; width: 440px;
             height: min(660px, calc(100vh - 44px));
             min-width: 360px; min-height: 440px; max-width: 94vw; max-height: 94vh;
-            /* Slate Teal ground, one step lighter than the old Graphite
-               (Jenna 2026-08-27: "can the background be a little lighter
-               color"). */
-            background: #15252A; border: 1px solid #3B3D38; border-radius: 14px;
+            background: #0C1618; border: 1px solid #3B3D38; border-radius: 14px;
             /* Slight static white outline + deep drop shadow. No pulse when
                open (Jenna 2026-08-21): "when the chatbot is open dont have
                It pulse glow just a slight white border". */
@@ -21343,7 +21340,7 @@ https://www.instagram.com/p/..."></textarea>
         @keyframes pmFade { from { opacity: 0; } to { opacity: 1; } }
         #prometheusHeader {
             display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
-            padding: 0.75rem 1rem; background: #1B2F35; border-bottom: 1px solid #3B3D38;
+            padding: 0.75rem 1rem; background: #15252A; border-bottom: 1px solid #3B3D38;
             cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
             flex: 0 0 auto;
         }
@@ -21371,7 +21368,7 @@ https://www.instagram.com/p/..."></textarea>
             align-items: center; justify-content: center; cursor: pointer; padding: 0;
             transition: background 120ms ease-out, color 120ms ease-out; flex: 0 0 auto;
         }
-        #prometheusCollapseBtn:hover { background: rgba(233,232,225,0.08); color: #E9E8E1; }
+        #prometheusCollapseBtn:hover { background: #1B2F35; color: #E9E8E1; }
         #prometheusCollapseBtn:focus-visible { outline: 2px solid #3358FF; outline-offset: 2px; }
         #prometheusBody {
             flex: 1; display: flex; flex-direction: column; min-height: 0;
@@ -21379,14 +21376,6 @@ https://www.instagram.com/p/..."></textarea>
         }
         #prometheusBody #synthChatMessages { min-height: 120px !important; }
         #prometheusBody #synthChatBriefPreview { max-height: 46%; overflow-y: auto; }
-        /* Lighter chat ground (Jenna 2026-08-27). Dark mode only: the
-           message log and composer leave the site-wide navy --bg-input
-           for the widget's slate ramp so the surface reads one step
-           lighter. Light mode keeps the inline var(--bg-input). */
-        body:not([data-theme="light"]) #prometheusBody #synthChatMessages,
-        body:not([data-theme="light"]) #prometheusBody #synthChatInput {
-            background: #1B2F35 !important;
-        }
         /* Drag-resize handles on every edge + corner (2026-08-20).
            Kept inside the widget bounds because overflow is hidden. */
         #prometheusWidget .pm-rs { position: absolute; z-index: 6; touch-action: none; }
@@ -21593,7 +21582,7 @@ https://www.instagram.com/p/..."></textarea>
                                 .synth-thinking-bubble {
                                     margin-bottom: 0.55rem;
                                     padding: 0.55rem 0.7rem;
-                                    background: rgba(255,255,255,0.07);
+                                    background: rgba(255,255,255,0.05);
                                     border-radius: 8px;
                                     animation: synthThinkFade 0.35s ease-out;
                                 }
@@ -60357,7 +60346,7 @@ https://www.instagram.com/p/..."></textarea>
                     ? '<div style="font-size: 0.85rem; white-space: pre-wrap; line-height: 1.4;">' +
                         _synthChatEscapeHtml(_rawText) + '</div>'
                     : _synthChatFormatAgentText(_rawText);
-                var bg = isUser ? 'rgba(139, 92, 246, 0.18)' : 'rgba(255,255,255,0.07)';
+                var bg = isUser ? 'rgba(139, 92, 246, 0.14)' : 'rgba(255,255,255,0.05)';
                 var label = isUser ? 'You' : 'Prometheus';
                 // Quick-reply chips (2026-08-20 Jenna: every keyword
                 // prompt should be clickable like the opening
@@ -60589,7 +60578,7 @@ https://www.instagram.com/p/..."></textarea>
                 chips += '<button type="button" onclick="synthChatChipFill(\'Pitching [brand] - help me figure out the right audience to profile\')" style="' + pill + '">Prep a pitch</button>';
                 var el = document.createElement('div');
                 el.id = 'synthChatWelcomeBubble';
-                el.style.cssText = 'margin-bottom: 0.55rem; padding: 0.55rem 0.7rem; background: rgba(255,255,255,0.07); border-radius: 8px; border-left: 2px solid rgba(139,92,246,0.45);';
+                el.style.cssText = 'margin-bottom: 0.55rem; padding: 0.55rem 0.7rem; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 2px solid rgba(139,92,246,0.45);';
                 el.innerHTML =
                     '<div class="pm-speaker" style="font-size: 0.7rem; opacity: 0.7; margin-bottom: 0.25rem;">Prometheus</div>' +
                     '<div style="font-size: 0.85rem; line-height: 1.4; margin-bottom: 0.5rem;">' +
