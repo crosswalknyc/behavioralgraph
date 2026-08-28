@@ -187,25 +187,72 @@ _CATEGORY_RX = re.compile(
     r'\b(categor(?:y|ies)|taxonomy|filed|classif\w+|what kind of profile)\b',
     re.IGNORECASE)
 
+# Per-family playbook matching (2026-08-28, phase 3). Ordered; the
+# first vocabulary match wins. When an ask matches a family, its
+# playbook module replaces the generic 'playbooks' module on KPI /
+# deck / search surfaces and attaches on analysis asks too.
+_PLAYBOOK_RXES = [
+    ('playbook_white_space', re.compile(
+        r'white\s?space|underserved|untapped|opportunit\w*|'
+        r'should (?:we |they )?(?:launch|make|sell)|licens\w+ (?:play|'
+        r'opportunit|categor)', re.IGNORECASE)),
+    ('playbook_sponsorship_fit', re.compile(
+        r'sponsor\w*|partner\w*|endorse\w*|collab\w*|brand fit|'
+        r'activation|which brands? (?:fit|should)', re.IGNORECASE)),
+    ('playbook_talent_value', re.compile(
+        r'\bvalue\b|\bworth\b|rate card|media value|talent fee|'
+        r'signups?|what (?:should|would) \w+ (?:pay|charge)',
+        re.IGNORECASE)),
+    ('playbook_category_demand', re.compile(
+        r'categor\w*.{0,60}\b(?:buy|bought|purchas|shop|spend|demand|'
+        r'mix)|\b(?:buy|bought|purchas|shop|spend)\w*.{0,60}categor|'
+        r'category (?:mix|share|breakdown|demand)|spending mix|'
+        r'what (?:do|does) .{0,40}\b(?:buy|purchase|shop for)\b',
+        re.IGNORECASE | re.DOTALL)),
+    ('playbook_competitive_overlap', re.compile(
+        r'overlap\w*|also (?:watch|stream|buy|shop)|shared audience|'
+        r'crossover|versus|\bvs\.?\b|head[- ]to[- ]head|compar\w*',
+        re.IGNORECASE)),
+    ('playbook_audience_sizing', re.compile(
+        r'how (?:big|many|large)|audience size|size of|sizing|'
+        r'projected (?:us )?(?:audience|reach)|total addressable|'
+        r'\breach\b', re.IGNORECASE)),
+]
+
+
+def match_playbook(text):
+    """First playbook module whose vocabulary matches the ask, else
+    None."""
+    t = str(text or '')
+    if not t.strip():
+        return None
+    for name, rx in _PLAYBOOK_RXES:
+        if rx.search(t):
+            return name
+    return None
+
 
 def select_topic_modules(surface, text='', ctx=None, mode=None):
     """Module names for this request, in stable order, max 3.
 
     Surface-driven: deck surfaces always carry 'decks'; the search-
-    demand surface always carries 'search_demand'. Text/context-driven:
+    demand surface always carries 'search_demand'. A vocabulary-matched
+    per-family playbook replaces the generic 'playbooks' module on
+    those surfaces and attaches on analysis asks. Text/context-driven:
     naming-shaped asks attach 'naming'; cut overlays, viewers subjects,
     or universe vocabulary attach 'universes'; category vocabulary
     attaches 'categories'."""
     t = str(text or '')
+    playbook = match_playbook(t)
     mods = []
     if surface in ('deck', 'insights_deck', 'deck_plan'):
         mods.append('decks')
-        mods.append('playbooks')
+        mods.append(playbook or 'playbooks')
     if surface == 'search_demand':
         mods.append('search_demand')
-        mods.append('playbooks')
+        mods.append(playbook or 'playbooks')
     if surface in ('measured_read', 'reasoned_metrics', 'metrics'):
-        mods.append('playbooks')
+        mods.append(playbook or 'playbooks')
     ctx = ctx if isinstance(ctx, dict) else {}
     primary_name = str(((ctx.get('primary') or {}) or {}).get('name') or '')
     has_cuts = bool(ctx.get('cuts'))
@@ -218,6 +265,8 @@ def select_topic_modules(surface, text='', ctx=None, mode=None):
         mods.append('naming')
     if _CATEGORY_RX.search(t):
         mods.append('categories')
+    if playbook:
+        mods.append(playbook)
     seen, out = set(), []
     for m in mods:
         if m not in seen:
@@ -227,10 +276,14 @@ def select_topic_modules(surface, text='', ctx=None, mode=None):
 
 
 def module_text(pack, names):
-    """Concatenated topical module text, stable order by `names`."""
+    """Concatenated topical module text, stable order by `names`.
+
+    A playbook module carries its worked example (pack['examples'],
+    keyed by family) when the compiler banked one."""
     if not isinstance(pack, dict) or not names:
         return ''
     topical = pack.get('topical') or {}
+    examples = pack.get('examples') or {}
     parts = []
     for name in names:
         mod = topical.get(name)
@@ -238,8 +291,21 @@ def module_text(pack, names):
             continue
         title = str(mod.get('title') or name).strip()
         text = str(mod.get('text') or '').strip()
-        if text:
-            parts.append(f"{title}. {text}")
+        if not text:
+            continue
+        if name.startswith('playbook_'):
+            ex = examples.get(name[len('playbook_'):])
+            if isinstance(ex, dict) and str(ex.get('text') or '').strip():
+                head = str(ex.get('title') or ex.get('subject')
+                           or '').strip()
+                ask = str(ex.get('q') or '').strip()
+                bits = [f"WORKED EXAMPLE ({head})." if head
+                        else "WORKED EXAMPLE."]
+                if ask:
+                    bits.append(f"Ask: {ask}")
+                bits.append(f"Delivered: {str(ex['text']).strip()}")
+                text = f"{text}\n{' '.join(bits)}"
+        parts.append(f"{title}. {text}")
     return '\n\n'.join(parts)
 
 

@@ -139,6 +139,45 @@ def entry_key(subject, metric_family, window_start=None, window_end=None):
 
 
 # ---------------------------------------------------------------------------
+# Provenance (2026-08-28): where an entry's numbers came from decides
+# which entry wins a conflict. Figures a client already holds
+# (delivered_artifact) outrank live generated reads (operator), which
+# outrank pairs distilled from old conversations (distilled). Entries
+# written before this field exist without it and rank as operator, so
+# every existing entry and caller keeps its exact behavior.
+# ---------------------------------------------------------------------------
+
+PROV_DELIVERED = 'delivered_artifact'
+PROV_OPERATOR = 'operator'
+PROV_DISTILLED = 'distilled'
+_PROV_RANK = {PROV_DELIVERED: 2, PROV_OPERATOR: 1, PROV_DISTILLED: 0}
+
+
+def canon_provenance(provenance):
+    p = str(provenance or '').strip().lower()
+    if not p:
+        return PROV_OPERATOR
+    if 'artifact' in p or 'deliver' in p or 'deck' in p:
+        return PROV_DELIVERED
+    if 'distill' in p:
+        return PROV_DISTILLED
+    return PROV_OPERATOR
+
+
+def provenance_rank(entry):
+    """Conflict rank for one stored entry. Delivered-deck anchor
+    entries written before the prov field rank as delivered too."""
+    if not isinstance(entry, dict):
+        return _PROV_RANK[PROV_OPERATOR]
+    p = entry.get('prov')
+    if p in _PROV_RANK:
+        return _PROV_RANK[p]
+    if entry.get('route') == ANCHOR_ROUTE:
+        return _PROV_RANK[PROV_DELIVERED]
+    return _PROV_RANK[PROV_OPERATOR]
+
+
+# ---------------------------------------------------------------------------
 # S3 plumbing: CAS index update + per-entry audit objects
 # ---------------------------------------------------------------------------
 
@@ -273,9 +312,15 @@ def make_entry(*, subject, metric_family, question, route, metrics,
                anchors=None, window_start='', window_end='',
                window_label='', reply='', followups=None,
                base_profile_key='', cohort='', breakdown=None,
-               derivation=''):
+               derivation='', provenance=''):
     """Build one ledger entry. `metrics` is a list of dicts with
     name/label/value/unit/definition (extra keys dropped).
+
+    `provenance` (2026-08-28): 'delivered_artifact' for figures a
+    client already holds, 'distilled' for pairs recovered from old
+    conversations, anything else (including absent) is 'operator',
+    the live generation path. Ranking: delivered > operator >
+    distilled on conflict.
 
     `base_profile_key` (2026-08-27, Jenna): the s3 key of the base
     profile (or the pulled read, e.g. a Subscriber IQ run) the
@@ -329,6 +374,7 @@ def make_entry(*, subject, metric_family, question, route, metrics,
         # gaps, examples). Logs and audit only - render_block never
         # includes it, so it can never reach a prompt or a user.
         'derivation': str(derivation or '')[:600],
+        'prov': canon_provenance(provenance),
     }
     return entry
 
@@ -372,6 +418,12 @@ def _supersedes(new, old):
     drift)."""
     try:
         if not isinstance(old, dict) or old.get('route') == ANCHOR_ROUTE:
+            return False
+        # A lower-provenance entry never replaces a higher one: a
+        # distilled conversation pair cannot evict a live generated
+        # read or a delivered figure carrying the same meaning
+        # (2026-08-28). Equal or higher rank replaces as before.
+        if provenance_rank(new) < provenance_rank(old):
             return False
         if new.get('qn') and new.get('qn') == old.get('qn'):
             return True
@@ -417,9 +469,11 @@ def persist(*, subject, metric_family, question, route, metrics,
             anchors=None, window_start='', window_end='',
             window_label='', reply='', followups=None,
             base_profile_key='', cohort='', breakdown=None,
-            derivation=''):
+            derivation='', provenance='', sync=False):
     """Persist one delivered read. Never raises; never blocks the
-    caller (daemon thread) unless _SYNC_FOR_TESTS."""
+    caller (daemon thread) unless `sync` or _SYNC_FOR_TESTS. Batch
+    jobs (the conversation distiller, the artifact ingester) pass
+    sync=True so the write lands before the process exits."""
     try:
         entry = make_entry(
             subject=subject, metric_family=metric_family,
@@ -428,10 +482,11 @@ def persist(*, subject, metric_family, question, route, metrics,
             window_end=window_end, window_label=window_label,
             reply=reply, followups=followups,
             base_profile_key=base_profile_key, cohort=cohort,
-            breakdown=breakdown, derivation=derivation)
+            breakdown=breakdown, derivation=derivation,
+            provenance=provenance)
         if not entry['metrics'] and not entry['reply']:
             return
-        if _SYNC_FOR_TESTS:
+        if sync or _SYNC_FOR_TESTS:
             _record_entry_now(entry)
             return
         threading.Thread(target=_record_entry_now, args=(entry,),
@@ -445,7 +500,9 @@ ANCHOR_ROUTE = 'delivered_deck'
 
 def ingest_deck_anchors(*, subject, metrics, source_name='',
                         window_start='', window_end='',
-                        window_label='', basis_notes=None):
+                        window_label='', basis_notes=None,
+                        metric_family='delivered_anchors',
+                        provenance=PROV_DELIVERED):
     """Record a shipped deliverable's headline figures as anchor
     entries for the subject (2026-08-27, Jenna: generated reads and
     decks must stay commensurate with what was already delivered).
@@ -457,7 +514,12 @@ def ingest_deck_anchors(*, subject, metrics, source_name='',
     produced; the note rides in the metric definition so new reads
     extend the same logic. Re-ingesting the same source replaces the
     prior anchor entries instead of stacking duplicates. Synchronous;
-    never raises."""
+    never raises.
+
+    `metric_family` + `provenance` (2026-08-28): the artifact
+    ingester passes the real family of each claim group so semantic
+    lookups land, and every anchor carries delivered provenance,
+    the top conflict rank."""
     try:
         clean = []
         notes = {str(k).strip().lower(): str(v)[:200]
@@ -479,10 +541,11 @@ def ingest_deck_anchors(*, subject, metrics, source_name='',
         entries = []
         for i in range(0, len(clean), 6):
             e = make_entry(
-                subject=subject, metric_family='delivered_anchors',
+                subject=subject, metric_family=metric_family,
                 question=marker, route=ANCHOR_ROUTE,
                 metrics=clean[i:i + 6], window_start=window_start,
-                window_end=window_end, window_label=window_label)
+                window_end=window_end, window_label=window_label,
+                provenance=provenance)
             if e['metrics']:
                 entries.append(e)
         if not entries:
@@ -733,13 +796,15 @@ def _dimension_ok(entry, qn):
 
 
 def find_semantic(entries, question):
-    """Meaning-level replay candidate: the newest stored read whose
+    """Meaning-level replay candidate: the best stored read whose
     (family, cohort, slice dimension) matches the ask. Overlapping
-    age ranges bind the closest stored cohort."""
+    age ranges bind the closest stored cohort; at equal cohort
+    distance, provenance rank wins (delivered_artifact > operator >
+    distilled), then recency."""
     fam = family_from_question(question)
     qn = normalize_question(question)
     qsig = cohort_signature(question)
-    best, best_dist = None, None
+    best, best_dist, best_rank = None, None, None
     for e in reversed(entries):   # newest first; ties keep the newest
         if not isinstance(e, dict) or not e.get('reply'):
             continue
@@ -782,23 +847,38 @@ def find_semantic(entries, question):
             dist = 0
         if not _dimension_ok(e, qn):
             continue
-        if best is None or dist < best_dist:
-            best, best_dist = e, dist
+        rank = provenance_rank(e)
+        if best is None or dist < best_dist \
+                or (dist == best_dist and rank > best_rank):
+            best, best_dist, best_rank = e, dist, rank
     return best
 
 
 def find_exact(entries, question=None, key=None):
-    """Most recent stored entry matching this exact ask: normalized
-    question match first (strongest), else normalized key match with a
-    non-empty stored reply."""
+    """Best stored entry matching this exact ask: normalized question
+    match first (strongest), else normalized key match with a
+    non-empty stored reply. On conflicting matches, provenance wins
+    (delivered_artifact > operator > distilled), then recency; with
+    the historical single-provenance corpus this is exactly the old
+    newest-first behavior."""
     qn = normalize_question(question) if question else None
-    for e in reversed(entries):
-        if qn and e.get('qn') == qn and e.get('reply'):
-            return e
+
+    def _best(match_fn):
+        best, best_rank = None, None
+        for e in reversed(entries):     # newest first; ties keep newest
+            if not (match_fn(e) and e.get('reply')):
+                continue
+            r = provenance_rank(e)
+            if best is None or r > best_rank:
+                best, best_rank = e, r
+        return best
+
+    if qn:
+        hit = _best(lambda e: e.get('qn') == qn)
+        if hit is not None:
+            return hit
     if key:
-        for e in reversed(entries):
-            if e.get('k') == key and e.get('reply'):
-                return e
+        return _best(lambda e: e.get('k') == key)
     return None
 
 
@@ -967,7 +1047,11 @@ def metrics_from_study(study):
 
 
 __all__ = ['consult', 'persist', 'make_entry', 'render_block',
-           'find_exact', 'metrics_from_study', 'entry_key',
-           'canon_family', 'subject_key', 'normalize_question',
-           'normalize_subject', 'LEDGER_PREFIX', 'INDEX_KEY',
-           'ENTRY_PREFIX']
+           'find_exact', 'find_semantic', 'metrics_from_study',
+           'entry_key', 'canon_family', 'subject_key',
+           'normalize_question', 'normalize_subject',
+           'family_from_question', 'cohort_signature',
+           'ingest_deck_anchors', 'canon_provenance',
+           'provenance_rank', 'PROV_DELIVERED', 'PROV_OPERATOR',
+           'PROV_DISTILLED', 'ANCHOR_ROUTE', 'LEDGER_PREFIX',
+           'INDEX_KEY', 'ENTRY_PREFIX']
