@@ -312,7 +312,7 @@ def make_entry(*, subject, metric_family, question, route, metrics,
                anchors=None, window_start='', window_end='',
                window_label='', reply='', followups=None,
                base_profile_key='', cohort='', breakdown=None,
-               derivation='', provenance=''):
+               derivation='', provenance='', verify=None):
     """Build one ledger entry. `metrics` is a list of dicts with
     name/label/value/unit/definition (extra keys dropped).
 
@@ -376,6 +376,13 @@ def make_entry(*, subject, metric_family, question, route, metrics,
         'derivation': str(derivation or '')[:600],
         'prov': canon_provenance(provenance),
     }
+    # Verification stamp (2026-08-28, p3-verify): the pre-banking pass
+    # outcome for generated reads. Audit trail only; render_block never
+    # includes it.
+    if isinstance(verify, dict) and verify:
+        entry['verify'] = {str(k)[:24]: (v if isinstance(v, (int, float))
+                                         else str(v)[:40])
+                           for k, v in list(verify.items())[:8]}
     return entry
 
 
@@ -469,7 +476,7 @@ def persist(*, subject, metric_family, question, route, metrics,
             anchors=None, window_start='', window_end='',
             window_label='', reply='', followups=None,
             base_profile_key='', cohort='', breakdown=None,
-            derivation='', provenance='', sync=False):
+            derivation='', provenance='', verify=None, sync=False):
     """Persist one delivered read. Never raises; never blocks the
     caller (daemon thread) unless `sync` or _SYNC_FOR_TESTS. Batch
     jobs (the conversation distiller, the artifact ingester) pass
@@ -483,7 +490,7 @@ def persist(*, subject, metric_family, question, route, metrics,
             reply=reply, followups=followups,
             base_profile_key=base_profile_key, cohort=cohort,
             breakdown=breakdown, derivation=derivation,
-            provenance=provenance)
+            provenance=provenance, verify=verify)
         if not entry['metrics'] and not entry['reply']:
             return
         if sync or _SYNC_FOR_TESTS:

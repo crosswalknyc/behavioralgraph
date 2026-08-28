@@ -1609,6 +1609,247 @@ def render_cross_module_block(block):
     )
 
 
+# ---------------------------------------------------------------------------
+# Subscriber IQ evidence block (2026-08-28, p4-subiq-parity)
+# ---------------------------------------------------------------------------
+# The generated-read path previously saw Subscriber IQ data only as the
+# one-line cross-module signal. When the ask (or its base) references a
+# title with a Subscriber IQ file, the full payload is parsed
+# server-side and a compact structured block (signups, windows,
+# cohorts, key drivers) rides the evidence, byte-capped. Parsed
+# payloads are cached in-process by ETag + TTL like the other loaders.
+
+SUBIQ_EVIDENCE_MAX_BYTES = 3072
+_SUBIQ_PAYLOAD_TTL_S = 600
+_subiq_payload_cache = {}   # {s3_key: {'etag', 'ts', 'parsed'}}
+
+
+def _subiq_payload_cached(s3_client, subiq_bucket, key, parser):
+    """Full parsed Subscriber IQ payload for one file. Within the TTL
+    the cached parse is reused as-is; past it a HEAD revalidates the
+    ETag before re-downloading."""
+    now = time.time()
+    with _xmod_lock:
+        c = _subiq_payload_cache.get(key)
+    if c and now - c['ts'] < _SUBIQ_PAYLOAD_TTL_S:
+        return c['parsed']
+    try:
+        if c:
+            head = s3_client.head_object(Bucket=subiq_bucket, Key=key)
+            etag = (head.get('ETag') or '').strip('"')
+            if etag and etag == c['etag']:
+                with _xmod_lock:
+                    _subiq_payload_cache[key] = {**c, 'ts': now}
+                return c['parsed']
+        resp = s3_client.get_object(Bucket=subiq_bucket, Key=key)
+        etag = (resp.get('ETag') or '').strip('"')
+        parsed = parser(resp['Body'].read().decode('utf-8'))
+    except Exception:
+        return c['parsed'] if c else None
+    with _xmod_lock:
+        _subiq_payload_cache[key] = {'etag': etag, 'ts': now,
+                                     'parsed': parsed}
+        if len(_subiq_payload_cache) > 32:
+            for k, _ in sorted(_subiq_payload_cache.items(),
+                               key=lambda kv: kv[1]['ts'])[:8]:
+                _subiq_payload_cache.pop(k, None)
+    return parsed
+
+
+def find_subiq_title(s3_client, subiq_bucket, text, subject_hint=''):
+    """(show, s3_key) when the subject hint or the ask names a title in
+    the Subscriber IQ index; (None, None) otherwise."""
+    index = _load_subiq_index(s3_client, subiq_bucket)
+    if not index:
+        return None, None
+    tk = _xmod_title_key(subject_hint)
+    if tk and tk in index:
+        return index[tk]
+    shows = {show for show, _k in index.values()}
+    found = _xmod_subject_from_text(text, shows)
+    tk = _xmod_title_key(found)
+    if tk and tk in index:
+        return index[tk]
+    return None, None
+
+
+def render_subiq_evidence(parsed, show):
+    """The compact structured evidence block from one parsed Subscriber
+    IQ payload. Pure rendering (testable on a fixture); byte-capped at
+    SUBIQ_EVIDENCE_MAX_BYTES by dropping the lowest-priority sections
+    first."""
+    parsed = parsed or {}
+    md = parsed.get('metadata') or {}
+    km = parsed.get('key_metrics') or {}
+    asum = parsed.get('attribution_summary') or {}
+
+    def _cnt(d, key='count'):
+        return _xmod_fmt_count((d or {}).get(key))
+
+    def _pair(d, label):
+        d = d or {}
+        c = _cnt(d)
+        us = _xmod_fmt_count(d.get('gen_pop'))
+        if c and us:
+            return f"{label} {c} ({us} US)"
+        if c or us:
+            return f"{label} {c or us}"
+        return None
+
+    head_bits = []
+    for k, lab in (('platform', 'platform'), ('date_range', 'window'),
+                   ('genre', 'genre'), ('content_cadence', 'cadence')):
+        v = str(md.get(k) or '').strip()
+        if v:
+            head_bits.append(f"{lab} {v}")
+
+    # (priority, line): lower priority survives the byte cap longer.
+    tagged = [
+        (0, f"SUBSCRIBER ACQUISITION EVIDENCE ({show})"
+            + (': ' + '; '.join(head_bits) if head_bits else '')),
+        (0, "Measured show-to-platform acquisition for this title. "
+            "These are the authoritative subscriber numbers: cite them "
+            "flat and never contradict them."),
+    ]
+
+    key_bits = [b for b in (
+        _pair(km.get('total_watchers'), 'accounts viewed'),
+        _pair(km.get('pre_existing'), 'pre-existing viewers'),
+        _pair(km.get('clean_sample'), 'first-time viewers'),
+        _pair(km.get('new_signups'), 'new signups'),
+    ) if b]
+    for k, lab in (('clean_conversion_rate', 'first-time conversion'),
+                   ('total_conversion_rate', 'overall conversion'),
+                   ('completion_rate', 'completion'),
+                   ('second_screen_activity', 'second-screen'),
+                   ('avg_days_to_signup', 'avg days to signup')):
+        v = str(km.get(k) or '').strip()
+        if v:
+            key_bits.append(f"{lab} {v}")
+    if key_bits:
+        tagged.append((1, 'KEY METRICS: ' + '; '.join(key_bits) + '.'))
+
+    attr_bits = [b for b in (
+        _pair(asum.get('attributed'), 'attributed signups'),
+        _pair(asum.get('dormant_reactive'), 'reactivated accounts'),
+        _pair(asum.get('total'), 'total signups'),
+    ) if b]
+    if attr_bits:
+        tagged.append((1, 'SIGNUPS ATTRIBUTED: ' + '; '.join(attr_bits)
+                       + '.'))
+
+    eps = [e for e in (parsed.get('episode_attribution') or [])
+           if isinstance(e, dict)
+           and isinstance(e.get('signups'), (int, float))]
+    eps.sort(key=lambda e: -float(e['signups']))
+    ep_bits = []
+    for e in eps[:6]:
+        lab = str(e.get('episode') or '').strip()
+        if not lab:
+            continue
+        lab = lab if '/' in lab else f"Ep {lab}"
+        d = str(e.get('episode_date') or '').strip()
+        s = _xmod_fmt_count(e.get('signups'))
+        ep_bits.append(f"{lab}{f' ({d})' if d else ''} {s} signups")
+    if ep_bits:
+        tagged.append((2, 'TOP EPISODES (key drivers, by signups): '
+                       + '; '.join(ep_bits) + '.'))
+
+    tim_bits = []
+    for t in (parsed.get('signup_timing') or [])[:8]:
+        if not isinstance(t, dict):
+            continue
+        lab = str(t.get('timing') or '').strip()
+        s = _xmod_fmt_count(t.get('signups'))
+        if lab and s:
+            tim_bits.append(f"{lab} {s}")
+    if tim_bits:
+        tagged.append((3, 'SIGNUP TIMING (after availability): '
+                       + '; '.join(tim_bits) + '.'))
+
+    mo_bits = []
+    for m in (parsed.get('monthly_signups') or [])[-12:]:
+        if not isinstance(m, dict):
+            continue
+        s = _xmod_fmt_count(m.get('signups'))
+        if m.get('month') and s:
+            mo_bits.append(f"{m['month']} {s}")
+    if mo_bits:
+        tagged.append((4, 'MONTHLY SIGNUPS: ' + '; '.join(mo_bits) + '.'))
+
+    demo = parsed.get('demographics') or {}
+    demo_bits = []
+    for a in (demo.get('age') or [])[:8]:
+        if isinstance(a, dict) and a.get('age_range') \
+                and str(a.get('percentage') or '').strip():
+            demo_bits.append(f"{a['age_range']} {a['percentage']}")
+    for g in (demo.get('gender') or [])[:3]:
+        if isinstance(g, dict) and g.get('gender') \
+                and str(g.get('percentage') or '').strip():
+            demo_bits.append(f"{g['gender']} {g['percentage']}")
+    if demo_bits:
+        tagged.append((2, 'SIGNUP COHORTS (who converted): '
+                       + '; '.join(demo_bits) + '.'))
+
+    comp_bits = []
+    for cpl in (parsed.get('competitive_platforms') or [])[:5]:
+        if isinstance(cpl, dict) and cpl.get('platform') \
+                and str(cpl.get('percentage') or '').strip():
+            comp_bits.append(f"{cpl['platform']} {cpl['percentage']}")
+    if comp_bits:
+        tagged.append((5, 'ALSO SUBSCRIBED (overlap): '
+                       + '; '.join(comp_bits) + '.'))
+
+    ch_bits = []
+    for m in (parsed.get('monthly_churn') or [])[-6:]:
+        if isinstance(m, dict) and m.get('month') \
+                and _xmod_fmt_count(m.get('churned')):
+            ch_bits.append(f"{m['month']} {_xmod_fmt_count(m['churned'])}")
+    if ch_bits:
+        tagged.append((6, 'MONTHLY CHURN: ' + '; '.join(ch_bits) + '.'))
+
+    if len(tagged) <= 2:
+        return ''
+
+    def _assemble(items):
+        return '\n'.join(ln for _p, ln in items)
+
+    keep = list(tagged)
+    while len(_assemble(keep).encode('utf-8')) > SUBIQ_EVIDENCE_MAX_BYTES:
+        drop_i, drop_p = None, -1
+        for i in range(len(keep) - 1, -1, -1):
+            if keep[i][0] > drop_p:
+                drop_i, drop_p = i, keep[i][0]
+        if drop_i is None or drop_p == 0:
+            body = _assemble(keep).encode('utf-8')
+            return body[:SUBIQ_EVIDENCE_MAX_BYTES].decode(
+                'utf-8', errors='ignore').strip()
+        keep.pop(drop_i)
+    return _assemble(keep).strip()
+
+
+def build_subiq_evidence_block(s3_client, subiq_bucket, parser, text,
+                               subject_hint=''):
+    """The full Subscriber IQ evidence block for a generated read.
+    Returns (block, show); ('' , None) when no Subscriber IQ title
+    matches the ask or its base subject, or the file cannot be
+    parsed."""
+    if s3_client is None or not subiq_bucket or parser is None:
+        return '', None
+    try:
+        show, key = find_subiq_title(s3_client, subiq_bucket, text,
+                                     subject_hint)
+        if not key:
+            return '', None
+        parsed = _subiq_payload_cached(s3_client, subiq_bucket, key,
+                                       parser)
+        if not parsed:
+            return '', None
+        return render_subiq_evidence(parsed, show), show
+    except Exception:
+        return '', None
+
+
 def render_ledger_block(block):
     """Wrap the published-measurements body in its delimited prompt
     section. Empty string when there is no ledger history."""

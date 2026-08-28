@@ -55174,6 +55174,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         job_id = uuid.uuid4().hex[:12]
         _pm_read_status_write(job_id, {
             'job_id': job_id, 'user': _pm_user, 'status': 'working',
+            'stage': 'reading the data',
             'question': text[:300], 'started_at': time.time()})
         threading.Thread(
             target=_pm_run_read_job,
@@ -55194,11 +55195,13 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         digest_block=digest_block, anchors_block=anchors_block,
         led=led, pm_user=_pm_user, pm_ppu=_pm_ppu)
     try:
-        _pm_csv_point(payload.get('profile'), text,
-                      (payload.get('_family') or ''))
+        if not payload.pop('_held', False):
+            _pm_csv_point(payload.get('profile'), text,
+                          (payload.get('_family') or ''))
     except Exception:
         pass
     payload.pop('_family', None)
+    payload.pop('_verify', None)
     _stages = payload.pop('_stages_ms', None)
     if isinstance(_stages, dict):
         for _sk, _sv in _stages.items():
@@ -55206,28 +55209,75 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     return jsonify(payload)
 
 
+def _pm_verify_prior_entries(res, family, led):
+    """Stored ledger entries the verification pass compares a fresh
+    read against: the pre-generation consult, plus a re-consult on the
+    response's own subject when it resolved differently (the ask may
+    have named no subject at all). Deduped; never raises."""
+    import insights_ledger as il
+    ents = list((led or {}).get('entries') or [])
+    try:
+        subj = str((res or {}).get('subject') or '').strip()
+        led_subj = str((led or {}).get('subject') or '').strip()
+        if subj and subj.lower() != led_subj.lower():
+            led2 = il.consult(subject=subj, metric_family=family)
+            ents.extend(led2.get('entries') or [])
+    except Exception:
+        pass
+    seen, out = set(), []
+    for e in ents:
+        if not isinstance(e, dict):
+            continue
+        k = (e.get('k'), e.get('ts'), e.get('qn'))
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(e)
+    return out
+
+
 def _pm_generate_read_core(*, text, history, mr, base, digest_block,
-                           anchors_block, led, pm_user, pm_ppu):
+                           anchors_block, led, pm_user, pm_ppu,
+                           stage_cb=None):
     """Fresh generated read - the operating loop (2026-08-27, Jenna:
     "it truly needs to be really smart"). Request-context free so it
     runs identically inline and inside a background read job.
 
     1. CONTEXT BIND: the base profile's rows, cross-module anchors,
        the subject's ledger history, worked examples from the whole
-       ledger, and neighbor evidence from across the ~4,200-profile
-       library (model-picked comparables, digests cached by ETag).
+       ledger, neighbor evidence from across the ~4,200-profile
+       library (model-picked comparables, digests cached by ETag),
+       and the full Subscriber IQ payload when the ask or its base
+       names a title with an acquisition read (2026-08-28).
     2. GAP RESEARCH: the reasoning call carries the web_search tool
        and researches what the grounding cannot answer, approved
        sources only, never named in output.
     3. SYNTHESIZE: playbooks + coherence enforcement.
-    4. BANK: the read persists with its derivation trail and becomes
-       a worked example for the next ask.
+    4. VERIFY: anchor recompute against the base rows, ledger
+       coherence, scrub residue - one self-revision on failure; a
+       second failure holds the read (2026-08-28, p3-verify).
+    5. BANK: the verified read persists with its derivation trail and
+       verification stamp and becomes a worked example for the next
+       ask.
 
-    Returns the response payload dict (plus internal '_family', and
-    '_stages_ms', a per-stage wall-clock breakdown the callers route
-    to the ask log / the read-job JSON)."""
+    `stage_cb`, when provided (the background read job), receives a
+    user-safe stage label at each phase transition so the widget can
+    narrate progress. Returns the response payload dict (plus internal
+    '_family', '_verify', '_held' when applicable, and '_stages_ms', a
+    per-stage wall-clock breakdown the callers route to the ask log /
+    the read-job JSON)."""
     import prometheus_analysis as pma
     import insights_ledger as il
+
+    def _stage_note(label):
+        if stage_cb is None:
+            return
+        try:
+            stage_cb(label)
+        except Exception:
+            pass
+
+    _stage_note('reading the data')
     stages = {}
     _t_stage = time.monotonic()
     if not anchors_block:
@@ -55280,11 +55330,25 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     except Exception:
         traceback.print_exc()
     stages['examples'] = int((time.monotonic() - _t_stage) * 1000)
+    # Subscriber IQ parity (2026-08-28): when the ask or its base names
+    # a title with an acquisition read, the full parsed payload rides
+    # the evidence as a compact structured block (signups, windows,
+    # cohorts, key drivers), not just the one-line cross-module signal.
+    subiq_block, subiq_show = '', None
+    _t_stage = time.monotonic()
+    try:
+        subiq_block, subiq_show = pma.build_subiq_evidence_block(
+            s3_client, SUBSCRIBER_S3_BUCKET, parse_subscriber_iq_csv,
+            text, subject_hint=base.get('subject') or '')
+    except Exception:
+        traceback.print_exc()
+    stages['subiq'] = int((time.monotonic() - _t_stage) * 1000)
     user_prompt = pma.build_reasoned_metrics_user_prompt(
         text, history, metric_request=mr or None,
         anchors_block=anchors_block, ledger_block=led.get('block'),
         profile_rows_block=digest_block)
-    extra_blocks = [b for b in (neighbor_block, examples_block) if b]
+    extra_blocks = [b for b in (subiq_block, neighbor_block,
+                                examples_block) if b]
     extra_blocks.append(pma.GENERATION_LOOP_GUIDANCE)
     is_strategy = False
     try:
@@ -55305,11 +55369,13 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     print(f"[pm-loop] grounding: base={base.get('s3_key')!r} "
           f"neighbors={neighbor_names} "
           f"examples={'yes' if examples_block else 'no'} "
+          f"subiq={subiq_show or 'no'} "
           f"strategy={is_strategy}")
     # 11000, not 4000: breakdown asks (one ranked row per category plus
     # shares, penetrations, notes) legitimately run long. The 4000
     # ceiling truncated the Shark Tank category read twice on
     # 2026-08-27 and the fragment crashed coherence enforcement.
+    _stage_note('researching')
     _t_stage = time.monotonic()
     result = _pm_claude_json(pma.REASONED_METRICS_SYSTEM_PROMPT,
                              user_prompt, max_tokens=11000,
@@ -55343,6 +55409,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             'success': True, 'action': 'answer', 'reply': reply,
             'followups': followups, 'offer_deck': False,
             'deck_angle': None, 'not_quantifiable': 'model_decline'}
+    _stage_note('composing the answer')
     _t_stage = time.monotonic()
     try:
         res = pma.enforce_metrics_coherence(data)
@@ -55353,6 +55420,102 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         _pm_ask_hint(outcome='error')
         return _chatbot_calm_payload()
     stages['coherence'] = int((time.monotonic() - _t_stage) * 1000)
+    # ---- Verification pass (2026-08-28, p3-verify): anchor recompute
+    # against the base rows, ledger coherence, scrub residue. ONE
+    # self-revision on failure; a second failure holds the read (never
+    # banked, never delivered). Trouble inside the pass itself never
+    # blocks a read - verification then records as skipped.
+    _stage_note('checking the numbers')
+    _t_verify = time.monotonic()
+    fam0 = 'strategy' if is_strategy else res.get('metric_family')
+    pmv = None
+    try:
+        import prometheus_verify as pmv
+    except Exception:
+        traceback.print_exc()
+    verdict, verify_revised = None, False
+    if pmv is not None:
+        try:
+            _v_lookup = pmv.load_base_lookup(
+                s3_client, S3_BUCKET, base.get('s3_key'),
+                base.get('subject') or '')
+            verdict = pmv.verify_read(
+                reply=reply, res=res, family=fam0,
+                base_lookup=_v_lookup,
+                prior_entries=_pm_verify_prior_entries(res, fam0, led))
+        except Exception:
+            traceback.print_exc()
+    if verdict is not None and not verdict.get('ok'):
+        print(f"[pm-verify] first pass failed: "
+              f"{verdict.get('findings')}")
+        revised_ok = False
+        try:
+            rev_prompt = (user_prompt + '\n\n'
+                          + pmv.render_findings_block(
+                              verdict.get('findings') or []))
+            result2 = _pm_claude_json(
+                pma.REASONED_METRICS_SYSTEM_PROMPT, rev_prompt,
+                max_tokens=11000, temperature=0.2,
+                usage_extras=pm_ppu, tools=[pma.WEB_SEARCH_TOOL])
+            if result2.get('success'):
+                data2 = result2.get('data') or {}
+                if isinstance(data2, list):
+                    data2 = next((d for d in data2
+                                  if isinstance(d, dict)), {})
+                if str(data2.get('action') or '').strip().lower() \
+                        != 'decline':
+                    res2 = pma.enforce_metrics_coherence(data2)
+                    reply2 = pma.format_generated_metrics_reply(res2)
+                    fam2 = ('strategy' if is_strategy
+                            else res2.get('metric_family'))
+                    verdict2 = pmv.verify_read(
+                        reply=reply2, res=res2, family=fam2,
+                        base_lookup=_v_lookup,
+                        prior_entries=_pm_verify_prior_entries(
+                            res2, fam2, led))
+                    if verdict2.get('ok'):
+                        data, res, reply = data2, res2, reply2
+                        fam0, verdict = fam2, verdict2
+                        verify_revised = revised_ok = True
+                    else:
+                        verdict = verdict2
+        except Exception:
+            traceback.print_exc()
+        if not revised_ok:
+            stages['verify'] = int(
+                (time.monotonic() - _t_verify) * 1000)
+            stages['verify_outcome'] = 2   # held
+            _findings = (verdict or {}).get('findings') or []
+            _chatbot_error_email(
+                'brief-chat/verify',
+                'generated read HELD after failed verification '
+                '(not banked, not delivered): '
+                + (' | '.join(str(f) for f in _findings)[:1200]
+                   or 'no findings recorded'),
+                user_email=pm_user,
+                payload={'question': text[:300],
+                         'subject': res.get('subject'),
+                         'base': base.get('s3_key')})
+            _pm_ask_hint(outcome='held')
+            return {
+                'success': True, 'action': 'answer',
+                'reply': ('The numbers need another pass before I '
+                          'hand them over. I am holding this one for '
+                          'a closer look and will follow up.'),
+                'followups': [], 'offer_deck': False,
+                'deck_angle': None, '_held': True, '_family': fam0,
+                '_stages_ms': stages}
+    stages['verify'] = int((time.monotonic() - _t_verify) * 1000)
+    # 0 = clean pass, 1 = passed after one revision, 2 = held (above),
+    # 3 = pass unavailable (verification infrastructure trouble).
+    stages['verify_outcome'] = (3 if verdict is None
+                                else (1 if verify_revised else 0))
+    _verify_stamp = None
+    if pmv is not None and verdict is not None:
+        try:
+            _verify_stamp = pmv.stamp(verdict, revised=verify_revised)
+        except Exception:
+            pass
     followups = [pma.scrub_user_text(str(f).strip())[:160]
                  for f in (data.get('followups') or [])
                  if str(f).strip()][:3]
@@ -55365,16 +55528,24 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             ln = ln.strip().lstrip('-').strip()
             if ln and len(anchor_names) < 6:
                 anchor_names.append(ln[:120])
+        _verify_note = ''
+        if _verify_stamp:
+            _verify_note = (
+                f"; verify={_verify_stamp['outcome']}"
+                f"(anchor={_verify_stamp['anchor']},"
+                f"ledger={_verify_stamp['ledger']},"
+                f"scrub={_verify_stamp['scrub']})")
         _derivation = (
             f"base={base.get('s3_key') or ''}; "
             f"neighbors={', '.join(neighbor_names) or 'none'}; "
             f"examples={'yes' if examples_block else 'no'}; "
+            f"subiq={subiq_show or 'no'}; "
             f"research=web_search; "
-            f"playbook={'strategy' if is_strategy else 'standard'}")
+            f"playbook={'strategy' if is_strategy else 'standard'}"
+            + _verify_note)
         il.persist(
             subject=res.get('subject'),
-            metric_family=('strategy' if is_strategy
-                           else res.get('metric_family')),
+            metric_family=fam0,
             question=text, route='reasoned_metrics',
             metrics=res.get('metrics'),
             anchors=anchor_names,
@@ -55385,7 +55556,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             base_profile_key=base.get('s3_key'),
             cohort=res.get('cohort'),
             breakdown=res.get('breakdown'),
-            derivation=_derivation)
+            derivation=_derivation,
+            verify=_verify_stamp)
     except Exception:
         traceback.print_exc()
     stages['persist'] = int((time.monotonic() - _t_stage) * 1000)
@@ -55402,8 +55574,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         'followups': followups, 'offer_deck': False, 'deck_angle': None,
         'model': result.get('model'),
         'profile': res.get('subject'),
-        '_family': ('strategy' if is_strategy
-                    else res.get('metric_family')),
+        '_family': fam0,
+        '_verify': _verify_stamp,
         '_stages_ms': stages}
 
 
@@ -55421,25 +55593,43 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                      digest_block, anchors_block, led):
     """Background body of one generated read. Writes the finished
     payload to the S3-backed job status the widget polls; a locked
-    phone or reloaded tab picks the read up when it returns."""
+    phone or reloaded tab picks the read up when it returns. As the
+    read advances, each phase transition lands on the job JSON as a
+    user-safe `stage` (one tiny S3 put per transition) so the widget
+    can narrate progress (2026-08-28, p1-staged-progress)."""
     head = {'job_id': job_id, 'user': pm_user,
             'question': text[:300], 'started_at': time.time()}
+
+    def _stage(label):
+        try:
+            _pm_read_status_write(job_id, {
+                **head, 'status': 'working', 'stage': str(label)[:60],
+                'stage_at': time.time()})
+        except Exception:
+            pass
+
     try:
         payload = _pm_generate_read_core(
             text=text, history=history, mr=mr, base=base,
             digest_block=digest_block, anchors_block=anchors_block,
-            led=led, pm_user=pm_user, pm_ppu=pm_ppu)
+            led=led, pm_user=pm_user, pm_ppu=pm_ppu, stage_cb=_stage)
         payload.pop('_family', None)
+        held = bool(payload.pop('_held', False))
+        _verify = payload.pop('_verify', None)
         _stages = payload.pop('_stages_ms', None)
         if payload.get('success'):
-            _done = {**head, 'status': 'done', 'payload': payload}
+            _done = {**head,
+                     'status': 'held' if held else 'done',
+                     'payload': payload}
             if isinstance(_stages, dict) and _stages:
                 _done['stages_ms'] = _stages
+            if isinstance(_verify, dict) and _verify:
+                _done['verify'] = _verify
             _pm_read_status_write(job_id, _done)
         else:
             _pm_read_status_write(job_id, {**head, 'status': 'error'})
         print(f"[pm-loop] read {job_id} "
-              f"{'done' if payload.get('success') else 'failed'} "
+              f"{'held' if held else 'done' if payload.get('success') else 'failed'} "
               f"for {pm_user}")
     except Exception as e:
         traceback.print_exc()

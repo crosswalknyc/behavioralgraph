@@ -60796,10 +60796,14 @@ https://www.instagram.com/p/..."></textarea>
         }
         async function _pmPollReadJob(jobId) {
             _pmTrackReadJob(jobId);
+            _pmReadIndicatorShow(jobId, 'reading the data');
             var waited = 0, misses = 0;
             while (waited < 900000) {
-                await new Promise(function(res) { setTimeout(res, 5000); });
-                waited += 5000;
+                // 2s cadence while the read is young (stages move
+                // fast early), backing off to 5s after 30s.
+                var step = waited < 30000 ? 2000 : 5000;
+                await new Promise(function(res) { setTimeout(res, step); });
+                waited += step;
                 var st = null, code = 0;
                 try {
                     var r = await fetch('/api/brief-chat/read-status/' + jobId,
@@ -60809,13 +60813,19 @@ https://www.instagram.com/p/..."></textarea>
                 } catch (_) { st = null; }
                 if (!st) {
                     if (code === 404 && ++misses >= 3) {
+                        _pmReadIndicatorHide(jobId);
                         _pmUntrackReadJob(jobId);
                         return;
                     }
                     continue;
                 }
                 misses = 0;
-                if (st.status === 'done' && st.payload && st.payload.reply) {
+                if (st.status === 'working' && st.stage) {
+                    _pmReadIndicatorShow(jobId, String(st.stage));
+                }
+                if ((st.status === 'done' || st.status === 'held') &&
+                        st.payload && st.payload.reply) {
+                    _pmReadIndicatorHide(jobId);
                     _pmUntrackReadJob(jobId);
                     var p = st.payload;
                     var opts = (p.followups || []).map(function(f) {
@@ -60830,11 +60840,13 @@ https://www.instagram.com/p/..."></textarea>
                     return;
                 }
                 if (st.status === 'error') {
+                    _pmReadIndicatorHide(jobId);
                     _pmUntrackReadJob(jobId);
                     synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
                     return;
                 }
             }
+            _pmReadIndicatorHide(jobId);
             _pmUntrackReadJob(jobId);
         }
         function _pmResumeReadJobs() {
@@ -60980,6 +60992,47 @@ https://www.instagram.com/p/..."></textarea>
             if (!_pmBuildIndEnd) return;
             try { _pmBuildIndEnd(); } catch (_) {}
             _pmBuildIndEnd = null;
+        }
+
+        // Read-job stage indicator (2026-08-28): one live bubble per
+        // polled generated read whose quiet label swaps in place as
+        // the server reports each stage (reading the data,
+        // researching, composing the answer, checking the numbers).
+        // Same chrome as every other working graphic; the elapsed
+        // counter keeps running across stage swaps.
+        var _pmReadInd = {};
+        function _pmReadIndicatorShow(jobId, stage) {
+            stage = String(stage || '');
+            var cur = _pmReadInd[jobId];
+            if (cur && cur.el) {
+                if (stage && stage !== cur.stage) {
+                    cur.stage = stage;
+                    var q = cur.el.querySelector('.synth-thinking-quiet');
+                    if (q) {
+                        q.textContent = stage;
+                    } else {
+                        var dots = cur.el.querySelector('.synth-thinking-dots');
+                        if (dots) {
+                            q = document.createElement('span');
+                            q.className = 'synth-thinking-quiet';
+                            q.textContent = stage;
+                            dots.insertAdjacentElement('afterend', q);
+                        }
+                    }
+                }
+                return;
+            }
+            var end = _synthChatBeginThinking('read', stage);
+            _pmReadInd[jobId] = {
+                stage: stage, end: end,
+                el: _pmLiveBubbles[_pmLiveBubbles.length - 1] || null
+            };
+        }
+        function _pmReadIndicatorHide(jobId) {
+            var cur = _pmReadInd[jobId];
+            if (!cur) return;
+            delete _pmReadInd[jobId];
+            if (cur.end) { try { cur.end(); } catch (_) {} }
         }
 
         // In-flight abort controller for interpret/approve fetches
