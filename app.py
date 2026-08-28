@@ -54674,6 +54674,39 @@ def _pm_generation_base(subject_hint, text, ctx=None,
 _PM_DATA_FILE_PREFIX = 'generated_data/'
 
 
+def _pm_csv_task_filename(entry):
+    """Filename for the CSV export (2026-08-28 Jenna): name the file
+    after the title of the task on screen (the active view's label,
+    e.g. 'Digital Journey IQ') when the ask came from a titled data
+    view; otherwise a short subject-based name. The browser saves it
+    like any regular download; the chat never shows the raw link."""
+    title = ''
+    try:
+        body = request.get_json(silent=True) or {}
+        vc = (body.get('page_context') or {}).get('view_context') or {}
+        title = str(vc.get('view_title') or '').strip()
+    except Exception:
+        title = ''
+    if not title:
+        try:
+            subject = str(entry.get('subject') or '').strip()
+            bd = entry.get('breakdown') \
+                if isinstance(entry.get('breakdown'), dict) else {}
+            dim = str((bd or {}).get('dimension') or '').strip()
+            title = ' '.join(p for p in (subject, dim) if p)
+        except Exception:
+            title = ''
+    try:
+        import prometheus_analysis as _pma_fn
+        title = _pma_fn.scrub_user_text(title) or title
+    except Exception:
+        pass
+    title = re.sub(r'[\\/:*?"<>|]+', ' ', title or '')
+    title = re.sub(r'\s+', ' ', title).strip()[:80].strip(' .') \
+        or 'Data Export'
+    return f"{title}.csv"
+
+
 def _pm_csv_point(subject, question, family):
     """Remember which ledger entry the CSV offer chip points at, so
     the download builds from the SAME entry the chat reply shipped
@@ -54734,6 +54767,7 @@ def _pm_csv_download_response(user, text, history=None):
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     try:
         fname, csv_text = pma.build_generated_csv(entry)
+        fname = _pm_csv_task_filename(entry) or fname
         s3_key = f"{_PM_DATA_FILE_PREFIX}{uuid.uuid4().hex[:12]}/{fname}"
         s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
                              Body=csv_text.encode('utf-8'),
@@ -54750,8 +54784,7 @@ def _pm_csv_download_response(user, text, history=None):
         _pm_ask_hint(outcome='error')
         return jsonify(_chatbot_calm_payload())
     _pm_ask_hint(outcome='answered', subject=entry.get('subject'))
-    reply = (f"Your CSV is ready: {fname}. The link below is good for "
-             f"7 days.\n{url}")
+    reply = f"Saved. {fname} is in your browser downloads."
     return jsonify({
         'success': True, 'action': 'answer', 'reply': reply,
         'followups': [], 'offer_deck': False, 'deck_angle': None,

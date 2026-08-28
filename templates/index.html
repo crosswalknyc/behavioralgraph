@@ -64047,6 +64047,30 @@ https://www.instagram.com/p/..."></textarea>
             return m;
         }
 
+        // Auto-save (2026-08-28 Jenna): a reply carrying
+        // download_url triggers a normal browser download (regular
+        // downloads folder; the filename is the task title, set
+        // server-side). One trigger per URL; the chat text never
+        // shows the raw link.
+        var _synthChatSavedUrls = {};
+        function _synthChatMaybeSaveFile(data) {
+            try {
+                if (!data || !data.success || !data.download_url) return;
+                var u = String(data.download_url);
+                if (_synthChatSavedUrls[u]) return;
+                _synthChatSavedUrls[u] = true;
+                var a = document.createElement('a');
+                a.href = u;
+                a.download = String(data.filename || '');
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(function() {
+                    try { document.body.removeChild(a); } catch (_) {}
+                }, 4000);
+            } catch (_) {}
+        }
+
         async function _synthChatFetchJson(url, body, signal) {
             async function _once() {
                 var r = await fetch(url, {
@@ -64063,9 +64087,14 @@ https://www.instagram.com/p/..."></textarea>
                                     r.status === 503 || r.status === 504 };
             }
             var first = await _once();
-            if (!first.retriable) return first;
+            if (!first.retriable) {
+                _synthChatMaybeSaveFile(first.data);
+                return first;
+            }
             await new Promise(function(res) { setTimeout(res, 4000); });
-            return await _once();
+            var second = await _once();
+            _synthChatMaybeSaveFile(second.data);
+            return second;
         }
 
         // Calm-failure contract (2026-08-23 Jenna): the chat never
