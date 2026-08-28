@@ -60685,7 +60685,11 @@ https://www.instagram.com/p/..."></textarea>
                 if (terminal[st]) return;  // most recent job already done
                 synthChatActiveRun = t.meta.run_id;
                 try {
-                    _synthChatStartPolling(t.meta.run_id, t.meta.subject || null);
+                    // Resume quietly: seed the poller with the status
+                    // we already know so the working graphic returns
+                    // without re-pushing the same status line into the
+                    // chat. A NEW status still pushes a turn.
+                    _synthChatStartPolling(t.meta.run_id, t.meta.subject || null, st);
                 } catch (_) {}
                 return;
             }
@@ -61598,6 +61602,74 @@ https://www.instagram.com/p/..."></textarea>
             );
         }
 
+        // Topic-switch detector (2026-08-27, Mr Gasket / Primetime
+        // defect). True when the message is clearly a NEW ask rather
+        // than an answer to a pending armed step (window question,
+        // region / cuts picker, batch scoping, discovery framings, a
+        // stashed sample offer, or the compare picker):
+        //   - it carries a URL (a URL is never a picker answer),
+        //   - it opens with imperative build phrasing ("run a...",
+        //     "build a...", "pull...", "profile on...", "cut of..."),
+        //   - or it reads as an analysis question, long enough that
+        //     it cannot be a terse answer to the pending question.
+        // Genuine short answers ("ok", "for 2024", "trailing 6
+        // months", "none", "skip", "1", a chip label, a cut name)
+        // never match, and window counter-proposals phrased as
+        // questions ("can we do January to March 2026 instead") stay
+        // bound to the armed step.
+        function _pmLooksTopicSwitch(text) {
+            var t = String(text || '').trim();
+            if (!t) return false;
+            var low = t.toLowerCase();
+            if (/(https?:\/\/|www\.)\S/i.test(t)) return true;
+            if (/\b[a-z0-9][a-z0-9-]*\.(com|net|org|io|co|tv|ai)(\/|\b)/i.test(low)) return true;
+            // Window counter-proposals stay bound to the armed step
+            // no matter how they are phrased ("can we do January to
+            // March 2026 instead", "do a trailing 6 months window").
+            var dateTok = /\b(20\d\d|q[1-4]|quarter|trailing|ytd|calendar|jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|jul(y)?|aug(ust)?|sep(t|tember)?|oct(ober)?|nov(ember)?|dec(ember)?|month|months|week|weeks|day|days|year|years|window)\b/i;
+            if (t.length <= 45 && dateTok.test(low) &&
+                /^(can|could|what about|how about|would|let'?s|maybe|do|use|try|go with|just|make it)\b/i.test(low)) return false;
+            // Soft leading pivots stripped so "actually, build a
+            // profile on X" still reads as imperative.
+            var lead = low.replace(/^(ok(ay)?|actually|hey|no|wait|instead|also|now|nvm|never ?mind|forget (that|it)|scratch that)[,.! ]+/, '');
+            // The indefinite article / fresh object is the tell that
+            // separates "run a Mr Gasket cut" (a new ask) from bare
+            // affirmatives like "run it" (an answer).
+            if (/^(please\s+)?(run|build|create|make|queue|launch|start|generate|do)\s+(a|an|another|new|me a|me an|us a)\s+\S/i.test(lead)) return true;
+            if (/^(please\s+)?(pull|refresh|requeue|rerun|re-run)\s+(?!it\b|this\b|that\b|them\b|back\b|up\b)\S/i.test(lead)) return true;
+            if (/\b(profile|audience|cohort|universe)s?\s+(on|of|for)\s+\S/i.test(low)) return true;
+            if (/\bcut\s+of\s+\S/i.test(low)) return true;
+            if (t.length >= 25 &&
+                /^(what|which|who|whose|how|why|where|when|do|does|did|are|is|can|could|would|should|show me|tell me|give me|compare|analy[sz]e)\b/i.test(low)) return true;
+            return false;
+        }
+
+        // True when any step is armed - i.e. the previous agent turn
+        // asked a question the next message would normally bind to.
+        function _pmArmedStepActive() {
+            return !!(synthChatBatchClarify ||
+                (synthChatClarify && synthChatClarify.steps &&
+                 synthChatClarify.idx < synthChatClarify.steps.length) ||
+                synthChatAwaitingDateConfirm ||
+                synthChatDiscoveryOffer ||
+                synthChatIncidenceOffer ||
+                _pmCompareArmed);
+        }
+
+        // Quiet release of every armed step: the pending question is
+        // simply dropped - no cancellation copy, no error text. The
+        // next reply the user sees belongs to their new ask.
+        function _pmReleaseArmedSteps() {
+            synthChatBatchClarify = null;
+            synthChatClarify = null;
+            synthChatDiscoveryOffer = null;
+            synthChatIncidenceOffer = null;
+            synthChatStashedClarifySteps = null;
+            _pmCompareArmed = false;
+            _pmCompareCandidates = null;
+            _synthChatClearDateState();
+        }
+
         function _pmShouldAnalyze(text, ctx) {
             var t = String(text || '').trim();
             if (!t) return false;
@@ -62274,6 +62346,32 @@ https://www.instagram.com/p/..."></textarea>
                 }
             }
 
+            // ===== TOPIC-SWITCH RELEASE (2026-08-27) =====
+            // Mr Gasket / Primetime defect: with the window question
+            // armed, "run a Mr. gasket cut of the holley data: <url>"
+            // was glued onto the stashed earlier ask as if it were a
+            // window answer, so the real request never routed. When a
+            // message is clearly a NEW ask (URL, imperative build
+            // phrasing, or an analysis question), every armed step
+            // releases quietly and the message routes fresh through
+            // the normal handling below. Genuine short answers still
+            // bind to the armed question. KPI asks keep the ad-CTR
+            // pivot behavior: bypass WITHOUT releasing so the picker
+            // stays answerable afterward.
+            var _pmKpiPivot = _pmLooksMetricKpi(text);
+            if (_pmArmedStepActive() && !_pmKpiPivot) {
+                if (_pmLooksTopicSwitch(text)) {
+                    _pmReleaseArmedSteps();
+                } else if (/^(never ?mind|nvm|forget (it|that)|cancel( (that|it))?|scratch that|abort)[.! ]*$/i.test(text)) {
+                    // Pure walk-away while a question is pending: set
+                    // the step aside quietly and wait for the next ask.
+                    _pmReleaseArmedSteps();
+                    synthChatPushTurn('agent',
+                        'No problem - that is set aside. Ask me anything else when ready.');
+                    return;
+                }
+            }
+
             // Discovery-offer follow-through (2026-08-19 guided
             // flow). If we just proposed audience framings, map this
             // reply onto one: a number or ordinal picks that option;
@@ -62315,8 +62413,8 @@ https://www.instagram.com/p/..."></textarea>
             // answer to the region / cuts picker. Skip the clarify
             // and date-confirm interceptions so it reaches the
             // analyze routing below; the draft stays open and the
-            // picker can still be answered afterward.
-            var _pmKpiPivot = _pmLooksMetricKpi(text);
+            // picker can still be answered afterward. _pmKpiPivot is
+            // computed above, next to the topic-switch release.
             if (!_pmKpiPivot && synthChatBatchClarify) {
                 if (synthChatBatchDrafts && synthChatBatchDrafts.length) {
                     await _synthChatBatchClarifyAnswer(text);
@@ -63764,6 +63862,15 @@ https://www.instagram.com/p/..."></textarea>
             synthChatBatchClarify = null;
             synthChatDiscoveryOffer = null;
             synthChatStashedClarifySteps = null;
+            // Closing a draft leaves no residual armed state behind:
+            // the pending window question, any stashed sample offer,
+            // and the compare picker die with it, so a later message
+            // can never bind to a step the user already walked away
+            // from (2026-08-27).
+            synthChatIncidenceOffer = null;
+            _pmCompareArmed = false;
+            _pmCompareCandidates = null;
+            _synthChatClearDateState();
             synthChatPushTurn('agent',
                 wasBatch ? 'Batch closed. Ask me anything else when ready.'
                          : 'Draft closed. Ask me anything else when ready.');
@@ -64023,9 +64130,16 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
 
-        function _synthChatStartPolling(runId, subjectHint) {
+        function _synthChatStartPolling(runId, subjectHint, knownStatus) {
             if (synthChatPollTimer) clearInterval(synthChatPollTimer);
-            var lastStatus = null;
+            // knownStatus seeds the change detector on a resume so a
+            // page load never re-announces a status the chat already
+            // carries - a bare "X is building." after the user's
+            // newest message reads as a (wrong) reply to it
+            // (2026-08-27 Mr Gasket / Primetime defect). Fresh
+            // approvals pass nothing and still get their first
+            // "queued" / "building" line.
+            var lastStatus = knownStatus || null;
             var subject = subjectHint || _synthChatSubjectForRun(runId) || 'Your profile';
             // Working graphic for the life of the run (2026-08-27,
             // Jenna): pulsing dots + the subject, no narration.
