@@ -20696,7 +20696,7 @@ DAILY_COSTS_FILE = 'system/usage/daily_costs.json'
 @app.route('/api/admin/daily-costs', methods=['GET'])
 @requires_super_admin
 def get_admin_daily_costs():
-    """Day-by-day usage spend (Prometheus / API / Custom Pulls).
+    """Day-by-day usage spend (Prometheus / API / System).
 
     Super admin only. Reads the day-keyed spend store maintained by the
     nightly aggregation job; never computes anything inline."""
@@ -20710,7 +20710,12 @@ def get_admin_daily_costs():
                 'date': d,
                 'prometheus': round(float(e.get('prometheus') or 0.0), 2),
                 'api': round(float(e.get('api') or 0.0), 2),
-                'custom_pulls': round(float(e.get('custom_pulls') or 0.0), 2),
+                # Old day records (pre-2026-08-28) stored this spend
+                # under 'custom_pulls'; map to system at read time.
+                'system': round(
+                    float(e.get('system')
+                          if e.get('system') is not None
+                          else (e.get('custom_pulls') or 0.0)), 2),
                 'other': round(float(e.get('other') or 0.0), 2),
                 'total': round(float(e.get('total') or 0.0), 2),
                 'basis': str(e.get('basis') or 'measured'),

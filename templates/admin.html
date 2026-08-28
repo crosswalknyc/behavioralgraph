@@ -2414,7 +2414,7 @@
                     <div class="card-header">
                         <h2>💵 Daily Spend</h2>
                         <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                            Day-by-day usage spend, newest first. Prometheus covers dashboard chat and on-screen analysis requests. API covers partner API requests. Custom Pulls covers all profile builds plus profile maintenance runs. Each dollar lands in exactly one bucket. A ~ marks days that include estimated figures from before full tracking began; all other days carry actual billed usage or measured records.
+                            Day-by-day usage spend, newest first. Prometheus is the full cost of dashboard chat, including the profile builds requested there. API is the full cost of partner API requests, including the builds they start. System is what we spend maintaining the product: data refreshes, quality checks, and upkeep runs. Each dollar lands in exactly one bucket. A ~ marks days that include estimated figures from before full tracking began; all other days carry actual billed usage or measured records.
                         </p>
                     </div>
                     <div style="padding: 1rem;">
@@ -6382,7 +6382,8 @@
                     : (b === 'measured' ? 'Measured records'
                        : 'Includes estimated figures from before full tracking began');
                 const rows = days.map(d => {
-                    totP += d.prometheus; totA += d.api; totC += d.custom_pulls; totO += Number(d.other || 0); totT += d.total;
+                    const sys = Number(d.system != null ? d.system : d.custom_pulls) || 0;
+                    totP += d.prometheus; totA += d.api; totC += sys; totO += Number(d.other || 0); totT += d.total;
                     const estMark = (d.basis === 'mixed' || d.basis === 'estimated')
                         ? ' <span style="color: var(--text-secondary); font-size: 0.75rem;">~</span>'
                         : '';
@@ -6390,7 +6391,7 @@
                         <td style="padding: 0.5rem 0.75rem; white-space: nowrap;" title="${basisTitle(d.basis)}">${d.date}${estMark}</td>
                         <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(d.prometheus)}</td>
                         <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(d.api)}</td>
-                        <td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(d.custom_pulls)}</td>
+                        <td style="padding: 0.5rem 0.75rem; text-align: right;" title="What we spend maintaining the product: data refreshes, quality checks, and upkeep runs">${fmt(sys)}</td>
                         ${showOther ? `<td style="padding: 0.5rem 0.75rem; text-align: right;">${fmt(d.other)}</td>` : ''}
                         <td style="padding: 0.5rem 0.75rem; text-align: right; font-weight: 600;">${fmt(d.total)}</td>
                     </tr>`;
@@ -6402,7 +6403,7 @@
                                 <th style="padding: 0.5rem 0.75rem; text-align: left;">Date</th>
                                 <th style="padding: 0.5rem 0.75rem; text-align: right;">Prometheus</th>
                                 <th style="padding: 0.5rem 0.75rem; text-align: right;">API</th>
-                                <th style="padding: 0.5rem 0.75rem; text-align: right;">Custom Pulls</th>
+                                <th style="padding: 0.5rem 0.75rem; text-align: right;" title="What we spend maintaining the product: data refreshes, quality checks, and upkeep runs">System</th>
                                 ${showOther ? '<th style="padding: 0.5rem 0.75rem; text-align: right;">Other</th>' : ''}
                                 <th style="padding: 0.5rem 0.75rem; text-align: right;">Total</th>
                             </tr>
