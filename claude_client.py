@@ -115,6 +115,22 @@ def get_claude_client():
         return None
 
 
+class ClaudeTruncatedError(RuntimeError):
+    """The response stopped at the max_tokens ceiling, so the output is
+    cut mid-text. For JSON callers a fragment is worse than a failure:
+    it can half-parse into a structurally valid but incomplete dict and
+    crash downstream validation (2026-08-28, Prometheus Shark Tank
+    category read: two 4,000-token truncations did exactly that).
+    Callers should treat this as a retryable capacity problem, not a
+    model refusal."""
+
+    def __init__(self, model_id, max_tokens):
+        super().__init__(
+            f"output truncated at max_tokens={max_tokens} on {model_id}")
+        self.model_id = model_id
+        self.max_tokens = max_tokens
+
+
 def _record_tagged_usage(usage_tag, model_id, resp,
                          duration_s=None) -> None:
     """Persist per-call usage when the caller tagged the request.
@@ -254,6 +270,15 @@ def claude_reason_json(
                               f"input={_in:,} output={_out:,}")
             except Exception:
                 pass
+            if getattr(resp, "stop_reason", None) == "max_tokens":
+                # Never hand a cut-off fragment back as if it were the
+                # answer. raise_on_error callers get the typed error
+                # (and can retry bigger); quiet callers get the
+                # documented "" failure.
+                print(f"[claude-truncated] {model_id} hit the "
+                      f"max_tokens={max_tokens} ceiling; discarding the "
+                      f"cut output")
+                raise ClaudeTruncatedError(model_id, max_tokens)
             blocks = resp.content or []
             if tools:
                 # Tool-using responses interleave search/tool blocks

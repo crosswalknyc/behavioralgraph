@@ -9593,6 +9593,11 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
                     or 'claude-sonnet-4-5')
 
     try:
+        from claude_client import ClaudeTruncatedError as _TruncErr
+    except Exception:
+        _TruncErr = ()
+
+    try:
         raw = claude_reason_json(
             system=system_prompt,
             user=user_prompt,
@@ -9603,6 +9608,28 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
             usage_tag=usage_tag,
             tools=tools,
         )
+    except _TruncErr:
+        # The answer needed more room than the caller budgeted
+        # (breakdown reads legitimately run long). One retry at a
+        # doubled ceiling; a fragment must never ship (2026-08-28
+        # Shark Tank category read).
+        bigger = min(int(max_tokens) * 2, 16000)
+        print(f"[claude-agent] {chosen_model} truncated at "
+              f"{max_tokens}; retrying once at {bigger}")
+        try:
+            raw = claude_reason_json(
+                system=system_prompt,
+                user=user_prompt,
+                model=chosen_model,
+                max_tokens=bigger,
+                temperature=temperature,
+                raise_on_error=True,
+                usage_tag=usage_tag,
+                tools=tools,
+            )
+        except Exception as exc:
+            return {'success': False, 'status': 502,
+                    'error': 'Reasoning request failed: {0}'.format(exc)}
     except Exception as exc:
         return {'success': False, 'status': 502,
                 'error': 'Reasoning request failed: {0}'.format(exc)}
@@ -55120,8 +55147,12 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
           f"neighbors={neighbor_names} "
           f"examples={'yes' if examples_block else 'no'} "
           f"strategy={is_strategy}")
+    # 11000, not 4000: breakdown asks (one ranked row per category plus
+    # shares, penetrations, notes) legitimately run long. The 4000
+    # ceiling truncated the Shark Tank category read twice on
+    # 2026-08-27 and the fragment crashed coherence enforcement.
     result = _pm_claude_json(pma.REASONED_METRICS_SYSTEM_PROMPT,
-                             user_prompt, max_tokens=4000,
+                             user_prompt, max_tokens=11000,
                              temperature=0.4, usage_extras=pm_ppu,
                              tools=[pma.WEB_SEARCH_TOOL])
     if not result.get('success'):

@@ -2323,11 +2323,12 @@ _BREAKDOWN_RX = re.compile(
     r'(?:[.?!,]|$)'
     r'|\bby ((?:toy |product |brand |content |spend(?:ing)? )?'
     r'categor(?:y|ies))\b'
-    r'|\b(?:which|what) (?:toy |product )?categor(?:y|ies)\b'
+    r'|\b(?:which|what)\b(?:\s+[a-z0-9&/\'-]+){0,4}\s+categor(?:y|ies)\b'
     r'|\b((?:toy|product) categor(?:y|ies))\b'
     r'|\b(?:category|categories) (?:mix|share|breakdown|split|'
     r'ranking|lead)\b'
-    r'|\btop (?:toy |product )?categories\b',
+    r'|\btop (?:toy |product )?categories\b'
+    r'|\brank(?:ed|ing)?\b[^.?!]{0,50}\bcategor(?:y|ies)\b',
     re.IGNORECASE)
 
 
@@ -2379,17 +2380,31 @@ _STRATEGY_RX = re.compile(
     r'\bshould\b[^.?!]{0,40}\b(?:launch|make|create|build|sell|add|'
     r'offer)\b|'
     r'\bworth\s+(?:launching|making|creating|testing|building|'
-    r'selling)\b', re.IGNORECASE)
+    r'selling)\b|'
+    # Sponsorship / partnership fit asks (2026-08-28, Shark Tank
+    # category-level sponsorship pitch): ranking categories or brands
+    # for a sponsorship angle is an opportunity read over the data.
+    r'\bsponsorships?\b[^.?!]{0,40}\b(?:pitch(?:es)?|fit|angle|'
+    r'package|opportunit\w+)\b|'
+    r'\b(?:pitch(?:es)?|fit)\b[^.?!]{0,30}\bsponsorships?\b|'
+    r'\b(?:best|top|strongest|right)\b[^.?!]{0,40}'
+    r'\b(?:sponsorship|partnership)\b', re.IGNORECASE)
 
 
 def detect_strategy_intent(text):
     """True when the ask is an opportunity / white-space / underserved-
     category question. These are analysis asks that additionally get
-    the white-space playbook in the generation prompt."""
+    the white-space playbook in the generation prompt. Imperative
+    build phrasing and deck asks are excluded so sponsorship-pitch
+    vocabulary never hijacks a deck or build request (2026-08-28)."""
     t = str(text or '').strip()
     if not t or len(t) > 600:
         return False
-    return bool(_STRATEGY_RX.search(t))
+    if not _STRATEGY_RX.search(t):
+        return False
+    if _is_build_request(t) or detect_deck_intent(t):
+        return False
+    return True
 
 
 def _is_build_request(text):
