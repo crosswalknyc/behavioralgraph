@@ -3713,6 +3713,27 @@ def respread_top_cluster_convergence(df, subject, verbose=True):
         return df, 0
     sample_size = _detect_sample_size(df, bp_col, raw_col)
     col_u = df['Column'].astype(str).str.strip().str.upper()
+    # Mirror map (2026-08-28, Furious - Los Angeles Ca deadlock): the
+    # SAME brand at the SAME 4dp in another category is a deliberate
+    # mirror (MPB exact-mirror rule #3b, companion sync). Re-spreading
+    # only the flagged category's row lets the MPB-mirror safety net
+    # copy the old value straight back on the next write pass,
+    # deadlocking the fix - the same failure mode the fractional-ladder
+    # fixer solved with mirror clusters. Every twin moves WITH the
+    # cluster row to the same new value (downward-only, so the subset
+    # invariant stays safe).
+    mirror_twins = {}
+    for _idx in df.index:
+        _cat = str(df.at[_idx, 'Column'] or '').strip().upper()
+        if _cat in _CONVERGENCE_EXEMPT_CATS:
+            continue
+        try:
+            _v = float(str(df.at[_idx, bp_col])
+                       .replace('%', '').replace(',', '').strip())
+        except (ValueError, TypeError):
+            continue
+        _b = _norm_brand(str(df.at[_idx, 'Value'] or ''))
+        mirror_twins.setdefault((_b, round(_v, 4)), []).append(_idx)
     n_changes = 0
     for cat, cluster in clusters:
         # First non-cluster value = lower bound for the descent.
@@ -3763,8 +3784,19 @@ def respread_top_cluster_convergence(df, subject, verbose=True):
                       f"{len(cluster)} within {CONVERGENCE_EPS_PP}pp)")
             _set_bp(df, idx, new_v, bp_col, cs_col, raw_col,
                     proj_col, sample_size)
-            prev = new_v
             n_changes += 1
+            for twin_idx in mirror_twins.get(
+                    (_norm_brand(brand), round(old_v, 4)), []):
+                if twin_idx == idx:
+                    continue
+                if verbose:
+                    print(f"   🪜 convergence re-spread mirror "
+                          f"[{str(df.at[twin_idx, 'Column']).strip()}] "
+                          f"{brand} -> {new_v:.4f}%")
+                _set_bp(df, twin_idx, new_v, bp_col, cs_col, raw_col,
+                        proj_col, sample_size)
+                n_changes += 1
+            prev = new_v
     return df, n_changes
 
 
