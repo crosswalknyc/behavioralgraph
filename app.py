@@ -51727,61 +51727,72 @@ def api_synth_chat_interpret():
             return jsonify(_chatbot_calm_payload())
 
     # ------------------------------------------------------------------
-    # ANALYSIS-ASK DEFLECTION (2026-08-27, Jenna's Paw Patrol toy-
-    # categories screenshot): an analysis-phrased ask ("what toy
-    # categories are parents of kids 4-6 buying of paw patrol viewer
-    # parents") that reaches this build surface must never open a build
-    # card when the named subject already has a base on file. It routes
-    # to the same measured-read path the analyze endpoint uses,
-    # anchored on that base. Only a clean delivered answer deflects;
-    # any other outcome (no base, credit gate, model trouble) falls
-    # through to the normal build interpret below. A typed CSV-export
-    # ask for the last delivered read is served the same way.
+    # ROUTER-DRIVEN DEFLECTION (2026-08-28, the routing wave; grew out
+    # of the 2026-08-27 Paw Patrol analysis-ask deflection): the same
+    # server-side router the analyze endpoint consults decides what an
+    # ask that reached this build surface actually wants, in one
+    # precedence. Subscriber IQ family detection ranks AHEAD of the
+    # analysis deflection here - "how many people signed up because of
+    # Landman" promotes to the Subscriber IQ flow downstream instead
+    # of deflecting to a generated read. An analysis-phrased ask whose
+    # subject has a base on file routes to the measured-read pass; a
+    # typed CSV-export ask is served; a search-demand ask gets its
+    # study; a non-digital ask gets the graceful decline. Only a clean
+    # delivered answer deflects; any other outcome (no base, credit
+    # gate, model trouble) falls through to the normal build interpret
+    # below, and subiq / churn-fork / build verdicts always fall
+    # through to the promotion machinery downstream.
     # ------------------------------------------------------------------
     try:
         import prometheus_analysis as _pma_route
         _deflect_payload = None
-        _ask_is_analysis = False
-        if not _pma_route.detect_csv_download_intent(text):
-            # Fast path first (zero cost). When it misses but the ask
-            # is question-shaped and the named subject has a base on
-            # file, a small model call decides analysis vs build vs
-            # cut - one-phrase-at-a-time pattern matching is exactly
-            # the failure mode Jenna called out (2026-08-27, "What
-            # category of toys do parents of paw patrol viewers aged
-            # 4-7 buy for their kids").
-            _ask_is_analysis = (_pma_route.detect_analysis_ask(text)
-                                or _pma_route.detect_strategy_intent(text))
-            # An underspecified analysis ask with no base named can
-            # still route to the measured-read pass when the USER'S
-            # cross-session memory holds a referent - the pass then
-            # asks the grounded confirm instead of the build flow
-            # composing a paid rebuild (2026-08-27, Jenna: "toy white
-            # space" must ask "do you mean for paw patrol viewers
-            # parents"). Memory is strictly per-user.
-            _has_ground = bool(_pm_generation_base('', text,
-                                                   prefer_catalog=True))
-            if not _has_ground:
-                try:
-                    import prometheus_memory as _pmm_route
-                    _has_ground = bool(_pmm_route.recent_referents(
-                        (session.get('username') or '').strip(), k=1))
-                except Exception:
-                    pass
-            if (_ask_is_analysis
-                    or _pma_route.analysis_ask_candidate(text)) \
-                    and _has_ground:
-                if not _ask_is_analysis:
-                    _ask_is_analysis = (
-                        _pma_route.classify_ask_semantic(
-                            text,
-                            lambda s, u: _pm_claude_json(
-                                s, u, max_tokens=200, temperature=0.0,
-                                surface='ask_classify'))
-                        == 'analysis')
-            else:
-                _ask_is_analysis = False
-        if _pma_route.detect_csv_download_intent(text):
+
+        def _interp_has_base():
+            # Catalog base for the named subject, or a stored cross-
+            # session referent (2026-08-27: "toy white space" must ask
+            # "do you mean for paw patrol viewers parents" instead of
+            # composing a paid rebuild). Memory is strictly per-user.
+            try:
+                if _pm_generation_base('', text, prefer_catalog=True):
+                    return True
+            except Exception:
+                traceback.print_exc()
+            try:
+                import prometheus_memory as _pmm_route
+                return bool(_pmm_route.recent_referents(
+                    (session.get('username') or '').strip(), k=1))
+            except Exception:
+                return False
+
+        _t_router = time.monotonic()
+        import prometheus_router as _pmr
+        _route_d = _pmr.route_ask(
+            text, surface='interpret',
+            has_base=_interp_has_base,
+            classify_fn=lambda _t: _pma_route.classify_ask_semantic(
+                _t, lambda s, u: _pm_claude_json(
+                    s, u, max_tokens=200, temperature=0.0,
+                    surface='ask_classify')))
+        _pm_ask_stage('router', t0=_t_router)
+        if _route_d.get('classify_ms'):
+            _pm_ask_stage('router_classify', ms=_route_d['classify_ms'])
+        _route = str(_route_d.get('route') or '')
+        if _route == 'not_quantifiable':
+            # Graceful decline (2026-08-26): behavior with no digital
+            # trace never produces a number, on this surface either.
+            _gate = _route_d.get('nq_gate') or {}
+            _nq_reply, _nq_chips = \
+                _pma_route.build_not_quantifiable_reply(text, _gate)
+            _pm_ask_hint(route='quantifiability_gate',
+                         outcome='declined_not_quantifiable')
+            return jsonify({
+                'success': False,
+                'guidance': True,
+                'analysis_read': True,
+                'error': _nq_reply,
+                'followups': _nq_chips,
+            })
+        if _route == 'csv_download':
             _csv_resp = _pm_csv_download_response(user, text,
                                                   history=history)
             _csv_obj = _csv_resp[0] if isinstance(_csv_resp, tuple) \
@@ -51789,7 +51800,15 @@ def api_synth_chat_interpret():
             _csv_data = _csv_obj.get_json(silent=True) or {}
             if _csv_data.get('success') and _csv_data.get('reply'):
                 _deflect_payload = _csv_data
-        elif _ask_is_analysis:
+        elif _route == 'search_demand':
+            _sd_resp = _pm_search_demand_response(user, text, history)
+            _sd_obj = _sd_resp[0] if isinstance(_sd_resp, tuple) \
+                else _sd_resp
+            _sd_data = _sd_obj.get_json(silent=True) or {}
+            if _sd_data.get('success') and _sd_data.get('reply') \
+                    and not _sd_data.get('build_required'):
+                _deflect_payload = _sd_data
+        elif _route == 'generate':
             _an_resp = _pm_generate_metrics_response(
                 user, text, history, prefer_catalog=True)
             _an_obj = _an_resp[0] if isinstance(_an_resp, tuple) \
@@ -54228,6 +54247,21 @@ _PM_ANALYZE_CANDIDATES = (
        'claude-opus-4-6'])
 _pm_model_lock = threading.Lock()
 _pm_resolved_model = {'name': None}
+# Pure-classification surfaces ride a fast Haiku-class model
+# (2026-08-28, the routing wave): corpus selection and the semantic
+# ask classifier are label decisions, not reasoning, and the fast
+# model answers them ~2x sooner (live probe on this key: opus-5
+# ~1.4s vs haiku-4-5 ~0.6s on the identical classify prompt). The
+# alias + the dated ID both verified against client.models.list on
+# 2026-08-28. The full analyze chain is always the tail, so
+# classification can never break on model naming.
+_PM_CLASSIFY_MODEL_ENV = (os.environ.get('PROMETHEUS_CLASSIFY_MODEL')
+                          or '').strip()
+_PM_CLASSIFY_CANDIDATES = (
+    ([_PM_CLASSIFY_MODEL_ENV] if _PM_CLASSIFY_MODEL_ENV else [])
+    + ['claude-haiku-4-5', 'claude-haiku-4-5-20251001'])
+_PM_CLASSIFY_SURFACES = frozenset(('corpus_select', 'ask_classify'))
+_pm_resolved_classify = {'name': None}
 _PM_DECK_PREFIX = 'system/prometheus_decks/'
 
 
@@ -54236,6 +54270,18 @@ def _pm_model_chain():
         if _pm_resolved_model['name']:
             return [_pm_resolved_model['name'], _SYNTH_CHAT_INTERPRET_MODEL]
     return _PM_ANALYZE_CANDIDATES + [_SYNTH_CHAT_INTERPRET_MODEL]
+
+
+def _pm_classify_chain():
+    """Fast-classifier candidates, then the full analyze chain as the
+    fallback so a classification call can never hard-fail on model
+    naming. The winning fast model is cached for the process lifetime
+    in its own slot - it must never leak into the analysis chain (a
+    label model cannot own the reasoning calls)."""
+    with _pm_model_lock:
+        if _pm_resolved_classify['name']:
+            return [_pm_resolved_classify['name']] + _pm_model_chain()
+    return _PM_CLASSIFY_CANDIDATES + _pm_model_chain()
 
 
 def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
@@ -54289,8 +54335,15 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
                 tool_plans = [tools, None]
         except Exception:
             tool_plans = [tools, None]
+    # Pure classification surfaces walk the fast chain first
+    # (2026-08-28): label decisions do not need the Opus chain, and
+    # the fast model answers them in under a second. Any failure
+    # falls through to the full analyze chain, so classification can
+    # never break.
+    _is_classify = surface in _PM_CLASSIFY_SURFACES
     for _tp in tool_plans:
-        for m in _pm_model_chain():
+        for m in (_pm_classify_chain() if _is_classify
+                  else _pm_model_chain()):
             result = _run_nflx_claude_agent(
                 system_prompt=system_prompt, user_prompt=user_prompt,
                 max_tokens=max_tokens, temperature=temperature, model=m,
@@ -54299,7 +54352,15 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
                 tools=_tp)
             if result.get('success'):
                 with _pm_model_lock:
-                    if _pm_resolved_model['name'] != m:
+                    if _is_classify and m in _PM_CLASSIFY_CANDIDATES:
+                        # The fast winner caches in its own slot only.
+                        # It must never become the analysis model.
+                        if _pm_resolved_classify['name'] != m:
+                            print(f"[prometheus] classify model "
+                                  f"resolved: {m}")
+                            _pm_resolved_classify['name'] = m
+                    elif not _is_classify \
+                            and _pm_resolved_model['name'] != m:
                         print(f"[prometheus] analysis model resolved: {m}")
                         _pm_resolved_model['name'] = m
                 return result
@@ -55451,25 +55512,100 @@ def api_synth_chat_analyze():
     # every model call this request makes, and switches billing from
     # credits to per-session dollar usage.
     _pm_ppu = _pm_usage_extras(user)
-    # CSV download of an already-delivered read (2026-08-27, Jenna):
-    # the offer chip on every generated-data reply lands here. Runs
-    # before every other branch and before any charge; exporting an
-    # already-delivered read costs nothing.
+    # ------------------ SINGLE ROUTER (2026-08-28) ------------------
+    # One server-side decision for every ask (prometheus_router):
+    # deterministic prefilters in one fixed precedence, the fast
+    # classify model as the ambiguity backstop, open data decisive.
+    # This removed the double reasoning call: an analysis-shaped data
+    # ask with a profile open goes STRAIGHT to the measured-read pass
+    # instead of paying the page-analysis pass first. The page
+    # analysis keeps genuine open-ended asks; its generate_metrics
+    # handoff survives only as a safety net (counted in stages as
+    # handoff_generate so the shrink is visible in the ask log).
+    ctx, ctx_err = _pm_validate_page_context(body.get('page_context'))
+    # Confirmed memory referent (2026-08-27, Jenna: cross-session
+    # memory). The confirm chip re-sends the original ask with the
+    # remembered subject; route it straight to the measured-read pass
+    # bound to that subject (instant replay when the read is banked).
+    _bind_subject = str(body.get('bind_subject') or '').strip()
+    if _bind_subject:
+        if ctx_err:
+            return ctx_err
+        return _pm_generate_metrics_response(
+            user, text, history, ctx=ctx, prefer_catalog=True,
+            bind_subject=_bind_subject,
+            bind_cohort=str(body.get('bind_cohort') or '').strip())
+    _pm_user = (session.get('username') or user.get('username') or '').strip()
+    _nc_refs = []
+
+    def _router_memory_referent():
+        # Lazy: costs an S3 read; the router calls it at most once,
+        # only when the decision needs it. The resolved referents are
+        # kept for the memory-confirm payload below.
+        try:
+            import prometheus_memory as _pmm_rt
+            if _pm_user and not _nc_refs:
+                _nc_refs.extend(_pmm_rt.recent_referents(_pm_user, k=1))
+        except Exception:
+            traceback.print_exc()
+        return bool(_nc_refs)
+
+    def _router_has_base():
+        # Ground for the classifier backstop: a catalog base for the
+        # named subject, or a stored cross-session referent (the
+        # measured-read pass then binds or asks the grounded confirm).
+        try:
+            if _pm_generation_base('', text, prefer_catalog=True):
+                return True
+        except Exception:
+            traceback.print_exc()
+        return _router_memory_referent()
+
+    _t_router = time.monotonic()
     try:
-        import prometheus_analysis as _pma_csv
-        if _pma_csv.detect_csv_download_intent(text):
-            return _pm_csv_download_response(user, text, history)
+        import prometheus_router as _pmr
+        import prometheus_analysis as _pma_rt
+        _route_d = _pmr.route_ask(
+            text, surface='analyze', has_ctx=bool(ctx),
+            mode=str(body.get('mode') or ''),
+            has_base=_router_has_base,
+            memory_referent=_router_memory_referent,
+            classify_fn=lambda _t: _pma_rt.classify_ask_semantic(
+                _t, lambda s, u: _pm_claude_json(
+                    s, u, max_tokens=200, temperature=0.0,
+                    surface='ask_classify', usage_extras=_pm_ppu)))
     except Exception:
         traceback.print_exc()
+        _route_d = {'route': 'analysis' if ctx else 'clarify',
+                    'why': 'router_error'}
+    _pm_ask_stage('router', t0=_t_router)
+    if _route_d.get('classify_ms'):
+        _pm_ask_stage('router_classify', ms=_route_d['classify_ms'])
+    _route = str(_route_d.get('route') or '')
+    # Subscriber IQ asks (and the ambiguous-churn fork) belong to the
+    # build surface's promotion machinery: hand the widget a re-route.
+    # The widget already respects action='build_profile' as "fall
+    # through to the interpret flow"; route_hint makes it explicit.
+    if _route == 'subiq' or (_route == 'clarify'
+                             and _route_d.get('why') == 'subiq_fork'):
+        _pm_ask_hint(route='subiq_reroute', outcome='rerouted')
+        return jsonify({
+            'success': True, 'action': 'build_profile',
+            'route_hint': 'interpret', 'reply': '',
+            'followups': [], 'offer_deck': False, 'deck_angle': None})
+    # CSV download of an already-delivered read (2026-08-27, Jenna):
+    # the offer chip on every generated-data reply lands here. Before
+    # any charge; exporting an already-delivered read costs nothing.
+    if _route == 'csv_download':
+        return _pm_csv_download_response(user, text, history)
     # Quantifiability gate (2026-08-26, Jenna): asks about behavior
     # with no digital trace (linear / over-the-air tune-in, in-store
     # physical purchases, foot traffic, terrestrial radio) decline
-    # gracefully with the nearest measurable read. Runs before every
-    # other branch so no flow can produce a non-digital number.
-    try:
-        import prometheus_analysis as _pma_gate
-        _gate = _pma_gate.classify_quantifiability(text)
-        if _gate:
+    # gracefully with the nearest measurable read.
+    if _route == 'not_quantifiable':
+        _gate = _route_d.get('nq_gate') or {}
+        try:
+            import prometheus_analysis as _pma_gate
             _g_reply, _g_chips = _pma_gate.build_not_quantifiable_reply(
                 text, _gate)
             _pm_ask_hint(route='quantifiability_gate',
@@ -55479,87 +55615,46 @@ def api_synth_chat_analyze():
                 'followups': _g_chips, 'offer_deck': False,
                 'deck_angle': None,
                 'not_quantifiable': _gate.get('domain')})
-    except Exception:
-        traceback.print_exc()
-    # Search-journey demand asks (2026-08-26): route to the dedicated
-    # flow before the page-context gate; these questions carry their
-    # own subject and need no open profile. The frontend sends
-    # mode='search_demand' explicitly; the server-side intent check
-    # catches the same asks typed while a profile is open.
-    _sd_mode = str(body.get('mode') or '').strip().lower()
-    try:
-        import prometheus_analysis as _pma_sd
-        if _sd_mode == 'search_demand' \
-                or _pma_sd.detect_search_demand_intent(text):
-            return _pm_search_demand_response(user, text, history)
-    except Exception as e:
-        traceback.print_exc()
-        _chatbot_error_email('brief-chat/analyze', e)
-        return jsonify(_chatbot_calm_payload())
-    ctx, ctx_err = _pm_validate_page_context(body.get('page_context'))
-    if ctx_err:
-        return ctx_err
-    # Confirmed memory referent (2026-08-27, Jenna: cross-session
-    # memory). The confirm chip re-sends the original ask with the
-    # remembered subject; route it straight to the measured-read pass
-    # bound to that subject (instant replay when the read is banked).
-    _bind_subject = str(body.get('bind_subject') or '').strip()
-    if _bind_subject:
-        return _pm_generate_metrics_response(
-            user, text, history, ctx=ctx, prefer_catalog=True,
-            bind_subject=_bind_subject,
-            bind_cohort=str(body.get('bind_cohort') or '').strip())
-    # Metric / KPI asks (2026-08-27, Jenna / Paige Bueckers ad CTR):
-    # KPI vocabulary (CTR, click-through, engagement rate, conversion
-    # rate, CPM, ROAS, ...) is a measurement ask by definition and is
-    # never carried by on-screen rows, so it routes straight to the
-    # measured-read pass whether or not anything is open. The base
-    # gate inside resolves the subject named in the ask (catalog
-    # first, then the open page, then Subscriber IQ) and steers to
-    # the 5-credit build when no base exists anywhere.
-    try:
-        import prometheus_analysis as _pma_kpi
-        if _pma_kpi.detect_metric_kpi_intent(text):
-            return _pm_generate_metrics_response(
-                user, text, history, ctx=ctx, prefer_catalog=True)
-        # Strategic / opportunity asks (2026-08-27, Jenna: "What's the
-        # potential white space to create paw patrol toys for this
-        # audience"): these need the full operating loop (stored
-        # demand mix + corpus neighbors + live coverage research), so
-        # they route straight to the measured-read pass whether or
-        # not a profile is open. Anaphoric subjects resolve from the
-        # thread inside.
-        if _pma_kpi.detect_strategy_intent(text):
-            return _pm_generate_metrics_response(
-                user, text, history, ctx=ctx, prefer_catalog=True)
-    except Exception:
-        traceback.print_exc()
-    if not ctx:
-        # Direct metric question with nothing open (2026-08-26): a
-        # digitally observable count is answerable without a profile -
-        # route it to the measured-read pass instead of bouncing the
-        # user. Sub-cut asks (2026-08-27) route the same way; the
-        # measured-read pass resolves the base from the catalog and
-        # hard-refuses (steer to build) when no base exists anywhere.
-        # Everything else keeps the open-something nudge.
-        try:
-            import prometheus_analysis as _pma_gen
-            if _pma_gen.detect_generate_intent(text) \
-                    or _pma_gen.detect_subcut_intent(text) \
-                    or _pma_gen.detect_analysis_ask(text):
-                return _pm_generate_metrics_response(user, text, history)
         except Exception:
             traceback.print_exc()
-        # Grounded clarify (2026-08-27, Jenna): when the user's own
-        # memory holds a plausible referent, the open-something nudge
-        # leads with it instead of asking cold. The chip re-runs this
-        # ask bound to the remembered subject.
+    # Search-journey demand asks (2026-08-26): these carry their own
+    # subject and need no open profile.
+    if _route == 'search_demand':
+        try:
+            return _pm_search_demand_response(user, text, history)
+        except Exception as e:
+            traceback.print_exc()
+            _chatbot_error_email('brief-chat/analyze', e)
+            return jsonify(_chatbot_calm_payload())
+    if ctx_err:
+        return ctx_err
+    # The classifier read an explicit build/cut ask that slipped past
+    # the widget's fast checks: hand it back to the interpret flow.
+    if _route == 'build_interpret':
+        _pm_ask_hint(route='build_reroute', outcome='rerouted')
+        return jsonify({
+            'success': True, 'action': 'build_profile',
+            'route_hint': 'interpret', 'reply': '',
+            'followups': [], 'offer_deck': False, 'deck_angle': None})
+    # Measured read: KPI vocabulary (2026-08-27, Paige Bueckers ad
+    # CTR), strategy / white-space asks, direct data asks with nothing
+    # open, and (2026-08-28) analysis-shaped data asks WITH the
+    # profile open - straight to the measured-read pass, no page-
+    # analysis pass first. The base gate inside resolves the subject
+    # (catalog first, then the open page, then Subscriber IQ) and
+    # steers to the 5-credit build when no base exists anywhere.
+    if _route == 'generate':
+        if _route_d.get('why') == 'no_ctx_data_ask':
+            return _pm_generate_metrics_response(user, text, history)
+        return _pm_generate_metrics_response(
+            user, text, history, ctx=ctx, prefer_catalog=True)
+    # Grounded clarify (2026-08-27, Jenna): when the user's own memory
+    # holds a plausible referent, the open-something nudge leads with
+    # it instead of asking cold. The chip re-runs this ask bound to
+    # the remembered subject.
+    if _route == 'memory_confirm':
         try:
             import prometheus_memory as _pmm_nc
-            _nc_user = (session.get('username')
-                        or user.get('username') or '').strip()
-            _nc_refs = _pmm_nc.recent_referents(_nc_user, k=1) \
-                if _nc_user else []
             if _nc_refs:
                 _nc_lab = _pmm_nc.referent_label(_nc_refs[0])
                 if _nc_lab:
@@ -55579,6 +55674,7 @@ def api_synth_chat_analyze():
                             }]}})
         except Exception:
             traceback.print_exc()
+    if not ctx:
         _pm_ask_hint(outcome='declined_no_context')
         return jsonify({
             'success': True, 'action': 'answer',
@@ -55603,6 +55699,59 @@ def api_synth_chat_analyze():
         }), 402
     try:
         import prometheus_analysis as pma
+    except Exception as e:
+        traceback.print_exc()
+        _chatbot_error_email('brief-chat/analyze', e)
+        return jsonify(_chatbot_calm_payload())
+    mode = str(body.get('mode') or '').strip().lower()
+    if mode not in pma.MODE_INSTRUCTIONS:
+        mode = ''
+    # Ledger replay first (2026-08-28, the routing wave): a repeat of
+    # an ask Crosswalk already answered for the OPEN subject replays
+    # the stored reply instantly - no digest build, no anchors, no
+    # reasoning pass. Subject-scoped matches only: a question-text hit
+    # on some other subject's bucket must never replay under a
+    # different open profile (that fallback consult still feeds the
+    # prompt constraints below). Mode chips (personas, exec summary,
+    # ...) always run fresh - they are render-shape commands.
+    _led = {'block': '', 'exact': None, 'entries': []}
+    _led_subj = str((ctx.get('primary') or {}).get('name')
+                    or (ctx.get('view_context') or {}).get('view_title')
+                    or '').strip()
+    _led_same_subject = True
+    _t_ledger = time.monotonic()
+    try:
+        import insights_ledger as _il_an
+        _led = _il_an.consult(subject=_led_subj or None, question=text)
+        if not _led.get('entries'):
+            _led = _il_an.consult(question=text)
+            _led_same_subject = False
+    except Exception:
+        traceback.print_exc()
+    _pm_ask_stage('ledger', t0=_t_ledger)
+    _led_exact = _led.get('exact')
+    if _led_exact and _led_exact.get('reply') and _led_same_subject \
+            and _led_subj and not mode:
+        _replay_subj = _led.get('subject') or _led_subj
+        _pm_ask_hint(route='ledger_replay', outcome='answered',
+                     subject=_replay_subj)
+        _pm_remember_ask(_pm_user, text, subject=_replay_subj,
+                         cohort=_led_exact.get('cohort'),
+                         ledger_key=_led_exact.get('k'), route='replay')
+        if _pm_user and _pm_ppu is None:
+            _pm_charge_async(_pm_user,
+                             f"Chatbot Analysis - {_replay_subj}")
+        _replay_chips = list(_led_exact.get('followups') or [])[:3]
+        if pma.CSV_OFFER_CHIP not in _replay_chips:
+            _replay_chips.append(pma.CSV_OFFER_CHIP)
+        _pm_csv_point(_replay_subj, text, _led_exact.get('family'))
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'reply': _led_exact['reply'],
+            'followups': _replay_chips,
+            'offer_deck': False, 'deck_angle': None,
+            'profile': _replay_subj})
+    try:
         digest, p_meta = None, {}
         if ctx.get('primary'):
             _t_digest = time.monotonic()
@@ -55613,9 +55762,6 @@ def api_synth_chat_analyze():
         traceback.print_exc()
         _chatbot_error_email('brief-chat/analyze', e)
         return jsonify(_chatbot_calm_payload())
-    mode = str(body.get('mode') or '').strip().lower()
-    if mode not in pma.MODE_INSTRUCTIONS:
-        mode = ''
     # Cross-module signals (2026-08-26 Jenna: "prometheus thinks
     # between modules"): what Subscriber IQ, Trends, and the profile
     # library know about the same subject. Existence checks against
@@ -55645,21 +55791,21 @@ def api_synth_chat_analyze():
     # Insights-ledger history (2026-08-26, Jenna): numbers Crosswalk
     # already delivered for this subject ride the prompt as binding
     # constraints, so the NORMAL answer path sits on the same
-    # consistency surface as generated reads. Open-subject lookup
-    # first, question-text lookup as the fallback.
-    _led_block = ''
-    _t_ledger = time.monotonic()
-    try:
-        import insights_ledger as _il_an
-        _led_subj = ((p_meta.get('name') if ctx.get('primary') else None)
-                     or (ctx.get('view_context') or {}).get('view_title'))
-        _led = _il_an.consult(subject=_led_subj, question=text)
-        if not _led.get('entries'):
-            _led = _il_an.consult(question=text)
-        _led_block = _led.get('block') or ''
-    except Exception:
-        traceback.print_exc()
-    _pm_ask_stage('ledger', t0=_t_ledger)
+    # consistency surface as generated reads. The consult itself ran
+    # before the digest (replay-first, 2026-08-28); when the widget's
+    # context name found nothing, the digest's canonical name gets one
+    # recovery lookup so the constraints block still binds.
+    if not _led.get('entries'):
+        try:
+            import insights_ledger as _il_an
+            _pm_canon_name = (p_meta.get('name')
+                              if ctx.get('primary') else None)
+            if _pm_canon_name and _pm_canon_name != _led_subj:
+                _led = _il_an.consult(subject=_pm_canon_name,
+                                      question=text)
+        except Exception:
+            traceback.print_exc()
+    _led_block = _led.get('block') or ''
     user_prompt = pma.build_analysis_user_prompt(
         digest, history, text, mode=mode or None,
         view_context=ctx.get('view_context'),
@@ -55696,8 +55842,12 @@ def api_synth_chat_analyze():
     # Measured-read handoff (2026-08-26): the analysis pass decided the
     # ask needs a concrete number nothing on screen carries. Credits
     # were prechecked above; the measured-read pass consults the
-    # ledger, generates, persists, and charges.
+    # ledger, generates, persists, and charges. Since the router
+    # (2026-08-28) sends analysis-shaped data asks straight to the
+    # measured read, this handoff is the safety net only - the stage
+    # counter tracks how often it still fires.
     if action == 'generate_metrics':
+        _pm_ask_stage('handoff_generate', count=1)
         return _pm_generate_metrics_response(
             user, text, history,
             metric_request=data.get('metric_request'),

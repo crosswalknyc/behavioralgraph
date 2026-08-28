@@ -1,41 +1,24 @@
 #!/usr/bin/env python3
 """Nightly route-level eval for the dashboard chat assistant (Phase 0,
-2026-08-28).
+2026-08-28; router-backed since the routing wave later the same day).
 
-Grades the DETERMINISTIC routing layer of the two chat surfaces against
-a fixed set of real user questions (scripts/prometheus_eval_set.json,
+Grades the REAL server-side router (prometheus_router.route_ask - the
+same function both chat endpoints consult in production) against a
+fixed set of real user questions (scripts/prometheus_eval_set.json,
 sampled from the S3 ask log plus constructed representatives for
 families the young log does not carry yet). No model calls, no S3, no
 Flask app import: the fixture's page_context / has_base / memory
-fields stand in for the data-dependent conditions, so the run is
-hermetic and takes under a second on the box.
+fields stand in for the data-dependent conditions and classify_fn
+stays None (the fast-model backstop is out of hermetic scope), so the
+run is hermetic and takes under a second on the box.
 
-WHAT IS MIRRORED (and must stay in sync with app.py):
-
-analyze surface (api_synth_chat_analyze, in production order):
-  1. prometheus_analysis.detect_csv_download_intent  -> csv_download
-  2. prometheus_analysis.classify_quantifiability    -> not_quantifiable
-  3. mode == 'search_demand' or detect_search_demand_intent
-                                                     -> search_demand
-  4. detect_metric_kpi_intent                        -> generate
-  5. detect_strategy_intent                          -> generate
-  6. no page context:
-       detect_generate_intent / detect_subcut_intent /
-       detect_analysis_ask                           -> generate
-       stored memory referent (fixture flag)         -> memory_confirm
-       otherwise (open-something nudge)              -> clarify
-  7. page context present                            -> analysis
-
-interpret surface (api_synth_chat_interpret, deterministic pre-model
-steps; the incidence pre-check and the model-backed semantic
-classifier are out of hermetic scope by design):
-  1. detect_csv_download_intent                      -> csv_download
-  2. fast-path analysis deflection:
-       (detect_analysis_ask or detect_strategy_intent)
-       and a base exists (fixture has_base)          -> generate
-  3. subiq_intent.subiq_intent_family truthy         -> subiq
-  4. subiq_intent.ambiguous_churn_subject fork       -> clarify
-  5. otherwise                                       -> build_interpret
+There is no mirrored branch order to keep in sync anymore: the harness
+imports prometheus_router and calls route_ask directly, so a routing
+change in production is graded here by construction. The router's
+precedence (subiq > churn fork > csv_download > not_quantifiable >
+search_demand > generate > analysis / memory_confirm > classifier >
+clarify / build_interpret) is documented in prometheus_router.py and
+pinned case-by-case in scripts/test_prometheus_router.py.
 
 Route vocabulary: analysis, generate, search_demand, csv_download,
 not_quantifiable, memory_confirm, build_interpret, subiq, clarify.
@@ -77,60 +60,20 @@ ROUTES = ('analysis', 'generate', 'search_demand', 'csv_download',
           'subiq', 'clarify')
 
 
-def classify_analyze(pma, text, has_ctx, mode=None, memory_referent=False):
-    """Mirror of the deterministic branch order in
-    api_synth_chat_analyze. Keep in sync with app.py."""
-    if pma.detect_csv_download_intent(text):
-        return 'csv_download'
-    if pma.classify_quantifiability(text):
-        return 'not_quantifiable'
-    if str(mode or '').strip().lower() == 'search_demand' \
-            or pma.detect_search_demand_intent(text):
-        return 'search_demand'
-    if pma.detect_metric_kpi_intent(text):
-        return 'generate'
-    if pma.detect_strategy_intent(text):
-        return 'generate'
-    if not has_ctx:
-        if pma.detect_generate_intent(text) \
-                or pma.detect_subcut_intent(text) \
-                or pma.detect_analysis_ask(text):
-            return 'generate'
-        if memory_referent:
-            return 'memory_confirm'
-        return 'clarify'
-    return 'analysis'
-
-
-def classify_interpret(pma, si, text, has_base=True):
-    """Mirror of the deterministic pre-model steps in
-    api_synth_chat_interpret. Keep in sync with app.py. The incidence
-    pre-check and the model-backed semantic classifier are not
-    mirrored (out of hermetic scope)."""
-    if pma.detect_csv_download_intent(text):
-        return 'csv_download'
-    if (pma.detect_analysis_ask(text)
-            or pma.detect_strategy_intent(text)) and has_base:
-        return 'generate'
-    if si.subiq_intent_family(text):
-        return 'subiq'
-    ambig, _subj = si.ambiguous_churn_subject(text)
-    if ambig:
-        return 'clarify'
-    return 'build_interpret'
-
-
-def classify_case(pma, si, case):
+def classify_case(pmr, case):
+    """Grade one fixture case through the production router. The
+    fixture flags map 1:1 onto route_ask kwargs; classify_fn stays None
+    so the run is hermetic (no model calls)."""
     surface = str(case.get('surface') or 'analyze').strip().lower()
     text = case.get('input') or ''
-    if surface == 'interpret':
-        return classify_interpret(pma, si, text,
-                                  has_base=bool(case.get('has_base', True)))
-    return classify_analyze(
-        pma, text,
+    d = pmr.route_ask(
+        text, surface=surface,
         has_ctx=bool(case.get('page_context')),
         mode=case.get('mode'),
-        memory_referent=bool(case.get('memory_referent', False)))
+        has_base=bool(case.get('has_base', True)),
+        memory_referent=bool(case.get('memory_referent', False)),
+        classify_fn=None)
+    return d.get('route')
 
 
 def run_live_smoke(pma, case, verbose=False):
@@ -204,7 +147,7 @@ def main(argv=None):
         return 2
     try:
         import prometheus_analysis as pma
-        import subiq_intent as si
+        import prometheus_router as pmr
     except Exception as e:
         print(f'[eval] cannot import routing modules: {e}')
         return 2
@@ -220,7 +163,7 @@ def main(argv=None):
             failed.append((case, f'bad expected_route {expected!r}'))
             continue
         try:
-            got = classify_case(pma, si, case)
+            got = classify_case(pmr, case)
         except Exception as e:
             got = f'ERROR {type(e).__name__}: {e}'
         ok = (got == expected)

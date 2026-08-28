@@ -2580,6 +2580,15 @@ def _is_build_request(text):
     return not _ANALYSIS_QUESTION_RX.search(t)
 
 
+def is_build_request(text):
+    """Public wrapper for the router (2026-08-28): imperative build /
+    pull phrasing. The router uses it to keep the quantifiability and
+    search-demand deflections off legitimate build asks on the
+    interpret surface ("build a profile of in-store Walmart shoppers"
+    stays a build)."""
+    return _is_build_request(text)
+
+
 # Anaphora (2026-08-27): "this audience", "these viewers", "them" in a
 # follow-up ask point at whatever the thread just read. The caller
 # resolves the referent from recent history when the ask itself names

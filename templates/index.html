@@ -61815,17 +61815,23 @@ https://www.instagram.com/p/..."></textarea>
         function _pmShouldAnalyze(text, ctx) {
             var t = String(text || '').trim();
             if (!t) return false;
-            // Build / pipeline asks always go to the interpret flow.
+            // Explicit build / pipeline asks always go to the
+            // interpret flow. Everything past these trivial vetoes is
+            // the server router's decision (2026-08-28): it answers,
+            // generates the measured read, or hands back a
+            // route_hint that re-routes to the interpret flow.
             if (/\b(run|build|pull|create|queue|start|launch|generate)\b[^.]{0,60}\bprofiles?\b/i.test(t)) return false;
             if (/\b(cut|slice)\b[^.]{0,40}\bby\b/i.test(t)) return false;
             if (/\brefresh\b|\bsample size\b|\bincidence\b|\bstatus\b|\bcredits?\b/i.test(t)) return false;
-            // Metric / KPI asks route to the analyze path whether or
-            // not a profile is open (base resolution happens there).
+            // With data open, analyze is the default surface.
+            if (ctx) return true;
+            // Nothing open: question-shaped and KPI asks still
+            // resolve there (measured read, grounded confirm, or the
+            // open-something nudge). Anything else stays with the
+            // interpret flow.
             if (_pmLooksMetricKpi(t)) return true;
-            var analytic = /\banaly[sz]|\binsight|\bsummar|\bcompare|\bmoneti[sz]|\bmoney\b|\brevenue\b|\bsponsor|\bpitch\b|\bsell\b|\bmedia plan|\breach\b|\bwhat (stands|does|do|is|are|should)\b|\bhow (can|do|would|should|does|is)\b|\bwhy\b|\bwho (is|are|should|would)\b|\bwhich\b|\btop \d|\bexplain|\bmean(s|ing)?\b|\btakeaway|\bopportunit|\btell me about\b|\bstands? out\b|\binteresting\b/i.test(t);
-            if (analytic) return true;
-            if (ctx && _pmAnalysisActive) return true;
-            if (ctx && /\?\s*$/.test(t)) return true;
+            if (/\?\s*$/.test(t)) return true;
+            if (/^(what|which|who|whose|how|why|where|when|do|does|did|are|is|was|were|can|could|would|should|show me|tell me|give me|compare|analy[sz]e|top \d|break ?down)\b/i.test(t)) return true;
             return false;
         }
 
@@ -62290,7 +62296,11 @@ https://www.instagram.com/p/..."></textarea>
                             : SYNTH_CHAT_CALM_MSG);
                     return 'done';
                 }
-                if (data.action === 'build_profile') {
+                if (data.action === 'build_profile' ||
+                    data.route_hint === 'interpret') {
+                    // Server router re-route (2026-08-28): build /
+                    // Subscriber IQ asks that reached the analyze
+                    // surface fall through to the interpret flow.
                     _pmAnalysisActive = false;
                     return 'reroute';
                 }

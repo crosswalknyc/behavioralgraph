@@ -1,5 +1,5 @@
 {
-  "description": "Fixed route-level eval set for the dashboard chat assistant. Real questions sampled from the S3 ask log (system/usage/ask_log/, 2026-08-26 through 2026-08-28, the log's full history at build time) plus constructed representatives for families the young log does not carry yet. Graded hermetically by scripts/prometheus_eval_run.py against the deterministic routing layer. expected_route vocabulary: analysis, generate, search_demand, csv_download, not_quantifiable, memory_confirm, build_interpret, subiq, clarify. surface: analyze (api_synth_chat_analyze) or interpret (api_synth_chat_interpret). page_context null means nothing open. has_base / memory_referent stand in for data-dependent conditions. known_fail documents a real routing defect owned by a separate fix.",
+  "description": "Fixed route-level eval set for the dashboard chat assistant. Real questions sampled from the S3 ask log (system/usage/ask_log/, 2026-08-26 through 2026-08-28, the log's full history at build time) plus constructed representatives for families the young log does not carry yet. Graded hermetically by scripts/prometheus_eval_run.py against prometheus_router.route_ask, the same server-side router both chat endpoints consult in production (classify_fn stays None so the run makes no model calls). expected_route vocabulary: analysis, generate, search_demand, csv_download, not_quantifiable, memory_confirm, build_interpret, subiq, clarify. surface: analyze (api_synth_chat_analyze) or interpret (api_synth_chat_interpret). page_context null means nothing open. has_base / memory_referent stand in for data-dependent conditions. known_fail documents a real routing defect owned by a separate fix.",
   "built": "2026-08-28",
   "cases": [
     {
@@ -8,9 +8,9 @@
       "surface": "analyze",
       "input": "what do parents with kids 4-6 buy for toys for paw patrol viewers",
       "page_context": {"primary": {"s3_key": "Paw_Patrol_Series_Viewers_08_12_2026_10_00.csv", "name": "Paw Patrol Series Viewers"}, "cuts": []},
-      "expected_route": "analysis",
+      "expected_route": "generate",
       "source": "ask_log 2026-08-27",
-      "note": "Known past miss family. With the profile open the analysis pass owns it; the model hands off to the measured read internally when rows do not cover the slice."
+      "note": "Known past miss family. Router (2026-08-28): with the profile open, an analysis-shaped data ask goes STRAIGHT to the measured read - no page-analysis pass first; the old two-pass handoff is the safety net only."
     },
     {
       "id": "toy-002",
@@ -57,8 +57,9 @@
       "surface": "analyze",
       "input": "top toy categories for parents of paw patrol viewers",
       "page_context": {"primary": {"s3_key": "Paw_Patrol_Series_Viewers_08_12_2026_10_00.csv", "name": "Paw Patrol Series Viewers"}, "cuts": []},
-      "expected_route": "analysis",
-      "source": "constructed"
+      "expected_route": "generate",
+      "source": "constructed",
+      "note": "Router (2026-08-28): open profile + analysis-shaped data ask routes straight to the measured read."
     },
     {
       "id": "ws-001",
@@ -173,8 +174,9 @@
       "surface": "analyze",
       "input": "what is the conversion rate on Chime signups from the campaign",
       "page_context": null,
-      "expected_route": "generate",
-      "source": "constructed"
+      "expected_route": "subiq",
+      "source": "constructed",
+      "note": "Re-specced 2026-08-28: signups attribution is the Subscriber IQ acquisition family, which ranks ahead of the KPI detector in the router precedence. A conversion-rate ask on signups belongs to that flow, not a generic generated read."
     },
     {
       "id": "kpi-004",
@@ -224,8 +226,8 @@
       "surface": "interpret",
       "input": "how many people signed up because of Landman",
       "expected_route": "subiq",
-      "known_fail": "Routes to generate: the interpret surface's analysis deflection (2026-08-27) runs before the Subscriber IQ promoter, and detect_generate_intent matches the how-many signup phrasing. The subiq acquisition pattern was written for exactly this ask. Ordering reconciliation belongs to the routing owner.",
-      "source": "constructed (acquisition family)"
+      "source": "constructed (acquisition family)",
+      "note": "Fixed 2026-08-28 (the routing wave): the router ranks Subscriber IQ family detection ahead of the analysis deflection on the interpret surface, so this no longer deflects to a generated read."
     },
     {
       "id": "subiq-005",
