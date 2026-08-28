@@ -185,25 +185,11 @@ def _build_compact_digest(df, name, meta, focus_tokens=()):
     return '\n'.join(lines)[:DIGEST_MAX_CHARS]
 
 
-def neighbor_digest(s3_client, bucket, entry, focus_tokens=()):
-    """Digest text for one catalog entry. S3-cached keyed by the
-    profile object's ETag; a corrected-in-place profile (new ETag)
-    rebuilds lazily on next use. Never raises; '' on trouble."""
-    s3_key = entry.get('s3_key') or ''
-    name = entry.get('display_name') or s3_key
-    try:
-        head = s3_client.head_object(Bucket=bucket, Key=s3_key)
-        etag = (head.get('ETag') or '').strip('"')
-    except Exception:
-        return ''
-    ck = _digest_cache_key(s3_key)
-    try:
-        resp = s3_client.get_object(Bucket=bucket, Key=ck)
-        doc = json.loads(resp['Body'].read().decode('utf-8'))
-        if doc.get('etag') == etag and doc.get('text'):
-            return doc['text']
-    except Exception:
-        pass
+def _build_and_store_digest(s3_client, bucket, s3_key, name, etag,
+                            focus_tokens=()):
+    """Build the digest text for one profile and store it in the S3
+    digest cache under the profile's current ETag. Returns the text
+    ('' on trouble). Never raises."""
     try:
         import prometheus_analysis as pma
         df, _ = pma.load_profile_df(s3_client, bucket, s3_key)
@@ -215,7 +201,7 @@ def neighbor_digest(s3_client, bucket, entry, focus_tokens=()):
         return ''
     try:
         s3_client.put_object(
-            Bucket=bucket, Key=ck,
+            Bucket=bucket, Key=_digest_cache_key(s3_key),
             Body=json.dumps({'etag': etag, 's3_key': s3_key,
                              'name': name, 'built_at': time.time(),
                              'text': text}).encode('utf-8'),
@@ -223,6 +209,59 @@ def neighbor_digest(s3_client, bucket, entry, focus_tokens=()):
     except Exception:
         pass
     return text
+
+
+def _cached_digest_text(s3_client, bucket, s3_key, etag):
+    """Warm digest text from the S3 cache when it matches the
+    profile's current ETag, else None."""
+    try:
+        resp = s3_client.get_object(Bucket=bucket,
+                                    Key=_digest_cache_key(s3_key))
+        doc = json.loads(resp['Body'].read().decode('utf-8'))
+        if doc.get('etag') == etag and doc.get('text'):
+            return doc['text']
+    except Exception:
+        pass
+    return None
+
+
+def neighbor_digest(s3_client, bucket, entry, focus_tokens=()):
+    """Digest text for one catalog entry. S3-cached keyed by the
+    profile object's ETag; a corrected-in-place profile (new ETag)
+    rebuilds lazily on next use. The nightly warm pass
+    (bg-webapp/scripts/build_prometheus_profile_indexes.py calling
+    warm_neighbor_digest) keeps the cache current for the whole
+    catalog so this almost never builds cold at ask time. Never
+    raises; '' on trouble."""
+    s3_key = entry.get('s3_key') or ''
+    name = entry.get('display_name') or s3_key
+    try:
+        head = s3_client.head_object(Bucket=bucket, Key=s3_key)
+        etag = (head.get('ETag') or '').strip('"')
+    except Exception:
+        return ''
+    text = _cached_digest_text(s3_client, bucket, s3_key, etag)
+    if text is not None:
+        return text
+    return _build_and_store_digest(s3_client, bucket, s3_key, name, etag,
+                                   focus_tokens=focus_tokens)
+
+
+def warm_neighbor_digest(s3_client, bucket, entry):
+    """Nightly warm for one catalog entry: ensure the S3 digest cache
+    holds a current-ETag digest. Returns 'warm' (already current),
+    'built', or 'failed'. Never raises."""
+    s3_key = entry.get('s3_key') or ''
+    name = entry.get('display_name') or s3_key
+    try:
+        head = s3_client.head_object(Bucket=bucket, Key=s3_key)
+        etag = (head.get('ETag') or '').strip('"')
+    except Exception:
+        return 'failed'
+    if _cached_digest_text(s3_client, bucket, s3_key, etag) is not None:
+        return 'warm'
+    text = _build_and_store_digest(s3_client, bucket, s3_key, name, etag)
+    return 'built' if text else 'failed'
 
 
 _FOCUS_STOP = {'what', 'which', 'the', 'for', 'are', 'this', 'that',

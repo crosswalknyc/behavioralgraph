@@ -14,6 +14,7 @@ Design constraints (Jenna 2026-08-20):
   no em dashes, state the finding then the number.
 """
 
+import hashlib
 import io
 import json
 import re
@@ -39,8 +40,14 @@ DEMO_COLS = {
 }
 
 _digest_cache = {}       # {s3_key: (etag+norms_ver, built_ts, digest_str, meta)}
-_genpop_cache = {'ts': 0.0, 'map': None}
+_genpop_cache = {'ts': 0.0, 'map': None, 'etag': None}
 _norms_cache = {'ts': 0.0, 'etag': None, 'data': None}
+# Nightly precomputed index docs (2026-08-28 speed layer): one small
+# JSON per profile, built by scripts/build_prometheus_profile_indexes.py
+# on the build host at 04:15 UTC. {s3_key: (index_etag, checked_ts, doc)};
+# doc None = negative cache (no index yet) so cold profiles do not pay
+# a lookup on every ask.
+_index_cache = {}
 # Parsed-profile cache (2026-08-26 latency work): profile CSVs are
 # 400-900KB and were re-downloaded + re-parsed on every analyze turn
 # even when the digest itself was cached. A HEAD revalidates the ETag
@@ -59,6 +66,8 @@ GENPOP_KEY = 'Gen_Pop_2026.csv'
 GENPOP_TTL_S = 3600
 NORMS_KEY = 'system/profile_norms.json.gz'
 NORMS_TTL_S = 6 * 3600
+INDEX_PREFIX = 'system/prometheus_profile_indexes/'
+INDEX_TTL_S = 600
 
 
 def _norm_cat(c):
@@ -173,8 +182,9 @@ def load_genpop_map(s3_client, bucket):
                 and time.time() - _genpop_cache['ts'] < GENPOP_TTL_S):
             return _genpop_cache['map']
     gp = {}
+    gp_etag = None
     try:
-        df, _ = load_profile_df(s3_client, bucket, GENPOP_KEY)
+        df, gp_etag = load_profile_df(s3_client, bucket, GENPOP_KEY)
         bp = _bp_col(df)
         if bp:
             for _, row in df.iterrows():
@@ -185,11 +195,23 @@ def load_genpop_map(s3_client, bucket):
                 if v is not None:
                     gp[(cat, _norm_brand(row.get('Value')))] = v
     except Exception as e:
+        gp_etag = None
         print(f"[prometheus] genpop map load failed: {e}")
     with _cache_lock:
         _genpop_cache['map'] = gp
         _genpop_cache['ts'] = time.time()
+        _genpop_cache['etag'] = gp_etag
     return gp
+
+
+def _genpop_current_etag():
+    """ETag of the Gen Pop object the cached gen pop map was parsed
+    from (None when the load failed). The precomputed-digest gate
+    compares this against the Gen Pop ETag stamped on the nightly
+    index so the stored text always matches what a live build with
+    the in-memory map would produce."""
+    with _cache_lock:
+        return _genpop_cache.get('etag')
 
 
 def load_norms(s3_client, bucket):
@@ -509,10 +531,167 @@ def build_cut_divergence(parent_df, parent_meta, cut_df, cut_meta,
     return out
 
 
+# ---------------------------------------------------------------------------
+# Nightly precomputed profile indexes (2026-08-28 speed layer)
+# ---------------------------------------------------------------------------
+# bg-webapp/scripts/build_prometheus_profile_indexes.py writes one JSON
+# per profile at system/prometheus_profile_indexes/{sha1(s3_key)[:24]}.json
+# nightly (04:15 UTC, after the 03:30 norms build and the 04:00 gen pop
+# sync). Each doc carries structured tables (per-category top rows with
+# gen pop indexes, the full demo block, a purchase-family index table)
+# plus the fully rendered digest text stamped with the profile ETag,
+# norms version, Gen Pop ETag, and a hash of the digest-rendering code.
+# get_digest_bundle serves the stored digest only when every stamp
+# matches what a live build would use right now, so the precomputed
+# path produces exactly the text the live-CSV path would; any mismatch
+# falls back to the live path.
+
+_digest_code_ver_memo = None
+
+
+def profile_index_s3_key(s3_key):
+    """S3 key of the nightly index doc for one profile."""
+    h = hashlib.sha1(str(s3_key).encode('utf-8')).hexdigest()[:24]
+    return f"{INDEX_PREFIX}{h}.json"
+
+
+def digest_code_version():
+    """Hash of the digest-rendering code paths. Stamped into each
+    nightly index doc; a mismatch (a deploy changed the renderer after
+    the index was built) disables the precomputed digest until the
+    next nightly rebuild."""
+    global _digest_code_ver_memo
+    if _digest_code_ver_memo is None:
+        import inspect
+        src = ''.join(inspect.getsource(f) for f in (
+            _norm_cat, _norm_brand, _bp_col, _fuzzy_col, _parse_bp,
+            _profile_meta, _norm_lookup, _fmt_row, build_profile_digest,
+            _peer_norms_section))
+        _digest_code_ver_memo = hashlib.sha1(
+            src.encode('utf-8')).hexdigest()[:12]
+    return _digest_code_ver_memo
+
+
+def load_profile_index(s3_client, bucket, s3_key):
+    """Nightly index doc for one profile, or None. In-process cache
+    with a short TTL; past the TTL a HEAD revalidates the index
+    object's ETag before the cached doc is reused. A missing index is
+    negative-cached for the TTL."""
+    now = time.time()
+    with _cache_lock:
+        cached = _index_cache.get(s3_key)
+    if cached and now - cached[1] < INDEX_TTL_S:
+        return cached[2]
+    ck = profile_index_s3_key(s3_key)
+    doc = etag = None
+    try:
+        if cached and cached[2] is not None:
+            head = s3_client.head_object(Bucket=bucket, Key=ck)
+            h_etag = (head.get('ETag') or '').strip('"')
+            if h_etag and h_etag == cached[0]:
+                with _cache_lock:
+                    _index_cache[s3_key] = (cached[0], now, cached[2])
+                return cached[2]
+        resp = s3_client.get_object(Bucket=bucket, Key=ck)
+        etag = (resp.get('ETag') or '').strip('"')
+        doc = json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception:
+        doc, etag = None, None
+    with _cache_lock:
+        _index_cache[s3_key] = (etag, now, doc)
+        if len(_index_cache) > 64:
+            for k, _ in sorted(_index_cache.items(),
+                               key=lambda kv: kv[1][1])[:16]:
+                _index_cache.pop(k, None)
+    return doc
+
+
+def _digest_from_index(s3_client, bucket, s3_key, want_name, norms_ver,
+                       profile_etag):
+    """(digest_text, meta) from the nightly index when provably fresh:
+    the profile's current ETag, the requested display name, the norms
+    version, the Gen Pop ETag, and the digest-renderer code hash must
+    all match what the index was built with, so the stored text is
+    exactly what a live build would produce right now. Anything off
+    returns None and the caller takes the live-CSV path."""
+    try:
+        doc = load_profile_index(s3_client, bucket, s3_key)
+        if not isinstance(doc, dict):
+            return None
+        if not profile_etag or doc.get('etag') != profile_etag:
+            return None
+        dig = doc.get('digest') or {}
+        meta = doc.get('meta') or {}
+        text = dig.get('text')
+        if not text or not isinstance(meta, dict):
+            return None
+        if (want_name or '') != (meta.get('name') or ''):
+            return None
+        if (dig.get('norms_ver') or '') != (norms_ver or ''):
+            return None
+        gp_etag = _genpop_current_etag()
+        if not gp_etag or (dig.get('genpop_etag') or '') != gp_etag:
+            return None
+        if dig.get('code_ver') != digest_code_version():
+            return None
+        return text, meta
+    except Exception:
+        return None
+
+
+def _digest_cache_put(s3_key, cache_key, digest, meta):
+    with _cache_lock:
+        _digest_cache[s3_key] = (cache_key, time.time(), digest, meta)
+        if len(_digest_cache) > 40:
+            oldest = sorted(_digest_cache.items(),
+                            key=lambda kv: kv[1][1])[:10]
+            for k, _ in oldest:
+                _digest_cache.pop(k, None)
+
+
+def _profile_digest_cached(s3_client, bucket, s3_key, want_name, genpop,
+                           norms, norms_ver):
+    """Digest + meta for one profile: the in-process digest cache
+    first, then the nightly precomputed index (neither downloads the
+    CSV), then the live download-and-build path. Returns (digest,
+    meta, etag, df); df is None unless the live path parsed the CSV
+    on this call (callers that need the frame later reload it via
+    load_profile_df, which hits the parsed-profile LRU)."""
+    etag = None
+    try:
+        head = s3_client.head_object(Bucket=bucket, Key=s3_key)
+        etag = (head.get('ETag') or '').strip('"') or None
+    except Exception:
+        etag = None
+    if etag:
+        ck = f"{etag}|{norms_ver}"
+        with _cache_lock:
+            cached = _digest_cache.get(s3_key)
+        if cached and cached[0] == ck:
+            return cached[2], cached[3], etag, None
+        pre = _digest_from_index(s3_client, bucket, s3_key, want_name,
+                                 norms_ver, etag)
+        if pre:
+            _digest_cache_put(s3_key, ck, pre[0], pre[1])
+            return pre[0], pre[1], etag, None
+    df, etag = load_profile_df(s3_client, bucket, s3_key)
+    ck = f"{etag}|{norms_ver}"
+    with _cache_lock:
+        cached = _digest_cache.get(s3_key)
+    if cached and cached[0] == ck:
+        return cached[2], cached[3], etag, df
+    meta = _profile_meta(df, want_name)
+    digest = build_profile_digest(df, meta, genpop, norms=norms)
+    _digest_cache_put(s3_key, ck, digest, meta)
+    return digest, meta, etag, df
+
+
 def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
     """Assemble the full digest bundle for a page context:
     {primary: {s3_key, name}, cuts: [{s3_key, name}, ...]}.
-    Returns (bundle_text, primary_meta). Caches per (key, etag)."""
+    Returns (bundle_text, primary_meta). Caches per (key, etag); the
+    nightly precomputed index, when provably fresh, serves the same
+    digest without downloading + parsing the CSV."""
     genpop = load_genpop_map(s3_client, bucket)
     norms = load_norms(s3_client, bucket)
     norms_ver = (norms or {}).get('built_at') or ''
@@ -521,26 +700,18 @@ def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
     if not p_key:
         raise ValueError('page context has no primary profile key')
 
-    p_df, p_etag = load_profile_df(s3_client, bucket, p_key)
-    p_cache_key = f"{p_etag}|{norms_ver}"
-    with _cache_lock:
-        cached = _digest_cache.get(p_key)
-    if cached and cached[0] == p_cache_key:
-        # Same bytes + same norms version: the stored meta was built
-        # from identical content, so reuse it instead of re-walking
-        # the full DataFrame.
-        p_digest, p_meta = cached[2], cached[3]
-    else:
-        p_meta = _profile_meta(p_df, primary.get('name'))
-        p_digest = build_profile_digest(p_df, p_meta, genpop, norms=norms)
-        with _cache_lock:
-            _digest_cache[p_key] = (p_cache_key, time.time(), p_digest,
-                                    p_meta)
-            if len(_digest_cache) > 40:
-                oldest = sorted(_digest_cache.items(),
-                                key=lambda kv: kv[1][1])[:10]
-                for k, _ in oldest:
-                    _digest_cache.pop(k, None)
+    p_digest, p_meta, p_etag, p_df = _profile_digest_cached(
+        s3_client, bucket, p_key, primary.get('name'), genpop, norms,
+        norms_ver)
+
+    def _parent_df():
+        # Cut divergence needs the parent frame; load it lazily so the
+        # precomputed-index path skips the CSV download entirely when
+        # no cut digest has to be built on this call.
+        nonlocal p_df
+        if p_df is None:
+            p_df = load_profile_df(s3_client, bucket, p_key)[0]
+        return p_df
 
     parts = [p_digest]
     for cut in (page_context.get('cuts') or [])[:max_cuts]:
@@ -557,7 +728,7 @@ def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
             else:
                 c_meta = _profile_meta(c_df, cut.get('name'))
                 cd_text = build_cut_divergence(
-                    p_df, p_meta, c_df, c_meta, genpop)
+                    _parent_df(), p_meta, c_df, c_meta, genpop)
                 with _cache_lock:
                     _cutdiv_cache[(p_key, c_key)] = (cd_ver, time.time(),
                                                      cd_text)
@@ -577,19 +748,9 @@ def get_digest_bundle(s3_client, bucket, page_context, max_cuts=3):
         if not e_key or e_key == p_key:
             continue
         try:
-            e_df, e_etag = load_profile_df(s3_client, bucket, e_key)
-            e_cache_key = f"{e_etag}|{norms_ver}"
-            with _cache_lock:
-                e_cached = _digest_cache.get(e_key)
-            if e_cached and e_cached[0] == e_cache_key:
-                e_digest = e_cached[2]
-            else:
-                e_meta = _profile_meta(e_df, ex.get('name'))
-                e_digest = build_profile_digest(e_df, e_meta, genpop,
-                                                norms=norms)
-                with _cache_lock:
-                    _digest_cache[e_key] = (e_cache_key, time.time(),
-                                            e_digest, e_meta)
+            e_digest = _profile_digest_cached(
+                s3_client, bucket, e_key, ex.get('name'), genpop, norms,
+                norms_ver)[0]
             parts.append(
                 "COMPARISON PROFILE (independent audience, NOT a cut of "
                 "the primary; shares do not sum with it):\n" + e_digest)
