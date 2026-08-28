@@ -1621,8 +1621,11 @@ def _check_i12(rows, sample, subject, s3_key, s3_client, verbose):
     parent_bp = {}
     for r in parent_rows:
         cu = r["cat_u"]
-        if (cu in DEMO_CATS or cu in META_CATS or cu in FAN_CATS
-                or cu == "LOCATION"):
+        # LOCATION/DMA/REGION participate as of 2026-08-28: a cut can
+        # never out-count its parent in a market either (Primetime
+        # Movie avid shipped Spokane Wa 15 raw vs parent 13). Demo
+        # categories stay exempt (shares renormalize to 100).
+        if cu in DEMO_CATS or cu in META_CATS or cu in FAN_CATS:
             continue
         bp = _num(r["bp_s"])
         if bp is None:
@@ -1634,8 +1637,7 @@ def _check_i12(rows, sample, subject, s3_key, s3_client, verbose):
     n_flagged = 0
     for r in rows:
         cu = r["cat_u"]
-        if (cu in DEMO_CATS or cu in META_CATS or cu in FAN_CATS
-                or cu == "LOCATION"):
+        if cu in DEMO_CATS or cu in META_CATS or cu in FAN_CATS:
             continue
         bp = _num(r["bp_s"])
         if bp is None:

@@ -166,7 +166,7 @@ def _is_international_country(country):
 def enforce_anchor_derivation(subject, subject_raw_tu, subject_raw_avid,
                               universe_anchor=None, engaged_share=None,
                               anchor_source=None, prose=None, log=print,
-                              country='US'):
+                              country='US', refresh_locked=False):
     """Jenna 2026-08-24 mandate: 'the sample always has to be based to
     the researched anchor.' Every fresh-build sample must equal
     anchor x engaged_share (within ANCHOR_FIT_TOLERANCE); when it does
@@ -257,6 +257,64 @@ def enforce_anchor_derivation(subject, subject_raw_tu, subject_raw_avid,
                 f"{subject}|universe-anchor|tu".encode()).hexdigest()[:8], 16)
             share = 0.72 + (h % 2101) / 10000.0
             meta['engaged_share_derived'] = True
+
+    if refresh_locked:
+        # Time-shifted refresh (2026-08-28, Joe & The Juice 22x sizing
+        # defect): the sample arriving here was chosen by the refresh
+        # sizing guard (parent-anchored +/-15% band, window-research
+        # verdicts, every-3rd-generation re-anchor). A freshly guessed
+        # anchor x share pair from THIS run's interpret step must not
+        # re-derive it - on 08/26 and 08/27 the same subject shipped
+        # 47,275 then 12,795 because each refresh's new anchor framing
+        # (brand customers x 1.7%, then category visitors x 0.3%)
+        # silently replaced the guard's verdict. The researched-anchor
+        # HARD CEILING still binds: a locked sample projecting ABOVE
+        # the anchor is scaled under it (that is exactly the move that
+        # corrected the unanchored 284,763 parent down to ~47k).
+        # Below the ceiling, the share is restated from the delivered
+        # sample so the derivation chain stays coherent.
+        meta['refresh_locked'] = True
+        if projected > anchor:
+            new_tu, _sc_meta = scale_under_anchor(
+                subject, tu, anchor, salt='tu-refresh-ceiling')
+            if new_tu != tu:
+                try:
+                    log(f"[anchor-guard] {subject!r}: refresh-locked "
+                        f"sample {tu:,} projects {projected:,} ABOVE "
+                        f"the researched universe anchor {anchor:,}; "
+                        f"ceiling binds, scaled to {new_tu:,}")
+                except Exception:
+                    pass
+                if subject_raw_avid:
+                    try:
+                        factor = new_tu / float(tu)
+                        subject_raw_avid = ensure_messy_sample_size(
+                            f"{subject}|avid|anchored",
+                            max(int(round(int(subject_raw_avid) * factor)),
+                                500),
+                        )
+                    except (TypeError, ValueError):
+                        pass
+                tu = new_tu
+                meta['recomputed'] = True
+        else:
+            try:
+                log(f"[anchor-guard] {subject!r}: refresh-locked sample "
+                    f"{tu:,} kept (guard verdict wins); engaged share "
+                    f"restated as projected {projected:,} / anchor "
+                    f"{anchor:,}")
+            except Exception:
+                pass
+        _share_final = projected_audience(tu) / float(anchor)
+        meta.update({
+            'anchor': anchor,
+            'anchor_source': (str(anchor_source).strip() or None)
+            if anchor_source else None,
+            'engaged_share': round(_share_final, 6),
+            'engaged_share_derived': True,
+            'projected': projected_audience(tu),
+        })
+        return tu, subject_raw_avid, meta
 
     expected_projected = anchor * share
     if expected_projected > 0 and \
@@ -472,7 +530,8 @@ def record_subject_raws(s3_client, bucket, entries, records):
 def apply_sizing_guards(subject, subject_raw_tu, subject_raw_avid,
                         universe_anchor=None, engaged_share=None,
                         anchor_source=None, prose=None, s3_client=None,
-                        bucket='dashboard-inputs', log=print, country='US'):
+                        bucket='dashboard-inputs', log=print, country='US',
+                        refresh_locked=False):
     """One-call convenience wrapper used by both wire points.
 
     Runs the MANDATORY anchor derivation on TU (Jenna 2026-08-24:
@@ -487,7 +546,7 @@ def apply_sizing_guards(subject, subject_raw_tu, subject_raw_avid,
             subject, subject_raw_tu, subject_raw_avid,
             universe_anchor=universe_anchor, engaged_share=engaged_share,
             anchor_source=anchor_source, prose=prose, log=log,
-            country=country,
+            country=country, refresh_locked=refresh_locked,
         )
     # 2. Cross-spec duplicate guard (S3 ledger).
     entries = []

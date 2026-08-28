@@ -1095,8 +1095,16 @@ def enforce_no_collisions(df_avid, df_baseline, subject: str):
 _SUBSET_COHERENCE_SKIP_CATS = frozenset({
     "BRAND INPUT", "SAMPLE SIZE", "BRAND CATEGORY", "SUBJECT",
     "INPUT_METADATA", "INPUT METADATA", "BRAND ID", "REPORT INPUT",
-    "LOCATION", "DMA", "REGION", "AVID FAN", "CASUAL FAN",
+    "AVID FAN", "CASUAL FAN",
 })
+
+# Geo categories participate in the UPWARD raw cap only (2026-08-28:
+# a cut can never count more panelists in a DMA than its parent does -
+# the Primetime Movie avid shipped Spokane Wa at 15 raw vs parent 13).
+# They stay exempt from the downward lift and own-row direction passes:
+# geo shares are a composition read, not an intensity read, and the
+# post-transform LOCATION renormalization already sets their level.
+_GEO_SUBSET_CATS = frozenset({"LOCATION", "DMA", "REGION"})
 
 # Mass-digital-behavior categories where an engaged (avid) slice cannot
 # plausibly sit far BELOW the broad audience: intensity selects for
@@ -1336,6 +1344,11 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
                     )
             else:
                 new_bp = None
+        elif cu in _GEO_SUBSET_CATS:
+            # Geo rows: upward cap only (handled above). Never lift or
+            # re-derive a geo share downward-direction - composition,
+            # not intensity.
+            continue
         elif (_spc_is_own is not None and avid_bp < parent_bp - 0.0005
                 and parent_bp < 99.2 and _spc_is_own(subject, vu)
                 and not (_spc_must_pin is not None

@@ -1011,7 +1011,16 @@ def _build_user_prompt(df, subject, s3_key, category, facts, genpop_map):
             f"150-300 on engagement grids (streaming, social, media, "
             f"fan-adjacent brands); the bands below are anchored on full "
             f"universes, so on this file apply them to DEPRESSIONS only "
-            f"and read above-band engagement as expected intensity.")
+            f"and read above-band engagement as expected intensity. "
+            f"Cuts inherit their brand levels from the parent file "
+            f"(same value plus hairline jitter; exact 100 pins kept), "
+            f"so a level concern on an inherited row belongs to the "
+            f"parent file, not this cut: note it as borderline, never "
+            f"FAIL the cut for it. Carriage note: a carrier pinned at "
+            f"100 alongside rivals at ordinary levels is the standard "
+            f"multi-homing shape (everyone in a title universe uses "
+            f"the carrier; most also use other services). It is never "
+            f"a coverage impossibility.")
     demo_lines = ["DEMOGRAPHIC COMPOSITION:"]
     for cu, pairs in facts.get("demo_summary", {}).items():
         row = ", ".join(f"{label} {bp:.1f}" for label, bp in pairs[:8])
@@ -1215,6 +1224,28 @@ def _fact_basis(finding):
     require it."""
     basis = str(finding.get("fact_basis") or "").strip()
     return basis if len(basis) >= 12 else ""
+
+
+def _frame_bp_map(df):
+    """(norm category, norm brand) -> BP float for every valued row of
+    a profile frame. Duplicate spellings keep the max, mirroring the
+    ship gate's I12 parent read. Used by the cut inheritance guard to
+    compare a cut's levels against the parent frame it derives from."""
+    out = {}
+    try:
+        cols = _detect_cols(df)
+        if not cols.get("cat") or not cols.get("val") or not cols.get("bp"):
+            return out
+        for _, r in df.iterrows():
+            bp = _num(r[cols["bp"]])
+            if bp is None:
+                continue
+            k = (_norm_cat(r[cols["cat"]]), _norm_brand(r[cols["val"]]))
+            if bp > out.get(k, -1.0):
+                out[k] = bp
+    except Exception:
+        return {}
+    return out
 
 
 def _fix_sanity(finding, cur_bp, genpop_bp):
@@ -1480,6 +1511,7 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                          s3_client=None,
                          claude_call: Optional[Callable] = None,
                          genpop_map=None, enforce=True, is_new=None,
+                         parent_df=None,
                          sort_fn=None, ledger=True, verbose=True):
     """Reasoned pre-publish review. Returns (df, report).
 
@@ -1493,6 +1525,12 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
     new reasoning even on an existing key); False skips it; None
     auto-detects by key existence (existing key = in-place correction
     of already-reviewed content = skip).
+
+    parent_df: the frame the deliverable derives from (cut engines
+    thread it via cut_write_gate). Enables the deterministic cut
+    inheritance guard: fail-severity findings on rows whose level the
+    cut carries at the parent's value (within jitter tolerance)
+    downgrade to borderline instead of holding the cut.
 
     Infrastructure failures (reasoner unreachable, unparseable output)
     fail OPEN with a loud log and a ledger entry: the mechanical gate
@@ -1623,6 +1661,61 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                 n_intensity_downgrades += 1
         if n_intensity_downgrades:
             report["intensity_downgrades"] = n_intensity_downgrades
+            if verdict == "FAIL" and not any(
+                    str(f.get("severity", "")).lower() == "fail"
+                    for f in findings):
+                verdict = "BORDERLINE"
+
+        # Cut inheritance guard (2026-08-28, Furious compound-cut
+        # hold): a derived cut's brand rows are the parent's rows by
+        # construction (inherit + subject-salted jitter; exact 100
+        # pins kept), so a fail-severity finding on a (category,
+        # brand) whose value the cut carries at the parent's level is
+        # a judgment on the PARENT, not the cut. Level defects on
+        # inherited rows route to the parent file (in-place SOP;
+        # skins never re-run pipelines) - a cut hold there blocks a
+        # legitimate delivery for a defect it did not introduce. The
+        # guard is deterministic and beats any model-supplied
+        # fact_basis: run to run the reasoner held the same fixture
+        # for "Netflix 66% is depressed" and then "Netflix 66% is
+        # impossibly high" while passing the identical grid on the
+        # sibling region cut. Cut-authored values (avid re-reasoning,
+        # gender tilts: anything beyond jitter tolerance of parent)
+        # stay fully holdable.
+        n_inherited_downgrades = 0
+        parent_map = {}
+        if parent_df is not None:
+            try:
+                if len(parent_df):
+                    parent_map = _frame_bp_map(parent_df)
+            except Exception:
+                parent_map = {}
+        if parent_map:
+            cut_map = _frame_bp_map(df)
+            for f in findings:
+                if str(f.get("severity", "")).lower() != "fail":
+                    continue
+                fk = (_norm_cat(f.get("category")),
+                      _norm_brand(f.get("brand")))
+                pbp = parent_map.get(fk)
+                cbp = cut_map.get(fk)
+                if pbp is None or cbp is None:
+                    continue
+                tol = max(0.35, 0.01 * abs(pbp))
+                if abs(cbp - pbp) <= tol:
+                    f["severity"] = "borderline"
+                    f["fixable"] = False
+                    f["fix_bp"] = None
+                    f["inherited_from_parent"] = round(pbp, 4)
+                    n_inherited_downgrades += 1
+        if n_inherited_downgrades:
+            report["inherited_downgrades"] = n_inherited_downgrades
+            if verbose:
+                print(f"[pre-ship-vetting] {base}: "
+                      f"{n_inherited_downgrades} fail finding(s) on "
+                      f"parent-inherited row(s) downgraded to "
+                      f"borderline (level judgments route to the "
+                      f"parent file)")
             if verdict == "FAIL" and not any(
                     str(f.get("severity", "")).lower() == "fail"
                     for f in findings):

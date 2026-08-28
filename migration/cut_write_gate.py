@@ -179,6 +179,10 @@ def finalize_cut_for_upload(df, subject, *, parent_df=None, out_key='',
     # PreShipVettingError (a ShipGateError subclass, so engine call
     # sites' existing re-raise handling applies). Infra failures fail
     # OPEN. Deliberately NOT wrapped in a swallowing try/except.
+    # parent_df threads through for the cut inheritance guard: a fail
+    # finding on a row whose level the cut inherited from the parent
+    # (within jitter tolerance) downgrades to borderline instead of
+    # holding the cut (2026-08-28 Furious compound-cut hold).
     try:
         from migration.pre_ship_vetting import run_pre_ship_vetting
     except ImportError:
@@ -188,6 +192,7 @@ def finalize_cut_for_upload(df, subject, *, parent_df=None, out_key='',
     df, vet_report = run_pre_ship_vetting(
         df, subject, out_key,
         enforce=bool(ship_gate), is_new=True,
+        parent_df=parent_df,
         sort_fn=_sort_within_category, verbose=verbose,
     )
     report['vetting'] = {
