@@ -39791,6 +39791,7 @@ https://www.instagram.com/p/..."></textarea>
                 var j = IMPACT_IQ_JOURNEYS[slug];
                 if (!j) return;
                 window.__impactIQ.current = slug;
+                try { window.__impactIQ.lastJourney = j; } catch (_) {}
 
                 var chip = document.getElementById('impactMetaChipText');
                 if (chip) chip.textContent = j.trigger_label + ' \u2192 ' + j.subject_label + '  |  ' + j.window_label;
@@ -53658,6 +53659,10 @@ https://www.instagram.com/p/..."></textarea>
             // Stash the parsed URL list on window so the filter / sort /
             // search controls can re-render without re-parsing the CSV.
             window._sfConvUrlMetrics = urlMetrics;
+            try {
+                window.__sfConv = { projectInfo: projectInfo,
+                                    platforms: platformMetrics };
+            } catch (_) {}
             renderSFConvUrlTable();
             
             // Platform Table - show projected values
@@ -55409,6 +55414,10 @@ https://www.instagram.com/p/..."></textarea>
         var _roasIQViewConvInst = null;
 
         function renderRoasIQViewDashboard(data) {
+            try {
+                window.__roasIQ = window.__roasIQ || {};
+                window.__roasIQ.lastData = data;
+            } catch (_) {}
             document.getElementById('roasIQEmptyState').style.display = 'none';
             document.getElementById('roasIQDashboardPanels').style.display = '';
             var results = data.results || [];
@@ -58279,6 +58288,10 @@ https://www.instagram.com/p/..."></textarea>
                         _llmoPollingTimer = setTimeout(loadLLMOIQDates, 2000);
                         return null;
                     }
+                    try {
+                        window.__llmoIQ = window.__llmoIQ || {};
+                        window.__llmoIQ.lastData = data;
+                    } catch (_) {}
                     renderLLMOSummaryCards(data);
                     populateLLMODemoAgentOptions(data.llms);
                     renderLLMOUsageTable(data.llms);
@@ -61538,6 +61551,408 @@ https://www.instagram.com/p/..."></textarea>
                 if (d.kpis) out.kpis = d.kpis;
                 if (d.summary) out.summary = d.summary;
                 return out;
+            },
+            journeyIQ: function() {
+                var run = null;
+                try {
+                    run = (typeof _jiqCurrentRun !== 'undefined' && _jiqCurrentRun)
+                        || window._jiqCurrentRun || null;
+                } catch (_) { run = window._jiqCurrentRun || null; }
+                if (!run || typeof run !== 'object') return null;
+                var meta = run.meta || {};
+                var est = run.estimated_view || {};
+                var _pmJiqStoryBlockRx = /^(amc|mic|nflx|obp|obs|spe|ufc|landman)_|^(beyond_sheridan|churn_wake_60d|companion_behaviors|competitive_consideration|cultural_ripple|fast_content_radar|moment_second_screen|music_influence|net_new_audience_profile|neurotropic_segment|non_converter_detour|off_platform_halo|paid_vs_earned|pre_signup_30d|sheridan_universe_map|trailer_drop_wake|ubg_hulu)$/;
+                var blocks = [], seen = {};
+                [run, est].forEach(function(srcObj) {
+                    Object.keys(srcObj || {}).forEach(function(k) {
+                        if (_pmJiqStoryBlockRx.test(k) && srcObj[k] && !seen[k]) {
+                            seen[k] = true; blocks.push(k);
+                        }
+                    });
+                });
+                var out = {
+                    title: meta.title || meta.target_label || meta.subject ||
+                           meta.label || null,
+                    story_mode: meta.story_mode || null,
+                    window: meta.window_label || meta.date_range || null,
+                    kpis: run.kpis || null
+                };
+                if (blocks.length) {
+                    out.story_blocks = blocks.slice(0, 24);
+                    var first = run[blocks[0]] || est[blocks[0]] || null;
+                    if (first && typeof first === 'object') {
+                        out.headline_block = { key: blocks[0], data: first };
+                    }
+                }
+                if (Array.isArray(run.facts) && run.facts.length) {
+                    out.facts = run.facts.slice(0, 6);
+                }
+                if (run.touchpoints && typeof run.touchpoints === 'object' &&
+                        !Array.isArray(run.touchpoints)) {
+                    out.touchpoint_keys = Object.keys(run.touchpoints).slice(0, 10);
+                }
+                if (Array.isArray(run.clusters) && run.clusters.length) {
+                    out.clusters = run.clusters.slice(0, 5);
+                }
+                return (out.kpis || out.story_blocks || out.facts) ? out : null;
+            },
+            intentIQ: function() {
+                var st = window.__intentIQ || {};
+                var ov = st.overview;
+                var cards = (st.audiences || {}).cards;
+                if (!ov && !Array.isArray(cards)) return null;
+                var out = { title: st.currentSlug || null };
+                if (ov && typeof ov === 'object') {
+                    out.overview = {
+                        title_type: ov.title_type || null,
+                        distributor: ov.distributor || null,
+                        opening_date: ov.opening_date || null,
+                        end_date: ov.end_date || null
+                    };
+                    if (Array.isArray(ov.phases)) out.phases = ov.phases.slice(0, 8);
+                }
+                if (Array.isArray(cards)) {
+                    out.audiences = cards.slice(0, 10).map(function(c) {
+                        c = c || {};
+                        return { name: c.display || c.subject_key || null,
+                                 category: c.category || null,
+                                 overlap_bp: c.overlap_bp };
+                    });
+                }
+                if (st.cohorts && typeof st.cohorts === 'object' &&
+                        !Array.isArray(st.cohorts)) {
+                    out.cohort_keys = Object.keys(st.cohorts).slice(0, 10);
+                }
+                return out;
+            },
+            impactIQ: function() {
+                var st = window.__impactIQ || {};
+                var j = st.lastJourney;
+                if (!j || typeof j !== 'object') return null;
+                var out = {
+                    journey: j.display || st.current || null,
+                    trigger: j.trigger_label || null,
+                    subject: j.subject_label || null,
+                    window: j.window_label || null
+                };
+                if (Array.isArray(j.cohorts)) {
+                    out.cohorts = j.cohorts.slice(0, 6).map(function(c) {
+                        c = c || {};
+                        return { label: c.label, size: c.size, desc: c.desc };
+                    });
+                }
+                if (Array.isArray(j.hero)) {
+                    out.hero_kpis = j.hero.slice(0, 8).map(function(k) {
+                        k = k || {};
+                        return { label: k.lbl, value: k.val, sub: k.sub };
+                    });
+                }
+                if (Array.isArray(j.insights)) {
+                    out.insights = j.insights.slice(0, 4).map(function(s) {
+                        return String(s || '').replace(/<[^>]*>/g, '')
+                            .replace(/\s+/g, ' ').trim().slice(0, 240);
+                    });
+                }
+                return (out.hero_kpis || out.cohorts) ? out : null;
+            },
+            blueIQ: function() {
+                var st = window.__blueIQ || {};
+                var d = st.lastData;
+                if (!d || typeof d !== 'object') return null;
+                var out = { filters: d.filters || null };
+                if (d.panel_size != null) out.audience_size = d.panel_size;
+                if (Array.isArray(d.cards)) out.cards = d.cards.slice(0, 10);
+                else if (d.cards && typeof d.cards === 'object') out.cards = d.cards;
+                if (Array.isArray(d.sections)) {
+                    out.sections = d.sections.slice(0, 6).map(function(s) {
+                        s = s || {};
+                        var o = { title: s.title || s.label || null };
+                        var rows = s.rows || s.items;
+                        if (Array.isArray(rows)) o.rows = rows.slice(0, 6);
+                        return o;
+                    });
+                }
+                return (out.cards || out.sections) ? out : null;
+            },
+            hedgeFundIQ: function() {
+                var d = null;
+                try {
+                    d = (typeof currentTickerData !== 'undefined' &&
+                         currentTickerData) || null;
+                } catch (_) { d = null; }
+                if (!d || typeof d !== 'object') return null;
+                var out = { ticker: d.ticker || null, kpi: d.kpi || null };
+                try {
+                    var tabs = (typeof openTickerTabs !== 'undefined' &&
+                                openTickerTabs) || [];
+                    var names = tabs.slice(0, 8).map(function(t) {
+                        return (t || {}).name || '';
+                    }).filter(Boolean);
+                    if (names.length) out.open_tickers = names;
+                } catch (_) {}
+                var series = Array.isArray(d.data) ? d.data : null;
+                if (series && series.length) {
+                    out.points = series.length;
+                    out.latest = series.slice(-3);
+                }
+                return (out.ticker || out.latest) ? out : null;
+            },
+            llmoIQ: function() {
+                var st = window.__llmoIQ || {};
+                var d = st.lastData;
+                if (!d || typeof d !== 'object') return null;
+                var out = {};
+                if (Array.isArray(d.llms)) {
+                    out.assistants = d.llms.slice(0, 10);
+                } else if (d.llms && typeof d.llms === 'object') {
+                    out.assistants = Object.keys(d.llms).slice(0, 10)
+                        .map(function(k) {
+                            var v = d.llms[k];
+                            if (!v || typeof v !== 'object') v = { value: v };
+                            var o = { name: v.name || k };
+                            Object.keys(v).slice(0, 8).forEach(function(f) {
+                                o[f] = v[f];
+                            });
+                            return o;
+                        });
+                }
+                if (Array.isArray(d.attribution)) {
+                    out.attribution = d.attribution.slice(0, 8);
+                }
+                if (Array.isArray(d.trend_dates) && d.trend_dates.length) {
+                    out.trend_window = {
+                        start: d.trend_dates[0],
+                        end: d.trend_dates[d.trend_dates.length - 1],
+                        points: d.trend_dates.length
+                    };
+                }
+                return (out.assistants || out.attribution) ? out : null;
+            },
+            sfConversion: function() {
+                var st = window.__sfConv || {};
+                var urls = window._sfConvUrlMetrics;
+                if (!st.projectInfo && !Array.isArray(urls)) return null;
+                var out = {};
+                if (st.projectInfo && typeof st.projectInfo === 'object') {
+                    out.project = {
+                        title: st.projectInfo.lfTitle || null,
+                        platform: st.projectInfo.lfPlatform || null,
+                        date_range: st.projectInfo.dateRange || null,
+                        window: st.projectInfo.window || null
+                    };
+                }
+                if (Array.isArray(st.platforms) && st.platforms.length) {
+                    out.platforms = st.platforms.slice(0, 8);
+                }
+                if (Array.isArray(urls) && urls.length) {
+                    out.url_count = urls.length;
+                    out.top_urls = urls.slice(0, 8);
+                }
+                return (out.project || out.platforms || out.top_urls)
+                    ? out : null;
+            },
+            roasIQ: function() {
+                var st = window.__roasIQ || {};
+                var d = st.lastData;
+                if (!d || typeof d !== 'object') return null;
+                var out = {
+                    project: d.project_name || null,
+                    search_terms: Array.isArray(d.search_terms)
+                        ? d.search_terms.slice(0, 10) : null,
+                    window: [d.start_date, d.end_date].filter(Boolean)
+                        .join(' to ') || null,
+                    scope: d.scope || null
+                };
+                if (Array.isArray(d.results)) {
+                    out.channels = d.results.slice(0, 10).map(function(r) {
+                        r = r || {};
+                        return { channel: r.channel, source: r.source,
+                                 pct: r.pct, projected: r.projected,
+                                 clicks: r.click_count,
+                                 conversions: r.conversions };
+                    });
+                }
+                return (out.channels && out.channels.length) ? out : null;
+            },
+            brandPartnershipIQ: function() {
+                var st = null;
+                try {
+                    st = (typeof _bpiqState !== 'undefined' && _bpiqState)
+                        || null;
+                } catch (_) { st = null; }
+                var d = st && st.data;
+                if (!d || typeof d !== 'object') return null;
+                var out = {};
+                if (d.subject || d.talent || d.brand) {
+                    out.subject = d.subject || d.talent || d.brand;
+                }
+                var v = d.valuation || {};
+                if (v.total_emv != null || v.emv_total != null) {
+                    out.total_emv = (v.total_emv != null)
+                        ? v.total_emv : v.emv_total;
+                }
+                if (Array.isArray(v.emv_breakdown)) {
+                    out.platforms = v.emv_breakdown.slice(0, 8)
+                        .map(function(r) {
+                            r = r || {};
+                            return {
+                                platform: r.platform,
+                                pre_users: r.pre_users_projected,
+                                post_users: r.post_users_projected,
+                                incremental: r.incremental_users_projected,
+                                emv_value: r.emv_value
+                            };
+                        });
+                }
+                if (Array.isArray(d.yearly_breakdown)) {
+                    out.yearly = d.yearly_breakdown.slice(0, 6);
+                }
+                return (out.platforms || out.total_emv != null) ? out : null;
+            },
+            flywheelConversion: function() {
+                var d = null;
+                try {
+                    d = (typeof _flywheelChartData !== 'undefined' &&
+                         _flywheelChartData) || null;
+                } catch (_) { d = null; }
+                if (!d || typeof d !== 'object') return null;
+                var out = {};
+                if (d.project_name) out.project = d.project_name;
+                if (d.entry_point_metrics &&
+                        typeof d.entry_point_metrics === 'object') {
+                    out.entry_points = d.entry_point_metrics;
+                }
+                if (Array.isArray(d.flywheel_funnel)) {
+                    out.funnel = d.flywheel_funnel.slice(0, 10);
+                }
+                return (out.funnel || out.entry_points) ? out : null;
+            },
+            shareOfTimeIQ: function() {
+                var d = null;
+                try {
+                    d = (typeof _sotData !== 'undefined' && _sotData) || null;
+                } catch (_) { d = null; }
+                if (!d || typeof d !== 'object') return null;
+                var out = {};
+                if (d.matched_users != null) out.users = d.matched_users;
+                if (d.projected_us_users != null) {
+                    out.projected_us_users = d.projected_us_users;
+                }
+                if (d.total_projected_hours != null) {
+                    out.total_hours = d.total_projected_hours;
+                }
+                if (Array.isArray(d.categories)) {
+                    out.categories = d.categories.slice(0, 12)
+                        .map(function(c) {
+                            c = c || {};
+                            return {
+                                name: c.name || c.category || c.label,
+                                share_pct: (c.share_pct != null)
+                                    ? c.share_pct : c.pct,
+                                hours: (c.hours != null)
+                                    ? c.hours : c.projected_hours
+                            };
+                        });
+                }
+                return (out.categories || out.users != null) ? out : null;
+            },
+            cultureRankerIQ: function() {
+                try {
+                    var active = document.querySelector(
+                        '#rankerIQPlatformContent .ranker-platform-panel.active');
+                    var slug = (active && active.id)
+                        ? active.id.replace('rankeriq-', '') : '';
+                    if (slug === 'netflixch') {
+                        var nrows = (typeof _netflixChRows !== 'undefined' &&
+                                     _netflixChRows) || [];
+                        if (nrows.length) {
+                            return { board: 'Netflix daily ranker',
+                                     top_rows: nrows.slice(0, 10) };
+                        }
+                        return null;
+                    }
+                    if (typeof IQ_RANKER_STATE === 'undefined' ||
+                            typeof IQ_RANKER_SLUG_TO_MASTER === 'undefined') {
+                        return null;
+                    }
+                    var master = IQ_RANKER_SLUG_TO_MASTER[slug] || null;
+                    var st = master ? IQ_RANKER_STATE[master] : null;
+                    if (!(st && st.lastRows && st.lastRows.length)) {
+                        var masters = Object.keys(IQ_RANKER_STATE);
+                        for (var i = 0; i < masters.length; i++) {
+                            var cand = IQ_RANKER_STATE[masters[i]];
+                            if (cand && cand.loaded && cand.lastRows &&
+                                    cand.lastRows.length) {
+                                master = masters[i]; st = cand; break;
+                            }
+                        }
+                    }
+                    if (st && st.lastRows && st.lastRows.length) {
+                        return { board: master,
+                                 sub_category: st.sub || null,
+                                 window: st.window || null,
+                                 sort: st.sort || null,
+                                 top_rows: st.lastRows.slice(0, 10) };
+                    }
+                } catch (_) {}
+                return null;
+            },
+            talentFitIQ: function() {
+                var st = window.__talentFitIQ || {};
+                var d = st.lastData;
+                if (!d || typeof d !== 'object') return null;
+                var out = {
+                    brand: d.brand || null,
+                    projected_brand_users: (d.projected_brand_users != null)
+                        ? d.projected_brand_users : null,
+                    window: [d.start_date, d.end_date].filter(Boolean)
+                        .join(' to ') || null
+                };
+                if (Array.isArray(d.talents)) {
+                    out.talents = d.talents.slice(0, 8).map(function(t) {
+                        t = t || {};
+                        return {
+                            name: t.name || t.talent || null,
+                            fit: (t.fit_score != null) ? t.fit_score : t.score,
+                            overlap: (t.overlap_pct != null)
+                                ? t.overlap_pct : t.overlap
+                        };
+                    });
+                }
+                if (d.brand_demographics) {
+                    out.brand_demographics = d.brand_demographics;
+                }
+                return (out.talents && out.talents.length) ? out : null;
+            },
+            customAnalysis: function() {
+                var out = {};
+                try {
+                    var tab = document.querySelector(
+                        '.custom-analysis-tab.active');
+                    if (tab) {
+                        out.active_tool = (tab.textContent || '')
+                            .replace(/\s+/g, ' ').trim().slice(0, 80);
+                    }
+                } catch (_) {}
+                var inc = (window.__incidenceIQ || {}).lastResult;
+                if (inc && typeof inc === 'object') {
+                    out.incidence = {
+                        project: inc.project_name || null,
+                        date_range: inc.date_range || null,
+                        term_variants: (inc.brand_count != null)
+                            ? inc.brand_count : null,
+                        final_sample_size: (inc.final_sample_size != null)
+                            ? inc.final_sample_size : null
+                    };
+                    var u = inc.universe;
+                    if (u && typeof u === 'object') {
+                        out.incidence.unique_users = u.total_unique_users;
+                        out.incidence.total_visits = u.total_visits;
+                        out.incidence.avg_visits_per_user =
+                            u.avg_visits_per_user;
+                    }
+                }
+                return out.incidence ? out : null;
             }
         };
 
@@ -61617,6 +62032,140 @@ https://www.instagram.com/p/..."></textarea>
                     }
                 } catch (_) {}
                 return m;
+            }
+            if (viewId === 'journeyIQ') {
+                var jq = [
+                    { t: 'Walk me through this journey', hot: true },
+                    { t: 'What is the single biggest takeaway here?' },
+                    { t: 'Analyze the data on this screen' }
+                ];
+                try {
+                    var jt = _pmSanitizeChipText(data.title || '');
+                    if (jt) {
+                        jq.splice(1, 0, { t: 'What should ' + jt +
+                            ' do next based on this journey?' });
+                    }
+                } catch (_) {}
+                return jq;
+            }
+            if (viewId === 'intentIQ') {
+                return [
+                    { t: 'What drove conversion in this campaign window?',
+                      hot: true },
+                    { t: 'Which audience overlaps matter most here?' },
+                    { t: 'Analyze the data on this screen' }
+                ];
+            }
+            if (viewId === 'impactIQ') {
+                var iq = [
+                    { t: 'What is the headline impact in this journey?',
+                      hot: true },
+                    { t: 'Analyze the data on this screen' }
+                ];
+                try {
+                    var subj = _pmSanitizeChipText(data.subject || '');
+                    if (subj) {
+                        iq.splice(1, 0, { t: 'What should ' + subj +
+                            ' do with these results?' });
+                    }
+                } catch (_) {}
+                return iq;
+            }
+            if (viewId === 'blueIQ') {
+                return [
+                    { t: 'What stands out in this state view?', hot: true },
+                    { t: 'Which states lead and which lag here?' },
+                    { t: 'Analyze the data on this screen' }
+                ];
+            }
+            if (viewId === 'hedgeFundIQ') {
+                var hf = [
+                    { t: 'What is the signal in this ticker read?',
+                      hot: true },
+                    { t: 'Analyze the data on this screen' }
+                ];
+                try {
+                    var tk = _pmSanitizeChipText(data.ticker || '');
+                    if (tk) {
+                        hf.splice(1, 0, { t: 'What is moving ' + tk +
+                            ' in this window?' });
+                    }
+                } catch (_) {}
+                return hf;
+            }
+            if (viewId === 'llmoIQ') {
+                return [
+                    { t: 'Which assistant is winning this window?',
+                      hot: true },
+                    { t: 'Where is assistant traffic converting?' },
+                    { t: 'Analyze the data on this screen' }
+                ];
+            }
+            if (viewId === 'sfConversion') {
+                return [
+                    { t: 'Did the short-form push convert?', hot: true },
+                    { t: 'Which platform converted best?' },
+                    { t: 'Analyze the data on this screen' }
+                ];
+            }
+            if (viewId === 'roasIQ') {
+                return [
+                    { t: 'Which channel is earning its spend here?',
+                      hot: true },
+                    { t: 'Where should the next dollar go?' },
+                    { t: 'Analyze the data on this screen' }
+                ];
+            }
+            if (viewId === 'brandPartnershipIQ') {
+                return [
+                    { t: 'Is this partnership paying off?', hot: true },
+                    { t: 'Which platform carries the partnership value?' },
+                    { t: 'Analyze the data on this screen' }
+                ];
+            }
+            if (viewId === 'flywheelConversion') {
+                return [
+                    { t: 'Where does this funnel leak the most?', hot: true },
+                    { t: 'Which entry point converts best?' },
+                    { t: 'Analyze the data on this screen' }
+                ];
+            }
+            if (viewId === 'shareOfTimeIQ') {
+                return [
+                    { t: 'Where does this audience spend its time?',
+                      hot: true },
+                    { t: 'Which category is gaining share of time?' },
+                    { t: 'Analyze the data on this screen' }
+                ];
+            }
+            if (viewId === 'cultureRankerIQ') {
+                var cr = [
+                    { t: 'Who is rising fastest on this board?', hot: true },
+                    { t: 'Analyze the data on this screen' }
+                ];
+                try {
+                    var r0 = (data.top_rows || [])[0] || {};
+                    var nm = _pmSanitizeChipText(r0.name || r0.title ||
+                        r0.talent || r0.brand || r0.label || '');
+                    if (nm) {
+                        cr.splice(1, 0, { t: 'Why is ' + nm +
+                            ' ranked this high?' });
+                    }
+                } catch (_) {}
+                return cr;
+            }
+            if (viewId === 'talentFitIQ') {
+                return [
+                    { t: 'Which talent fits this brand best?', hot: true },
+                    { t: 'Analyze the data on this screen' }
+                ];
+            }
+            if (viewId === 'customAnalysis') {
+                return [
+                    { t: 'What does this result say about the audience size?',
+                      hot: true },
+                    { t: 'Analyze the data on this screen' }
+                ];
             }
             return [
                 { t: 'Analyze the data on this screen', hot: true },
@@ -64818,6 +65367,10 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         function renderTalentFitDashboard(data) {
+            try {
+                window.__talentFitIQ = window.__talentFitIQ || {};
+                window.__talentFitIQ.lastData = data;
+            } catch (_) {}
             destroyTalentFitCharts();
             
             const dashboard = document.getElementById('talentFitDashboard');
@@ -110946,6 +111499,7 @@ https://www.instagram.com/p/..."></textarea>
 
                 const data = await pollIncidenceCheckStatus(jobId, resultsDiv);
                 if (!data) { btn.disabled = false; btn.textContent = '🔍 Check Incidence'; return; }
+                try { window.__incidenceIQ = { lastResult: data }; } catch (_) {}
 
                 let html = '';
 
