@@ -54278,9 +54278,15 @@ def _pm_classify_chain():
     naming. The winning fast model is cached for the process lifetime
     in its own slot - it must never leak into the analysis chain (a
     label model cannot own the reasoning calls)."""
+    # Read the resolved slot under the lock, then build the chain
+    # OUTSIDE it: _pm_model_chain() takes the same non-reentrant lock,
+    # so calling it while held self-deadlocks the second classify call
+    # of the process and every model call queues behind it (found
+    # 2026-08-28 via a hung read-job smoke).
     with _pm_model_lock:
-        if _pm_resolved_classify['name']:
-            return [_pm_resolved_classify['name']] + _pm_model_chain()
+        resolved = _pm_resolved_classify['name']
+    if resolved:
+        return [resolved] + _pm_model_chain()
     return _PM_CLASSIFY_CANDIDATES + _pm_model_chain()
 
 
