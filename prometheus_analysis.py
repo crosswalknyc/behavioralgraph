@@ -1694,6 +1694,22 @@ def build_search_demand_user_prompt(text, history, ledger_block=None):
     )
 
 
+def _clip_text(text, limit):
+    """Length-bound a user-facing string without cutting mid-word.
+    Prefers the last full sentence inside the limit; otherwise cuts at
+    the last word boundary (2026-08-27: raw [:320] slices shipped reads
+    ending mid-word, e.g. '...renting year ')."""
+    t = str(text or '').strip()
+    if len(t) <= limit:
+        return t
+    cut = t[:limit]
+    m = max(cut.rfind('. '), cut.rfind('! '), cut.rfind('? '))
+    if m >= int(limit * 0.5):
+        return cut[:m + 1]
+    sp = cut.rfind(' ')
+    return (cut[:sp] if sp > 0 else cut).rstrip(' ,;:-') + '.'
+
+
 def _messy(subject, kpi, value):
     """Deterministic messy count: last digit 1-9, never ends in 0
     (no-round-numbers rule). Idempotent for a given (subject, kpi,
@@ -1760,8 +1776,8 @@ def enforce_demand_coherence(data):
         'window_start': str(data.get('window_start') or '').strip()[:12],
         'window_end': str(data.get('window_end') or '').strip()[:12],
         'cohort_label': str(data.get('cohort_label') or '').strip()[:160],
-        'headline': str(data.get('headline') or '').strip()[:300],
-        'reads': [str(r).strip()[:320]
+        'headline': _clip_text(data.get('headline'), 300),
+        'reads': [_clip_text(r, 320)
                   for r in (data.get('reads') or []) if str(r).strip()][:5],
     }
 
@@ -2350,6 +2366,124 @@ _ANALYSIS_BEHAVIOR_RX = re.compile(
     r'listen(?:ing|ed|s)?|spend(?:ing|s)?|spent|engag\w+|'
     r'subscrib\w+|download\w*|visit\w*)\b', re.IGNORECASE)
 
+# Strategic / opportunity vocabulary (2026-08-27, Jenna: "What's the
+# potential white space to create paw patrol toys for this audience").
+# An opportunity question about an audience is an analysis ask - it
+# reads demand vs coverage, it never builds anything.
+_STRATEGY_RX = re.compile(
+    r'\bwhite[\s-]*space\b|\bunderserved\b|\buntapped\b|\bunmet\b|'
+    r'\bopportunit(?:y|ies)\b|\bwhere to play\b|'
+    r'\bgaps?\b[^.?!]{0,40}\b(?:market|categor\w+|product|line|lineup|'
+    r'portfolio|coverage|offering)\b|'
+    r'\b(?:market|categor\w+|product|coverage)\b[^.?!]{0,30}\bgaps?\b|'
+    r'\bshould\b[^.?!]{0,40}\b(?:launch|make|create|build|sell|add|'
+    r'offer)\b|'
+    r'\bworth\s+(?:launching|making|creating|testing|building|'
+    r'selling)\b', re.IGNORECASE)
+
+
+def detect_strategy_intent(text):
+    """True when the ask is an opportunity / white-space / underserved-
+    category question. These are analysis asks that additionally get
+    the white-space playbook in the generation prompt."""
+    t = str(text or '').strip()
+    if not t or len(t) > 600:
+        return False
+    return bool(_STRATEGY_RX.search(t))
+
+
+def _is_build_request(text):
+    """Imperative build/pull phrasing. A QUESTION that merely contains
+    a build verb near an audience noun is not a build request -
+    "What's the potential white space to create paw patrol toys for
+    this audience" is an analysis ask (2026-08-27, Jenna). Only
+    non-question phrasing keeps the hard exclude."""
+    t = str(text or '')
+    if not _GENERATE_EXCLUDE_RX.search(t):
+        return False
+    return not _ANALYSIS_QUESTION_RX.search(t)
+
+
+# Anaphora (2026-08-27): "this audience", "these viewers", "them" in a
+# follow-up ask point at whatever the thread just read. The caller
+# resolves the referent from recent history when the ask itself names
+# no subject.
+_ANAPHORA_RX = re.compile(
+    r'\bth(?:is|at|e)\s+(?:audience|cohort|group|base|profile|'
+    r'universe|fan\s*base)\b'
+    r'|\bthese\s+(?:viewers|fans|parents|buyers|people|shoppers|'
+    r'subscribers|users)\b'
+    r'|\bfor\s+them\b|\babout\s+them\b|\bdo\s+they\b|\bare\s+they\b',
+    re.IGNORECASE)
+
+
+def ask_is_anaphoric(text):
+    """True when the ask points back at the thread's bound audience
+    instead of naming one."""
+    return bool(_ANAPHORA_RX.search(str(text or '')))
+
+
+# ---------------------------------------------------------------------------
+# The generation operating loop (2026-08-27, Jenna: "takes what is
+# asked and uses the data in dashboard as context then researches
+# answers externally and uses high level reasoning to synth answers
+# saving them in the bank"). These blocks ride the reasoned-metrics
+# user prompt on every fresh generation. The web_search tool pair
+# mirrors migration/genpop_research_calibration.py (current type
+# first, legacy fallback).
+# ---------------------------------------------------------------------------
+
+WEB_SEARCH_TOOL = {
+    'type': 'web_search_20260209',
+    'name': 'web_search',
+    'max_uses': 6,
+}
+WEB_SEARCH_TOOL_LEGACY = {
+    'type': 'web_search_20250305',
+    'name': 'web_search',
+    'max_uses': 6,
+}
+
+GENERATION_LOOP_GUIDANCE = (
+    'HOW TO WORK THIS ASK (operating loop):\n'
+    '1. GROUND FIRST: the profile rows, published measurements, '
+    'neighbor evidence, and worked examples above are the first-party '
+    'grounding. Read them before anything else. Numbers already '
+    'delivered for this subject are binding: never contradict them.\n'
+    '2. NAME THE GAPS: decide what the grounding cannot answer '
+    '(market sizes, current product coverage, competitive context, '
+    'external benchmarks).\n'
+    '3. RESEARCH THE GAPS with the web_search tool. Approved ground: '
+    'SEC filings and earnings reports, Pew Research, Statista, '
+    'eMarketer, YouGov, app analytics. Never use in-store visit '
+    'counts, cable/satellite reach, or total-brand figures that mix '
+    'offline exposure. The reply NEVER names a source, a search, or '
+    'any research step - the findings speak as house knowledge.\n'
+    '4. SYNTHESIZE: derive the answer from grounding plus research, '
+    'anchor-first, with the same method and voice as the worked '
+    'examples. Hard counts and shares speak flat with messy last '
+    'digits; blended or inferred reads use directional language '
+    '(leans, skews, reads as, worth testing).\n')
+
+STRATEGY_GUIDANCE = (
+    'WHITE-SPACE / OPPORTUNITY PLAYBOOK (this ask is strategic):\n'
+    'White space = categories where this audience\'s demand is strong '
+    'but the subject\'s current product coverage is thin or absent.\n'
+    '- DEMAND comes from the stored category mix and the profile rows '
+    'above. Reuse those exact shares; never re-derive them.\n'
+    '- COVERAGE comes from research: where the subject\'s product '
+    'line is already strong versus thin or absent. Neighbor evidence '
+    'shows where comparable audiences are already served.\n'
+    '- Reply shape: a short prose verdict naming the top 2 or 3 '
+    'white-space categories, each with its demand number and a '
+    'coverage rationale. Then the ranked breakdown table: every row '
+    'is a category with share_pct = the audience demand share '
+    '(reused from the stored mix where it exists) and note = the '
+    'coverage read plus the opportunity read in a few words.\n'
+    '- Demand numbers are Tier-1 (flat, exact). Coverage and '
+    'opportunity reads are Tier-2 (leans, underserved, worth '
+    'testing). The first line names the cohort the read covers.\n')
+
 
 def detect_analysis_ask(text):
     """True when a message that reached the build surface is actually
@@ -2362,14 +2496,19 @@ def detect_analysis_ask(text):
     t = str(text or '').strip()
     if not t or len(t) > 600:
         return False
-    if _GENERATE_EXCLUDE_RX.search(t):
+    if _is_build_request(t):
         return False
     if detect_deck_intent(t):
         return False
+    question = bool(_ANALYSIS_QUESTION_RX.search(t))
+    # Opportunity / white-space asks are analysis asks (2026-08-27):
+    # a question about where demand is underserved reads the data, it
+    # never builds anything.
+    if _STRATEGY_RX.search(t) and (question or t.rstrip().endswith('?')):
+        return True
     if detect_metric_kpi_intent(t) or detect_generate_intent(t):
         return True
     dim = detect_breakdown_intent(t)
-    question = bool(_ANALYSIS_QUESTION_RX.search(t))
     behavior = bool(_ANALYSIS_BEHAVIOR_RX.search(t))
     subcut = detect_subcut_intent(t)
     if dim and (question or behavior or subcut):
@@ -2400,7 +2539,13 @@ _ASK_CLASSIFY_SYSTEM = (
     'valuable a slice of it is. Question forms in any word order '
     'count ("what category of toys do X buy", "which toys are X '
     'buying", "top toy categories for X", "what do X purchase for '
-    'their kids").\n'
+    'their kids"). Strategic and opportunity questions about an '
+    'audience are ALSO analysis: white space, underserved or untapped '
+    'categories, gaps, what a brand should launch or make for this '
+    'audience, where the opportunity is. A question that contains '
+    'verbs like create/build/make is still analysis when it asks '
+    'about opportunity or behavior rather than requesting a new '
+    'profile.\n'
     '- "build": a request to build, create, pull, run, queue, or '
     'refresh a profile or audience.\n'
     '- "cut": a request to derive a cut (gender, age, geo, avid) '
@@ -2419,12 +2564,13 @@ def analysis_ask_candidate(text):
     t = str(text or '').strip()
     if not t or len(t) > 600:
         return False
-    if _GENERATE_EXCLUDE_RX.search(t) or _CUT_REQUEST_RX.search(t):
+    if _is_build_request(t) or _CUT_REQUEST_RX.search(t):
         return False
     if detect_deck_intent(t) or detect_csv_download_intent(t):
         return False
     return bool(_ANALYSIS_QUESTION_RX.search(t)
                 or _ANALYSIS_BEHAVIOR_RX.search(t)
+                or _STRATEGY_RX.search(t)
                 or re.match(r'\s*(?:do|does|are|is|top)\b', t,
                             re.IGNORECASE)
                 or t.rstrip().endswith('?'))
@@ -2441,7 +2587,7 @@ def classify_ask_semantic(text, claude_json_fn):
     t = str(text or '').strip()
     if not t:
         return 'other'
-    if _GENERATE_EXCLUDE_RX.search(t):
+    if _is_build_request(t):
         return 'build'
     if _CUT_REQUEST_RX.search(t):
         return 'cut'
@@ -2809,8 +2955,8 @@ def enforce_metrics_coherence(data):
         'window_label': str(data.get('window_label') or '').strip()[:80],
         'window_start': str(data.get('window_start') or '').strip()[:12],
         'window_end': str(data.get('window_end') or '').strip()[:12],
-        'headline': str(data.get('headline') or '').strip()[:300],
-        'reads': [str(r).strip()[:320]
+        'headline': _clip_text(data.get('headline'), 300),
+        'reads': [_clip_text(r, 320)
                   for r in (data.get('reads') or []) if str(r).strip()][:5],
     }
     metrics, seen = [], set()

@@ -60082,6 +60082,7 @@ https://www.instagram.com/p/..."></textarea>
                     // in this user's history so a tab refresh / Render
                     // redeploy doesn't orphan an in-flight run.
                     _synthChatResumeIfInFlight();
+                    try { _pmResumeReadJobs(); } catch (_) {}
                     _synthChatShowWelcomeBack();
                 })
                 .catch(function(){});
@@ -60693,6 +60694,87 @@ https://www.instagram.com/p/..."></textarea>
                 } catch (_) {}
                 return;
             }
+        }
+
+        // Background generated reads (2026-08-27): fresh analysis
+        // reads ride a server job; the widget polls read-status and
+        // renders the read when it lands, surviving reloads and phone
+        // backgrounding via localStorage resume.
+        function _pmReadJobsLoad() {
+            try {
+                return JSON.parse(localStorage.getItem('pmReadJobs') || '[]');
+            } catch (_) { return []; }
+        }
+        function _pmReadJobsSave(list) {
+            try {
+                localStorage.setItem('pmReadJobs',
+                    JSON.stringify((list || []).slice(-6)));
+            } catch (_) {}
+        }
+        function _pmTrackReadJob(id) {
+            var jobs = _pmReadJobsLoad().filter(function(j) {
+                return j && j.id !== id;
+            });
+            jobs.push({ id: id, ts: Date.now() });
+            _pmReadJobsSave(jobs);
+        }
+        function _pmUntrackReadJob(id) {
+            _pmReadJobsSave(_pmReadJobsLoad().filter(function(j) {
+                return j && j.id !== id;
+            }));
+        }
+        async function _pmPollReadJob(jobId) {
+            _pmTrackReadJob(jobId);
+            var waited = 0, misses = 0;
+            while (waited < 900000) {
+                await new Promise(function(res) { setTimeout(res, 5000); });
+                waited += 5000;
+                var st = null, code = 0;
+                try {
+                    var r = await fetch('/api/brief-chat/read-status/' + jobId,
+                        { credentials: 'same-origin' });
+                    code = r.status;
+                    st = r.ok ? await r.json() : null;
+                } catch (_) { st = null; }
+                if (!st) {
+                    if (code === 404 && ++misses >= 3) {
+                        _pmUntrackReadJob(jobId);
+                        return;
+                    }
+                    continue;
+                }
+                misses = 0;
+                if (st.status === 'done' && st.payload && st.payload.reply) {
+                    _pmUntrackReadJob(jobId);
+                    var p = st.payload;
+                    var opts = (p.followups || []).map(function(f) {
+                        return { label: f, send: f };
+                    });
+                    if (opts.length) {
+                        _synthChatPushTurnWithMeta('agent', p.reply,
+                            { options: opts });
+                    } else {
+                        synthChatPushTurn('agent', p.reply);
+                    }
+                    return;
+                }
+                if (st.status === 'error') {
+                    _pmUntrackReadJob(jobId);
+                    synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
+                    return;
+                }
+            }
+            _pmUntrackReadJob(jobId);
+        }
+        function _pmResumeReadJobs() {
+            var jobs = _pmReadJobsLoad(), now = Date.now();
+            jobs.forEach(function(j) {
+                if (j && j.id && (now - (j.ts || 0)) < 1200000) {
+                    try { _pmPollReadJob(j.id); } catch (_) {}
+                } else if (j && j.id) {
+                    _pmUntrackReadJob(j.id);
+                }
+            });
         }
 
         // Plain-English label for a { start, end } range object.
@@ -62141,6 +62223,15 @@ https://www.instagram.com/p/..."></textarea>
                     return 'reroute';
                 }
                 _pmAnalysisActive = true;
+                if (data.read_job_id) {
+                    // Fresh generation riding a background job: show
+                    // the holding line, poll until the read lands.
+                    synthChatPushTurn('agent', data.reply ||
+                        'On it. The read will land right here when ' +
+                        'it is ready.');
+                    try { _pmPollReadJob(data.read_job_id); } catch (_) {}
+                    return 'done';
+                }
                 var opts = (data.followups || []).map(function(f) {
                     return { label: f, send: f };
                 });
@@ -62587,6 +62678,11 @@ https://www.instagram.com/p/..."></textarea>
                         _gMsg = '';
                     }
                     synthChatPushTurn('agent', _gMsg || SYNTH_CHAT_CALM_MSG);
+                    if (data.read_job_id) {
+                        // Analysis read generating in the background
+                        // (2026-08-27): poll until it lands in-thread.
+                        try { _pmPollReadJob(data.read_job_id); } catch (_) {}
+                    }
                     return;
                 }
                 // Echo estimated_credits onto spec_draft so
@@ -62975,8 +63071,20 @@ https://www.instagram.com/p/..."></textarea>
             if (step === 'viewer_audience') {
                 // 2026-08-27 (Paw Patrol directive): a preschool/kids
                 // title picks its universe - actual under-18 viewers
-                // or parents of the viewers. Sends match the Python
-                // parser branches exactly.
+                // or parents of the viewers. kind='product' is the
+                // kids-product twin (Toca Boca directive): players
+                // themselves vs parents of the players. Sends match
+                // the Python parser branches exactly.
+                var _vaCD = ((synthChatCurrentDraft || d || {})
+                    .viewer_audience_data) || {};
+                if (String(_vaCD.kind || '') === 'product') {
+                    return [
+                        {label: 'The players themselves',
+                         send: 'the players themselves'},
+                        {label: 'Parents of the players',
+                         send: 'parents of the players'}
+                    ];
+                }
                 return [
                     {label: 'Actual under-18 viewers',
                      send: 'actual under-18 viewers'},
@@ -63319,12 +63427,19 @@ https://www.instagram.com/p/..."></textarea>
             if (step === 'viewer_audience') {
                 // 2026-08-27 (Paw Patrol directive): preschool/kids
                 // title - actual under-18 viewers vs parents of the
-                // viewers. Data rides the draft (stashed by the
-                // interpret step).
+                // viewers. kind='product' is the kids-product twin
+                // (Toca Boca directive). Data rides the draft
+                // (stashed by the interpret step).
                 var _vaDraft = synthChatCurrentDraft || {};
                 var _vaD = _vaDraft.viewer_audience_data || {};
                 var _vaT = String(_vaD.title || _vaDraft.subject ||
                     'This title');
+                if (String(_vaD.kind || '') === 'product') {
+                    return _vaT + ' is made for kids. Should the ' +
+                        'profile cover the players themselves (the ' +
+                        'under-18 end users), or the parents of the ' +
+                        'players (the adults who download and buy)?';
+                }
                 return _vaT + ' is made for a young audience. ' +
                     'Should the profile cover the actual under-18 ' +
                     'viewers, or the parents of the viewers?';

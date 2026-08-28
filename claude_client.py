@@ -151,6 +151,7 @@ def claude_reason_json(
     max_retries: int = 3,
     raise_on_error: bool = False,
     usage_tag=None,
+    tools=None,
 ) -> str:
     """Send a single-shot reasoning prompt to Claude; return the raw text.
 
@@ -204,6 +205,12 @@ def claude_reason_json(
                 system=_system_param,
                 messages=[{"role": "user", "content": user}],
             )
+            if tools:
+                # Server tools (e.g. web_search): the model researches
+                # in-flight and the response interleaves tool blocks
+                # with text blocks (2026-08-27, Prometheus generation
+                # loop).
+                _kwargs["tools"] = tools
             if not _model_omits_temperature(model_id):
                 _kwargs["temperature"] = temperature
 
@@ -248,6 +255,15 @@ def claude_reason_json(
             except Exception:
                 pass
             blocks = resp.content or []
+            if tools:
+                # Tool-using responses interleave search/tool blocks
+                # with several text blocks; the JSON payload may sit in
+                # the last one. Join every text block.
+                parts = [getattr(b, "text", None) for b in blocks]
+                joined = "\n".join(p for p in parts if p)
+                if joined:
+                    return joined
+                return ""
             for b in blocks:
                 txt = getattr(b, "text", None)
                 if txt:

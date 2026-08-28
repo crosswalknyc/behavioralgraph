@@ -9546,7 +9546,8 @@ the 79.4M projected base; every absolute count is the panel n times 32.99.
 
 def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
                            temperature=0.4, model=None,
-                           salvage_arrays=False, usage_tag=None):
+                           salvage_arrays=False, usage_tag=None,
+                           tools=None):
     """
     Run a single Claude reasoning pass, parse the response as a JSON object,
     and return either {'success': True, 'data': {...}, 'model': '...'} or
@@ -9587,6 +9588,7 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
             temperature=temperature,
             raise_on_error=True,
             usage_tag=usage_tag,
+            tools=tools,
         )
     except Exception as exc:
         return {'success': False, 'status': 502,
@@ -9622,6 +9624,7 @@ def _run_nflx_claude_agent(*, system_prompt, user_prompt, max_tokens=8192,
                 temperature=0.2,
                 raise_on_error=True,
                 usage_tag=usage_tag,
+                tools=tools,
             )
             parsed = _extract_json_object(raw2)
             if parsed is None and salvage_arrays:
@@ -44681,6 +44684,35 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "no parentheticals about platforms or values. Pins belong in "
         "subject_rows and nowhere in prose.\n\n"
 
+        "KIDS' PRODUCTS - WHO IS THE UNIVERSE (2026-08-27):\n"
+        "When the subject is a PRODUCT whose end users are "
+        "predominantly children under 13 - kids play apps (Toca "
+        "Boca, PBS Kids Games), kid-dominant game platforms "
+        "(Roblox), toy brands, preschool character franchises - two "
+        "different universes exist: the under-18 end users who "
+        "actually play with it, and the parents who download, buy, "
+        "and manage it. Emit `kids_product`: true|false on every "
+        "draft. True ONLY for that class. False for TV shows and "
+        "films (the viewers pathway owns those), family brands "
+        "whose users span all ages (Nintendo, Pixar, LEGO's adult "
+        "lines), teen-dominant products, and adult/general "
+        "products. When kids_product is true:\n"
+        "  * If the request's own words already pick a side, honor "
+        "them in the subject name: play-framed words ('players', "
+        "'the kids themselves', 'end users') -> '{Product} - "
+        "Players' with an under-18 demo shape (AGE concentrated in "
+        "17 AND UNDER); purchase-framed words ('buyers', 'people "
+        "who purchase', 'parents', 'moms') -> '{Product} - Parents "
+        "of Players' with an adult parent demo shape (25-44, "
+        "parental status very high).\n"
+        "  * If the request does not say which side, keep the clean "
+        "product name and shape demos for the PARENTS (the adult "
+        "cohort digital behavior measures) - the flow asks the user "
+        "one question and renames from their answer.\n"
+        "  * Never build a kids product on an under-18 demo shape "
+        "without the request (or the clarify answer) naming the "
+        "players side.\n\n"
+
         "SAMPLE-SIZE HEURISTICS (subject_raw for TU cohort):\n"
         "  KEY INSIGHT: subject_raw is 'how many of the fixed 10,000,000 "
         "panelists engaged with the subject in the window'. This IS the "
@@ -44932,6 +44964,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  \"ip_scope\": \"broad|consumers\" or null (null = ask the user; see IP AUDIENCE SCOPE),\n"
         "  \"consumer_verb\": \"viewers|readers|listeners|players\" or null,\n"
         "  \"consumers_sample_fraction\": <float 0.15-0.90 or null - consumed-share of the broad engager universe>,\n"
+        "  \"kids_product\": <true|false - see KIDS' PRODUCTS: true ONLY when the subject is a product/app/game/toy/franchise whose end users are predominantly children under 13>,\n"
         "  \"home_platform_rows\": [[\"STREAMING/PLATFORM\",\"Starz\"], ...] or [],\n"
         "  \"run_avid\": <true|false>,\n"
         "  \"subject_rows\": [[\"CATEGORY\",\"Value\"], ...],\n"
@@ -50588,6 +50621,17 @@ def api_synth_chat_clarify():
             except Exception as _vsg_err:
                 print(f"[ip-scope] viewer-scope chain skipped: "
                       f"{_vsg_err}")
+            # Kids-product definition chain (2026-08-27 Toca Boca):
+            # a players-only pick on a kids' game/app resolves WHO
+            # those players are - 'X Players' reads as the under-18
+            # end users and silently renames to 'X - Players'; a
+            # non-kids product is untouched.
+            try:
+                _apply_product_audience_guard(draft, answer,
+                                              allow_ask=True)
+            except Exception as _pag_err:
+                print(f"[ip-scope] product-audience chain skipped: "
+                      f"{_pag_err}")
             head = (f"Got it - building on {verb} only. The profile "
                     f"is now {draft.get('subject') or subject}.")
             for _note_key in ('viewer_audience_note', 'viewer_scope_note'):
@@ -50650,21 +50694,40 @@ def api_synth_chat_clarify():
         # directive): a preschool/kids title asks whether the universe
         # is the actual under-18 viewers or the parents of the
         # viewers. Data was stashed by _apply_viewer_scope_guard.
+        # kind='product' is the kids-product twin (2026-08-27 Toca
+        # Boca directive, stashed by _apply_product_audience_guard):
+        # the players themselves vs the parents who buy.
         from migration.viewer_content_scope import (
             audience_from_text as _va_from_text,
+            product_audience_from_text as _pa_from_text,
         )
         data = draft.get('viewer_audience_data') or {}
+        is_product = str(data.get('kind') or '') == 'product'
         title = str(data.get('title') or subject)
         low = answer.lower().strip()
-        choice = _va_from_text(answer)
+        choice = (_pa_from_text(answer) if is_product
+                  else _va_from_text(answer))
         if not choice:
             if _re.search(r'\bparents?\b|\bmoms?\b|\bdads?\b'
-                          r'|\badults?\b', low):
+                          r'|\badults?\b|\bbuyers?\b', low):
                 choice = 'parents'
             elif _re.search(r'\bkids?\b|\bchild(?:ren)?\b|\bactual\b'
-                            r'|\bunder\b|\b17\b|\b18\b|\byoung\b', low):
+                            r'|\bunder\b|\b17\b|\b18\b|\byoung\b'
+                            r'|\bplayers?\b', low):
                 choice = 'under18'
         if not choice:
+            if is_product:
+                return jsonify({
+                    'success': True, 'draft': draft,
+                    'message': (f"{title} is made for kids - should "
+                                f"the profile cover the players "
+                                f"themselves (the under-18 end "
+                                f"users), or the parents of the "
+                                f"players (the adults who download "
+                                f"and buy)? Pick below, or reply "
+                                f"players or parents."),
+                    'next_step': 'viewer_audience',
+                })
             return jsonify({
                 'success': True, 'draft': draft,
                 'message': (f"{title} is made for a young audience - "
@@ -50674,10 +50737,17 @@ def api_synth_chat_clarify():
                             f"or kids."),
                 'next_step': 'viewer_audience',
             })
-        _bind_viewer_audience(draft, data, choice)
+        if is_product:
+            _bind_product_audience(draft, data, choice)
+            who = ('the parents of the players'
+                   if choice == 'parents'
+                   else 'the under-18 players themselves')
+        else:
+            _bind_viewer_audience(draft, data, choice)
+            who = ('the parents and co-viewing adults'
+                   if choice == 'parents'
+                   else 'the actual under-18 viewers')
         draft.pop('viewer_audience_data', None)
-        who = ('the parents and co-viewing adults' if choice == 'parents'
-               else 'the actual under-18 viewers')
         head = (f"Got it - building on {who}. The profile is now "
                 f"{draft.get('subject') or subject}.")
         if draft.get('ask_viewer_scope') and \
@@ -51376,12 +51446,18 @@ def api_synth_chat_interpret():
                                 "CSV\" and I'll drop the file.")
             # The guidance shape is the one payload this surface
             # renders as a plain chat turn without an approval card.
-            return jsonify({
+            _guid = {
                 'success': False,
                 'guidance': True,
                 'analysis_read': True,
                 'error': _reply_text,
-            })
+            }
+            # Fresh generations ride a background job (2026-08-27):
+            # the widget polls read-status and swaps the holding line
+            # for the finished read when it lands.
+            if _deflect_payload.get('read_job_id'):
+                _guid['read_job_id'] = _deflect_payload['read_job_id']
+            return jsonify(_guid)
     except Exception:
         traceback.print_exc()
 
@@ -51720,6 +51796,20 @@ def api_synth_chat_interpret():
                 _apply_viewer_scope_guard(spec_draft, text, allow_ask=True)
         except Exception as _vsc_err:
             print(f"[synth-chat interpret] viewer-scope error: {_vsc_err}")
+
+        # Kids-product definition (2026-08-27 Jenna, Toca Boca
+        # directive): a product whose end users are predominantly
+        # children asks WHO the universe is - the players themselves
+        # or the parents who buy - before composing anything. Waits
+        # behind a pending ip-scope ask (one question per turn; the
+        # ip_scope handler chains this guard after its answer).
+        try:
+            if not spec_draft.get('ask_ip_scope'):
+                _apply_product_audience_guard(spec_draft, text,
+                                              allow_ask=True)
+        except Exception as _pag_err:
+            print(f"[synth-chat interpret] product-audience error: "
+                  f"{_pag_err}")
 
         # Sample-lock passthrough (2026-08-19 incidence check): when
         # the user ran a sample check and replied "run it", the
@@ -53753,7 +53843,7 @@ def _pm_model_chain():
 
 def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
                     temperature=0.5, surface='analysis',
-                    usage_extras=None):
+                    usage_extras=None, tools=None):
     """JSON reasoning pass on the strongest model that answers. Walks
     the Opus candidate chain once, caches the winner for the process
     lifetime, and always keeps the interpret sonnet as the final
@@ -53787,21 +53877,38 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
     except Exception:
         pass
     last = None
-    for m in _pm_model_chain():
-        result = _run_nflx_claude_agent(
-            system_prompt=system_prompt, user_prompt=user_prompt,
-            max_tokens=max_tokens, temperature=temperature, model=m,
-            usage_tag=((surface, 'chatbot', usage_extras)
-                       if usage_extras else (surface, 'chatbot')))
-        if result.get('success'):
-            with _pm_model_lock:
-                if _pm_resolved_model['name'] != m:
-                    print(f"[prometheus] analysis model resolved: {m}")
-                    _pm_resolved_model['name'] = m
-            return result
-        print(f"[prometheus] model {m} failed "
-              f"({str(result.get('error') or '')[:160]}); trying next")
-        last = result
+    # Tool plans (2026-08-27, the generation loop): when the caller
+    # asks for web research, try the current web_search tool type,
+    # then the legacy type, then no tools at all - research is
+    # additive and must never make a read fail.
+    tool_plans = [tools] if tools else [None]
+    if tools:
+        try:
+            import prometheus_analysis as _pma_tools
+            if tools == [_pma_tools.WEB_SEARCH_TOOL]:
+                tool_plans = [[_pma_tools.WEB_SEARCH_TOOL],
+                              [_pma_tools.WEB_SEARCH_TOOL_LEGACY], None]
+            else:
+                tool_plans = [tools, None]
+        except Exception:
+            tool_plans = [tools, None]
+    for _tp in tool_plans:
+        for m in _pm_model_chain():
+            result = _run_nflx_claude_agent(
+                system_prompt=system_prompt, user_prompt=user_prompt,
+                max_tokens=max_tokens, temperature=temperature, model=m,
+                usage_tag=((surface, 'chatbot', usage_extras)
+                           if usage_extras else (surface, 'chatbot')),
+                tools=_tp)
+            if result.get('success'):
+                with _pm_model_lock:
+                    if _pm_resolved_model['name'] != m:
+                        print(f"[prometheus] analysis model resolved: {m}")
+                        _pm_resolved_model['name'] = m
+                return result
+            print(f"[prometheus] model {m} failed "
+                  f"({str(result.get('error') or '')[:160]}); trying next")
+            last = result
     return last or {'success': False, 'status': 503,
                     'error': 'no reasoning model available'}
 
@@ -54326,10 +54433,22 @@ def _pm_search_demand_response(user, text, history):
         'profile': study.get('subject')})
 
 
+def _pm_history_bind_text(history):
+    """Referent text for an anaphoric ask ('this audience', 'them'):
+    the last few thread turns, newest last, so subject inference can
+    bind whatever the thread just read."""
+    parts = []
+    for turn in (history or [])[-6:]:
+        t = str((turn or {}).get('text') or '').strip()
+        if t:
+            parts.append(t[:400])
+    return '\n'.join(parts)
+
+
 def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                   anchors_block='', charge_done=False,
                                   ctx=None, digest_block='',
-                                  prefer_catalog=False):
+                                  prefer_catalog=False, async_fresh=None):
     """Reasoned measurement read (2026-08-26, Jenna): a concrete
     number for a digitally observable ask the open data does not
     cover, or the read for a sub-cohort the open data does not
@@ -54377,6 +54496,19 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                                    prefer_catalog=prefer_catalog)
     except Exception:
         traceback.print_exc()
+    if not base and history:
+        # Anaphoric ask (2026-08-27, Jenna's white-space ask): "this
+        # audience" names no subject; the thread does. Resolve the
+        # referent from recent turns and bind that base.
+        try:
+            if pma.ask_is_anaphoric(text):
+                _hist_text = _pm_history_bind_text(history)
+                if _hist_text:
+                    base = _pm_generation_base(subj_hint, _hist_text,
+                                               ctx=ctx,
+                                               prefer_catalog=True)
+        except Exception:
+            traceback.print_exc()
     if not base:
         subj_name = (subj_hint or pma.guess_subject_from_text(text)
                      or 'that subject')
@@ -54438,9 +54570,67 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             'followups': _replay_chips,
             'offer_deck': False, 'deck_angle': None,
             'profile': led.get('subject') or subj_hint or None})
-    # First-party anchors: when the caller (analyze path) already built
-    # the cross-module block, reuse it; otherwise resolve the subject
-    # from the question against the catalog / SubIQ / trends indexes.
+    # No stored read to replay: this is a FRESH generation, which
+    # runs the full operating loop (corpus retrieval, live research,
+    # examples-as-foundation) and can take tens of seconds. By
+    # default it rides a background job the widget polls - the reply
+    # survives phone backgrounding and reloads (2026-08-27, the
+    # fallback Jenna kept hitting was the client fetch dying mid-
+    # generation, not the server failing).
+    if async_fresh is None:
+        async_fresh = True
+    if async_fresh:
+        job_id = uuid.uuid4().hex[:12]
+        _pm_read_status_write(job_id, {
+            'job_id': job_id, 'user': _pm_user, 'status': 'working',
+            'question': text[:300], 'started_at': time.time()})
+        threading.Thread(
+            target=_pm_run_read_job,
+            args=(job_id, _pm_user, _pm_ppu, text,
+                  list(history or [])[-10:], mr, base, digest_block,
+                  anchors_block, led),
+            daemon=True).start()
+        _pm_ask_hint(outcome='answered', subject=base.get('subject'))
+        return jsonify({
+            'success': True, 'action': 'answer',
+            'read_job_id': job_id,
+            'reply': ('On it. This one takes a real look at the data '
+                      'plus some research, so give me a moment - the '
+                      'read will land right here when it is ready.'),
+            'followups': [], 'offer_deck': False, 'deck_angle': None})
+    payload = _pm_generate_read_core(
+        text=text, history=history, mr=mr, base=base,
+        digest_block=digest_block, anchors_block=anchors_block,
+        led=led, pm_user=_pm_user, pm_ppu=_pm_ppu)
+    try:
+        _pm_csv_point(payload.get('profile'), text,
+                      (payload.get('_family') or ''))
+    except Exception:
+        pass
+    payload.pop('_family', None)
+    return jsonify(payload)
+
+
+def _pm_generate_read_core(*, text, history, mr, base, digest_block,
+                           anchors_block, led, pm_user, pm_ppu):
+    """Fresh generated read - the operating loop (2026-08-27, Jenna:
+    "it truly needs to be really smart"). Request-context free so it
+    runs identically inline and inside a background read job.
+
+    1. CONTEXT BIND: the base profile's rows, cross-module anchors,
+       the subject's ledger history, worked examples from the whole
+       ledger, and neighbor evidence from across the ~4,200-profile
+       library (model-picked comparables, digests cached by ETag).
+    2. GAP RESEARCH: the reasoning call carries the web_search tool
+       and researches what the grounding cannot answer, approved
+       sources only, never named in output.
+    3. SYNTHESIZE: playbooks + coherence enforcement.
+    4. BANK: the read persists with its derivation trail and becomes
+       a worked example for the next ask.
+
+    Returns the response payload dict (plus internal '_family')."""
+    import prometheus_analysis as pma
+    import insights_ledger as il
     if not anchors_block:
         try:
             _xm_trends_reader = None
@@ -54457,10 +54647,44 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         except Exception:
             traceback.print_exc()
             anchors_block = ''
+    # Corpus-wide neighbor evidence (2026-08-27, Jenna: "it can go
+    # through all the profiles"): comparable audiences from the whole
+    # library, model-picked for this ask, digests cached by ETag.
+    neighbor_block, neighbor_names = '', []
+    try:
+        import prometheus_corpus as pmc
+        neighbor_block, neighbor_names = pmc.gather_neighbor_evidence(
+            s3_client, S3_BUCKET, text, base.get('subject'),
+            _profile_catalog_for_chat(),
+            lambda s, u: _pm_claude_json(s, u, max_tokens=400,
+                                         temperature=0.0,
+                                         surface='corpus_select',
+                                         usage_extras=pm_ppu),
+            k=6)
+    except Exception:
+        traceback.print_exc()
+    # Bank-as-foundation: nearest prior delivered reads ride the
+    # prompt as worked examples (method + voice, never numbers).
+    examples_block = ''
+    try:
+        _ex = il.examples(question=text, subject=base.get('subject'))
+        examples_block = il.render_examples_block(_ex)
+    except Exception:
+        traceback.print_exc()
     user_prompt = pma.build_reasoned_metrics_user_prompt(
         text, history, metric_request=mr or None,
         anchors_block=anchors_block, ledger_block=led.get('block'),
         profile_rows_block=digest_block)
+    extra_blocks = [b for b in (neighbor_block, examples_block) if b]
+    extra_blocks.append(pma.GENERATION_LOOP_GUIDANCE)
+    is_strategy = False
+    try:
+        is_strategy = pma.detect_strategy_intent(text)
+    except Exception:
+        pass
+    if is_strategy:
+        extra_blocks.append(pma.STRATEGY_GUIDANCE)
+    user_prompt = user_prompt + '\n\n' + '\n\n'.join(extra_blocks)
     try:
         import prometheus_knowledge as _pmk
         _kb = _pmk.knowledge_block('measured_read', text=text,
@@ -54469,9 +54693,14 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             user_prompt = f"{user_prompt}\n\n{_kb}"
     except Exception:
         pass
+    print(f"[pm-loop] grounding: base={base.get('s3_key')!r} "
+          f"neighbors={neighbor_names} "
+          f"examples={'yes' if examples_block else 'no'} "
+          f"strategy={is_strategy}")
     result = _pm_claude_json(pma.REASONED_METRICS_SYSTEM_PROMPT,
                              user_prompt, max_tokens=4000,
-                             temperature=0.4, usage_extras=_pm_ppu)
+                             temperature=0.4, usage_extras=pm_ppu,
+                             tools=[pma.WEB_SEARCH_TOOL])
     if not result.get('success'):
         _chatbot_error_email(
             'brief-chat/analyze',
@@ -54479,7 +54708,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             + str(result.get('error') or 'unknown')[:400],
             tb='(model chain exhausted without a usable reply)')
         _pm_ask_hint(outcome='error')
-        return jsonify(_chatbot_calm_payload())
+        return _chatbot_calm_payload()
     data = result.get('data') or {}
     if isinstance(data, list):
         data = next((d for d in data if isinstance(d, dict)), {})
@@ -54489,10 +54718,10 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                 'alternative': 'the digital read on the same subject'}
         reply, followups = pma.build_not_quantifiable_reply(text, gate)
         _pm_ask_hint(outcome='declined_not_quantifiable')
-        return jsonify({
+        return {
             'success': True, 'action': 'answer', 'reply': reply,
             'followups': followups, 'offer_deck': False,
-            'deck_angle': None, 'not_quantifiable': 'model_decline'})
+            'deck_angle': None, 'not_quantifiable': 'model_decline'}
     try:
         res = pma.enforce_metrics_coherence(data)
         reply = pma.format_generated_metrics_reply(res)
@@ -54500,7 +54729,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         traceback.print_exc()
         _chatbot_error_email('brief-chat/analyze', e)
         _pm_ask_hint(outcome='error')
-        return jsonify(_chatbot_calm_payload())
+        return _chatbot_calm_payload()
     followups = [pma.scrub_user_text(str(f).strip())[:160]
                  for f in (data.get('followups') or [])
                  if str(f).strip()][:3]
@@ -54512,9 +54741,16 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             ln = ln.strip().lstrip('-').strip()
             if ln and len(anchor_names) < 6:
                 anchor_names.append(ln[:120])
+        _derivation = (
+            f"base={base.get('s3_key') or ''}; "
+            f"neighbors={', '.join(neighbor_names) or 'none'}; "
+            f"examples={'yes' if examples_block else 'no'}; "
+            f"research=web_search; "
+            f"playbook={'strategy' if is_strategy else 'standard'}")
         il.persist(
             subject=res.get('subject'),
-            metric_family=res.get('metric_family'),
+            metric_family=('strategy' if is_strategy
+                           else res.get('metric_family')),
             question=text, route='reasoned_metrics',
             metrics=res.get('metrics'),
             anchors=anchor_names,
@@ -54524,21 +54760,91 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             reply=reply, followups=followups,
             base_profile_key=base.get('s3_key'),
             cohort=res.get('cohort'),
-            breakdown=res.get('breakdown'))
+            breakdown=res.get('breakdown'),
+            derivation=_derivation)
     except Exception:
         traceback.print_exc()
-    _pm_csv_point(res.get('subject'), text, res.get('metric_family'))
     _pm_ask_hint(outcome='answered', subject=res.get('subject'))
-    if _pm_user and _pm_ppu is None:
+    if pm_user and pm_ppu is None:
         _pm_charge_async(
-            _pm_user,
+            pm_user,
             f"Chatbot Analysis [measured read] - "
             f"{res.get('subject') or 'measured read'}")
-    return jsonify({
+    return {
         'success': True, 'action': 'answer', 'reply': reply,
         'followups': followups, 'offer_deck': False, 'deck_angle': None,
         'model': result.get('model'),
-        'profile': res.get('subject')})
+        'profile': res.get('subject'),
+        '_family': ('strategy' if is_strategy
+                    else res.get('metric_family'))}
+
+
+_PM_READ_PREFIX = 'system/prometheus_reads/'
+
+
+def _pm_read_status_write(job_id, payload):
+    s3_client.put_object(
+        Bucket=S3_BUCKET, Key=f"{_PM_READ_PREFIX}{job_id}.json",
+        Body=json.dumps(payload).encode('utf-8'),
+        ContentType='application/json')
+
+
+def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
+                     digest_block, anchors_block, led):
+    """Background body of one generated read. Writes the finished
+    payload to the S3-backed job status the widget polls; a locked
+    phone or reloaded tab picks the read up when it returns."""
+    head = {'job_id': job_id, 'user': pm_user,
+            'question': text[:300], 'started_at': time.time()}
+    try:
+        payload = _pm_generate_read_core(
+            text=text, history=history, mr=mr, base=base,
+            digest_block=digest_block, anchors_block=anchors_block,
+            led=led, pm_user=pm_user, pm_ppu=pm_ppu)
+        payload.pop('_family', None)
+        if payload.get('success'):
+            _pm_read_status_write(job_id, {**head, 'status': 'done',
+                                           'payload': payload})
+        else:
+            _pm_read_status_write(job_id, {**head, 'status': 'error'})
+        print(f"[pm-loop] read {job_id} "
+              f"{'done' if payload.get('success') else 'failed'} "
+              f"for {pm_user}")
+    except Exception as e:
+        traceback.print_exc()
+        _chatbot_error_email('brief-chat/read-job', e,
+                             user_email=pm_user,
+                             payload={'job_id': job_id,
+                                      'text': text[:200]})
+        try:
+            _pm_read_status_write(job_id, {**head, 'status': 'error'})
+        except Exception:
+            pass
+
+
+@app.route('/api/brief-chat/read-status/<job_id>', methods=['GET'])
+@requires_auth
+@_chatbot_route_guard('brief-chat/read-status')
+def api_synth_chat_read_status(job_id):
+    """Poll one background generated read. Mirrors deck-status: the
+    payload is the exact analyze response the sync path would have
+    returned; on 'error' the widget shows the calm message."""
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    if not re.fullmatch(r'[0-9a-f]{12}', str(job_id or '')):
+        return jsonify({'success': False, 'error': 'bad job id'}), 400
+    try:
+        resp = s3_client.get_object(
+            Bucket=S3_BUCKET, Key=f"{_PM_READ_PREFIX}{job_id}.json")
+        payload = json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception:
+        return jsonify({'success': False, 'error': 'unknown job'}), 404
+    uname = (user.get('username') or user.get('email') or '').strip()
+    if (payload.get('user') and payload.get('user') != uname
+            and user.get('role') != 'super_admin'):
+        return jsonify({'success': False, 'error': 'not your job'}), 403
+    return jsonify({'success': True, **payload})
 
 
 @app.route('/api/brief-chat/analyze', methods=['POST'])
@@ -54636,6 +54942,16 @@ def api_synth_chat_analyze():
         if _pma_kpi.detect_metric_kpi_intent(text):
             return _pm_generate_metrics_response(
                 user, text, history, ctx=ctx, prefer_catalog=True)
+        # Strategic / opportunity asks (2026-08-27, Jenna: "What's the
+        # potential white space to create paw patrol toys for this
+        # audience"): these need the full operating loop (stored
+        # demand mix + corpus neighbors + live coverage research), so
+        # they route straight to the measured-read pass whether or
+        # not a profile is open. Anaphoric subjects resolve from the
+        # thread inside.
+        if _pma_kpi.detect_strategy_intent(text):
+            return _pm_generate_metrics_response(
+                user, text, history, ctx=ctx, prefer_catalog=True)
     except Exception:
         traceback.print_exc()
     if not ctx:
@@ -54649,7 +54965,8 @@ def api_synth_chat_analyze():
         try:
             import prometheus_analysis as _pma_gen
             if _pma_gen.detect_generate_intent(text) \
-                    or _pma_gen.detect_subcut_intent(text):
+                    or _pma_gen.detect_subcut_intent(text) \
+                    or _pma_gen.detect_analysis_ask(text):
                 return _pm_generate_metrics_response(user, text, history)
         except Exception:
             traceback.print_exc()
@@ -57401,6 +57718,133 @@ def _apply_viewer_scope_guard(draft, raw_text='', allow_ask=True,
         return False
 
 
+def _bind_product_audience(draft, doc, choice, assumed=False):
+    """In-place: bind the kids-product universe definition
+    (2026-08-27 Jenna, Toca Boca directive). 'parents' = the buying
+    adults behind the young end users; 'under18' = the players
+    themselves. Renames the subject so the definition rides the TU
+    name whole ('{Subject} - Parents of Players' / '{Subject} -
+    Players'), stamps draft['viewer_audience'] for the spec, appends
+    the membership sentence to persona_notes, and sets
+    draft['viewer_audience_note'] (partner-safe prose)."""
+    from migration.viewer_content_scope import (
+        product_audience_persona_note, product_audience_prose,
+        product_audience_subject_name,
+    )
+    if choice not in ('parents', 'under18'):
+        return draft
+    subj_now = str(draft.get('subject') or draft.get('name') or '').strip()
+    new_subj = product_audience_subject_name(subj_now, choice)
+    if new_subj and new_subj != subj_now:
+        draft['subject'] = new_subj
+        draft['name'] = new_subj
+        draft.pop('file_stem', None)
+    draft['viewer_audience'] = choice
+    draft['viewer_audience_assumed'] = bool(assumed)
+    draft.pop('ask_viewer_audience', None)
+    if not isinstance(doc, dict) or not doc.get('subject'):
+        doc = dict(doc or {})
+        doc['subject'] = subj_now.split(' - ')[0].strip()
+    note = product_audience_prose(doc, choice, assumed=assumed)
+    if note:
+        draft['viewer_audience_note'] = note
+    pnote = product_audience_persona_note(doc, choice)
+    if pnote:
+        existing = str(draft.get('persona_notes') or '').rstrip()
+        if pnote not in existing:
+            draft['persona_notes'] = (existing + (' ' if existing else '')
+                                      + pnote).strip()
+    try:
+        print(f"[product-audience] bound {draft.get('subject')!r} -> "
+              f"{choice}{' (assumed)' if assumed else ''}")
+    except Exception:
+        pass
+    return draft
+
+
+# Categories where a kids-product read is plausible enough to spend a
+# cached research call even when the interpret model didn't flag it.
+_KIDS_PLAUSIBLE_CATEGORIES = frozenset((
+    'TOY', 'TOYS', 'GAMES', 'GAME PLAYERS', 'GAMES - PLAYERS',
+    'APP/PLATFORM', 'AMUSEMENT PARKS',
+))
+
+
+def _apply_product_audience_guard(draft, raw_text='', allow_ask=True,
+                                  decision=None):
+    """In-place bind-or-ask for the kids-product universe definition
+    (2026-08-27 Jenna, Toca Boca directive: a child's toy app built a
+    parental audience without ever asking which side was wanted).
+
+    Fresh-build product subjects only (cuts / existing matches keep
+    their parent's definition), and only when the viewers pathway
+    does not own the subject (consumption-scoped titles have their
+    own kids-title clarify). Fires when the interpret model flagged
+    kids_product OR the category is kids-plausible; a cache-first
+    research read then confirms the end users are predominantly
+    children before anything asks or binds:
+      * dashboard (allow_ask=True): stashes ask_viewer_audience /
+        viewer_audience_data (kind='product') so the same chip step
+        runs - players themselves vs parents of the players; returns
+        True when stashed.
+      * partner API (allow_ask=False): binds what the ask's own words
+        framed - play-framed words read as the under-18 players,
+        purchase-framed words as the buying parents - and defaults to
+        parents otherwise, with the choice stated in
+        draft['viewer_audience_note'].
+    Fail-open: any research failure leaves the draft untouched."""
+    try:
+        if not isinstance(draft, dict):
+            return False
+        dec = str(decision or draft.get('decision')
+                  or 'new_build').strip().lower()
+        if dec not in ('new_build', 'time_shifted_refresh',
+                       'cut_needs_parent'):
+            return False
+        if draft.get('viewer_audience') in ('parents', 'under18'):
+            return False
+        if draft.get('ask_viewer_audience'):
+            return False
+        subj = str(draft.get('subject') or draft.get('name') or '').strip()
+        if not subj:
+            return False
+        cat = str(draft.get('brand_category') or '').strip().upper()
+        flagged = bool(draft.get('kids_product'))
+        if not flagged and cat not in _KIDS_PLAUSIBLE_CATEGORIES:
+            return False
+        from migration.viewer_carriage import detect_consumption_scoped
+        if detect_consumption_scoped(subj):
+            return False  # viewers pathway owns titles
+        from migration.viewer_content_scope import (
+            ensure_product_audience, is_kids_product,
+            product_audience_chip_payload, product_audience_from_text,
+        )
+        doc = ensure_product_audience(subj, run_id='product-audience')
+        if not is_kids_product(doc):
+            return False
+        words = ' '.join([subj, str(raw_text or '')])
+        choice = product_audience_from_text(words)
+        if choice:
+            _bind_product_audience(draft, doc, choice)
+            return False
+        if allow_ask:
+            draft['ask_viewer_audience'] = True
+            draft['viewer_audience_data'] = \
+                product_audience_chip_payload(doc)
+            try:
+                print(f"[product-audience] {subj!r} reads as a kids' "
+                      f"{doc.get('product_type') or 'product'} - asking "
+                      f"players vs parents")
+            except Exception:
+                pass
+            return True
+        _bind_product_audience(draft, doc, 'parents', assumed=True)
+        return False
+    except Exception as _pa_err:
+        print(f"[product-audience] guard skipped (non-fatal): {_pa_err}")
+        return False
+
+
 # --------------------------------------------------------------------
 # Subject identity resolution (2026-08-24, the Furious defect).
 #
@@ -58992,6 +59436,16 @@ def _v1_conclude(prompt, run_avid=True):
                                   decision=decision)
     except Exception as _vs_err:
         print(f"[v1_conclude] viewer-scope guard skipped: {_vs_err}")
+    # Kids-product definition (2026-08-27 Toca Boca): the one-shot
+    # surface never asks - play-framed words build the under-18
+    # players, purchase-framed words the buying parents, and a bare
+    # ask defaults to parents with the choice stated in the brief
+    # summary below (viewer_audience_note).
+    try:
+        _apply_product_audience_guard(draft, prompt, allow_ask=False,
+                                      decision=decision)
+    except Exception as _pa_err:
+        print(f"[v1_conclude] product-audience guard skipped: {_pa_err}")
     # Event-scoped window (2026-08-24): resolved event dates override
     # the default window on the v1 surface too. The v1 contract has no
     # clarify round-trip, so an UNRESOLVED event window rides

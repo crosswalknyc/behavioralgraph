@@ -99,6 +99,8 @@ _FAMILY_ALIASES = (
     ('engagement', ('engag', 'session', 'visit', 'social', 'follow',
                     'app activity')),
     ('revenue', ('revenue', 'spend', 'dollar', 'arpu')),
+    ('strategy', ('strategy', 'white space', 'whitespace', 'opportunit',
+                  'underserved', 'untapped', 'unmet')),
     ('audience', ('audience', 'reach', 'fans', 'cohort')),
 )
 
@@ -270,7 +272,8 @@ def _put_entry_object(entry):
 def make_entry(*, subject, metric_family, question, route, metrics,
                anchors=None, window_start='', window_end='',
                window_label='', reply='', followups=None,
-               base_profile_key='', cohort='', breakdown=None):
+               base_profile_key='', cohort='', breakdown=None,
+               derivation=''):
     """Build one ledger entry. `metrics` is a list of dicts with
     name/label/value/unit/definition (extra keys dropped).
 
@@ -321,6 +324,11 @@ def make_entry(*, subject, metric_family, question, route, metrics,
         'reply': str(reply or '')[:MAX_REPLY_CHARS],
         'followups': [str(f)[:160] for f in (followups or [])
                       if str(f)][:4],
+        # Internal derivation trail (2026-08-27, the generation loop):
+        # what grounded the read (base, neighbors weighed, research
+        # gaps, examples). Logs and audit only - render_block never
+        # includes it, so it can never reach a prompt or a user.
+        'derivation': str(derivation or '')[:600],
     }
     return entry
 
@@ -408,7 +416,8 @@ def _record_entry_now(entry):
 def persist(*, subject, metric_family, question, route, metrics,
             anchors=None, window_start='', window_end='',
             window_label='', reply='', followups=None,
-            base_profile_key='', cohort='', breakdown=None):
+            base_profile_key='', cohort='', breakdown=None,
+            derivation=''):
     """Persist one delivered read. Never raises; never blocks the
     caller (daemon thread) unless _SYNC_FOR_TESTS."""
     try:
@@ -419,7 +428,7 @@ def persist(*, subject, metric_family, question, route, metrics,
             window_end=window_end, window_label=window_label,
             reply=reply, followups=followups,
             base_profile_key=base_profile_key, cohort=cohort,
-            breakdown=breakdown)
+            breakdown=breakdown, derivation=derivation)
         if not entry['metrics'] and not entry['reply']:
             return
         if _SYNC_FOR_TESTS:
@@ -643,6 +652,13 @@ _PARENT_TOKENS = ('parent', 'famil', 'mom', 'dad', 'caregiver',
 # over cohort nouns ("what do paw patrol VIEWERS buy" is a purchases
 # ask; 'viewers' names the cohort, not the metric).
 _ASK_FAMILY_RULES = (
+    # Strategy vocabulary wins over behavior verbs: "white space to
+    # create paw patrol toys" is an opportunity ask, not a purchases
+    # ask, even when 'buy' also appears (2026-08-27, Jenna).
+    ('strategy', ('white space', 'whitespace', 'underserved',
+                  'untapped', 'unmet', 'opportunit', 'where to play',
+                  'should launch', 'worth launching', 'worth making',
+                  'worth creating', 'worth testing')),
     ('purchases', ('buy', 'buying', 'purchas', 'shop', 'bought',
                    'spending on', 'spend on', 'order')),
     ('subscribers', ('subscri', 'signup', 'sign up', 'churn')),
@@ -695,11 +711,21 @@ def _dimension_ok(entry, qn):
         if re.search(r'categor|breakdown|\bmix\b|top \d', qn):
             return False
         return True
-    for w in dim.split():
-        if w in _DIM_STOP:
-            continue
-        if w.rstrip('s') not in qn:
-            return False
+    # ANY meaningful dimension token in the ask qualifies (2026-08-27:
+    # a stored strategy table titled "Toy category (demand vs current
+    # Paw Patrol coverage)" must replay for "what toy categories are
+    # underserved..." - requiring EVERY token blocked it). The class-
+    # word conflict check below still keeps a brand/retailer ask off a
+    # category table. Subject and cohort words inside the label never
+    # count as dimension meaning ("Paw Patrol" in the title must not
+    # bind "how big is the paw patrol audience").
+    subj_toks = set(normalize_subject(
+        f"{entry.get('subject') or ''} {entry.get('cohort') or ''}"
+    ).split())
+    dtoks = [w for w in dim.split()
+             if w not in _DIM_STOP and w not in subj_toks]
+    if dtoks and not any(w.rstrip('s') in qn for w in dtoks):
+        return False
     for c in _DIM_CLASS_WORDS:
         if c in qn and c not in dim:
             return False
@@ -734,7 +760,14 @@ def find_semantic(entries, question):
             if not (bd.get('rows') and dtoks):
                 continue
         esig = cohort_signature(e.get('cohort') or '')
-        if esig['parents'] != qsig['parents'] and e.get('cohort'):
+        # An ask that names NO cohort facts ("what toy categories are
+        # underserved for paw patrol") is unconstrained: it binds the
+        # subject's stored read whatever cohort it covers, at a
+        # distance penalty so a cohort-named ask always wins ties
+        # (2026-08-27, white-space asks).
+        q_uncons = qsig['ages'] is None and not qsig['parents']
+        if not q_uncons and esig['parents'] != qsig['parents'] \
+                and e.get('cohort'):
             continue
         qa, ea = qsig['ages'], esig['ages']
         if qa and ea:
@@ -744,9 +777,7 @@ def find_semantic(entries, question):
         elif qa and not ea:
             dist = 6
         elif ea and not qa:
-            if not qsig['parents']:
-                continue
-            dist = 8
+            dist = 8 if qsig['parents'] else 10
         else:
             dist = 0
         if not _dimension_ok(e, qn):
@@ -823,6 +854,65 @@ def consult(subject=None, question=None, metric_family=None,
     except Exception as e:
         print(f"[insights-ledger] consult failed: {e}")
         return empty
+
+
+def examples(question=None, subject=None, k=2):
+    """Worked examples for the generation loop (2026-08-27, Jenna:
+    banked reads are "foundational for similar asks as examples").
+
+    Nearest prior DELIVERED reads, ranked:
+    1. same metric family on ANOTHER subject (method exemplar - a
+       white-space read for Paw Patrol shapes next month's white-space
+       read for a different franchise),
+    2. another read on the SAME subject (grounding + voice - the toy
+       category mix grounds the white-space ask that follows it).
+    Anchors and the ask's own replay candidate are excluded. Never
+    raises; empty list on any failure."""
+    try:
+        doc = _load_index()
+        subjects = doc.get('subjects') or {}
+        fam = family_from_question(question)
+        qn = normalize_question(question)
+        skey = _resolve_subject(doc, subject=subject, question=question)
+        same_fam, same_subj = [], []
+        for bkey, bucket in subjects.items():
+            for e in reversed(list(bucket.get('entries') or [])):
+                if not isinstance(e, dict) or not e.get('reply'):
+                    continue
+                if e.get('route') == ANCHOR_ROUTE:
+                    continue
+                if qn and e.get('qn') == qn:
+                    continue    # that's the replay, not an example
+                if fam and e.get('family') == fam and bkey != skey \
+                        and len(same_fam) < k:
+                    same_fam.append(e)
+                elif bkey == skey and len(same_subj) < k:
+                    same_subj.append(e)
+        out = (same_fam + same_subj)[:k]
+        return out
+    except Exception as e:
+        print(f"[insights-ledger] examples failed: {e}")
+        return []
+
+
+def render_examples_block(entries):
+    """Prompt block carrying prior delivered reads as worked examples.
+    Method and voice transfer; the numbers never do."""
+    ents = [e for e in (entries or [])
+            if isinstance(e, dict) and e.get('reply')]
+    if not ents:
+        return ''
+    lines = [
+        'WORKED EXAMPLES - reads already delivered from this library. '
+        'Follow their METHOD, structure, table shape, tier language, '
+        'and voice. Their numbers belong to their own subjects and '
+        'cohorts: never copy a number from an example into this read.']
+    for e in ents[:3]:
+        head = ' / '.join(x for x in (e.get('subject'), e.get('cohort'),
+                                      e.get('family')) if x)
+        lines.append(f"--- EXAMPLE ({head}) ---")
+        lines.append(str(e.get('reply'))[:1700])
+    return '\n'.join(lines)
 
 
 # ---------------------------------------------------------------------------
