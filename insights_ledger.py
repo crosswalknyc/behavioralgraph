@@ -403,14 +403,101 @@ def persist(*, subject, metric_family, question, route, metrics,
         print(f"[insights-ledger] persist failed: {e}")
 
 
+ANCHOR_ROUTE = 'delivered_deck'
+
+
+def ingest_deck_anchors(*, subject, metrics, source_name='',
+                        window_start='', window_end='',
+                        window_label='', basis_notes=None):
+    """Record a shipped deliverable's headline figures as anchor
+    entries for the subject (2026-08-27, Jenna: generated reads and
+    decks must stay commensurate with what was already delivered).
+
+    Anchor entries have no reply (they never replay verbatim); their
+    metrics render into the PUBLISHED MEASUREMENTS block, which the
+    prompt wrappers already mark as binding. `basis_notes` maps a
+    metric name or label to a one-line note on how the figure was
+    produced; the note rides in the metric definition so new reads
+    extend the same logic. Re-ingesting the same source replaces the
+    prior anchor entries instead of stacking duplicates. Synchronous;
+    never raises."""
+    try:
+        clean = []
+        notes = {str(k).strip().lower(): str(v)[:200]
+                 for k, v in (basis_notes or {}).items()}
+        for m in (metrics or []):
+            if not isinstance(m, dict):
+                continue
+            m = dict(m)
+            note = notes.get(str(m.get('name') or '').strip().lower()) \
+                or notes.get(str(m.get('label') or '').strip().lower())
+            if note:
+                base_def = str(m.get('definition') or '').strip()
+                m['definition'] = (f"{base_def}; {note}" if base_def
+                                   else note)[:220]
+            clean.append(m)
+        if not clean:
+            return
+        marker = f"delivered anchors: {source_name or subject}"
+        entries = []
+        for i in range(0, len(clean), 6):
+            e = make_entry(
+                subject=subject, metric_family='delivered_anchors',
+                question=marker, route=ANCHOR_ROUTE,
+                metrics=clean[i:i + 6], window_start=window_start,
+                window_end=window_end, window_label=window_label)
+            if e['metrics']:
+                entries.append(e)
+        if not entries:
+            return
+        for e in entries:
+            try:
+                _put_entry_object(e)
+            except Exception as ee:
+                print(f"[insights-ledger] anchor entry put failed: {ee}")
+        skey = subject_key(subject)
+        marker_qn = normalize_question(marker)
+
+        def mutate(doc):
+            subj = doc['subjects'].setdefault(
+                skey, {'subject': subject or skey, 'entries': []})
+            kept = [x for x in (subj.get('entries') or [])
+                    if not (x.get('route') == ANCHOR_ROUTE
+                            and x.get('qn') == marker_qn)]
+            kept.extend(entries)
+            subj['entries'] = kept[-MAX_ENTRIES_PER_SUBJECT:]
+            doc['updated'] = entries[-1]['ts']
+            return doc
+
+        _update_index(mutate)
+    except Exception as e:
+        print(f"[insights-ledger] anchor ingest failed: {e}")
+
+
 # ---------------------------------------------------------------------------
 # Consult
 # ---------------------------------------------------------------------------
 
+# Generic audience nouns that never identify a subject on their own.
+# Mirrors the base-resolution token set in app.py so a question naming
+# "paw patrol viewer parents" still resolves the "Paw Patrol Series"
+# bucket (2026-08-27, toy-categories routing).
+_GENERIC_SUBJECT_TOKENS = {
+    'viewers', 'viewer', 'fans', 'fan', 'series', 'audience', 'buyers',
+    'buyer', 'shoppers', 'shopper', 'watchers', 'universe', 'total',
+    'tu', 'the', 'of', 'and', 'a', 'an', 'profile', 'consumers',
+    'consumer', 'customers', 'customer', 'avid', 'casual', 'movie',
+    'show', 'subscribers', 'members', 'users', 'parents', 'parent',
+    'kids', 'kid', 'potential', 'prospective', 'purchasers',
+    'purchaser',
+}
+
+
 def _resolve_subject(index_doc, subject=None, question=None):
     """Find the subject bucket for this ask. Explicit subject first
     (normalized match), else the longest ledger subject whose
-    normalized form appears inside the normalized question."""
+    normalized form appears inside the normalized question, else the
+    subject whose distinctive tokens all appear in the question."""
     subjects = index_doc.get('subjects') or {}
     if subject:
         skey = subject_key(subject)
@@ -429,14 +516,55 @@ def _resolve_subject(index_doc, subject=None, question=None):
             continue
         if f' {s_norm} ' in qn and len(s_norm) > best_len:
             best_key, best_len = k, len(s_norm)
+    if best_key:
+        return best_key
+    # Token-subset fallback: every distinctive token of the stored
+    # subject appears in the question ("paw patrol viewer parents"
+    # resolves "Paw Patrol Series"). Requires enough distinctive
+    # material (6+ chars) so short subjects never match noise.
+    q_tokens = set(qn.split())
+    for k, v in subjects.items():
+        s_norm = normalize_subject(v.get('subject'))
+        stok = [w for w in s_norm.split()
+                if w not in _GENERIC_SUBJECT_TOKENS]
+        if not stok or sum(len(w) for w in stok) < 6:
+            continue
+        if set(stok) <= q_tokens:
+            score = sum(len(w) for w in stok)
+            if score > best_len:
+                best_key, best_len = k, score
     return best_key
+
+
+def _find_exact_anywhere(subjects, question):
+    """Global exact-question scan: the most recent stored entry whose
+    normalized question matches, across every subject bucket. Replay
+    by exact ask must never depend on how the stored subject was
+    named (2026-08-27, toy-categories routing)."""
+    qn = normalize_question(question) if question else None
+    if not qn:
+        return None, None
+    best_key, best = None, None
+    for k, v in subjects.items():
+        for e in reversed(v.get('entries') or []):
+            if e.get('qn') == qn and e.get('reply'):
+                if best is None or (e.get('ts') or '') > (best.get('ts')
+                                                          or ''):
+                    best_key, best = k, e
+                break
+    return best_key, best
 
 
 def render_block(entries, limit=12):
     """PUBLISHED MEASUREMENTS body for the prompt builders: one line
-    per stored metric, most recent entries first."""
+    per stored metric. Delivered-deck anchor entries render first
+    (they are the figures already shipped for the subject and always
+    survive the line cap), then the most recent reads."""
+    anchors = [e for e in entries if e.get('route') == ANCHOR_ROUTE]
+    reads = [e for e in entries if e.get('route') != ANCHOR_ROUTE]
+    ordered = anchors[-limit:] + list(reversed(reads[-limit:]))
     lines = []
-    for e in reversed(entries[-limit:]):
+    for e in ordered[:limit]:
         win = e.get('wl') or (f"{e.get('ws')} to {e.get('we')}"
                               if e.get('ws') and e.get('we') else 'any window')
         for m in (e.get('metrics') or [])[:6]:
@@ -491,10 +619,21 @@ def consult(subject=None, question=None, metric_family=None,
              'block': '', 'exact': None}
     try:
         doc = _load_index()
+        subjects = doc.get('subjects') or {}
         skey = _resolve_subject(doc, subject=subject, question=question)
         if not skey:
-            return empty
-        bucket = (doc.get('subjects') or {}).get(skey) or {}
+            # Exact-ask replay must not depend on subject resolution:
+            # scan all buckets for this normalized question.
+            gkey, gexact = _find_exact_anywhere(subjects, question)
+            if not gexact:
+                return empty
+            bucket = subjects.get(gkey) or {}
+            entries = [e for e in (bucket.get('entries') or [])
+                       if isinstance(e, dict)]
+            return {'subject': bucket.get('subject'), 'skey': gkey,
+                    'entries': entries, 'block': render_block(entries),
+                    'exact': gexact}
+        bucket = subjects.get(skey) or {}
         entries = [e for e in (bucket.get('entries') or [])
                    if isinstance(e, dict)]
         if not entries:
@@ -504,6 +643,10 @@ def consult(subject=None, question=None, metric_family=None,
             key = entry_key(bucket.get('subject') or subject or '',
                             metric_family, window_start, window_end)
         exact = find_exact(entries, question=question, key=key)
+        if not exact:
+            gkey, gexact = _find_exact_anywhere(subjects, question)
+            if gexact:
+                exact = gexact
         return {'subject': bucket.get('subject'), 'skey': skey,
                 'entries': entries, 'block': render_block(entries),
                 'exact': exact}

@@ -200,8 +200,12 @@ def select_topic_modules(surface, text='', ctx=None, mode=None):
     mods = []
     if surface in ('deck', 'insights_deck', 'deck_plan'):
         mods.append('decks')
+        mods.append('playbooks')
     if surface == 'search_demand':
         mods.append('search_demand')
+        mods.append('playbooks')
+    if surface in ('measured_read', 'reasoned_metrics', 'metrics'):
+        mods.append('playbooks')
     ctx = ctx if isinstance(ctx, dict) else {}
     primary_name = str(((ctx.get('primary') or {}) or {}).get('name') or '')
     has_cuts = bool(ctx.get('cuts'))

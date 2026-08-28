@@ -51310,6 +51310,59 @@ def api_synth_chat_interpret():
             return jsonify(_chatbot_calm_payload())
 
     # ------------------------------------------------------------------
+    # ANALYSIS-ASK DEFLECTION (2026-08-27, Jenna's Paw Patrol toy-
+    # categories screenshot): an analysis-phrased ask ("what toy
+    # categories are parents of kids 4-6 buying of paw patrol viewer
+    # parents") that reaches this build surface must never open a build
+    # card when the named subject already has a base on file. It routes
+    # to the same measured-read path the analyze endpoint uses,
+    # anchored on that base. Only a clean delivered answer deflects;
+    # any other outcome (no base, credit gate, model trouble) falls
+    # through to the normal build interpret below. A typed CSV-export
+    # ask for the last delivered read is served the same way.
+    # ------------------------------------------------------------------
+    try:
+        import prometheus_analysis as _pma_route
+        _deflect_payload = None
+        if _pma_route.detect_csv_download_intent(text):
+            _csv_resp = _pm_csv_download_response(user, text,
+                                                  history=history)
+            _csv_obj = _csv_resp[0] if isinstance(_csv_resp, tuple) \
+                else _csv_resp
+            _csv_data = _csv_obj.get_json(silent=True) or {}
+            if _csv_data.get('success') and _csv_data.get('reply'):
+                _deflect_payload = _csv_data
+        elif _pma_route.detect_analysis_ask(text) \
+                and _pm_generation_base('', text, prefer_catalog=True):
+            _an_resp = _pm_generate_metrics_response(
+                user, text, history, prefer_catalog=True)
+            _an_obj = _an_resp[0] if isinstance(_an_resp, tuple) \
+                else _an_resp
+            _an_data = _an_obj.get_json(silent=True) or {}
+            if _an_data.get('success') and _an_data.get('reply') \
+                    and not _an_data.get('build_required') \
+                    and not _an_data.get('pay_per_use_offer'):
+                _deflect_payload = _an_data
+        if _deflect_payload:
+            _reply_text = str(_deflect_payload['reply'])
+            _fups = [str(f) for f in
+                     (_deflect_payload.get('followups') or []) if f]
+            if any(f.lower() == _pma_route.CSV_OFFER_CHIP.lower()
+                   for f in _fups):
+                _reply_text += ("\n\nReply \"download this data as a "
+                                "CSV\" and I'll drop the file.")
+            # The guidance shape is the one payload this surface
+            # renders as a plain chat turn without an approval card.
+            return jsonify({
+                'success': False,
+                'guidance': True,
+                'analysis_read': True,
+                'error': _reply_text,
+            })
+    except Exception:
+        traceback.print_exc()
+
+    # ------------------------------------------------------------------
     # DISCOVERY (2026-08-19): pitch-shaped asks without an audience
     # ("I'm pitching GoGo squeeZ") get 2-4 proposed audience framings
     # to pick from instead of a guessed build. Direct build asks skip
@@ -53890,7 +53943,8 @@ _PM_BASE_GENERIC_TOKENS = {
     'buyer', 'shoppers', 'shopper', 'watchers', 'universe', 'total',
     'tu', 'the', 'of', 'and', 'a', 'an', 'profile', 'consumers',
     'consumer', 'customers', 'customer', 'avid', 'casual', 'movie',
-    'show', 'subscribers', 'members', 'users',
+    'show', 'subscribers', 'members', 'users', 'potential',
+    'prospective', 'purchasers', 'purchaser',
 }
 
 
@@ -53944,8 +53998,15 @@ def _pm_generation_base(subject_hint, text, ctx=None,
 
     # 2. Profile catalog: a profile whose distinctive subject tokens
     # all appear in the ask (or the subject hint). TU files win over
-    # cuts; more distinctive subjects win over shorter ones.
+    # cuts; more distinctive subjects win over shorter ones. When no
+    # subject is fully named, a partial tier binds the closest catalog
+    # subject whose distinctive tokens mostly appear in the ask (at
+    # least 2 tokens at two-thirds coverage), so "what are parents of
+    # kids 4-7 buying in terms of toy categories" still reaches the
+    # parents / toy-buyers base (2026-08-27, toy-categories routing).
     best, best_score = None, (0, 0)
+    partial, partial_score = None, (0, 0.0, 0)
+    ask_tokens = q_tokens | hint_tokens
     try:
         for entry in _profile_catalog_for_chat():
             for field in ('subject', 'display_name'):
@@ -53953,22 +54014,32 @@ def _pm_generation_base(subject_hint, text, ctx=None,
                 if not toks or sum(len(t) for t in toks) < 4:
                     continue
                 tset = set(toks)
-                if not (tset <= q_tokens or tset <= hint_tokens
-                        or tset <= guess_tokens):
-                    continue
                 is_tu = ' - ' not in str(entry.get('display_name') or '')
-                score = (1 if is_tu else 0, len(toks))
-                if score > best_score:
-                    best_score = score
-                    best = {'subject': str(entry.get('subject')
-                                           or entry.get('display_name')
-                                           or '').strip(),
-                            's3_key': str(entry.get('s3_key') or ''),
-                            'source': 'catalog'}
+                cand = {'subject': str(entry.get('subject')
+                                       or entry.get('display_name')
+                                       or '').strip(),
+                        's3_key': str(entry.get('s3_key') or ''),
+                        'source': 'catalog'}
+                if (tset <= q_tokens or tset <= hint_tokens
+                        or tset <= guess_tokens):
+                    score = (1 if is_tu else 0, len(toks))
+                    if score > best_score:
+                        best_score = score
+                        best = cand
+                    continue
+                matched = len(tset & ask_tokens)
+                frac = matched / len(tset)
+                if matched >= 2 and frac >= 0.66:
+                    pscore = (1 if is_tu else 0, frac, matched)
+                    if pscore > partial_score:
+                        partial_score = pscore
+                        partial = cand
     except Exception:
         traceback.print_exc()
     if best:
         return best
+    if partial:
+        return partial
     if page_base is not None:
         return page_base
 
@@ -54293,6 +54364,21 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             'success': True, 'action': 'answer', 'reply': reply,
             'followups': followups, 'offer_deck': False,
             'deck_angle': None, 'build_required': True})
+    # Base rows ride the prompt (2026-08-27, toy-categories routing):
+    # when the caller had no open-page digest but the base resolved to
+    # a catalog profile, load that profile's digest so the read
+    # derives from the base's actual rows (a category mix weighs the
+    # base's own brand rows, not free-floating knowledge).
+    if not str(digest_block or '').strip() \
+            and str(base.get('s3_key') or '').lower().endswith('.csv'):
+        try:
+            digest_block, _base_meta = pma.get_digest_bundle(
+                s3_client, S3_BUCKET,
+                {'primary': {'s3_key': base['s3_key'],
+                             'name': base.get('subject') or ''},
+                 'cuts': []})
+        except Exception:
+            traceback.print_exc()
     led = {'block': '', 'exact': None, 'entries': []}
     try:
         led = il.consult(subject=subj_hint or None, question=text,
@@ -54982,6 +55068,19 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
             **base, 'status': 'done', 'url': url, 'filename': fname,
             'title': plan.get('title'),
             'slides': len(plan.get('slides') or [])})
+        # Delivered-deck anchors (2026-08-27): the shipped deck's
+        # headline figures become binding ledger anchors so every
+        # later read or deck for this subject stays commensurate
+        # with what was delivered.
+        try:
+            import insights_ledger as _il_anchor
+            _anchor_metrics = pma.extract_plan_anchors(plan)
+            if _anchor_metrics:
+                _il_anchor.ingest_deck_anchors(
+                    subject=subject, metrics=_anchor_metrics,
+                    source_name=fname)
+        except Exception:
+            traceback.print_exc()
         print(f"[prometheus] deck {job_id} done for {username}: {fname}")
     except Exception as e:
         traceback.print_exc()

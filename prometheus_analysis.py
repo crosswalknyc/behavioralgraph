@@ -1549,6 +1549,11 @@ _SCRUB_RULES = (
     (r'\bpanelists\b', 'viewers'),
     (r'\bpanelist\b', 'viewer'),
     (r'\bpanel\b', 'audience'),
+    # Individual-level language (standing rule): counts and cohorts
+    # are viewers / people / accounts, never households.
+    (r'\bhousehold income\b', 'income'),
+    (r'\bhouseholds\b', 'families'),
+    (r'\bhousehold\b', 'family'),
     (r'\bhetzner\b', 'server'),
     (r'\bclickhouse\b', 'server'),
     (r'\bsystemd\b', 'server'),
@@ -2302,7 +2307,8 @@ _BREAKDOWN_RX = re.compile(
     r'(?:[.?!,]|$)'
     r'|\bby ((?:toy |product |brand |content |spend(?:ing)? )?'
     r'categor(?:y|ies))\b'
-    r'|\bwhich (?:toy |product )?categories\b'
+    r'|\b(?:which|what) (?:toy |product )?categor(?:y|ies)\b'
+    r'|\b((?:toy|product) categor(?:y|ies))\b'
     r'|\b(?:category|categories) (?:mix|share|breakdown|split|'
     r'ranking|lead)\b'
     r'|\btop (?:toy |product )?categories\b',
@@ -2324,6 +2330,51 @@ def detect_breakdown_intent(text):
         return ''
     dim = next((g for g in m.groups() if g), 'categories')
     return re.sub(r'\s+', ' ', str(dim)).strip().lower()
+
+
+# ---------------------------------------------------------------------------
+# Analysis-ask routing (2026-08-27, Jenna's Paw Patrol toy-categories
+# screenshot): "what toy categories are parents of kids 4-6 buying of
+# paw patrol viewer parents" reached the build surface and opened a
+# time-window clarify for a subject that already had a base on file.
+# An analysis-phrased ask must never open a build card when its subject
+# is already pulled; the build endpoint deflects it to the measured-
+# read path via this detector.
+# ---------------------------------------------------------------------------
+
+_ANALYSIS_QUESTION_RX = re.compile(
+    r'^\s*(?:what|which|who|where|when|how)\b', re.IGNORECASE)
+_ANALYSIS_BEHAVIOR_RX = re.compile(
+    r'\b(?:buy(?:ing|s)?|bought|purchas\w+|shop(?:s|ping|ped)?|'
+    r'watch(?:ing|ed|es)?|stream(?:ing|ed|s)?|search(?:ing|ed|es)?|'
+    r'listen(?:ing|ed|s)?|spend(?:ing|s)?|spent|engag\w+|'
+    r'subscrib\w+|download\w*|visit\w*)\b', re.IGNORECASE)
+
+
+def detect_analysis_ask(text):
+    """True when a message that reached the build surface is actually
+    an analysis question about an audience's behavior. Build phrasing
+    always stays a build; a deck ask stays a deck. A KPI ask, a direct
+    metric question, a breakdown ask, or a question-shaped behavior
+    ask about a named slice reads as analysis. The caller still gates
+    on an existing base profile before deflecting, so a subject with
+    no base keeps flowing to the build interpreter."""
+    t = str(text or '').strip()
+    if not t or len(t) > 600:
+        return False
+    if _GENERATE_EXCLUDE_RX.search(t):
+        return False
+    if detect_deck_intent(t):
+        return False
+    if detect_metric_kpi_intent(t) or detect_generate_intent(t):
+        return True
+    dim = detect_breakdown_intent(t)
+    question = bool(_ANALYSIS_QUESTION_RX.search(t))
+    behavior = bool(_ANALYSIS_BEHAVIOR_RX.search(t))
+    subcut = detect_subcut_intent(t)
+    if dim and (question or behavior or subcut):
+        return True
+    return bool(question and behavior and subcut)
 
 
 CSV_OFFER_CHIP = 'Download this data as a CSV'
@@ -2974,3 +3025,94 @@ def enforce_insights_plan(plan, subject):
         slides.append(cleaned)
     out['slides'] = slides
     return out
+
+
+# ---------------------------------------------------------------------------
+# Delivered-deck anchors (2026-08-27, Jenna: generated reads and decks
+# must stay commensurate with the deck already delivered for a subject)
+# ---------------------------------------------------------------------------
+# When a deck ships, its headline figures become ledger anchor entries
+# so every later read or deck for the same subject quotes the same
+# numbers and nests new figures under them.
+
+_ANCHOR_FIG_RX = re.compile(
+    r'^\s*(?P<dollar>\$)?(?P<num>\d{1,3}(?:,\d{3})*(?:\.\d+)?)'
+    r'\s*(?P<suffix>[KMB])?(?P<pct>%)?\s*$', re.IGNORECASE)
+_ANCHOR_SUFFIX = {'K': 1_000, 'M': 1_000_000, 'B': 1_000_000_000}
+
+
+def _parse_anchor_figure(display):
+    """(value, unit) from a deck display figure like '17.9M', '1.3%',
+    '$87.43', '268', '109,642'. None when the string is not one clean
+    figure."""
+    m = _ANCHOR_FIG_RX.match(str(display or ''))
+    if not m:
+        return None
+    try:
+        num = float(m.group('num').replace(',', ''))
+    except ValueError:
+        return None
+    suffix = (m.group('suffix') or '').upper()
+    if suffix:
+        num *= _ANCHOR_SUFFIX[suffix]
+    if m.group('pct'):
+        return round(num, 2), 'pct'
+    if m.group('dollar'):
+        return (round(num, 2) if num != int(num) else int(num)), 'USD'
+    return (int(num) if num == int(num) else round(num, 2)), 'count'
+
+
+def extract_plan_anchors(plan, limit=18):
+    """Ledger-ready metric dicts for the headline figures of a shipped
+    insights-deck plan: cover stats, tile bigs, stat cards, hero-proof
+    figures, and fact rows. Each metric keeps the exact delivered
+    figure with the slide's framing in the definition."""
+    metrics = []
+    seen = set()
+    if not isinstance(plan, dict):
+        return metrics
+
+    def add(display, label, slide_title):
+        parsed = _parse_anchor_figure(display)
+        label = str(label or '').strip()
+        if not parsed or not label:
+            return
+        key = label.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        value, unit = parsed
+        definition = 'delivered deck figure'
+        st = str(slide_title or '').strip()
+        if st:
+            definition += f"; slide: {st[:120]}"
+        metrics.append({
+            'name': re.sub(r'[^a-z0-9]+', '_', label.lower())[:48],
+            'label': label[:90],
+            'value': value,
+            'unit': unit,
+            'definition': definition[:220],
+        })
+
+    for sl in (plan.get('slides') or []):
+        if not isinstance(sl, dict):
+            continue
+        title = sl.get('title') or ''
+        for st in (sl.get('stats') or []):
+            if isinstance(st, dict):
+                add(st.get('big'), st.get('label'), title)
+        for t in (sl.get('tiles') or []):
+            if isinstance(t, dict):
+                add(t.get('big'), t.get('label'), title)
+        for c in (sl.get('stat_cards') or []):
+            if isinstance(c, dict):
+                add(c.get('big'), c.get('label'), title)
+        for p in (sl.get('proofs') or []):
+            if isinstance(p, dict):
+                add(p.get('fig'), p.get('label'), title)
+        for f in (sl.get('facts') or []):
+            if isinstance(f, dict):
+                add(f.get('fig'), f.get('label'), title)
+        if len(metrics) >= limit:
+            break
+    return metrics[:limit]
