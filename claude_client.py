@@ -19,11 +19,27 @@ returns "" and the caller is expected to fall back to GPT.
 from __future__ import annotations
 
 import os
+import threading
 import time
 from typing import Optional
 
 _claude_client = None
 _claude_init_failed = False
+
+# Per-thread stats of the most recent completed claude_reason_json call
+# (2026-08-28 latency instrumentation). Lets callers that only receive
+# the parsed text (e.g. the Prometheus stage timers) read the winning
+# call's duration and server-side web_search round count without any
+# signature change. Thread-local because background read jobs and
+# request handlers run on their own threads.
+_last_call_stats = threading.local()
+
+
+def last_call_stats() -> dict:
+    """Copy of the most recent completed call's stats on THIS thread:
+    {'model', 'duration_s', 'web_search_requests'}. Empty dict when no
+    call has completed on the thread. Diagnostics only."""
+    return dict(getattr(_last_call_stats, "stats", None) or {})
 
 # Model families that reject the `temperature` param (Anthropic began
 # deprecating it on newer models; sending it returns a 400
@@ -260,6 +276,18 @@ def claude_reason_json(
                                  duration_s=time.monotonic() - _t0)
             try:
                 _u = getattr(resp, "usage", None)
+                _stu = getattr(_u, "server_tool_use", None) \
+                    if _u is not None else None
+                _last_call_stats.stats = {
+                    "model": model_id,
+                    "duration_s": round(time.monotonic() - _t0, 3),
+                    "web_search_requests": int(getattr(
+                        _stu, "web_search_requests", 0) or 0),
+                }
+            except Exception:
+                pass
+            try:
+                _u = getattr(resp, "usage", None)
                 if _u is not None:
                     _cr = getattr(_u, "cache_read_input_tokens", 0) or 0
                     _cw = getattr(_u, "cache_creation_input_tokens", 0) or 0
@@ -367,9 +395,9 @@ def claude_messages(
     # Prompt caching: explicit cache_control on the system block caches the
     # tools+system prefix for 5 min. Hits pay ~10% input cost vs 125% on first
     # write. Explicit breakpoint (not automatic top-level) because automatic
-    # caching defaults to the last cacheable block — the per-request user
-    # message — which never repeats. Per the Anthropic docs hierarchy
-    # (tools → system → messages), a breakpoint on system caches both tools
+    # caching defaults to the last cacheable block (the per-request user
+    # message) which never repeats. Per the Anthropic docs hierarchy
+    # (tools -> system -> messages), a breakpoint on system caches both tools
     # and system. Min cacheable prefix on Opus is 4096 tokens. Disable via
     # CLAUDE_DISABLE_PROMPT_CACHE=1.
     _cache_disabled = (os.environ.get("CLAUDE_DISABLE_PROMPT_CACHE") or "").strip().lower() in ("1", "true", "yes", "on")
@@ -513,4 +541,5 @@ __all__ = [
     "get_claude_client",
     "claude_reason_json",
     "claude_messages",
+    "last_call_stats",
 ]

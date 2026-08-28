@@ -280,16 +280,25 @@ def focus_tokens_from_ask(text):
 
 
 def gather_neighbor_evidence(s3_client, bucket, text, subject, catalog,
-                             claude_json_fn, k=6):
+                             claude_json_fn, k=6, timings=None):
     """Full corpus pass: select neighbors, digest each, render the
     NEIGHBOR EVIDENCE block. Returns (block_text, [names]); ('' , [])
-    when nothing useful. Never raises."""
+    when nothing useful. Never raises.
+
+    `timings` (optional dict, 2026-08-28 latency instrumentation): the
+    pass writes 'select_ms' (the selection model call) and 'digest_ms'
+    (all digest fetches/builds) into it so the caller's stage timers
+    can split the two without a second wrapper."""
     try:
+        t0 = time.monotonic()
         chosen = select_neighbors(text, subject, catalog,
                                   claude_json_fn, k=k)
+        if isinstance(timings, dict):
+            timings['select_ms'] = int((time.monotonic() - t0) * 1000)
         if not chosen:
             return '', []
         focus = focus_tokens_from_ask(text)
+        t1 = time.monotonic()
         digests, names = [], []
         for c in chosen:
             d = neighbor_digest(s3_client, bucket, c,
@@ -297,6 +306,8 @@ def gather_neighbor_evidence(s3_client, bucket, text, subject, catalog,
             if d:
                 digests.append(d)
                 names.append(c['display_name'])
+        if isinstance(timings, dict):
+            timings['digest_ms'] = int((time.monotonic() - t1) * 1000)
         if not digests:
             return '', []
         block = (

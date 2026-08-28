@@ -1,0 +1,641 @@
+{
+  "description": "Fixed route-level eval set for the dashboard chat assistant. Real questions sampled from the S3 ask log (system/usage/ask_log/, 2026-08-26 through 2026-08-28, the log's full history at build time) plus constructed representatives for families the young log does not carry yet. Graded hermetically by scripts/prometheus_eval_run.py against the deterministic routing layer. expected_route vocabulary: analysis, generate, search_demand, csv_download, not_quantifiable, memory_confirm, build_interpret, subiq, clarify. surface: analyze (api_synth_chat_analyze) or interpret (api_synth_chat_interpret). page_context null means nothing open. has_base / memory_referent stand in for data-dependent conditions. known_fail documents a real routing defect owned by a separate fix.",
+  "built": "2026-08-28",
+  "cases": [
+    {
+      "id": "toy-001",
+      "family": "toy_category",
+      "surface": "analyze",
+      "input": "what do parents with kids 4-6 buy for toys for paw patrol viewers",
+      "page_context": {"primary": {"s3_key": "Paw_Patrol_Series_Viewers_08_12_2026_10_00.csv", "name": "Paw Patrol Series Viewers"}, "cuts": []},
+      "expected_route": "analysis",
+      "source": "ask_log 2026-08-27",
+      "note": "Known past miss family. With the profile open the analysis pass owns it; the model hands off to the measured read internally when rows do not cover the slice."
+    },
+    {
+      "id": "toy-002",
+      "family": "toy_category",
+      "surface": "analyze",
+      "input": "what do parents with kids 4-6 buy for toys for paw patrol viewers",
+      "page_context": null,
+      "expected_route": "generate",
+      "source": "ask_log 2026-08-27 (no-context variant)"
+    },
+    {
+      "id": "toy-003",
+      "family": "toy_category",
+      "surface": "analyze",
+      "input": "What category of toys do parents of paw patrol viewers aged 4-7 buy for their kids",
+      "page_context": null,
+      "expected_route": "generate",
+      "flags": {"must_offer_csv": true, "must_not_fallback": true},
+      "source": "ask_log 2026-08-28",
+      "note": "The Paw Patrol paraphrase Jenna hit repeatedly on 2026-08-27/28."
+    },
+    {
+      "id": "toy-004",
+      "family": "toy_category",
+      "surface": "interpret",
+      "input": "what toy categories are parents of kids 4-6 buying of paw patrol viewer parents",
+      "has_base": true,
+      "expected_route": "generate",
+      "source": "ask_log 2026-08-27",
+      "note": "Typed on the build surface; the analysis deflection must catch it instead of opening a build card (2026-08-27 defect)."
+    },
+    {
+      "id": "toy-005",
+      "family": "toy_category",
+      "surface": "interpret",
+      "input": "What category of toys do parents of paw patrol viewers aged 4-7 buy for their kids",
+      "has_base": true,
+      "expected_route": "generate",
+      "source": "ask_log 2026-08-28 (surface variant)"
+    },
+    {
+      "id": "toy-006",
+      "family": "toy_category",
+      "surface": "analyze",
+      "input": "top toy categories for parents of paw patrol viewers",
+      "page_context": {"primary": {"s3_key": "Paw_Patrol_Series_Viewers_08_12_2026_10_00.csv", "name": "Paw Patrol Series Viewers"}, "cuts": []},
+      "expected_route": "analysis",
+      "source": "constructed"
+    },
+    {
+      "id": "ws-001",
+      "family": "whitespace_strategy",
+      "surface": "analyze",
+      "input": "Find the market whitespace for this audience",
+      "page_context": {"primary": {"s3_key": "Paw_Patrol_Series_Viewers_08_12_2026_10_00.csv", "name": "Paw Patrol Series Viewers"}, "cuts": []},
+      "mode": "whitespace",
+      "expected_route": "generate",
+      "source": "ask_log 2026-08-27",
+      "note": "Strategy asks route to the full generation loop even with a profile open (2026-08-28 routing)."
+    },
+    {
+      "id": "ws-002",
+      "family": "whitespace_strategy",
+      "surface": "analyze",
+      "input": "What\u2019s the potential white space to create paw patrol toys for this audience",
+      "page_context": null,
+      "expected_route": "generate",
+      "flags": {"must_not_fallback": true},
+      "source": "ask_log 2026-08-28"
+    },
+    {
+      "id": "ws-003",
+      "family": "whitespace_strategy",
+      "surface": "analyze",
+      "input": "What\u2019s the potential white space to create paw patrol toys for this audience?",
+      "page_context": {"primary": {"s3_key": "Parents_of_Paw_Patrol_Series_Viewers_08_27_2026_20_00.csv", "name": "Parents of Paw Patrol Series Viewers"}, "cuts": []},
+      "mode": "whitespace",
+      "expected_route": "generate",
+      "source": "ask_log 2026-08-28"
+    },
+    {
+      "id": "ws-004",
+      "family": "whitespace_strategy",
+      "surface": "analyze",
+      "input": "Which categories are underserved for this audience?",
+      "page_context": {"primary": {"s3_key": "Shark_Tank_08_20_2026_12_00.csv", "name": "Shark Tank"}, "cuts": []},
+      "expected_route": "generate",
+      "source": "constructed"
+    },
+    {
+      "id": "ws-005",
+      "family": "whitespace_strategy",
+      "surface": "analyze",
+      "input": "where are the untapped opportunities for Yellowstone viewers",
+      "page_context": null,
+      "expected_route": "generate",
+      "source": "constructed"
+    },
+    {
+      "id": "spon-001",
+      "family": "sponsorship_fit",
+      "surface": "analyze",
+      "input": "Which specific Shark Tank brand categories (CPG, pet, beauty, travel) show the highest purchase index among engagers for a category-level sponsorship pitch?",
+      "page_context": null,
+      "expected_route": "generate",
+      "flags": {"must_not_fallback": true},
+      "source": "ask_log 2026-08-27",
+      "note": "The known past miss: this phrasing errored on 2026-08-27 (truncation) and briefly fell to the calm fallback. Locks the strategy-intent route."
+    },
+    {
+      "id": "spon-002",
+      "family": "sponsorship_fit",
+      "surface": "analyze",
+      "input": "Which specific Shark Tank brand categories (CPG, pet, beauty, travel) show the highest purchase index among engagers for a category-level sponsorship pitch?",
+      "page_context": {"primary": {"s3_key": "Shark_Tank_08_20_2026_12_00.csv", "name": "Shark Tank"}, "cuts": []},
+      "expected_route": "generate",
+      "source": "ask_log 2026-08-27 (open-profile variant)"
+    },
+    {
+      "id": "spon-003",
+      "family": "sponsorship_fit",
+      "surface": "analyze",
+      "input": "which sponsorship fit is strongest for Paw Patrol parents",
+      "page_context": {"primary": {"s3_key": "Parents_of_Paw_Patrol_Series_Viewers_08_27_2026_20_00.csv", "name": "Parents of Paw Patrol Series Viewers"}, "cuts": []},
+      "expected_route": "generate",
+      "source": "constructed"
+    },
+    {
+      "id": "spon-004",
+      "family": "sponsorship_fit",
+      "surface": "analyze",
+      "input": "I need a sponsorship and brand partnership sales deck based on the Shark Tank profile. I'm particularly interested in how brands featured on the TV show fared because I need a headline about the lift these brands received",
+      "page_context": {"primary": {"s3_key": "Shark_Tank_08_20_2026_12_00.csv", "name": "Shark Tank"}, "cuts": []},
+      "expected_route": "analysis",
+      "source": "ask_log 2026-08-27 (trimmed)",
+      "note": "A deck ask stays with the analysis pass at the deterministic layer; deck detection and any measured-read handoff happen downstream of it."
+    },
+    {
+      "id": "kpi-001",
+      "family": "kpi_index",
+      "surface": "analyze",
+      "input": "I want to know ad CTR for paige bueckers",
+      "page_context": null,
+      "expected_route": "generate",
+      "source": "constructed from the 2026-08-27 Paige Bueckers ad CTR defect"
+    },
+    {
+      "id": "kpi-002",
+      "family": "kpi_index",
+      "surface": "analyze",
+      "input": "whats the CPM benchmark for this audience",
+      "page_context": {"primary": {"s3_key": "Danny_Go_08_10_2026_09_00.csv", "name": "Danny Go"}, "cuts": []},
+      "expected_route": "generate",
+      "source": "constructed",
+      "note": "KPI vocabulary routes to the measured read even with a profile open."
+    },
+    {
+      "id": "kpi-003",
+      "family": "kpi_index",
+      "surface": "analyze",
+      "input": "what is the conversion rate on Chime signups from the campaign",
+      "page_context": null,
+      "expected_route": "generate",
+      "source": "constructed"
+    },
+    {
+      "id": "kpi-004",
+      "family": "kpi_index",
+      "surface": "analyze",
+      "input": "whats the ROAS on the Landman push",
+      "page_context": null,
+      "expected_route": "generate",
+      "source": "constructed"
+    },
+    {
+      "id": "kpi-005",
+      "family": "kpi_index",
+      "surface": "analyze",
+      "input": "click-through rate on the Paw Patrol placements",
+      "page_context": {"primary": {"s3_key": "Paw_Patrol_Series_Viewers_08_12_2026_10_00.csv", "name": "Paw Patrol Series Viewers"}, "cuts": []},
+      "expected_route": "generate",
+      "source": "constructed"
+    },
+    {
+      "id": "subiq-001",
+      "family": "subiq",
+      "surface": "interpret",
+      "input": "pull a subscriber iq for The Pitt",
+      "expected_route": "subiq",
+      "source": "constructed (product family)"
+    },
+    {
+      "id": "subiq-002",
+      "family": "subiq",
+      "surface": "interpret",
+      "input": "subscriber acquisition for Landman on Paramount+",
+      "expected_route": "subiq",
+      "source": "constructed (acquisition family)"
+    },
+    {
+      "id": "subiq-003",
+      "family": "subiq",
+      "surface": "interpret",
+      "input": "what drove signups for Peacock in March",
+      "expected_route": "subiq",
+      "source": "constructed (acquisition family)"
+    },
+    {
+      "id": "subiq-004",
+      "family": "subiq",
+      "surface": "interpret",
+      "input": "how many people signed up because of Landman",
+      "expected_route": "subiq",
+      "known_fail": "Routes to generate: the interpret surface's analysis deflection (2026-08-27) runs before the Subscriber IQ promoter, and detect_generate_intent matches the how-many signup phrasing. The subiq acquisition pattern was written for exactly this ask. Ordering reconciliation belongs to the routing owner.",
+      "source": "constructed (acquisition family)"
+    },
+    {
+      "id": "subiq-005",
+      "family": "subiq",
+      "surface": "interpret",
+      "input": "first watch report for The Pitt on HBO Max",
+      "expected_route": "subiq",
+      "source": "constructed (first_watch family)"
+    },
+    {
+      "id": "subiq-006",
+      "family": "subiq",
+      "surface": "interpret",
+      "input": "cancellations after the Yellowstone finale",
+      "expected_route": "subiq",
+      "source": "constructed (churn family, title-tied)"
+    },
+    {
+      "id": "subiq-007",
+      "family": "subiq",
+      "surface": "interpret",
+      "input": "subsciber aqcuisiont for The Pitt",
+      "expected_route": "subiq",
+      "source": "constructed (typo tolerance, Jenna's own spelling)"
+    },
+    {
+      "id": "subiq-008",
+      "family": "subiq",
+      "surface": "interpret",
+      "input": "The Pitt season 2 subscriber impact",
+      "expected_route": "subiq",
+      "source": "constructed (impact family)"
+    },
+    {
+      "id": "subiq-fork-001",
+      "family": "subiq_fork",
+      "surface": "interpret",
+      "input": "Peacock churn",
+      "expected_route": "clarify",
+      "source": "constructed (ambiguous churn fork, 2026-08-26 refinement)"
+    },
+    {
+      "id": "subiq-fork-002",
+      "family": "subiq_fork",
+      "surface": "interpret",
+      "input": "hows retention looking on Max",
+      "expected_route": "clarify",
+      "source": "constructed (ambiguous churn fork)"
+    },
+    {
+      "id": "sd-001",
+      "family": "search_demand",
+      "surface": "analyze",
+      "input": "how are people finding Normal on HBO Max",
+      "page_context": null,
+      "expected_route": "search_demand",
+      "flags": {"must_not_fallback": true},
+      "source": "constructed from the Normal (Bob Odenkirk) study shape"
+    },
+    {
+      "id": "sd-002",
+      "family": "search_demand",
+      "surface": "analyze",
+      "input": "what is the search demand for Wednesday season 3",
+      "page_context": null,
+      "expected_route": "search_demand",
+      "source": "constructed"
+    },
+    {
+      "id": "sd-003",
+      "family": "search_demand",
+      "surface": "analyze",
+      "input": "how did viewers discover Landman",
+      "page_context": null,
+      "expected_route": "search_demand",
+      "source": "constructed"
+    },
+    {
+      "id": "sd-004",
+      "family": "search_demand",
+      "surface": "analyze",
+      "input": "read the search journey for KPop Demon Hunters",
+      "page_context": null,
+      "expected_route": "search_demand",
+      "source": "constructed"
+    },
+    {
+      "id": "sd-005",
+      "family": "search_demand",
+      "surface": "analyze",
+      "input": "first touch split for Normal",
+      "page_context": {"primary": {"s3_key": "Normal_Viewers_08_25_2026_10_00.csv", "name": "Normal Viewers"}, "cuts": []},
+      "expected_route": "search_demand",
+      "source": "constructed",
+      "note": "Search-journey vocabulary wins over the open profile."
+    },
+    {
+      "id": "csv-001",
+      "family": "csv_download",
+      "surface": "analyze",
+      "input": "Download this data as a CSV",
+      "page_context": null,
+      "expected_route": "csv_download",
+      "source": "the offer chip itself"
+    },
+    {
+      "id": "csv-002",
+      "family": "csv_download",
+      "surface": "analyze",
+      "input": "can you export that as a csv",
+      "page_context": {"primary": {"s3_key": "Shark_Tank_08_20_2026_12_00.csv", "name": "Shark Tank"}, "cuts": []},
+      "expected_route": "csv_download",
+      "source": "constructed"
+    },
+    {
+      "id": "csv-003",
+      "family": "csv_download",
+      "surface": "analyze",
+      "input": "download as csv please",
+      "page_context": null,
+      "expected_route": "csv_download",
+      "source": "constructed"
+    },
+    {
+      "id": "csv-004",
+      "family": "csv_download",
+      "surface": "interpret",
+      "input": "give me a csv of it",
+      "expected_route": "csv_download",
+      "source": "constructed",
+      "note": "A typed export ask on the build surface serves the last delivered read the same way."
+    },
+    {
+      "id": "csv-005",
+      "family": "csv_download",
+      "surface": "interpret",
+      "input": "build out a csv of what brands paw patrol parents buy most",
+      "has_base": true,
+      "expected_route": "build_interpret",
+      "source": "constructed (guard)",
+      "note": "A NEW-data ask that mentions csv must not trip the export path; the generation flow offers the download chip itself."
+    },
+    {
+      "id": "nq-001",
+      "family": "not_quantifiable",
+      "surface": "analyze",
+      "input": "How many people watched the Super Bowl on linear TV",
+      "page_context": null,
+      "expected_route": "not_quantifiable",
+      "source": "constructed (linear_tv domain)"
+    },
+    {
+      "id": "nq-002",
+      "family": "not_quantifiable",
+      "surface": "analyze",
+      "input": "what are the Nielsen ratings for Tracker",
+      "page_context": null,
+      "expected_route": "not_quantifiable",
+      "source": "constructed (linear_tv domain)"
+    },
+    {
+      "id": "nq-003",
+      "family": "not_quantifiable",
+      "surface": "analyze",
+      "input": "how much are people buying in-store at Target",
+      "page_context": null,
+      "expected_route": "not_quantifiable",
+      "source": "constructed (in_store domain)"
+    },
+    {
+      "id": "nq-004",
+      "family": "not_quantifiable",
+      "surface": "analyze",
+      "input": "what is the foot traffic to Chick-fil-A locations",
+      "page_context": null,
+      "expected_route": "not_quantifiable",
+      "source": "constructed (foot_traffic domain)"
+    },
+    {
+      "id": "nq-005",
+      "family": "not_quantifiable",
+      "surface": "analyze",
+      "input": "how many people listen to Howard Stern on FM radio",
+      "page_context": null,
+      "expected_route": "not_quantifiable",
+      "source": "constructed (radio domain)"
+    },
+    {
+      "id": "nq-006",
+      "family": "not_quantifiable",
+      "surface": "analyze",
+      "input": "compare in-store vs online purchases for Walmart",
+      "page_context": {"primary": {"s3_key": "Walmart_08_01_2026_09_00.csv", "name": "Walmart"}, "cuts": []},
+      "expected_route": "not_quantifiable",
+      "source": "constructed",
+      "note": "A mixed ask still declines; the gate runs before the open profile matters."
+    },
+    {
+      "id": "noctx-001",
+      "family": "no_context",
+      "surface": "analyze",
+      "input": "Analyze the data on this screen",
+      "page_context": null,
+      "expected_route": "clarify",
+      "source": "ask_log 2026-08-27 (no-context variant)",
+      "note": "With nothing open and no stored referent, the open-something nudge is the answer."
+    },
+    {
+      "id": "noctx-002",
+      "family": "no_context",
+      "surface": "analyze",
+      "input": "what should I look at here",
+      "page_context": null,
+      "expected_route": "clarify",
+      "source": "constructed"
+    },
+    {
+      "id": "mem-001",
+      "family": "memory_confirm",
+      "surface": "analyze",
+      "input": "Analyze the data on this screen",
+      "page_context": null,
+      "memory_referent": true,
+      "expected_route": "memory_confirm",
+      "source": "constructed",
+      "note": "Same ask with a stored cross-session referent leads with the grounded confirm chip."
+    },
+    {
+      "id": "mem-002",
+      "family": "memory_confirm",
+      "surface": "analyze",
+      "input": "rank the retailers for me",
+      "page_context": null,
+      "memory_referent": true,
+      "expected_route": "memory_confirm",
+      "source": "constructed"
+    },
+    {
+      "id": "page-001",
+      "family": "page_analysis",
+      "surface": "analyze",
+      "input": "Which of these trends should a brand jump on?",
+      "page_context": {"primary": {"s3_key": "Danny_Go_08_10_2026_09_00.csv", "name": "Danny Go"}, "cuts": []},
+      "expected_route": "analysis",
+      "source": "ask_log 2026-08-26"
+    },
+    {
+      "id": "page-002",
+      "family": "page_analysis",
+      "surface": "analyze",
+      "input": "Create personas from this audience",
+      "page_context": {"primary": {"s3_key": "Apple_TV_EST_Buyers_08_15_2026_11_00.csv", "name": "Apple TV EST Buyers"}, "cuts": []},
+      "mode": "personas",
+      "expected_route": "analysis",
+      "source": "ask_log 2026-08-26"
+    },
+    {
+      "id": "page-003",
+      "family": "page_analysis",
+      "surface": "analyze",
+      "input": "Give me interesting takeaways for a LinkedIn post from this data",
+      "page_context": {"primary": {"s3_key": "Taylor_Jenkins_Reid_08_18_2026_14_00.csv", "name": "Taylor Jenkins Reid"}, "cuts": []},
+      "mode": "linkedin_post",
+      "expected_route": "analysis",
+      "source": "ask_log 2026-08-27"
+    },
+    {
+      "id": "page-004",
+      "family": "page_analysis",
+      "surface": "analyze",
+      "input": "is golden girls profile finished?",
+      "page_context": {"primary": {"s3_key": "Taylor_Jenkins_Reid_08_18_2026_14_00.csv", "name": "Taylor Jenkins Reid"}, "cuts": []},
+      "expected_route": "analysis",
+      "source": "ask_log 2026-08-27",
+      "note": "Status chatter with a profile open stays with the analysis pass, which answers conversationally."
+    },
+    {
+      "id": "page-005",
+      "family": "page_analysis",
+      "surface": "analyze",
+      "input": "give me the dmas of only the LGBTQ members of the audience",
+      "page_context": {"primary": {"s3_key": "Taylor_Jenkins_Reid_08_18_2026_14_00.csv", "name": "Taylor Jenkins Reid"}, "cuts": []},
+      "expected_route": "analysis",
+      "source": "ask_log 2026-08-27",
+      "note": "The analysis pass owns it deterministically; the model hands off to the measured read when the rows do not carry the slice (the logged outcome)."
+    },
+    {
+      "id": "page-006",
+      "family": "page_analysis",
+      "surface": "analyze",
+      "input": "Notify me when Golden Girls Viewers finishes",
+      "page_context": {"primary": {"s3_key": "Taylor_Jenkins_Reid_08_18_2026_14_00.csv", "name": "Taylor Jenkins Reid"}, "cuts": []},
+      "expected_route": "analysis",
+      "source": "ask_log 2026-08-27"
+    },
+    {
+      "id": "ana-001",
+      "family": "anaphoric_metric",
+      "surface": "analyze",
+      "input": "how many people watched it last month",
+      "page_context": null,
+      "expected_route": "generate",
+      "source": "constructed",
+      "note": "A direct count ask with no subject routes to the measured read, which resolves the referent from the thread."
+    },
+    {
+      "id": "build-001",
+      "family": "build_request",
+      "surface": "interpret",
+      "input": "i need a golden girls profile",
+      "expected_route": "build_interpret",
+      "source": "ask_log 2026-08-27"
+    },
+    {
+      "id": "build-002",
+      "family": "build_request",
+      "surface": "interpret",
+      "input": "pull a profile on the YMCA",
+      "expected_route": "build_interpret",
+      "source": "ask_log 2026-08-27"
+    },
+    {
+      "id": "build-003",
+      "family": "build_request",
+      "surface": "interpret",
+      "input": "pull a profile on Toca Boca",
+      "expected_route": "build_interpret",
+      "source": "ask_log 2026-08-27"
+    },
+    {
+      "id": "build-004",
+      "family": "build_request",
+      "surface": "interpret",
+      "input": "pull a profile on  the YouTube reality show LA CASA DE ALOFOKE",
+      "expected_route": "build_interpret",
+      "source": "ask_log 2026-08-27"
+    },
+    {
+      "id": "build-005",
+      "family": "build_request",
+      "surface": "interpret",
+      "input": "run a profile on Holley Performance Brands",
+      "expected_route": "build_interpret",
+      "source": "ask_log 2026-08-27"
+    },
+    {
+      "id": "build-006",
+      "family": "build_request",
+      "surface": "interpret",
+      "input": "do a profile on Chris Hansen",
+      "expected_route": "build_interpret",
+      "source": "ask_log 2026-08-27"
+    },
+    {
+      "id": "build-007",
+      "family": "build_request",
+      "surface": "interpret",
+      "input": "build a profile on To Catch A predator",
+      "expected_route": "build_interpret",
+      "source": "ask_log 2026-08-27"
+    },
+    {
+      "id": "build-008",
+      "family": "build_request",
+      "surface": "interpret",
+      "input": "Primetime Movie A24 profile",
+      "expected_route": "build_interpret",
+      "source": "ask_log 2026-08-27"
+    },
+    {
+      "id": "build-009",
+      "family": "build_request",
+      "surface": "interpret",
+      "input": "build a profile of high-CTR shoppers",
+      "expected_route": "build_interpret",
+      "source": "constructed (guard)",
+      "note": "KPI vocabulary inside an imperative build stays a build."
+    },
+    {
+      "id": "build-010",
+      "family": "build_request",
+      "surface": "interpret",
+      "input": "profile of Paramount+ subscribers",
+      "expected_route": "build_interpret",
+      "source": "constructed (guard)",
+      "note": "Subscriber vocabulary inside a cohort definition never promotes to Subscriber IQ."
+    },
+    {
+      "id": "cut-001",
+      "family": "cut_request",
+      "surface": "interpret",
+      "input": "run a cut of netflix on netflix avod subscribers and a cut on svod subscribers",
+      "expected_route": "build_interpret",
+      "source": "ask_log 2026-08-27"
+    },
+    {
+      "id": "cut-002",
+      "family": "cut_request",
+      "surface": "interpret",
+      "input": "run a Mr. gasket cut of the holley data",
+      "expected_route": "build_interpret",
+      "source": "ask_log 2026-08-27 (trimmed)"
+    },
+    {
+      "id": "cut-003",
+      "family": "cut_request",
+      "surface": "interpret",
+      "input": "add a female cut to the Reba profile",
+      "expected_route": "build_interpret",
+      "source": "constructed"
+    }
+  ]
+}

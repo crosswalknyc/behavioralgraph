@@ -51606,7 +51606,8 @@ def _ask_logged(surface):
                     view=view, question=question, surface=surface,
                     route=route, outcome=outcome,
                     ms=int((time.time() - t0) * 1000),
-                    mode=mode, subject=subject)
+                    mode=mode, subject=subject,
+                    stages=getattr(_g, '_pm_ask_stages', None))
                 # Cross-session memory (2026-08-27, Jenna): every ask
                 # that resolved a subject feeds the per-user memory,
                 # unless the handler already recorded it with richer
@@ -54359,6 +54360,28 @@ def _pm_ask_hint(route=None, outcome=None, subject=None, mode=None):
         pass
 
 
+def _pm_ask_stage(key, t0=None, ms=None, count=None):
+    """Accumulate one per-stage duration (or count) on flask.g for the
+    ask-log record (2026-08-28 latency instrumentation). Pass `t0` (a
+    time.monotonic() start) for the common case, or an explicit `ms` /
+    `count`. Safe outside a request context (tests, background
+    threads): failures are swallowed, overhead is one dict write."""
+    try:
+        from flask import g as _g
+        stages = getattr(_g, '_pm_ask_stages', None)
+        if stages is None:
+            stages = {}
+            _g._pm_ask_stages = stages
+        if count is not None:
+            stages[str(key)[:40]] = int(count)
+        elif ms is not None:
+            stages[str(key)[:40]] = int(ms)
+        elif t0 is not None:
+            stages[str(key)[:40]] = int((time.monotonic() - t0) * 1000)
+    except Exception:
+        pass
+
+
 def _pm_access_gate(user):
     """Prometheus tier gate for the analysis surfaces (2026-08-26).
 
@@ -54653,10 +54676,12 @@ def _pm_search_demand_response(user, text, history):
                       'button in the top bar to request more.'),
         }), 402
     led = {'block': '', 'exact': None, 'entries': []}
+    _t_ledger = time.monotonic()
     try:
         led = il.consult(question=text)
     except Exception:
         traceback.print_exc()
+    _pm_ask_stage('ledger', t0=_t_ledger)
     exact = led.get('exact')
     if exact and exact.get('route') == 'search_demand' \
             and exact.get('reply'):
@@ -54686,9 +54711,11 @@ def _pm_search_demand_response(user, text, history):
             user_prompt = f"{user_prompt}\n\n{_kb}"
     except Exception:
         pass
+    _t_model = time.monotonic()
     result = _pm_claude_json(pma.SEARCH_DEMAND_SYSTEM_PROMPT, user_prompt,
                              max_tokens=7500, temperature=0.4,
                              usage_extras=_pm_ppu)
+    _pm_ask_stage('model', t0=_t_model)
     if not result.get('success'):
         _chatbot_error_email(
             'brief-chat/analyze',
@@ -54972,6 +54999,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # base's own brand rows, not free-floating knowledge).
     if not str(digest_block or '').strip() \
             and str(base.get('s3_key') or '').lower().endswith('.csv'):
+        _t_digest = time.monotonic()
         try:
             digest_block, _base_meta = pma.get_digest_bundle(
                 s3_client, S3_BUCKET,
@@ -54980,7 +55008,9 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                  'cuts': []})
         except Exception:
             traceback.print_exc()
+        _pm_ask_stage('digest', t0=_t_digest)
     led = {'block': '', 'exact': None, 'entries': []}
+    _t_ledger = time.monotonic()
     try:
         led = il.consult(subject=subj_hint or None, question=text,
                          metric_family=mr.get('metric_family'))
@@ -54996,6 +55026,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
                              metric_family=mr.get('metric_family'))
     except Exception:
         traceback.print_exc()
+    _pm_ask_stage('ledger', t0=_t_ledger)
     exact = led.get('exact')
     if exact and exact.get('reply'):
         _pm_ask_hint(outcome='answered',
@@ -55058,6 +55089,10 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     except Exception:
         pass
     payload.pop('_family', None)
+    _stages = payload.pop('_stages_ms', None)
+    if isinstance(_stages, dict):
+        for _sk, _sv in _stages.items():
+            _pm_ask_stage(_sk, ms=_sv)
     return jsonify(payload)
 
 
@@ -55078,9 +55113,13 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     4. BANK: the read persists with its derivation trail and becomes
        a worked example for the next ask.
 
-    Returns the response payload dict (plus internal '_family')."""
+    Returns the response payload dict (plus internal '_family', and
+    '_stages_ms', a per-stage wall-clock breakdown the callers route
+    to the ask log / the read-job JSON)."""
     import prometheus_analysis as pma
     import insights_ledger as il
+    stages = {}
+    _t_stage = time.monotonic()
     if not anchors_block:
         try:
             _xm_trends_reader = None
@@ -55097,10 +55136,13 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         except Exception:
             traceback.print_exc()
             anchors_block = ''
+    stages['anchors'] = int((time.monotonic() - _t_stage) * 1000)
     # Corpus-wide neighbor evidence (2026-08-27, Jenna: "it can go
     # through all the profiles"): comparable audiences from the whole
     # library, model-picked for this ask, digests cached by ETag.
     neighbor_block, neighbor_names = '', []
+    _corpus_t = {}
+    _t_stage = time.monotonic()
     try:
         import prometheus_corpus as pmc
         neighbor_block, neighbor_names = pmc.gather_neighbor_evidence(
@@ -55110,17 +55152,24 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                                          temperature=0.0,
                                          surface='corpus_select',
                                          usage_extras=pm_ppu),
-            k=6)
+            k=6, timings=_corpus_t)
     except Exception:
         traceback.print_exc()
+    stages['corpus'] = int((time.monotonic() - _t_stage) * 1000)
+    for _tk, _sk in (('select_ms', 'corpus_select'),
+                     ('digest_ms', 'corpus_digest')):
+        if _corpus_t.get(_tk) is not None:
+            stages[_sk] = int(_corpus_t[_tk])
     # Bank-as-foundation: nearest prior delivered reads ride the
     # prompt as worked examples (method + voice, never numbers).
     examples_block = ''
+    _t_stage = time.monotonic()
     try:
         _ex = il.examples(question=text, subject=base.get('subject'))
         examples_block = il.render_examples_block(_ex)
     except Exception:
         traceback.print_exc()
+    stages['examples'] = int((time.monotonic() - _t_stage) * 1000)
     user_prompt = pma.build_reasoned_metrics_user_prompt(
         text, history, metric_request=mr or None,
         anchors_block=anchors_block, ledger_block=led.get('block'),
@@ -55151,10 +55200,18 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     # shares, penetrations, notes) legitimately run long. The 4000
     # ceiling truncated the Shark Tank category read twice on
     # 2026-08-27 and the fragment crashed coherence enforcement.
+    _t_stage = time.monotonic()
     result = _pm_claude_json(pma.REASONED_METRICS_SYSTEM_PROMPT,
                              user_prompt, max_tokens=11000,
                              temperature=0.4, usage_extras=pm_ppu,
                              tools=[pma.WEB_SEARCH_TOOL])
+    stages['model'] = int((time.monotonic() - _t_stage) * 1000)
+    try:
+        from claude_client import last_call_stats as _pm_lcs
+        stages['model_ws_rounds'] = int(
+            (_pm_lcs() or {}).get('web_search_requests') or 0)
+    except Exception:
+        pass
     if not result.get('success'):
         _chatbot_error_email(
             'brief-chat/analyze',
@@ -55176,6 +55233,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             'success': True, 'action': 'answer', 'reply': reply,
             'followups': followups, 'offer_deck': False,
             'deck_angle': None, 'not_quantifiable': 'model_decline'}
+    _t_stage = time.monotonic()
     try:
         res = pma.enforce_metrics_coherence(data)
         reply = pma.format_generated_metrics_reply(res)
@@ -55184,11 +55242,13 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         _chatbot_error_email('brief-chat/analyze', e)
         _pm_ask_hint(outcome='error')
         return _chatbot_calm_payload()
+    stages['coherence'] = int((time.monotonic() - _t_stage) * 1000)
     followups = [pma.scrub_user_text(str(f).strip())[:160]
                  for f in (data.get('followups') or [])
                  if str(f).strip()][:3]
     if pma.CSV_OFFER_CHIP not in followups:
         followups.append(pma.CSV_OFFER_CHIP)
+    _t_stage = time.monotonic()
     try:
         anchor_names = []
         for ln in (anchors_block or '').splitlines():
@@ -55218,6 +55278,7 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
             derivation=_derivation)
     except Exception:
         traceback.print_exc()
+    stages['persist'] = int((time.monotonic() - _t_stage) * 1000)
     _pm_remember_ask(pm_user, text, subject=res.get('subject'),
                      cohort=res.get('cohort'), route='generated')
     _pm_ask_hint(outcome='answered', subject=res.get('subject'))
@@ -55232,7 +55293,8 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         'model': result.get('model'),
         'profile': res.get('subject'),
         '_family': ('strategy' if is_strategy
-                    else res.get('metric_family'))}
+                    else res.get('metric_family')),
+        '_stages_ms': stages}
 
 
 _PM_READ_PREFIX = 'system/prometheus_reads/'
@@ -55258,9 +55320,12 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             digest_block=digest_block, anchors_block=anchors_block,
             led=led, pm_user=pm_user, pm_ppu=pm_ppu)
         payload.pop('_family', None)
+        _stages = payload.pop('_stages_ms', None)
         if payload.get('success'):
-            _pm_read_status_write(job_id, {**head, 'status': 'done',
-                                           'payload': payload})
+            _done = {**head, 'status': 'done', 'payload': payload}
+            if isinstance(_stages, dict) and _stages:
+                _done['stages_ms'] = _stages
+            _pm_read_status_write(job_id, _done)
         else:
             _pm_read_status_write(job_id, {**head, 'status': 'error'})
         print(f"[pm-loop] read {job_id} "
@@ -55491,8 +55556,10 @@ def api_synth_chat_analyze():
         import prometheus_analysis as pma
         digest, p_meta = None, {}
         if ctx.get('primary'):
+            _t_digest = time.monotonic()
             digest, p_meta = pma.get_digest_bundle(s3_client, S3_BUCKET,
                                                    ctx)
+            _pm_ask_stage('digest', t0=_t_digest)
     except Exception as e:
         traceback.print_exc()
         _chatbot_error_email('brief-chat/analyze', e)
@@ -55506,6 +55573,7 @@ def api_synth_chat_analyze():
     # TTL-cached indexes, parallel fetches, hard time budget; on any
     # failure the analysis proceeds without enrichment.
     xmod_block, xmod_modules = '', []
+    _t_anchors = time.monotonic()
     try:
         _xm_view = ((ctx.get('view_context') or {}).get('view_id')
                     or ('profileIQ' if ctx.get('primary') else ''))
@@ -55524,12 +55592,14 @@ def api_synth_chat_analyze():
     except Exception:
         traceback.print_exc()
         xmod_block, xmod_modules = '', []
+    _pm_ask_stage('anchors', t0=_t_anchors)
     # Insights-ledger history (2026-08-26, Jenna): numbers Crosswalk
     # already delivered for this subject ride the prompt as binding
     # constraints, so the NORMAL answer path sits on the same
     # consistency surface as generated reads. Open-subject lookup
     # first, question-text lookup as the fallback.
     _led_block = ''
+    _t_ledger = time.monotonic()
     try:
         import insights_ledger as _il_an
         _led_subj = ((p_meta.get('name') if ctx.get('primary') else None)
@@ -55540,6 +55610,7 @@ def api_synth_chat_analyze():
         _led_block = _led.get('block') or ''
     except Exception:
         traceback.print_exc()
+    _pm_ask_stage('ledger', t0=_t_ledger)
     user_prompt = pma.build_analysis_user_prompt(
         digest, history, text, mode=mode or None,
         view_context=ctx.get('view_context'),
@@ -55557,9 +55628,11 @@ def api_synth_chat_analyze():
         pass
     _max_tok = 7500 if mode in ('cross_profile', 'personas',
                                 'whitespace') else 6000
+    _t_model = time.monotonic()
     result = _pm_claude_json(pma.ANALYSIS_SYSTEM_PROMPT, user_prompt,
                              max_tokens=_max_tok, temperature=0.5,
                              usage_extras=_pm_ppu)
+    _pm_ask_stage('model', t0=_t_model)
     if not result.get('success'):
         _chatbot_error_email(
             'brief-chat/analyze',

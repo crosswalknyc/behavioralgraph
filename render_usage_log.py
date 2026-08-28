@@ -312,7 +312,8 @@ def record_ask(*, user: str, view: str, question: str, surface: str,
                route: str, outcome: str, ms: int,
                mode: Optional[str] = None,
                subject: Optional[str] = None,
-               extra: Optional[dict] = None) -> None:
+               extra: Optional[dict] = None,
+               stages: Optional[dict] = None) -> None:
     """Persist one user question. Never raises; never blocks the caller
     (S3 put runs on a daemon thread, mirroring record_call).
 
@@ -323,6 +324,11 @@ def record_ask(*, user: str, view: str, question: str, surface: str,
     outcome: what the user got ('answered', 'clarify', 'declined',
              'declined_not_quantifiable', 'declined_no_context',
              'declined_credits', 'error').
+    stages:  optional per-stage wall-clock breakdown of the total 'ms'
+             (2026-08-28 latency instrumentation): a small dict of
+             stage name -> integer, e.g. {'digest': 812, 'anchors': 194,
+             'model': 11938}. Values are milliseconds except *_rounds
+             keys, which are counts. Capped at 16 entries.
     """
     try:
         q = str(question or '').strip()
@@ -351,6 +357,15 @@ def record_ask(*, user: str, view: str, question: str, surface: str,
                                       else str(v)[:200])
             if clean:
                 record['extra'] = clean
+        if isinstance(stages, dict) and stages:
+            clean_stages = {}
+            for k, v in list(stages.items())[:16]:
+                try:
+                    clean_stages[str(k)[:40]] = int(v)
+                except (TypeError, ValueError):
+                    continue
+            if clean_stages:
+                record['stages'] = clean_stages
         if _SYNC_FOR_TESTS:
             _put_ask_record_safe(record)
             return
