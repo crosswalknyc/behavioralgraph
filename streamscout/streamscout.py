@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """
-title_lookup.py  —  interactive per-title identifier lookup
-===========================================================
+StreamScout  (streamscout.py)  —  interactive per-title identifier lookup
+=========================================================================
 Ask a few questions in the terminal, then fetch the UNIQUE URL slug /
 identifier segment(s) for that title and write them to a fresh CSV on the
 Desktop.
+
+StreamScout is a self-contained unit: this file plus its sibling per-platform
+resolver modules and production_tags.py all live together in the streamscout/
+folder. Run it directly; the resolvers are loaded by name from this same
+folder, so keep them together.
 
 Flow
 ----
@@ -57,11 +62,11 @@ Netflix, the UUID for Hulu/Peacock/Max) and SEASON reads "Season 1", "Season 2"
 Search window (SLUG platforms): trailing N days (default 365). Override with
 --days, or pin --start / --end (YYYY-MM-DD).
 
-Usage
+Usage  (run from the repo root, or from inside the streamscout/ folder)
 -----
-    /opt/homebrew/bin/python3 title_lookup.py
-    /opt/homebrew/bin/python3 title_lookup.py --days 120
-    /opt/homebrew/bin/python3 title_lookup.py --start 2026-07-01 --end 2026-07-31
+    /opt/homebrew/bin/python3 streamscout/streamscout.py
+    /opt/homebrew/bin/python3 streamscout/streamscout.py --days 120
+    /opt/homebrew/bin/python3 streamscout/streamscout.py --start 2026-07-01 --end 2026-07-31
 """
 
 import argparse
@@ -249,6 +254,14 @@ def ask_choice(prompt: str, choices: dict[str, str]) -> str:
 # ── SLUG platforms (live ClickHouse) ──────────────────────────────────────────
 def get_client():
     import clickhouse_connect
+    # This unit lives in a subfolder (streamscout/) of the behavioralgraph repo;
+    # the `migration` package sits at the repo root, so make sure the repo root
+    # is importable no matter which directory the tool is launched from. (Only
+    # used by Peacock's clickstream fallback — the other platforms need none of
+    # this.)
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
     from migration.clickhouse_connector import (
         CH_HOST, CH_PORT, CH_USER, CH_PASSWORD, CH_DATABASE,
     )

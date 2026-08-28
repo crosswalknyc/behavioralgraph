@@ -61,7 +61,8 @@ UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
 # ── helpers ───────────────────────────────────────────────────────────────────
 def load_env(path=".env.local") -> dict:
     env = {}
-    for p in (path, os.path.join(os.path.dirname(__file__), path)):
+    for p in (path, os.path.join(os.path.dirname(__file__), path),
+              os.path.join(os.path.dirname(os.path.dirname(__file__)), path)):
         if os.path.exists(p):
             for line in open(p):
                 line = line.strip()

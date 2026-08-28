@@ -394,7 +394,8 @@ def resolve(title=None, url=None, kind="series", seasons=None):
 # Credentials come from the gitignored .env.local (DISNEY_EMAIL / DISNEY_PASSWORD).
 def load_env(path=".env.local"):
     env = {}
-    for p in (path, os.path.join(os.path.dirname(__file__), path)):
+    for p in (path, os.path.join(os.path.dirname(__file__), path),
+              os.path.join(os.path.dirname(os.path.dirname(__file__)), path)):
         if os.path.exists(p):
             for line in open(p):
                 line = line.strip()
