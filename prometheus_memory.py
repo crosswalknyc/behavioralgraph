@@ -198,11 +198,20 @@ def _record_now(user, rec):
     _update(user, mutate)
 
 
+# Standing default build window (default-date-range rule). A stored
+# window only counts as a rememberable preference when it differs.
+DEFAULT_WINDOW_START = '2025-07-01'
+DEFAULT_WINDOW_END = '2026-06-30'
+
+
 def remember(user, question, subject=None, cohort=None, ledger_key=None,
-             thread_id=None, view=None, route=None):
+             thread_id=None, view=None, route=None, window=None,
+             region=None):
     """Record a resolved ask into the user's memory. Fire-and-forget
     (daemon thread) unless _SYNC_FOR_TESTS: never adds reply latency,
-    never raises."""
+    never raises. `window` is {'start': 'YYYY-MM-DD', 'end': ...} when
+    the ask ran with a confirmed build window; `region` is the named
+    market(s) when the build carried market cuts."""
     try:
         if not str(user or '').strip() or not str(question or '').strip():
             return
@@ -216,6 +225,16 @@ def remember(user, question, subject=None, cohort=None, ledger_key=None,
             'route': (str(route)[:32] if route else None),
             'ts': _now_iso(),
         }
+        if isinstance(window, dict) and window.get('start') \
+                and window.get('end'):
+            rec['window'] = {'start': str(window['start'])[:10],
+                             'end': str(window['end'])[:10]}
+        if region:
+            if isinstance(region, (list, tuple)):
+                region = ', '.join(str(r) for r in region if r)
+            region = str(region).strip()
+            if region:
+                rec['region'] = region[:160]
         if _SYNC_FOR_TESTS:
             _record_now(user, rec)
             return
@@ -266,6 +285,34 @@ def recent_referents(user, k=2):
         if len(out) >= k:
             break
     return out
+
+
+def last_window(user, default_start=DEFAULT_WINDOW_START,
+                default_end=DEFAULT_WINDOW_END):
+    """The user's most recent NON-DEFAULT build window, or None. A
+    user who always accepts the standing default has no window
+    preference to lead with, so the clarify keeps its current
+    wording."""
+    for a in recall(user):
+        w = a.get('window')
+        if not isinstance(w, dict):
+            continue
+        ws, we = str(w.get('start') or ''), str(w.get('end') or '')
+        if not (ws and we):
+            continue
+        if ws == default_start and we == default_end:
+            continue
+        return {'start': ws, 'end': we}
+    return None
+
+
+def last_region(user):
+    """The user's most recent named market(s) from a build, or None."""
+    for a in recall(user):
+        r = str(a.get('region') or '').strip()
+        if r:
+            return r
+    return None
 
 
 def referent_label(ref):

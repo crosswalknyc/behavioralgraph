@@ -62792,6 +62792,23 @@ https://www.instagram.com/p/..."></textarea>
                     return;
                 }
                 if (data.needs_date_clarification) {
+                    // Grounded clarify (2026-08-27, Jenna): when the
+                    // user's memory holds a last-used custom window,
+                    // it leads as the first chip. The send phrase is
+                    // explicit dates, so picking it rides the normal
+                    // window-answer path.
+                    var _memWinChip = null;
+                    if (data.memory_window && data.memory_window.start &&
+                        data.memory_window.end) {
+                        var _mwLabel = _synthChatFormatRange(data.memory_window);
+                        if (_mwLabel) {
+                            _memWinChip = {
+                                label: 'Same as last time: ' + _mwLabel,
+                                send: 'from ' + data.memory_window.start +
+                                      ' to ' + data.memory_window.end
+                            };
+                        }
+                    }
                     // Batch variant (2026-08-20): stash the whole
                     // payload; confirmation releases the stacked
                     // summary with the window shown on it.
@@ -62812,10 +62829,11 @@ https://www.instagram.com/p/..."></textarea>
                             + ' (the last 12 months).\n\n'
                             + 'Reply ok to use that, or tell me a '
                             + 'different window (e.g. "for 2024", '
-                            + '"trailing 6 months", "Q4 2025").', { options: [
+                            + '"trailing 6 months", "Q4 2025").', { options:
+                                (_memWinChip ? [_memWinChip] : []).concat([
                                 {label: 'Use ' + bRangeLabel, send: 'ok'},
                                 {label: 'Trailing 6 months', send: 'trailing 6 months'}
-                            ]});
+                            ])});
                         return;
                     }
                     // Stash the draft and ask about dates. Do NOT
@@ -62840,10 +62858,11 @@ https://www.instagram.com/p/..."></textarea>
                         + 'Reply ok to use that, or tell me a '
                         + 'different window (e.g. "for 2024", '
                         + '"trailing 6 months", "Q4 2025").';
-                    _synthChatPushTurnWithMeta('agent', msg, { options: [
+                    _synthChatPushTurnWithMeta('agent', msg, { options:
+                        (_memWinChip ? [_memWinChip] : []).concat([
                         {label: 'Use ' + rangeLabel, send: 'ok'},
                         {label: 'Trailing 6 months', send: 'trailing 6 months'}
-                    ]});
+                    ])});
                     return;
                 }
                 // Batch response with zero surviving drafts

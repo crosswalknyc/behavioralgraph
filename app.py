@@ -48145,6 +48145,9 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
         'subjects': subjects,
         'needs_date_clarification': needs_date_clarification,
         'proposed_date_range': proposed_range,
+        # Grounded clarify (2026-08-27): last-used custom window chip.
+        'memory_window': (_pm_memory_last_window()
+                          if needs_date_clarification else None),
         'spec_drafts': [r.get('spec_draft') for r in ok_drafts],
         'per_subject_meta': [
             {
@@ -52198,6 +52201,11 @@ def api_synth_chat_interpret():
             'model': result.get('model'),
             'needs_date_clarification': needs_date_clarification,
             'proposed_date_range': proposed_range,
+            # Grounded clarify (2026-08-27, Jenna): the window question
+            # leads with the user's last-used custom window as a chip
+            # when their memory holds one; None keeps current wording.
+            'memory_window': (_pm_memory_last_window()
+                              if needs_date_clarification else None),
             'subject_label': subject_label,
             # Plain-language window this build/cut will run with
             # (ECHO RULE 2026-08-24). '' only for existing_match.
@@ -53571,6 +53579,28 @@ def api_synth_chat_approve():
             traceback.print_exc()
     _, _credits_left = check_user_credits(_charge_user)
 
+    # Cross-session memory (2026-08-27, Jenna): the approved build's
+    # confirmed window and any named markets become the user's
+    # last-used values, so the next window clarify can lead with them.
+    try:
+        _mem_dr = draft.get('date_range') \
+            if isinstance(draft.get('date_range'), dict) else {}
+        _mem_win = ({'start': _mem_dr.get('start'),
+                     'end': _mem_dr.get('end')}
+                    if _mem_dr.get('start') and _mem_dr.get('end')
+                    else None)
+        _mem_region = [str(c.get('dma') or c.get('label') or '').strip()
+                       for c in (draft.get('addon_cuts') or [])
+                       if isinstance(c, dict)
+                       and str(c.get('type') or '') == 'dma']
+        _pm_remember_ask_build(
+            (session.get('username') or '').strip(),
+            f"build: {spec.get('name', 'profile')}",
+            subject=spec.get('name'), window=_mem_win,
+            region=[r for r in _mem_region if r])
+    except Exception:
+        pass
+
     return jsonify({
         'success': True,
         'decision': decision,
@@ -54489,6 +54519,30 @@ def _pm_remember_ask(pm_user, question, subject=None, cohort=None,
             pass
     except Exception:
         pass
+
+
+def _pm_remember_ask_build(pm_user, question, subject=None, window=None,
+                           region=None):
+    """Record an approved build (subject + confirmed window + named
+    markets) into per-user memory. Fire-and-forget; never raises."""
+    try:
+        import prometheus_memory as pmm
+        pmm.remember(pm_user, question, subject=subject, route='build',
+                     window=window, region=region or None)
+    except Exception:
+        pass
+
+
+def _pm_memory_last_window():
+    """The session user's most recent non-default build window from
+    per-user memory, or None. One small cached S3 GET; any failure
+    returns None so the clarify keeps its current wording."""
+    try:
+        import prometheus_memory as pmm
+        u = (session.get('username') or '').strip()
+        return pmm.last_window(u) if u else None
+    except Exception:
+        return None
 
 
 def _pm_history_bind_text(history):
