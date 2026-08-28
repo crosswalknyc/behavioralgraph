@@ -88,6 +88,19 @@ _LABEL_STOPWORDS = {
     'or', 'as', 'at', 'in', 'on', 'for', 'of', 'to', 'by',
 }
 
+# Labels that describe the audience itself, not a base row. They must
+# never bind to brand/demo rows: on 2026-08-28 the Shark Tank income
+# ask captured 'audience and an' from prose, containment-matched the
+# 4-char key 'audi', and verified the income-tilt claim against the
+# AUDI car brand row (131 vs 106.3 -> false hold).
+_GENERIC_LABEL_NORMS = frozenset({
+    'audience', 'audiences', 'viewer', 'viewers', 'fan', 'fans',
+    'fanbase', 'base', 'cohort', 'universe', 'population', 'genpop',
+    'generalpopulation', 'index', 'tilt', 'share', 'reach', 'profile',
+    'file', 'subject', 'read', 'people', 'adults', 'household',
+    'households', 'income', 'group', 'segment', 'us',
+})
+
 _NORM_RX = re.compile(r'[^a-z0-9]+')
 
 
@@ -96,10 +109,14 @@ def _norm(label):
 
 
 def _trim_label(label):
-    """Last few meaningful words of a regex-captured label window."""
+    """Last few meaningful words of a regex-captured label window,
+    stopwords stripped from BOTH ends ('the audience and an' ->
+    'audience', not 'audience and an')."""
     words = [w for w in re.split(r'\s+', str(label or '').strip()) if w]
     while words and words[0].lower() in _LABEL_STOPWORDS:
         words.pop(0)
+    while words and words[-1].lower() in _LABEL_STOPWORDS:
+        words.pop()
     return ' '.join(words[-4:])
 
 
@@ -123,10 +140,13 @@ def _dp(value, text=None):
 # Base lookup (anchor source)
 # ---------------------------------------------------------------------------
 
-def build_base_lookup(index_doc):
+def build_base_lookup(index_doc, genpop=None):
     """Plain lookup dict from a nightly profile index doc:
     {'brands': {norm: [(category, bp, index_or_None)]},
-     'demos':  {norm: [(category, bp)]}, 'name': ...}."""
+     'demos':  {norm: [(category, bp, genpop_bp_or_None, label)]},
+     'name': ...}. `genpop` (optional {(cat, brand_norm): bp}) prices
+    demo buckets against Gen Pop so composite tilts (e.g. the $100K+
+    income index) are recomputable."""
     if not isinstance(index_doc, dict):
         return None
     brands, demos = {}, {}
@@ -157,11 +177,34 @@ def build_base_lookup(index_doc):
                 continue
             bn = _norm(bucket)
             if bn:
-                demos.setdefault(bn, []).append((cat, bp))
+                gp = _genpop_bp_for(genpop, cat, bucket)
+                demos.setdefault(bn, []).append(
+                    (cat, bp, gp, str(bucket)))
     if not brands and not demos:
         return None
     return {'name': index_doc.get('name') or '', 'source': 'index',
             'brands': brands, 'demos': demos}
+
+
+def _genpop_bp_for(genpop, cat, label):
+    """Gen Pop penetration for a (category, label) pair, tolerant of
+    the two key shapes the genpop map is built with."""
+    if not genpop:
+        return None
+    try:
+        import prometheus_analysis as pma
+        keys = ((str(cat).strip().upper(), pma._norm_brand(str(label))),
+                (str(cat).strip().upper(), _norm(label)))
+    except Exception:
+        keys = ((str(cat).strip().upper(), _norm(label)),)
+    for k in keys:
+        gp = genpop.get(k)
+        if gp is not None:
+            try:
+                return float(gp)
+            except (TypeError, ValueError):
+                return None
+    return None
 
 
 def lookup_from_frame(df, name, genpop=None):
@@ -185,7 +228,8 @@ def lookup_from_frame(df, name, genpop=None):
             if not bn:
                 continue
             if is_demo:
-                demos.setdefault(bn, []).append((catU, v))
+                gp = _genpop_bp_for(genpop, catU, label)
+                demos.setdefault(bn, []).append((catU, v, gp, label))
             else:
                 gp = genpop.get((catU, pma._norm_brand(label)))
                 idx = (round(v / gp * 100.0, 1)
@@ -211,18 +255,22 @@ def load_base_lookup(s3_client, bucket, s3_key, name=''):
         live_etag = (head.get('ETag') or '').strip('"')
     except Exception:
         return None
+    genpop = None
+    try:
+        genpop = pma.load_genpop_map(s3_client, bucket)
+    except Exception:
+        genpop = None
     try:
         doc = pma.load_profile_index(s3_client, bucket, key)
         if isinstance(doc, dict) and live_etag \
                 and doc.get('etag') == live_etag:
-            lk = build_base_lookup(doc)
+            lk = build_base_lookup(doc, genpop=genpop)
             if lk:
                 return lk
     except Exception:
         pass
     try:
         df, _etag = pma.load_profile_df(s3_client, bucket, key)
-        genpop = pma.load_genpop_map(s3_client, bucket)
         return lookup_from_frame(df, name, genpop)
     except Exception:
         return None
@@ -233,18 +281,18 @@ def load_base_lookup(s3_client, bucket, s3_key, name=''):
 # ---------------------------------------------------------------------------
 
 _IDX_TEXT_RX = (
-    re.compile(r"(?P<label>[A-Za-z][A-Za-z0-9&'\.\+\- ]{1,40}?)\s+"
+    re.compile(r"(?P<label>[A-Za-z$][A-Za-z0-9&'\.\+\-,$ ]{1,40}?)\s+"
                r"index(?:es)?\s+(?:of\s+|at\s+|is\s+|to\s+)?"
                r"(?P<val>\d{2,4})(?![\d.%])"),
     re.compile(r"index(?:es)?\s+(?:of\s+|at\s+)?(?P<val>\d{2,4})\s+"
                r"(?:for|on|against)\s+"
-               r"(?P<label>[A-Za-z][A-Za-z0-9&'\.\+\- ]{1,40})"),
+               r"(?P<label>[A-Za-z$][A-Za-z0-9&'\.\+\-,$ ]{1,40})"),
 )
 _PCT_TEXT_RX = (
-    re.compile(r"(?P<label>[A-Za-z][A-Za-z0-9&'\.\+\- ]{1,40}?)\s+"
+    re.compile(r"(?P<label>[A-Za-z$][A-Za-z0-9&'\.\+\-,$ ]{1,40}?)\s+"
                r"(?:at|reaches|hits|sits at|lands at|shows|measures)\s+"
                r"(?P<val>\d{1,2}(?:\.\d{1,2})?)%"),
-    re.compile(r"(?P<label>[A-Za-z][A-Za-z0-9&'\.\+\- ]{1,40}?)\s+"
+    re.compile(r"(?P<label>[A-Za-z$][A-Za-z0-9&'\.\+\-,$ ]{1,40}?)\s+"
                r"pen(?:etration)?\s+(?:of\s+|at\s+|is\s+)?"
                r"(?P<val>\d{1,2}(?:\.\d{1,2})?)%"),
 )
@@ -327,10 +375,73 @@ def extract_claims(reply, res):
 # Check 1: anchor recompute
 # ---------------------------------------------------------------------------
 
+_INCOME_AMOUNT_RX = re.compile(
+    r'\$\s*(?P<full>\d{1,3}(?:,\d{3})+)|(?<![\d.])(?P<k>\d{2,3})\s*[kK]\b')
+_INCOME_PLUS_RX = re.compile(
+    r'\+|or more|plus|and up|above|over|at least|minimum', re.I)
+_INCOME_WORD_RX = re.compile(
+    r'income|earn|household|hhi|affluent|\$', re.I)
+_BUCKET_FLOOR_RX = re.compile(r'(\d{1,3}(?:,\d{3})+|\d{4,})')
+
+
+def _income_threshold_from_label(label):
+    """Dollar floor when a claim label reads as an income-threshold
+    tilt ('$100K+ households', 'earning 100k or more'); else None."""
+    text = str(label or '')
+    m = _INCOME_AMOUNT_RX.search(text)
+    if not m:
+        return None
+    if not _INCOME_PLUS_RX.search(text):
+        return None
+    if not _INCOME_WORD_RX.search(text):
+        return None
+    if m.group('full'):
+        return int(m.group('full').replace(',', ''))
+    return int(m.group('k')) * 1000
+
+
+def _income_composite_index(lookup, threshold):
+    """Recompute the audience-vs-Gen-Pop index for the income buckets
+    at or above `threshold` from the base demo rows. None when the
+    buckets or their Gen Pop denominators are unavailable."""
+    aud = gp = 0.0
+    n = 0
+    for rows in (lookup.get('demos') or {}).values():
+        for row in rows:
+            if len(row) < 4 or str(row[0]).strip().upper() != 'INCOME':
+                continue
+            label = str(row[3])
+            low = 0
+            if not re.search(r'less than|under', label, re.I):
+                fm = _BUCKET_FLOOR_RX.search(label)
+                if not fm:
+                    continue
+                low = int(fm.group(1).replace(',', ''))
+            if low < threshold:
+                continue
+            if row[2] is None:
+                return None
+            aud += float(row[1])
+            gp += float(row[2])
+            n += 1
+    if not n or gp <= 0.01:
+        return None
+    return round(aud / gp * 100.0, 1)
+
+
 def _candidates_for(claim, lookup):
     """Base rows a claim can bind to, by normalized-label match (exact
-    first, containment for labels of 5+ chars)."""
+    first, containment when both sides are 5+ chars). Generic audience
+    nouns never bind; income-threshold index claims bind to the
+    recomputed bucket composite."""
     ln = _norm(claim['label'])
+    if claim['kind'] == 'index':
+        threshold = _income_threshold_from_label(claim['label'])
+        if threshold is not None:
+            comp = _income_composite_index(lookup, threshold)
+            return [comp] if comp is not None else []
+    if ln in _GENERIC_LABEL_NORMS:
+        return []
     table = lookup['demos'] if claim['kind'] == 'demo' \
         else lookup['brands']
     rows = list(table.get(ln) or [])
@@ -338,7 +449,7 @@ def _candidates_for(claim, lookup):
         rows = list(lookup['demos'].get(ln) or [])
     if not rows and len(ln) >= 5:
         for key, krows in table.items():
-            if ln in key or key in ln:
+            if len(key) >= 5 and (ln in key or key in ln):
                 rows.extend(krows)
             if len(rows) >= 8:
                 break
