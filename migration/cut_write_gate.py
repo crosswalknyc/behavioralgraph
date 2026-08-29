@@ -170,17 +170,46 @@ def finalize_cut_for_upload(df, subject, *, parent_df=None, out_key='',
                 from avid_fan_row_by_row import (  # type: ignore
                     enforce_avid_subset_coherence,
                 )
-            df, _cap_stats = enforce_avid_subset_coherence(
-                df, _gate_parent_df, subject,
-                verbose=verbose, cap_only=True,
-            )
-            n_capped = int(_cap_stats.get('capped_up', 0) or 0)
-            report['terminal_subset_recap'] = n_capped
-            if n_capped:
-                if verbose:
-                    print(f'   ✅ cut-write-gate terminal subset re-cap: '
-                          f'{n_capped} row(s) re-capped')
-                df, _ = run_write_safety_net(df, subject, verbose=False)
+            try:
+                from migration.post_generation_enforcers import (
+                    apply_recompute_category_share,
+                    recompute_raw_and_projection,
+                )
+            except ImportError:
+                from post_generation_enforcers import (  # type: ignore
+                    apply_recompute_category_share,
+                    recompute_raw_and_projection,
+                )
+            # Post-cap reconcile is ARITHMETIC ONLY (Raw/Proj +
+            # Category Share). The full write safety net re-runs the
+            # direction-blind 4dp-collision dejitter, which moved a
+            # freshly capped row back UP across its subset raw ceiling
+            # (Automotive avid, run fbb-KZmN3eNsQw: SPEAKE MARIN capped
+            # 0.0100 -> 0.0021, net dejittered to 0.0030, raw 5 -> 6 vs
+            # parent 5 -> I12 hold). BP-mutating passes stay upstream
+            # (polish, step 2); nothing after this step may move a BP.
+            # The loop re-verifies convergence: the arithmetic passes
+            # cannot move BPs, so round 2 finding 0 rows proves the
+            # frame sits at-or-under every parent ceiling.
+            total_capped = 0
+            for _recap_round in range(3):
+                df, _cap_stats = enforce_avid_subset_coherence(
+                    df, _gate_parent_df, subject,
+                    verbose=verbose, cap_only=True,
+                )
+                n_capped = int(_cap_stats.get('capped_up', 0) or 0)
+                total_capped += n_capped
+                if not n_capped:
+                    break
+                df, _ = recompute_raw_and_projection(
+                    df, subject, verbose=False)
+                df, _ = apply_recompute_category_share(
+                    df, subject, verbose=False)
+            report['terminal_subset_recap'] = total_capped
+            if total_capped and verbose:
+                print(f'   ✅ cut-write-gate terminal subset re-cap: '
+                      f'{total_capped} row(s) re-capped '
+                      f'(converged round {_recap_round + 1})')
         except Exception as e:
             report['terminal_subset_recap'] = -1
             print(f'   ⚠ cut-write-gate subset re-cap failed '
