@@ -1956,6 +1956,17 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
             hold = verdict == "FAIL" and (
                 bool(judgment) or len(fixable) > MAX_AUTOFIX_ROWS)
             if (not hold) and 0 < len(fixable) <= MAX_AUTOFIX_ROWS:
+                # TRANSACTIONAL SNAPSHOT (2026-08-29 Automotive avid,
+                # run fbb-KZmN3eNsQw): the frame entering this branch
+                # already PASSED the mechanical gate. Vetting fixes are
+                # all-or-nothing - if the re-gate below rejects the
+                # fixed frame, we publish THIS frame, never the mutated
+                # one. (The old flow let the re-gate's ShipGateError
+                # fall through to the internal-error fallback, which
+                # published the mutated frame: VISA lift + three micro
+                # rows the post-fix safety net had drifted back across
+                # their subset raw ceilings.)
+                _gate_passed_df = df
                 df = df.copy()
                 # Strip baseline columns so the fixes and the chain
                 # recompute see the canonical frame; re-appended by the
@@ -2001,6 +2012,60 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                     except Exception as e:
                         print(f"[pre-ship-vetting] post-fix safety net "
                               f"raised ({type(e).__name__}: {e})")
+                    # Derived cuts only: the safety net's direction-
+                    # blind 4dp dejitter can push a micro row back
+                    # across its parent subset raw ceiling (the exact
+                    # drift that fails the re-gate as I12). Re-cap to
+                    # convergence with ARITHMETIC-ONLY reconciles in
+                    # between, mirroring cut_write_gate step 2.5.
+                    if " - " in os.path.basename(str(key)):
+                        try:
+                            try:
+                                from migration.avid_fan_row_by_row \
+                                    import enforce_avid_subset_coherence
+                                from migration.final_ship_gate import (
+                                    _resolve_parent_tu,
+                                )
+                                from migration.post_generation_enforcers \
+                                    import (
+                                        apply_recompute_category_share,
+                                        recompute_raw_and_projection,
+                                    )
+                            except ImportError:
+                                from avid_fan_row_by_row import (  # type: ignore
+                                    enforce_avid_subset_coherence,
+                                )
+                                from final_ship_gate import (  # type: ignore
+                                    _resolve_parent_tu,
+                                )
+                                from post_generation_enforcers import (  # type: ignore
+                                    apply_recompute_category_share,
+                                    recompute_raw_and_projection,
+                                )
+                            _pk, _pb = _resolve_parent_tu(
+                                key, verbose=False)
+                            if _pb:
+                                import pandas as _pd_recap
+                                _pdf = _pd_recap.read_csv(
+                                    io.BytesIO(_pb), dtype=str,
+                                    keep_default_na=False)
+                                for _rr in range(3):
+                                    df, _cs = \
+                                        enforce_avid_subset_coherence(
+                                            df, _pdf, subject,
+                                            verbose=False,
+                                            cap_only=True)
+                                    if not int(_cs.get("capped_up", 0)
+                                               or 0):
+                                        break
+                                    df, _ = recompute_raw_and_projection(
+                                        df, subject, verbose=False)
+                                    df, _ = apply_recompute_category_share(
+                                        df, subject, verbose=False)
+                        except Exception as e:
+                            print(f"[pre-ship-vetting] post-fix subset "
+                                  f"re-cap raised "
+                                  f"({type(e).__name__}: {e})")
                     if sort_fn is None:
                         try:
                             try:
@@ -2018,6 +2083,12 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                             df = sort_fn(df)
                         except Exception:
                             pass
+                    # Re-gate REPORT-ONLY: a violation here must not
+                    # quarantine the fixed frame or raise - it means
+                    # the fixes (or the post-fix reconcile) broke an
+                    # invariant, and the remedy is the transactional
+                    # revert to the frame the gate already approved.
+                    _regate_ok = True
                     try:
                         try:
                             from migration.final_ship_gate import (
@@ -2029,21 +2100,32 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                             )
                         buf = io.StringIO()
                         df.to_csv(buf, index=False)
-                        run_final_ship_gate(
+                        _ok2, _viol2 = run_final_ship_gate(
                             buf.getvalue().encode("utf-8"), key,
-                            subject, enforce=enforce, s3_client=s3c,
+                            subject, enforce=False, s3_client=s3c,
                             verbose=verbose,
                         )
+                        _regate_ok = bool(_ok2)
                     except ImportError:
                         pass
-                    report["verdict"] = (
-                        "FAIL_AUTOFIXED" if verdict == "FAIL"
-                        else f"{verdict}_AUTOFIXED")
-                    if verbose:
-                        print(f"[pre-ship-vetting] {base}: {verdict} "
-                              f"with {len(applied)} benchmark-backed "
-                              f"fix(es) applied; re-checked and "
-                              f"publishing")
+                    if not _regate_ok:
+                        df = _gate_passed_df
+                        report["autofix_reverted"] = applied
+                        report["autofix"] = []
+                        report["verdict"] = f"{verdict}_FIXES_REVERTED"
+                        print(f"[pre-ship-vetting] {base}: post-fix "
+                              f"frame failed the mechanical re-gate; "
+                              f"{len(applied)} fix(es) reverted, "
+                              f"publishing the gate-approved frame")
+                    else:
+                        report["verdict"] = (
+                            "FAIL_AUTOFIXED" if verdict == "FAIL"
+                            else f"{verdict}_AUTOFIXED")
+                        if verbose:
+                            print(f"[pre-ship-vetting] {base}: "
+                                  f"{verdict} with {len(applied)} "
+                                  f"benchmark-backed fix(es) applied; "
+                                  f"re-checked and publishing")
             if hold:
                 hold_findings = judgment or fail_findings
                 report["verdict"] = "FAIL_HELD"
