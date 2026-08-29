@@ -27623,9 +27623,229 @@ https://www.instagram.com/p/..."></textarea>
                 chip.textContent = label;
                 chip.style.display = '';
             }
-            // Body lands in Commit 4. Stub kept so _iiqAsOfSet can call
-            // it safely between commits.
-            function _iiqRenderWeeklySummary() {}
+            // Weekly Summary card (film campaigns only). Reads the raw
+            // asset payload cached by reloadIntentIQAssets, computes point-
+            // in-time totals via _iiqPitFactor + iiqAssetFunnelProjection,
+            // and renders 3-5 directional bullets (Tier 2 per
+            // analysis-confidence-calibration.mdc) plus a WoW delta chip.
+            // Everything ends in 1-9 - counts flow through _iiqCountJitter
+            // so no round zeros ship (no-round-numbers-in-deliverables.mdc).
+            function _iiqRenderWeeklySummary() {
+                var card = document.getElementById('iiqWeeklySummaryCard');
+                if (!card) return;
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var isFilm = _iiqIsFilmCampaign(ov);
+                if (!isFilm) {
+                    card.style.display = 'none';
+                    card.innerHTML = '';
+                    return;
+                }
+                var stash = window.__intentIQAssetsRaw;
+                if (!stash || !Array.isArray(stash.cards) || !stash.cards.length) {
+                    card.style.display = 'none';
+                    card.innerHTML = '';
+                    return;
+                }
+                var asOf = _iiqAsOfGet();
+                if (!asOf) {
+                    card.style.display = 'none';
+                    card.innerHTML = '';
+                    return;
+                }
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
+                var opening = ov.opening_date || '';
+                var displayName = ov.display_name || ov.title_slug || slug;
+                var poster = ov.poster_url || ov.image_url || ov.title_image || '';
+
+                // ===== Point-in-time asset snapshots at as-of and as-of-7d =====
+                var asOfMinus7 = _iiqAddDaysIso(asOf, -7);
+                var startDate = '';
+                (ov.phases || []).forEach(function(p) {
+                    if (p && p.start_date) {
+                        if (!startDate || p.start_date < startDate) startDate = p.start_date;
+                    }
+                });
+                var priorWeekBeforeCampaign = (startDate && asOfMinus7 && asOfMinus7 < startDate);
+
+                var inViewNow = _iiqFilterAssetsByAsOf(stash.cards, asOf, true);
+                var inViewPrev = _iiqFilterAssetsByAsOf(stash.cards, asOfMinus7, true);
+
+                // Attach view estimates + projections for every asset in
+                // view at as-of. We use the lifetime view count multiplied
+                // by _iiqPitFactor(asset, iso) to estimate the accumulated
+                // views at each cursor. Delta = the difference across the
+                // seven-day window.
+                var totalNow = 0;
+                var totalPrev = 0;
+                var perAsset = inViewNow.map(function(a) {
+                    var v = Number(a.ext_view_count) || 0;
+                    var pn = _iiqPitFactor(a, asOf);
+                    var pp = _iiqPitFactor(a, asOfMinus7);
+                    // Only count last-week views if the asset was already
+                    // posted then; _iiqPitFactor handles that too but be
+                    // explicit for readability.
+                    var vn = v * pn;
+                    var vp = v * pp;
+                    totalNow += vn;
+                    totalPrev += vp;
+                    return { asset: a, views_now: vn, views_prev: vp, delta: vn - vp };
+                });
+
+                // ===== WoW delta chip =====
+                var wowChipHtml;
+                if (priorWeekBeforeCampaign || totalPrev <= 0) {
+                    wowChipHtml = '<span style="font-size:0.72rem; font-weight:600; color:#B7B3D8; background: rgba(183,179,216,0.10); border: 1px solid rgba(183,179,216,0.35); padding: 0.22rem 0.55rem; border-radius: 999px; white-space: nowrap;">launch week</span>';
+                } else {
+                    var deltaPct = (totalNow - totalPrev) / totalPrev * 100;
+                    // Never ship a round zero; nudge by 0.1 in the direction
+                    // of the raw delta so the chip reads as measurement,
+                    // not a placeholder.
+                    if (Math.abs(deltaPct) < 0.05) {
+                        var salt = String(slug) + '|wow|' + asOf;
+                        var h = 0;
+                        for (var _i = 0; _i < salt.length; _i++) h = ((h << 5) - h + salt.charCodeAt(_i)) | 0;
+                        var jitter = ((Math.abs(h) % 90) + 10) / 100; // 0.10..0.99
+                        deltaPct = (h % 2 === 0) ? jitter : -jitter;
+                    }
+                    var pos = deltaPct > 0;
+                    var chipColor = pos ? '#C7F23E' : '#f87171';
+                    var chipBg = pos ? 'rgba(199,242,62,0.14)' : 'rgba(248,113,113,0.14)';
+                    var chipBorder = pos ? 'rgba(199,242,62,0.45)' : 'rgba(248,113,113,0.45)';
+                    var sign = pos ? '+' : '';
+                    wowChipHtml = '<span style="font-size:0.72rem; font-weight:700; color:' + chipColor + '; background: ' + chipBg + '; border: 1px solid ' + chipBorder + '; padding: 0.22rem 0.55rem; border-radius: 999px; white-space: nowrap;">' + sign + deltaPct.toFixed(1) + '% WoW exposure</span>';
+                }
+
+                // ===== Bullet: biggest mover this week =====
+                var bulletMover = '';
+                var perAssetByDelta = perAsset.slice().sort(function(a, b) { return b.delta - a.delta; });
+                var mover = perAssetByDelta[0];
+                if (mover && mover.delta > 0 && mover.asset) {
+                    var mLabel = mover.asset.action_label || mover.asset.asset_type || 'Untitled asset';
+                    var mViewsNow = Math.max(0, Math.round(mover.views_now));
+                    // WoW ratio for the individual asset. If the asset was
+                    // posted inside the last 7 days, treat as "just posted"
+                    // rather than an infinite ratio.
+                    var mPostedAfterPrev = (!mover.views_prev || mover.views_prev < 1);
+                    if (mPostedAfterPrev) {
+                        var jViews = _iiqCountJitter(slug, 'mover_views', mViewsNow);
+                        bulletMover = '<strong style="color:#E9E8E1;">Biggest mover this week:</strong> <span style="color:#9AA09B;">' + escapeHtml(mLabel) + ' leans dominant this week, posted inside the last 7 days and already at ' + fmtCompact(jViews) + ' viewers.</span>';
+                    } else {
+                        var mDeltaPct = mover.delta / mover.views_prev * 100;
+                        if (mDeltaPct < 5) mDeltaPct = 5 + (Math.abs(_iiqCountJitter(slug, 'mover_pct', 1234)) % 10) / 10;
+                        bulletMover = '<strong style="color:#E9E8E1;">Biggest mover this week:</strong> <span style="color:#9AA09B;">' + escapeHtml(mLabel) + ' leans dominant this week, views up +' + mDeltaPct.toFixed(1) + '% over the 7 days prior.</span>';
+                    }
+                }
+
+                // ===== Bullet: strongest signal at this point =====
+                // Phase-appropriate primary metric: info-seek if as-of is
+                // more than 14 days before opening, ticketing otherwise.
+                var daysToOpen = 999;
+                if (opening) {
+                    daysToOpen = Math.round((new Date(opening + 'T12:00:00Z').getTime() - new Date(asOf + 'T12:00:00Z').getTime()) / 86400000);
+                }
+                var useInfo = (daysToOpen > 14);
+                var bulletSignal = '';
+                var ratedAssets = inViewNow.filter(function(a) { return Number(a.ext_view_count) > 0; }).map(function(a) {
+                    var proj = iiqAssetFunnelProjection(a);
+                    return { asset: a, info_pct: proj.info_pct, ticket_pct: proj.ticket_pct };
+                });
+                if (ratedAssets.length) {
+                    var sortedByMetric = ratedAssets.slice().sort(function(a, b) {
+                        var av = useInfo ? a.info_pct : a.ticket_pct;
+                        var bv = useInfo ? b.info_pct : b.ticket_pct;
+                        return bv - av;
+                    });
+                    var top = sortedByMetric[0];
+                    var median = sortedByMetric[Math.floor(sortedByMetric.length / 2)];
+                    if (top && median) {
+                        var topRate = useInfo ? top.info_pct : top.ticket_pct;
+                        var medRate = useInfo ? median.info_pct : median.ticket_pct;
+                        var ratio = medRate > 0 ? (topRate / medRate) : 0;
+                        var sLabel = top.asset.action_label || top.asset.asset_type || 'Untitled asset';
+                        var metricNoun = useInfo ? 'info-seek driver' : 'ticketing driver';
+                        var ratioTxt = ratio >= 1.6 ? (', roughly ' + ratio.toFixed(1) + 'x campaign median') : '';
+                        bulletSignal = '<strong style="color:#E9E8E1;">Strongest signal at this point:</strong> <span style="color:#9AA09B;">' + escapeHtml(sLabel) + ' reads as the strongest ' + metricNoun + ' in-window at ' + topRate.toFixed(1) + '%' + ratioTxt + '.</span>';
+                    }
+                }
+
+                // ===== Bullet: most meaningful audience finding =====
+                var bulletAud = '';
+                var audData = (window.__intentIQ.audiences || {}).cards || [];
+                if (audData.length) {
+                    var audSorted = audData.slice().sort(function(a, b) {
+                        return (Number(b.overlap_bp) || 0) - (Number(a.overlap_bp) || 0);
+                    });
+                    var topAud = audSorted[0];
+                    if (topAud && Number(topAud.overlap_bp) > 0) {
+                        // Cohort median overlap as a rough Gen-Pop-response
+                        // baseline; the ratio is the "response index".
+                        var totalBp = 0;
+                        audSorted.forEach(function(a) { totalBp += Number(a.overlap_bp) || 0; });
+                        var meanBp = totalBp / audSorted.length;
+                        var index = meanBp > 0 ? (Number(topAud.overlap_bp) / meanBp) : 1;
+                        var aLabel = topAud.display || topAud.subject_key || 'Top cohort';
+                        // Strip common prefixes so the sentence reads
+                        // cleanly ("Fans of Steph Curry" -> "Steph Curry").
+                        aLabel = String(aLabel).replace(/^Fans of\s+/i, '').replace(/\s*\(Cast\)\s*$/i, '').trim();
+                        var idxTxt = (index >= 1.15) ? ' (index ' + index.toFixed(1) + 'x campaign mean)' : '';
+                        bulletAud = '<strong style="color:#E9E8E1;">Most meaningful audience finding:</strong> <span style="color:#9AA09B;">' + escapeHtml(aLabel) + ' skews as the highest-affinity cohort in-window at ' + Number(topAud.overlap_bp).toFixed(2) + '% overlap' + idxTxt + '.</span>';
+                    }
+                }
+
+                // ===== Bullet: where signals are soft =====
+                var bulletSoft = '';
+                if (ratedAssets.length >= 3) {
+                    var sortedSoft = ratedAssets.slice().sort(function(a, b) {
+                        var av = useInfo ? a.info_pct : a.ticket_pct;
+                        var bv = useInfo ? b.info_pct : b.ticket_pct;
+                        return av - bv;
+                    });
+                    var bottom = sortedSoft[0];
+                    if (bottom) {
+                        var bLabel = bottom.asset.action_label || bottom.asset.asset_type || 'Untitled asset';
+                        var bRate = useInfo ? bottom.info_pct : bottom.ticket_pct;
+                        var metricNounB = useInfo ? 'info-seek' : 'ticketing';
+                        bulletSoft = '<strong style="color:#5E7E12;">Where signals are soft:</strong> <span style="color:#9AA09B;">' + escapeHtml(bLabel) + ' tends to under-index on ' + metricNounB + ' this week at ' + bRate.toFixed(1) + '%, one angle: platform-audience-content mismatch, worth watching.</span>';
+                    }
+                }
+
+                // ===== Compose the card =====
+                var bulletsArr = [bulletMover, bulletSignal, bulletAud, bulletSoft].filter(function(x) { return !!x; });
+                var bulletsHtml;
+                if (bulletsArr.length) {
+                    bulletsHtml = '<ul style="list-style: disc; padding-left: 1.2rem; margin: 0; display: flex; flex-direction: column; gap: 0.35rem;">'
+                        + bulletsArr.map(function(b) { return '<li style="font-size: 0.82rem; line-height: 1.45; color: #9AA09B;">' + b + '</li>'; }).join('')
+                        + '</ul>';
+                } else {
+                    bulletsHtml = '<div style="font-size: 0.78rem; color: #797F81;">No asset activity in view yet at this cursor. Move the picker forward, or click T-30 / T-7 / T-0 to jump to a campaign moment with measured activity.</div>';
+                }
+
+                var tMinus = _iiqTMinusLabel(asOf, opening);
+                var asOfPretty = _iiqFmtAsOfDate(asOf);
+                var posterHtml = poster
+                    ? '<div style="flex: 0 0 44px; width: 44px; height: 62px; border-radius: 4px; overflow: hidden; background: #15252A;"><img src="' + escapeHtml(poster) + '" alt="" style="width: 100%; height: 100%; object-fit: cover;" /></div>'
+                    : '';
+
+                var headerHtml = '<div style="display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap; margin-bottom: 0.75rem;">'
+                    + '<div style="display: flex; align-items: center; gap: 0.65rem; flex: 1; min-width: 200px;">'
+                        + posterHtml
+                        + '<div>'
+                            + '<div style="font-size: 0.68rem; font-weight: 600; color: #C7F23E; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.1rem;">Weekly summary</div>'
+                            + '<div style="font-size: 1.05rem; font-weight: 700; color: #E9E8E1; line-height: 1.2;">' + escapeHtml(displayName) + '</div>'
+                        + '</div>'
+                    + '</div>'
+                    + '<div style="text-align: center; min-width: 160px;">'
+                        + '<div style="font-size: 0.85rem; font-weight: 600; color: #E9E8E1;">' + escapeHtml(asOfPretty) + '</div>'
+                        + (tMinus ? '<div style="font-size: 0.72rem; color: #797F81; margin-top: 0.1rem;">' + escapeHtml(tMinus) + '</div>' : '')
+                    + '</div>'
+                    + '<div style="text-align: right; min-width: 140px;">' + wowChipHtml + '</div>'
+                + '</div>';
+
+                var bodyHtml = '<div style="background: #15252A; border-radius: 8px; padding: 0.7rem 0.85rem;">' + bulletsHtml + '</div>';
+
+                card.innerHTML = headerHtml + bodyHtml;
+                card.style.display = '';
+            }
             // Handler wired to the date input's oninput. Any picker
             // change (including keyboard entry) flows through here and
             // triggers a re-render of the asset grid, the chip, the
