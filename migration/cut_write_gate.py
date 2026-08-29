@@ -126,6 +126,66 @@ def finalize_cut_for_upload(df, subject, *, parent_df=None, out_key='',
             print(f'   ⚠ cut-write-gate collision recheck failed '
                   f'(non-fatal): {e}')
 
+    # 2.5. TERMINAL SUBSET RE-CAP (2026-08-29 Bethenny / Automotive
+    #    I12 holds): the polish's depin/dejitter (step 1) and the
+    #    no-collision jitter (step 2) mutate BPs with no parent
+    #    context, so a row the engine already capped against the
+    #    parent can drift back across the subset raw ceiling and hit
+    #    the ship gate's I12 - a whack-a-mole where each fixer undoes
+    #    the last. This is the LAST BP-mutating step before the gate:
+    #    a strictly non-increasing, raw-verified cap (cap_only=True -
+    #    no lifts, so it can never fight gender-pair coherence).
+    #    Capped against the SAME parent bytes the ship gate's I12
+    #    will resolve from S3 (falling back to the caller's in-memory
+    #    parent_df when resolution fails, e.g. offline dry runs), so
+    #    the cap and the gate can never disagree about the ceiling.
+    _gate_parent_df = None
+    try:
+        try:
+            from migration.final_ship_gate import _resolve_parent_tu
+        except ImportError:
+            from final_ship_gate import _resolve_parent_tu  # type: ignore
+        _pkey, _pbody = _resolve_parent_tu(out_key, verbose=verbose)
+        if _pbody:
+            import io as _io
+
+            import pandas as _pd
+            _gate_parent_df = _pd.read_csv(
+                _io.BytesIO(_pbody), dtype=str, keep_default_na=False)
+            if verbose:
+                print(f'   [cut-write-gate] subset re-cap parent: {_pkey}')
+    except Exception as e:
+        if verbose:
+            print(f'   [cut-write-gate] gate-parent resolve failed '
+                  f'({e}); falling back to in-memory parent')
+    if _gate_parent_df is None:
+        _gate_parent_df = parent_df
+    if _gate_parent_df is not None:
+        try:
+            try:
+                from migration.avid_fan_row_by_row import (
+                    enforce_avid_subset_coherence,
+                )
+            except ImportError:
+                from avid_fan_row_by_row import (  # type: ignore
+                    enforce_avid_subset_coherence,
+                )
+            df, _cap_stats = enforce_avid_subset_coherence(
+                df, _gate_parent_df, subject,
+                verbose=verbose, cap_only=True,
+            )
+            n_capped = int(_cap_stats.get('capped_up', 0) or 0)
+            report['terminal_subset_recap'] = n_capped
+            if n_capped:
+                if verbose:
+                    print(f'   ✅ cut-write-gate terminal subset re-cap: '
+                          f'{n_capped} row(s) re-capped')
+                df, _ = run_write_safety_net(df, subject, verbose=False)
+        except Exception as e:
+            report['terminal_subset_recap'] = -1
+            print(f'   ⚠ cut-write-gate subset re-cap failed '
+                  f'(non-fatal): {e}')
+
     # 3. numeric artifacts - the LAST formatter before sort + upload
     try:
         df, n_art = _normalize_numeric_artifacts(df, verbose=verbose)

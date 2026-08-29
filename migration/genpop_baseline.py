@@ -72,6 +72,27 @@ _CAT_ALIASES = {
     "INFLUENCER/CREATOR": "CREATOR/INFLUENCER",
     "VIRTUAL MVPD/FAST": "VIRTUAL MVPD FAST",
     "VMVPD/FAST": "VIRTUAL MVPD FAST",
+    # 2026-08-28 (partner findings): profiles ship these spellings but
+    # Gen Pop stores the canonical right-hand names; without the fold
+    # whole columns ship index-less (Holley STREAMING MUSIC x14, AMASS
+    # APP/PLATFORM x7).
+    "STREAMING MUSIC": "STREAMING/MUSIC",
+    "APP/PLATFORM": "APP/PLATFORM USAGE",
+}
+
+# Mirror-group fallbacks (2026-08-28, partner findings 6.1/6.2): when a
+# profile row's own category has no Gen Pop entry for the brand, fall
+# back to the brand's row in a mirror-coherent companion category. Per
+# rule #3b the purchase-family mirror keeps those values identical, so
+# the fallback IS the brand's Gen Pop reach, not a proxy. This is how
+# parts retailers ranked in an AUTOMOBILE ladder (AutoZone, NAPA,
+# Summit Racing - hostmap section 'Where They Shop') and beverage
+# challengers in a BEVERAGE ladder pick up denominators. Ordered by
+# preference; first hit wins.
+_CAT_FALLBACKS = {
+    "BEVERAGE": ("CPG", "MOST PURCHASED BRANDS"),
+    "AUTOMOBILE": ("WHERE THEY SHOP",),
+    "CASUAL DINING": ("QSR", "WHERE THEY DINE"),
 }
 
 
@@ -164,7 +185,13 @@ def append_genpop_columns(df: pd.DataFrame, genpop_map=None,
                 pens.append("")
                 idxs.append("")
                 continue
-            hit = genpop_map.get((cat, _norm_brand(row.get(VAL_COL))))
+            bn = _norm_brand(row.get(VAL_COL))
+            hit = genpop_map.get((cat, bn))
+            if hit is None:
+                for fb_cat in _CAT_FALLBACKS.get(cat, ()):
+                    hit = genpop_map.get((_norm_cat(fb_cat), bn))
+                    if hit is not None:
+                        break
             if hit is None:
                 pens.append("")
                 idxs.append("")

@@ -750,6 +750,54 @@ def _subject_forms(subject, s3_key, rows):
     return full, mono
 
 
+# Audience / qualifier nouns that never alone justify a near-100 pin.
+# Used by _is_universe_constituent: a value made ONLY of these words
+# ('HOME', 'PAST 60 DAYS') is not a brand named in the subject.
+_CONSTITUENT_GENERIC_WORDS = frozenset({
+    "SWITCHER", "SWITCHERS", "CUSTOMER", "CUSTOMERS", "BUYER", "BUYERS",
+    "VOTER", "VOTERS", "FAN", "FANS", "VIEWER", "VIEWERS", "SHOPPER",
+    "SHOPPERS", "MEMBER", "MEMBERS", "USER", "USERS", "SUBSCRIBER",
+    "SUBSCRIBERS", "ENTHUSIAST", "ENTHUSIASTS", "OWNER", "OWNERS",
+    "PLAYER", "PLAYERS", "LISTENER", "LISTENERS", "READER", "READERS",
+    "CONSUMER", "CONSUMERS", "HOUSEHOLD", "HOUSEHOLDS", "AUDIENCE",
+    "PEOPLE", "ADULT", "ADULTS", "KID", "KIDS", "PARENT", "PARENTS",
+    "HOME", "PAST", "DAYS", "DAY", "THE", "AND", "FOR", "NEW", "WITH",
+    "POTENTIAL", "ACTIVE", "HEAVY", "LIGHT", "LAPSED", "FORMER",
+    "CURRENT", "MONTHLY", "WEEKLY", "DAILY", "AVID", "CASUAL",
+})
+
+
+def _is_universe_constituent(subject, value):
+    """True when `value` is a brand NAMED INSIDE a multi-brand universe
+    subject (2026-08-29, Spectrum switcher / T-Mobile 5G Home holds).
+
+    'Spectrum to Frontier Switchers' definitionally reads ~100 on BOTH
+    Spectrum (the from-brand) and Frontier (the to-brand); 'T-Mobile 5G
+    Home Customer' reads ~100 on T-Mobile. The writer pins these
+    (spec_pin_disposition's restatement heuristic) and the gate must
+    recognize the same convention or every switcher/customer universe
+    holds at I1. Guards: every value word must appear in the subject
+    (joined adjacent pairs included, so 'TMOBILE' matches 'T Mobile'),
+    the value must be a PROPER subset of the subject's words (the full
+    restatement is the `full` form's job), and at least one value word
+    must be brand-ish: len >= 3, not pure digits, not an audience /
+    qualifier noun.
+    """
+    vw = [w for w in re.split(r"[^A-Za-z0-9]+", str(value or "").upper())
+          if w]
+    swl = [w for w in re.split(r"[^A-Za-z0-9]+", str(subject or "").upper())
+           if w]
+    if not vw or not swl or len(vw) >= len(swl):
+        return False
+    sw = set(swl)
+    for i in range(len(swl) - 1):
+        sw.add(swl[i] + swl[i + 1])
+    if any(w not in sw for w in vw):
+        return False
+    return any(len(w) >= 3 and not w.isdigit()
+               and w not in _CONSTITUENT_GENERIC_WORDS for w in vw)
+
+
 # ---------------------------------------------------------------------------
 # Viewer-carriage sidecar (2026-08-26 Jenna JKL/Rosie mandate).
 # The build-time research step caches its carriage facts at
@@ -970,6 +1018,16 @@ def _check_i1(rows, subject, s3_key, s3_client, verbose):
                         continue
             except Exception:
                 pass
+            # Universe-constituent brand (2026-08-29 Spectrum switcher
+            # / T-Mobile 5G Home holds): a brand named inside a
+            # multi-brand universe subject is universe-defining and
+            # pins near 100 by convention (writer side:
+            # spec_pin_disposition's restatement heuristic). The mono
+            # exemption above deliberately doesn't cover this case
+            # when the category also carries the full subject row -
+            # switcher universes legitimately carry BOTH.
+            if _is_universe_constituent(subject, r["val"]):
+                continue
             if baselines is not None:
                 base_bp = baselines.get(vn)
                 if base_bp is not None and base_bp >= 30.0:
@@ -2045,6 +2103,10 @@ def _check_i18(rows, subject, s3_key):
         if _e100 is not None and _e100(subject, cu, r["val"],
                                        cut_label=cut_label,
                                        carrier_domains=carrier_domains):
+            continue
+        # Universe-constituent brand: same convention as I1 (a brand
+        # named inside a multi-brand universe subject pins ~100).
+        if _is_universe_constituent(subject, r["val"]):
             continue
         out.append(_v(
             "I18", "exact-100 non-subject pin",

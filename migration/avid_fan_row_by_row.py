@@ -1137,9 +1137,17 @@ def _read_sample_size(df, raw_col):
 def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
                                   *, verbose: bool = True,
                                   down_gap_pp: float = 9.0,
-                                  down_parent_min_bp: float = 60.0):
+                                  down_parent_min_bp: float = 60.0,
+                                  cap_only: bool = False):
     """Both-direction subset coherence between an intensity cut and its
     parent (2026-08-24, Dylan Minnette / Erin Brooks audits).
+
+    cap_only=True (2026-08-29, terminal cut-write-gate re-cap): run
+    ONLY the upward raw cap and skip the own-row direction lift and
+    the mega-reach downward lift. The terminal re-cap inside
+    finalize_cut_for_upload must be strictly non-increasing so it can
+    never fight gender-pair coherence or push a row into a new
+    violation; the lifts belong to the engine-phase pass only.
 
     The avid (or any reduced-intensity) cohort is a strict subset of
     the parent audience, so for every shared (category, brand) pair:
@@ -1223,15 +1231,49 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
                   f"skipping (no-op)")
         return df_avid, stats
 
-    # Parent (CAT, VAL) -> bp
+    # Parent (CAT, normed VAL) -> MAX bp. Keyed by the same
+    # alphanumeric-only normalization the ship gate's I12 uses
+    # (2026-08-29): exact-upper matching missed cross-spelling rows
+    # ('Coca-Cola' parent vs 'COCA COLA' cut), which the gate then
+    # flagged - the cap and the gate must resolve the same ceiling.
+    # MAX on duplicate keys mirrors the gate's generous reading.
+    _subset_norm = re.compile(r"[^A-Z0-9]")
+
+    def _nkey(v):
+        return _subset_norm.sub("", str(v or "").upper())
+
     parent_idx = {}
     for _, r in df_parent.iterrows():
         cu = str(r.get("Column", "")).strip().upper()
-        vu = str(r.get("Value", "")).strip().upper()
+        vn_k = _nkey(r.get("Value", ""))
         bp = _fbp(r.get(p_bp_col))
-        if bp is None or not cu or not vu:
+        if bp is None or not cu or not vn_k:
             continue
-        parent_idx[(cu, vu)] = bp
+        k = (cu, vn_k)
+        if bp > parent_idx.get(k, -1.0):
+            parent_idx[k] = bp
+
+    # cap_only caps toward the gate's verdict, so it must LOOK AT
+    # everything the gate's I12 looks at: use the gate's own skip sets
+    # when importable (fall back to the engine sets).
+    _skip_cats = set(_SUBSET_COHERENCE_SKIP_CATS) | set(DEMO_CATS_TF)
+    if cap_only:
+        try:
+            try:
+                from migration.final_ship_gate import (
+                    DEMO_CATS as _g_demo,
+                    FAN_CATS as _g_fan,
+                    META_CATS as _g_meta,
+                )
+            except ImportError:
+                from final_ship_gate import (  # type: ignore
+                    DEMO_CATS as _g_demo,
+                    FAN_CATS as _g_fan,
+                    META_CATS as _g_meta,
+                )
+            _skip_cats = set(_g_demo) | set(_g_meta) | set(_g_fan)
+        except Exception:
+            pass
 
     df_avid = df_avid.copy()
     for c in (bp_col, cs_col, raw_col, proj_col):
@@ -1304,7 +1346,7 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
 
     for idx in df_avid.index:
         cu = str(df_avid.at[idx, "Column"]).strip().upper()
-        if cu in _SUBSET_COHERENCE_SKIP_CATS or cu in DEMO_CATS_TF:
+        if cu in _skip_cats:
             continue
         vu = str(df_avid.at[idx, "Value"]).strip().upper()
         if not vu:
@@ -1315,7 +1357,7 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
         # Self-pin exemption (any alias)
         if avid_bp >= 99.49 and _norm_pin(vu) in pin_aliases:
             continue
-        parent_bp = parent_idx.get((cu, vu))
+        parent_bp = parent_idx.get((cu, _nkey(vu)))
         if parent_bp is None:
             continue
         if parent_bp < 0:
@@ -1344,9 +1386,9 @@ def enforce_avid_subset_coherence(df_avid, df_parent, subject: str,
                     )
             else:
                 new_bp = None
-        elif cu in _GEO_SUBSET_CATS:
-            # Geo rows: upward cap only (handled above). Never lift or
-            # re-derive a geo share downward-direction - composition,
+        elif cap_only or cu in _GEO_SUBSET_CATS:
+            # cap_only mode (terminal re-cap): upward cap only, no
+            # lifts. Geo rows: upward cap only always - composition,
             # not intensity.
             continue
         elif (_spc_is_own is not None and avid_bp < parent_bp - 0.0005
