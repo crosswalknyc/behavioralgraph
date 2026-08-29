@@ -54157,6 +54157,40 @@ def api_synth_chat_active_runs():
     })
 
 
+# Queue-health blip gate (2026-08-29): the box code-sync restarts the
+# listener whenever new code lands on main, and a badge poll racing
+# that restart (or a momentarily loaded box) can miss one 5s window.
+# One missed poll self-resolves and is not an incident - the 00:53 UTC
+# blip emailed a full ReadTimeout traceback for a listener that was
+# back in milliseconds. Email ops only when the failure PERSISTS:
+# 3+ consecutive failed polls, at most one email per 30 minutes
+# (per-worker counters; the badge polls often enough that a real
+# outage crosses the bar within a couple of minutes).
+_QUEUE_HEALTH_BLIP = {'consec': 0, 'last_email_ts': 0.0}
+_QUEUE_HEALTH_EMAIL_AFTER = 3
+_QUEUE_HEALTH_EMAIL_COOLDOWN_S = 1800
+
+
+def _queue_health_blip_email(err, tb=None):
+    """Gate a queue-health failure email behind persistence: bump the
+    consecutive-failure counter and email only past the threshold and
+    outside the cooldown. Reset on any healthy poll."""
+    st = _QUEUE_HEALTH_BLIP
+    st['consec'] = int(st.get('consec') or 0) + 1
+    if st['consec'] < _QUEUE_HEALTH_EMAIL_AFTER:
+        return
+    now = time.time()
+    if now - float(st.get('last_email_ts') or 0.0) \
+            < _QUEUE_HEALTH_EMAIL_COOLDOWN_S:
+        return
+    st['last_email_ts'] = now
+    _chatbot_error_email(
+        'brief-chat/health',
+        f"queue health failing {st['consec']} consecutive poll(s): "
+        f"{err}",
+        tb=tb)
+
+
 @app.route('/api/brief-chat/health', methods=['GET'])
 @app.route('/api/synth-chat/health', methods=['GET'])  # legacy alias
 @requires_auth
@@ -54197,25 +54231,37 @@ def api_synth_chat_health():
     try:
         import requests as _requests
         params = {} if (want_global or not user_id) else {'user': user_id}
-        resp = _requests.get(
-            f"{SYNTH_QUEUE_URL}/synth/health",
-            params=params,
-            timeout=5,
-        )
+        # One quick retry rides out the listener's restart-on-new-code
+        # window before the poll counts as failed at all.
+        resp, _hc_last = None, None
+        for _attempt, _tmo in ((0, 5), (1, 6)):
+            try:
+                resp = _requests.get(
+                    f"{SYNTH_QUEUE_URL}/synth/health",
+                    params=params,
+                    timeout=_tmo,
+                )
+                break
+            except Exception as e:
+                _hc_last = e
+                if _attempt == 0:
+                    time.sleep(1.5)
+        if resp is None:
+            raise _hc_last
         if resp.status_code == 200:
+            _QUEUE_HEALTH_BLIP['consec'] = 0
             body = resp.json()
             body['scope'] = 'global' if (want_global or not user_id) else 'user'
             return jsonify({'success': True, 'configured': True,
                              'queue': body})
-        _chatbot_error_email('brief-chat/health',
-                             f'queue health check returned '
-                             f'{resp.status_code}',
-                             tb=str(resp.text or '')[:1200]
-                             or '(empty reply)')
+        _queue_health_blip_email(f'queue health check returned '
+                                 f'{resp.status_code}',
+                                 tb=str(resp.text or '')[:1200]
+                                 or '(empty reply)')
         return jsonify(_chatbot_calm_payload(configured=True))
     except Exception as _hc_err:
         traceback.print_exc()
-        _chatbot_error_email('brief-chat/health', _hc_err)
+        _queue_health_blip_email(_hc_err)
         return jsonify(_chatbot_calm_payload(configured=True))
 
 
