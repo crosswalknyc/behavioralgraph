@@ -20056,7 +20056,8 @@ def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
             from hostmap_gap_mapping import (  # type: ignore
                 partition_false_gaps as _gap_partition,
             )
-        missing, _suppressed_gaps = _gap_partition(missing)
+        missing, _suppressed_gaps = _gap_partition(
+            missing, reason_sub_entities=True)
         for _e, _canon in _suppressed_gaps:
             print(f"   [gap-mapping] suppressed false gap "
                   f"{str(_e.get('value'))!r} - already in the hostmap "
