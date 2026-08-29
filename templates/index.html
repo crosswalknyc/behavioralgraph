@@ -26541,6 +26541,11 @@ https://www.instagram.com/p/..."></textarea>
                     window.__intentIQ.audiences = rs[1];
                     window.__intentIQ.cohorts = rs[2];
                     renderIntentIQOverview();
+                    // As-of time machine: reset picker to today on a
+                    // fresh title, populate preset buttons, and render
+                    // the chip / Weekly Summary card once the overview
+                    // is available. Film-gated internally.
+                    try { _iiqInitAsOfForTitle(); } catch (_e) {}
                     // Audiences + moviegoing-frequency cohorts now render
                     // on-demand inside the Performance tab's "Audiences"
                     // sub-tab (between "Paid vs. Organic" and "Intent to
@@ -27558,12 +27563,127 @@ https://www.instagram.com/p/..."></textarea>
                 while (v % 10 === 0 && guard++ < 9) v += 1 + (Math.abs(h >> 4) % 8);
                 return v;
             }
-            // Renderers referenced by _iiqAsOfSet; declared here so the
-            // helper can call them without ordering issues. Body lands in
-            // Commit 2 splice; stubs are no-ops until then.
-            function _iiqRenderAsOfPresets() {}
-            function _iiqRenderAsOfChip() {}
+            // Populate the T-90 / T-60 / T-30 / T-14 / T-7 / T-0 / T+7 / T+30
+            // preset button row inside the selector bar. Reads opening_date
+            // from the loaded overview; hides the row entirely for brand
+            // campaigns (no opening-day concept) or when opening_date is
+            // missing. The active preset (matching the current picker
+            // value) gets a Signal-Green outline.
+            function _iiqRenderAsOfPresets() {
+                var host = document.getElementById('iiqAsOfPresets');
+                if (!host) return;
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var isFilm = _iiqIsFilmCampaign(ov);
+                var opening = ov.opening_date || '';
+                if (!isFilm || !opening) {
+                    host.innerHTML = '';
+                    host.style.display = 'none';
+                    return;
+                }
+                host.style.display = 'flex';
+                var current = _iiqAsOfGet();
+                var presets = _iiqAsOfPresets(opening);
+                host.innerHTML = presets.map(function(p) {
+                    var active = (p.date === current);
+                    var bg = active ? 'rgba(199,242,62,0.16)' : 'rgba(255,255,255,0.04)';
+                    var bd = active ? '1px solid #C7F23E' : '1px solid rgba(255,255,255,0.10)';
+                    var col = active ? '#C7F23E' : '#cbd5e1';
+                    return '<button type="button" onclick="iiqOnAsOfPresetClick(\'' + p.date + '\')" title="' + escapeHtml(p.label + ' - ' + p.date) + '" style="background:' + bg + '; border:' + bd + '; color:' + col + '; font-size:0.68rem; padding:0.2rem 0.45rem; border-radius:4px; cursor:pointer; white-space:nowrap; font-weight:600;">' + escapeHtml(p.label) + '</button>';
+                }).join('');
+            }
+            // Update the "N of M assets in view" chip next to the As-of
+            // label. N = assets with posted_date <= as_of, M = total
+            // assets in the current (post-window-filter) payload. Brand
+            // campaigns hide the chip entirely.
+            function _iiqRenderAsOfChip() {
+                var chip = document.getElementById('iiqAsOfChip');
+                if (!chip) return;
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var isFilm = _iiqIsFilmCampaign(ov);
+                if (!isFilm) {
+                    chip.style.display = 'none';
+                    chip.textContent = '';
+                    return;
+                }
+                var stash = window.__intentIQAssetsRaw;
+                if (!stash || !Array.isArray(stash.cards) || !stash.cards.length) {
+                    chip.style.display = 'none';
+                    chip.textContent = '';
+                    return;
+                }
+                var asOf = _iiqAsOfGet();
+                var M = stash.cards.length;
+                var filtered = _iiqFilterAssetsByAsOf(stash.cards, asOf, true);
+                var N = filtered.length;
+                var pending = M - N;
+                var label = N + ' of ' + M + ' assets in view';
+                if (pending > 0) {
+                    label += ' (' + pending + ' not yet posted as of ' + _iiqFmtAsOfDate(asOf) + ')';
+                }
+                chip.textContent = label;
+                chip.style.display = '';
+            }
+            // Body lands in Commit 4. Stub kept so _iiqAsOfSet can call
+            // it safely between commits.
             function _iiqRenderWeeklySummary() {}
+            // Handler wired to the date input's oninput. Any picker
+            // change (including keyboard entry) flows through here and
+            // triggers a re-render of the asset grid, the chip, the
+            // preset row, and the Weekly Summary card. No re-fetch;
+            // the raw cards payload is reused.
+            window.iiqOnAsOfChange = function() {
+                _iiqRenderAsOfPresets();
+                _iiqRenderAsOfChip();
+                if (typeof window._iiqRenderAssetsGrid === 'function') {
+                    try { window._iiqRenderAssetsGrid(); } catch (_e) {}
+                }
+                try { _iiqRenderWeeklySummary(); } catch (_e) {}
+            };
+            // Click handler for the preset buttons: writes the picker,
+            // then routes through iiqOnAsOfChange so every downstream
+            // dependent stays coherent.
+            window.iiqOnAsOfPresetClick = function(iso) {
+                _iiqAsOfSet(iso);
+                window.iiqOnAsOfChange();
+            };
+            // Initialize the picker for a freshly-loaded title. Called
+            // from reloadIntentIQ() after the overview payload lands.
+            // Defaults to today on first load, keeps the user's existing
+            // pick if it's still within the campaign range on subsequent
+            // reloads. For brand campaigns we disable the picker + hide
+            // the presets so nothing accidentally filters assets out.
+            function _iiqInitAsOfForTitle() {
+                var el = document.getElementById('iiqAsOf');
+                if (!el) return;
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var isFilm = _iiqIsFilmCampaign(ov);
+                if (!isFilm) {
+                    el.disabled = true;
+                    el.value = '';
+                    var host = document.getElementById('iiqAsOfPresets');
+                    if (host) { host.innerHTML = ''; host.style.display = 'none'; }
+                    var chip = document.getElementById('iiqAsOfChip');
+                    if (chip) { chip.style.display = 'none'; chip.textContent = ''; }
+                    var card = document.getElementById('iiqWeeklySummaryCard');
+                    if (card) { card.style.display = 'none'; card.innerHTML = ''; }
+                    return;
+                }
+                el.disabled = false;
+                // Default to today on first load for this slug. On a
+                // re-load of the same slug keep whatever the user
+                // picked; on a slug switch snap back to today so the
+                // new campaign's Weekly Summary always opens on the
+                // current calendar date, not the previous title's cursor.
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                var lastSlug = window.__iiqAsOfLastSlug || '';
+                if (!el.value || slug !== lastSlug) {
+                    el.value = _iiqTodayIso();
+                }
+                window.__iiqAsOfLastSlug = slug;
+                _iiqRenderAsOfPresets();
+                _iiqRenderAsOfChip();
+                try { _iiqRenderWeeklySummary(); } catch (_e) {}
+            }
             // ================================================================
 
             function renderIntentIQOverview() {
@@ -29400,6 +29520,22 @@ https://www.instagram.com/p/..."></textarea>
                 if (_platPick) {
                     allCards = allCards.filter(function(c) { return c && c.channel === _platPick; });
                 }
+                // As-of time machine (film campaigns only): drop assets
+                // whose posted_date is AFTER the picked date. Applied
+                // BEFORE the type / summary math below so counts, blended
+                // rates, and the Weekly Summary all agree with what the
+                // grid actually shows. Brand campaigns are pass-through.
+                var _iiqOvAssets = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var _iiqIsFilmAssets = _iiqIsFilmCampaign(_iiqOvAssets);
+                if (_iiqIsFilmAssets) {
+                    var _asOfAssets = _iiqAsOfGet();
+                    if (_asOfAssets) {
+                        allCards = _iiqFilterAssetsByAsOf(allCards, _asOfAssets, true);
+                    }
+                }
+                // Refresh the chip now that we know how many assets are
+                // in view after the as-of filter runs.
+                try { _iiqRenderAsOfChip(); } catch (_e) {}
                 // Filter and render.
                 var cards = iiqFilterAssets(allCards).slice();
                 cards.sort(function(a, b) {
