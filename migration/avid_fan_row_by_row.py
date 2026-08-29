@@ -2239,6 +2239,27 @@ def synthesize_avid_fan(
     except Exception as _sn_err:
         print(f"   ⚠ write-safety-net raised (non-fatal): {_sn_err}")
 
+    # Terminal subset re-cap (2026-08-29 Bethenny / Automotive
+    # Aftermarket I12 holds): the enforcer chain and the write safety
+    # net both mutate BPs with no parent context (MPB deband re-spread,
+    # ladder dejitter, panel-reality floors), AFTER Phase 4b and the
+    # tu_avid_coherence pass already capped against the parent. Anything
+    # they pushed past the subset raw ceiling shipped straight into the
+    # terminal gate's I12 check and blocked the run. Re-run the
+    # raw-verified cap as the LAST BP-mutating step before the cut
+    # write gate; idempotent on a coherent frame.
+    try:
+        df_avid, _coh2 = enforce_avid_subset_coherence(
+            df_avid, df_baseline, subject, verbose=True,
+        )
+        if _coh2.get("capped_up") or _coh2.get("lifted_down"):
+            print(f"   ✅ terminal subset re-cap: "
+                  f"capped_up={_coh2.get('capped_up', 0)} "
+                  f"lifted_down={_coh2.get('lifted_down', 0)}")
+    except Exception as _coh2_err:
+        print(f"   ⚠ terminal subset re-cap failed (non-fatal): "
+              f"{_coh2_err}")
+
     # Shared terminal cut write gate (2026-08-24 Furious audit D2/D5/
     # D6): final invariant polish (cohort-label guard + subject re-pin +
     # depin + SUBJECT-row backstop) -> parent no-collision recheck ->

@@ -102,6 +102,18 @@ CS_COL = "Category Share"
 RAW_COL = "Original Raw Numbers"
 PROJ_COL = "US Gen Pop Projection"
 
+class WriterQualityRefusal(RuntimeError):
+    """The writer detected a QUALITY defect it could not remediate and
+    refused to upload. Distinct from infrastructure errors so callers
+    can react correctly: the frame is defective by construction, and a
+    caller must NEVER respond by falling back to a direct S3 put of the
+    same bytes (2026-08-28 Automotive Aftermarket hold: a G12 refusal
+    fell into the worker's generic direct-put fallback, which shipped
+    the un-normalized frame into the terminal ship gate and blocked the
+    run with 177 violations). The correct reaction is to fail the run.
+    """
+
+
 # Rows to skip when sorting within category (metadata / meta rows are pinned
 # to the top of their category group even when their BP field is blank).
 _META_CATS_SKIP_SORT = {
@@ -878,6 +890,14 @@ def write_profile_csv(
         _g12_hits = [d for d in (gate_defects or [])
                      if "G12 PHANTOM_ZERO" in str(d)]
         if _g12_hits:
+            # Fixed-point remediation (2026-08-29 Automotive Aftermarket
+            # hold): one strip pass is not always enough, because the
+            # safety-net re-run inside the pass can round fresh micro-BP
+            # rows down to raw=0 and re-mint phantoms the regate then
+            # flags. Iterate strip -> safety net -> regate until clean
+            # (bounded); the normalize_final_format drop-not-zero change
+            # removes the main re-mint source, so round 1 clears in
+            # practice and the loop is belt-and-suspenders.
             print(f"  [profile_writer] G12 PHANTOM_ZERO flagged "
                   f"({len(_g12_hits)}); applying strip + regate before "
                   f"upload")
@@ -892,33 +912,42 @@ def write_profile_csv(
                         strip_phantom_zero_rows,
                         run_write_safety_net as _rwsn_g12,
                     )
-                df, _n_stripped = strip_phantom_zero_rows(
-                    df, subject, verbose=verbose,
-                )
-                df, _ = _rwsn_g12(df, subject, verbose=verbose)
-                if sort:
-                    df = _sort_within_category(df)
-                gate_defects = run_pre_publish_gate(
-                    df, subject,
-                    project_name=display_name or s3_key,
-                    raise_on_fail=False,
-                    verbose=verbose,
-                )
+                _n_stripped_total = 0
+                _g12_still = _g12_hits
+                for _g12_round in range(1, 4):
+                    df, _n_stripped = strip_phantom_zero_rows(
+                        df, subject, verbose=verbose,
+                    )
+                    _n_stripped_total += _n_stripped
+                    df, _ = _rwsn_g12(df, subject, verbose=verbose)
+                    if sort:
+                        df = _sort_within_category(df)
+                    gate_defects = run_pre_publish_gate(
+                        df, subject,
+                        project_name=display_name or s3_key,
+                        raise_on_fail=False,
+                        verbose=verbose,
+                    )
+                    _g12_still = [d for d in (gate_defects or [])
+                                  if "G12 PHANTOM_ZERO" in str(d)]
+                    if not _g12_still:
+                        break
+                    print(f"  [profile_writer] G12 re-minted after "
+                          f"round {_g12_round} ({len(_g12_still)} "
+                          f"hit(s)); retrying strip + regate")
             except Exception as _g12_err:
-                raise RuntimeError(
+                raise WriterQualityRefusal(
                     f"G12 PHANTOM_ZERO auto-fix failed for {subject} "
                     f"({s3_key}): {_g12_err}"
                 )
-            _g12_still = [d for d in (gate_defects or [])
-                          if "G12 PHANTOM_ZERO" in str(d)]
             if _g12_still:
-                raise RuntimeError(
-                    f"G12 PHANTOM_ZERO persists after strip + regate "
-                    f"for {subject} ({s3_key}); refusing to upload a "
-                    f"flagged file: {_g12_still[0]}"
+                raise WriterQualityRefusal(
+                    f"G12 PHANTOM_ZERO persists after 3 strip + regate "
+                    f"rounds for {subject} ({s3_key}); refusing to "
+                    f"upload a flagged file: {_g12_still[0]}"
                 )
             print(f"  [profile_writer] G12 cleared after strip "
-                  f"({_n_stripped} row(s) removed); proceeding")
+                  f"({_n_stripped_total} row(s) removed); proceeding")
 
         # 5.55 G2 / G5 hard impossibilities are BLOCKING (2026-08-24
         # Jenna mandate, same precedent as G12): a projection above US
@@ -965,13 +994,13 @@ def write_profile_csv(
                     verbose=verbose,
                 )
             except Exception as _g25_err:
-                raise RuntimeError(
+                raise WriterQualityRefusal(
                     f"G2/G5 auto-fix failed for {subject} "
                     f"({s3_key}): {_g25_err}"
                 )
             _g25_still = _hard_hits(gate_defects)
             if _g25_still:
-                raise RuntimeError(
+                raise WriterQualityRefusal(
                     f"G2/G5 hard impossibility persists after "
                     f"remediation + regate for {subject} ({s3_key}); "
                     f"refusing to upload a flagged file: "
@@ -1341,4 +1370,5 @@ def upload_and_register_profile(
     )
 
 
-__all__ = ["write_profile_csv", "upload_and_register_profile"]
+__all__ = ["write_profile_csv", "upload_and_register_profile",
+           "WriterQualityRefusal"]

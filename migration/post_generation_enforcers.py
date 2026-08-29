@@ -10053,8 +10053,17 @@ def normalize_final_format(df, subject, verbose=True):
         if verbose:
             print(f'   [normalize_final] Fix 1b (CS %) failed: {e}')
 
-    # --- Fix 2: zero raw=0 / bp>0 phantom rows ---------------------------
+    # --- Fix 2: phantom raw=0 / bp>0 rows --------------------------------
+    # Split by category class (2026-08-29 Automotive Aftermarket hold):
+    # G12-exempt categories (metadata, demos, meta-cats like LOCATION)
+    # are ZEROED in place - their schema and sums must stay intact and
+    # the G12 detector skips them. Non-exempt brand rows are DROPPED
+    # instead: zeroing them used to mint the exact BP=0/Raw=0 signature
+    # the pre-publish gate blocks as G12 PHANTOM_ZERO, so the writer's
+    # strip pass was undone by the next safety-net normalize in an
+    # endless strip/recreate loop that ended in an upload refusal.
     zeroed_by_col = {}
+    dropped_by_col = {}
     try:
         if raw_col is not None:
             def _to_i(v):
@@ -10066,8 +10075,14 @@ def normalize_final_format(df, subject, verbose=True):
             bps  = df[bp_col].apply(_bp)
             phantom = (raws == 0) & (bps.fillna(0) > 0)
             if phantom.any():
+                _g12_exempt = METADATA_COLS | DEPIN_DEMO_CATS | DEPIN_META_CATS
+                drop_idxs = []
                 for idx in df.index[phantom]:
                     cat = _norm_col_upper(df.at[idx, 'Column'])
+                    if cat not in _g12_exempt:
+                        dropped_by_col[cat] = dropped_by_col.get(cat, 0) + 1
+                        drop_idxs.append(idx)
+                        continue
                     zeroed_by_col[cat] = zeroed_by_col.get(cat, 0) + 1
                     # Assign strings throughout so we don't trip pandas 2.x's
                     # strict-dtype guard on object-typed columns
@@ -10080,14 +10095,26 @@ def normalize_final_format(df, subject, verbose=True):
                     df.at[idx, raw_col] = '0'
                     if proj_col is not None:
                         df.at[idx, proj_col] = '0'
-                n_zeroed = int(phantom.sum())
-                total += n_zeroed
+                if drop_idxs:
+                    df = df.drop(index=drop_idxs).reset_index(drop=True)
+                n_zeroed = sum(zeroed_by_col.values())
+                n_dropped = len(drop_idxs)
+                total += n_zeroed + n_dropped
                 if verbose:
-                    parts = ', '.join(
-                        f'{c}={n}' for c, n in sorted(zeroed_by_col.items())
-                    )
-                    print(f'   [normalize_final] zeroed {n_zeroed} phantom '
-                          f'raw=0/BP>0 row(s): {parts}')
+                    if n_zeroed:
+                        parts = ', '.join(
+                            f'{c}={n}'
+                            for c, n in sorted(zeroed_by_col.items())
+                        )
+                        print(f'   [normalize_final] zeroed {n_zeroed} '
+                              f'phantom raw=0/BP>0 exempt row(s): {parts}')
+                    if n_dropped:
+                        parts = ', '.join(
+                            f'{c}={n}'
+                            for c, n in sorted(dropped_by_col.items())
+                        )
+                        print(f'   [normalize_final] dropped {n_dropped} '
+                              f'phantom raw=0/BP>0 brand row(s): {parts}')
 
                 # Renormalize LOCATION back to 100 (LOCATION should sum to
                 # 100% by construction; zeroing phantom rows leaves a small

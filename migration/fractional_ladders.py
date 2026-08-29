@@ -90,6 +90,22 @@ DECISION_BATCH_MIN = 4
 # suffixes in-category at ANY integer spread.
 PERCAT_STEPPED_MIN = 5
 PERCAT_STEPPED_INTS = 4
+# Identical-VALUE collapse inside one decision batch (2026-08-29
+# Bethenny / Automotive Aftermarket avid holds): when the model returns
+# ONE exact 4dp value for this many rows of a single category chunk
+# (e.g. 0.05 for hundreds of long-tail MPB brands), it made no per-row
+# call at all - it templated a "negligible" answer. Re-salting those
+# rows (the suffix-ladder path below) fabricates magnitude and ordering
+# where none was reasoned; downstream re-spreads then amplified the
+# fabricated mass into subset-ceiling (I12) violations and a 0.0500 x564
+# exact-collision cluster (G4). Per the avid-skin rules, rows the agent
+# didn't genuinely decide must fall back to source BP + subject-salted
+# jitter - so collapsed values are DROPPED from the batch (one
+# representative row keeps the model's literal value) and the
+# transforms' standing no-decision fallback handles the rest. Organic
+# exact-4dp value multiplicity within a ~200-row batch is 0-2 on the
+# known-good corpus; 4+ is always templating.
+COLLAPSE_VALUE_MIN = 4
 
 
 def suffix4(bp) -> str:
@@ -194,18 +210,28 @@ def deladder_decision_values(decisions: dict, subject: str, cat: str,
                              *, min_group: int = DECISION_BATCH_MIN):
     """At-birth guard for one category's model decision batch.
 
-    `decisions`: {label: bp} as parsed from the model response. Any
-    fractional suffix shared by >= `min_group` members is a laziness
-    artifact, never reasoning: each member (beyond the first, which
-    keeps the model's literal value so one representative of the
-    model's intent survives) gets its fractional part re-drawn from a
-    per-(subject, category, label) salted hash. Integer part is
-    preserved - the model's MAGNITUDE call is respected; only the
-    fabricated shared suffix is replaced. New values avoid exact-4dp
-    collisions within the batch and avoid re-creating any flagged
-    suffix.
+    `decisions`: {label: bp} as parsed from the model response. Two
+    passes:
 
-    Returns (new_decisions, n_changed).
+    1. Identical-VALUE collapse: >= COLLAPSE_VALUE_MIN members sharing
+       one exact 4dp value means the model templated a mass answer
+       (never per-row reasoning). Those members are DROPPED from the
+       batch (one representative keeps the literal value) so the
+       consumers' no-decision fallback - source/parent BP plus
+       subject-salted jitter, which preserves the source's rank order -
+       takes over. Re-salting them instead would fabricate magnitude
+       and ordering (2026-08-29 Bethenny I12 hold).
+    2. Shared-SUFFIX ladders: any fractional suffix shared by >=
+       `min_group` surviving members is a laziness artifact: each
+       member (beyond the first) gets its fractional part re-drawn
+       from a per-(subject, category, label) salted hash. Integer part
+       is preserved - the model's MAGNITUDE call is respected; only
+       the fabricated shared suffix is replaced. New values avoid
+       exact-4dp collisions within the batch and avoid re-creating any
+       flagged suffix.
+
+    Returns (new_decisions, n_changed) where n_changed counts drops +
+    re-salts.
     """
     numeric = {}
     for label, v in decisions.items():
@@ -213,6 +239,34 @@ def deladder_decision_values(decisions: dict, subject: str, cat: str,
             numeric[label] = float(v)
         except (TypeError, ValueError):
             continue
+
+    # Identical-value collapse pre-pass (2026-08-29, see
+    # COLLAPSE_VALUE_MIN above): >= COLLAPSE_VALUE_MIN rows sharing one
+    # exact 4dp value in a single batch = the model templated a mass
+    # answer instead of deciding per row. Drop all but one
+    # representative so the consumers' no-decision fallback (source /
+    # parent BP + subject-salted jitter, rank-preserving) takes over.
+    # Self-pins (~100) stay; integer and zero values ARE in scope -
+    # a mass at exactly 0.0 or 1.0 is the same non-decision.
+    by_value = defaultdict(list)
+    for label, v in numeric.items():
+        if v < 99.99:
+            by_value[round(v, 4)].append(label)
+    collapsed = {v4: labels for v4, labels in by_value.items()
+                 if len(labels) >= COLLAPSE_VALUE_MIN}
+    n_dropped = 0
+    if collapsed:
+        decisions = dict(decisions)
+        for v4, labels in sorted(collapsed.items()):
+            for label in sorted(labels)[1:]:
+                decisions.pop(label, None)
+                numeric.pop(label, None)
+                n_dropped += 1
+        print(f"    [deladder] {cat}: dropped {n_dropped} collapsed "
+              f"decision value(s) across {len(collapsed)} mass-identical "
+              f"group(s) ({', '.join(f'{v4:.4f} x{len(ls)}' for v4, ls in sorted(collapsed.items(), key=lambda t: -len(t[1]))[:4])}); "
+              f"rows fall back to source-anchored values")
+
     groups = defaultdict(list)
     for label, v in numeric.items():
         if 0.0001 < v < 99.99 and suffix4(v) != "0000":
@@ -220,12 +274,12 @@ def deladder_decision_values(decisions: dict, subject: str, cat: str,
     bad = {s: labels for s, labels in groups.items()
            if len(labels) >= min_group}
     if not bad:
-        return decisions, 0
+        return decisions, n_dropped
 
     used4 = {round(v, 4) for v in numeric.values()}
     bad_suffixes = set(bad)
     out = dict(decisions)
-    n_changed = 0
+    n_changed = n_dropped
     for s, labels in bad.items():
         # Deterministic member order; the first keeps the model value.
         for label in sorted(labels)[1:]:
@@ -277,6 +331,7 @@ def deladder_decision_map(category_decisions: dict, subject: str,
         else:
             out[cat] = decisions
     if total and verbose:
-        print(f"    [deladder] re-salted {total} model decision value(s) "
-              f"that shared fabricated fractional parts")
+        print(f"    [deladder] adjusted {total} model decision value(s) "
+              f"(mass-identical values dropped to the source-anchored "
+              f"fallback; fabricated shared suffixes re-salted)")
     return out, total
