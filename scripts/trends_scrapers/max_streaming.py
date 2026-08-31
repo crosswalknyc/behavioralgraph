@@ -65,30 +65,38 @@ MAX_URLS = [
 
 
 # HBO Max ships its home rail as fully-rendered DOM tiles. Once we
-# can find at least a few /shows/ or /movies/ anchors, the page is
-# hydrated. Note the PLURAL - the pre-2025 URLs were /show/ and
-# /movie/, but the reverted-to-HBO-Max app uses /shows/ and /movies/.
+# can find at least a few show / movie anchors the page is hydrated.
+# Match BOTH the singular /show/ /movie/ path (currently live as of
+# 2026-08-31 - reverted from the plural /shows/ /movies/ that shipped
+# briefly in mid-2025) AND the plural variants, so the scraper keeps
+# working if HBO Max flips the URL shape again.
 _MAX_HYDRATE_SELECTORS = [
+    'a[href*="/show/"]',
+    'a[href*="/movie/"]',
     'a[href*="/shows/"]',
     'a[href*="/movies/"]',
 ]
 
 
-# HBO Max tile anchor looks like:
+# HBO Max tile anchor looks like (2026-08 shape, singular, no slug):
 #
-#   <a href="/shows/rick-and-morty/ab553cdc-e15d-4597-b65f-bec9201fd2dd"
+#   <a href="/show/c68e69d7-9317-428a-a615-cdf8fe5a2e06"
 #      draggable="false" class="sc-...">
 #     <div class="img-collection ...">
 #       <img id="pageXXXX-bandYYY-..." src=".../artwork.png" />
 #     </div>
-#     <p class="sc-...">Rick and Morty</p>
+#     <p class="sc-...">House of the Dragon</p>
 #   </a>
 #
-# The title is in the LAST <p> inside the anchor (never aria-label
-# post-2025). Slug + trailing UUID uniquely identify the item and let
-# us classify Film vs TV from the URL path segment.
+# The 2025 rebrand-revert briefly shipped /shows/<slug>/<uuid> with
+# the slug in the middle; that came and went. Accept both by making
+# the middle slug segment optional. The trailing 36-char UUID is the
+# stable entity identifier across both shapes and is what we dedupe
+# on. Film vs TV falls out of whether the first path segment is
+# show(s) or movie(s). Title lives in the last <p> inside the anchor
+# in every shape we've seen since 2025.
 _MAX_TILE_RE = re.compile(
-    r'<a\s+href="(/(?:shows|movies)/[a-z0-9\-]+/[a-f0-9\-]{36})"'
+    r'<a\s+href="(/(?:shows?|movies?)/(?:[a-z0-9\-]+/)?[a-f0-9\-]{36})"'
     r'[^>]*>'
     r'.*?<p[^>]*>([^<]{1,240})</p>'
     r'\s*</a>',
@@ -105,9 +113,9 @@ def _clean_title(raw: str) -> str:
 
 
 def _classify_from_path(path: str) -> str:
-    if '/movies/' in path:
+    if '/movie/' in path or '/movies/' in path:
         return 'Film'
-    if '/shows/' in path:
+    if '/show/' in path or '/shows/' in path:
         return 'TV'
     return ''
 
@@ -125,20 +133,21 @@ _NAV_STOPWORDS = frozenset({
 
 
 def _extract_max_dom(html: str, limit: int = 40) -> list[dict]:
-    """Dedupe by slug (path without the trailing UUID). The same show
-    can appear on the Featured, Trending Now, and Because You Watched
-    rails; we only want it counted once. First occurrence wins, which
-    preserves the "closest to top of page" ranking."""
+    """Dedupe by the trailing UUID (the stable entity id across the
+    /show/<uuid>, /shows/<slug>/<uuid>, /movie/<uuid>, and
+    /movies/<slug>/<uuid> URL shapes HBO Max has cycled through). The
+    same show can appear on Featured, Trending Now, and Because You
+    Watched rails; we only want it counted once. First occurrence
+    wins, which preserves the "closest to top of page" ranking."""
     items: list[dict] = []
-    seen_slugs: set[str] = set()
+    seen_uuids: set[str] = set()
     for m in _MAX_TILE_RE.finditer(html):
-        path  = m.group(1)      # /shows/rick-and-morty/UUID
+        path  = m.group(1)      # /show/<uuid>  or  /shows/<slug>/<uuid>
         title = _clean_title(m.group(2))
-        # /shows/<slug>/<uuid> -> slug key = /shows/<slug>
-        slug_key = path.rsplit('/', 1)[0]
-        if slug_key in seen_slugs:
+        uuid_key = path.rsplit('/', 1)[-1].lower()
+        if uuid_key in seen_uuids:
             continue
-        seen_slugs.add(slug_key)
+        seen_uuids.add(uuid_key)
         if not (2 <= len(title) <= 200):
             continue
         if title.lower() in _NAV_STOPWORDS:
