@@ -1358,12 +1358,16 @@ def _slide_emv(prs, ctx: DeckCtx, idx: int, total: int):
     # every platform in the fixed roster (not just the first 4)
     # since all 11 platforms need to be sourced explicitly per
     # Liz's C13.
-    payload_srcs = ((ctx.data.get("valuation") or {})
-                    .get("rate_sources", {})
-                    .get("emv_per_user")) or {}
-    # If every platform's rate source is the same string (as under
-    # the Crosswalk internal-convention relabel), collapse to a
-    # single sentence rather than repeating 11 times.
+    _raw_srcs = ((ctx.data.get("valuation") or {})
+                 .get("rate_sources", {})
+                 .get("emv_per_user"))
+    if isinstance(_raw_srcs, str):
+        _one_src = _raw_srcs
+        payload_srcs = {p: _one_src for p in display_roster}
+    elif isinstance(_raw_srcs, dict):
+        payload_srcs = _raw_srcs
+    else:
+        payload_srcs = {}
     unique_srcs = set()
     for plat in display_roster:
         rate = float(((ctx.data.get("valuation") or {})
@@ -1674,7 +1678,11 @@ def _slide_demographics(prs, ctx: DeckCtx, idx: int, total: int):
     qualifier_type = str(ctx.data.get("qualifier_type") or "").lower()
     qualifier_val = ctx.data.get("qualifier_value")
     if isinstance(qualifier_val, list):
-        qualifier_name = ", ".join(str(v) for v in qualifier_val)
+        # Use only the first (primary) qualifier for display; the full
+        # variant list is a clickstream-slug convenience for the pipeline,
+        # not intended for reader-facing copy.
+        _clean = [str(v).strip() for v in qualifier_val if str(v).strip()]
+        qualifier_name = _clean[0] if _clean else ""
     else:
         qualifier_name = str(qualifier_val or "").strip()
     if qualifier_type in ("tv", "movie", "sporting event", "event", "show"):
