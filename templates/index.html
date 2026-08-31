@@ -53335,9 +53335,9 @@ https://www.instagram.com/p/..."></textarea>
         // methodology copy, tooltip text, or the "how to read this"
         // captions - only the raw row data users see on the page.
         //
-        // Common schema (10 columns):
-        //   Tab, Section, Rank, Title, Subtitle, Source, Value, Unit,
-        //   Change, Why
+        // Common schema (9 columns):
+        //   Tab, Section, Rank, Title, Subtitle, Change,
+        //   US Audience, Audience Unit, Why
         //
         // Empty cells are '' - never null. Numeric values are stringified.
         // Trend direction (up/down/flat) folds into Change so a
@@ -53351,8 +53351,7 @@ https://www.instagram.com/p/..."></textarea>
         // ============================================================
         var _TIQ_EXPORT_HEADERS = [
             'Tab', 'Section', 'Rank', 'Title', 'Subtitle',
-            'Value', 'Unit', 'Change',
-            'US Audience', 'Audience Unit', 'Why'
+            'Change', 'US Audience', 'Audience Unit', 'Why'
         ];
 
         function _tiqCsvCell(v) {
@@ -53487,8 +53486,6 @@ https://www.instagram.com/p/..."></textarea>
                         Rank: r.rank_today || (i + 1),
                         Title: r.term || '',
                         Subtitle: r.rank_prev ? ('was #' + r.rank_prev) : '',
-                        Value: r.score || '',
-                        Unit: r.score ? 'signal score' : '',
                         Change: _tiqMoverChange(r),
                         'US Audience': aud.value,
                         'Audience Unit': aud.unit,
@@ -53509,7 +53506,7 @@ https://www.instagram.com/p/..."></textarea>
                     Rank: i + 1,
                     Title: r.title || '',
                     Subtitle: r.seendate || '',
-                    Value: '', Unit: '', Change: '',
+                    Change: '',
                     'US Audience': aud.value,
                     'Audience Unit': aud.unit,
                     Why: '', URL: r.url || ''
@@ -53523,7 +53520,7 @@ https://www.instagram.com/p/..."></textarea>
                         Rank: i + 1,
                         Title: a.title || '',
                         Subtitle: a.seendate || '',
-                        Value: '', Unit: '', Change: '',
+                        Change: '',
                         'US Audience': aud.value,
                         'Audience Unit': aud.unit,
                         Why: '', URL: a.url || ''
@@ -53537,7 +53534,7 @@ https://www.instagram.com/p/..."></textarea>
                     Rank: i + 1,
                     Title: r.title || '',
                     Subtitle: r.published || '',
-                    Value: '', Unit: '', Change: '',
+                    Change: '',
                     'US Audience': aud.value,
                     'Audience Unit': aud.unit,
                     Why: '', URL: r.url || ''
@@ -53550,7 +53547,7 @@ https://www.instagram.com/p/..."></textarea>
                     Rank: i + 1,
                     Title: r.title || '',
                     Subtitle: r.published || r.seendate || '',
-                    Value: '', Unit: '', Change: '',
+                    Change: '',
                     'US Audience': aud.value,
                     'Audience Unit': aud.unit,
                     Why: '', URL: r.url || ''
@@ -53563,7 +53560,7 @@ https://www.instagram.com/p/..."></textarea>
                     Rank: i + 1,
                     Title: r.title || '',
                     Subtitle: r.published || r.seendate || '',
-                    Value: '', Unit: '', Change: '',
+                    Change: '',
                     'US Audience': aud.value,
                     'Audience Unit': aud.unit,
                     Why: '', URL: r.url || ''
@@ -53583,8 +53580,6 @@ https://www.instagram.com/p/..."></textarea>
                         Rank: r.rank || (i + 1),
                         Title: r.term || '',
                         Subtitle: (r.related || []).slice(0, 1).join(''),
-                        Value: r.score || r.volume || '',
-                        Unit: 'search volume',
                         Change: (typeof r.volume_growth_pct === 'number')
                                     ? (r.volume_growth_pct > 0 ? '+' : '') + Math.round(r.volume_growth_pct) + '%'
                                     : '',
@@ -53612,8 +53607,6 @@ https://www.instagram.com/p/..."></textarea>
                     Rank: i + 1,
                     Title: r.title || '',
                     Subtitle: r.description || '',
-                    Value: r.views_today || '',
-                    Unit: 'views today',
                     Change: _tiqDirectionLabel(r),
                     'US Audience': aud.value,
                     'Audience Unit': aud.unit,
@@ -53628,8 +53621,6 @@ https://www.instagram.com/p/..."></textarea>
                     Rank: i + 1,
                     Title: p.name || '',
                     Subtitle: p.description || '',
-                    Value: p.mentions || '',
-                    Unit: 'mentions',
                     Change: _tiqDirectionLabel(p),
                     'US Audience': aud.value,
                     'Audience Unit': aud.unit,
@@ -53659,8 +53650,6 @@ https://www.instagram.com/p/..."></textarea>
                         Title: it.title || '',
                         Subtitle: it.artist || it.author || it.publisher ||
                                   it.subtitle || '',
-                        Value: se.value,
-                        Unit: se.unit,
                         Change: it.weeks_in_top10
                                     ? ('week ' + it.weeks_in_top10)
                                     : se.change,
@@ -53698,8 +53687,6 @@ https://www.instagram.com/p/..."></textarea>
                             Rank: it.rank || (i + 1),
                             Title: it.title || '',
                             Subtitle: '',
-                            Value: se.value,
-                            Unit: se.unit,
                             Change: it.weeks_in_top10
                                         ? ('week ' + it.weeks_in_top10)
                                         : se.change,
@@ -53723,8 +53710,6 @@ https://www.instagram.com/p/..."></textarea>
                         Rank: i + 1,
                         Title: ch.title || ch.name || '',
                         Subtitle: ch.content_type || '',
-                        Value: se.value,
-                        Unit: se.unit || 'weekly US viewers',
                         Change: se.change,
                         'US Audience': aud.value,
                         'Audience Unit': aud.unit,
@@ -53770,8 +53755,6 @@ https://www.instagram.com/p/..."></textarea>
                         Rank: it.bucket_rank || it.rank || (i + 1),
                         Title: it.title || '',
                         Subtitle: it.publisher || it.subtitle || '',
-                        Value: se.value,
-                        Unit: se.unit,
                         Change: se.change,
                         'US Audience': aud.value,
                         'Audience Unit': aud.unit,
@@ -53807,7 +53790,7 @@ https://www.instagram.com/p/..."></textarea>
                     Rank: i + 1,
                     Title: w.title || w.name || '',
                     Subtitle: w.geo || '',
-                    Value: '', Unit: '', Change: '',
+                    Change: '',
                     'US Audience': aud.value,
                     'Audience Unit': aud.unit,
                     Why: '', URL: ''
