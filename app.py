@@ -56280,6 +56280,52 @@ def _pm_deck_status_write(job_id, payload):
 _PM_DECK_FILE_PREFIX = 'generated_decks/'
 
 
+def _pm_deck_fuzzy_suggestions(query):
+    """Closest-catalog deck suggestions for a subject / ask that did not
+    resolve to one exact profile (Jenna 2026-08-31: fuzzy-match the typed
+    name and suggest the similar-named profiles instead of a generic
+    punt). Reuses the interpret path's token-overlap shortlister
+    (_shortlist_profile_matches) and layers per-user access gating; the
+    grouping, family-set binding, and chip payloads live in
+    prometheus_analysis (pure + unit-tested).
+
+    Returns a list of confirm-chip payloads
+    ({kind, label, subtitle, bind}); [] when nothing is close enough."""
+    import prometheus_analysis as pma
+    q = str(query or '').strip()
+    if not q:
+        return []
+    try:
+        catalog = _profile_catalog_for_chat()
+    except Exception:
+        traceback.print_exc()
+        return []
+    # Only ever suggest profiles this user can actually run.
+    accessible = []
+    for c in (catalog or []):
+        k = str((c or {}).get('s3_key') or '').strip()
+        if not k:
+            continue
+        try:
+            ok, _err = _require_profile_run_access(k)
+        except Exception:
+            ok = False
+        if ok:
+            accessible.append(c)
+    if not accessible:
+        return []
+    try:
+        ranked = _shortlist_profile_matches(
+            q, accessible, max_candidates=SYNTH_CHAT_MAX_CANDIDATES)
+    except Exception:
+        ranked = None
+    try:
+        return pma.build_deck_suggestions(q, accessible, ranked=ranked)
+    except Exception:
+        traceback.print_exc()
+        return []
+
+
 def _pm_resolve_deck_subject(text, ctx):
     """Resolve a typed deck ask to a profile in the catalog.
 
@@ -56409,11 +56455,35 @@ def _pm_resolve_deck_subject(text, ctx):
         return ({'ctx': new_ctx, 'subject': subject,
                  'partner': resolved_partner, 'clarify': None}, None)
 
+    # Fuzzy suggestions (2026-08-31, Jenna): a NAMED subject that did not
+    # resolve to one exact profile offers the closest catalog profiles as
+    # confirm chips (including a whole-family set), not a generic punt.
+    # An explicitly named subject wins even over an open profile, since
+    # the user asked for something specific by name.
+    if wanted:
+        suggestions = _pm_deck_fuzzy_suggestions(wanted)
+        if suggestions:
+            return ({'clarify': {
+                'question': (f'I could not find an exact match for '
+                             f'"{wanted}". Did you mean one of these?'),
+                'suggestions': suggestions}}, None)
+
     if ctx and ctx.get('primary'):
         name = str((ctx.get('primary') or {}).get('name') or '').strip()
         subject = name.split(' - ')[0].strip() or name or 'this audience'
         return ({'ctx': ctx, 'subject': subject,
                  'partner': resolved_partner, 'clarify': None}, None)
+
+    # No named subject and nothing open: recover a profile name from the
+    # raw ask itself (the extractor can miss a name inside a long,
+    # multi-part project brief). Same confirm-chip suggestions.
+    if not wanted and text:
+        suggestions = _pm_deck_fuzzy_suggestions(text)
+        if suggestions:
+            return ({'clarify': {
+                'question': ('Here are the closest profiles in the '
+                             'library. Which should the deck cover?'),
+                'suggestions': suggestions}}, None)
 
     if wanted:
         return None, (jsonify({

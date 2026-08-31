@@ -64011,6 +64011,15 @@ https://www.instagram.com/p/..."></textarea>
                     var o = (_synthChatActiveOptions || [])[
                         parseInt(b.getAttribute('data-synth-opt'), 10)];
                     if (o == null) return;
+                    // Deck subject-suggestion chip: bind the picked
+                    // profile (or the whole family set) and continue the
+                    // deck flow, instead of re-typing a name that would
+                    // not resolve (family members carry a cut suffix).
+                    if (o && o.deckBind && o.deckBind.primary
+                            && o.deckBind.primary.s3_key) {
+                        _pmDeckPickSuggestion(o);
+                        return;
+                    }
                     synthChatChipSend(String((o && o.send) || (o && o.label) || o));
                 });
             }
@@ -66487,9 +66496,33 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
 
-        async function _pmStartDeck(text) {
-            var ctx = _pmCollectPageContext();
-            var angle = _pmPendingDeckAngle ||
+        // Deck subject-suggestion pick (2026-08-31): a fuzzy-match chip
+        // carries the profile (or family set) to bind. Picking it opens
+        // that set as the deck context and continues the deck flow,
+        // reusing the original ask as the deck angle.
+        var _pmDeckClarifyAngle = '';
+        function _pmDeckPickSuggestion(o) {
+            var bind = o && o.deckBind;
+            if (!bind || !bind.primary || !bind.primary.s3_key) return;
+            synthChatPushTurn('user', String(o.label || 'Build this deck'));
+            var ctx = {
+                primary: { s3_key: bind.primary.s3_key,
+                           name: String(bind.primary.name || '') },
+                cuts: (bind.cuts || []).map(function(c) {
+                    return { s3_key: c.s3_key, name: String(c.name || '') };
+                }),
+                extras: (bind.extras || []).map(function(e) {
+                    return { s3_key: e.s3_key, name: String(e.name || '') };
+                }),
+                view_context: null
+            };
+            _pmStartDeck('Build a deck from this', ctx, _pmDeckClarifyAngle);
+        }
+
+        async function _pmStartDeck(text, boundCtx, angleOverride) {
+            var ctx = boundCtx || _pmCollectPageContext();
+            var angle = (angleOverride && String(angleOverride)) ||
+                _pmPendingDeckAngle ||
                 String(text || 'The strongest commercial story in this data.');
             _pmPendingDeckAngle = null;
             _pmDeckInFlight = true;
@@ -66513,9 +66546,26 @@ https://www.instagram.com/p/..."></textarea>
                     return;
                 }
                 if (data && data.success && data.clarify) {
-                    var copts = (data.clarify.options || []).map(function(o) {
-                        return { label: o, send: o };
-                    });
+                    // Fuzzy subject suggestions (2026-08-31): each is a
+                    // confirm chip that binds a profile or a whole family
+                    // set. Fall back to plain string options when the
+                    // server sent the older-style clarify list.
+                    var _dsugg = (data.clarify.suggestions || []);
+                    var copts;
+                    if (_dsugg.length) {
+                        _pmDeckClarifyAngle = String(text || '');
+                        copts = _dsugg.map(function(s) {
+                            var lbl = String(s.label || '');
+                            if (s.subtitle) lbl += '  (' + s.subtitle + ')';
+                            return { label: lbl, send: String(s.label || ''),
+                                     deckBind: s.bind || null,
+                                     deckKind: s.kind || 'profile' };
+                        });
+                    } else {
+                        copts = (data.clarify.options || []).map(function(o) {
+                            return { label: o, send: o };
+                        });
+                    }
                     _synthChatPushTurnWithMeta('agent',
                         data.clarify.question ||
                             'Which profile should the deck cover?',

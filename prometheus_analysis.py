@@ -14,6 +14,7 @@ Design constraints (Jenna 2026-08-20):
   no em dashes, state the finding then the number.
 """
 
+import difflib
 import hashlib
 import io
 import json
@@ -3281,6 +3282,244 @@ def extract_deck_brief(text):
     if subject.lower() in _DECK_SUBJ_STOPWORDS:
         subject = ''
     return {'subject': subject[:120], 'partner': partner[:80]}
+
+
+# ---------------------------------------------------------------------------
+# Deck subject resolution: fuzzy family matching + suggestion chips
+# ---------------------------------------------------------------------------
+# When a typed deck ask names a subject that does not resolve to one
+# exact profile, the deck flow offers the closest catalog profiles as
+# clickable confirm chips instead of a generic punt (Jenna 2026-08-31:
+# fuzzy-match the typed name and suggest the similar-named profiles).
+# These helpers are pure (catalog in, chip payloads out) so they can be
+# unit-tested offline; app.py layers the catalog source, the interpret
+# path's token-overlap shortlister, and per-user access gating on top.
+
+DECK_FUZZY_THRESHOLD = 0.34
+DECK_MAX_SUGGESTIONS = 6
+_DECK_COMBO_KEYWORDS = ('all social', 'all platforms', 'all three',
+                        'combined', 'combo', 'all')
+
+
+def _deck_norm(s):
+    """Lowercase, strip punctuation, collapse whitespace."""
+    if not s:
+        return ''
+    s = str(s).lower()
+    s = re.sub(r"[^a-z0-9\s]+", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def deck_family_base(display_name):
+    """The entity name before the first ' - ' cut / platform suffix.
+    'Unlikely Collaborators - TikTok - Avid Fan' -> 'Unlikely
+    Collaborators'. A family groups every platform, total, and Avid cut
+    that shares this base."""
+    return str(display_name or '').split(' - ', 1)[0].strip()
+
+
+def deck_suffix_is_avid(display_name):
+    """True when the display name carries an Avid Fan cut suffix."""
+    parts = str(display_name or '').split(' - ', 1)
+    return len(parts) > 1 and 'avid' in parts[1].lower()
+
+
+def _deck_combo_rank(display_name):
+    """Rank a total-universe member so a combined / all-platform member
+    leads the family (it makes the strongest deck primary)."""
+    d = _deck_norm(display_name)
+    for i, kw in enumerate(_DECK_COMBO_KEYWORDS):
+        if kw in d:
+            return (0, i)
+    return (1, 0)
+
+
+def deck_order_members(members):
+    """Order a family's members for display: total-universe members
+    first (a combined / all-platform member leads), then Avid cuts.
+    Stable within each group by normalized display name."""
+    def _key(m):
+        disp = str(m.get('display_name') or '')
+        is_avid = 1 if deck_suffix_is_avid(disp) else 0
+        combo = _deck_combo_rank(disp)
+        return (is_avid, combo[0], combo[1], _deck_norm(disp))
+    return sorted(members, key=_key)
+
+
+def _deck_ref(entry):
+    return {'s3_key': str(entry.get('s3_key') or '').strip(),
+            'name': str(entry.get('display_name') or '')[:200]}
+
+
+def deck_build_family_bind(members):
+    """Split a family's members into a deck-ready page context:
+    {primary, cuts, extras}. Total-universe members become the primary
+    plus comparison profiles (extras); Avid cuts become cuts. Mirrors
+    exactly what get_digest_bundle consumes (primary + up to 3 cuts +
+    up to 3 extras), so a whole family builds one combined deck."""
+    ordered = deck_order_members(members)
+    tu = [m for m in ordered
+          if not deck_suffix_is_avid(m.get('display_name'))]
+    avid = [m for m in ordered
+            if deck_suffix_is_avid(m.get('display_name'))]
+    if not tu:                       # avid-only family
+        tu, avid = avid[:1], avid[1:]
+    primary = _deck_ref(tu[0])
+    extras = [_deck_ref(m) for m in tu[1:4]]
+    cuts = [_deck_ref(m) for m in avid[:3]]
+    return {'primary': primary, 'cuts': cuts, 'extras': extras}
+
+
+def deck_single_bind(member, members):
+    """Bind one member as the deck primary, attaching that member's own
+    Avid cut when the family carries it (mirrors the total + Avid pair
+    the exact-match path already ships)."""
+    m_disp = str(member.get('display_name') or '')
+    m_norm = _deck_norm(m_disp)
+    cuts = []
+    for c in members:
+        if c.get('s3_key') == member.get('s3_key'):
+            continue
+        cd = str(c.get('display_name') or '')
+        if deck_suffix_is_avid(cd) and _deck_norm(cd).startswith(m_norm + ' '):
+            cuts.append(_deck_ref(c))
+    return {'primary': _deck_ref(member), 'cuts': cuts[:3], 'extras': []}
+
+
+def deck_family_subtitle(members):
+    """A short factual descriptor for a family set chip, e.g.
+    '3 total + 3 Avid'. No em dashes, no internal terms."""
+    tu = sum(1 for m in members
+             if not deck_suffix_is_avid(m.get('display_name')))
+    avid = sum(1 for m in members
+               if deck_suffix_is_avid(m.get('display_name')))
+    parts = []
+    if tu:
+        parts.append(f"{tu} total")
+    if avid:
+        parts.append(f"{avid} Avid")
+    return ' + '.join(parts)
+
+
+def deck_match_families(query, catalog, ranked=None,
+                        threshold=DECK_FUZZY_THRESHOLD):
+    """Score catalog families against a typed subject / ask and return
+    matched families best-first:
+    [(base_norm, base_disp, ordered_members, score)].
+
+    Three complementary signals, per family base:
+      1. ranked scores from app.py's _shortlist_profile_matches (the
+         interpret path's own token-overlap matcher) when provided.
+      2. base-token containment in the query - catches a family whose
+         base sits inside a longer ask ('New Project: Unlikely
+         Collaborators ...'), which token-COVERAGE scoring dilutes to
+         near zero on long prompts.
+      3. difflib ratio - catches typos and short near-miss queries, and
+         is the ONLY signal for single-token bases so a common word
+         inside a long ask never false-fires.
+    """
+    q = str(query or '').strip()
+    if not q or not catalog:
+        return []
+    q_norm = _deck_norm(q)
+    q_tokens = set(t for t in q_norm.split() if len(t) >= 3)
+
+    fam_disp, fam_members = {}, {}
+    for c in catalog:
+        base = deck_family_base(c.get('display_name'))
+        bnorm = _deck_norm(base)
+        if not bnorm:
+            continue
+        fam_disp.setdefault(bnorm, base)
+        fam_members.setdefault(bnorm, [])
+        k = str(c.get('s3_key') or '').strip()
+        if k and all(m.get('s3_key') != k for m in fam_members[bnorm]):
+            fam_members[bnorm].append(c)
+
+    fam_score = {}
+    # Signal 1: folded-in shortlister scores.
+    for c in (ranked or []):
+        s = float(c.get('_score') or 0)
+        if s < threshold:
+            continue
+        bnorm = _deck_norm(deck_family_base(c.get('display_name')))
+        if bnorm in fam_members:
+            fam_score[bnorm] = max(fam_score.get(bnorm, 0.0), s)
+
+    # Signals 2 + 3: containment and difflib over the query.
+    for bnorm in fam_members:
+        b_tokens = set(t for t in bnorm.split() if len(t) >= 3)
+        best = fam_score.get(bnorm, 0.0)
+        if len(b_tokens) >= 2:
+            contain = len(b_tokens & q_tokens) / len(b_tokens)
+            if contain >= 0.8:
+                best = max(best, 0.6 + 0.4 * contain)
+            elif contain >= 0.5:
+                best = max(best, 0.34 + 0.3 * contain)
+        ratio = difflib.SequenceMatcher(None, q_norm, bnorm).ratio()
+        if ratio >= 0.72:
+            best = max(best, ratio)
+        if best >= threshold:
+            fam_score[bnorm] = best
+
+    matched = [(b, fam_disp[b], deck_order_members(fam_members[b]),
+                fam_score[b])
+               for b in fam_score if fam_members.get(b)]
+    matched.sort(key=lambda x: (-x[3], x[0]))
+    return matched
+
+
+def build_deck_suggestions(query, catalog, ranked=None,
+                           max_suggestions=DECK_MAX_SUGGESTIONS,
+                           threshold=DECK_FUZZY_THRESHOLD):
+    """Return clickable confirm-chip payloads for a fuzzy deck subject.
+    Each item: {kind: 'set'|'profile', label, subtitle, bind}. bind is a
+    page-context shape {primary, cuts, extras} the frontend sends back to
+    the deck route to bind that profile (or the whole family set) and
+    continue the deck flow. [] when nothing clears the threshold."""
+    matched = deck_match_families(query, catalog, ranked=ranked,
+                                  threshold=threshold)
+    if not matched:
+        return []
+    suggestions = []
+    # Pass 1: one lead chip per matched family - the whole set when the
+    # family has more than one profile, else the single profile.
+    for _bnorm, base_disp, members, _score in matched:
+        if not members:
+            continue
+        if len(members) > 1:
+            bind = deck_build_family_bind(members)
+            if bind['primary'].get('s3_key'):
+                suggestions.append({
+                    'kind': 'set',
+                    'label': f"{base_disp} (all {len(members)} profiles)",
+                    'subtitle': deck_family_subtitle(members),
+                    'bind': bind})
+        else:
+            m = members[0]
+            if str(m.get('s3_key') or '').strip():
+                suggestions.append({
+                    'kind': 'profile',
+                    'label': str(m.get('display_name') or '')[:200],
+                    'subtitle': '',
+                    'bind': deck_single_bind(m, members)})
+        if len(suggestions) >= max_suggestions:
+            return suggestions[:max_suggestions]
+    # Pass 2: when a single family matched, expand its members so the
+    # user can pick one platform instead of the whole set.
+    if len(matched) == 1 and len(matched[0][2]) > 1:
+        members = matched[0][2]
+        for m in members:
+            if len(suggestions) >= max_suggestions:
+                break
+            if not str(m.get('s3_key') or '').strip():
+                continue
+            suggestions.append({
+                'kind': 'profile',
+                'label': str(m.get('display_name') or '')[:200],
+                'subtitle': '',
+                'bind': deck_single_bind(m, members)})
+    return suggestions[:max_suggestions]
 
 
 INSIGHTS_DECK_SYSTEM_PROMPT = """You are Prometheus, Crosswalk's senior audience strategist, producing the slide plan for a FINISHED client-ready insights deck. This is a final deliverable a seller walks into a pitch with, not an outline. You get the subject's Profile IQ digest (first-party audience data), the recent conversation, and the ask. Return a strict JSON slide plan; a renderer lays it out in the Crosswalk deck system.
