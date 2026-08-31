@@ -33418,6 +33418,238 @@ https://www.instagram.com/p/..."></textarea>
                 }
             };
 
+            // ================================================================
+            // === iiqShowAudienceDetailPIT: audience drill-in overlay    =====
+            // === Deliverable B (Phase 3). Which specific assets drove   =====
+            // === THIS cohort's response in the current as-of window.    =====
+            // ================================================================
+            // Ranks top 8 in-view assets by contribution to the cohort's
+            // total response. Contribution = per-asset cohort-projected
+            // exposure x per-asset cohort-projected response % (via
+            // iiqAssetCohortProjection which already applies per-asset
+            // per-cohort affinity). Row-click opens the Phase 2
+            // iiqShowAssetDetailPIT overlay on top (different DOM id
+            // so the two co-exist).
+            window.iiqShowAudienceDetailPIT = function(rowOrCard, asOfIso) {
+                if (!rowOrCard) return;
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var opening = ov.opening_date || '';
+                var asOf = asOfIso || (typeof _iiqAsOfGet === 'function' ? _iiqAsOfGet() : '');
+                var useInfo = _iiqPhaseUsesInfo(asOf, opening);
+
+                // Accept either a computed audience-row object (with
+                // .card / .overlap_pct / etc.) or a raw audience card.
+                // When passed a raw card, re-run the compute so header
+                // metrics match the table.
+                var row = rowOrCard;
+                if (!row.card && !row.overlap_pct && (row.overlap_bp !== undefined || row.display)) {
+                    // raw card path: find the matching computed row
+                    var rowsAll = _iiqComputeAudienceRows(asOf, opening);
+                    for (var _i = 0; _i < rowsAll.length; _i++) {
+                        if (rowsAll[_i].card === row || rowsAll[_i].subject_key === (row.subject_key || row.display)) {
+                            row = rowsAll[_i];
+                            break;
+                        }
+                    }
+                }
+                if (!row.card) return;
+                var card = row.card;
+
+                var overlay = document.getElementById('iiqAudienceModal');
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.id = 'iiqAudienceModal';
+                    overlay.style.cssText = 'position:fixed; inset:0; background: rgba(0,0,0,0.7); z-index:9998; display:flex; align-items:center; justify-content:center; padding:2rem;';
+                    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+                    document.body.appendChild(overlay);
+                } else {
+                    overlay.innerHTML = '';
+                    overlay.style.display = 'flex';
+                }
+
+                // ===== Build cohort-shaped object for iiqAssetCohortProjection =====
+                var cohortShaped = {
+                    slug:          'aud_' + String(card.subject_key || card.display || '').toLowerCase()
+                                       .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''),
+                    display:       card.display || card.subject_key,
+                    category:      String(card.category || 'AUDIENCE').toUpperCase(),
+                    gen_pop_share: (Number(card.overlap_bp) || 0) / 100,
+                    _src:          'audience',
+                    _raw:          card
+                };
+
+                var stash = window.__intentIQAssetsRaw;
+                var allAssets = (stash && Array.isArray(stash.cards)) ? stash.cards : [];
+                var inViewAssets = _iiqFilterAssetsByAsOf(allAssets, asOf, true);
+
+                // ===== Per-asset contribution to cohort response =====
+                var contribs = [];
+                var totalContrib = 0;
+                for (var i = 0; i < inViewAssets.length; i++) {
+                    var a = inViewAssets[i];
+                    if (!a) continue;
+                    if (typeof iiqAssetCohortProjection !== 'function') break;
+                    var proj = iiqAssetCohortProjection(a, cohortShaped);
+                    var pit = _iiqPitFactor(a, asOf);
+                    var cohortViewsAtAsOf = Math.max(0, proj.views * pit);
+                    if (cohortViewsAtAsOf <= 0) continue;
+                    var respPct = useInfo ? Number(proj.info_pct) : Number(proj.ticket_pct);
+                    if (!isFinite(respPct)) continue;
+                    var contribCount = cohortViewsAtAsOf * respPct / 100;
+                    totalContrib += contribCount;
+                    contribs.push({
+                        asset:         a,
+                        exposure:      cohortViewsAtAsOf,
+                        response_pct:  respPct,
+                        contribution:  contribCount
+                    });
+                }
+                contribs.sort(function(a, b) { return b.contribution - a.contribution; });
+                var topContribs = contribs.slice(0, 8);
+
+                // ===== Slug salt for per-row jitter =====
+                var slugSalt = String(slug || '') + '|aud|' + String(card.subject_key || card.display || 'cohort');
+                function _pitJit(bucket, base) {
+                    if (typeof _iiqCountJitter === 'function') return _iiqCountJitter(slugSalt, bucket, base);
+                    return base;
+                }
+
+                // ===== Header =====
+                var display = card.display || card.subject_key || 'Audience';
+                var catRaw = String(card.category || 'AUDIENCE').toUpperCase();
+                var catLabel = _iiqAudienceCategoryLabel(catRaw);
+                var glyph = _iiqAudienceGlyph(catRaw);
+                var peopleJit = _pitJit('modal_people', Math.round(row.gen_pop_frac * 329900000));
+
+                // ===== 5-tile summary strip =====
+                var reachedJit = _pitJit('modal_reach', row.reached);
+                var respondedJit = _pitJit('modal_resp', row.responded);
+                var overlapTip = 'Share of the cohort that has seen at least one asset in view. Saturates toward the cohort\'s baseline overlap as more of the campaign fires.';
+                var responseLabel = useInfo ? 'Info-seek %' : 'Ticketing %';
+                var responseTip = (useInfo ? 'Info-seek' : 'Ticketing') + ' % applied to the reached slice of the cohort. Weighted mean across in-view assets, tilted by cohort affinity.';
+                var reachedTip = 'Cohort viewers reached by at least one in-view asset at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '.';
+                var respondedTip = 'Reached cohort viewers who then took a ' + (useInfo ? 'title info-search or IMDb / RT / Letterboxd hit' : 'ticketing-site visit') + ' within a 7-day window.';
+
+                var idxChipHtml;
+                if (row.index == null) {
+                    idxChipHtml = '<span style="color:#797F81; font-size:0.82rem;">no reading</span>';
+                } else {
+                    var iBg, iBorder, iFg, iLabel;
+                    if (row.index >= 1.30)      { iBg = 'rgba(199,242,62,0.14)'; iBorder = 'rgba(199,242,62,0.45)'; iFg = '#C7F23E'; iLabel = 'Over-indexes'; }
+                    else if (row.index >= 0.70) { iBg = 'rgba(183,179,216,0.14)'; iBorder = 'rgba(183,179,216,0.45)'; iFg = '#B7B3D8'; iLabel = 'On-pace'; }
+                    else                        { iBg = 'rgba(248,113,113,0.14)'; iBorder = 'rgba(248,113,113,0.45)'; iFg = '#f87171'; iLabel = 'Under-indexes'; }
+                    idxChipHtml = '<span style="display:inline-block; background:' + iBg + '; border:1px solid ' + iBorder + '; color:' + iFg + '; font-size:0.72rem; font-weight:700; padding:0.22rem 0.6rem; border-radius:999px; white-space:nowrap;">' + iLabel + ' \u00b7 ' + row.index.toFixed(1) + 'x</span>';
+                }
+
+                var fitLabel = '', fitFg = '#9AA09B';
+                if (row.fit === 'sweet')            { fitLabel = 'Sweet spot';   fitFg = '#C7F23E'; }
+                else if (row.fit === 'underserved') { fitLabel = 'Under-served'; fitFg = '#E682FF'; }
+                else if (row.fit === 'broad')       { fitLabel = 'Broad';        fitFg = '#B7B3D8'; }
+                else if (row.fit === 'offtarget')   { fitLabel = 'Off-target';   fitFg = '#9AA09B'; }
+
+                function tile(labelHtml, valueTxt, subTxt, tipText) {
+                    var tipAttr = tipText ? (' title="' + escapeHtml(tipText) + '"') : '';
+                    return '<div' + tipAttr + ' style="background:#15252A; border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:0.7rem 0.85rem;">'
+                        +   '<div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.06em; color:#9AA09B; font-weight:600;">' + labelHtml + '</div>'
+                        +   '<div style="font-size:1.05rem; font-weight:700; color:#E9E8E1; margin-top:0.22rem;">' + valueTxt + '</div>'
+                        +   (subTxt ? '<div style="font-size:0.68rem; color:#797F81; margin-top:0.18rem;">' + subTxt + '</div>' : '')
+                        + '</div>';
+                }
+                function tileHtml(labelHtml, valueHtml, subTxt, tipText) {
+                    var tipAttr = tipText ? (' title="' + escapeHtml(tipText) + '"') : '';
+                    return '<div' + tipAttr + ' style="background:#15252A; border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:0.7rem 0.85rem;">'
+                        +   '<div style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.06em; color:#9AA09B; font-weight:600;">' + labelHtml + '</div>'
+                        +   '<div style="margin-top:0.22rem;">' + valueHtml + '</div>'
+                        +   (subTxt ? '<div style="font-size:0.68rem; color:#797F81; margin-top:0.18rem;">' + subTxt + '</div>' : '')
+                        + '</div>';
+                }
+
+                var stripHtml = '<div style="display:grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap:0.55rem; margin: 0.9rem 0 1rem;">'
+                    + tile('Overlap %',            row.overlap_pct.toFixed(2) + '%',           '~' + fmtCompact(reachedJit) + ' reached', overlapTip)
+                    + tile(responseLabel,          row.response_pct.toFixed(2) + '%',          '~' + fmtCompact(respondedJit) + ' responded', responseTip)
+                    + tile('Reached',              fmtCompact(reachedJit),                     'cohort viewers with 1+ in-view exposure', reachedTip)
+                    + tile('Responded',            fmtCompact(respondedJit),                   'downstream action inside 7d window', respondedTip)
+                    + tileHtml('vs Gen Pop',       idxChipHtml,                                fitLabel ? '<span style="color:' + fitFg + '; font-weight:600;">' + fitLabel + '</span>' : '')
+                    + '</div>';
+
+                // ===== Top contributing assets table =====
+                var contribHtml;
+                if (!topContribs.length) {
+                    contribHtml = '<div style="padding:1.4rem 1rem; text-align:center; color:#797F81; font-size:0.82rem; background:#15252A; border:1px solid rgba(255,255,255,0.06); border-radius:8px;">No assets in view at this as-of date. Move the picker forward.</div>';
+                } else {
+                    var contribRows = topContribs.map(function(t, tidx) {
+                        var a = t.asset;
+                        var label = a.action_label || a.asset_type || ('Asset #' + (a.asset_id || tidx));
+                        var trimmed = (label.length > 30) ? (label.slice(0, 27) + '\u2026') : label;
+                        var ch = a.channel || 'other';
+                        var icon = (typeof _iiqChannelIcon === 'function') ? _iiqChannelIcon(ch) : '\u00b7';
+                        var expJit = _pitJit('mc_exp_' + tidx, Math.round(t.exposure));
+                        var respShare = totalContrib > 0 ? (t.contribution / totalContrib * 100) : 0;
+
+                        return '<tr onclick="var _s=(window.__intentIQ&&window.__intentIQ.currentSlug)||\'\'; if(typeof window.iiqShowAssetDetailPIT===\'function\') window.iiqShowAssetDetailPIT(_s, (window.__iiqAudModalAssets||[])[' + tidx + '], \'' + asOf + '\');" style="cursor:pointer; transition: background 0.12s ease;" onmouseover="this.style.background=\'rgba(199,242,62,0.05)\'" onmouseout="this.style.background=\'\'">'
+                            + '<td style="padding: 0.55rem 0.7rem; border-bottom:1px solid #182528; vertical-align:middle;">'
+                            +   '<div style="display:flex; align-items:center; gap:0.55rem;">'
+                            +     '<div style="flex: 0 0 22px; width:22px; height:22px; border-radius:4px; background:#0C1618; color:#C7F23E; display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:700;">' + escapeHtml(icon) + '</div>'
+                            +     '<div style="min-width:0;">'
+                            +       '<div title="' + escapeHtml(label) + '" style="color:#E9E8E1; font-size:0.82rem; font-weight:600; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 260px;">' + escapeHtml(trimmed) + '</div>'
+                            +       '<div style="color:#797F81; font-size:0.68rem; line-height:1.2; margin-top:0.08rem;">' + escapeHtml(ch) + '</div>'
+                            +     '</div>'
+                            +   '</div>'
+                            + '</td>'
+                            + '<td style="padding: 0.55rem 0.7rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle; color:#E9E8E1; font-size:0.82rem; font-weight:600;">' + fmtCompact(expJit) + '</td>'
+                            + '<td style="padding: 0.55rem 0.7rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle; color:#E9E8E1; font-size:0.82rem; font-weight:600;">' + t.response_pct.toFixed(2) + '%</td>'
+                            + '<td style="padding: 0.55rem 0.7rem; border-bottom:1px solid #182528; text-align:right; vertical-align:middle; color:#C7F23E; font-size:0.82rem; font-weight:700;">' + respShare.toFixed(1) + '%</td>'
+                            + '</tr>';
+                    }).join('');
+                    contribHtml = '<div style="overflow-x:auto; border:1px solid #27393D; border-radius:8px; background:#0C1618;">'
+                        + '<table style="width:100%; border-collapse:collapse; font-family:\'Inter\', -apple-system, BlinkMacSystemFont, sans-serif;">'
+                        + '<thead><tr>'
+                        +   '<th style="text-align:left; padding:0.5rem 0.7rem; font-size:0.66rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#9AA09B; border-bottom:1px solid #27393D;">Asset</th>'
+                        +   '<th style="text-align:right; padding:0.5rem 0.7rem; font-size:0.66rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#9AA09B; border-bottom:1px solid #27393D;">Cohort exposure</th>'
+                        +   '<th style="text-align:right; padding:0.5rem 0.7rem; font-size:0.66rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#9AA09B; border-bottom:1px solid #27393D;">' + responseLabel + '</th>'
+                        +   '<th style="text-align:right; padding:0.5rem 0.7rem; font-size:0.66rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#9AA09B; border-bottom:1px solid #27393D;">Contribution</th>'
+                        + '</tr></thead>'
+                        + '<tbody>' + contribRows + '</tbody>'
+                        + '</table>'
+                        + '</div>';
+                }
+
+                // Stash the top-contrib asset references on window so
+                // the row-click onclick strings can hand them to
+                // iiqShowAssetDetailPIT without re-running the compute.
+                window.__iiqAudModalAssets = topContribs.map(function(t) { return t.asset; });
+
+                var captionTxt = 'Ranked by contribution to this cohort\'s response in the current as-of window.';
+
+                // ===== Compose panel =====
+                var panel = document.createElement('div');
+                panel.style.cssText = 'background: #0C1618; border:1px solid #27393D; border-radius:10px; max-width:960px; width:100%; max-height:90vh; overflow:auto; padding:1.25rem 1.5rem; box-shadow: 0 24px 64px rgba(0,0,0,0.5); font-family: \'Inter\', -apple-system, BlinkMacSystemFont, sans-serif;';
+
+                var catChipHtml = '<span style="display:inline-block; background:#15252A; border:1px solid rgba(255,255,255,0.10); color:#B7B3D8; font-size:0.66rem; font-weight:700; padding:0.2rem 0.55rem; border-radius:999px; text-transform:uppercase; letter-spacing:0.06em;">' + escapeHtml(catLabel) + '</span>';
+
+                panel.innerHTML =
+                    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.4rem; gap:1rem;">'
+                  +   '<div style="min-width:0; flex:1;">'
+                  +     '<div style="display:flex; align-items:center; gap:0.55rem; margin-bottom:0.35rem;">'
+                  +       '<span style="font-size:1.05rem; line-height:1;">' + glyph + '</span>'
+                  +       '<h3 style="margin:0; color:#E9E8E1; font-size:1.05rem; font-weight:700; line-height:1.2;">' + escapeHtml(display) + '</h3>'
+                  +       catChipHtml
+                  +     '</div>'
+                  +     '<div style="font-size:0.72rem; color:#9AA09B; line-height:1.5;">'
+                  +       '~' + fmtCompact(peopleJit) + ' people match this audience \u00b7 baseline share ' + row.bp.toFixed(2) + '% of Americans'
+                  +     '</div>'
+                  +   '</div>'
+                  +   '<button type="button" onclick="var m=document.getElementById(\'iiqAudienceModal\'); if(m) m.remove();" style="background: rgba(255,255,255,0.06); color:#E9E8E1; border:1px solid rgba(255,255,255,0.12); border-radius:6px; padding:0.35rem 0.7rem; cursor:pointer; font-size:0.85rem; flex:none;">Close \u2715</button>'
+                  + '</div>'
+                  + stripHtml
+                  + '<div style="font-size:0.68rem; font-weight:600; color:#C7F23E; text-transform:uppercase; letter-spacing:0.08em; margin: 0.4rem 0 0.4rem;">Top contributing assets</div>'
+                  + contribHtml
+                  + '<div style="font-size:0.68rem; color:#797F81; margin-top:0.55rem; line-height:1.4;">' + captionTxt + ' Click any asset row for the point-in-time drill-in.</div>';
+
+                overlay.appendChild(panel);
+            };
+
             // ===== Per-comp estimated signal breakdown (Q3) =====
             // For each already-released comp we don't have asset-level data,
             // so we model the same 3 high-intent signals the subject (GOAT)
