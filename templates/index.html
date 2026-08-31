@@ -28785,10 +28785,159 @@ https://www.instagram.com/p/..."></textarea>
                     host.innerHTML = '';
                     return;
                 }
-                // Commit 3 replaces this placeholder with the two-panel
-                // layout + summary strip.
+
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
+                var useInfo = _iiqPhaseUsesInfo(asOf, opening);
+                var primaryMetricLabel = useInfo ? 'info-seek' : 'ticketing';
+
+                // ---- Sub-panel A: asset movers ----------------------
+                var assetPanelHtml;
+                if (!assetMovers.length) {
+                    assetPanelHtml = '<div style="padding: 1rem; text-align:center; color:#797F81; font-size:0.78rem;">No asset movement in this window.</div>';
+                } else {
+                    assetPanelHtml = assetMovers.map(function(m) {
+                        var a = m.asset;
+                        var label = a.action_label || a.asset_type || 'Untitled asset';
+                        var trimmed = (label.length > 40) ? (label.slice(0, 37) + '…') : label;
+                        var ch = a.channel || 'other';
+                        var icon = _iiqChannelIcon(ch);
+                        var posted = a.posted_date ? String(a.posted_date).slice(0, 10) : '';
+                        var subline = escapeHtml(ch);
+                        if (posted) subline += ' · ' + escapeHtml(posted);
+                        var iconBlock = '<div style="flex: 0 0 22px; width:22px; height:22px; border-radius:4px; background:#15252A; color:#C7F23E; display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:700;">' + escapeHtml(icon) + '</div>';
+                        var titleBlock = '<div style="min-width:0; flex:1 1 auto;">'
+                            +   '<div title="' + escapeHtml(label) + '" style="color:#E9E8E1; font-size:0.8rem; font-weight:600; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(trimmed) + '</div>'
+                            +   '<div style="color:#797F81; font-size:0.65rem; line-height:1.2; margin-top:0.1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + subline + '</div>'
+                            + '</div>';
+
+                        var buckets = _iiqWeeklyBuckets(a, asOf);
+                        var sparkBlock = '<div style="flex:0 0 60px; display:flex; align-items:center; justify-content:center;">' + _iiqRenderTrendSparkline(buckets) + '</div>';
+
+                        var chipHtml;
+                        if (m.launch_week) {
+                            chipHtml = '<span style="font-size:0.7rem; font-weight:600; color:#B7B3D8; background: rgba(183,179,216,0.10); border: 1px solid rgba(183,179,216,0.35); padding: 0.18rem 0.5rem; border-radius: 999px; white-space: nowrap;">launch week</span>';
+                        } else {
+                            var pos = m.delta_pct > 0;
+                            var chipColor = pos ? '#C7F23E' : '#f87171';
+                            var chipBg = pos ? 'rgba(199,242,62,0.14)' : 'rgba(248,113,113,0.14)';
+                            var chipBorder = pos ? 'rgba(199,242,62,0.45)' : 'rgba(248,113,113,0.45)';
+                            var sign = pos ? '+' : '';
+                            chipHtml = '<span style="font-size:0.72rem; font-weight:700; color:' + chipColor + '; background:' + chipBg + '; border:1px solid ' + chipBorder + '; padding:0.18rem 0.5rem; border-radius:999px; white-space:nowrap;">' + sign + m.delta_pct.toFixed(1) + '%</span>';
+                        }
+                        var chipBlock = '<div style="flex:0 0 auto; text-align:right;">' + chipHtml + '</div>';
+
+                        return '<div style="display:flex; align-items:center; gap:0.65rem; padding:0.5rem 0.15rem; border-bottom:1px solid #182528;">'
+                            + iconBlock + titleBlock + sparkBlock + chipBlock
+                            + '</div>';
+                    }).join('');
+                    // Strip the trailing border off the last row
+                    assetPanelHtml = '<div>' + assetPanelHtml + '</div>';
+                }
+
+                var assetPanel = '<div style="flex:1 1 50%; min-width: 280px;">'
+                    + '<div style="font-size:0.64rem; font-weight:600; color:#C7F23E; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.35rem;">Assets moving fastest this week</div>'
+                    + assetPanelHtml
+                    + '</div>';
+
+                // ---- Sub-panel B: audience movers -------------------
+                var audPanelHtml;
+                if (!audMovers.length) {
+                    audPanelHtml = '<div style="padding: 1rem; text-align:center; color:#797F81; font-size:0.78rem;">No audience movement in this window.</div>';
+                } else {
+                    audPanelHtml = audMovers.map(function(m) {
+                        var display = m.display || m.subject_key;
+                        var trimmed = (display.length > 30) ? (display.slice(0, 27) + '…') : display;
+                        var glyph = _iiqAudienceGlyph(m.category);
+                        var iconBlock = '<div style="flex: 0 0 22px; width:22px; height:22px; border-radius:4px; background:#15252A; color:#C7F23E; display:flex; align-items:center; justify-content:center; font-size:0.78rem; font-weight:700;">' + glyph + '</div>';
+
+                        var fBg, fBorder, fFg, fLabel;
+                        if (m.fit === 'sweet')             { fBg = 'rgba(199,242,62,0.14)'; fBorder = 'rgba(199,242,62,0.45)'; fFg = '#C7F23E'; fLabel = 'Sweet spot'; }
+                        else if (m.fit === 'underserved')  { fBg = 'rgba(232,130,255,0.14)'; fBorder = 'rgba(232,130,255,0.55)'; fFg = '#E682FF'; fLabel = 'Under-served'; }
+                        else if (m.fit === 'broad')        { fBg = 'rgba(183,179,216,0.14)'; fBorder = 'rgba(183,179,216,0.45)'; fFg = '#B7B3D8'; fLabel = 'Broad'; }
+                        else                               { fBg = 'rgba(120,120,120,0.14)'; fBorder = 'rgba(120,120,120,0.35)'; fFg = '#9AA09B'; fLabel = 'Off-target'; }
+                        var fitChip = '<span style="display:inline-block; background:' + fBg + '; border:1px solid ' + fBorder + '; color:' + fFg + '; font-size:0.62rem; font-weight:700; padding:0.1rem 0.4rem; border-radius:999px; white-space:nowrap;">' + fLabel + '</span>';
+
+                        var titleBlock = '<div style="min-width:0; flex:1 1 auto;">'
+                            +   '<div title="' + escapeHtml(display) + '" style="color:#E9E8E1; font-size:0.8rem; font-weight:600; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(trimmed) + '</div>'
+                            +   '<div style="line-height:1.2; margin-top:0.15rem;">' + fitChip + '</div>'
+                            + '</div>';
+
+                        var arrow, deltaColor;
+                        if (m.delta_pp > 0)      { arrow = '▲'; deltaColor = '#C7F23E'; }
+                        else if (m.delta_pp < 0) { arrow = '▼'; deltaColor = '#f87171'; }
+                        else                     { arrow = '→'; deltaColor = '#B7B3D8'; }
+                        var deltaSign = m.delta_pp > 0 ? '+' : '';
+                        var deltaBlock = '<div style="flex:0 0 auto; text-align:right; font-size:0.78rem; font-weight:700; color:' + deltaColor + '; white-space:nowrap;">'
+                            + arrow + ' ' + deltaSign + m.delta_pp.toFixed(2) + 'pp'
+                            + '</div>';
+
+                        var metricBlock = '<div style="flex:0 0 auto; text-align:right; font-size:0.62rem; color:#797F81; text-transform:uppercase; letter-spacing:0.06em; margin-left:0.4rem;">'
+                            + escapeHtml(primaryMetricLabel)
+                            + '</div>';
+
+                        return '<div style="display:flex; align-items:center; gap:0.65rem; padding:0.5rem 0.15rem; border-bottom:1px solid #182528;">'
+                            + iconBlock + titleBlock + deltaBlock + metricBlock
+                            + '</div>';
+                    }).join('');
+                    audPanelHtml = '<div>' + audPanelHtml + '</div>';
+                }
+
+                var audPanel = '<div style="flex:1 1 50%; min-width: 280px;">'
+                    + '<div style="font-size:0.64rem; font-weight:600; color:#E682FF; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.35rem;">Audiences leaning in (or out) this week</div>'
+                    + audPanelHtml
+                    + '</div>';
+
+                // ---- Summary strip: 3 tiles ------------------------
+                var weeksLabel = _iiqTrendWeeksLabel(asOf, opening, ov);
+                var totalExpo = _iiqTrendTotalExposureThisWeek(asOf, slug);
+                var traj = _iiqComputeTrajectory(asOf, opening);
+
+                var trajTier = traj ? traj.tier : 'steady';
+                var trajLabel = traj ? traj.label : 'Steady';
+                var trajArrow, trajFg, trajBg, trajBorder;
+                if (trajTier === 'accel') { trajArrow = '▲'; trajFg = '#C7F23E'; trajBg = 'rgba(199,242,62,0.12)'; trajBorder = 'rgba(199,242,62,0.45)'; }
+                else if (trajTier === 'slow') { trajArrow = '▼'; trajFg = '#f87171'; trajBg = 'rgba(248,113,113,0.12)'; trajBorder = 'rgba(248,113,113,0.45)'; }
+                else { trajArrow = '→'; trajFg = '#B7B3D8'; trajBg = 'rgba(183,179,216,0.10)'; trajBorder = 'rgba(183,179,216,0.35)'; }
+                var trajRatioTxt = (traj && isFinite(traj.ratio)) ? (' · ' + (traj.ratio * 100).toFixed(0) + '% of prior 4 wks') : '';
+
+                var tile = function(eyebrow, main, sub, extraStyle) {
+                    return '<div style="flex:1 1 33%; min-width: 140px; padding: 0.65rem 0.85rem; background: #15252A; border: 1px solid #27393D; border-radius: 8px; ' + (extraStyle || '') + '">'
+                        + '<div style="font-size:0.6rem; color:#797F81; text-transform:uppercase; letter-spacing:0.08em; font-weight:600;">' + eyebrow + '</div>'
+                        + '<div style="margin-top:0.25rem;">' + main + '</div>'
+                        + (sub ? ('<div style="font-size:0.65rem; color:#797F81; margin-top:0.15rem;">' + sub + '</div>') : '')
+                        + '</div>';
+                };
+
+                var weeksTile = tile('Weeks in campaign',
+                    '<span style="color:#E9E8E1; font-size:0.95rem; font-weight:600;">' + escapeHtml(weeksLabel) + '</span>',
+                    '');
+                var expoTile = tile('Total exposure this week',
+                    '<span style="color:#E9E8E1; font-size:0.95rem; font-weight:600;">+' + fmtCompact(totalExpo) + ' viewers</span>',
+                    'over ' + escapeHtml(_iiqFmtAsOfDate(_iiqAddDaysIso(asOf, -6))) + ' to ' + escapeHtml(_iiqFmtAsOfDate(asOf)));
+                var trajInner = '<span title="Vs the trailing 4-week mean." style="display:inline-block; background:' + trajBg + '; border:1px solid ' + trajBorder + '; color:' + trajFg + '; font-size:0.78rem; font-weight:700; padding:0.2rem 0.55rem; border-radius:999px; white-space:nowrap;">' + trajArrow + ' ' + escapeHtml(trajLabel) + '</span>';
+                var trajTile = tile('Trajectory', trajInner, 'Vs the trailing 4-week mean' + trajRatioTxt);
+
+                var stripHtml = '<div style="display:flex; gap:0.6rem; margin-top:0.85rem; flex-wrap:wrap;">'
+                    + weeksTile + expoTile + trajTile
+                    + '</div>';
+
+                // ---- Header + full card assembly --------------------
+                var headerHtml = '<div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:0.6rem; gap:0.75rem;">'
+                    + '<div>'
+                    +   '<div style="font-size:0.68rem; font-weight:600; color:#C7F23E; text-transform:uppercase; letter-spacing:0.08em;">How signals are moving</div>'
+                    +   '<div style="font-size:0.72rem; color:#797F81; margin-top:0.15rem;">Week-over-week momentum: assets, audiences, and total exposure vs the trailing 4 weeks.</div>'
+                    + '</div>'
+                    + '<div style="font-size:0.7rem; color:#797F81;">as of ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '</div>'
+                    + '</div>';
+
+                var panelsHtml = '<div style="display:flex; gap:1.1rem; flex-wrap:wrap; align-items:flex-start;">'
+                    + assetPanel + audPanel
+                    + '</div>';
+
                 host.style.display = '';
-                host.innerHTML = '<div style="background:#0C1618; border:1px solid #27393D; border-radius:10px; padding:0.85rem 1rem; color:#797F81; font-size:0.78rem;">How signals are moving · loading week-over-week view...</div>';
+                host.innerHTML = '<div style="background:#0C1618; border:1px solid #27393D; border-radius:10px; padding:0.9rem 1rem;">'
+                    + headerHtml + panelsHtml + stripHtml
+                    + '</div>';
             }
             // Populate the T-90 / T-60 / T-30 / T-14 / T-7 / T-0 / T+7 / T+30
             // preset button row inside the selector bar. Reads opening_date
