@@ -960,6 +960,29 @@ _PODCAST_PLATFORMS = [
          'exclusive era) was 5-8M weekly US on Spotify. Non-exclusive '
          '#1: 2-5M weekly US on Spotify; top-10 1-2.5M; top-50 <1M.'
      )},
+    {'key': 'youtube_podcasts',
+     'label': 'YouTube Podcasts',
+     'ceiling': 7_000_000,
+     'anchors': (
+         'YouTube is now the #1 US podcast platform by weekly reach '
+         "per Edison Research's Infinite Dial 2025 - ~31% of US "
+         'monthly podcast listeners use YouTube as their primary '
+         'listening surface, ~50-80M individuals reached weekly with '
+         'video-podcast content on the platform. Top video-podcast '
+         'shows on YouTube (Joe Rogan Experience YouTube channel, '
+         'Kill Tony, This Past Weekend w/ Theo Von, Shawn Ryan Show, '
+         'Rotten Mango, MeidasTouch) reach 4-7M weekly US individuals '
+         'each; tier-two shows (Diary of a CEO, Financial Audit, '
+         'Good Mythical Morning) 500K-2M; long-tail YouTube podcast '
+         'shows 10K-100K. Anchor per-show numbers off the channel '
+         'subscriber base and reported weekly video views on the '
+         'canonical show channel; a channel with N subscribers and M '
+         'weekly video views on new podcast uploads sees roughly '
+         '~0.15-0.30 x M unique US viewers per week. Bias to the '
+         'middle of these tiers unless a specific press cite or '
+         'Podnews / Podtrac YouTube-inclusive ranker exists for the '
+         'exact show.'
+     )},
     {'key': 'netflix',
      'label': 'Netflix Video Podcasts',
      'ceiling': 3_000_000,
@@ -1523,6 +1546,12 @@ _CHART_LABEL_TO_PLATFORM = (
     ('apple podcasts',   'apple'),
     ('apple music',      'apple'),
     ('apple',            'apple'),
+    # 2026-08-31: YouTube Popular Podcasts (US) - podcast platform key
+    # is `youtube_podcasts`, distinct from the `youtube` key used for
+    # YouTube Music song rankers. Must beat both `youtube music` and
+    # the bare `youtube` catch-all below.
+    ('youtube popular podcasts', 'youtube_podcasts'),
+    ('youtube podcasts', 'youtube_podcasts'),
     ('youtube music',    'youtube'),
     ('youtube',          'youtube'),
     ('amazon music podcasts', 'amazon'),

@@ -75,6 +75,25 @@ DOMAIN_REFRESH_MAP: dict[str, dict[str, list[str]]] = {
     # but a few store paths still 302 through oculus.com).
     'meta.com':         {'runall': ['meta_quest']},
     'oculus.com':       {'runall': ['meta_quest']},
+    # YouTube podcasts (public HTML on youtube.com/podcasts). The
+    # scrape runs anonymously today so a donation is a no-op, but
+    # keeping the mapping in place means the operator's "just donated
+    # youtube" gesture triggers a `podcast_charts` refresh (YouTube
+    # Podcasts is one of its sources) without any additional wiring
+    # once youtube.com goes auth-gated for the podcasts surface.
+    # music.youtube.com and podcasts.youtube.com listed alongside so
+    # any of the three donation flows triggers the same refresh.
+    'youtube.com':          {'runall': ['podcast_charts']},
+    'music.youtube.com':    {'runall': ['podcast_charts']},
+    'podcasts.youtube.com': {'runall': ['podcast_charts']},
+    # Steam (Valve). All endpoints are public / anonymous so a
+    # donation is a no-op today, but keeping the map in place means
+    # a future auth requirement (login-gated storefront APIs) picks
+    # up the same refresh chain without a wiring change. Both the
+    # store host and the api host map to the same source key.
+    'steampowered.com': {'runall': ['steam_charts']},
+    'store.steampowered.com': {'runall': ['steam_charts']},
+    'api.steampowered.com':   {'runall': ['steam_charts']},
     # Film ticketing - one module scrapes all sites
     'amctheatres.com':  {'local': ['film_ticketing']},
     'regmovies.com':    {'local': ['film_ticketing']},

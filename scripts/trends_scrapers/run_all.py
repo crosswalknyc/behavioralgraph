@@ -43,6 +43,12 @@ SCRAPERS = [
     ('wikipedia_trending', 'scripts.trends_scrapers.wikipedia_trending', 'Wikipedia',            'search'),
     ('music_charts',       'scripts.trends_scrapers.music_charts',       'Music',                'music'),
     ('podcast_charts',     'scripts.trends_scrapers.podcast_charts',     'Podcasts',             'podcast'),
+    # Standalone snapshot for the YouTube rail. The rail is already
+    # inside podcast_charts.json (dashboard-facing), but this per-source
+    # file lets a partner poll `youtube_podcasts.json` directly without
+    # unpacking the consolidated snapshot. Same parser, so the two never
+    # drift; extra cost is one public HTTP GET per day.
+    ('youtube_podcasts',   'scripts.trends_scrapers.youtube_podcasts',   'YouTube Popular Podcasts', 'podcast'),
     ('book_charts',        'scripts.trends_scrapers.book_charts',        'Books',                'book'),
     # Comics / manga / graphic novels: Amazon Comics & Graphic Novels
     # bestsellers + Apple Books Comics genre RSS + Libby Comics via
@@ -97,6 +103,14 @@ SCRAPERS = [
     # its own rails on the Games landing page. Anonymous fetch works
     # via curl_cffi Chrome-TLS impersonation; no cookies needed today.
     ('meta_quest', 'scripts.trends_scrapers.meta_quest',    'Meta Quest', 'gaming'),
+    # Steam (Valve). One snapshot with two panels (Most Played by
+    # 24-hour peak concurrent, Top Sellers by weekly US revenue).
+    # All three endpoints (ISteamChartsService/GetMostPlayedGames,
+    # IStoreTopSellersService/GetWeeklyTopSellers,
+    # IStoreBrowseService/GetItems) are anonymous public JSON; no
+    # cookies needed. curl_cffi Chrome-TLS impersonation covers
+    # Steam's basic rate-limit posture from the Hetzner box.
+    ('steam_charts', 'scripts.trends_scrapers.steam_charts', 'Steam',      'gaming'),
 ]
 
 

@@ -55321,9 +55321,11 @@ https://www.instagram.com/p/..."></textarea>
         // ============================================================
 
         function renderTIQPodcasts(sources) {
-            // Order: Apple (biggest chart) -> Spotify -> Netflix (their
-            // curated video-podcast lineup) -> Amazon -> Audible.
-            var keys = ['apple', 'spotify', 'netflix', 'amazon', 'audible'];
+            // Order: Apple (biggest chart) -> Spotify -> YouTube Podcasts
+            // (#1 US podcast platform by weekly reach per Edison Infinite
+            // Dial 2025) -> Netflix (their curated video-podcast lineup)
+            // -> Amazon -> Audible.
+            var keys = ['apple', 'spotify', 'youtube_podcasts', 'netflix', 'amazon', 'audible'];
             var present = keys.filter(function(k) { return sources[k]; });
             if (!present.length) {
                 return '<div class="tiq-empty">Podcast charts are warming up. Check back later.</div>';

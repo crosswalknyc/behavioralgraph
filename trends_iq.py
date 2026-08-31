@@ -2998,11 +2998,12 @@ _MUSIC_PANEL_TO_PLATFORM = {
     # per-track streams, so they get the aggregate (or nothing).
 }
 _PODCAST_PANEL_TO_PLATFORM = {
-    'apple':   'apple',
-    'spotify': 'spotify',
-    'netflix': 'netflix',
-    'amazon':  'amazon',
-    'audible': 'audible',
+    'apple':            'apple',
+    'spotify':          'spotify',
+    'youtube_podcasts': 'youtube_podcasts',
+    'netflix':          'netflix',
+    'amazon':           'amazon',
+    'audible':          'audible',
 }
 _STREAMING_PANEL_TO_PLATFORM = {
     'netflix':    'netflix',
