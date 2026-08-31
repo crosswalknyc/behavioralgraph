@@ -52917,15 +52917,20 @@ https://www.instagram.com/p/..."></textarea>
         //
         // Common schema (10 columns):
         //   Tab, Section, Rank, Title, Subtitle, Source, Value, Unit,
-        //   Change, Why, URL
+        //   Change, Why
         //
         // Empty cells are '' - never null. Numeric values are stringified.
         // Trend direction (up/down/flat) folds into Change so a
         // spreadsheet sort by Change makes sense.
+        //
+        // URL is deliberately excluded from the header list per user
+        // directive 2026-08-31 - the exporter does not surface source
+        // URLs in downloaded CSVs. Row builders may still populate a
+        // URL field; the emitter ignores keys not in the header list.
         // ============================================================
         var _TIQ_EXPORT_HEADERS = [
             'Tab', 'Section', 'Rank', 'Title', 'Subtitle',
-            'Source', 'Value', 'Unit', 'Change', 'Why', 'URL'
+            'Source', 'Value', 'Unit', 'Change', 'Why'
         ];
 
         function _tiqCsvCell(v) {
