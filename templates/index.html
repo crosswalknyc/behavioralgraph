@@ -25172,6 +25172,29 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-audience-delta.up   { color: #86efac; }
             #trendsIQView .tiq-audience-delta.down { color: #fca5a5; }
             #trendsIQView .tiq-audience-delta.flat { color: var(--text-secondary); }
+            #trendsIQView .tiq-sheet { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+            #trendsIQView .tiq-sheet thead th { text-align: left; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-secondary); padding: 0.25rem 0.5rem 0.45rem; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+            #trendsIQView .tiq-sheet th.tiq-sheet-th-num { text-align: right; width: 1%; }
+            #trendsIQView .tiq-sheet th.tiq-sheet-sortable { cursor: pointer; user-select: none; }
+            #trendsIQView .tiq-sheet th.tiq-sheet-sortable:hover { color: var(--text-primary); }
+            #trendsIQView .tiq-sheet .tiq-sort-ind { margin-left: 0.25rem; font-size: 0.72rem; opacity: 0.55; }
+            #trendsIQView .tiq-sheet th.sort-asc .tiq-sort-ind, #trendsIQView .tiq-sheet th.sort-desc .tiq-sort-ind { opacity: 1; color: #a78bfa; }
+            #trendsIQView .tiq-sheet tbody td { padding: 0.4rem 0.5rem; border-bottom: 1px solid rgba(148,163,184,0.16); vertical-align: middle; }
+            #trendsIQView .tiq-sheet tbody tr:last-child td { border-bottom: none; }
+            #trendsIQView .tiq-sheet tbody tr:hover td { background: rgba(148,163,184,0.08); }
+            #trendsIQView .tiq-sheet .tiq-sheet-td-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-primary); }
+            #trendsIQView .tiq-sheet-titlecell { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
+            #trendsIQView .tiq-sheet-rank { flex: 0 0 auto; min-width: 20px; text-align: right; font-size: 0.8rem; font-weight: 700; color: #a78bfa; font-variant-numeric: tabular-nums; }
+            #trendsIQView .tiq-sheet .tiq-poster-image { flex: 0 0 34px; width: 34px; height: 48px; }
+            #trendsIQView .tiq-sheet-titlemain { min-width: 0; }
+            #trendsIQView .tiq-sheet-delta { font-weight: 700; }
+            #trendsIQView .tiq-sheet-delta.up { color: #86efac; }
+            #trendsIQView .tiq-sheet-delta.down { color: #fca5a5; }
+            #trendsIQView .tiq-sheet-delta.flat { color: var(--text-secondary); font-weight: 500; }
+            #trendsIQView .tiq-sheet-dim { color: var(--text-secondary); }
+            body[data-theme="light"] #trendsIQView .tiq-sheet-delta.up { color: #15803d; }
+            body[data-theme="light"] #trendsIQView .tiq-sheet-delta.down { color: #b91c1c; }
+            body[data-theme="light"] #trendsIQView .tiq-sheet th.sort-asc .tiq-sort-ind, body[data-theme="light"] #trendsIQView .tiq-sheet th.sort-desc .tiq-sort-ind { color: #6d28d9; }
             #trendsIQView .tiq-retailer-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
             #trendsIQView .tiq-retailer-tab { padding: 0.4rem 0.85rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; font-size: 0.8rem; cursor: pointer; color: var(--text-secondary); user-select: none; display: inline-flex; align-items: center; gap: 0.35rem; }
             #trendsIQView .tiq-retailer-tab.active { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: #fff; border-color: transparent; }
@@ -52533,6 +52556,51 @@ https://www.instagram.com/p/..."></textarea>
                    arrow + '</span>';
         }
 
+        // Client-side sort for the FAST > Titles sheet. Reorders the rows of
+        // ONE table (Film or TV) by Views or delta. Cycles desc -> asc ->
+        // back to the original popularity order on repeat clicks.
+        window.tiqSortFastSheet = function(thEl, key) {
+            var table = thEl.closest ? thEl.closest('table') : null;
+            if (!table) return;
+            var tbody = table.querySelector('tbody');
+            if (!tbody) return;
+            var curKey = table.getAttribute('data-sort-key') || '';
+            var curDir = table.getAttribute('data-sort-dir') || '';
+            var dir;
+            if (curKey === key) {
+                dir = (curDir === 'desc') ? 'asc' : (curDir === 'asc') ? 'none' : 'desc';
+            } else {
+                dir = 'desc';
+            }
+            table.setAttribute('data-sort-key', dir === 'none' ? '' : key);
+            table.setAttribute('data-sort-dir', dir === 'none' ? '' : dir);
+            var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+            var ord = function(r) { return parseFloat(r.getAttribute('data-order')) || 0; };
+            rows.sort(function(a, b) {
+                if (dir === 'none') return ord(a) - ord(b);
+                var av = parseFloat(a.getAttribute('data-' + key));
+                var bv = parseFloat(b.getAttribute('data-' + key));
+                var aNaN = isNaN(av), bNaN = isNaN(bv);
+                if (aNaN && bNaN) return ord(a) - ord(b);
+                if (aNaN) return 1;
+                if (bNaN) return -1;
+                if (av === bv) return ord(a) - ord(b);
+                return (dir === 'desc') ? (bv - av) : (av - bv);
+            });
+            rows.forEach(function(r) { tbody.appendChild(r); });
+            var ths = table.querySelectorAll('th.tiq-sheet-sortable');
+            for (var i = 0; i < ths.length; i++) {
+                ths[i].classList.remove('sort-asc', 'sort-desc');
+                var ind = ths[i].querySelector('.tiq-sort-ind');
+                if (ind) ind.textContent = '⇅';
+            }
+            if (dir !== 'none') {
+                thEl.classList.add(dir === 'desc' ? 'sort-desc' : 'sort-asc');
+                var ind2 = thEl.querySelector('.tiq-sort-ind');
+                if (ind2) ind2.textContent = (dir === 'desc') ? '↓' : '↑';
+            }
+        };
+
         // ------------------------------------------------------------------
         // Persona-lens filter helpers (populated from cards.lens_config /
         // cards.lens_scores in the daily lens_relevance snapshot).
@@ -52685,7 +52753,7 @@ https://www.instagram.com/p/..."></textarea>
 
         // Filter target selector - kept centralized so adding new
         // card types (e.g. tiq-product-card) is a one-line change.
-        var _TIQ_LENS_ROW_SELECTOR = '.tiq-row, .tiq-person-card';
+        var _TIQ_LENS_ROW_SELECTOR = '.tiq-row, .tiq-person-card, .tiq-sheet-row';
 
         // Apply the currently-selected lens to every rendered row.
         // Called on payload arrival (repaint) AND on dropdown change.
@@ -55540,28 +55608,64 @@ https://www.instagram.com/p/..."></textarea>
                     var totalCount = (filmRows.length + tvRows.length) || (s.items || []).length;
                     var titlesSubtitle = 'Top ' + totalCount + ' titles on ' +
                                     _tiqEsc(s.label || k) +
-                                    ' (US popularity, ad-supported tier).';
+                                    ' (US popularity, ad-supported tier). Tap Views or Δ% to sort.';
                     var renderCol = function(label, rows) {
-                        var lis = (rows || []).map(function(it, i) {
+                        var rowsHtml = (rows || []).map(function(it, i) {
+                            var us = it.us_streams || {};
+                            var estimate = Number(us.us_estimate);
+                            var hasViews = isFinite(estimate) && estimate > 0;
+                            var viewsNum = hasViews ? _tiqCompactNum(estimate) : '';
+                            var deltaHtml = '<span class="tiq-sheet-delta flat">—</span>';
+                            var deltaSort = '';
+                            if (typeof us.delta_pct === 'number' && us.direction) {
+                                var pct = Math.round(Math.abs(us.delta_pct) * 100);
+                                if (pct >= 1) {
+                                    var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
+                                    var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
+                                    var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
+                                    deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pct + '%</span>';
+                                    deltaSort = String(signed);
+                                }
+                            }
+                            var tipParts = [];
+                            if (hasViews) {
+                                tipParts.push(viewsNum + ' ' + (us.unit_label || 'weekly US views'));
+                                if (us.method) tipParts.push(String(us.method));
+                                if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
+                            }
+                            var viewsTip = _tiqEsc(tipParts.join(' — '));
                             var streamKey = it.title;
                             var img = _tiqPosterCell(it.image);
                             var year = it.year ? '<span class="tiq-fast-year">' + _tiqEsc(String(it.year)) + '</span>' : '';
                             var genres = (it.genres && it.genres.length)
                                 ? '<div class="tiq-fast-genres">' + _tiqEsc(it.genres.slice(0, 3).join(' · ')) + '</div>'
                                 : '';
-                            var views = _tiqAudienceChip(it.us_streams);
                             var rk = it.bucket_rank || (i + 1);
-                            return '<div class="tiq-row"><div class="tiq-rank">' + rk + '</div>' +
-                                   img +
-                                   '<div class="tiq-row-body">' +
-                                   '<div class="tiq-row-title">' + _tiqEsc(it.title) + ' ' + year +
-                                   _tiqActions('fast', k, streamKey, streamKey, 'National') + '</div>' +
-                                   (views ? '<div class="tiq-row-meta">' + views + '</div>' : '') +
-                                   genres +
-                                   '</div></div>';
+                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
+                                   '<td class="tiq-sheet-td-title">' +
+                                     '<div class="tiq-sheet-titlecell">' +
+                                       '<span class="tiq-sheet-rank">' + rk + '</span>' +
+                                       img +
+                                       '<div class="tiq-sheet-titlemain">' +
+                                         '<div class="tiq-row-title">' + _tiqEsc(it.title) + ' ' + year +
+                                         _tiqActions('fast', k, streamKey, streamKey, 'National') + '</div>' +
+                                         genres +
+                                       '</div>' +
+                                     '</div>' +
+                                   '</td>' +
+                                   '<td class="tiq-sheet-td-num tiq-sheet-td-views" title="' + viewsTip + '">' + (viewsNum || '<span class="tiq-sheet-dim">—</span>') + '</td>' +
+                                   '<td class="tiq-sheet-td-num">' + deltaHtml + '</td>' +
+                                   '</tr>';
                         }).join('');
                         return '<div class="tiq-card"><h4>' + _tiqEsc(label) + '</h4>' +
-                               '<div class="tiq-headline-list">' + (lis || '<div class="tiq-empty">No data.</div>') + '</div></div>';
+                               '<table class="tiq-sheet">' +
+                                 '<thead><tr>' +
+                                   '<th class="tiq-sheet-th-title">Title</th>' +
+                                   '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
+                                   '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
+                                 '</tr></thead>' +
+                                 '<tbody>' + (rowsHtml || '<tr><td colspan="3" class="tiq-empty">No data.</td></tr>') + '</tbody>' +
+                               '</table></div>';
                     };
                     var hasFilm = (filmRows || []).length > 0;
                     var hasTV   = (tvRows   || []).length > 0;
