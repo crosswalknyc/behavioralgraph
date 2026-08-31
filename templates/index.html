@@ -25204,6 +25204,9 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-sheet-tag { display: inline-block; padding: 1px 7px; border-radius: 9999px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.03em; background: rgba(129,140,248,0.16); color: #c7d2fe; }
             body[data-theme="light"] #trendsIQView .tiq-sheet-tag { background: rgba(99,102,241,0.14); color: #4338ca; }
             #trendsIQView .tiq-sheet-th-label { margin-right: 0.4rem; }
+            #trendsIQView .tiq-sheet-chan .tiq-sheet-td-title, #trendsIQView .tiq-sheet-chan th.tiq-sheet-th-title { width: 1%; white-space: nowrap; }
+            #trendsIQView .tiq-sheet-chan .tiq-chan-delta { padding-left: 3.5rem; }
+            #trendsIQView .tiq-sheet-chan th.tiq-sheet-th-spacer, #trendsIQView .tiq-sheet-chan .tiq-sheet-td-spacer { width: 100%; padding: 0; }
             #trendsIQView .tiq-sheet-titlesort { font-family: inherit; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.02em; text-transform: none; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 1px 4px; cursor: pointer; vertical-align: middle; -webkit-appearance: none; -moz-appearance: none; appearance: none; width: 2.9rem; box-sizing: border-box; text-align: center; text-align-last: center; }
             #trendsIQView .tiq-sheet-titlesort option { background: var(--bg-card); color: var(--text-primary); }
             #trendsIQView .tiq-sheet-cardhead { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.35rem; }
@@ -55987,49 +55990,40 @@ https://www.instagram.com/p/..."></textarea>
                                 if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
                             }
                             var viewsTip = _tiqEsc(tipParts.join(' — '));
-                            var ctTag = '';
                             var chName = _tiqEsc(ch.name);
                             var rk = ch.rank || (i + 1);
                             var sortTitle = _tiqEsc(String(ch.name || '').toLowerCase());
                             var dispName = _tiqEsc(String(ch.name || ''));
-                            var dataYear = '';
-                            var dataGenres = '';
-                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="' + dataYear + '" data-genres="' + dataGenres + '" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
+                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="" data-genres="" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
                                    '<td class="tiq-sheet-td-title">' +
                                      '<div class="tiq-sheet-titlecell">' +
                                        '<span class="tiq-sheet-rank">' + rk + '</span>' +
                                        '<div class="tiq-sheet-titlemain">' +
                                          '<div class="tiq-row-title" title="' + chName + '">' + chName + '</div>' +
-                                         ctTag +
                                        '</div>' +
                                      '</div>' +
                                    '</td>' +
-                                   '<td class="tiq-sheet-td-num tiq-sheet-td-views" title="' + viewsTip + '">' + (viewsNum || '<span class="tiq-sheet-dim">—</span>') + '</td>' +
-                                   '<td class="tiq-sheet-td-num">' + deltaHtml + '</td>' +
+                                   '<td class="tiq-sheet-td-num tiq-sheet-td-views tiq-chan-views" title="' + viewsTip + '">' + (viewsNum || '<span class="tiq-sheet-dim">—</span>') + '</td>' +
+                                   '<td class="tiq-sheet-td-num tiq-chan-delta">' + deltaHtml + '</td>' +
+                                   '<td class="tiq-sheet-td-spacer"></td>' +
                                    '</tr>';
-                        });
-                        var _chTbl = function(arr, colId) {
-                            return '<div class="tiq-card">' + _tiqSheetCardHead('Channels') +
-                                   '<table class="tiq-sheet" data-entity="Channel" data-export="' + _tiqEsc(String(k) + '-channels-' + colId) + '">' +
-                                     '<thead><tr>' +
-                                       '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Channel</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select></th>' +
-                                       '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
-                                       '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
-                                     '</tr></thead>' +
-                                     '<tbody>' + arr.join('') + '</tbody>' +
-                                   '</table></div>';
-                        };
-                        var _chHalf = Math.ceil(chRows.length / 2);
-                        var _chLeft = chRows.slice(0, _chHalf);
-                        var _chRight = chRows.slice(_chHalf);
-                        var _chCols = _chRight.length ? '1fr 1fr' : '1fr';
-                        var _chGrid = _chTbl(_chLeft, '1') + (_chRight.length ? _chTbl(_chRight, '2') : '');
+                        }).join('');
                         channelsHtml =
                             '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
                               'Ranking the ' + channels.length + ' most-watched channels on ' +
                               _tiqEsc(s.label || k) + ' by weekly US viewers. Tap Views or Δ% to sort.' +
                             '</div>' +
-                            '<div class="tiq-cards-grid" style="grid-template-columns: ' + _chCols + ';">' + _chGrid + '</div>';
+                            '<div class="tiq-card">' + _tiqSheetCardHead('Channels') +
+                              '<table class="tiq-sheet tiq-sheet-chan" data-entity="Channel" data-export="' + _tiqEsc(String(k) + '-channels') + '">' +
+                                '<thead><tr>' +
+                                  '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Channel</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select></th>' +
+                                  '<th class="tiq-sheet-th-num tiq-sheet-sortable tiq-chan-views" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
+                                  '<th class="tiq-sheet-th-num tiq-sheet-sortable tiq-chan-delta" onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
+                                  '<th class="tiq-sheet-th-spacer"></th>' +
+                                '</tr></thead>' +
+                                '<tbody>' + chRows + '</tbody>' +
+                              '</table>' +
+                            '</div>';
                     }
 
                     // ---- Mode toggle ------------------------------------------
