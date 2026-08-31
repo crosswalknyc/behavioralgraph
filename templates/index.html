@@ -24930,15 +24930,15 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-title { font-size: 1.45rem; font-weight: 600; margin: 0; }
             #trendsIQView .tiq-subtitle { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
             #trendsIQView .tiq-filter-bar {
-                /* Geography + Region controls were removed 2026-07-27
-                   (Trends IQ is now always National); Lens dropdown was
-                   added 2026-08-10.  All three controls (Window, Lens,
-                   Apply) live on a single row so the filter box stays
-                   compact.  align-items: end lines the Apply button's
-                   baseline up with the bottom of the two select inputs
-                   (each has a stacked <label> above it). */
+                /* All five controls (Window, As-of date, Today button,
+                   Lens, Apply) sit on a single row so the filter box
+                   stays compact.  align-items: end lines the button
+                   baselines up with the bottom of the select/date
+                   inputs (each has a stacked <label> above it).  On
+                   viewports narrower than 900px the grid collapses to
+                   two columns so mobile users are not cramped. */
                 display: grid;
-                grid-template-columns: minmax(160px, 220px) minmax(180px, 240px) auto;
+                grid-template-columns: minmax(140px, 200px) minmax(140px, 180px) auto minmax(160px, 220px) auto;
                 justify-content: start;
                 gap: 0.6rem;
                 align-items: end;
@@ -24947,6 +24947,11 @@ https://www.instagram.com/p/..."></textarea>
                 border: 1px solid var(--border-color, #2c2c3e);
                 border-radius: 10px;
                 margin-bottom: 1rem;
+            }
+            @media (max-width: 900px) {
+                #trendsIQView .tiq-filter-bar {
+                    grid-template-columns: 1fr 1fr;
+                }
             }
             #trendsIQView .tiq-filter-bar label { font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.25rem; display: block; }
             #trendsIQView .tiq-filter-bar select,
