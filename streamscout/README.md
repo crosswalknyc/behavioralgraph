@@ -19,6 +19,24 @@ SHOW · URL · PRODUCTION · PLATFORM · SEASON
 
 ---
 
+## 0. First — put the tool on `main` (do this once)
+
+The tool currently lives in **Pull Request #75**. Until that PR is merged, the
+`streamscout/` folder isn't on `main` yet, so the setup steps below can't find
+it. Merging is a ~30-second click, and you (as the repo owner) can do it:
+
+1. Open the PR: **https://github.com/crosswalknyc/behavioralgraph/pull/75**
+2. Click **Merge pull request** → **Confirm merge**.
+   - You may see a note that a check named **`validate` didn't run** — that check
+     only applies to website (`index.html`) edits, *not* this Python tool, so
+     it's safe to merge past it. As the owner you'll have a **Merge** button
+     regardless; use it.
+3. That's it — the entire tool, with all the latest fixes, is now on `main`.
+
+You only do this once. After it's merged, everything below "just works."
+
+---
+
 ## 1. One-time setup
 
 You only do this once per computer.
