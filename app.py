@@ -51137,6 +51137,7 @@ def api_synth_chat_clarify():
         # 'scope' -> 'pick' for the second ask.
         from migration.viewer_content_scope import (
             scope_from_text as _vs_from_text,
+            extend_series_seasons as _vs_extend_seasons,
         )
         data = draft.get('viewer_scope_data') or {}
         kind = str(data.get('kind') or 'series')
@@ -51188,7 +51189,7 @@ def api_synth_chat_clarify():
         def _vs_pick_question():
             opts = seasons if is_series else films
             lines = [f"Which {unit}?"]
-            for _i, _o in enumerate(opts[:24], start=1):
+            for _i, _o in enumerate(opts[:60], start=1):
                 lines.append(f"  {_i}. {_o.get('label')}")
             lines.append(f"Pick below, or reply with the {unit} "
                          f"(or all).")
@@ -51198,15 +51199,36 @@ def api_synth_chat_clarify():
         direct = _vs_from_text(answer, data)
         if direct and direct.get('mode') == 'specific':
             if is_series and direct.get('season') is not None:
+                want_n = int(direct['season'])
                 have = {int(s.get('number') or 0) for s in seasons}
-                if int(direct['season']) not in have:
-                    return jsonify({
-                        'success': True, 'draft': draft,
-                        'message': (f"Season {direct['season']} isn't "
-                                    f"in the researched run.\n"
-                                    + _vs_pick_question()),
-                        'next_step': 'viewer_scope',
-                    })
+                researched_max = max(have) if have else 0
+                if want_n not in have:
+                    # A season the researched list is behind on (a
+                    # just-aired / current season the cached structure
+                    # missed) must not be hard-rejected - that made the
+                    # current season impossible to pick when the list
+                    # was stale. Accept a number just beyond the
+                    # researched max: extend the structure so the label,
+                    # year, and sample sizing land right, then bind it.
+                    # Keep the helpful rejection only for a genuine
+                    # in-run gap or an implausibly high number.
+                    plausible_current = (
+                        researched_max > 0
+                        and want_n > researched_max
+                        and want_n <= researched_max + 6
+                        and want_n <= 60)
+                    if plausible_current:
+                        data = _vs_extend_seasons(data, want_n)
+                        draft['viewer_scope_data'] = data
+                        seasons = data.get('seasons') or seasons
+                    else:
+                        return jsonify({
+                            'success': True, 'draft': draft,
+                            'message': (f"Season {direct['season']} isn't "
+                                        f"in the researched run.\n"
+                                        + _vs_pick_question()),
+                            'next_step': 'viewer_scope',
+                        })
             return _vs_bind_and_continue(direct)
         if _re.search(r'\b(most\s+recent|latest|newest|current)\b', low):
             return _vs_bind_and_continue({'mode': 'latest'})

@@ -268,7 +268,12 @@ def research_content_structure(title, run_id=""):
         "sources.\n"
         "Decide what the title IS:\n"
         "  - series: an episodic TV/streaming show. Enumerate EVERY "
-        "season released to date with the year each premiered.\n"
+        "season from Season 1 through the CURRENT / most recent season, "
+        "with the year each premiered. Use web_search to confirm the "
+        "latest season - long-running annual shows (reality, daytime, "
+        "competition, etc.) usually have a season that aired in the "
+        "current year, so include seasons up to the present. Do NOT "
+        "stop at your training cutoff or omit recently aired seasons.\n"
         "  - franchise_film: a film that belongs to a multi-film "
         "franchise (or the franchise itself was named). Enumerate the "
         "franchise's theatrically/streaming released films in order "
@@ -502,6 +507,81 @@ def resolve_scope(structure, req):
     return out
 
 
+def next_season_year_estimate(seasons, number):
+    """Estimate the premiere year for a season NUMBER not in the
+    researched list, from the trend of the known (number, year) pairs.
+    An annual show adds ~1 year per season, so a list ending at
+    Season 24 (2022) estimates Season 28 as 2026. Returns '' when no
+    usable year trend exists. Never estimates past next year."""
+    pts = []
+    for s in (seasons or []):
+        try:
+            n = int(s.get("number"))
+            y = int(str(s.get("year") or "").strip()[:4])
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if n > 0 and 1900 <= y <= 2100:
+            pts.append((n, y))
+    if not pts:
+        return ""
+    pts.sort()
+    (n0, y0), (n1, y1) = pts[0], pts[-1]
+    delta = 1.0 if n1 == n0 else (y1 - y0) / float(n1 - n0)
+    if delta < 1.0:
+        # Season numbers never advance more than once a year for the
+        # annual-show case this powers; guard multi-per-year noise.
+        delta = 1.0
+    try:
+        target = int(number)
+    except (TypeError, ValueError):
+        return ""
+    est = int(round(y1 + delta * (target - n1)))
+    horizon = datetime.now(timezone.utc).year + 1
+    if est > horizon:
+        est = datetime.now(timezone.utc).year
+    return str(est)
+
+
+def extend_series_seasons(structure, up_to_number):
+    """Return a structure whose season list is extended with any
+    seasons from (current max + 1) through up_to_number, years
+    estimated from the known trend. Used when a viewer names a
+    just-aired / current season that a stale cached structure missed,
+    so the label, year, and sample sizing land right instead of the
+    build hard-rejecting a plausible current season. No-op unless the
+    structure is a series and up_to_number is genuinely beyond the
+    current max (and within a sane bound)."""
+    if not isinstance(structure, dict) or structure.get("kind") != "series":
+        return structure
+    try:
+        target = int(up_to_number)
+    except (TypeError, ValueError):
+        return structure
+    base_seasons = list(structure.get("seasons") or [])
+    have = set()
+    cur_max = 0
+    for s in base_seasons:
+        try:
+            n = int(s.get("number"))
+        except (TypeError, ValueError):
+            continue
+        have.add(n)
+        cur_max = max(cur_max, n)
+    if target <= cur_max or target > 99:
+        return structure
+    extended = list(base_seasons)
+    for n in range(cur_max + 1, target + 1):
+        if n in have:
+            continue
+        extended.append(
+            {"number": n, "year": next_season_year_estimate(base_seasons, n)})
+    extended.sort(key=lambda s: int(s.get("number") or 0))
+    out = dict(structure)
+    out["seasons"] = extended[:99]
+    out["seasons_extended"] = True
+    return out
+
+
 def needs_scope_clarify(structure):
     """True when the structure supports a real scope choice: a series
     with 2+ seasons, or a franchise with 2+ films."""
@@ -518,13 +598,17 @@ def scope_chip_payload(structure):
     """The clarify-step data shape the dashboard chips render from.
     Rides the draft as viewer_scope_data; mode flips 'scope' -> 'pick'
     when the user asks for a specific season/film."""
+    # Show every researched unit (mirrors the normalize caps of 60
+    # seasons / 40 films). A prior 24-item slice silently hid the
+    # recent seasons of long-running annual shows (e.g. Big Brother
+    # capped at Season 24) even after research enumerated them.
     seasons = []
-    for s in (structure.get("seasons") or [])[:24]:
+    for s in (structure.get("seasons") or [])[:60]:
         yr = f" ({s['year']})" if s.get("year") else ""
         seasons.append({"number": s["number"], "year": s.get("year") or "",
                         "label": f"Season {s['number']}{yr}"})
     films = []
-    for f in (structure.get("films") or [])[:20]:
+    for f in (structure.get("films") or [])[:40]:
         yr = f" ({f['year']})" if f.get("year") else ""
         films.append({"title": f["title"], "year": f.get("year") or "",
                       "label": f"{f['title']}{yr}"})
