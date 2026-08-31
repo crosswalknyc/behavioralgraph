@@ -25835,6 +25835,14 @@ https://www.instagram.com/p/..."></textarea>
                  _iiqRenderAssetTable in the script block below; hidden
                  whenever no film title is picked or no assets loaded. -->
             <div id="iiqAssetTableSection" style="display: none; margin: 0 0 0.85rem; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;"></div>
+            <!-- ===== Audience response (Phase 3, film campaigns only) =====
+                 One row per audience card in the campaign snapshot, metrics
+                 computed against the currently-in-view asset set (the same
+                 _iiqComputeAssetRows the Phase 2 table renders). Populated
+                 by _iiqRenderAudienceTable in the script block below;
+                 hidden whenever no film title is picked, no audiences
+                 array, or no assets loaded. -->
+            <div id="iiqAudienceTableSection" style="display: none; margin: 0 0 0.85rem; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;"></div>
             <div class="iiq-subtab-bar">
                 <button class="iiq-subtab active" data-iiq-subtab="overview" onclick="showIntentIQSubtab('overview')">📊 TIMELINE</button>
                 <button class="iiq-subtab" data-iiq-subtab="assets" onclick="showIntentIQSubtab('assets')">🎞️ ASSETS</button>
@@ -28673,6 +28681,7 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 try { _iiqRenderWeeklySummary(); } catch (_e) {}
                 try { _iiqRenderAssetTable(); } catch (_e) {}
+                try { _iiqRenderAudienceTable(); } catch (_e) {}
             };
             // Click handler for the preset buttons: writes the picker,
             // then routes through iiqOnAsOfChange so every downstream
@@ -28703,6 +28712,8 @@ https://www.instagram.com/p/..."></textarea>
                     if (card) { card.style.display = 'none'; card.innerHTML = ''; }
                     var tblSec = document.getElementById('iiqAssetTableSection');
                     if (tblSec) { tblSec.style.display = 'none'; tblSec.innerHTML = ''; }
+                    var audSec = document.getElementById('iiqAudienceTableSection');
+                    if (audSec) { audSec.style.display = 'none'; audSec.innerHTML = ''; }
                     return;
                 }
                 el.disabled = false;
@@ -28721,6 +28732,7 @@ https://www.instagram.com/p/..."></textarea>
                 _iiqRenderAsOfChip();
                 try { _iiqRenderWeeklySummary(); } catch (_e) {}
                 try { _iiqRenderAssetTable(); } catch (_e) {}
+                try { _iiqRenderAudienceTable(); } catch (_e) {}
             }
             // ================================================================
 
@@ -30784,8 +30796,11 @@ https://www.instagram.com/p/..."></textarea>
                         window._iiqRenderAssetsGrid();
                         // Phase 2: rebuild the asset-ranked table + Weekly
                         // Summary now that a fresh assets payload is cached.
+                        // Phase 3: audience table also depends on the assets
+                        // payload for its Overlap accrual denominator.
                         try { _iiqRenderWeeklySummary(); } catch (_e) {}
                         try { _iiqRenderAssetTable(); } catch (_e) {}
+                        try { _iiqRenderAudienceTable(); } catch (_e) {}
                     })
                     .catch(function(e) {
                         document.getElementById('iiqAssetMeta').textContent = 'Failed: ' + (e.message || e);
