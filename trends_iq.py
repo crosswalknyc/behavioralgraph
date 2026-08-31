@@ -2878,6 +2878,12 @@ _DEFAULT_UNIT_BY_KIND = {
     # vs library borrows). The aggregate fallback below is generic; the
     # per-platform stamp prefers `_PLATFORM_UNIT_LABEL` when set.
     'book':    'weekly US audience',
+    # Comics: same pattern as books - the per-platform stamp prefers
+    # a comics-specific unit label from `_PLATFORM_UNIT_LABEL`
+    # (readers on Amazon/Apple, library borrows on Libby). The
+    # aggregate fallback stays 'weekly US readers' since a comic is
+    # almost always read (never listened to like an audiobook).
+    'comic':   'weekly US readers',
     # FAST channels: ad-supported free viewers. Same "views" noun as
     # paid streaming (Nielsen's household definition), but the daily
     # Claude research is calibrated separately against FAST Gauge /
@@ -2912,6 +2918,10 @@ _PLATFORM_UNIT_LABEL = {
     ('book', 'audible'):      'weekly US listeners',
     ('book', 'libby_ebook'):  'weekly US library borrows',
     ('book', 'libby_audio'):  'weekly US library borrows',
+    # Comics
+    ('comic', 'amazon_kindle'): 'weekly US readers',
+    ('comic', 'apple_comics'):  'weekly US readers',
+    ('comic', 'libby_comics'):  'weekly US library comic borrows',
 }
 
 
@@ -3060,6 +3070,15 @@ _LIBBY_PANEL_TO_PLATFORM = {
     'ebook':     'libby_ebook',
     'audiobook': 'libby_audio',
     'magazine':  'libby_magazine',
+}
+# comics_charts panels -> per-platform key. Kept separate from
+# _BOOK_PANEL_TO_PLATFORM so an Amazon Comics row never lands in
+# the Amazon Best-Sellers book anchor tier (books have ~10x the
+# per-title weekly US audience of comics, so the tiers can't share).
+_COMIC_PANEL_TO_PLATFORM = {
+    'amazon_kindle': 'amazon_kindle',
+    'apple_comics':  'apple_comics',
+    'libby_comics':  'libby_comics',
 }
 
 
@@ -3610,6 +3629,54 @@ def _annotate_books_with_streams(book_charts: dict,
     _stamp_panel(book_charts,   _BOOK_PANEL_TO_PLATFORM,   'book')
     _stamp_panel(libby_trends,  _LIBBY_PANEL_TO_PLATFORM,  'book',
                   libby_fallback=True)
+
+
+def _annotate_comics_with_streams(comics_charts: dict,
+                                    estimates: dict) -> None:
+    """Attach per-platform `us_streams` to every comics row.
+
+    Rows key by `comic:<normalized title + author>` in the estimates
+    snapshot (matches `_collect_comics`). Same three-source card
+    layout the Books tab uses (Amazon / Apple / Libby), but each
+    row lands in a comics-only platform anchor tier so the chip
+    reads a realistic weekly US audience for that item.
+
+    Libby fallback: Libby Comics rows that the daily research pass
+    hasn't priced yet get a projected US number computed from their
+    raw LA County hold count so every visible row can render a chip
+    (same 25x/7 projection the books-side Libby fallback uses).
+    """
+    if not comics_charts:
+        return
+    items_lookup = (estimates or {}).get('items') or {}
+    for panel_slug, panel in (comics_charts or {}).items():
+        platform_key = _COMIC_PANEL_TO_PLATFORM.get(panel_slug, '')
+        if not platform_key:
+            continue
+        for row in (panel or {}).get('items') or []:
+            title  = (row.get('title')  or '').strip()
+            artist = (row.get('artist') or '').strip()
+            key = f'comic:{_cp_normalize(f"{title} {artist}")}'
+            _stamp_stream_estimate(row, items_lookup.get(key),
+                                     platform_key=platform_key,
+                                     kind_hint='comic')
+            # Libby fallback: if the daily research pass produced
+            # nothing for this row but the row carries a raw LA
+            # County hold count, project it up ourselves so the
+            # tile never shows a local number. Uses the same
+            # 25x/7 projection as the books-side Libby fallback.
+            if platform_key == 'libby_comics' and not row.get('us_streams'):
+                fb = _libby_fallback_us_estimate(
+                    int(row.get('holds') or 0),
+                    'libby_comics',
+                )
+                if fb:
+                    # Override the unit label so the chip reads
+                    # comic-specific (default helper returns
+                    # 'weekly US library borrows' which reads
+                    # book-y).
+                    fb['unit_label'] = 'weekly US library comic borrows'
+                    row['us_streams'] = fb
 
 
 def _annotate_cross_platform_moments(
@@ -6417,6 +6484,15 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         {'sources': libby_trends},
         stream_estimates_snap,
     )
+    # Comics: same three-source (Amazon Comics / Apple Books Comics /
+    # Libby Comics) card layout as the Books tab, but each row lands
+    # in a comics-only platform anchor tier (see
+    # stream_estimates._COMICS_PLATFORMS). Keyed
+    # `comic:<title author>` in the estimates snapshot. Libby Comics
+    # rows the daily research pass hasn't priced yet get a projected
+    # US number computed from their raw LA County hold count so every
+    # visible row can render a chip.
+    _annotate_comics_with_streams(comics_charts, stream_estimates_snap)
 
     # Stamp `us_readers` (daily US-gen-pop reader estimate + DoD trend)
     # onto every headline surface: the flat "Top trending" list, the

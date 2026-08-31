@@ -636,6 +636,76 @@ def _collect_books(max_items: int = _MAX_BOOK_ITEMS) -> list[dict]:
     return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
 
 
+# Comics coverage cap: 3 panels * ~50 top rows each, post-dedup by
+# (title + author). Amazon Comics ships 60, Apple Books Comics 50,
+# Libby Comics 35 = 145 gross; cross-panel dedup collapses maybe
+# 5-15 (a title on Amazon Best-Sellers AND Libby, or Amazon AND
+# Apple), so 150 covers every visible row with a small ceiling.
+_MAX_COMIC_ITEMS = 150
+
+
+def _collect_comics(max_items: int = _MAX_COMIC_ITEMS) -> list[dict]:
+    """Union top items across the comics_charts snapshot (Amazon
+    Comics + Apple Books Comics + Libby Comics), deduped by
+    (normalized title + author).
+
+    Same fold-onto-existing-item pattern as `_collect_books`: a
+    title that appears on both the Amazon Best-Sellers list AND
+    Libby's popular-comics list gets a SINGLE Claude call that
+    reasons across both platforms, with the LA County hold count
+    surfaced via `libby_holds` so the prompt can project it up.
+
+    Panel-source spelling comes from `comics_charts.fetch`:
+      amazon_kindle -> Amazon Comics (physical bestsellers)
+      apple_comics  -> Apple Books Comics (digital paid)
+      libby_comics  -> Libby Comics (US public-library digital)
+    Each panel slug matches the platform key in
+    `_COMICS_PLATFORMS` so `_focus_keys_from_charts` can highlight
+    the on-chart platforms in the prompt.
+    """
+    comics_snap = _read_snapshot('comics_charts') or {}
+    per: dict[str, dict] = {}
+
+    _COMIC_PANEL_META = {
+        'amazon_kindle': 'Amazon Comics',
+        'apple_comics':  'Apple Books Comics',
+        'libby_comics':  'Libby Comics',
+    }
+    for src_slug, chart_prefix in _COMIC_PANEL_META.items():
+        panel = (comics_snap.get('sources') or {}).get(src_slug) or {}
+        for i, it in enumerate((panel.get('items') or [])[:60]):
+            title  = (it.get('title')  or '').strip()
+            artist = (it.get('artist') or '').strip()
+            if not title:
+                continue
+            key = _cp_normalize(f'{title} {artist}')
+            if not key:
+                continue
+            rank = i + 1
+            e = per.setdefault(key, {
+                'kind':          'comic',
+                'display_title': title,
+                'artist':        artist,
+                'best_rank':     rank,
+                'chart_labels':  [],
+                'image':         it.get('image'),
+                'url':           it.get('url'),
+                'libby_holds':   0,
+            })
+            e['chart_labels'].append(f'{chart_prefix} #{rank}')
+            if rank < e['best_rank']:
+                e['best_rank'] = rank
+            # Libby comics carry a native `holds` count (LA County
+            # only). Preserve it so the prompt can cite the raw
+            # signal and project it up to US-wide library borrows.
+            if src_slug == 'libby_comics':
+                h = int(it.get('holds') or 0)
+                if h > e['libby_holds']:
+                    e['libby_holds'] = h
+
+    return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
+
+
 def _lookup_key(kind: str, display_title: str, artist: str = '') -> str:
     """Storage key for an item. Podcasts/streaming key by title;
     songs key by (title + artist) because titles collide across
@@ -644,6 +714,8 @@ def _lookup_key(kind: str, display_title: str, artist: str = '') -> str:
         return f'song:{_cp_normalize(f"{display_title} {artist}")}'
     if kind == 'book':
         return f'book:{_cp_normalize(f"{display_title} {artist}")}'
+    if kind == 'comic':
+        return f'comic:{_cp_normalize(f"{display_title} {artist}")}'
     if kind == 'game':
         # Games don't collide by title (no two AAA releases share a
         # name in the same window). Publisher rides along on `artist`
@@ -997,6 +1069,75 @@ _BOOK_PLATFORMS = [
 ]
 
 
+# Comics / graphic novels / manga. Distinct kind='comic' rather than
+# folding into 'book' because the addressable US audience is much
+# smaller (comics ~30-40M annual US readers vs ~180M annual US
+# book buyers), the price / unit conventions differ (single issues
+# vs full novels), and the anchor tiers per source diverge sharply:
+# Amazon Comics ships PHYSICAL bestsellers; Apple ships DIGITAL
+# per-issue paid catalog; Libby ships public-library digital
+# borrows. Same three-panel layout the Books tab uses.
+_COMICS_PLATFORMS = [
+    {'key': 'amazon_kindle',
+     'label': 'Amazon Comics & Graphic Novels (physical bestsellers)',
+     'ceiling': 50_000,
+     'anchors': (
+         "Amazon's Best Sellers list for Comics & Graphic Novels is "
+         "the physical print + trade-paperback bestseller list (not "
+         "the Kindle-only chart, which doesn't server-render). Total "
+         "US comics + graphic-novel readership ~30-40M adults "
+         "annually (Comichron / ICv2 / NPD BookScan). Weekly US "
+         "buyers of a single title concentrate hard on the top tier: "
+         "a #1 Best-Seller in a big release week (Fourth Wing GN, "
+         "Absolute Batman #1) 8-25K weekly US buyers; steady-state "
+         "top-10 = 2-6K weekly US buyers; top-30 = 500-1.5K; long-"
+         "tail (rank 30-60) = 100-500. Anchor: Circana BookScan "
+         "graphic-novel weekly units + Diamond Comic Distributors "
+         "monthly market share reports. Amazon is ~35-45% of US "
+         "graphic-novel unit sales. Bias LOW - a title without a "
+         "specific press cite defaults to the LOW anchor for its "
+         "chart tier."
+     )},
+    {'key': 'apple_comics',
+     'label': 'Apple Books Comics & Graphic Novels (digital paid)',
+     'ceiling': 15_000,
+     'anchors': (
+         "Apple Books Comics genre = digital single-issue + digital "
+         "graphic-novel / manga bestseller list. US digital comics "
+         "market ~$200-260M/yr (Comichron 2024); ComiXology (Amazon) "
+         "captures ~60-70%, Apple Books ~10-15%, Google Play + "
+         "publisher direct the remainder. Top-10 Apple Books Comics "
+         "US typically 500-2K weekly US buyers per title; #1 "
+         "1.5-4K in a launch week (new Berserk volume, Chainsaw Man "
+         "chapter drop, Attack on Titan compendium); top-30 "
+         "150-500; long-tail <200. Manga-heavy: Berserk / Chainsaw "
+         "Man / Attack on Titan / Jujutsu Kaisen dominate the list, "
+         "and manga readers concentrate on Apple Books more than on "
+         "Kindle. Anchor: Circana BookScan digital graphic-novel + "
+         "any Apple Books press disclosure. Bias LOW."
+     )},
+    {'key': 'libby_comics',
+     'label': 'Libby Comics (US public-library projection)',
+     'ceiling': 20_000,
+     'anchors': (
+         "OverDrive/Libby comics borrows are a subset of digital "
+         "public-library circulation. Graphic novels are ~15-20% of "
+         "OverDrive's total US juvenile + YA digital lending; "
+         "comics-specific US annual library borrows ~90-120M "
+         "(OverDrive 2024-2025) = ~1.7-2.3M weekly US library "
+         "comics borrows. #1 comics title on OverDrive ~4-12K US "
+         "weekly library borrows; top-10 1-4K; top-30 300-1K; "
+         "long-tail <300. RAW SIGNAL IS LA COUNTY LIBRARY HOLDS "
+         "(same as Libby ebooks/audio) - project up ~25-35x for LA "
+         "County's share of US library-served population, cross-"
+         "reference against OverDrive's Big Library Read + American "
+         "Libraries digital-loan press. Bias LOW: many comics titles "
+         "carry small hold counts (single-digit) because comics "
+         "borrows are dominated by walk-ins vs holds queues."
+     )},
+]
+
+
 _STREAMING_PLATFORMS_META = [
     {'key': 'netflix',
      'label': 'Netflix',
@@ -1330,6 +1471,8 @@ def _platforms_for_kind(kind: str) -> list[dict]:
         return _GAMING_PLATFORMS_META
     if kind == 'book':
         return _BOOK_PLATFORMS
+    if kind == 'comic':
+        return _COMICS_PLATFORMS
     return []
 
 
@@ -1356,6 +1499,14 @@ def _format_target_platforms(platforms: list[dict], focus_keys: set[str]) -> str
 # actually appears on. Kept case-insensitive and forgiving so a label
 # reword doesn't silently break the highlight.
 _CHART_LABEL_TO_PLATFORM = (
+    # Comics - most specific first so 'libby comics' doesn't get eaten
+    # by the shorter 'libby' book prefixes further down. Each panel
+    # label routes to its own comics-only platform key so a comics
+    # row never lands in a book anchor tier.
+    ('amazon comics',          'amazon_kindle'),
+    ('apple books comics',     'apple_comics'),
+    ('libby comics',           'libby_comics'),
+
     # Books - most specific first so 'libby: popular ebooks' isn't
     # eaten by the shorter 'libby' prefix.
     ('libby: popular ebooks',     'libby_ebook'),
@@ -1609,6 +1760,29 @@ def _build_prompt(item: dict) -> str:
                               'must be projected up):\n  '
                               + '\n  '.join(parts))
         libby_note = '\n' + _LIBBY_PROJECTION_NOTE
+    elif kind == 'comic':
+        unit  = ('weekly US audience per platform (amazon_kindle = '
+                 'weekly US buyers of the physical / trade edition, '
+                 'apple_comics = weekly US buyers of the digital '
+                 'edition, libby_comics = weekly US library borrows '
+                 'PROJECTED to the US public-library ecosystem - '
+                 'never the raw LA County hold count)')
+        query = (f'"{display_title}" "{artist}" Circana BookScan '
+                 f'graphic novel US weekly sales Comichron ICv2 '
+                 f'OverDrive Libby comics US borrows 2026')
+        item_line = (f'COMIC / GRAPHIC NOVEL TITLE: {display_title}\n'
+                      f'AUTHOR / CREATOR: {artist or "(unknown)"}')
+        # Surface any Libby LA County hold count so Claude has the
+        # raw local signal it must project upward. Comics Libby
+        # panel carries the same `holds` field books use, so the
+        # 25-35x projection rule applies here too.
+        raw_holds = int(item.get('libby_holds') or 0)
+        if raw_holds > 0:
+            item_line += ('\nLIBBY RAW SIGNAL (LA County only, must '
+                          f'be projected up):\n  libby_comics raw '
+                          f'LA County holds: {raw_holds:,}')
+        libby_note = '\n' + _LIBBY_PROJECTION_NOTE.replace(
+            'libby_ebook and libby_audio', 'libby_comics')
     else:
         unit  = 'weekly US views'
         query = f'"{display_title}" weekly viewers US streaming 2026'
@@ -1691,6 +1865,13 @@ _MAX_ESTIMATE_BY_KIND = {
     # down to 500K. A weekly release-week best-seller might hit this;
     # steady-state top-10 books read far below.
     'book':    500_000,
+    # `comic` covers Amazon Comics (physical) + Apple Books Comics
+    # (digital) + Libby Comics (public-library digital). Sum of
+    # per-platform ceilings ~85K; aggregate ceiling biased down to
+    # 60K. A once-in-a-decade launch-week hit (Fourth Wing GN /
+    # Absolute Batman #1) might hit this on release week; steady-
+    # state top-10 comics read far below.
+    'comic':   60_000,
     # FAST aggregate: sum of Roku 6M + Tubi 6M + Pluto 5M + Amazon 4M
     # = 21M weekly. Biased conservative to 18M; even the biggest
     # cross-platform FAST hit (Everybody Loves Raymond simultaneously
@@ -1724,6 +1905,13 @@ def _default_unit_for_kind(kind: str) -> str:
         # aggregate stays 'weekly US audience' since aggregating
         # across sale + loan units in one label reads awkwardly.
         return 'weekly US audience'
+    if kind == 'comic':
+        # Same story as `book` - amazon_kindle / apple_comics are
+        # buyer counts, libby_comics is library-borrow counts, so
+        # the aggregate uses a neutral 'weekly US readers' framing
+        # and the per-panel annotate overrides with the precise
+        # unit for that platform.
+        return 'weekly US readers'
     if kind == 'game':
         return 'weekly US plays'
     if kind == 'fast_channel':
@@ -2151,7 +2339,7 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
     """Read podcast / music / streaming / book / fast snapshots,
     research each unique top item's US audience via Claude +
     web_search, and return the combined snapshot dict."""
-    wanted = only or {'podcast', 'song', 'streaming', 'book',
+    wanted = only or {'podcast', 'song', 'streaming', 'book', 'comic',
                        'fast', 'fast_channel', 'gaming'}
 
     items: list[dict] = []
@@ -2163,6 +2351,8 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
         items.extend(_collect_streaming())
     if 'book' in wanted:
         items.extend(_collect_books())
+    if 'comic' in wanted:
+        items.extend(_collect_comics())
     if 'fast' in wanted:
         items.extend(_collect_fast())
     if 'fast_channel' in wanted:
@@ -2186,13 +2376,14 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
         }
 
     logger.info("stream_estimates: total unique items = %d "
-                "(podcast=%d, song=%d, streaming=%d, book=%d, fast=%d, "
-                "fast_channel=%d, gaming=%d)",
+                "(podcast=%d, song=%d, streaming=%d, book=%d, comic=%d, "
+                "fast=%d, fast_channel=%d, gaming=%d)",
                 len(items),
                 sum(1 for it in items if it['kind'] == 'podcast'),
                 sum(1 for it in items if it['kind'] == 'song'),
                 sum(1 for it in items if it['kind'] in ('film', 'tv', 'title')),
                 sum(1 for it in items if it['kind'] == 'book'),
+                sum(1 for it in items if it['kind'] == 'comic'),
                 sum(1 for it in items if it['kind'] in ('fast_film', 'fast_tv')),
                 sum(1 for it in items if it['kind'] == 'fast_channel'),
                 sum(1 for it in items if it['kind'] == 'game'))
@@ -2277,7 +2468,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--only', default='',
                         help='Comma-separated: podcast,song,streaming,book,'
-                              'fast,fast_channel,gaming')
+                              'comic,fast,fast_channel,gaming')
     args = parser.parse_args()
     only = set()
     for tok in args.only.split(','):

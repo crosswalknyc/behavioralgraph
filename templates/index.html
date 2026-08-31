@@ -55399,6 +55399,16 @@ https://www.instagram.com/p/..."></textarea>
                     if (it.genre && sourceSlug === 'apple_comics') {
                         meta += '<span style="opacity:0.75;">' + _tiqEsc(it.genre) + '</span>';
                     }
+                    // Projected-US-audience chip. `us_streams` is stamped
+                    // on every comics row by `_annotate_comics_with_streams`
+                    // in trends_iq.py - a daily research pass + a Libby
+                    // LA->US hold-count fallback. Same chip idiom used
+                    // by the Books tab so the reading experience stays
+                    // consistent. Unit label ('weekly US readers' /
+                    // 'weekly US library comic borrows') rides on
+                    // us_streams so the tooltip reads platform-native.
+                    var audience = _tiqAudienceChip(it.us_streams);
+                    if (audience) meta += audience;
                     return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
                            '<div class="tiq-row-body">' +
                            '<div class="tiq-row-title">' + titleLine +
