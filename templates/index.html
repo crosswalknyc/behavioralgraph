@@ -25871,6 +25871,15 @@ https://www.instagram.com/p/..."></textarea>
                  hidden whenever no film title is picked, no audiences
                  array, or no assets loaded. -->
             <div id="iiqAudienceTableSection" style="display: none; margin: 0 0 0.85rem; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;"></div>
+            <!-- ===== How signals are moving (Phase 4, film campaigns only) =====
+                 One card, two sub-panels + a summary strip. Left: top 5
+                 asset movers with mini-sparkline + WoW delta chip. Right:
+                 top 3 audience response movers. Strip: weeks-in-campaign,
+                 total exposure this week, trajectory tier. Populated by
+                 _iiqRenderTrendModule in the script block below; hidden
+                 whenever no film title is picked, no assets loaded, or no
+                 rated assets in-window. -->
+            <div id="iiqTrendModule" style="display: none; margin: 0 0 0.85rem; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;"></div>
             <div class="iiq-subtab-bar">
                 <button class="iiq-subtab active" data-iiq-subtab="overview" onclick="showIntentIQSubtab('overview')">📊 TIMELINE</button>
                 <button class="iiq-subtab" data-iiq-subtab="assets" onclick="showIntentIQSubtab('assets')">🎞️ ASSETS</button>
@@ -28738,6 +28747,49 @@ https://www.instagram.com/p/..."></textarea>
                 var weekStr = 'Week ' + curWeekRaw + ' of ' + totalWeeks;
                 return tminus ? (tminus + ' · ' + weekStr) : weekStr;
             }
+
+            // Trend module renderer. Commit 2/3 wires the film-gate,
+            // empty-state hide, and picker-refresh path. Commit 3
+            // populates the sub-panels + summary strip in-place. The
+            // shell is deliberately conservative: nothing rendered when
+            // no film title is picked, no assets loaded, or the mover
+            // sets are both empty. Same pattern as the Phase 2 Weekly
+            // Summary card's auto-hide on empty state.
+            function _iiqRenderTrendModule() {
+                var host = document.getElementById('iiqTrendModule');
+                if (!host) return;
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var isFilm = _iiqIsFilmCampaign(ov);
+                if (!isFilm) {
+                    host.style.display = 'none';
+                    host.innerHTML = '';
+                    return;
+                }
+                var stash = window.__intentIQAssetsRaw;
+                if (!stash || !Array.isArray(stash.cards) || !stash.cards.length) {
+                    host.style.display = 'none';
+                    host.innerHTML = '';
+                    return;
+                }
+                var asOf = _iiqAsOfGet();
+                if (!asOf) {
+                    host.style.display = 'none';
+                    host.innerHTML = '';
+                    return;
+                }
+                var opening = ov.opening_date || '';
+                var assetMovers = _iiqComputeAssetMoversRows(asOf, opening);
+                var audMovers   = _iiqComputeAudienceMoversRows(asOf, opening);
+                if (!assetMovers.length && !audMovers.length) {
+                    host.style.display = 'none';
+                    host.innerHTML = '';
+                    return;
+                }
+                // Commit 3 replaces this placeholder with the two-panel
+                // layout + summary strip.
+                host.style.display = '';
+                host.innerHTML = '<div style="background:#0C1618; border:1px solid #27393D; border-radius:10px; padding:0.85rem 1rem; color:#797F81; font-size:0.78rem;">How signals are moving · loading week-over-week view...</div>';
+            }
             // Populate the T-90 / T-60 / T-30 / T-14 / T-7 / T-0 / T+7 / T+30
             // preset button row inside the selector bar. Reads opening_date
             // from the loaded overview; hides the row entirely for brand
@@ -29040,6 +29092,7 @@ https://www.instagram.com/p/..."></textarea>
                 try { _iiqRenderWeeklySummary(); } catch (_e) {}
                 try { _iiqRenderAssetTable(); } catch (_e) {}
                 try { _iiqRenderAudienceTable(); } catch (_e) {}
+                try { _iiqRenderTrendModule(); } catch (_e) {}
             };
             // Click handler for the preset buttons: writes the picker,
             // then routes through iiqOnAsOfChange so every downstream
@@ -29072,6 +29125,8 @@ https://www.instagram.com/p/..."></textarea>
                     if (tblSec) { tblSec.style.display = 'none'; tblSec.innerHTML = ''; }
                     var audSec = document.getElementById('iiqAudienceTableSection');
                     if (audSec) { audSec.style.display = 'none'; audSec.innerHTML = ''; }
+                    var trendSec = document.getElementById('iiqTrendModule');
+                    if (trendSec) { trendSec.style.display = 'none'; trendSec.innerHTML = ''; }
                     return;
                 }
                 el.disabled = false;
@@ -29091,6 +29146,7 @@ https://www.instagram.com/p/..."></textarea>
                 try { _iiqRenderWeeklySummary(); } catch (_e) {}
                 try { _iiqRenderAssetTable(); } catch (_e) {}
                 try { _iiqRenderAudienceTable(); } catch (_e) {}
+                try { _iiqRenderTrendModule(); } catch (_e) {}
             }
             // ================================================================
 
