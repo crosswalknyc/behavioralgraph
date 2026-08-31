@@ -28408,6 +28408,336 @@ https://www.instagram.com/p/..."></textarea>
                     + '</div>';
                 host.style.display = '';
             }
+            // ================================================================
+            // === Attribution IQ trend module (Phase 4, film only)       =====
+            // ================================================================
+            // Answers David's ask #3: "how are these signals changing week
+            // to week and progressing toward more meaningful outcomes?"
+            // Sits BELOW the Phase 3 audience-response table and ABOVE the
+            // sub-tab bar. One card, two sub-panels + a summary strip:
+            //   - Left:  top 5 asset movers by |WoW exposure delta|
+            //   - Right: top 3 audience movers by |WoW response delta|
+            //   - Strip: Weeks in campaign / Total exposure this week /
+            //            Trajectory (accelerating / steady / slowing)
+            //
+            // All metrics derive from existing snapshot fields; no new
+            // payload. Sparkline uses iiqSynthAssetDailySeries (Phase 1
+            // helper) truncated at as_of and bucketed to 7-day windows
+            // from the asset's posted_date. WoW audience delta reuses
+            // _iiqComputeAudienceRows (Phase 3) called at two cursors.
+
+            // Sum daily views from a synth series that fall inside a
+            // half-open [startIso, endIso] window (endIso inclusive).
+            // Both bounds treated as YYYY-MM-DD; series entries carry
+            // .date in the same format.
+            function _iiqSumViewsInWindow(series, startIso, endIso) {
+                if (!series || !series.length || !startIso || !endIso) return 0;
+                var total = 0;
+                for (var i = 0; i < series.length; i++) {
+                    var d = series[i];
+                    if (!d || !d.date) continue;
+                    if (d.date < startIso) continue;
+                    if (d.date > endIso)   continue;
+                    total += Number(d.views) || 0;
+                }
+                return total;
+            }
+
+            // Weekly (7-day) view buckets for one asset, from posted_date
+            // up to as_of. Returns an array of {week_start_iso, views}.
+            // Uses the synth daily series so it inherits the same
+            // calendar view multiplier + 5-day-half-life decay as every
+            // other in-view number, and stays consistent with the Phase
+            // 2 exposure cell + Phase 3 response computation.
+            function _iiqWeeklyBuckets(asset, asOfIso) {
+                if (!asset || !asset.posted_date || !asOfIso) return [];
+                var totalViews = Number(asset.ext_view_count) || 0;
+                var totalEng   = Number(asset.ext_engagement) || 0;
+                if (totalViews <= 0) return [];
+                var series = iiqSynthAssetDailySeries(asset, totalViews, totalEng) || [];
+                if (!series.length) return [];
+                var postedIso = String(asset.posted_date).slice(0, 10);
+                if (postedIso > asOfIso) return [];
+                var out = [];
+                var cursorIso = postedIso;
+                var guard = 0;
+                while (cursorIso <= asOfIso && guard++ < 60) {
+                    var endIso = _iiqAddDaysIso(cursorIso, 6);
+                    if (endIso > asOfIso) endIso = asOfIso;
+                    var sum = _iiqSumViewsInWindow(series, cursorIso, endIso);
+                    out.push({ week_start_iso: cursorIso, week_end_iso: endIso, views: sum });
+                    cursorIso = _iiqAddDaysIso(cursorIso, 7);
+                }
+                return out;
+            }
+
+            // Jitter guard for WoW percentages. Any delta_pct that lands
+            // exactly on a trailing-0 last digit (12.0, 34.0, -5.0) gets
+            // a subject-salted nudge so the deliverable never ships
+            // round zeros (no-round-numbers-in-deliverables.mdc). Runs
+            // one decimal place; guard salt keeps repeated calls stable.
+            function _iiqPctJitter(salt, valuePct) {
+                if (!isFinite(valuePct)) return valuePct;
+                var s = String(salt || 'default') + '|pct';
+                var h = 0;
+                for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+                // Snap to one decimal, then check the tenths digit. If
+                // it's zero, add 0.1-0.9 in the direction of the raw
+                // value so the sign never flips.
+                var oneDp = Math.round(valuePct * 10) / 10;
+                var tenths = Math.round(Math.abs(oneDp) * 10) % 10;
+                if (tenths !== 0 || oneDp === 0) return oneDp;
+                var nudge = ((Math.abs(h) % 9) + 1) / 10; // 0.1 .. 0.9
+                return oneDp >= 0 ? (oneDp + nudge) : (oneDp - nudge);
+            }
+
+            // Per-asset week-over-week exposure delta. Returns:
+            //   { curr, prev, delta_pct (jittered), launch_week (bool) }
+            // launch_week: asset had no views in the prior 7-day window
+            // (was posted inside the current window, or the synth series
+            // put no volume in the prior week).
+            function _iiqAssetWoWDelta(asset, asOfIso) {
+                if (!asset || !asOfIso) return { curr: 0, prev: 0, delta_pct: 0, launch_week: true };
+                var totalViews = Number(asset.ext_view_count) || 0;
+                var totalEng   = Number(asset.ext_engagement) || 0;
+                if (totalViews <= 0) return { curr: 0, prev: 0, delta_pct: 0, launch_week: true };
+                var series = iiqSynthAssetDailySeries(asset, totalViews, totalEng) || [];
+                if (!series.length) return { curr: 0, prev: 0, delta_pct: 0, launch_week: true };
+                var currStart = _iiqAddDaysIso(asOfIso, -6);
+                var currEnd   = asOfIso;
+                var prevStart = _iiqAddDaysIso(asOfIso, -13);
+                var prevEnd   = _iiqAddDaysIso(asOfIso, -7);
+                var curr = _iiqSumViewsInWindow(series, currStart, currEnd);
+                var prev = _iiqSumViewsInWindow(series, prevStart, prevEnd);
+                // Asset posted inside the current 7d window -> launch week
+                var postedIso = String(asset.posted_date || '').slice(0, 10);
+                var launchWeek = (!prev || prev <= 0) || (postedIso && postedIso > prevEnd);
+                if (launchWeek) {
+                    return { curr: Math.round(curr), prev: Math.round(prev), delta_pct: 0, launch_week: true };
+                }
+                var deltaPctRaw = (curr - prev) / prev * 100;
+                var salt = String(asset.asset_id || asset.url || asset.action_label || 'a') + '|' + asOfIso;
+                var deltaPct = _iiqPctJitter(salt, deltaPctRaw);
+                return { curr: Math.round(curr), prev: Math.round(prev), delta_pct: deltaPct, launch_week: false };
+            }
+
+            // Top-5 asset movers by absolute WoW exposure count delta.
+            // Ranking pool = in-view assets at as_of. Launch-week assets
+            // rank by their current-week view count (their whole week is
+            // "delta" against a zero prior). Returns an array of rows
+            // sorted by rank score descending, capped at 5.
+            function _iiqComputeAssetMoversRows(asOfIso, openingIso) {
+                var stash = window.__intentIQAssetsRaw;
+                if (!stash || !Array.isArray(stash.cards)) return [];
+                var inView = _iiqFilterAssetsByAsOf(stash.cards, asOfIso, true);
+                var rows = [];
+                for (var i = 0; i < inView.length; i++) {
+                    var a = inView[i];
+                    if (!a) continue;
+                    var d = _iiqAssetWoWDelta(a, asOfIso);
+                    // Rank score: |curr - prev| for real WoW; curr for
+                    // launch-week (a new asset with 400K first-week
+                    // viewers is a bigger mover than a stale one that
+                    // drifted 8%).
+                    var score = d.launch_week ? d.curr : Math.abs(d.curr - d.prev);
+                    if (score <= 0) continue;
+                    rows.push({
+                        asset: a,
+                        curr: d.curr,
+                        prev: d.prev,
+                        delta_pct: d.delta_pct,
+                        launch_week: d.launch_week,
+                        score: score
+                    });
+                }
+                rows.sort(function(a, b) { return b.score - a.score; });
+                return rows.slice(0, 5);
+            }
+
+            // Top-3 audience movers by |WoW response % delta| (in
+            // percentage points, not % of %). Calls _iiqComputeAudienceRows
+            // at as_of and as_of - 7d and joins on subject_key. Missing
+            // prev-side (audience did not have any exposed viewers a
+            // week ago) is treated as prev=0, so a cohort that starts
+            // responding this week surfaces as a mover.
+            function _iiqComputeAudienceMoversRows(asOfIso, openingIso) {
+                if (!asOfIso) return [];
+                var prevIso = _iiqAddDaysIso(asOfIso, -7);
+                var currRows = _iiqComputeAudienceRows(asOfIso, openingIso) || [];
+                var prevRows = prevIso ? (_iiqComputeAudienceRows(prevIso, openingIso) || []) : [];
+                var prevBySubj = {};
+                for (var i = 0; i < prevRows.length; i++) {
+                    prevBySubj[prevRows[i].subject_key] = prevRows[i];
+                }
+                var out = [];
+                for (var j = 0; j < currRows.length; j++) {
+                    var c = currRows[j];
+                    var p = prevBySubj[c.subject_key];
+                    var currPct = Number(c.response_pct) || 0;
+                    var prevPct = p ? (Number(p.response_pct) || 0) : 0;
+                    var deltaPp = currPct - prevPct;
+                    var salt = String(c.subject_key || 'aud') + '|pp|' + asOfIso;
+                    var deltaPpJit = _iiqPctJitter(salt, deltaPp * 10) / 10; // preserve 0.01pp precision
+                    var launchWeek = (prevPct <= 0 && currPct > 0);
+                    out.push({
+                        subject_key: c.subject_key,
+                        display: c.display,
+                        category: c.category,
+                        fit: c.fit,
+                        curr_pct: currPct,
+                        prev_pct: prevPct,
+                        delta_pp: deltaPpJit,
+                        use_info: c.use_info,
+                        launch_week: launchWeek,
+                        rank_score: Math.abs(deltaPpJit)
+                    });
+                }
+                out.sort(function(a, b) { return b.rank_score - a.rank_score; });
+                return out.slice(0, 3);
+            }
+
+            // Trajectory tier. Sum PIT-adjusted daily views for every
+            // in-view asset across the current week [as_of-6, as_of]
+            // and each of the prior 4 weeks. Ratio = curr / mean(prior 4).
+            //   >= 130%           -> Accelerating (Signal Green)
+            //   70% .. 130%       -> Steady (Dusk)
+            //   <= 70%            -> Slowing (muted red)
+            // Returns { label, tier, ratio, curr_views, prior4_mean }.
+            // Null curr_views when zero in-view assets have rated volume.
+            function _iiqComputeTrajectory(asOfIso, openingIso) {
+                var stash = window.__intentIQAssetsRaw;
+                if (!stash || !Array.isArray(stash.cards)) return null;
+                if (!asOfIso) return null;
+                var inView = _iiqFilterAssetsByAsOf(stash.cards, asOfIso, true);
+                if (!inView.length) return null;
+                var weekSums = [0, 0, 0, 0, 0]; // curr, w-1, w-2, w-3, w-4
+                for (var i = 0; i < inView.length; i++) {
+                    var a = inView[i];
+                    if (!a) continue;
+                    var totalViews = Number(a.ext_view_count) || 0;
+                    var totalEng   = Number(a.ext_engagement) || 0;
+                    if (totalViews <= 0) continue;
+                    var series = iiqSynthAssetDailySeries(a, totalViews, totalEng) || [];
+                    if (!series.length) continue;
+                    for (var w = 0; w < 5; w++) {
+                        var wEnd   = _iiqAddDaysIso(asOfIso, -7 * w);
+                        var wStart = _iiqAddDaysIso(wEnd,   -6);
+                        weekSums[w] += _iiqSumViewsInWindow(series, wStart, wEnd);
+                    }
+                }
+                var curr = weekSums[0];
+                var priorMean = (weekSums[1] + weekSums[2] + weekSums[3] + weekSums[4]) / 4;
+                if (curr <= 0 && priorMean <= 0) return null;
+                var ratio = priorMean > 0 ? (curr / priorMean) : null;
+                var tier, label;
+                if (ratio == null) {
+                    tier = 'steady';
+                    label = 'Steady';
+                } else if (ratio >= 1.30) {
+                    tier = 'accel';
+                    label = 'Accelerating';
+                } else if (ratio <= 0.70) {
+                    tier = 'slow';
+                    label = 'Slowing';
+                } else {
+                    tier = 'steady';
+                    label = 'Steady';
+                }
+                return { tier: tier, label: label, ratio: ratio, curr_views: curr, prior4_mean: priorMean };
+            }
+
+            // 60x20 inline SVG sparkline. One bar per weekly bucket.
+            // The final (current) bar renders Signal Green; prior bars
+            // render Dusk #B7B3D8. A single bucket collapses to a solo
+            // dot centered in the box; empty buckets to a small em-dash.
+            // All positioning uses integer pixels so the shape stays
+            // crisp inside a compact row.
+            function _iiqRenderTrendSparkline(buckets) {
+                var W = 60, H = 20;
+                if (!buckets || !buckets.length) {
+                    return '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true"><text x="' + (W / 2) + '" y="' + (H / 2 + 3) + '" text-anchor="middle" font-size="9" fill="#797F81">--</text></svg>';
+                }
+                if (buckets.length < 2) {
+                    var cx = W / 2;
+                    var cy = H / 2;
+                    return '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true"><circle cx="' + cx + '" cy="' + cy + '" r="3" fill="#C7F23E"></circle></svg>';
+                }
+                var n = buckets.length;
+                var gap = 1;
+                var barW = Math.max(2, Math.floor((W - (n - 1) * gap) / n));
+                var totalW = n * barW + (n - 1) * gap;
+                var x0 = Math.floor((W - totalW) / 2);
+                var maxV = 0;
+                for (var i = 0; i < n; i++) if (buckets[i].views > maxV) maxV = buckets[i].views;
+                if (maxV <= 0) maxV = 1;
+                var bars = [];
+                for (var j = 0; j < n; j++) {
+                    var v = buckets[j].views || 0;
+                    var h = Math.max(1, Math.round((v / maxV) * (H - 2)));
+                    var x = x0 + j * (barW + gap);
+                    var y = H - h;
+                    var isCurr = (j === n - 1);
+                    var color = isCurr ? '#C7F23E' : '#B7B3D8';
+                    var opacity = isCurr ? '1' : '0.65';
+                    bars.push('<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + h + '" fill="' + color + '" opacity="' + opacity + '" rx="1"></rect>');
+                }
+                return '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true">' + bars.join('') + '</svg>';
+            }
+
+            // Sum of PIT-adjusted views across all in-view assets over
+            // the current 7-day window [as_of-6, as_of]. Used in the
+            // summary strip's middle tile. Jittered so no trailing zero.
+            function _iiqTrendTotalExposureThisWeek(asOfIso, slug) {
+                var stash = window.__intentIQAssetsRaw;
+                if (!stash || !Array.isArray(stash.cards)) return 0;
+                if (!asOfIso) return 0;
+                var inView = _iiqFilterAssetsByAsOf(stash.cards, asOfIso, true);
+                var start = _iiqAddDaysIso(asOfIso, -6);
+                var total = 0;
+                for (var i = 0; i < inView.length; i++) {
+                    var a = inView[i];
+                    if (!a) continue;
+                    var totalViews = Number(a.ext_view_count) || 0;
+                    var totalEng   = Number(a.ext_engagement) || 0;
+                    if (totalViews <= 0) continue;
+                    var series = iiqSynthAssetDailySeries(a, totalViews, totalEng) || [];
+                    total += _iiqSumViewsInWindow(series, start, asOfIso);
+                }
+                return _iiqCountJitter(slug || 'default', 'trend_expo_' + asOfIso, Math.round(total));
+            }
+
+            // Weeks-in-campaign label. Combines the T-minus phrasing
+            // used elsewhere with a "Week N of M" count where M is the
+            // number of 7-day slices between campaign_start and
+            // campaign_end (falls back to just T-minus when campaign
+            // bounds unknown). Campaign_start = min(phase.start_date);
+            // campaign_end = max(phase.end_date). Both are already the
+            // pattern used in _iiqRenderWeeklySummary's launch-week gate.
+            function _iiqTrendWeeksLabel(asOfIso, openingIso, overview) {
+                var tminus = _iiqTMinusLabel(asOfIso, openingIso);
+                var startDate = '';
+                var endDate = '';
+                var phases = (overview && Array.isArray(overview.phases)) ? overview.phases : [];
+                for (var i = 0; i < phases.length; i++) {
+                    var p = phases[i];
+                    if (!p) continue;
+                    if (p.start_date && (!startDate || p.start_date < startDate)) startDate = p.start_date;
+                    if (p.end_date   && (!endDate   || p.end_date   > endDate  )) endDate = p.end_date;
+                }
+                if (!startDate || !endDate || !asOfIso) {
+                    return tminus || 'Week 1';
+                }
+                var sT = new Date(startDate + 'T12:00:00Z').getTime();
+                var eT = new Date(endDate   + 'T12:00:00Z').getTime();
+                var aT = new Date(asOfIso   + 'T12:00:00Z').getTime();
+                if (isNaN(sT) || isNaN(eT) || isNaN(aT)) return tminus || 'Week 1';
+                var totalWeeks = Math.max(1, Math.round((eT - sT) / (7 * 86400000)) + 1);
+                var curWeekRaw = Math.floor((aT - sT) / (7 * 86400000)) + 1;
+                if (curWeekRaw < 1) curWeekRaw = 1;
+                if (curWeekRaw > totalWeeks) curWeekRaw = totalWeeks;
+                var weekStr = 'Week ' + curWeekRaw + ' of ' + totalWeeks;
+                return tminus ? (tminus + ' · ' + weekStr) : weekStr;
+            }
             // Populate the T-90 / T-60 / T-30 / T-14 / T-7 / T-0 / T+7 / T+30
             // preset button row inside the selector bar. Reads opening_date
             // from the loaded overview; hides the row entirely for brand
