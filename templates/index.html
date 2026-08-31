@@ -53299,6 +53299,7 @@ https://www.instagram.com/p/..."></textarea>
             if (window.__trendsIQ.activeTab === 'social') {
                 window.__trendsIQ.activeTab = 'searches';
             }
+            _tiqInstallCardSearches(document.getElementById('trendsIQPanels'));
             setTrendsIQTab(window.__trendsIQ.activeTab || 'searches');
 
             if (!window.__trendsIQ.watchReady) {
@@ -54127,6 +54128,185 @@ https://www.instagram.com/p/..."></textarea>
             });
         }
 
+        // ============================================================
+        // Per-card search (Trends IQ ranker search).
+        //
+        // Every card that renders a ranked list of rows gets a small
+        // search input in its header. Typing filters the visible rows
+        // in that card. Match is case-insensitive substring against the
+        // row's rendered text (title, subtitle, publisher, creator,
+        // artist, badges), debounced ~120ms. Split panels (Meta Quest
+        // Free/Paid, FAST Film/TV, Streaming Film/TV, Steam Most
+        // Played/Top Sellers) render each column as its own card so
+        // one search per column falls out naturally. Sub-pill views
+        // (Streaming / FAST / Gaming platform pills, Headlines sub-
+        // tabs) render each sub-panel with its own card + search, so
+        // switching sub-pills exposes a fresh search input tied to
+        // that panel's rows. CSV export walks the underlying data, so
+        // the filter never changes what ships.
+        // ============================================================
+        function _tiqCardSearchDebounce(fn, ms) {
+            var t = 0;
+            return function() {
+                var args = arguments, self = this;
+                clearTimeout(t);
+                t = setTimeout(function() { fn.apply(self, args); }, ms);
+            };
+        }
+
+        // Every kind of row a Trends IQ card renders. Order does not
+        // matter - the selector is a union. `:scope` versions could
+        // narrow to direct list children, but the containers are
+        // themselves nested inside the card (`.tiq-headline-list`,
+        // `.tiq-rows`, ...) so a plain descendant query is fine.
+        var _TIQ_CARD_ROW_SELECTOR = [
+            '.tiq-headline-list > .tiq-row',
+            '.tiq-rows > .tiq-row',
+            '.tiq-search-scroll > .tiq-row',
+            '.tiq-mover-scroll > .tiq-row',
+            '.tiq-people-grid > .tiq-person-card',
+            '.tiq-product-grid > .tiq-product-card',
+            '.tiq-watch-row',
+            '.tiq-sheet > tbody > tr.tiq-sheet-row'
+        ].join(', ');
+
+        function _tiqCardApplySearch(card) {
+            var input = card.querySelector(':scope > .tiq-card-search-wrap .tiq-card-search');
+            var counter = card.querySelector(':scope > .tiq-card-search-wrap .tiq-card-search-count');
+            if (!input) return;
+            var q = String(input.value || '').trim().toLowerCase();
+            var rows = card.querySelectorAll(_TIQ_CARD_ROW_SELECTOR);
+            var total = rows.length;
+            var shown = 0;
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                if (!q) {
+                    row.style.display = '';
+                    shown++;
+                    continue;
+                }
+                var text = (row.textContent || '').toLowerCase();
+                if (text.indexOf(q) >= 0) {
+                    row.style.display = '';
+                    shown++;
+                } else {
+                    row.style.display = 'none';
+                }
+            }
+            if (counter) {
+                counter.textContent = q ? ('Showing ' + shown + ' of ' + total) : '';
+            }
+        }
+
+        function _tiqInstallCardSearches(root) {
+            if (!root) return;
+            var cards = root.querySelectorAll('.tiq-card');
+            for (var c = 0; c < cards.length; c++) {
+                var card = cards[c];
+                // Idempotent: skip cards we already wired.
+                if (card.querySelector(':scope > .tiq-card-search-wrap')) continue;
+                // Skip cards with no rows to search (empty state,
+                // placeholder cards, "Loading" cards).
+                var rows = card.querySelectorAll(_TIQ_CARD_ROW_SELECTOR);
+                if (!rows.length) continue;
+                // Anchor: direct <h4> child or the FAST-style sheet-
+                // cardhead wrapper that carries the h4. Skip cards
+                // without a header - we have no good spot to put the
+                // input.
+                var anchor = card.querySelector(':scope > h4')
+                          || card.querySelector(':scope > .tiq-sheet-cardhead');
+                if (!anchor) continue;
+                // If a `.tiq-card-sub` sits directly after the header,
+                // insert below it so the subtitle keeps hugging the
+                // heading.
+                var afterEl = anchor;
+                var next = anchor.nextElementSibling;
+                if (next && next.classList && next.classList.contains('tiq-card-sub')) {
+                    afterEl = next;
+                }
+                var wrap = document.createElement('div');
+                wrap.className = 'tiq-card-search-wrap';
+                wrap.style.cssText = 'display:flex;align-items:center;gap:8px;margin:6px 0 10px;';
+                var input = document.createElement('input');
+                input.type = 'search';
+                input.className = 'tiq-card-search';
+                input.placeholder = 'Search...';
+                input.setAttribute('autocomplete', 'off');
+                input.setAttribute('spellcheck', 'false');
+                input.style.cssText =
+                    'flex:1;min-width:0;background:#111827;color:#fff;' +
+                    'border:1px solid #374151;border-radius:6px;' +
+                    'padding:6px 10px;font-size:12px;line-height:1.2;';
+                var counter = document.createElement('span');
+                counter.className = 'tiq-card-search-count';
+                counter.style.cssText = 'font-size:11px;opacity:0.7;white-space:nowrap;';
+                wrap.appendChild(input);
+                wrap.appendChild(counter);
+                if (afterEl.nextSibling) {
+                    card.insertBefore(wrap, afterEl.nextSibling);
+                } else {
+                    card.appendChild(wrap);
+                }
+                // Closure captures the card the input belongs to.
+                (function(cardEl) {
+                    var handler = _tiqCardSearchDebounce(function() {
+                        _tiqCardApplySearch(cardEl);
+                    }, 120);
+                    input.addEventListener('input', handler);
+                })(card);
+            }
+            // Second pass: bare-panel rankers that render a row list
+            // directly under a `.tiq-social-panel` / `.tiq-retailer-panel`
+            // without a wrapping `.tiq-card`. Today this is Xbox Game
+            // Pass under the Gaming tab (single-list panel, no per-
+            // column card). Insert the search input at the top of the
+            // panel body. Skip any panel that already contains a
+            // `.tiq-card` - the first pass handles those.
+            var barePanels = root.querySelectorAll(
+                '.tiq-social-panel[data-tiq-gaming], ' +
+                '.tiq-social-panel[data-tiq-social], ' +
+                '.tiq-social-panel[data-tiq-streaming], ' +
+                '.tiq-social-panel[data-tiq-fast], ' +
+                '.tiq-retailer-panel[data-tiq-retailer]'
+            );
+            for (var p = 0; p < barePanels.length; p++) {
+                var panel = barePanels[p];
+                if (panel.querySelector(':scope > .tiq-card-search-wrap')) continue;
+                if (panel.querySelector('.tiq-card')) continue;
+                var panelRows = panel.querySelectorAll(_TIQ_CARD_ROW_SELECTOR);
+                if (!panelRows.length) continue;
+                var pwrap = document.createElement('div');
+                pwrap.className = 'tiq-card-search-wrap';
+                pwrap.style.cssText = 'display:flex;align-items:center;gap:8px;margin:6px 0 10px;';
+                var pinput = document.createElement('input');
+                pinput.type = 'search';
+                pinput.className = 'tiq-card-search';
+                pinput.placeholder = 'Search...';
+                pinput.setAttribute('autocomplete', 'off');
+                pinput.setAttribute('spellcheck', 'false');
+                pinput.style.cssText =
+                    'flex:1;min-width:0;background:#111827;color:#fff;' +
+                    'border:1px solid #374151;border-radius:6px;' +
+                    'padding:6px 10px;font-size:12px;line-height:1.2;';
+                var pcounter = document.createElement('span');
+                pcounter.className = 'tiq-card-search-count';
+                pcounter.style.cssText = 'font-size:11px;opacity:0.7;white-space:nowrap;';
+                pwrap.appendChild(pinput);
+                pwrap.appendChild(pcounter);
+                if (panel.firstChild) {
+                    panel.insertBefore(pwrap, panel.firstChild);
+                } else {
+                    panel.appendChild(pwrap);
+                }
+                (function(panelEl) {
+                    var handler = _tiqCardSearchDebounce(function() {
+                        _tiqCardApplySearch(panelEl);
+                    }, 120);
+                    pinput.addEventListener('input', handler);
+                })(panel);
+            }
+        }
+
         window.setTrendsIQTab = function(key) {
             window.__trendsIQ.activeTab = key;
             document.querySelectorAll('#trendsIQTabStrip .tiq-tab').forEach(function(el) {
@@ -54528,6 +54708,7 @@ https://www.instagram.com/p/..."></textarea>
                     data.cards.philanthropy_news  || [],
                     data.cards.business_news      || [],
                     data.cards.wall_street_news   || []);
+                _tiqInstallCardSearches(panel);
             }
             // Re-run lens filter after in-place repaint so the active
             // persona filter stays applied when the user flips between
@@ -54806,7 +54987,10 @@ https://www.instagram.com/p/..."></textarea>
             var rows = (window.__trendsIQ.lastData && window.__trendsIQ.lastData.cards
                         && window.__trendsIQ.lastData.cards.trending_people) || [];
             var panel = document.querySelector('#trendsIQPanels .tiq-panel[data-tiq-panel="people"]');
-            if (panel) panel.innerHTML = renderTIQPeople(rows);
+            if (panel) {
+                panel.innerHTML = renderTIQPeople(rows);
+                _tiqInstallCardSearches(panel);
+            }
         };
 
         // Renders the up/down/flat/new pill next to a person's name.
@@ -56262,6 +56446,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (typeof _tiqApplyTooltips === 'function') {
                     _tiqApplyTooltips();
                 }
+                _tiqInstallCardSearches(panel);
             }
             if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
         };
@@ -56601,6 +56786,7 @@ https://www.instagram.com/p/..."></textarea>
             // Re-run lens filter after the star-toggle repaint so rows
             // stay hidden/visible per the active lens.
             if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
+            _tiqInstallCardSearches(document.getElementById('trendsIQPanels'));
             setTrendsIQTab(window.__trendsIQ.activeTab || 'searches');
         }
 
