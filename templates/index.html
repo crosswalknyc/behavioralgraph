@@ -40162,7 +40162,7 @@ https://www.instagram.com/p/..."></textarea>
                     </h4>
                     <div id="jiqNflxAqiSignals" style="margin-bottom: 1rem;"></div>
 
-                    <!-- Tier distribution across U.S. Netflix HHs -->
+                    <!-- Tier distribution across U.S. Netflix Accounts -->
                     <h4 style="font-size: 0.85rem; margin: 0.5rem 0 0.45rem; opacity: 0.92; color: #fcd34d;">
                         📊 AQI tier distribution - U.S. Netflix ad-tier households scored
                     </h4>
@@ -53350,7 +53350,8 @@ https://www.instagram.com/p/..."></textarea>
         // ============================================================
         var _TIQ_EXPORT_HEADERS = [
             'Tab', 'Section', 'Rank', 'Title', 'Subtitle',
-            'Value', 'Unit', 'Change', 'Why'
+            'Value', 'Unit', 'Change',
+            'US Audience', 'Audience Unit', 'Why'
         ];
 
         function _tiqCsvCell(v) {
@@ -53409,6 +53410,40 @@ https://www.instagram.com/p/..."></textarea>
             return { value: v === 0 ? 0 : (v || ''), unit: u || '', change: change };
         }
 
+        // Extract the same US-audience integer + unit the on-card chip
+        // shows so downloaded CSVs carry the audience count the client
+        // sees on the dashboard. Priority: us_streams.us_estimate ->
+        // us_readers.us_estimate -> raw `holds` int (Libby). Returns
+        // {value:'', unit:''} when a row has none of those (e.g. Movers
+        // score rows, Trending People fusion rows). Values are raw
+        // integers, not abbreviated strings; downstream analysts can
+        // sort/filter numerically. Unit label matches the on-card chip
+        // string (e.g. "weekly US views", "weekly US plays", "weekly US
+        // readers", "US library holds", "weekly US listeners").
+        function _tiqExportAudience(it) {
+            if (!it || typeof it !== 'object') return { value: '', unit: '' };
+            var s = it.us_streams;
+            if (s && typeof s === 'object' &&
+                typeof s.us_estimate === 'number' && s.us_estimate > 0) {
+                return {
+                    value: s.us_estimate,
+                    unit:  s.unit_label || 'weekly US views'
+                };
+            }
+            var r = it.us_readers;
+            if (r && typeof r === 'object' &&
+                typeof r.us_estimate === 'number' && r.us_estimate > 0) {
+                return {
+                    value: r.us_estimate,
+                    unit:  r.unit_label || 'weekly US readers'
+                };
+            }
+            if (typeof it.holds === 'number' && it.holds > 0) {
+                return { value: it.holds, unit: 'US library holds' };
+            }
+            return { value: '', unit: '' };
+        }
+
         // Fold a mover row's rank_change into a single Change string.
         function _tiqMoverChange(row) {
             if (!row) return '';
@@ -53445,6 +53480,7 @@ https://www.instagram.com/p/..."></textarea>
                 (movers[b.key] || []).forEach(function(r, i) {
                     var mix = r.platform_mix || {};
                     var driven = mix.primary ? ('driven by ' + mix.primary) : '';
+                    var aud = _tiqExportAudience(r);
                     out.push({
                         Tab: tabLabel, Section: b.label,
                         Rank: r.rank_today || (i + 1),
@@ -53453,6 +53489,8 @@ https://www.instagram.com/p/..."></textarea>
                         Value: r.score || '',
                         Unit: r.score ? 'signal score' : '',
                         Change: _tiqMoverChange(r),
+                        'US Audience': aud.value,
+                        'Audience Unit': aud.unit,
                         Why: r.why || ((r.related || [])[0] || ''),
                         URL: ''
                     });
@@ -53464,54 +53502,69 @@ https://www.instagram.com/p/..."></textarea>
         function _tiqExportRowsHeadlines(cards, tabLabel) {
             var out = [];
             (cards.trending_headlines || []).forEach(function(r, i) {
+                var aud = _tiqExportAudience(r);
                 out.push({
                     Tab: tabLabel, Section: 'Top trending',
                     Rank: i + 1,
                     Title: r.title || '',
                     Subtitle: r.seendate || '',
                     Value: '', Unit: '', Change: '',
+                    'US Audience': aud.value,
+                    'Audience Unit': aud.unit,
                     Why: '', URL: r.url || ''
                 });
             });
             (cards.articles_by_source || []).forEach(function(src) {
                 (src.articles || []).forEach(function(a, i) {
+                    var aud = _tiqExportAudience(a);
                     out.push({
                         Tab: tabLabel, Section: 'By source - ' + (src.source || ''),
                         Rank: i + 1,
                         Title: a.title || '',
                         Subtitle: a.seendate || '',
                         Value: '', Unit: '', Change: '',
+                        'US Audience': aud.value,
+                        'Audience Unit': aud.unit,
                         Why: '', URL: a.url || ''
                     });
                 });
             });
             (cards.philanthropy_news || []).forEach(function(r, i) {
+                var aud = _tiqExportAudience(r);
                 out.push({
                     Tab: tabLabel, Section: 'Philanthropy',
                     Rank: i + 1,
                     Title: r.title || '',
                     Subtitle: r.published || '',
                     Value: '', Unit: '', Change: '',
+                    'US Audience': aud.value,
+                    'Audience Unit': aud.unit,
                     Why: '', URL: r.url || ''
                 });
             });
             (cards.business_news || []).forEach(function(r, i) {
+                var aud = _tiqExportAudience(r);
                 out.push({
                     Tab: tabLabel, Section: 'Business',
                     Rank: i + 1,
                     Title: r.title || '',
                     Subtitle: r.published || r.seendate || '',
                     Value: '', Unit: '', Change: '',
+                    'US Audience': aud.value,
+                    'Audience Unit': aud.unit,
                     Why: '', URL: r.url || ''
                 });
             });
             (cards.wall_street_news || []).forEach(function(r, i) {
+                var aud = _tiqExportAudience(r);
                 out.push({
                     Tab: tabLabel, Section: 'Wall Street',
                     Rank: i + 1,
                     Title: r.title || '',
                     Subtitle: r.published || r.seendate || '',
                     Value: '', Unit: '', Change: '',
+                    'US Audience': aud.value,
+                    'Audience Unit': aud.unit,
                     Why: '', URL: r.url || ''
                 });
             });
@@ -53523,6 +53576,7 @@ https://www.instagram.com/p/..."></textarea>
             var byCat = cards.trending_searches_by_category || {};
             var pushList = function(sectionLabel, rows) {
                 (rows || []).forEach(function(r, i) {
+                    var aud = _tiqExportAudience(r);
                     out.push({
                         Tab: tabLabel, Section: sectionLabel,
                         Rank: r.rank || (i + 1),
@@ -53533,6 +53587,8 @@ https://www.instagram.com/p/..."></textarea>
                         Change: (typeof r.volume_growth_pct === 'number')
                                     ? (r.volume_growth_pct > 0 ? '+' : '') + Math.round(r.volume_growth_pct) + '%'
                                     : '',
+                        'US Audience': aud.value,
+                        'Audience Unit': aud.unit,
                         Why: r.why || '',
                         URL: ''
                     });
@@ -53549,6 +53605,7 @@ https://www.instagram.com/p/..."></textarea>
         function _tiqExportRowsPeople(cards, tabLabel) {
             var out = [];
             (cards.wikipedia_trending || []).forEach(function(r, i) {
+                var aud = _tiqExportAudience(r);
                 out.push({
                     Tab: tabLabel, Section: 'Wikipedia',
                     Rank: i + 1,
@@ -53557,11 +53614,14 @@ https://www.instagram.com/p/..."></textarea>
                     Value: r.views_today || '',
                     Unit: 'views today',
                     Change: _tiqDirectionLabel(r),
+                    'US Audience': aud.value,
+                    'Audience Unit': aud.unit,
                     Why: r.why || '',
                     URL: r.url || ''
                 });
             });
             (cards.trending_people || []).forEach(function(p, i) {
+                var aud = _tiqExportAudience(p);
                 out.push({
                     Tab: tabLabel, Section: 'Trending people',
                     Rank: i + 1,
@@ -53570,6 +53630,8 @@ https://www.instagram.com/p/..."></textarea>
                     Value: p.mentions || '',
                     Unit: 'mentions',
                     Change: _tiqDirectionLabel(p),
+                    'US Audience': aud.value,
+                    'Audience Unit': aud.unit,
                     Why: p.why || '',
                     URL: p.url || ''
                 });
@@ -53588,6 +53650,7 @@ https://www.instagram.com/p/..."></textarea>
                 var label = panel.label || slug;
                 (panel.items || []).forEach(function(it, i) {
                     var se = _tiqExtractStreamValue(it);
+                    var aud = _tiqExportAudience(it);
                     out.push({
                         Tab: tabLabel,
                         Section: (sectionPrefix ? (sectionPrefix + ' - ') : '') + label,
@@ -53600,6 +53663,8 @@ https://www.instagram.com/p/..."></textarea>
                         Change: it.weeks_in_top10
                                     ? ('week ' + it.weeks_in_top10)
                                     : se.change,
+                        'US Audience': aud.value,
+                        'Audience Unit': aud.unit,
                         Why: it.why || '',
                         URL: it.url || ''
                     });
@@ -53625,6 +53690,7 @@ https://www.instagram.com/p/..."></textarea>
                 var pushList = function(kind, rows) {
                     (rows || []).forEach(function(it, i) {
                         var se = _tiqExtractStreamValue(it);
+                        var aud = _tiqExportAudience(it);
                         out.push({
                             Tab: tabLabel,
                             Section: label + ' - ' + kind,
@@ -53636,6 +53702,8 @@ https://www.instagram.com/p/..."></textarea>
                             Change: it.weeks_in_top10
                                         ? ('week ' + it.weeks_in_top10)
                                         : se.change,
+                            'US Audience': aud.value,
+                            'Audience Unit': aud.unit,
                             Why: it.why || '',
                             URL: it.url || ''
                         });
@@ -53647,6 +53715,7 @@ https://www.instagram.com/p/..."></textarea>
                 // its own section so the ranker view is exportable too.
                 (panel.channels || []).forEach(function(ch, i) {
                     var se = _tiqExtractStreamValue(ch);
+                    var aud = _tiqExportAudience(ch);
                     out.push({
                         Tab: tabLabel,
                         Section: label + ' - Channels',
@@ -53656,6 +53725,8 @@ https://www.instagram.com/p/..."></textarea>
                         Value: se.value,
                         Unit: se.unit || 'weekly US viewers',
                         Change: se.change,
+                        'US Audience': aud.value,
+                        'Audience Unit': aud.unit,
                         Why: '',
                         URL: ch.url || ''
                     });
@@ -53676,6 +53747,7 @@ https://www.instagram.com/p/..."></textarea>
                 var label = panel.label || slug;
                 var pushRow = function(sectionSuffix, it, i) {
                     var se = _tiqExtractStreamValue(it);
+                    var aud = _tiqExportAudience(it);
                     out.push({
                         Tab: tabLabel,
                         Section: sectionSuffix
@@ -53687,6 +53759,8 @@ https://www.instagram.com/p/..."></textarea>
                         Value: se.value,
                         Unit: se.unit,
                         Change: se.change,
+                        'US Audience': aud.value,
+                        'Audience Unit': aud.unit,
                         Why: it.why || '',
                         URL: it.url || ''
                     });
@@ -53713,12 +53787,15 @@ https://www.instagram.com/p/..."></textarea>
             var out = [];
             var items = (window.__trendsIQ && window.__trendsIQ.watchList) || [];
             items.forEach(function(w, i) {
+                var aud = _tiqExportAudience(w);
                 out.push({
                     Tab: 'Watchlist', Section: w.kind || '',
                     Rank: i + 1,
                     Title: w.title || w.name || '',
                     Subtitle: w.geo || '',
                     Value: '', Unit: '', Change: '',
+                    'US Audience': aud.value,
+                    'Audience Unit': aud.unit,
                     Why: '', URL: ''
                 });
             });
@@ -70659,8 +70736,8 @@ https://www.instagram.com/p/..."></textarea>
                         ubg_hulu: _JIQ_UBG_DATA,
                         facts: [
                             { label: 'Panel',    value: '47.8M matched U.S. Hulu-active viewers, 90-day window ending 2026-08-14. Panel includes both ad-supported and no-ads Hulu tiers, deterministically linked to TikTok / Instagram / Fox Sports touchpoints.' },
-                            { label: 'Reach',    value: '3.85M U.S. HHs watched \u22651 episode of Universal Basic Guys on Hulu in the window - 8.1% of the matched Hulu panel.' },
-                            { label: 'Discovery', value: 'Fox NFL cross-promo (linear + Hulu Live TV) sourced 42.6% of first-play HHs. Instagram / TikTok clips together sourced 24.8%. Hulu\u2019s own recommended-for-you row sourced 18.3%. Peer-share URL clicks 8.4%. Editorial / other 5.9%.' },
+                            { label: 'Reach',    value: '3.85M U.S. Accounts watched \u22651 episode of Universal Basic Guys on Hulu in the window - 8.1% of the matched Hulu panel.' },
+                            { label: 'Discovery', value: 'Fox NFL cross-promo (linear + Hulu Live TV) sourced 42.6% of first-play Accounts. Instagram / TikTok clips together sourced 24.8%. Hulu\u2019s own recommended-for-you row sourced 18.3%. Peer-share URL clicks 8.4%. Editorial / other 5.9%.' },
                             { label: 'Time-to-watch', value: 'Median 4 days from first discovery touchpoint to first Hulu play. 34.2% converted same-day; 61.8% within 2 days; 84.6% within a week.' },
                             { label: 'Retention', value: 'S1 Ep 2 held 85.2% of Ep 1 viewers. S1 completion (all 10 eps) 58.2%. S1 \u2192 S2 carry rate: 48.6% of S1 openers also opened S2 within 30 days of S2 premiere.' }
                         ]
@@ -70746,8 +70823,8 @@ https://www.instagram.com/p/..."></textarea>
                             { label: 'Amazon',    value: 'Beauty, travel, luxury fashion, jewelry, and premium spirits all over-index Netflix viewer purchase intent AND have under 30% Amazon category share - the budgets Netflix can credibly take from Amazon.' },
                             { label: 'Attribution', value: 'Dove × Bridgerton S4 case study: +47.6% brand-search lift, +71.4% dove.com visits, +28.4% purchase-proxy lift, -17.9pp cart abandonment in the 30d window vs. a matched-control cohort. This is the framework that justifies premium CPMs and wins performance dollars.' },
                             { label: 'Incrementality', value: 'Matched-control study design across 4 case studies (Dove × Bridgerton, Toyota × Squid Game, Capital One × Wednesday, Booking.com × Emily in Paris) shows 80%+ of the exposed cohort\'s lift is causally attributable to the buy. SMD < 0.10 on all 8 matching variables. CPM uplift: 38-53% per category.' },
-                            { label: 'AQI',         value: '10 priceable segment packs across 70.3M Diamond + Platinum + Gold Netflix HHs - Premium Travel Planners (AQI 92, CPM +57%), Luxury Considerers (89, +52%), High-Intent Tech Buyers (84, +47%), Auto Switchers (81, +44%), Multicultural Growth (79, +41%), Sports/Event Viewers (77, +37%), Beauty Buyers (76, +35%), New Parents (78, +38%), Streaming Superfans (73, +31%), Gen Z Migrators (71, +28%).' },
-                            { label: 'Migration',   value: '88.6% of U.S. Netflix HHs are multi-platform streamers. 32.9M inbound + 44.5M outbound 90d cross-platform moves. Top outbound: YouTube (12.3M), Hulu (8.4M), Prime (7.2M). Top inbound: YouTube (9.7M), Hulu (7.1M), Prime (5.4M). 14.2M lapsed subs reactivated in 2026 because of a specific Netflix title - Squid Game S3 alone drove 3.4M.' }
+                            { label: 'AQI',         value: '10 priceable segment packs across 70.3M Diamond + Platinum + Gold Netflix Accounts - Premium Travel Planners (AQI 92, CPM +57%), Luxury Considerers (89, +52%), High-Intent Tech Buyers (84, +47%), Auto Switchers (81, +44%), Multicultural Growth (79, +41%), Sports/Event Viewers (77, +37%), Beauty Buyers (76, +35%), New Parents (78, +38%), Streaming Superfans (73, +31%), Gen Z Migrators (71, +28%).' },
+                            { label: 'Migration',   value: '88.6% of U.S. Netflix Accounts are multi-platform streamers. 32.9M inbound + 44.5M outbound 90d cross-platform moves. Top outbound: YouTube (12.3M), Hulu (8.4M), Prime (7.2M). Top inbound: YouTube (9.7M), Hulu (7.1M), Prime (5.4M). 14.2M lapsed subs reactivated in 2026 because of a specific Netflix title - Squid Game S3 alone drove 3.4M.' }
                         ]
                     }
                 };
@@ -70777,8 +70854,8 @@ https://www.instagram.com/p/..."></textarea>
                         mic_purchase:   _JIQ_MICHAEL_DATA.mic_purchase,
                         mic_read:       _JIQ_MICHAEL_DATA.mic_read,
                         facts: [
-                            { label: 'Headline',      value: 'Michael did $158.2M theatrical against a $24.8M PVOD projection but delivered only $14.1M - a 43.1% transactional shortfall. The clickstream shows this is not a demand problem: 43.8% of transactional buys came from HHs that already saw it in theaters, and the transactional-only cohort is 60% smaller than the studio\'s PVOD forecast assumed.' },
-                            { label: 'Two audiences', value: 'Theatrical cohort: 8.70M U.S. HHs. Transactional cohort: 2.40M HHs. Overlap: 1.05M. Transactional-only cohort: 1.35M HHs, well below the 3.4M implied by the studio\'s PVOD comp forecast.' },
+                            { label: 'Headline',      value: 'Michael did $158.2M theatrical against a $24.8M PVOD projection but delivered only $14.1M - a 43.1% transactional shortfall. The clickstream shows this is not a demand problem: 43.8% of transactional buys came from Accounts that already saw it in theaters, and the transactional-only cohort is 60% smaller than the studio\'s PVOD forecast assumed.' },
+                            { label: 'Two audiences', value: 'Theatrical cohort: 8.70M U.S. Accounts. Transactional cohort: 2.40M Accounts. Overlap: 1.05M. Transactional-only cohort: 1.35M Accounts, well below the 3.4M implied by the studio\'s PVOD comp forecast.' },
                             { label: 'Audience gap',  value: 'Theatrical skews 25-44 (54.8%), $75K-149K income (46.2%), event-moviegoer psychographic. Transactional-only skews 18-34 (43.1%), lower HHI, home-first entertainment mode. These are not the same person one window later.' },
                             { label: 'Saturation',    value: 'The 43.8% double-dip rate is elevated for a biopic (comp avg 31.4%) - theatrical did absorb some transactional demand. But it explains only ~$5.9M of the $10.7M shortfall.' },
                             { label: 'Awareness',     value: 'Trailer-view penetration: 78.4% in theatrical cohort, 41.2% in transactional-only cohort - a 37.2pp gap. Michael\'s spend under-indexed on the TikTok / YouTube reaction / Instagram Reels surfaces where the transactional-only cohort lives.' },
@@ -70814,12 +70891,12 @@ https://www.instagram.com/p/..."></textarea>
                         amc_segments:  _JIQ_AMC_DATA.amc_segments,
                         amc_read:      _JIQ_AMC_DATA.amc_read,
                         facts: [
-                            { label: 'Headline',      value: 'AMC\u2019s windowed-release strategy is working. 625K U.S. HHs subscribed to AMC+ within 60 days of first watching an AMC+ original on HBO Max in the Aug 2025 - Aug 2026 observation window. 340K attributable to Interview with the Vampire, 220K to The Vampire Lestat, 185K to Mayfair Witches (with cohort overlap deduped).' },
-                            { label: 'Migration flow',value: 'Panel-observed Max \u2192 AMC+ funnel: 4.20M unique HHs streamed \u22651 AMC+ original on Max in the window \u2192 2.15M finished a season on Max \u2192 1.24M reached an AMC+ paywall / awareness surface within 30d \u2192 625K signed up for AMC+ within 60d. Conversion from finished-Max-season \u2192 signed-up-for-AMC+ = 29.1%.' },
-                            { label: 'Overlap',       value: 'HBO Max: 50.0M US HHs. AMC+: 11.8M US HHs. Both: 4.5M HHs (38.1% of AMC+ base carries a Max sub; 9.0% of Max base carries an AMC+ sub). Of the 4.5M co-sub cohort, 625K (13.9%) added AMC+ after their first Max play of an AMC+ original.' },
-                            { label: 'Signup lift',   value: 'Premiere-week AMC+ signups from Max HHs, indexed to trailing-8-week baseline: IWTV S3 premiere +7.0x (May 26, 2026), Vampire Lestat S1 premiere +5.1x (Feb 9, 2026), Mayfair Witches S2 premiere +3.8x (Oct 20, 2025). IWTV S3 lift is 40% higher than S2 (Jul 2024) - brand awareness is compounding.' },
+                            { label: 'Headline',      value: 'AMC\u2019s windowed-release strategy is working. 625K U.S. Accounts subscribed to AMC+ within 60 days of first watching an AMC+ original on HBO Max in the Aug 2025 - Aug 2026 observation window. 340K attributable to Interview with the Vampire, 220K to The Vampire Lestat, 185K to Mayfair Witches (with cohort overlap deduped).' },
+                            { label: 'Migration flow',value: 'Panel-observed Max \u2192 AMC+ funnel: 4.20M unique Accounts streamed \u22651 AMC+ original on Max in the window \u2192 2.15M finished a season on Max \u2192 1.24M reached an AMC+ paywall / awareness surface within 30d \u2192 625K signed up for AMC+ within 60d. Conversion from finished-Max-season \u2192 signed-up-for-AMC+ = 29.1%.' },
+                            { label: 'Overlap',       value: 'HBO Max: 50.0M US Accounts. AMC+: 11.8M US Accounts. Both: 4.5M Accounts (38.1% of AMC+ base carries a Max sub; 9.0% of Max base carries an AMC+ sub). Of the 4.5M co-sub cohort, 625K (13.9%) added AMC+ after their first Max play of an AMC+ original.' },
+                            { label: 'Signup lift',   value: 'Premiere-week AMC+ signups from Max Accounts, indexed to trailing-8-week baseline: IWTV S3 premiere +7.0x (May 26, 2026), Vampire Lestat S1 premiere +5.1x (Feb 9, 2026), Mayfair Witches S2 premiere +3.8x (Oct 20, 2025). IWTV S3 lift is 40% higher than S2 (Jul 2024) - brand awareness is compounding.' },
                             { label: 'Retention',     value: 'Migrant cohort retention runs below baseline: D30 87.4% vs baseline 90.2%; D90 58.3% vs 66.1%; D180 41.2% vs 51.3%; D365 27.6% vs 33.8%. Migrants churn ~1.6x faster than organic AMC+ subs. Show-driven signups behave promotionally, not permanently.' },
-                            { label: 'Segments',      value: 'Migrant profile skews 25-44 (60.3%), 62.4% female, mid-market income ($50-99K = 47.2%), heavy gothic / vampire / dark-romance content-affinity relative to Max-only base. Anne Rice reader signal (Kindle / Goodreads) present in 34% of migrant HHs vs 8% of Max-only base.' },
+                            { label: 'Segments',      value: 'Migrant profile skews 25-44 (60.3%), 62.4% female, mid-market income ($50-99K = 47.2%), heavy gothic / vampire / dark-romance content-affinity relative to Max-only base. Anne Rice reader signal (Kindle / Goodreads) present in 34% of migrant Accounts vs 8% of Max-only base.' },
                             { label: 'Recommendation', value: 'Three moves: (1) formalize the Max window as an acquisition channel with per-episode CPA targets ($8-14 per signup); (2) sequence adjacent catalog (additional Anne Rice IP, Immortal Universe deep cuts) into AMC+ post-migration to lift D90/D180 retention; (3) time PR / paid social 10-14d before each premiere to amplify the +5-7x signup spike.' }
                         ]
                     }
@@ -81228,14 +81305,14 @@ https://www.instagram.com/p/..."></textarea>
                 question: 'Can Netflix prove that ads changed behavior, not just reached people who were already going to act?',
                 method_bullets: [
                     'Exposed cohort: ad-tier viewers who saw ≥1 in-show impression of the campaign creative',
-                    'Control cohort: behaviorally-similar Netflix HHs that were NOT exposed to the campaign',
+                    'Control cohort: behaviorally-similar Netflix Accounts that were NOT exposed to the campaign',
                     'Matched on: pre-flight category interest, brand familiarity, demographic profile, prior competitor behavior, Netflix tenure, ad-tier vs. paid tier, geo, HHI',
                     'Lift = (exposed-cohort post-flight behavior) − (control-cohort post-flight behavior), measured as a percentage delta vs. each cohort\'s OWN pre-flight baseline',
                     'Statistical significance via paired-difference test with bootstrapped CIs across 1,000 resamples of the matched pairs'
                 ],
                 pipeline: [
-                    { stage: 'Total U.S. Netflix HHs',         value: 79400000, label: 'addressable HH base (projected from n=2,406,790 panelist HHs)' },
-                    { stage: 'Ad-tier eligible HHs',            value: 32700000, label: 'ad-supported plan, opted-in measurement (41.2% of base)' },
+                    { stage: 'Total U.S. Netflix Accounts',         value: 79400000, label: 'addressable HH base (projected from n=2,406,790 panelist Accounts)' },
+                    { stage: 'Ad-tier eligible Accounts',            value: 32700000, label: 'ad-supported plan, opted-in measurement (41.2% of base)' },
                     { stage: 'Reached by campaign',             value: 14200000, label: '≥1 in-show ad impression on the flight (17.9% of base)' },
                     { stage: 'Exposed cohort (analysis-ready)', value: 14200000, label: 'final exposed set after invalid-traffic exclusion' },
                     { stage: 'Matched control cohort',          value: 14200000, label: '1:1 nearest-neighbor match on 8 variables' }
@@ -81582,10 +81659,10 @@ https://www.instagram.com/p/..."></textarea>
             nflx_migration: {
                 enabled: true,
                 title: 'Competitive streaming migration map',
-                subtitle: 'Netflix sees its own subs and its own churn. Crosswalk sees the entire streaming marketplace - which competitors Netflix HHs subscribe to alongside it, where Netflix subs go when they leave, where new subs come from, the cycling and stacking patterns, the ad-tier upgrade paths, the binge-and-cancel signatures, and which titles bring lapsed subs back.',
+                subtitle: 'Netflix sees its own subs and its own churn. Crosswalk sees the entire streaming marketplace - which competitors Netflix Accounts subscribe to alongside it, where Netflix subs go when they leave, where new subs come from, the cycling and stacking patterns, the ad-tier upgrade paths, the binge-and-cancel signatures, and which titles bring lapsed subs back.',
                 question: 'How do consumers move between Netflix and other streamers, and what does that mean for the cross-CTV ad buy?',
                 method_bullets: [
-                    'Data window: 90-day rolling household behavior across U.S. ad-tier-eligible HHs',
+                    'Data window: 90-day rolling household behavior across U.S. ad-tier-eligible Accounts',
                     'Migration = detected SVOD login / homepage / billing-portal visit at a destination platform within 30d of leaving the source platform',
                     'Multi-sub stacking = concurrent active subscriptions detected in the same rolling 90d window',
                     'Cycling = >=2 cancellation -> resubscription events on the same platform within 12 months',
@@ -81604,13 +81681,13 @@ https://www.instagram.com/p/..."></textarea>
                     total_inbound:  32900000,
                     total_outbound: 44500000,
                     net_flow:       -11600000,
-                    note: 'Net 90d outbound exceeds inbound by ~11.6M HHs - the cross-platform "share-shift" gap Netflix can close by 1) marketing into competitor-tier ad-aware audiences and 2) selling its own ad-tier as a cross-CTV complement rather than a competitor.'
+                    note: 'Net 90d outbound exceeds inbound by ~11.6M Accounts - the cross-platform "share-shift" gap Netflix can close by 1) marketing into competitor-tier ad-aware audiences and 2) selling its own ad-tier as a cross-CTV complement rather than a competitor.'
                 },
                 lenses: [
                     {
                         id: 'stacking',
                         label: 'Multi-sub stacking',
-                        title: 'How many active paid SVODs Netflix HHs subscribe to in a rolling 90d window',
+                        title: 'How many active paid SVODs Netflix Accounts subscribe to in a rolling 90d window',
                         view: 'bar',
                         rows: [
                             { label: '1 SVOD (Netflix-only)',    pct: 11.4, hh_count:  9051600, note: 'Netflix exclusives - the cohort most-at-risk for cycling out if engagement drops.' },
@@ -81619,7 +81696,7 @@ https://www.instagram.com/p/..."></textarea>
                             { label: '4 SVODs',                  pct: 18.6, hh_count: 14768400, note: 'Premium stackers - over-index on the AQI Diamond + Platinum tiers.' },
                             { label: '5+ SVODs',                 pct: 11.0, hh_count:  8734000, note: 'Super-stackers - 71% logged into >=2 competing SVODs in last 7d. Streaming Superfans cohort.' }
                         ],
-                        callout: '88.6% of U.S. Netflix HHs are multi-platform streamers. Selling Netflix as part of a cross-CTV plan is more accurate to user behavior than selling it as a walled garden.'
+                        callout: '88.6% of U.S. Netflix Accounts are multi-platform streamers. Selling Netflix as part of a cross-CTV plan is more accurate to user behavior than selling it as a walled garden.'
                     },
                     {
                         id: 'cycling',
@@ -81633,7 +81710,7 @@ https://www.instagram.com/p/..."></textarea>
                             { label: '3 cycles',                          pct:  4.8, hh_count:  3811200, note: 'High-churn - the ad-tier conversion target.' },
                             { label: '4+ cycles',                         pct:  4.4, hh_count:  3493600, note: 'Promo-hopper / serial canceler - usually shopping for the lowest active price.' }
                         ],
-                        callout: '35.7% of U.S. Netflix HHs cycled in or out at least once in the last 12 months. The cycling cohort is twice as large as Netflix\'s lifetime-cancel base.'
+                        callout: '35.7% of U.S. Netflix Accounts cycled in or out at least once in the last 12 months. The cycling cohort is twice as large as Netflix\'s lifetime-cancel base.'
                     },
                     {
                         id: 'adtier',
@@ -81642,12 +81719,12 @@ https://www.instagram.com/p/..."></textarea>
                         view: 'bar',
                         rows: [
                             { label: 'Upgrade from "lapsed paid Netflix"',           pct: 40.6, hh_count: 7500000, note: 'Resubscribed at the ad-tier price point - the lowest-friction reactivation funnel.' },
-                            { label: 'New trial - never previously a Netflix sub',   pct: 22.8, hh_count: 4200000, note: 'Ad-tier-first - usually price-sensitive Gen Z + multicultural HHs.' },
+                            { label: 'New trial - never previously a Netflix sub',   pct: 22.8, hh_count: 4200000, note: 'Ad-tier-first - usually price-sensitive Gen Z + multicultural Accounts.' },
                             { label: 'Downgrade from competitor SVOD',               pct: 18.4, hh_count: 3400000, note: 'Direct share-shift - usually from Hulu, Max, or Disney+ ad-tier.' },
                             { label: 'Downgrade from paid Netflix tier',             pct: 11.2, hh_count: 2070000, note: 'Existing subs trading down for price - the margin-pressure cohort.' },
                             { label: 'Bundle activation (Verizon / T-Mobile / partner)', pct: 7.0, hh_count: 1290000, note: 'Telco + retailer bundle activations - the partner-channel acquisition funnel.' }
                         ],
-                        callout: '~18.5M Netflix ad-tier HHs in the U.S. today. 41% of new ad-tier signups are lapsed paid Netflix subs returning at the lower price - a defensible ARPU story when paired with ad-revenue uplift.'
+                        callout: '~18.5M Netflix ad-tier Accounts in the U.S. today. 41% of new ad-tier signups are lapsed paid Netflix subs returning at the lower price - a defensible ARPU story when paired with ad-revenue uplift.'
                     },
                     {
                         id: 'binge_cancel',
@@ -81689,7 +81766,7 @@ https://www.instagram.com/p/..."></textarea>
                 subtitle: 'Netflix today sells generic show sponsorships. Crosswalk lets Netflix sell behaviorally-supported category alignment: every genre profiled across 10 off-Netflix signal classes, mapped to the advertiser categories and brands that over-index on its audience, and packaged into sponsorship + programmatic units that come priced.',
                 question: 'Which advertiser categories align with specific Netflix genres - and what are the sponsorship + programmatic packages that turn that alignment into revenue?',
                 method_bullets: [
-                    'Genre cohort = U.S. Netflix HHs whose viewing in the last 90d is >=30% concentrated in titles tagged for this genre',
+                    'Genre cohort = U.S. Netflix Accounts whose viewing in the last 90d is >=30% concentrated in titles tagged for this genre',
                     '10 off-Netflix signal classes per genre: shopping, brand affinities, travel, luxury, retail, subscriptions, lifestyle, app usage, social/video, competitor SVOD overlap',
                     'Affinity index: 100 = genpop Netflix parity. >=115 = over-indexes, >=130 = strong fit, >=150 = anchor-pack candidate',
                     'Sponsorship packs are pre-built formats - title-card sponsorship, mid-roll exclusive, programmatic genre segment - with CPM uplift ranges tied to the genre\'s top advertiser-category affinity',
@@ -82019,8 +82096,8 @@ https://www.instagram.com/p/..."></textarea>
         // All numbers ladder up to a single panel basis, derived
         // top-down from U.S. domestic box office:
         //   $71.7M box office ÷ $15 avg ticket = 4.78M tickets sold
-        //   4.78M tickets ÷ 2 tickets/buyer    = 2.39M ticket-buyer HHs
-        //   2.39M HHs ÷ 27.34x projection      = 87,420 panel HHs
+        //   4.78M tickets ÷ 2 tickets/buyer    = 2.39M ticket-buyer Accounts
+        //   2.39M Accounts ÷ 27.34x projection      = 87,420 panel Accounts
         // Every HH count in this deck is a sub-cohort of that
         // 2.39M-HH gen-pop projected base.
         // ══════════════════════════════════════════════════════════════
@@ -82037,7 +82114,7 @@ https://www.instagram.com/p/..."></textarea>
                 avg_ticket_price_usd: 15,
                 tickets_per_buyer:    2,
                 refresh_window:       'May 1 - Jun 28 2026, refreshed daily',
-                methodology_note:     'Top-down ladder anchored to U.S. domestic box office. $71.7M box office ÷ $15 avg ticket = 4.78M tickets sold ÷ 2 tickets per buyer (avg party) = 2.39M U.S. ticket-buyer HHs (gen-pop projected base). Panel observation: n=87,420 BehavioralGraph panelist HHs with a verified Obsession ticket purchase (Fandango / Atom / theater-chain native apps + opening-week showtime page-view -> seat-select -> checkout sequence), at a 27.34x panel-to-population projection factor.'
+                methodology_note:     'Top-down ladder anchored to U.S. domestic box office. $71.7M box office ÷ $15 avg ticket = 4.78M tickets sold ÷ 2 tickets per buyer (avg party) = 2.39M U.S. ticket-buyer Accounts (gen-pop projected base). Panel observation: n=87,420 BehavioralGraph panelist Accounts with a verified Obsession ticket purchase (Fandango / Atom / theater-chain native apps + opening-week showtime page-view -> seat-select -> checkout sequence), at a 27.34x panel-to-population projection factor.'
             },
 
             // Film + director context. The agency_lens flag flips every
@@ -82561,13 +82638,13 @@ https://www.instagram.com/p/..."></textarea>
                  +     'n=' + _jiqFmt(pb.sample_panelists) + '</span>'
                  +   '<span style="opacity:0.55;">\u2192</span>'
                  +   '<span style="color:var(--text-primary); font-weight:800;">'
-                 +     _jiqNflxAbbrevHH(pb.projected_us_hh) + ' U.S. HHs</span>'
+                 +     _jiqNflxAbbrevHH(pb.projected_us_hh) + ' U.S. Accounts</span>'
                  + '</span>';
         }
         function _jiqNflxCohortMeta(label, cohortCount) {
             // Build a meta-line HTML string that anchors a per-pull
             // cohort to the panel basis. Produces:
-            //   "{label}: 612,400 (0.77% of 79.4M base · n=18,562 panelist HHs)  [PANEL CHIP]"
+            //   "{label}: 612,400 (0.77% of 79.4M base · n=18,562 panelist Accounts)  [PANEL CHIP]"
             // so every card visibly ladders to the same denominator.
             var pb = _jiqNflxPanelBasis();
             var prefix = _jiqEsc(label || 'Cohort');
@@ -82580,7 +82657,7 @@ https://www.instagram.com/p/..."></textarea>
                 var nPanel = Math.round(cohortCount / (pb.projection_factor || 32.99));
                 ladder = ' <span style="opacity:0.75;">('
                        + pctTxt + '% of ' + _jiqNflxAbbrevHH(pb.projected_us_hh) + ' base'
-                       + ' · n=' + _jiqFmt(nPanel) + ' panelist HHs)</span>';
+                       + ' · n=' + _jiqFmt(nPanel) + ' panelist Accounts)</span>';
             }
             return '<span style="display:inline-flex; align-items:center; flex-wrap:wrap; gap:0.55rem;">'
                  +   '<span>' + prefix + ': <strong>' + _jiqFmt(cohortCount || 0) + '</strong>' + ladder + '</span>'
@@ -82696,7 +82773,7 @@ https://www.instagram.com/p/..."></textarea>
             if (!pb) return '';
             // Surface the full ladder inline so the math is visible
             // without hovering the tooltip:
-            //   PANEL n=87,420 → 2.39M HHs ← $71.7M ÷ $15 ÷ 2
+            //   PANEL n=87,420 → 2.39M Accounts ← $71.7M ÷ $15 ÷ 2
             // The leading "PANEL n=" half shows the observation;
             // the trailing "← $X ÷ $Y ÷ Z" half shows the box-office
             // derivation. Both halves resolve to the same projected
@@ -82723,7 +82800,7 @@ https://www.instagram.com/p/..."></textarea>
                  +     'n=' + _jiqFmt(pb.sample_panelists) + '</span>'
                  +   '<span style="opacity:0.55;">\u2192</span>'
                  +   '<span style="color:var(--text-primary); font-weight:800;">'
-                 +     _jiqObsAbbrevHH(pb.projected_us_hh) + ' U.S. ticket-buyer HHs</span>'
+                 +     _jiqObsAbbrevHH(pb.projected_us_hh) + ' U.S. ticket-buyer Accounts</span>'
                  +   bo
                  + '</span>';
         }
@@ -82739,7 +82816,7 @@ https://www.instagram.com/p/..."></textarea>
                 var nPanel = Math.round(cohortCount / (pb.projection_factor || 27.34));
                 ladder = ' <span style="opacity:0.75;">('
                        + pctTxt + '% of ' + _jiqObsAbbrevHH(pb.projected_us_hh) + ' base'
-                       + ' · n=' + _jiqFmt(nPanel) + ' panelist HHs)</span>';
+                       + ' · n=' + _jiqFmt(nPanel) + ' panelist Accounts)</span>';
             }
             return '<span style="display:inline-flex; align-items:center; flex-wrap:wrap; gap:0.55rem;">'
                  +   '<span>' + prefix + ': <strong>' + _jiqFmt(cohortCount || 0) + '</strong>' + ladder + '</span>'
@@ -82861,11 +82938,11 @@ https://www.instagram.com/p/..."></textarea>
 
             var da = data.director_attribution || {};
             var attribTiles = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(165px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
-                + _jiqTile('Director-driven',  Number(da.director_driven_pct || 0).toFixed(1) + '%', _jiqFmt(da.director_driven_hh || 0) + ' HHs (director-owned)', '#a855f7')
-                + _jiqTile('Cast-driven',      Number(da.cast_driven_pct || 0).toFixed(1) + '%',     _jiqFmt(da.cast_driven_hh || 0) + ' HHs (cast-adjacent)', '#c4b5fd')
-                + _jiqTile('Marketing-driven', Number(da.marketing_driven_pct || 0).toFixed(1) + '%', _jiqFmt(da.marketing_driven_hh || 0) + ' HHs', '#94a3b8')
-                + _jiqTile('Genre / organic',  Number(da.genre_organic_pct || 0).toFixed(1) + '%',   _jiqFmt(da.genre_organic_hh || 0) + ' HHs', '#94a3b8')
-                + _jiqTile('Word of mouth',    Number(da.word_of_mouth_pct || 0).toFixed(1) + '%',   _jiqFmt(da.word_of_mouth_hh || 0) + ' HHs', '#86efac')
+                + _jiqTile('Director-driven',  Number(da.director_driven_pct || 0).toFixed(1) + '%', _jiqFmt(da.director_driven_hh || 0) + ' Accounts (director-owned)', '#a855f7')
+                + _jiqTile('Cast-driven',      Number(da.cast_driven_pct || 0).toFixed(1) + '%',     _jiqFmt(da.cast_driven_hh || 0) + ' Accounts (cast-adjacent)', '#c4b5fd')
+                + _jiqTile('Marketing-driven', Number(da.marketing_driven_pct || 0).toFixed(1) + '%', _jiqFmt(da.marketing_driven_hh || 0) + ' Accounts', '#94a3b8')
+                + _jiqTile('Genre / organic',  Number(da.genre_organic_pct || 0).toFixed(1) + '%',   _jiqFmt(da.genre_organic_hh || 0) + ' Accounts', '#94a3b8')
+                + _jiqTile('Word of mouth',    Number(da.word_of_mouth_pct || 0).toFixed(1) + '%',   _jiqFmt(da.word_of_mouth_hh || 0) + ' Accounts', '#86efac')
                 + '</div>';
 
             var attribNote = '';
@@ -83050,7 +83127,7 @@ https://www.instagram.com/p/..."></textarea>
                     return '<div style="padding:0.5rem 0.75rem; border-radius:5px; background:rgba(255,255,255,0.025); border-left:3px solid #a855f7;">'
                          +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.25rem;">'
                          +     '<div style="font-size:0.8rem; font-weight:700;">' + (i + 1) + '. ' + _jiqEsc(s.step) + '</div>'
-                         +     '<div><span style="font-size:0.82rem; font-weight:800; color:#c4b5fd;">' + _jiqFmt(s.count_hh || 0) + '</span> <span style="opacity:0.65; font-size:0.7rem;">HHs · ' + Number(s.share_of_aware_pct || 0).toFixed(1) + '% of aware' + (s.drop_pp > 0 ? ' · -' + Number(s.drop_pp).toFixed(1) + 'pp' : '') + '</span></div>'
+                         +     '<div><span style="font-size:0.82rem; font-weight:800; color:#c4b5fd;">' + _jiqFmt(s.count_hh || 0) + '</span> <span style="opacity:0.65; font-size:0.7rem;">Accounts · ' + Number(s.share_of_aware_pct || 0).toFixed(1) + '% of aware' + (s.drop_pp > 0 ? ' · -' + Number(s.drop_pp).toFixed(1) + 'pp' : '') + '</span></div>'
                          +   '</div>'
                          +   '<div style="height:6px; border-radius:3px; background:rgba(168,85,247,0.15); overflow:hidden;">'
                          +     '<div style="height:100%; width:' + pctOfBar.toFixed(2) + '%; background:#a855f7;"></div>'
@@ -83066,7 +83143,7 @@ https://www.instagram.com/p/..."></textarea>
                 + '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
                 +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase;">Channel</th>'
                 +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Share</th>'
-                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">HHs</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Accounts</th>'
                 +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Conv rate</th>'
                 +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Seat→Pay</th>'
                 +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7;">Note</th>'
@@ -83492,7 +83569,7 @@ https://www.instagram.com/p/..."></textarea>
                 +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase;">Director</th>'
                 +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase;">Released</th>'
                 +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Audience overlap</th>'
-                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">HHs</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Accounts</th>'
                 +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7;">Why</th>'
                 + '</tr></thead><tbody>'
                 + data.comp_films.map(function(c) {
@@ -83562,7 +83639,7 @@ https://www.instagram.com/p/..."></textarea>
                 theatrical_only_hh_m: 7.65,
                 transactional_only_hh_m: 1.35,
                 short: '02/14 theatrical → 05/28 PVOD · panel through 07/15',
-                detail: 'U.S. HHs with panel signal for Michael in the 22 wks after theatrical opening. Theatrical = ticket purchase on Fandango / AMC / Regal / etc. or trailer→ticket-page conversion. Transactional = ≥$0.99 SKU purchase on Google Play, Apple TV, Amazon Prime Video, YouTube, Vudu, Xfinity.',
+                detail: 'U.S. Accounts with panel signal for Michael in the 22 wks after theatrical opening. Theatrical = ticket purchase on Fandango / AMC / Regal / etc. or trailer→ticket-page conversion. Transactional = ≥$0.99 SKU purchase on Google Play, Apple TV, Amazon Prime Video, YouTube, Vudu, Xfinity.',
                 theatrical_gross_usd_m: 158.2,
                 pvod_gross_projected_usd_m: 24.8,
                 pvod_gross_actual_usd_m: 14.1,
@@ -83626,7 +83703,7 @@ https://www.instagram.com/p/..."></textarea>
                     overall_double_dip_pct: 43.8,
                     special_edition_double_dip_lift_pp: 21.1,
                     special_edition_share_of_double_dip_pct: 35.2,
-                    read: 'The Special Edition + digital photo book SKU captured 23.7% of transactional HHs — 570K households. 65% of those buyers had already bought a theatrical ticket, vs 43.8% overall — a +21pp double-dip lift. The photo-book bundle sold disproportionately to fans who saw the film first (the physical-media collector pattern), not to new-to-Michael HHs. Roughly one in three double-dip households paid the premium for the collector SKU.'
+                    read: 'The Special Edition + digital photo book SKU captured 23.7% of transactional Accounts — 570K households. 65% of those buyers had already bought a theatrical ticket, vs 43.8% overall — a +21pp double-dip lift. The photo-book bundle sold disproportionately to fans who saw the film first (the physical-media collector pattern), not to new-to-Michael Accounts. Roughly one in three double-dip households paid the premium for the collector SKU.'
                 },
                 // ── Comparison titles ─────────────────────────────
                 // Same two-cohort Venn structure (theatrical / transactional
@@ -83636,7 +83713,7 @@ https://www.instagram.com/p/..."></textarea>
                 // within the peer distribution is legible at a glance.
                 //
                 // Panel basis: Crosswalk clickstream panel, projected to
-                // US digital HHs. Titles marked 'projected' have not yet
+                // US digital Accounts. Titles marked 'projected' have not yet
                 // opened transactional windows in this panel; ratios
                 // built from genre / cast / studio comps and flagged
                 // as such in the UI. Titles marked 'observed' have full
@@ -83733,7 +83810,7 @@ https://www.instagram.com/p/..."></textarea>
                         note: 'Family / fandom-driven tentpole. Large new-to-title trans cohort from IP-curious buyers who skipped theaters.'
                     }
                 ],
-                comparison_read: 'Michael\u2019s 43.8% double-dip rate sits with A24 narrow-adult titles (Normal, The Sheep Detectives, The Drama at 44-46%), not with wide theatrical releases (Now You See Me: NYD 39.0%, Masters of the Universe 30.4%, The Devil Wears Prada 2 28.6%). Michael is the anomaly: a wide theatrical opening (8.70M HHs, roughly the scale of NYSM:NYD) with a trans audience that behaves like an A24 fan cohort. That is the shape of a fan-cannibalized PVOD window, not a broad home-viewing acquisition.',
+                comparison_read: 'Michael\u2019s 43.8% double-dip rate sits with A24 narrow-adult titles (Normal, The Sheep Detectives, The Drama at 44-46%), not with wide theatrical releases (Now You See Me: NYD 39.0%, Masters of the Universe 30.4%, The Devil Wears Prada 2 28.6%). Michael is the anomaly: a wide theatrical opening (8.70M Accounts, roughly the scale of NYSM:NYD) with a trans audience that behaves like an A24 fan cohort. That is the shape of a fan-cannibalized PVOD window, not a broad home-viewing acquisition.',
                 pvod_forecast_gap: {
                     forecast_transactional_only_hh_m: 3.40,
                     actual_transactional_only_hh_m: 1.35,
@@ -83806,7 +83883,7 @@ https://www.instagram.com/p/..."></textarea>
                             { bucket: '26-50 DMA',    theatrical_pct: 17.4, transactional_only_pct: 20.3, both_pct: 15.6 },
                             { bucket: '51+ DMA',      theatrical_pct: 16.8, transactional_only_pct: 31.1, both_pct: 13.5 }
                         ],
-                        read: 'Theatrical concentrated in top-10 DMAs (limited-then-wide release pattern). Transactional-only is the geographically-diffused cohort — 31.1% in DMAs 51+ vs 16.8% of theatrical. These are HHs that had lower screen access or delayed intent.'
+                        read: 'Theatrical concentrated in top-10 DMAs (limited-then-wide release pattern). Transactional-only is the geographically-diffused cohort — 31.1% in DMAs 51+ vs 16.8% of theatrical. These are Accounts that had lower screen access or delayed intent.'
                     },
                     {
                         label: 'Household composition',
@@ -83880,13 +83957,13 @@ https://www.instagram.com/p/..."></textarea>
                     comp_biopics_double_dip_rate_pct: 8.7,
                     delta_pp: 3.4,
                     incremental_double_dip_hh_m: 0.30,
-                    note: 'Michael\'s theatrical audience double-dipped at 12.1% — 3.4pp above the biopic comp average of 8.7%. That is ~300K incremental double-dip HHs.'
+                    note: 'Michael\'s theatrical audience double-dipped at 12.1% — 3.4pp above the biopic comp average of 8.7%. That is ~300K incremental double-dip Accounts.'
                 },
                 shortfall_decomposition: [
                     { component: 'Elevated double-dip (theatrical cannibalized transactional-only demand)', usd_m: 3.2, pct: 29.9, color: '#f59e0b',
-                      note: '~300K theatrical HHs bought PVOD instead of new transactional-only HHs. Avg $10.68 spend/HH → $3.2M reallocated demand.' },
+                      note: '~300K theatrical Accounts bought PVOD instead of new transactional-only Accounts. Avg $10.68 spend/HH → $3.2M reallocated demand.' },
                     { component: 'Under-reached transactional-only cohort (marketing gap)',                 usd_m: 4.8, pct: 44.9, color: '#ea580c',
-                      note: '2.05M HHs the PVOD forecast assumed would buy but the trailer never reached. Est. capture: 27% → $4.8M unrealized.' },
+                      note: '2.05M Accounts the PVOD forecast assumed would buy but the trailer never reached. Est. capture: 27% → $4.8M unrealized.' },
                     { component: 'Compressed sales curve (weak long-tail on catalog)',                     usd_m: 2.7, pct: 25.2, color: '#ef4444',
                       note: 'PVOD peaked wk 2 and dropped 68% by wk 6 vs comp 41% drop. Missing wks 3-8 tail = ~$2.7M.' }
                 ],
@@ -83975,13 +84052,13 @@ https://www.instagram.com/p/..."></textarea>
             mic_read: {
                 subtitle: 'Synthesis + three concrete moves for the next Lionsgate music-biopic transactional window.',
                 narrative: [
-                    { heading: 'The paradox has a clean answer', body: 'Michael did not underperform on transactional because demand was absent. It underperformed because the transactional-only cohort — 1.35M HHs of home-first, price-elastic, non-prestige-drama buyers — was under-reached by 37.2pp of trailer penetration and under-served by a plan that anchored on the $19.99 buy SKU when their comp price-point was $5.99 rent.' },
+                    { heading: 'The paradox has a clean answer', body: 'Michael did not underperform on transactional because demand was absent. It underperformed because the transactional-only cohort — 1.35M Accounts of home-first, price-elastic, non-prestige-drama buyers — was under-reached by 37.2pp of trailer penetration and under-served by a plan that anchored on the $19.99 buy SKU when their comp price-point was $5.99 rent.' },
                     { heading: 'Saturation is a minor factor',   body: 'Yes, 43.8% of transactional buys were double-dip. Yes, the double-dip rate (12.1% of the theatrical cohort) exceeded biopic comps by 3.4pp. But that only explains $3.2M of the $10.7M shortfall. The remaining $7.5M is a marketing + creative + windowing problem, not a demand-cannibalization problem.' },
                     { heading: 'These are two audiences, not one', body: 'The theatrical cohort is a $75K-149K, 35-44, female-head, prestige-drama-native, top-10-DMA book of demand. The transactional-only cohort is a <$75K, split-age, single-adult, home-first, franchise + reality-TV book of demand. They watch different shows, live on different surfaces, and respond to different price points. Treating them as one funnel is the miss.' }
                 ],
                 recommendations: [
                     { move: 'Shift 30-40% of the trailer/social budget from theatrical-launch surfaces to short-form social 10-14 days ahead of window open',
-                      why:  'The transactional-only cohort under-indexes 30pp on YouTube trailer view and 23pp on TikTok. That is where the missing 2.05M HHs live.',
+                      why:  'The transactional-only cohort under-indexes 30pp on YouTube trailer view and 23pp on TikTok. That is where the missing 2.05M Accounts live.',
                       est_impact_usd_m: 3.4 },
                     { move: 'Lead all transactional-window creative with the $5.99 rent SKU',
                       why:  'Rent converts at 8.1% vs 4.8% for the $19.99 buy. Michael\'s buyer never bought — the plan\'s $19.99 anchor was priced for a different audience.',
@@ -84244,10 +84321,10 @@ https://www.instagram.com/p/..."></textarea>
 
             // ── Mini-Venn SVG for a single comp row.
             //    Scales r1 (theatrical) and r2 (transactional_total) with
-            //    sqrt(HHs) so audience size stays legible without shouting.
+            //    sqrt(Accounts) so audience size stays legible without shouting.
             function miniVenn(row) {
                 var vw = 220, vh = 130;
-                // Radius scaling: max theatrical HHs across subject+comps
+                // Radius scaling: max theatrical Accounts across subject+comps
                 // → r1 = 46; min at 3M gives r1 = 18. Use anchored sqrt.
                 var maxT = 15.8;   // Devil Wears Prada 2 is the largest
                 var minR1 = 16, maxR1 = 46;
@@ -84387,15 +84464,15 @@ https://www.instagram.com/p/..."></textarea>
             }).join('');
 
             var legend = '<div style="display:flex; gap:0.9rem; flex-wrap:wrap; font-size:0.66rem; opacity:0.72; margin-bottom:0.4rem;">'
-                +   '<span><span style="display:inline-block; width:10px; height:10px; background:rgba(245,158,11,0.72); border-radius:2px; margin-right:4px; vertical-align:middle;"></span>Theatrical-only HHs</span>'
+                +   '<span><span style="display:inline-block; width:10px; height:10px; background:rgba(245,158,11,0.72); border-radius:2px; margin-right:4px; vertical-align:middle;"></span>Theatrical-only Accounts</span>'
                 +   '<span><span style="display:inline-block; width:10px; height:10px; background:rgba(167,139,250,0.85); border-radius:2px; margin-right:4px; vertical-align:middle;"></span>Double-dip (both)</span>'
-                +   '<span><span style="display:inline-block; width:10px; height:10px; background:rgba(234,88,12,0.75); border-radius:2px; margin-right:4px; vertical-align:middle;"></span>Transactional-only HHs</span>'
+                +   '<span><span style="display:inline-block; width:10px; height:10px; background:rgba(234,88,12,0.75); border-radius:2px; margin-right:4px; vertical-align:middle;"></span>Transactional-only Accounts</span>'
                 + '</div>';
 
             var rankedBox = '<div style="padding:0.85rem 1rem; border-radius:8px; margin-bottom:0.85rem; background:rgba(255,255,255,0.018); border:1px solid rgba(255,255,255,0.08);">'
                 +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:0.35rem;">'
                 +     '<div style="font-weight:800; font-size:0.82rem;">Ranked by double-dip % of transactional</div>'
-                +     '<div style="font-size:0.6rem; opacity:0.6;">Bar width = total HHs (theatrical + trans-only); segments = cohort split.</div>'
+                +     '<div style="font-size:0.6rem; opacity:0.6;">Bar width = total Accounts (theatrical + trans-only); segments = cohort split.</div>'
                 +   '</div>'
                 +   legend
                 +   rankedRows
@@ -84430,8 +84507,8 @@ https://www.instagram.com/p/..."></textarea>
 
             var v = data.venn || {};
             // ── Proportional two-circle Venn ─────────────────────────────
-            //   Theatrical HHs total  = 8.70M  → r=118 (area ∝ 8.70)
-            //   Transactional HHs tot = 2.40M  → r=62  (area ∝ 2.40)
+            //   Theatrical Accounts total  = 8.70M  → r=118 (area ∝ 8.70)
+            //   Transactional Accounts tot = 2.40M  → r=62  (area ∝ 2.40)
             //   Overlap  = 1.05M (43.8% of transactional / 12.1% of theatrical)
             // Circle-circle geometry: centers on y=180, d = 120 →
             //   intersection line x ≈ 382, overlap x-range 338-398.
@@ -84484,9 +84561,9 @@ https://www.instagram.com/p/..."></textarea>
 
             var tilesHtml = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.55rem; margin-bottom:0.85rem;">'
                 + [
-                    { label: 'Theatrical HHs',            value: _jiqMicAbbrevM(v.theatrical_only_hh_m + v.both_hh_m), sub: 'ticket-buyers overall', accent: '#f59e0b' },
-                    { label: 'Transactional HHs',         value: _jiqMicAbbrevM(v.transactional_only_hh_m + v.both_hh_m), sub: 'PVOD buyers overall', accent: '#ea580c' },
-                    { label: 'Double-dip HHs',            value: _jiqMicAbbrevM(v.both_hh_m), sub: 'bought BOTH ticket + PVOD', accent: '#a78bfa' },
+                    { label: 'Theatrical Accounts',            value: _jiqMicAbbrevM(v.theatrical_only_hh_m + v.both_hh_m), sub: 'ticket-buyers overall', accent: '#f59e0b' },
+                    { label: 'Transactional Accounts',         value: _jiqMicAbbrevM(v.transactional_only_hh_m + v.both_hh_m), sub: 'PVOD buyers overall', accent: '#ea580c' },
+                    { label: 'Double-dip Accounts',            value: _jiqMicAbbrevM(v.both_hh_m), sub: 'bought BOTH ticket + PVOD', accent: '#a78bfa' },
                     { label: '% of transactional that double-dipped', value: v.double_dip_pct_of_transactional.toFixed(1) + '%', sub: 'the saturation signal', accent: '#a78bfa' }
                   ].map(function(t) {
                     return '<div style="padding:0.6rem 0.75rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + t.accent + ';">'
@@ -84512,31 +84589,31 @@ https://www.instagram.com/p/..."></textarea>
                     +     '(concert stills + archival photos + producer liner notes) · ' + _jiqEsc(se.sku_platforms) + '.'
                     +   '</div>'
                     // Stacked bar: standard vs special edition split of transactional
-                    +   '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.25rem;">SKU mix within 2.40M transactional HHs</div>'
+                    +   '<div style="font-size:0.58rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; margin-bottom:0.25rem;">SKU mix within 2.40M transactional Accounts</div>'
                     +   '<div style="display:flex; height:26px; border-radius:4px; overflow:hidden; margin-bottom:0.35rem;">'
                     +     '<div style="width:' + stdPct.toFixed(1) + '%; background:rgba(234,88,12,0.55); display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:800; color:#fff;">Standard &middot; ' + stdPct.toFixed(1) + '%</div>'
                     +     '<div style="width:' + sePct.toFixed(1) + '%; background:rgba(167,139,250,0.75); display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:800; color:#fff;">SE &middot; ' + sePct.toFixed(1) + '%</div>'
                     +   '</div>'
                     +   '<div style="display:flex; justify-content:space-between; font-size:0.66rem; opacity:0.75; margin-bottom:0.85rem;">'
-                    +     '<div><strong style="color:#fdba74;">' + _jiqMicAbbrevM(se.standard_edition_hh_m) + '</strong> standard HHs</div>'
-                    +     '<div><strong style="color:#c4b5fd;">' + _jiqMicAbbrevM(se.special_edition_hh_m) + '</strong> SE HHs</div>'
+                    +     '<div><strong style="color:#fdba74;">' + _jiqMicAbbrevM(se.standard_edition_hh_m) + '</strong> standard Accounts</div>'
+                    +     '<div><strong style="color:#c4b5fd;">' + _jiqMicAbbrevM(se.special_edition_hh_m) + '</strong> SE Accounts</div>'
                     +   '</div>'
                     // Within-SE breakdown (2 hero stats + 1 supporting)
                     +   '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.55rem;">'
                     +     '<div style="padding:0.65rem 0.75rem; border-radius:6px; background:rgba(167,139,250,0.10); border-left:3px solid #a78bfa;">'
                     +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800;">SE buyers who also bought a ticket</div>'
                     +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.15rem; color:#c4b5fd;">' + wse.double_dip_pct.toFixed(1) + '%</div>'
-                    +       '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.1rem;">' + _jiqMicAbbrevM(wse.double_dip_hh_m) + ' HHs · vs ' + se.overall_double_dip_pct.toFixed(1) + '% overall (+' + se.special_edition_double_dip_lift_pp.toFixed(1) + 'pp)</div>'
+                    +       '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.1rem;">' + _jiqMicAbbrevM(wse.double_dip_hh_m) + ' Accounts · vs ' + se.overall_double_dip_pct.toFixed(1) + '% overall (+' + se.special_edition_double_dip_lift_pp.toFixed(1) + 'pp)</div>'
                     +     '</div>'
                     +     '<div style="padding:0.65rem 0.75rem; border-radius:6px; background:rgba(234,88,12,0.10); border-left:3px solid #ea580c;">'
                     +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800;">SE buyers who skipped theaters</div>'
                     +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.15rem; color:#fdba74;">' + wse.transactional_only_pct.toFixed(1) + '%</div>'
-                    +       '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.1rem;">' + _jiqMicAbbrevM(wse.transactional_only_hh_m) + ' HHs · trans-only w/ SE upgrade</div>'
+                    +       '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.1rem;">' + _jiqMicAbbrevM(wse.transactional_only_hh_m) + ' Accounts · trans-only w/ SE upgrade</div>'
                     +     '</div>'
                     +     '<div style="padding:0.65rem 0.75rem; border-radius:6px; background:rgba(255,255,255,0.03); border-left:3px solid #94a3b8;">'
                     +       '<div style="font-size:0.58rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.06em; font-weight:800;">SE share of double-dip cohort</div>'
                     +       '<div style="font-size:1.55rem; font-weight:900; margin-top:0.15rem; color:#e2e8f0;">' + se.special_edition_share_of_double_dip_pct.toFixed(1) + '%</div>'
-                    +       '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.1rem;">1 in 3 double-dip HHs paid the SE premium</div>'
+                    +       '<div style="font-size:0.66rem; opacity:0.7; margin-top:0.1rem;">1 in 3 double-dip Accounts paid the SE premium</div>'
                     +     '</div>'
                     +   '</div>'
                     // Read line
@@ -84549,7 +84626,7 @@ https://www.instagram.com/p/..."></textarea>
                     return '<div style="padding:0.55rem 0.75rem; border-radius:6px; background:rgba(255,255,255,0.025); border-left:3px solid ' + c.color + '; margin-bottom:0.35rem;">'
                          +   '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">'
                          +     '<div style="font-weight:800; font-size:0.85rem; color:' + c.color + ';">' + _jiqEsc(c.label) + '</div>'
-                         +     '<div style="font-weight:800; font-size:0.85rem;">' + _jiqMicAbbrevM(c.hh_m) + ' HHs</div>'
+                         +     '<div style="font-weight:800; font-size:0.85rem;">' + _jiqMicAbbrevM(c.hh_m) + ' Accounts</div>'
                          +   '</div>'
                          +   '<div style="font-size:0.74rem; color:var(--text-secondary); margin-top:0.2rem; line-height:1.5;">' + _jiqEsc(c.definition) + '</div>'
                          + '</div>';
@@ -84748,7 +84825,7 @@ https://www.instagram.com/p/..."></textarea>
                 +     '<div>'
                 +       '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#c4b5fd;">Michael double-dip rate</div>'
                 +       '<div style="font-size:2.2rem; font-weight:900; color:#c4b5fd; line-height:1;">' + dd.double_dip_rate_pct.toFixed(1) + '%</div>'
-                +       '<div style="font-size:0.68rem; opacity:0.7;">of ' + _jiqMicAbbrevM(dd.theatrical_hh_m) + ' theatrical HHs</div>'
+                +       '<div style="font-size:0.68rem; opacity:0.7;">of ' + _jiqMicAbbrevM(dd.theatrical_hh_m) + ' theatrical Accounts</div>'
                 +     '</div>'
                 +     '<div>'
                 +       '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800;">Biopic comp avg</div>'
@@ -84757,7 +84834,7 @@ https://www.instagram.com/p/..."></textarea>
                 +     '<div>'
                 +       '<div style="font-size:0.6rem; opacity:0.75; text-transform:uppercase; letter-spacing:0.08em; font-weight:800; color:#fca5a5;">Δ vs comp</div>'
                 +       '<div style="font-size:1.5rem; font-weight:900; color:#fca5a5; line-height:1;">+' + dd.delta_pp.toFixed(1) + 'pp</div>'
-                +       '<div style="font-size:0.68rem; opacity:0.7;">+' + _jiqMicAbbrevM(dd.incremental_double_dip_hh_m) + ' incremental double-dip HHs</div>'
+                +       '<div style="font-size:0.68rem; opacity:0.7;">+' + _jiqMicAbbrevM(dd.incremental_double_dip_hh_m) + ' incremental double-dip Accounts</div>'
                 +     '</div>'
                 +   '</div>'
                 +   '<div style="font-size:0.72rem; color:var(--text-secondary); font-style:italic; margin-top:0.4rem;">' + _jiqEsc(dd.note || '') + '</div>'
@@ -85038,7 +85115,7 @@ https://www.instagram.com/p/..."></textarea>
         // ══════════════════════════════════════════════════════════════
         // UNIVERSAL BASIC GUYS (Hulu) - single-card discovery journey.
         //
-        // Panel: 47.8M matched U.S. Hulu-active HHs, 90-day window
+        // Panel: 47.8M matched U.S. Hulu-active Accounts, 90-day window
         // ending 2026-08-14. Discovery touchpoints observed across
         // Fox Sports (linear + Hulu Live TV cross-promo), TikTok,
         // Instagram, YouTube, Hulu on-service surfaces, and peer-share
@@ -85048,7 +85125,7 @@ https://www.instagram.com/p/..."></textarea>
         var _JIQ_UBG_DATA = {
             panel_basis: {
                 label: 'Panel basis',
-                short: '47.8M Hulu-active HHs · 90d window',
+                short: '47.8M Hulu-active Accounts · 90d window',
                 detail: '47.8M matched U.S. Hulu-active households · window: 2026-05-16 to 2026-08-14 (T-1 read). Discovery touchpoints and first-play are deterministically linked at HH level. UBG audience = HH with a Hulu play of any Universal Basic Guys episode (S1 or S2) in the window.'
             },
             show_meta: {
@@ -85164,14 +85241,14 @@ https://www.instagram.com/p/..."></textarea>
 
             // ── Topline tiles ─────────────────────────────────────────
             var tiles = [
-                { label: 'UBG viewers on Hulu', value: _jiqUbgAbbrevM(t.ubg_viewers_hh_m) + ' HHs',
+                { label: 'UBG viewers on Hulu', value: _jiqUbgAbbrevM(t.ubg_viewers_hh_m) + ' Accounts',
                   sub: (t.pct_of_hulu_panel != null ? t.pct_of_hulu_panel.toFixed(1) + '% of matched Hulu panel' : ''),
                   accent: '#22c55e' },
                 { label: 'Median discovery \u2192 first play', value: (t.median_days_discovery_to_play || 0) + ' days',
                   sub: (t.same_day_watch_pct != null ? t.same_day_watch_pct.toFixed(1) + '% converted same-day' : ''),
                   accent: '#38bdf8' },
                 { label: 'S1 completion', value: (t.s1_completion_pct != null ? t.s1_completion_pct.toFixed(1) + '%' : '-'),
-                  sub: 'HHs that watched all 10 S1 episodes',
+                  sub: 'Accounts that watched all 10 S1 episodes',
                   accent: '#a78bfa' },
                 { label: 'S1 \u2192 S2 carry', value: (t.s1_to_s2_carry_pct != null ? t.s1_to_s2_carry_pct.toFixed(1) + '%' : '-'),
                   sub: 'S1 openers who returned for S2 within 30 days',
@@ -85221,7 +85298,7 @@ https://www.instagram.com/p/..."></textarea>
                              + '</div>';
                     }).join('');
                     var reachChip = (st.reach_hh_m != null)
-                        ? '<div style="display:inline-block; padding:1px 8px; border-radius:99px; background:rgba(34,197,94,0.14); color:#86efac; font-size:0.6rem; font-weight:800; letter-spacing:0.06em; margin-right:4px;">' + _jiqUbgAbbrevM(st.reach_hh_m) + ' HHs</div>'
+                        ? '<div style="display:inline-block; padding:1px 8px; border-radius:99px; background:rgba(34,197,94,0.14); color:#86efac; font-size:0.6rem; font-weight:800; letter-spacing:0.06em; margin-right:4px;">' + _jiqUbgAbbrevM(st.reach_hh_m) + ' Accounts</div>'
                         : '';
                     var daysChip = (st.median_days != null)
                         ? '<div style="display:inline-block; padding:1px 8px; border-radius:99px; background:rgba(56,189,248,0.14); color:#7dd3fc; font-size:0.6rem; font-weight:800; letter-spacing:0.06em;">median ' + st.median_days + 'd</div>'
@@ -85274,7 +85351,7 @@ https://www.instagram.com/p/..."></textarea>
                         return '<div style="padding:5px 0; display:grid; grid-template-columns:200px 1fr 90px 60px; gap:10px; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05);">'
                              +   '<div style="font-size:0.78rem; font-weight:800;">' + _jiqUbgEsc(r.label) + '</div>'
                              +   '<div style="height:6px; border-radius:3px; background:rgba(255,255,255,0.05);"><div style="height:100%; width:' + w.toFixed(1) + '%; background:#a78bfa; border-radius:3px;"></div></div>'
-                             +   '<div style="text-align:right; font-size:0.75rem;"><span style="font-weight:900;">' + _jiqUbgAbbrevM(r.hh_m) + '</span> <span style="opacity:0.55; font-size:0.65rem;">HHs</span></div>'
+                             +   '<div style="text-align:right; font-size:0.75rem;"><span style="font-weight:900;">' + _jiqUbgAbbrevM(r.hh_m) + '</span> <span style="opacity:0.55; font-size:0.65rem;">Accounts</span></div>'
                              +   '<div style="text-align:right; font-weight:900; color:#c4b5fd;">' + r.cume_pct.toFixed(1) + '%</div>'
                              + '</div>';
                     }).join('')
@@ -85635,7 +85712,7 @@ https://www.instagram.com/p/..."></textarea>
                 amcp_active_m: 7.8,
                 overlap_hh_m: 2.14,
                 window: '90d ending Aug 10, 2026',
-                short: '42.6M Max \u00d7 7.8M AMC+ HHs \u00b7 90d ending Aug 10',
+                short: '42.6M Max \u00d7 7.8M AMC+ Accounts \u00b7 90d ending Aug 10',
                 detail: '42.6M matched U.S. HBO Max active subscriber households and 7.8M matched AMC+ active subscriber households, 90-day window ending Aug 10, 2026. Deterministic HH-level linkage across the two services. HH counted as migrated only when a Max play of Anne Rice-universe episodes precedes an AMC+ signup or first-play inside the window.'
             },
 
@@ -85643,9 +85720,9 @@ https://www.instagram.com/p/..."></textarea>
             amc_case: {
                 subtitle: 'The Anne Rice universe on AMC+ - three original series with prior-episode availability on HBO Max - creates a clean natural experiment for measuring platform-to-platform migration. This tab establishes the hypothesis, the panel we are reading against, and the four headline numbers.',
                 key_metrics: [
-                    { label: 'Max \u00d7 AMC+ HH overlap',      value: '2.14M HHs', accent: '#a855f7', sub: '5.0% of Max, 27.4% of AMC+' },
+                    { label: 'Max \u00d7 AMC+ HH overlap',      value: '2.14M Accounts', accent: '#a855f7', sub: '5.0% of Max, 27.4% of AMC+' },
                     { label: 'AMC+ signups from Max',          value: '~487K',      accent: '#ef4444', sub: '34.6% of last-12mo AMC+ signups had prior Max Rice touchpoint' },
-                    { label: 'Migration rate (Max IWTV \u2192 AMC+)', value: '4.8%', accent: '#22c55e', sub: 'Max IWTV S1 HHs that signed up for AMC+ in 30d post-S2' },
+                    { label: 'Migration rate (Max IWTV \u2192 AMC+)', value: '4.8%', accent: '#22c55e', sub: 'Max IWTV S1 Accounts that signed up for AMC+ in 30d post-S2' },
                     { label: '90d retention gap',              value: '\u221210.2pp', accent: '#f59e0b', sub: '68.2% migrant retention vs 78.4% AMC+ baseline' }
                 ],
                 hypothesis: {
@@ -85731,7 +85808,7 @@ https://www.instagram.com/p/..."></textarea>
                 panel: [
                     { cell: 'Max only',       hh_m: 40.46, share_of_universe_pct: 43.2, color: '#a855f7', note: 'HBO Max active, no AMC+ subscription observed in-window.' },
                     { cell: 'AMC+ only',      hh_m: 5.66,  share_of_universe_pct: 6.0,  color: '#ef4444', note: 'AMC+ active, no HBO Max subscription observed in-window.' },
-                    { cell: 'Both (overlap)', hh_m: 2.14,  share_of_universe_pct: 2.3,  color: '#f59e0b', note: 'Overlap: 5.0% of Max HHs, 27.4% of AMC+ HHs.' },
+                    { cell: 'Both (overlap)', hh_m: 2.14,  share_of_universe_pct: 2.3,  color: '#f59e0b', note: 'Overlap: 5.0% of Max Accounts, 27.4% of AMC+ Accounts.' },
                     { cell: 'Neither',        hh_m: 45.42, share_of_universe_pct: 48.5, color: '#94a3b8', note: 'Neither service active in-window; other SVOD or no SVOD.' }
                 ],
                 anne_rice_slice: {
@@ -85741,9 +85818,9 @@ https://www.instagram.com/p/..."></textarea>
                     both_hh_m: 0.94,
                     total_hh_m: 7.38,
                     overlap_pct_of_amcp_watchers: 30.3,
-                    note: 'HHs that watched IWTV, Mayfair, or Lestat on EITHER platform in the 90d window. Overlap is 12.7% of the Anne Rice universe, but 30.3% of AMC+ Rice-watchers also watched Rice content on Max.'
+                    note: 'Accounts that watched IWTV, Mayfair, or Lestat on EITHER platform in the 90d window. Overlap is 12.7% of the Anne Rice universe, but 30.3% of AMC+ Rice-watchers also watched Rice content on Max.'
                 },
-                read: 'General service overlap is small (2.14M HHs, ~5% of Max). But inside the Anne Rice universe the overlap concentrates: nearly a third of AMC+ Rice-watchers also watched Rice content on Max in the same 90-day window. Max is not a general AMC+ audience source - it is specifically a Rice-fan discovery layer.'
+                read: 'General service overlap is small (2.14M Accounts, ~5% of Max). But inside the Anne Rice universe the overlap concentrates: nearly a third of AMC+ Rice-watchers also watched Rice content on Max in the same 90-day window. Max is not a general AMC+ audience source - it is specifically a Rice-fan discovery layer.'
             },
 
             // ─── TAB 5: Signup Lift ───────────────────────────────────
@@ -85999,7 +86076,7 @@ https://www.instagram.com/p/..."></textarea>
                          +   '</div>'
                          +   '<div style="font-size:0.65rem; opacity:0.62; margin-top:3px; font-style:italic;">' + _jiqEsc(s.sub) + '</div>'
                          +   '</div>'
-                         +   '<div style="text-align:right; font-weight:800; font-size:0.86rem;">' + _jiqAmcAbbrevM(s.hh_m) + ' <span style="opacity:0.55; font-size:0.66rem;">HHs</span></div>'
+                         +   '<div style="text-align:right; font-weight:800; font-size:0.86rem;">' + _jiqAmcAbbrevM(s.hh_m) + ' <span style="opacity:0.55; font-size:0.66rem;">Accounts</span></div>'
                          +   '<div style="text-align:right; font-weight:900; color:' + color + ';">' + s.pct_of_start.toFixed(1) + '%</div>'
                          + '</div>';
                   }).join('')
@@ -86054,7 +86131,7 @@ https://www.instagram.com/p/..."></textarea>
                      +   '</div>'
                      +   '<div style="font-size:0.7rem; opacity:0.7; margin-bottom:0.6rem; font-style:italic;">' + _jiqEsc(s.max_window) + '</div>'
                      +   '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:0.5rem; margin-bottom:0.5rem;">'
-                     +     _amcShowsTile('Max prior-season viewers', _jiqAmcAbbrevM(s.max_prior_viewers_m) + ' HHs', '#a855f7')
+                     +     _amcShowsTile('Max prior-season viewers', _jiqAmcAbbrevM(s.max_prior_viewers_m) + ' Accounts', '#a855f7')
                      +     _amcShowsTile('Migrated signups', _jiqAmcAbbrevK(s.migrated_signups_k), color)
                      +     _amcShowsTile('Migration rate', s.migration_rate_pct.toFixed(1) + '%', '#22c55e')
                      +     _amcShowsTile('90d retention', s.retention_90d_pct.toFixed(1) + '%', '#38bdf8')
@@ -86098,7 +86175,7 @@ https://www.instagram.com/p/..."></textarea>
                     var pct = totalHH ? (q.hh_m / totalHH * 100) : 0;
                     return '<div style="padding:0.7rem 0.85rem; border-radius:7px; background:rgba(255,255,255,0.03); border-left:4px solid ' + q.color + ';">'
                          +   '<div style="font-size:0.6rem; opacity:0.7; text-transform:uppercase; letter-spacing:0.08em; font-weight:700;">' + _jiqEsc(q.cell) + '</div>'
-                         +   '<div style="font-size:1.55rem; font-weight:900; margin-top:0.1rem; color:' + q.color + ';">' + _jiqAmcAbbrevM(q.hh_m) + ' <span style="font-size:0.65rem; opacity:0.6; font-weight:700;">HHs</span></div>'
+                         +   '<div style="font-size:1.55rem; font-weight:900; margin-top:0.1rem; color:' + q.color + ';">' + _jiqAmcAbbrevM(q.hh_m) + ' <span style="font-size:0.65rem; opacity:0.6; font-weight:700;">Accounts</span></div>'
                          +   '<div style="font-size:0.66rem; opacity:0.65; margin-top:0.15rem;">' + pct.toFixed(1) + '% of measured universe</div>'
                          +   (q.note ? '<div style="font-size:0.68rem; opacity:0.7; margin-top:0.35rem; font-style:italic; line-height:1.5;">' + _jiqEsc(q.note) + '</div>' : '')
                          + '</div>';
@@ -86113,9 +86190,9 @@ https://www.instagram.com/p/..."></textarea>
                     + '<div style="padding:0.85rem 1rem; border-radius:8px; background:rgba(168,85,247,0.06); border:1px solid rgba(168,85,247,0.28);">'
                     +   '<div style="font-size:0.72rem; opacity:0.8; margin-bottom:0.55rem;">' + _jiqEsc(ars.label) + '</div>'
                     +   '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.5rem; margin-bottom:0.55rem;">'
-                    +     _amcShowsTile('Max only', _jiqAmcAbbrevM(ars.max_only_hh_m) + ' HHs', '#a855f7')
-                    +     _amcShowsTile('AMC+ only', _jiqAmcAbbrevM(ars.amcp_only_hh_m) + ' HHs', '#ef4444')
-                    +     _amcShowsTile('Both (overlap)', _jiqAmcAbbrevM(ars.both_hh_m) + ' HHs', '#f59e0b')
+                    +     _amcShowsTile('Max only', _jiqAmcAbbrevM(ars.max_only_hh_m) + ' Accounts', '#a855f7')
+                    +     _amcShowsTile('AMC+ only', _jiqAmcAbbrevM(ars.amcp_only_hh_m) + ' Accounts', '#ef4444')
+                    +     _amcShowsTile('Both (overlap)', _jiqAmcAbbrevM(ars.both_hh_m) + ' Accounts', '#f59e0b')
                     +   '</div>'
                     +   '<div style="font-size:0.78rem; line-height:1.55;">'
                     +     '<b>' + ars.overlap_pct_of_amcp_watchers.toFixed(1) + '%</b> of AMC+ Rice-watchers also watched Rice content on Max in the same 90d window.'
@@ -89954,7 +90031,7 @@ https://www.instagram.com/p/..."></textarea>
                 disclosures: {
                     heading: 'Methodology annex requirements',
                     items: [
-                        'Linkage rate: share of panelists with ≥1 CTV device deterministically linked, and whether linked HHs differ systematically from unlinked HHs.',
+                        'Linkage rate: share of panelists with ≥1 CTV device deterministically linked, and whether linked Accounts differ systematically from unlinked Accounts.',
                         'Title-level sample: unweighted count of panelists who initiated Obsession playback on Peacock, split by device class, with confidence interval on the projected completion rate.',
                         'Denominator + threshold: completion threshold at ≥95% of narrative runtime (min 102 of 108); multi-session completion credited; segment-request prefetch adjustment applied.',
                         'Person-level attribution accuracy for CTV sessions stated separately from household linkage. Where sample permits, headline age composition computed from PC + mobile (deterministic) with CTV-inclusive figure as a consistency check.'
@@ -91874,13 +91951,13 @@ https://www.instagram.com/p/..."></textarea>
                  +     'n=' + _jiqFmt(pb.sample_panelists) + '</span>'
                  +   '<span style="opacity:0.55;">\u2192</span>'
                  +   '<span style="color:var(--text-primary); font-weight:800;">'
-                 +     _jiqNflxAbbrevHH(pb.projected_us_hh) + ' U.S. HHs</span>'
+                 +     _jiqNflxAbbrevHH(pb.projected_us_hh) + ' U.S. Accounts</span>'
                  + '</span>';
         }
         function _jiqNflxCohortMeta(label, cohortCount) {
             // Build a meta-line HTML string that anchors a per-pull
             // cohort to the panel basis. Produces:
-            //   "{label}: 612,400 (0.77% of 79.4M base · n=18,562 panelist HHs)  [PANEL CHIP]"
+            //   "{label}: 612,400 (0.77% of 79.4M base · n=18,562 panelist Accounts)  [PANEL CHIP]"
             // so every card visibly ladders to the same denominator.
             var pb = _jiqNflxPanelBasis();
             var prefix = _jiqEsc(label || 'Cohort');
@@ -91893,7 +91970,7 @@ https://www.instagram.com/p/..."></textarea>
                 var nPanel = Math.round(cohortCount / (pb.projection_factor || 32.99));
                 ladder = ' <span style="opacity:0.75;">('
                        + pctTxt + '% of ' + _jiqNflxAbbrevHH(pb.projected_us_hh) + ' base'
-                       + ' · n=' + _jiqFmt(nPanel) + ' panelist HHs)</span>';
+                       + ' · n=' + _jiqFmt(nPanel) + ' panelist Accounts)</span>';
             }
             return '<span style="display:inline-flex; align-items:center; flex-wrap:wrap; gap:0.55rem;">'
                  +   '<span>' + prefix + ': <strong>' + _jiqFmt(cohortCount || 0) + '</strong>' + ladder + '</span>'
@@ -92009,7 +92086,7 @@ https://www.instagram.com/p/..."></textarea>
             if (!pb) return '';
             // Surface the full ladder inline so the math is visible
             // without hovering the tooltip:
-            //   PANEL n=87,420 → 2.39M HHs ← $71.7M ÷ $15 ÷ 2
+            //   PANEL n=87,420 → 2.39M Accounts ← $71.7M ÷ $15 ÷ 2
             // The leading "PANEL n=" half shows the observation;
             // the trailing "← $X ÷ $Y ÷ Z" half shows the box-office
             // derivation. Both halves resolve to the same projected
@@ -92036,7 +92113,7 @@ https://www.instagram.com/p/..."></textarea>
                  +     'n=' + _jiqFmt(pb.sample_panelists) + '</span>'
                  +   '<span style="opacity:0.55;">\u2192</span>'
                  +   '<span style="color:var(--text-primary); font-weight:800;">'
-                 +     _jiqObsAbbrevHH(pb.projected_us_hh) + ' U.S. ticket-buyer HHs</span>'
+                 +     _jiqObsAbbrevHH(pb.projected_us_hh) + ' U.S. ticket-buyer Accounts</span>'
                  +   bo
                  + '</span>';
         }
@@ -92052,7 +92129,7 @@ https://www.instagram.com/p/..."></textarea>
                 var nPanel = Math.round(cohortCount / (pb.projection_factor || 27.34));
                 ladder = ' <span style="opacity:0.75;">('
                        + pctTxt + '% of ' + _jiqObsAbbrevHH(pb.projected_us_hh) + ' base'
-                       + ' · n=' + _jiqFmt(nPanel) + ' panelist HHs)</span>';
+                       + ' · n=' + _jiqFmt(nPanel) + ' panelist Accounts)</span>';
             }
             return '<span style="display:inline-flex; align-items:center; flex-wrap:wrap; gap:0.55rem;">'
                  +   '<span>' + prefix + ': <strong>' + _jiqFmt(cohortCount || 0) + '</strong>' + ladder + '</span>'
@@ -92174,11 +92251,11 @@ https://www.instagram.com/p/..."></textarea>
 
             var da = data.director_attribution || {};
             var attribTiles = '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(165px, 1fr)); gap:0.5rem; margin-bottom:0.85rem;">'
-                + _jiqTile('Director-driven',  Number(da.director_driven_pct || 0).toFixed(1) + '%', _jiqFmt(da.director_driven_hh || 0) + ' HHs (director-owned)', '#a855f7')
-                + _jiqTile('Cast-driven',      Number(da.cast_driven_pct || 0).toFixed(1) + '%',     _jiqFmt(da.cast_driven_hh || 0) + ' HHs (cast-adjacent)', '#c4b5fd')
-                + _jiqTile('Marketing-driven', Number(da.marketing_driven_pct || 0).toFixed(1) + '%', _jiqFmt(da.marketing_driven_hh || 0) + ' HHs', '#94a3b8')
-                + _jiqTile('Genre / organic',  Number(da.genre_organic_pct || 0).toFixed(1) + '%',   _jiqFmt(da.genre_organic_hh || 0) + ' HHs', '#94a3b8')
-                + _jiqTile('Word of mouth',    Number(da.word_of_mouth_pct || 0).toFixed(1) + '%',   _jiqFmt(da.word_of_mouth_hh || 0) + ' HHs', '#86efac')
+                + _jiqTile('Director-driven',  Number(da.director_driven_pct || 0).toFixed(1) + '%', _jiqFmt(da.director_driven_hh || 0) + ' Accounts (director-owned)', '#a855f7')
+                + _jiqTile('Cast-driven',      Number(da.cast_driven_pct || 0).toFixed(1) + '%',     _jiqFmt(da.cast_driven_hh || 0) + ' Accounts (cast-adjacent)', '#c4b5fd')
+                + _jiqTile('Marketing-driven', Number(da.marketing_driven_pct || 0).toFixed(1) + '%', _jiqFmt(da.marketing_driven_hh || 0) + ' Accounts', '#94a3b8')
+                + _jiqTile('Genre / organic',  Number(da.genre_organic_pct || 0).toFixed(1) + '%',   _jiqFmt(da.genre_organic_hh || 0) + ' Accounts', '#94a3b8')
+                + _jiqTile('Word of mouth',    Number(da.word_of_mouth_pct || 0).toFixed(1) + '%',   _jiqFmt(da.word_of_mouth_hh || 0) + ' Accounts', '#86efac')
                 + '</div>';
 
             var attribNote = '';
@@ -92363,7 +92440,7 @@ https://www.instagram.com/p/..."></textarea>
                     return '<div style="padding:0.5rem 0.75rem; border-radius:5px; background:rgba(255,255,255,0.025); border-left:3px solid #a855f7;">'
                          +   '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.25rem;">'
                          +     '<div style="font-size:0.8rem; font-weight:700;">' + (i + 1) + '. ' + _jiqEsc(s.step) + '</div>'
-                         +     '<div><span style="font-size:0.82rem; font-weight:800; color:#c4b5fd;">' + _jiqFmt(s.count_hh || 0) + '</span> <span style="opacity:0.65; font-size:0.7rem;">HHs · ' + Number(s.share_of_aware_pct || 0).toFixed(1) + '% of aware' + (s.drop_pp > 0 ? ' · -' + Number(s.drop_pp).toFixed(1) + 'pp' : '') + '</span></div>'
+                         +     '<div><span style="font-size:0.82rem; font-weight:800; color:#c4b5fd;">' + _jiqFmt(s.count_hh || 0) + '</span> <span style="opacity:0.65; font-size:0.7rem;">Accounts · ' + Number(s.share_of_aware_pct || 0).toFixed(1) + '% of aware' + (s.drop_pp > 0 ? ' · -' + Number(s.drop_pp).toFixed(1) + 'pp' : '') + '</span></div>'
                          +   '</div>'
                          +   '<div style="height:6px; border-radius:3px; background:rgba(168,85,247,0.15); overflow:hidden;">'
                          +     '<div style="height:100%; width:' + pctOfBar.toFixed(2) + '%; background:#a855f7;"></div>'
@@ -92379,7 +92456,7 @@ https://www.instagram.com/p/..."></textarea>
                 + '<thead><tr style="border-bottom:1px solid var(--border-color); text-align:left;">'
                 +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase;">Channel</th>'
                 +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Share</th>'
-                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">HHs</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Accounts</th>'
                 +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Conv rate</th>'
                 +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Seat→Pay</th>'
                 +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7;">Note</th>'
@@ -92805,7 +92882,7 @@ https://www.instagram.com/p/..."></textarea>
                 +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase;">Director</th>'
                 +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7; text-transform:uppercase;">Released</th>'
                 +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Audience overlap</th>'
-                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">HHs</th>'
+                +   '<th style="padding:6px 8px; text-align:right; font-size:0.62rem; opacity:0.7;">Accounts</th>'
                 +   '<th style="padding:6px 8px; font-size:0.62rem; opacity:0.7;">Why</th>'
                 + '</tr></thead><tbody>'
                 + data.comp_films.map(function(c) {
@@ -94668,7 +94745,7 @@ https://www.instagram.com/p/..."></textarea>
                 var _projHH = _pb.projected_us_hh || (data.study_cohort_size || 0);
                 var _addrPctOfBase = (_projHH > 0) ? (totalAddr * 1000000 / _projHH * 100) : 0;
                 topEl.innerHTML = ''
-                    + _jiqTile('Panel sample',       'n=' + _jiqFmt(_pb.sample_panelists || 0), 'Netflix-active panelist HHs', '#fca5a5')
+                    + _jiqTile('Panel sample',       'n=' + _jiqFmt(_pb.sample_panelists || 0), 'Netflix-active panelist Accounts', '#fca5a5')
                     + _jiqTile('Active households',  _jiqFmt(_projHH), 'U.S. Netflix base (' + (_pb.projection_factor || 32.99).toFixed(2) + 'x panel projection)', '#5b6cff')
                     + _jiqTile('Total addressable',  totalAddr.toFixed(1) + 'M', _addrPctOfBase.toFixed(0) + '% of base (overlap allowed, 15 packs)', '#5b6cff')
                     + _jiqTile('Largest pack',       _jiqEsc((top3[0] || {}).label || '-'), ((top3[0] || {}).pct_in_market || 0).toFixed(1) + '% of 79.4M base', '#22c55e')
@@ -94969,7 +95046,7 @@ https://www.instagram.com/p/..."></textarea>
             var subEl = document.getElementById('jiqNflxPrePostSubtitle');
             if (subEl) subEl.textContent = data.subtitle || '';
             _jiqNflxSetCohortMeta('jiqNflxPrePostMeta',
-                'Exposed cohort - HHs that saw the campaign creative',
+                'Exposed cohort - Accounts that saw the campaign creative',
                 (data.campaign && data.campaign.exposed_cohort) || 0);
 
             // Campaign header strip - 6-tile compact KPI band.
@@ -94988,15 +95065,15 @@ https://www.instagram.com/p/..."></textarea>
                     +   rowTile('Show',            c.show            || '-')
                     +   rowTile('Flight',          c.flight_dates    || '-')
                     +   rowTile('Format',          c.ad_format       || '-')
-                    +   rowTile('Exposed cohort',  _jiqFmt(c.exposed_cohort || 0) + ' HHs')
-                    +   rowTile('Matched control', _jiqFmt(c.control_cohort || 0) + ' HHs')
+                    +   rowTile('Exposed cohort',  _jiqFmt(c.exposed_cohort || 0) + ' Accounts')
+                    +   rowTile('Matched control', _jiqFmt(c.control_cohort || 0) + ' Accounts')
                     + '</div>'
                     + '<div style="margin-top:0.55rem; padding-top:0.55rem; border-top:1px dashed rgba(255,255,255,0.10);'
                     +              ' font-size:0.72rem; color:var(--text-secondary); line-height:1.5;">'
                     +   '<strong style="color:var(--text-primary);">Creative:</strong> ' + _jiqEsc(c.creative || '-') + '. '
                     +   '<strong style="color:var(--text-primary);">Placement:</strong> ' + _jiqEsc(c.placement || '-') + '. '
                     +   '<strong style="color:var(--text-primary);">Avg. frequency:</strong> ' + (c.creative_freq || 0).toFixed(1) + 'x · '
-                    +   '<strong style="color:var(--text-primary);">Gross reach:</strong> ' + (c.gross_reach_pct || 0).toFixed(1) + '% of ad-tier HHs. '
+                    +   '<strong style="color:var(--text-primary);">Gross reach:</strong> ' + (c.gross_reach_pct || 0).toFixed(1) + '% of ad-tier Accounts. '
                     +   '<strong style="color:var(--text-primary);">Matched on:</strong> ' + _jiqEsc(c.matched_on || '-') + '.'
                     + '</div>';
             }
@@ -95324,7 +95401,7 @@ https://www.instagram.com/p/..."></textarea>
                     +   '<div><div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em;">Flight</div>'
                     +     '<div style="font-size:0.85rem; font-weight:700;">' + _jiqEsc(s.flight || '-') + '</div></div>'
                     +   '<div><div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em;">Exposed cohort</div>'
-                    +     '<div style="font-size:0.85rem; font-weight:700;">' + _jiqFmt(s.cohort_size || 0) + ' HHs</div></div>'
+                    +     '<div style="font-size:0.85rem; font-weight:700;">' + _jiqFmt(s.cohort_size || 0) + ' Accounts</div></div>'
                     +   '<div><div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em;">Post window</div>'
                     +     '<div style="font-size:0.85rem; font-weight:700;">' + _jiqEsc(s.post_window || '-') + '</div></div>'
                     +   '<div><div style="font-size:0.62rem; opacity:0.65; text-transform:uppercase; letter-spacing:0.06em;">CPM uplift</div>'
@@ -95464,7 +95541,7 @@ https://www.instagram.com/p/..."></textarea>
         // ── PULL 9 · NETFLIX AUDIENCE QUALITY INDEX (AQI)
         // Rate-card-style card: take the 80M-HH addressable base,
         // composite 12 off-Netflix behavioral signals into a 0-100
-        // score, distribute HHs across 5 tiers, then expose 10
+        // score, distribute Accounts across 5 tiers, then expose 10
         // commercially-priceable segment packs each with a CPM band.
         // Clicking a segment opens a deep-dive: signal-by-signal
         // indexing (vs. genpop Netflix = 100), viewing pattern, lead
@@ -95550,7 +95627,7 @@ https://www.instagram.com/p/..."></textarea>
                                  +     '<div style="font-size:0.78rem; font-weight:800; color:' + (t.color || '#94a3b8') + ';">' + _jiqEsc(t.name) + '</div>'
                                  +     '<div style="font-size:0.66rem; color:var(--text-secondary); font-family:monospace;">' + _jiqEsc(t.range) + '</div>'
                                  +   '</div>'
-                                 +   '<div style="font-size:0.7rem; margin-top:0.2rem;">' + _jiqFmt(t.hh_count || 0) + ' HHs <span style="opacity:0.6;">(' + t.share_pct + '%)</span></div>'
+                                 +   '<div style="font-size:0.7rem; margin-top:0.2rem;">' + _jiqFmt(t.hh_count || 0) + ' Accounts <span style="opacity:0.6;">(' + t.share_pct + '%)</span></div>'
                                  +   '<div style="font-size:0.7rem; margin-top:0.15rem; color:#fcd34d; font-weight:700;">CPM ' + _jiqEsc(t.cpm_band) + '</div>'
                                  + '</div>';
                         }).join('')
@@ -95599,7 +95676,7 @@ https://www.instagram.com/p/..."></textarea>
                                  +   '</div>'
                                  +   '<div style="display:flex; justify-content:space-between; gap:0.5rem; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.35rem;">'
                                  +     '<div>AQI <strong style="color:var(--text-primary); font-family:monospace;">' + (s.aqi_score || 0) + '</strong></div>'
-                                 +     '<div>' + _jiqFmt(s.hh_count || 0) + ' HHs</div>'
+                                 +     '<div>' + _jiqFmt(s.hh_count || 0) + ' Accounts</div>'
                                  +     '<div>CPM <strong style="color:#fcd34d;">+' + (s.cpm_uplift_pct || 0) + '%</strong></div>'
                                  +   '</div>'
                                  +   '<div style="font-size:0.68rem; color:var(--text-secondary); line-height:1.4; font-style:italic;">'
@@ -95671,7 +95748,7 @@ https://www.instagram.com/p/..."></textarea>
                     +                    'background:' + tcol + '22; color:' + tcol + ';">' + _jiqEsc(s.tier) + ' · AQI ' + (s.aqi_score || 0) + '</span>'
                     +     '</div>'
                     +     '<div style="font-size:0.72rem; color:var(--text-secondary);">'
-                    +       _jiqFmt(s.hh_count || 0) + ' HHs · '
+                    +       _jiqFmt(s.hh_count || 0) + ' Accounts · '
                     +       '<strong style="color:#fcd34d;">CPM +' + (s.cpm_uplift_pct || 0) + '%</strong> vs. NFLX baseline'
                     +     '</div>'
                     +   '</div>'
@@ -95739,7 +95816,7 @@ https://www.instagram.com/p/..."></textarea>
             var subEl = document.getElementById('jiqNflxMigrationSubtitle');
             if (subEl) subEl.textContent = data.subtitle || '';
             _jiqNflxSetCohortMeta('jiqNflxMigrationMeta',
-                'Migration base - U.S. Netflix HHs tracked across the streaming marketplace',
+                'Migration base - U.S. Netflix Accounts tracked across the streaming marketplace',
                 ((data.sankey || {}).netflix || {}).hh_count || (_JIQ_NETFLIX_DATA.panel_basis || {}).projected_us_hh || 0);
 
             // Methodology strip - question + 5 design bullets.
@@ -95761,10 +95838,10 @@ https://www.instagram.com/p/..."></textarea>
 
             // SVG Sankey diagram. Layout:
             //   - Left column  : 6 competitor "source" nodes
-            //                    (inbound HHs → Netflix)
+            //                    (inbound Accounts → Netflix)
             //   - Middle column: Netflix node (1 big rect)
             //   - Right column : 6 competitor "destination" nodes
-            //                    (outbound HHs ← Netflix)
+            //                    (outbound Accounts ← Netflix)
             //   - Flow paths   : cubic beziers, stroke-width
             //                    proportional to HH count, opacity
             //                    ~0.4 so overlapping flows still read
@@ -95854,7 +95931,7 @@ https://www.instagram.com/p/..."></textarea>
                     + '<text x="' + (midX + midW / 2) + '" y="' + (midY + midH / 2 - 14) + '" text-anchor="middle" '
                     +       'fill="#ffffff" font-size="20" font-weight="800" letter-spacing="1">' + _jiqEsc(nx.label || 'Netflix') + '</text>'
                     + '<text x="' + (midX + midW / 2) + '" y="' + (midY + midH / 2 + 10) + '" text-anchor="middle" '
-                    +       'fill="#ffffff" font-size="11" opacity="0.85">' + _jiqFmt(nx.hh_count || 0) + ' U.S. HHs</text>'
+                    +       'fill="#ffffff" font-size="11" opacity="0.85">' + _jiqFmt(nx.hh_count || 0) + ' U.S. Accounts</text>'
                     + '<text x="' + (midX + midW / 2) + '" y="' + (midY + midH / 2 + 28) + '" text-anchor="middle" '
                     +       'fill="#ffffff" font-size="9.5" opacity="0.7" font-style="italic">90d rolling base</text>';
 
@@ -95883,7 +95960,7 @@ https://www.instagram.com/p/..."></textarea>
                     + '</text>'
                     + '<text x="' + (midX + midW / 2) + '" y="' + (midY + midH + 18) + '" text-anchor="middle" '
                     +       'fill="' + netColor + '" font-size="11" font-weight="800">'
-                    +   'NET 90d FLOW: ' + netSign + _jiqFmt(netFlow) + ' HHs'
+                    +   'NET 90d FLOW: ' + netSign + _jiqFmt(netFlow) + ' Accounts'
                     + '</text>';
 
                 sankeyEl.innerHTML = ''
@@ -95971,7 +96048,7 @@ https://www.instagram.com/p/..."></textarea>
                                  +   '</div>'
                                  +   '<div style="text-align:right;">'
                                  +     '<div style="font-size:0.85rem; font-weight:800; color:#a5b4fc;">' + (r.pct || 0).toFixed(1) + '%</div>'
-                                 +     '<div style="font-size:0.65rem; color:var(--text-secondary);">' + _jiqFmt(r.hh_count || 0) + ' HHs</div>'
+                                 +     '<div style="font-size:0.65rem; color:var(--text-secondary);">' + _jiqFmt(r.hh_count || 0) + ' Accounts</div>'
                                  +   '</div>'
                                  + '</div>';
                         }).join('')
@@ -96120,7 +96197,7 @@ https://www.instagram.com/p/..."></textarea>
                                  +     '<span style="font-size:1.1rem;">' + (g.emoji || '🎬') + '</span>'
                                  +     '<span style="font-size:0.85rem; font-weight:700;">' + _jiqEsc(g.name) + '</span>'
                                  +   '</div>'
-                                 +   '<div style="font-size:0.66rem; color:var(--text-secondary); margin-bottom:0.25rem;">' + _jiqFmt(g.hh_count || 0) + ' HHs</div>'
+                                 +   '<div style="font-size:0.66rem; color:var(--text-secondary); margin-bottom:0.25rem;">' + _jiqFmt(g.hh_count || 0) + ' Accounts</div>'
                                  +   '<div style="font-size:0.66rem; color:#fda4af; font-weight:700;">'
                                  +     'Top: ' + _jiqEsc((top.name || '-').split(' (')[0]) + ' · +' + (top.cpm_uplift_pct || 0) + '% CPM'
                                  +   '</div>'
@@ -96204,7 +96281,7 @@ https://www.instagram.com/p/..."></textarea>
                     +       '<span style="font-size:1.4rem;">' + (g.emoji || '🎬') + '</span>'
                     +       '<h4 style="margin:0; font-size:1rem;">' + _jiqEsc(g.name) + '</h4>'
                     +     '</div>'
-                    +     '<div style="font-size:0.72rem; color:var(--text-secondary);">' + _jiqFmt(g.hh_count || 0) + ' Netflix HHs · <em>' + _jiqEsc(g.marquee_titles || '') + '</em></div>'
+                    +     '<div style="font-size:0.72rem; color:var(--text-secondary);">' + _jiqFmt(g.hh_count || 0) + ' Netflix Accounts · <em>' + _jiqEsc(g.marquee_titles || '') + '</em></div>'
                     +   '</div>'
                     +   '<div style="display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:0.9rem;">'
                     +     '<div>'

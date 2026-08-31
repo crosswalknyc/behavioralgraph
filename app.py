@@ -9506,7 +9506,7 @@ def api_dispatch_pool():
 # with a clear error when no ANTHROPIC_API_KEY is configured.
 #
 # The prompts are deliberately HIGH-LEVEL: they hand Claude the panel basis
-# (n + projected U.S. HHs) and a structured menu of the 11 hand-authored
+# (n + projected U.S. Accounts) and a structured menu of the 11 hand-authored
 # Netflix pulls already in the deck, then ask Claude to choose which signals
 # resonate with the supplied brand and write the synthesized output in the
 # exact schema the frontend renderers consume.
@@ -9569,7 +9569,7 @@ NFLX_AGENT_EVIDENCE_MENU = """
    cart abandonment delta), decay curve from 1d to 60d, and incrementality %.
 
 8. INCREMENTALITY (nflx_incrementality): the matched-cohort study-design template +
-   pipeline (Total US Netflix HHs -> ad-tier eligible -> reached -> exposed ->
+   pipeline (Total US Netflix Accounts -> ad-tier eligible -> reached -> exposed ->
    matched control). 8-variable SMD balance diagnostic. 4 worked examples
    (Dove x Bridgerton, Toyota RAV4 x Squid Game, Capital One Venture x
    Wednesday, Booking.com x Emily in Paris) - each with 9-metric lift table
@@ -9588,7 +9588,7 @@ NFLX_AGENT_EVIDENCE_MENU = """
 
 10. MIGRATION (nflx_migration): 90d cross-platform streaming flow - Netflix vs
     Hulu / Max / Disney+ / Prime / YouTube / FAST. Sankey of inbound +
-    outbound HHs. Multi-sub stacking distribution (1 to 5+ SVODs). Cycling
+    outbound Accounts. Multi-sub stacking distribution (1 to 5+ SVODs). Cycling
     frequency. Ad-tier acquisition sources. Binge-and-cancel signatures.
     Title-triggered reactivations.
 
@@ -9599,8 +9599,8 @@ NFLX_AGENT_EVIDENCE_MENU = """
     top brands, proof point, sponsorship pack formats. Cross-genre heatmap of
     affinity vs 10 priority advertiser categories.
 
-PANEL BASIS (shared denominator): n=2,406,790 BehavioralGraph consumer-panel HHs
-matched to the Netflix profile, projected to 79.4M U.S. Netflix HHs via the
+PANEL BASIS (shared denominator): n=2,406,790 BehavioralGraph consumer-panel Accounts
+matched to the Netflix profile, projected to 79.4M U.S. Netflix Accounts via the
 32.99x dashboard projection factor. Every percentage in this deck ladders to
 the 79.4M projected base; every absolute count is the panel n times 32.99.
 """.strip()
