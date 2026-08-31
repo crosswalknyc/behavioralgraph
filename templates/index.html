@@ -65870,6 +65870,12 @@ https://www.instagram.com/p/..."></textarea>
             if (!t || _pmDeckInFlight) return false;
             if (/\b(build|make|create|generate|put together|spin up|prepare|draft)\b[^.!?]{0,60}\b(deck|slides|presentation|one[- ]?pagers?|pptx)\b/i.test(t)) return true;
             if (/\binsights? deck\b|\b(pitch|talent[- ]value|audience[- ]value|partnership) deck\b|\bdeck (on|about|for)\b|\bone[- ]?pager (on|about|for)\b/i.test(t)) return true;
+            // Deck-artifact language wins even without a build verb
+            // (Jenna 2026-08-31, Unlikely Collaborators): a Venn
+            // diagram or a single-slide deliverable is unmistakably a
+            // deck ask, so a long multi-part brief that describes its
+            // slides never falls through to the build flow.
+            if (/\bvenn diagram\b|\bon a single slide\b/i.test(t)) return true;
             if (_pmPendingDeckAngle &&
                 /^(y(es|ep|eah)?|sure|ok(ay)?|do it|go ahead|please( do)?|build it|make it|lets do it|let's do it)\b/i.test(t)) return true;
             return false;
@@ -66731,7 +66737,15 @@ https://www.instagram.com/p/..."></textarea>
             // pivot behavior: bypass WITHOUT releasing so the picker
             // stays answerable afterward.
             var _pmKpiPivot = _pmLooksMetricKpi(text);
-            if (_pmArmedStepActive() && !_pmKpiPivot) {
+            // Deck-ask pivot (2026-08-31, Jenna / Unlikely
+            // Collaborators defect): an explicit deck ask always wins
+            // over any half-armed build state. Release every armed
+            // step and clear the window state so the ask reaches the
+            // deck gate below and can never fall into the profile
+            // build intake or the time-window question.
+            var _pmDeckPivot = _pmLooksLikeDeckAsk(text);
+            if (_pmDeckPivot) { _pmReleaseArmedSteps(); }
+            if (_pmArmedStepActive() && !_pmKpiPivot && !_pmDeckPivot) {
                 if (_pmLooksTopicSwitch(text)) {
                     _pmReleaseArmedSteps();
                 } else if (/^(never ?mind|nvm|forget (it|that)|cancel( (that|it))?|scratch that|abort)[.! ]*$/i.test(text)) {
@@ -66852,7 +66866,7 @@ https://www.instagram.com/p/..."></textarea>
             // any other reply gets combined with the stashed
             // original ask so Claude sees the full request in one
             // shot.
-            if (synthChatAwaitingDateConfirm && !_pmKpiPivot) {
+            if (synthChatAwaitingDateConfirm && !_pmKpiPivot && !_pmDeckPivot) {
                 if (_synthChatIsDateConfirmation(text)) {
                     // Batch release (2026-08-20): the whole batch
                     // was stashed pending the window answer.

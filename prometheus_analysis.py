@@ -3209,6 +3209,11 @@ _DECK_ASK_PATTERNS = (
     r'\b(?:pitch|talent[- ]value|audience[- ]value|partnership) deck\b',
     r'\bdeck (?:on|about|for)\b',
     r'\bone[- ]pager (?:on|about|for)\b',
+    # Deck-artifact language wins even without a build verb (Jenna
+    # 2026-08-31, Unlikely Collaborators): a Venn diagram or a single-
+    # slide deliverable is unmistakably a deck ask.
+    r'\bvenn diagram\b',
+    r'\bon a single slide\b',
 )
 _DECK_ASK_COMPILED = tuple(re.compile(p, re.IGNORECASE)
                            for p in _DECK_ASK_PATTERNS)
