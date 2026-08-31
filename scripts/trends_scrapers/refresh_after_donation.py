@@ -68,6 +68,13 @@ DOMAIN_REFRESH_MAP: dict[str, dict[str, list[str]]] = {
     'mgmplus.com':      {'local': ['mgmplus']},
     'starz.com':        {'local': ['starz']},
     'xbox.com':         {'local': ['xbox_gamepass']},
+    # Meta Horizon Store (Top Free + Top Paid). Runs on Hetzner via
+    # run_all (anonymous curl_cffi impersonation is sufficient today).
+    # oculus.com listed alongside meta.com so a donation for either
+    # domain triggers the same refresh (Meta rebranded from Oculus
+    # but a few store paths still 302 through oculus.com).
+    'meta.com':         {'runall': ['meta_quest']},
+    'oculus.com':       {'runall': ['meta_quest']},
     # Film ticketing - one module scrapes all sites
     'amctheatres.com':  {'local': ['film_ticketing']},
     'regmovies.com':    {'local': ['film_ticketing']},

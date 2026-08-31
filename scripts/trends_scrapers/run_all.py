@@ -86,6 +86,11 @@ SCRAPERS = [
     #   - Hulu (2026-07): kept returning 0 items from Hetzner despite
     #     valid donated cookies; Hulu WAFs the datacenter IP pre-auth.
     ('primevideo', 'scripts.trends_scrapers.primevideo',    'Prime Video', 'streaming'),
+    # Meta Horizon Store (formerly Oculus). One snapshot with two
+    # panels (Top Free + Top Paid) - matches how the store surfaces
+    # its own rails on the Games landing page. Anonymous fetch works
+    # via curl_cffi Chrome-TLS impersonation; no cookies needed today.
+    ('meta_quest', 'scripts.trends_scrapers.meta_quest',    'Meta Quest', 'gaming'),
 ]
 
 

@@ -338,14 +338,32 @@ STREAMING_PLATFORMS = [
     ('starz',      'Starz',        False),
 ]
 
-# 2026-08-20: Gaming tab. First platform is Xbox Game Pass Ultimate;
-# PlayStation Plus / Nintendo Switch Online / Steam trending can slot
-# in here later without touching the frontend or payload shape - they
-# just need a scraper that writes trends_iq_snapshots/latest/{slug}.json
-# with the same {national: [{title, image, publisher, genre, url}, ...]}
-# structure.
+# 2026-08-20: Gaming tab. First platform was Xbox Game Pass Ultimate;
+# 2026-08-31 added Meta Quest (Top Free + Top Paid). PlayStation Plus,
+# Nintendo Switch Online, and Steam trending slot in here without
+# touching the frontend or payload shape - each new provider just
+# needs a scraper that writes to `trends_iq_snapshots/latest/{slug}.json`.
+#
+# Tuple shape: (panel_key, panel_label, default_available,
+#               snapshot_slug, source_key_or_None)
+#   panel_key         - Frontend + estimator key. Also the CSV export
+#                       section slug.
+#   panel_label       - Human-readable label rendered on the pill.
+#   default_available - Assume the source is up on first render before
+#                       the snapshot lands (True) vs. show a "warming
+#                       up" state (False).
+#   snapshot_slug     - Name of the S3 snapshot file (without extension).
+#                       Xbox uses its own; both Meta Quest panels share
+#                       one `meta_quest.json`.
+#   source_key        - When None, `_fetch_gaming_trending` reads
+#                       `snap['national']` (Xbox pattern). When set,
+#                       reads `snap['sources'][source_key]['items']`
+#                       (FAST + Meta Quest pattern - one snapshot,
+#                       multiple panels).
 GAMING_PLATFORMS = [
-    ('xbox_gamepass', 'Xbox Game Pass Ultimate', False),
+    ('xbox_gamepass',    'Xbox Game Pass Ultimate', False, 'xbox_gamepass', None),
+    ('meta_quest_free',  'Meta Quest - Top Free',   False, 'meta_quest',    'meta_quest_free'),
+    ('meta_quest_paid',  'Meta Quest - Top Paid',   False, 'meta_quest',    'meta_quest_paid'),
 ]
 
 # How old a snapshot can be before we treat the source as unavailable
@@ -2967,12 +2985,17 @@ _FAST_PANEL_TO_PLATFORM = {
     'pluto':  'pluto',
     'amazon': 'amazon',
 }
-# Gaming: currently one platform. Same shape as the other tabs so
-# adding PS Plus / Nintendo Switch Online / Steam later is a
-# one-line addition here (plus a new platform entry in
-# stream_estimates._GAMING_PLATFORMS_META).
+# Gaming: three panels today (Xbox Game Pass Ultimate + Meta Quest
+# Top Free + Meta Quest Top Paid). Adding PS Plus / Nintendo Switch
+# Online / Steam later is a one-line addition here (plus a new
+# platform entry in stream_estimates._GAMING_PLATFORMS_META). Panel
+# key is identity-mapped to platform key so the estimator's per-
+# platform `us_streams` block lines up with the panel the row is
+# rendered under.
 _GAMING_PANEL_TO_PLATFORM = {
-    'xbox_gamepass': 'xbox_gamepass',
+    'xbox_gamepass':    'xbox_gamepass',
+    'meta_quest_free':  'meta_quest_free',
+    'meta_quest_paid':  'meta_quest_paid',
 }
 # book_charts panels -> per-platform key. Libby panels come from a
 # separate snapshot (`libby_trends`) but plug into the same book
@@ -5679,28 +5702,70 @@ def _fetch_gaming_trending(state: Optional[str], lookback_days: int,
     `_fetch_streaming_trending` so the frontend can reuse render
     helpers.
 
-    Each platform ships an `items` list of up to 25 games with:
+    Handles two snapshot layouts:
+      - Direct-national (Xbox): items live on `snap['national']`.
+        Panel key == snapshot slug. Fed by `xbox_gamepass.json`.
+      - Sources-keyed (Meta Quest): one snapshot backs multiple panels
+        via `snap['sources'][<source_key>].items`. Fed by
+        `meta_quest.json` which packs both Top Free + Top Paid into
+        one S3 object. Snapshot reads are cached per call so we don't
+        re-hit S3 for the second Meta Quest panel.
+
+    Each panel ships an `items` list of up to 25 games with:
       { rank, title, image, publisher, genre, url, product_id,
-        category_display: 'Game', recently_added: bool }
+        category_display, recently_added: bool }
     """
     result: dict[str, dict] = {}
-    for slug, label, _default_avail in GAMING_PLATFORMS:
-        snap = _read_snapshot(slug, asof) if asof else _read_snapshot(slug)
+    snap_cache: dict[str, Optional[dict]] = {}
+    for entry in GAMING_PLATFORMS:
+        # Backwards-tolerant unpack: the pre-2026-08-31 tuple was
+        # 3-wide (panel_key, label, default_avail). Newer 5-wide adds
+        # (snapshot_slug, source_key). Fall back to panel_key as the
+        # snapshot slug when a 3-tuple slips through so this never
+        # crashes on a stale schema.
+        if len(entry) == 5:
+            panel_key, label, _default_avail, snapshot_slug, source_key = entry
+        else:
+            panel_key, label, _default_avail = entry[0], entry[1], entry[2]
+            snapshot_slug, source_key = panel_key, None
+        if snapshot_slug not in snap_cache:
+            snap_cache[snapshot_slug] = (_read_snapshot(snapshot_slug, asof)
+                                          if asof else
+                                          _read_snapshot(snapshot_slug))
+        snap = snap_cache[snapshot_slug]
         if not snap:
-            result[slug] = {'label': label, 'items': [], 'available': False}
+            result[panel_key] = {'label': label, 'items': [],
+                                  'available': False}
             continue
-        items = _snapshot_items_for_geo(snap, state, keywords=keywords)
-        items = items[:25]
+        if source_key:
+            block = ((snap.get('sources') or {}).get(source_key) or {})
+            raw_items = list(block.get('items') or [])
+            # Panel-level metadata (available flag, note, stale marker)
+            # rides through when the scraper set it explicitly. Geo
+            # slicing doesn't apply to source-keyed panels today (Meta
+            # Quest is national-only); a per-source `by_state` block
+            # can be added later if a provider ships regional charts.
+            panel_available = block.get('available')
+            panel_note = block.get('soft_block_reason') or block.get('note')
+        else:
+            raw_items = _snapshot_items_for_geo(snap, state, keywords=keywords)
+            panel_available = None
+            panel_note = None
+        items = raw_items[:25]
         for i, it in enumerate(items, 1):
             it['rank'] = i
-        result[slug] = {
+        available = (panel_available if panel_available is not None
+                     else bool(items))
+        result[panel_key] = {
             'label':      label,
             'items':      items,
-            'available':  bool(items),
+            'available':  available,
             'fetched_at': snap.get('fetched_at'),
         }
-        if snap.get('error'):
-            result[slug]['note'] = f"latest snapshot: {snap['error']}"
+        if panel_note:
+            result[panel_key]['note'] = panel_note
+        elif snap.get('error'):
+            result[panel_key]['note'] = f"latest snapshot: {snap['error']}"
     return result
 
 
@@ -6012,6 +6077,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'music_charts':        lambda: _read_snapshot('music_charts',       asof),
             'podcast_charts':      lambda: _read_snapshot('podcast_charts',     asof),
             'book_charts':         lambda: _read_snapshot('book_charts',        asof),
+            'comics_charts':       lambda: _read_snapshot('comics_charts',      asof),
             'film_ticketing':      lambda: _read_snapshot('film_ticketing',     asof),
             'libby_trends':        lambda: _read_snapshot('libby_trends',       asof),
             'philanthropy_news':   lambda: _read_snapshot('philanthropy_news',  asof),
@@ -6046,6 +6112,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'music_charts':        lambda: _read_snapshot('music_charts'),
             'podcast_charts':      lambda: _read_snapshot('podcast_charts'),
             'book_charts':         lambda: _read_snapshot('book_charts'),
+            'comics_charts':       lambda: _read_snapshot('comics_charts'),
             'film_ticketing':      lambda: _read_snapshot('film_ticketing'),
             'libby_trends':        lambda: _read_snapshot('libby_trends'),
             'philanthropy_news':   lambda: _read_snapshot('philanthropy_news'),
@@ -6112,6 +6179,14 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # Book charts (Amazon Best-Sellers + Apple Books; Audible stubbed).
     book_snap    = results.get('book_charts') or {}
     book_charts  = book_snap.get('sources') or {}
+
+    # Comics charts (Amazon Comics & Graphic Novels bestsellers +
+    # Apple Books Comics genre RSS + Libby Comics via LA County
+    # OverDrive). Same shape as `book_charts` so the frontend renderer
+    # can share the row layout. See `scripts/trends_scrapers/
+    # comics_charts.py` for the per-source transport notes.
+    comics_snap    = results.get('comics_charts') or {}
+    comics_charts  = comics_snap.get('sources') or {}
 
     # Film ticketing (Fandango + Cinemark live; AMC / Regal / Atom
     # stubbed with cookie-donation guidance until a signed-in session
@@ -6330,6 +6405,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'music_trending':                 music_charts,
             'podcasts_trending':              podcast_charts,
             'books_trending':                 book_charts,
+            'comics_trending':                comics_charts,
             'films_ticketing':                film_sources,
             'libby_trending':                 libby_trends,
             # `fused_trending` is populated below after the payload
@@ -6383,7 +6459,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'fast':          sum(len(((fast_trending.get(k) or {}).get('items') or []))
                                   for k in ('roku', 'tubi', 'pluto', 'amazon')),
             'gaming':        sum(len(((gaming_trending.get(k) or {}).get('items') or []))
-                                  for k, _l, _a in GAMING_PLATFORMS),
+                                  for k, *_rest in GAMING_PLATFORMS),
             'music':         sum(len(((music_charts.get(k) or {}).get('items') or []))
                                   for k in ('spotify', 'apple', 'tiktok', 'shazam', 'amazon')),
             'podcasts':      sum(len(((podcast_charts.get(k) or {}).get('items') or []))
@@ -6395,6 +6471,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                   for k in ('amazon', 'apple', 'audible', 'spotify')) +
                               sum(len(((libby_trends.get(k) or {}).get('items') or []))
                                   for k in ('ebook', 'audiobook', 'magazine'))),
+            'comics':        sum(len(((comics_charts.get(k) or {}).get('items') or []))
+                                  for k in ('amazon_kindle', 'apple_comics', 'libby_comics')),
             'films':         sum(len(((film_sources.get(k) or {}).get('items') or []))
                                   for k in ('fandango', 'cinemark', 'amc', 'regal', 'atom')),
             'philanthropy':  (len(philanthropy_news) +

@@ -124,11 +124,12 @@ _MAX_BOOK_ITEMS      = 400   # was 220 - 3 book + 3 libby panels each
 # little cross-platform overlap. ~$6-7/day added to the daily Claude
 # spend at full 100-row coverage.
 _MAX_FAST_ITEMS      = 350
-# Gaming: 1 platform (Xbox Game Pass Ultimate) x top 25 = 25 gross,
-# no cross-platform dedup needed today. Room to grow when we add
-# PlayStation Plus / Nintendo Switch Online / Steam later without
-# changing the cap.
-_MAX_GAMING_ITEMS    = 30
+# Gaming: 3 panels today - Xbox Game Pass Ultimate (25) + Meta Quest
+# Top Free (~20) + Meta Quest Top Paid (~10). Cross-panel dedup
+# collapses any title that charts on multiple providers (e.g. Beat
+# Saber if it ever landed on Game Pass). Room to grow when we add
+# PlayStation Plus / Nintendo Switch Online / Steam later.
+_MAX_GAMING_ITEMS    = 80
 # FAST-CHANNEL RANKER: micro-channels inside each FAST platform
 # (LaurenZSide, Mythical 24/7, Nick Jr. Pluto TV, Forensic Files
 # 24/7, ...). Roku ships ~619, Amazon ~655, Pluto ~410, Tubi ~169
@@ -312,13 +313,20 @@ _FAST_SLUGS = (
 )
 
 
-# Gaming platforms. Snapshot layout mirrors streaming's one-file-per-
-# platform pattern (fast_channels uses one merged file; gaming uses
-# one per platform because each backend scraper is bespoke - Xbox
-# hydrates via DisplayCatalog v7, PS Plus would hit a totally
-# different endpoint). Chart labels feed `_CHART_LABEL_TO_PLATFORM`.
+# Gaming platforms. Snapshot layout is heterogenous: Xbox writes one
+# file per platform (`xbox_gamepass.json`) with items on the top-level
+# `national` key, while Meta Quest writes one file (`meta_quest.json`)
+# with two panels under `sources.{meta_quest_free,meta_quest_paid}` -
+# same pattern FAST channels use. `_collect_gaming` handles both.
+# Chart labels feed `_CHART_LABEL_TO_PLATFORM`.
+#
+# Tuple shape: (panel_key, panel_label, snapshot_slug, source_key_or_None)
+# When source_key is None -> read `national` off the snapshot named
+#   `snapshot_slug`. When set -> read `sources[source_key].items`.
 _GAMING_SLUGS = (
-    ('xbox_gamepass', 'Xbox Game Pass Ultimate'),
+    ('xbox_gamepass',    'Xbox Game Pass Ultimate', 'xbox_gamepass', None),
+    ('meta_quest_free',  'Meta Quest - Top Free',   'meta_quest',    'meta_quest_free'),
+    ('meta_quest_paid',  'Meta Quest - Top Paid',   'meta_quest',    'meta_quest_paid'),
 )
 
 
@@ -415,17 +423,32 @@ def _collect_fast(max_items: int = _MAX_FAST_ITEMS) -> list[dict]:
 
 
 def _collect_gaming(max_items: int = _MAX_GAMING_ITEMS) -> list[dict]:
-    """Union top games across every gaming-platform snapshot (currently
-    just xbox_gamepass), keyed by `game:<norm_title>`. Games don't
-    collide by title the way songs do (there's only one 'Baldur's
-    Gate 3'), so no artist qualifier in the key. Publisher rides
-    along on `artist` for prompt context only."""
+    """Union top games across every gaming-platform panel, keyed by
+    `game:<norm_title>`. Games don't collide by title the way songs
+    do (there's only one 'Baldur's Gate 3'), so no artist qualifier
+    in the key. Publisher rides along on `artist` for prompt context
+    only.
+
+    Handles both snapshot layouts:
+      - Direct-national (Xbox): items live on `snap['national']`.
+      - Sources-keyed (Meta Quest): items live on
+        `snap['sources'][source_key]['items']`. Same snapshot may
+        back multiple panel keys; cached per-run.
+    """
     per: dict[str, dict] = {}
-    for slug, label in _GAMING_SLUGS:
-        snap = _read_snapshot(slug)
+    snap_cache: dict[str, dict] = {}
+    for panel_key, label, snapshot_slug, source_key in _GAMING_SLUGS:
+        snap = snap_cache.get(snapshot_slug)
+        if snap is None:
+            snap = _read_snapshot(snapshot_slug) or {}
+            snap_cache[snapshot_slug] = snap
         if not snap:
             continue
-        items = snap.get('national') or snap.get('items') or []
+        if source_key:
+            block = ((snap.get('sources') or {}).get(source_key) or {})
+            items = block.get('items') or []
+        else:
+            items = snap.get('national') or snap.get('items') or []
         for i, it in enumerate(items[:25]):
             title = (it.get('title') or '').strip()
             if not _cp_normalize(title):
@@ -1238,6 +1261,56 @@ _GAMING_PLATFORMS_META = [
          'state in their launch week. Anchor: Microsoft first-party '
          'engagement disclosures, Newzoo Cloud Gaming Insights, '
          'Circana US Games Tracker.'
+     )},
+    # Meta Horizon Store (Meta Quest 2 / 3 / 3S + Quest Pro headset
+    # base). US install base ~14-16M active headsets mid-2026
+    # (Ampere + IDC AR/VR unit tracker; ~30M cumulative shipments
+    # globally, ~55-60% US share on active-use panels). Weekly US
+    # active players on the top free games (Gorilla Tag, VRChat,
+    # Roblox VR) sit 800K-2.5M; mid-tier free 150K-500K; long-tail
+    # free 20-80K. Paid catalog top titles (Beat Saber, BONELAB,
+    # Blade & Sorcery: Nomad, GOLF+) 200K-800K weekly; mid-tier paid
+    # 60K-200K; long-tail paid 10K-40K. Free rail carries the mass-
+    # engagement scale; paid rail runs 3-5x smaller unique-user
+    # counts but with heavier per-session time.
+    {'key': 'meta_quest_free',
+     'label': 'Meta Quest - Top Free',
+     'ceiling': 3_500_000,
+     'anchors': (
+         'Meta Quest US active headset base ~14-16M mid-2026 (Ampere '
+         'Analysis + IDC AR/VR shipment tracker + Meta Reality Labs '
+         'quarterly engagement disclosures). Top-3 free games (Gorilla '
+         'Tag, VRChat, Roblox VR) sit 800K-2.5M unique US weekly '
+         'players; the store\'s "Most popular" trending rail is a '
+         'reliable read on this tier. Mid-tier free (ranks 4-10) '
+         '150K-500K weekly. Long-tail free (ranks 11-20) 20-80K '
+         'weekly. Free apps skew heavier per-session time than paid '
+         'because there is no purchase gate; social sandboxes like '
+         'Gorilla Tag / VRChat run 45-90 min average session vs. '
+         '20-30 for single-player paid. Big launches or viral '
+         'moments (a new Gorilla Tag mode, a Roblox VR crossover '
+         'weekend) spike a title 2-4x its steady state. Anchor: '
+         'Meta Reality Labs disclosures, Newzoo VR/AR Games Tracker, '
+         'Sensor Tower Meta Quest app analytics.'
+     )},
+    {'key': 'meta_quest_paid',
+     'label': 'Meta Quest - Top Paid',
+     'ceiling': 1_200_000,
+     'anchors': (
+         'Meta Quest US paid-catalog top sellers run 3-5x smaller '
+         'weekly-user counts than the free rail because the purchase '
+         'gate compresses the funnel. Beat Saber (evergreen top '
+         'seller, $19.99 base + DLC packs) sits 400K-800K unique US '
+         'weekly players; BONELAB / Blade & Sorcery: Nomad / GOLF+ / '
+         'I Am Cat 200K-500K weekly. Mid-tier paid (ranks 4-10) '
+         '60K-200K weekly. Long-tail paid (ranks 11-20) 10K-40K '
+         'weekly. Big paid launches (Marvel\'s Deadpool VR, Assassin\'s '
+         'Creed Nexus, Batman: Arkham Shadow) hit 300K-600K in their '
+         'first month then decay to 40-120K steady state within 6 '
+         'weeks. Bundle promotions during holiday windows spike '
+         'Beat Saber / BONELAB 2-3x normal. Anchor: Ampere VR '
+         'revenue charts, UploadVR weekly revenue tracker, Meta '
+         'Reality Labs paid-catalog disclosures.'
      )},
 ]
 
