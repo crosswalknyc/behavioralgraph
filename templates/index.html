@@ -25825,6 +25825,32 @@ https://www.instagram.com/p/..."></textarea>
             body[data-theme="light"] #intentIQView .iiq-phase-timeline,
             body[data-theme="light"] #intentIQView .iiq-selector-bar,
             body[data-theme="light"] #intentIQView .iiq-question-card { background: #fff; border-color: rgba(0,0,0,0.08); }
+            /* Explore drawer (Phase 5) - wraps the legacy sub-tab bar
+               (Timeline / Assets / Performance / Intent to Conversion /
+               ROI) plus its 6 panels behind a single collapsible header.
+               Three visual states via wrapper class:
+                 .is-passthrough  -> brand campaigns; no header, no
+                                     divider, no hint; contents visible
+                                     exactly as pre-Phase-5.
+                 .is-collapsed    -> film campaigns, drawer closed;
+                                     header + hint visible, body hidden.
+                 .is-expanded     -> film campaigns, drawer open;
+                                     header visible (no hint), body
+                                     visible with all sub-tabs live. */
+            #intentIQView .iiq-explore-drawer { margin: 0.15rem 0 0.85rem; }
+            #intentIQView .iiq-explore-drawer.is-passthrough > .iiq-explore-header,
+            #intentIQView .iiq-explore-drawer.is-passthrough > .iiq-explore-divider,
+            #intentIQView .iiq-explore-drawer.is-passthrough > .iiq-explore-hint { display: none; }
+            #intentIQView .iiq-explore-drawer.is-collapsed > .iiq-explore-body { display: none; }
+            #intentIQView .iiq-explore-drawer.is-expanded > .iiq-explore-hint { display: none; }
+            #intentIQView .iiq-explore-divider { border-top: 1px solid rgba(255,255,255,0.08); margin: 0.5rem 0 0.65rem; }
+            #intentIQView .iiq-explore-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 0.5rem 0.2rem 0.35rem; user-select: none; border-radius: 4px; }
+            #intentIQView .iiq-explore-header:hover { background: rgba(199,242,62,0.05); }
+            #intentIQView .iiq-explore-eyebrow { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 500; font-size: 13px; color: #C7F23E; letter-spacing: 0.06em; text-transform: uppercase; }
+            #intentIQView .iiq-explore-chevron { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 1.05rem; color: #C7F23E; margin-left: 0.5rem; line-height: 1; }
+            #intentIQView .iiq-explore-hint { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; color: #B7B3D8; padding: 0 0.2rem 0.6rem; }
+            body[data-theme="light"] #intentIQView .iiq-explore-divider { border-top-color: rgba(0,0,0,0.08); }
+            body[data-theme="light"] #intentIQView .iiq-explore-hint { color: #5C6560; }
         </style>
         <div id="intentIQView">
             <div class="iiq-header">
@@ -27479,6 +27505,106 @@ https://www.instagram.com/p/..."></textarea>
                 // (matches the legacy GOAT / Hades path where the ingest
                 // agent didn't stamp title_type on early builds).
                 return true;
+            }
+            // ================================================================
+            // Explore drawer (Phase 5) helpers + state store.
+            //
+            // Wraps the legacy sub-tab bar (Timeline / Assets / Performance
+            // / Intent to Conversion / ROI) plus its 6 panels in a
+            // collapsible drawer so the four Phase 1-4 weekly-reporter
+            // cards (Weekly Summary, Asset-Ranked Table, Audience
+            // Response Table, Trend Module) fill the viewport on first
+            // landing. Film campaigns only; brand campaigns render the
+            // sub-tab bar unconditionally via the .is-passthrough class.
+            //
+            // Open/closed state persists per title slug in
+            // window._iiqUIState.exploreDrawerOpenBySlug so a power user
+            // who opens Explore for GOAT, navigates away, and comes back
+            // finds it still open for GOAT. Brand campaigns are
+            // unaffected because the wrapper is passthrough for them.
+            //
+            // These helpers are safe no-ops until commit 2 wires the DOM
+            // wrapper into templates/index.html; document.getElementById
+            // returns null and every function returns early.
+            // ================================================================
+            window._iiqUIState = window._iiqUIState || {};
+            window._iiqUIState.exploreDrawerOpenBySlug = window._iiqUIState.exploreDrawerOpenBySlug || {};
+            function _iiqExploreDrawerHintText() {
+                // Read the actual sub-tab labels from the DOM so if a
+                // tab is added / removed later the hint text updates
+                // without a code change. Strip the leading emoji + any
+                // non-alphanumeric prefix, Title-Case each label (small
+                // connectors stay lower, ROI stays upper), join with
+                // commas, terminal period.
+                try {
+                    var bar = document.querySelector('#iiqExploreDrawer .iiq-subtab-bar');
+                    if (!bar) return '';
+                    var small = { of: 1, to: 1, the: 1, and: 1, a: 1, an: 1, or: 1, on: 1, in: 1, for: 1 };
+                    var labels = [];
+                    bar.querySelectorAll('.iiq-subtab').forEach(function(b) {
+                        var raw = String(b.textContent || '').replace(/^[^A-Za-z0-9]+/, '').trim();
+                        if (!raw) return;
+                        var pretty = raw.toLowerCase().split(/\s+/).map(function(w, i) {
+                            if (w === 'roi') return 'ROI';
+                            if (i > 0 && small[w]) return w;
+                            return w.charAt(0).toUpperCase() + w.slice(1);
+                        }).join(' ');
+                        labels.push(pretty);
+                    });
+                    return labels.length ? (labels.join(', ') + '.') : '';
+                } catch (_e) {
+                    return '';
+                }
+            }
+            window._iiqExploreDrawerToggle = function() {
+                var drawer = document.getElementById('iiqExploreDrawer');
+                if (!drawer) return;
+                if (drawer.classList.contains('is-passthrough')) return;
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                var next = !drawer.classList.contains('is-expanded');
+                drawer.classList.toggle('is-expanded', next);
+                drawer.classList.toggle('is-collapsed', !next);
+                var chev = document.getElementById('iiqExploreChevron');
+                if (chev) chev.textContent = next ? '\u25B4' : '\u25BE';
+                var hdr = drawer.querySelector('.iiq-explore-header');
+                if (hdr) hdr.setAttribute('aria-expanded', next ? 'true' : 'false');
+                if (slug) {
+                    window._iiqUIState.exploreDrawerOpenBySlug[slug] = next;
+                }
+            };
+            function _iiqRenderExploreDrawer() {
+                var drawer = document.getElementById('iiqExploreDrawer');
+                if (!drawer) return;
+                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
+                var isFilm = _iiqIsFilmCampaign(ov);
+                if (!isFilm) {
+                    // Brand campaign (Chime, MyPay, Big Beef, etc.):
+                    // pure passthrough. Sub-tab bar renders exactly as
+                    // it did pre-Phase-5. No header, no divider, no
+                    // chevron, no hint text, no click target.
+                    drawer.classList.add('is-passthrough');
+                    drawer.classList.remove('is-collapsed', 'is-expanded');
+                    var hdrB = drawer.querySelector('.iiq-explore-header');
+                    if (hdrB) hdrB.setAttribute('aria-expanded', 'true');
+                    return;
+                }
+                drawer.classList.remove('is-passthrough');
+                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
+                var open = false;
+                if (slug && Object.prototype.hasOwnProperty.call(window._iiqUIState.exploreDrawerOpenBySlug, slug)) {
+                    open = !!window._iiqUIState.exploreDrawerOpenBySlug[slug];
+                }
+                drawer.classList.toggle('is-expanded', open);
+                drawer.classList.toggle('is-collapsed', !open);
+                var chev = document.getElementById('iiqExploreChevron');
+                if (chev) chev.textContent = open ? '\u25B4' : '\u25BE';
+                var hdr = drawer.querySelector('.iiq-explore-header');
+                if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
+                var hint = document.getElementById('iiqExploreHint');
+                if (hint) {
+                    var txt = _iiqExploreDrawerHintText();
+                    if (txt) hint.textContent = txt;
+                }
             }
             function _iiqTodayIso() {
                 var d = new Date();
@@ -29296,6 +29422,7 @@ https://www.instagram.com/p/..."></textarea>
                 try { _iiqRenderAssetTable(); } catch (_e) {}
                 try { _iiqRenderAudienceTable(); } catch (_e) {}
                 try { _iiqRenderTrendModule(); } catch (_e) {}
+                try { _iiqRenderExploreDrawer(); } catch (_e) {}
             }
             // ================================================================
 
