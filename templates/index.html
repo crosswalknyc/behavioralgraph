@@ -53396,12 +53396,17 @@ https://www.instagram.com/p/..."></textarea>
 
         // Pick the same stream-estimate value the row chip shows.
         function _tiqExtractStreamValue(row) {
-            if (!row || typeof row !== 'object') return { value: '', unit: '' };
+            if (!row || typeof row !== 'object') return { value: '', unit: '', change: '' };
             var e = row.us_streams || row.stream_estimate || row.us_audience || null;
-            if (!e) return { value: '', unit: '' };
-            var v = e.estimate || e.value || e.count || '';
+            if (!e) return { value: '', unit: '', change: '' };
+            var v = e.us_estimate || e.estimate || e.value || e.count || '';
             var u = e.unit_label || e.unit || '';
-            return { value: v === 0 ? 0 : (v || ''), unit: u || '' };
+            var change = '';
+            if (typeof e.delta_pct === 'number' && e.delta_pct !== 0 && e.direction) {
+                var pct = Math.round(Math.abs(e.delta_pct) * 100);
+                if (pct >= 1) change = (e.direction === 'up' ? '+' : e.direction === 'down' ? '-' : '') + pct + '%';
+            }
+            return { value: v === 0 ? 0 : (v || ''), unit: u || '', change: change };
         }
 
         // Fold a mover row's rank_change into a single Change string.
@@ -53594,7 +53599,7 @@ https://www.instagram.com/p/..."></textarea>
                         Unit: se.unit,
                         Change: it.weeks_in_top10
                                     ? ('week ' + it.weeks_in_top10)
-                                    : '',
+                                    : se.change,
                         Why: it.why || '',
                         URL: it.url || ''
                     });
@@ -53630,7 +53635,7 @@ https://www.instagram.com/p/..."></textarea>
                             Unit: se.unit,
                             Change: it.weeks_in_top10
                                         ? ('week ' + it.weeks_in_top10)
-                                        : '',
+                                        : se.change,
                             Why: it.why || '',
                             URL: it.url || ''
                         });
@@ -53641,15 +53646,16 @@ https://www.instagram.com/p/..."></textarea>
                 // FAST panels also carry a channels list. Emit it as
                 // its own section so the ranker view is exportable too.
                 (panel.channels || []).forEach(function(ch, i) {
+                    var se = _tiqExtractStreamValue(ch);
                     out.push({
                         Tab: tabLabel,
                         Section: label + ' - Channels',
                         Rank: i + 1,
                         Title: ch.title || ch.name || '',
                         Subtitle: ch.content_type || '',
-                        Value: (ch.us_streams && ch.us_streams.estimate) || '',
-                        Unit: (ch.us_streams && ch.us_streams.unit_label) || 'weekly US viewers',
-                        Change: '',
+                        Value: se.value,
+                        Unit: se.unit || 'weekly US viewers',
+                        Change: se.change,
                         Why: '',
                         URL: ch.url || ''
                     });
@@ -53680,7 +53686,7 @@ https://www.instagram.com/p/..."></textarea>
                         Subtitle: it.publisher || it.subtitle || '',
                         Value: se.value,
                         Unit: se.unit,
-                        Change: '',
+                        Change: se.change,
                         Why: it.why || '',
                         URL: it.url || ''
                     });
