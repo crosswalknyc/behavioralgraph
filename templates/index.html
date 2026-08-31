@@ -25201,6 +25201,16 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-sheet-th-label { margin-right: 0.4rem; }
             #trendsIQView .tiq-sheet-titlesort { font-family: inherit; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.02em; text-transform: none; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 1px 4px; cursor: pointer; vertical-align: middle; -webkit-appearance: none; -moz-appearance: none; appearance: none; width: 2.9rem; box-sizing: border-box; text-align: center; text-align-last: center; }
             #trendsIQView .tiq-sheet-titlesort option { background: var(--bg-card); color: var(--text-primary); }
+            #trendsIQView .tiq-sheet-cardhead { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.35rem; }
+            #trendsIQView .tiq-sheet-cardhead h4 { margin: 0; }
+            #trendsIQView .tiq-export { position: relative; }
+            #trendsIQView .tiq-export-btn { font-family: inherit; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 3px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem; }
+            #trendsIQView .tiq-export-btn:hover { color: var(--text-primary); border-color: #a78bfa; }
+            #trendsIQView .tiq-export-caret { font-size: 0.6rem; }
+            #trendsIQView .tiq-export-menu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 30; min-width: 8.5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.28); padding: 0.25rem; display: flex; flex-direction: column; gap: 1px; }
+            #trendsIQView .tiq-export-menu[hidden] { display: none; }
+            #trendsIQView .tiq-export-menu button { font-family: inherit; font-size: 0.72rem; font-weight: 600; text-align: left; color: var(--text-primary); background: transparent; border: none; border-radius: 5px; padding: 5px 9px; cursor: pointer; white-space: nowrap; }
+            #trendsIQView .tiq-export-menu button:hover { background: rgba(148,163,184,0.16); }
             #trendsIQView .tiq-retailer-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
             #trendsIQView .tiq-retailer-tab { padding: 0.4rem 0.85rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; font-size: 0.8rem; cursor: pointer; color: var(--text-secondary); user-select: none; display: inline-flex; align-items: center; gap: 0.35rem; }
             #trendsIQView .tiq-retailer-tab.active { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: #fff; border-color: transparent; }
@@ -52652,6 +52662,88 @@ https://www.instagram.com/p/..."></textarea>
             rows.forEach(function(r) { tbody.appendChild(r); });
         };
 
+        // Card header with an Export-CSV dropdown for a FAST sheet.
+        function _tiqSheetCardHead(label) {
+            return '<div class="tiq-sheet-cardhead">' +
+                     '<h4>' + _tiqEsc(label) + '</h4>' +
+                     '<div class="tiq-export">' +
+                       '<button type="button" class="tiq-export-btn" onclick="tiqToggleExportMenu(this)">Export CSV <span class="tiq-export-caret">▾</span></button>' +
+                       '<div class="tiq-export-menu" hidden>' +
+                         '<button type="button" onclick="tiqExportFastCsv(this,10)">Top 10</button>' +
+                         '<button type="button" onclick="tiqExportFastCsv(this,25)">Top 25</button>' +
+                         '<button type="button" onclick="tiqExportFastCsv(this,50)">Top 50</button>' +
+                         '<button type="button" onclick="tiqExportFastCsv(this,0)">Full list</button>' +
+                       '</div>' +
+                     '</div>' +
+                   '</div>';
+        }
+
+        // Toggle a card's Export-CSV menu; close others + close on outside click.
+        window.tiqToggleExportMenu = function(btn) {
+            var wrap = btn.parentNode;
+            var menu = wrap ? wrap.querySelector('.tiq-export-menu') : null;
+            if (!menu) return;
+            var wasHidden = menu.hasAttribute('hidden');
+            var all = document.querySelectorAll('.tiq-export-menu');
+            for (var i = 0; i < all.length; i++) all[i].setAttribute('hidden', '');
+            if (wasHidden) menu.removeAttribute('hidden');
+            if (!window.__tiqExportMenuInit) {
+                window.__tiqExportMenuInit = true;
+                document.addEventListener('click', function(e) {
+                    if (e.target && e.target.closest && e.target.closest('.tiq-export')) return;
+                    var open = document.querySelectorAll('.tiq-export-menu');
+                    for (var j = 0; j < open.length; j++) open[j].setAttribute('hidden', '');
+                });
+            }
+        };
+
+        // Export a FAST sheet card's rows (in current sort order) to CSV.
+        // limit > 0 caps the row count; 0 exports the full list.
+        window.tiqExportFastCsv = function(el, limit) {
+            var card = el.closest ? el.closest('.tiq-card') : null;
+            if (!card) return;
+            var table = card.querySelector('table.tiq-sheet');
+            if (!table) return;
+            var entity = table.getAttribute('data-entity') || 'Title';
+            var fileLabel = table.getAttribute('data-export') || 'fast';
+            var isTitle = (entity === 'Title');
+            var allRows = Array.prototype.slice.call(table.querySelectorAll('tbody tr.tiq-sheet-row'));
+            var rows = (limit && limit > 0) ? allRows.slice(0, limit) : allRows;
+            var header = isTitle
+                ? ['Rank', 'Title', 'Year', 'Genres', 'Views', 'Change %']
+                : ['Rank', 'Channel', 'Views', 'Change %'];
+            var q = function(v) {
+                v = (v == null) ? '' : String(v);
+                return (/[",\n]/.test(v)) ? '"' + v.replace(/"/g, '""') + '"' : v;
+            };
+            var lines = [header.map(q).join(',')];
+            rows.forEach(function(r, idx) {
+                var rankEl = r.querySelector('.tiq-sheet-rank');
+                var rank = rankEl ? (rankEl.textContent || '').trim() : String(idx + 1);
+                var name = r.getAttribute('data-name') || '';
+                var views = r.getAttribute('data-views') || '';
+                var delta = r.getAttribute('data-delta');
+                var deltaStr = (delta === null || delta === '') ? '' : ((Number(delta) > 0 ? '+' : '') + delta + '%');
+                var cols = isTitle
+                    ? [rank, name, r.getAttribute('data-year') || '', r.getAttribute('data-genres') || '', views, deltaStr]
+                    : [rank, name, views, deltaStr];
+                lines.push(cols.map(q).join(','));
+            });
+            var csv = lines.join('\r\n');
+            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            var suffix = (limit && limit > 0) ? ('top' + limit) : 'full';
+            a.href = url;
+            a.download = (fileLabel + '-' + suffix + '.csv').toLowerCase().replace(/[^a-z0-9.-]+/g, '-');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+            var menu = el.closest ? el.closest('.tiq-export-menu') : null;
+            if (menu) menu.setAttribute('hidden', '');
+        };
+
         // ------------------------------------------------------------------
         // Persona-lens filter helpers (populated from cards.lens_config /
         // cards.lens_scores in the daily lens_relevance snapshot).
@@ -55693,7 +55785,10 @@ https://www.instagram.com/p/..."></textarea>
                                 : '';
                             var rk = it.bucket_rank || (i + 1);
                             var sortTitle = _tiqEsc(String(it.title || '').toLowerCase());
-                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
+                            var dispName = _tiqEsc(String(it.title || ''));
+                            var dataYear = it.year ? _tiqEsc(String(it.year)) : '';
+                            var dataGenres = (it.genres && it.genres.length) ? _tiqEsc(it.genres.slice(0, 3).join(' · ')) : '';
+                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="' + dataYear + '" data-genres="' + dataGenres + '" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
                                    '<td class="tiq-sheet-td-title">' +
                                      '<div class="tiq-sheet-titlecell">' +
                                        '<span class="tiq-sheet-rank">' + rk + '</span>' +
@@ -55709,8 +55804,8 @@ https://www.instagram.com/p/..."></textarea>
                                    '<td class="tiq-sheet-td-num">' + deltaHtml + '</td>' +
                                    '</tr>';
                         }).join('');
-                        return '<div class="tiq-card"><h4>' + _tiqEsc(label) + '</h4>' +
-                               '<table class="tiq-sheet">' +
+                        return '<div class="tiq-card">' + _tiqSheetCardHead(label) +
+                               '<table class="tiq-sheet" data-entity="Title" data-export="' + _tiqEsc(String(k) + '-' + label) + '">' +
                                  '<thead><tr>' +
                                    '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Title</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select></th>' +
                                    '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
@@ -55768,13 +55863,14 @@ https://www.instagram.com/p/..."></textarea>
                                 if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
                             }
                             var viewsTip = _tiqEsc(tipParts.join(' — '));
-                            var ctTag = ch.content_type
-                                ? '<div class="tiq-sheet-subline"><span class="tiq-sheet-tag">' + _tiqEsc(ch.content_type) + '</span></div>'
-                                : '';
+                            var ctTag = '';
                             var chName = _tiqEsc(ch.name);
                             var rk = ch.rank || (i + 1);
                             var sortTitle = _tiqEsc(String(ch.name || '').toLowerCase());
-                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
+                            var dispName = _tiqEsc(String(ch.name || ''));
+                            var dataYear = '';
+                            var dataGenres = '';
+                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="' + dataYear + '" data-genres="' + dataGenres + '" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
                                    '<td class="tiq-sheet-td-title">' +
                                      '<div class="tiq-sheet-titlecell">' +
                                        '<span class="tiq-sheet-rank">' + rk + '</span>' +
@@ -55787,22 +55883,29 @@ https://www.instagram.com/p/..."></textarea>
                                    '<td class="tiq-sheet-td-num tiq-sheet-td-views" title="' + viewsTip + '">' + (viewsNum || '<span class="tiq-sheet-dim">—</span>') + '</td>' +
                                    '<td class="tiq-sheet-td-num">' + deltaHtml + '</td>' +
                                    '</tr>';
-                        }).join('');
+                        });
+                        var _chTbl = function(arr, colId) {
+                            return '<div class="tiq-card">' + _tiqSheetCardHead('Channels') +
+                                   '<table class="tiq-sheet" data-entity="Channel" data-export="' + _tiqEsc(String(k) + '-channels-' + colId) + '">' +
+                                     '<thead><tr>' +
+                                       '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Channel</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select></th>' +
+                                       '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
+                                       '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
+                                     '</tr></thead>' +
+                                     '<tbody>' + arr.join('') + '</tbody>' +
+                                   '</table></div>';
+                        };
+                        var _chHalf = Math.ceil(chRows.length / 2);
+                        var _chLeft = chRows.slice(0, _chHalf);
+                        var _chRight = chRows.slice(_chHalf);
+                        var _chCols = _chRight.length ? '1fr 1fr' : '1fr';
+                        var _chGrid = _chTbl(_chLeft, '1') + (_chRight.length ? _chTbl(_chRight, '2') : '');
                         channelsHtml =
                             '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
                               'Ranking the ' + channels.length + ' most-watched channels on ' +
                               _tiqEsc(s.label || k) + ' by weekly US viewers. Tap Views or Δ% to sort.' +
                             '</div>' +
-                            '<div class="tiq-card">' +
-                              '<table class="tiq-sheet">' +
-                                '<thead><tr>' +
-                                  '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Channel</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select></th>' +
-                                  '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
-                                  '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
-                                '</tr></thead>' +
-                                '<tbody>' + chRows + '</tbody>' +
-                              '</table>' +
-                            '</div>';
+                            '<div class="tiq-cards-grid" style="grid-template-columns: ' + _chCols + ';">' + _chGrid + '</div>';
                     }
 
                     // ---- Mode toggle ------------------------------------------
