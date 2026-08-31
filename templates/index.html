@@ -53058,6 +53058,8 @@ https://www.instagram.com/p/..."></textarea>
                   tip: 'Podcasts: Trending shows on Apple Podcasts, Spotify, Amazon Music, and Audible.' },
                 { key: 'books',     label: 'Books',            count: counts.books     || 0, icon: '📚',
                   tip: 'Books: Best-selling and trending titles across Amazon, Apple Books, Audible, and Libby (LA County Library eBooks, audiobooks, and magazines).' },
+                { key: 'comics',    label: 'Comics',           count: counts.comics    || 0, icon: '📖',
+                  tip: 'Comics: Best-selling comics, manga, and graphic novels across Amazon Comics & Graphic Novels, Apple Books, and Libby (LA County Library).' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺',
                   tip: 'Streaming: Daily Top-10 rankings on Netflix, Disney+, Hulu, Max, Prime Video, and ESPN+, split into Film and TV.' },
                 { key: 'films',     label: 'Films',            count: counts.films     || 0, icon: '🎬',
@@ -53098,6 +53100,7 @@ https://www.instagram.com/p/..."></textarea>
                 _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
                 _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
+                _renderTIQPanel('comics',    renderTIQComics(cards.comics_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('films',     renderTIQFilms(cards.films_ticketing || {})) +
                 _renderTIQPanel('fast',      renderTIQFast(cards.fast_trending || {})) +
@@ -53548,6 +53551,7 @@ https://www.instagram.com/p/..."></textarea>
                 case 'music':     return _tiqExportRowsPanelDict(cards.music_trending, tabLabel, '');
                 case 'podcasts':  return _tiqExportRowsPanelDict(cards.podcasts_trending, tabLabel, '');
                 case 'books':     return _tiqExportRowsBooks(cards, tabLabel);
+                case 'comics':    return _tiqExportRowsPanelDict(cards.comics_trending, tabLabel, '');
                 case 'streaming': return _tiqExportRowsFilmTvSplit(cards.streaming_trending || {}, tabLabel);
                 case 'films':     return _tiqExportRowsPanelDict(cards.films_ticketing, tabLabel, '');
                 case 'fast':      return _tiqExportRowsFilmTvSplit(cards.fast_trending || {}, tabLabel);
@@ -53566,6 +53570,7 @@ https://www.instagram.com/p/..."></textarea>
             music:     'Music',
             podcasts:  'Podcasts',
             books:     'Books',
+            comics:    'Comics',
             streaming: 'Streaming',
             films:     'Films',
             fast:      'FAST',
@@ -53597,7 +53602,7 @@ https://www.instagram.com/p/..."></textarea>
                 return;
             }
             var order = ['searches', 'movers', 'headlines', 'people',
-                          'music', 'podcasts', 'books', 'streaming',
+                          'music', 'podcasts', 'books', 'comics', 'streaming',
                           'films', 'fast', 'gaming', 'watchlist'];
             var all = [];
             order.forEach(function(k) {
@@ -55219,6 +55224,87 @@ https://www.instagram.com/p/..."></textarea>
                    '</div>';
         }
 
+        // Comics renderer. Same three-source card layout as
+        // renderTIQBooks (Amazon / Apple / Libby), but for the
+        // Comics-and-Graphic-Novels feeds. The `sources` shape
+        // matches book_charts (per-source dict with items,
+        // label, available, sub) so the row-level renderer is
+        // shared: Amazon Comics rows carry `price`, Libby rows
+        // carry `availability` + `subjects`, and Apple carries
+        // whichever is populated.
+        function renderTIQComics(sources) {
+            var order = ['amazon_kindle', 'apple_comics', 'libby_comics'];
+            var present = order.filter(function(k) { return sources[k]; });
+            if (!present.length) {
+                return '<div class="tiq-empty">Comics charts are warming up. Check back later.</div>';
+            }
+
+            function rowsFor(items, sourceSlug) {
+                return items.map(function(it, i) {
+                    var img = _tiqPosterCell(it.image);
+                    var titleLine = it.url
+                        ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
+                        : _tiqEsc(it.title);
+                    var rowKey = it.title + ' - ' + (it.artist || sourceSlug);
+                    var meta = '';
+                    if (it.artist) meta += '<span>' + _tiqEsc(it.artist) + '</span>';
+                    if (it.price) {
+                        meta += '<span class="tiq-badge">' + _tiqEsc(it.price) + '</span>';
+                    }
+                    // Libby-only extras.
+                    if (it.availability && sourceSlug === 'libby_comics') {
+                        meta += '<span class="tiq-badge">' + _tiqEsc(it.availability) + '</span>';
+                    }
+                    if (typeof it.holds === 'number' && it.holds > 0) {
+                        meta += '<span>' + _tiqNum(it.holds) + ' holds</span>';
+                    }
+                    if (it.subjects && it.subjects.length) {
+                        meta += '<span style="opacity:0.75;">' + _tiqEsc(it.subjects.slice(0, 2).join(', ')) + '</span>';
+                    }
+                    // Apple carries a `genre` string on comics rows
+                    // (Manga / Graphic Novels / Comics & Graphic Novels).
+                    if (it.genre && sourceSlug === 'apple_comics') {
+                        meta += '<span style="opacity:0.75;">' + _tiqEsc(it.genre) + '</span>';
+                    }
+                    return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                           '<div class="tiq-row-body">' +
+                           '<div class="tiq-row-title">' + titleLine +
+                           _tiqCrossPlatformBadge(it) +
+                           _tiqActions('comic', sourceSlug, rowKey, rowKey, 'National') +
+                           '</div>' +
+                           (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
+                           '</div></div>';
+                }).join('');
+            }
+
+            function cardFor(s, sourceSlug) {
+                var items = s.items || [];
+                var label = s.label || sourceSlug;
+                var body;
+                if (!s.available || !items.length) {
+                    body = '<div class="tiq-placeholder">' +
+                           '<div class="tiq-placeholder-title">' + _tiqEsc(label) + '</div>' +
+                           '<div>' + _tiqEsc(s.sub || 'Warming up.') + '</div>' +
+                           '</div>';
+                } else {
+                    body = '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
+                           rowsFor(items, sourceSlug) +
+                           '</div>';
+                }
+                return '<div class="tiq-card">' +
+                       '<h4>' + _tiqEsc(label) + '</h4>' +
+                       body +
+                       '</div>';
+            }
+
+            var cards = present.map(function(k) {
+                return cardFor(sources[k] || {}, k);
+            }).join('');
+            return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' +
+                   cards +
+                   '</div>';
+        }
+
         // Shorten "Thu, 10 Jul 2026 09:34:11 GMT" -> "10 Jul". Used in
         // the philanthropy news feed to keep the meta line tight.
         function _tiqShortDate(s) {
@@ -56158,6 +56244,7 @@ https://www.instagram.com/p/..."></textarea>
                 _renderTIQPanel('music',     renderTIQMusic(cards.music_trending || {})) +
                 _renderTIQPanel('podcasts',  renderTIQPodcasts(cards.podcasts_trending || {})) +
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
+                _renderTIQPanel('comics',    renderTIQComics(cards.comics_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
                 _renderTIQPanel('films',     renderTIQFilms(cards.films_ticketing || {})) +
                 _renderTIQPanel('fast',      renderTIQFast(cards.fast_trending || {})) +

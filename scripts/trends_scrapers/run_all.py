@@ -44,6 +44,12 @@ SCRAPERS = [
     ('music_charts',       'scripts.trends_scrapers.music_charts',       'Music',                'music'),
     ('podcast_charts',     'scripts.trends_scrapers.podcast_charts',     'Podcasts',             'podcast'),
     ('book_charts',        'scripts.trends_scrapers.book_charts',        'Books',                'book'),
+    # Comics / manga / graphic novels: Amazon Comics & Graphic Novels
+    # bestsellers + Apple Books Comics genre RSS + Libby Comics via
+    # LA County OverDrive. Same-day cost is low (all three sources are
+    # public HTML / RSS / JSON, no cookies, ~5s wall time), so it runs
+    # alongside book_charts in the standard daily batch.
+    ('comics_charts',      'scripts.trends_scrapers.comics_charts',      'Comics',               'comics'),
     ('libby_trends',       'scripts.trends_scrapers.libby_trends',       'Libby popular',        'libby'),
     ('philanthropy_news',  'scripts.trends_scrapers.philanthropy_news',  'Philanthropy news',    'news'),
     ('business_news',      'scripts.trends_scrapers.business_news',      'Business news',        'news'),

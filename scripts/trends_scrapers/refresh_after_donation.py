@@ -89,9 +89,13 @@ DOMAIN_REFRESH_MAP: dict[str, dict[str, list[str]]] = {
     # amazon.com session feeds Prime Video; music.amazon.com feeds the
     # Amazon Music chart + podcast rails (donated ad hoc, not in
     # DEFAULT_DOMAINS).
-    'amazon.com':       {'runall': ['primevideo']},
+    'amazon.com':       {'runall': ['primevideo', 'comics_charts']},
     'music.amazon.com': {'runall': ['music_charts', 'podcast_charts']},
     'audible.com':      {'runall': ['podcast_charts', 'book_charts']},
+    # Amazon.com session doesn't gate the Comics bestsellers endpoint
+    # (public HTML, no auth) but we run comics_charts anyway on an
+    # amazon.com donation so the operator's "just donated amazon"
+    # gesture refreshes every amazon-adjacent snapshot in one shot.
     # TikTok Creative Center session feeds the viral-songs chart
     # inside music_charts.
     'ads.tiktok.com':   {'runall': ['music_charts']},
