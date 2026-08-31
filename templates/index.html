@@ -25209,6 +25209,9 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-sheet-chan th.tiq-sheet-th-spacer, #trendsIQView .tiq-sheet-chan .tiq-sheet-td-spacer { width: 100%; padding: 0; }
             #trendsIQView .tiq-sheet-titlesort { font-family: inherit; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.02em; text-transform: none; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 1px 4px; cursor: pointer; vertical-align: middle; -webkit-appearance: none; -moz-appearance: none; appearance: none; width: 2.9rem; box-sizing: border-box; text-align: center; text-align-last: center; }
             #trendsIQView .tiq-sheet-titlesort option { background: var(--bg-card); color: var(--text-primary); }
+            #trendsIQView .tiq-sheet-genresort { font-family: inherit; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 1px 4px; margin-left: 0.35rem; cursor: pointer; vertical-align: middle; max-width: 10rem; }
+            #trendsIQView .tiq-sheet-genresort option { background: var(--bg-card); color: var(--text-primary); text-transform: none; }
+            #trendsIQView .tiq-sheet-row.tiq-genre-hidden { display: none !important; }
             #trendsIQView .tiq-sheet-cardhead { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.35rem; }
             #trendsIQView .tiq-sheet-cardhead h4 { margin: 0; }
             #trendsIQView .tiq-export { position: relative; }
@@ -52670,6 +52673,45 @@ https://www.instagram.com/p/..."></textarea>
             rows.forEach(function(r) { tbody.appendChild(r); });
         };
 
+        // Build <option> list for a card's Genre filter dropdown from the
+        // genres shown under its titles (top 3 per title). Value = lowercase
+        // genre; '' / 'all' mean no filter (show everything).
+        function _tiqGenreOptions(rows) {
+            var seen = {};
+            var list = [];
+            (rows || []).forEach(function(it) {
+                (it.genres || []).slice(0, 3).forEach(function(g) {
+                    var t = String(g || '').trim();
+                    if (!t) return;
+                    var key = t.toLowerCase();
+                    if (!seen[key]) { seen[key] = true; list.push(t); }
+                });
+            });
+            list.sort(function(a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); });
+            var opts = '<option value="">Genre</option><option value="all">ALL</option>';
+            list.forEach(function(g) {
+                opts += '<option value="' + _tiqEsc(g.toLowerCase()) + '">' + _tiqEsc(g.toUpperCase()) + '</option>';
+            });
+            return opts;
+        }
+
+        // Filter a FAST title sheet by genre (matches row data-genrekey).
+        // Hidden rows get .tiq-genre-hidden (display:none !important) so the
+        // persona-lens clear-pass can't accidentally re-show them.
+        window.tiqFilterFastGenre = function(sel) {
+            var table = sel.closest ? sel.closest('table') : null;
+            if (!table) return;
+            var val = (sel.value || '').toLowerCase();
+            var showAll = (!val || val === 'all');
+            var rows = table.querySelectorAll('tbody tr.tiq-sheet-row');
+            for (var i = 0; i < rows.length; i++) {
+                var gk = rows[i].getAttribute('data-genrekey') || '';
+                var parts = gk ? gk.split('|') : [];
+                var match = showAll || parts.indexOf(val) !== -1;
+                rows[i].classList.toggle('tiq-genre-hidden', !match);
+            }
+        };
+
         // Card header with an Export-CSV dropdown for a FAST sheet.
         function _tiqSheetCardHead(label) {
             return '<div class="tiq-sheet-cardhead">' +
@@ -52715,7 +52757,7 @@ https://www.instagram.com/p/..."></textarea>
             var entity = table.getAttribute('data-entity') || 'Title';
             var fileLabel = table.getAttribute('data-export') || 'fast';
             var isTitle = (entity === 'Title');
-            var allRows = Array.prototype.slice.call(table.querySelectorAll('tbody tr.tiq-sheet-row'));
+            var allRows = Array.prototype.slice.call(table.querySelectorAll('tbody tr.tiq-sheet-row')).filter(function(r) { return !r.classList.contains('tiq-genre-hidden'); });
             var rows = (limit && limit > 0) ? allRows.slice(0, limit) : allRows;
             var header = isTitle
                 ? ['Rank', 'Title', 'Year', 'Genres', 'Views', 'Change %']
@@ -55889,7 +55931,8 @@ https://www.instagram.com/p/..."></textarea>
                     var titlesSubtitle = 'Top ' + totalCount + ' titles on ' +
                                     _tiqEsc(s.label || k) +
                                     ' (US popularity, ad-supported tier). Tap Views or Δ% to sort.';
-                    var renderCol = function(label, rows) {
+                    var renderCol = function(label, rows, forceIndexRank) {
+                        var genreOpts = _tiqGenreOptions(rows);
                         var rowsHtml = (rows || []).map(function(it, i) {
                             var us = it.us_streams || {};
                             var estimate = Number(us.us_estimate);
@@ -55920,12 +55963,13 @@ https://www.instagram.com/p/..."></textarea>
                             var genres = (it.genres && it.genres.length)
                                 ? '<div class="tiq-fast-genres">' + _tiqEsc(it.genres.slice(0, 3).join(' · ')) + '</div>'
                                 : '';
-                            var rk = it.bucket_rank || (i + 1);
+                            var rk = forceIndexRank ? (i + 1) : (it.bucket_rank || (i + 1));
                             var sortTitle = _tiqEsc(String(it.title || '').toLowerCase());
                             var dispName = _tiqEsc(String(it.title || ''));
                             var dataYear = it.year ? _tiqEsc(String(it.year)) : '';
                             var dataGenres = (it.genres && it.genres.length) ? _tiqEsc(it.genres.slice(0, 3).join(' · ')) : '';
-                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="' + dataYear + '" data-genres="' + dataGenres + '" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
+                            var genreKey = (it.genres && it.genres.length) ? _tiqEsc(it.genres.slice(0, 3).map(function(g) { return String(g || '').toLowerCase().trim(); }).join('|')) : '';
+                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="' + dataYear + '" data-genres="' + dataGenres + '" data-genrekey="' + genreKey + '" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
                                    '<td class="tiq-sheet-td-title">' +
                                      '<div class="tiq-sheet-titlecell">' +
                                        '<span class="tiq-sheet-rank">' + rk + '</span>' +
@@ -55944,7 +55988,7 @@ https://www.instagram.com/p/..."></textarea>
                         return '<div class="tiq-card">' + _tiqSheetCardHead(label) +
                                '<table class="tiq-sheet" data-entity="Title" data-export="' + _tiqEsc(String(k) + '-' + label) + '">' +
                                  '<thead><tr>' +
-                                   '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Title</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select></th>' +
+                                   '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Title</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select><select class="tiq-sheet-genresort" onchange="tiqFilterFastGenre(this)">' + genreOpts + '</select></th>' +
                                    '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
                                    '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
                                  '</tr></thead>' +
@@ -55957,11 +56001,19 @@ https://www.instagram.com/p/..."></textarea>
                     var titlesGrid = '';
                     if (hasFilm) titlesGrid += renderCol('Film', filmRows);
                     if (hasTV)   titlesGrid += renderCol('TV',   tvRows);
+                    var allRows = (filmRows || []).concat(tvRows || []);
+                    allRows.sort(function(a, b) {
+                        var av = Number((a.us_streams || {}).us_estimate); av = isFinite(av) ? av : -1;
+                        var bv = Number((b.us_streams || {}).us_estimate); bv = isFinite(bv) ? bv : -1;
+                        return bv - av;
+                    });
+                    var allCard = allRows.length ? renderCol('All', allRows, true) : '';
                     var titlesHtml =
                         '<div class="tiq-card-sub" style="margin-bottom:12px;">' + titlesSubtitle + '</div>' +
                         '<div class="tiq-cards-grid" style="grid-template-columns: ' + cols + ';">' +
                         titlesGrid +
-                        '</div>';
+                        '</div>' +
+                        (allCard ? '<div class="tiq-cards-grid" style="grid-template-columns: 1fr; margin-top: 16px;">' + allCard + '</div>' : '');
 
                     // ---- Channel Ranker view -----------------------------------
                     // Backend already re-sorts channels by weekly US
