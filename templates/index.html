@@ -25195,6 +25195,9 @@ https://www.instagram.com/p/..."></textarea>
             body[data-theme="light"] #trendsIQView .tiq-sheet-delta.up { color: #15803d; }
             body[data-theme="light"] #trendsIQView .tiq-sheet-delta.down { color: #b91c1c; }
             body[data-theme="light"] #trendsIQView .tiq-sheet th.sort-asc .tiq-sort-ind, body[data-theme="light"] #trendsIQView .tiq-sheet th.sort-desc .tiq-sort-ind { color: #6d28d9; }
+            #trendsIQView .tiq-sheet-subline { margin-top: 0.2rem; }
+            #trendsIQView .tiq-sheet-tag { display: inline-block; padding: 1px 7px; border-radius: 9999px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.03em; background: rgba(129,140,248,0.16); color: #c7d2fe; }
+            body[data-theme="light"] #trendsIQView .tiq-sheet-tag { background: rgba(99,102,241,0.14); color: #4338ca; }
             #trendsIQView .tiq-retailer-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
             #trendsIQView .tiq-retailer-tab { padding: 0.4rem 0.85rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; font-size: 0.8rem; cursor: pointer; color: var(--text-secondary); user-select: none; display: inline-flex; align-items: center; gap: 0.35rem; }
             #trendsIQView .tiq-retailer-tab.active { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: #fff; border-color: transparent; }
@@ -52519,6 +52522,14 @@ https://www.instagram.com/p/..."></textarea>
             return String(Math.round(v));
         }
 
+        // Full, comma-separated integer (e.g. 3,100,000). Empty string for
+        // non-positive / invalid input so cells render cleanly.
+        function _tiqFullNum(n) {
+            var v = Number(n);
+            if (!isFinite(v) || v <= 0) return '';
+            return Math.round(v).toLocaleString('en-US');
+        }
+
         // Render the projected-views chip for a row. Reads
         // `row.us_streams` populated by the backend annotator (see
         // trends_iq._annotate_fast_with_streams). Returns '' when the
@@ -55614,7 +55625,7 @@ https://www.instagram.com/p/..."></textarea>
                             var us = it.us_streams || {};
                             var estimate = Number(us.us_estimate);
                             var hasViews = isFinite(estimate) && estimate > 0;
-                            var viewsNum = hasViews ? _tiqCompactNum(estimate) : '';
+                            var viewsNum = hasViews ? _tiqFullNum(estimate) : '';
                             var deltaHtml = '<span class="tiq-sheet-delta flat">—</span>';
                             var deltaSort = '';
                             if (typeof us.delta_pct === 'number' && us.direction) {
@@ -55692,33 +55703,64 @@ https://www.instagram.com/p/..."></textarea>
                     if (!channels.length) {
                         channelsHtml = '<div class="tiq-empty">Channel ranker is warming up.</div>';
                     } else {
-                        var chLis = channels.map(function(ch, i) {
-                            var ct = ch.content_type
-                                ? '<span style="padding:1px 7px; background:#eef2ff; color:#4338ca; border-radius:9999px; font-size:10px; font-weight:600; letter-spacing:.02em; flex:none;">' + _tiqEsc(ch.content_type) + '</span>'
+                        var chRows = channels.map(function(ch, i) {
+                            var us = ch.us_streams || {};
+                            var estimate = Number(us.us_estimate);
+                            var hasViews = isFinite(estimate) && estimate > 0;
+                            var viewsNum = hasViews ? _tiqFullNum(estimate) : '';
+                            var deltaHtml = '<span class="tiq-sheet-delta flat">—</span>';
+                            var deltaSort = '';
+                            if (typeof us.delta_pct === 'number' && us.direction) {
+                                var pct = Math.round(Math.abs(us.delta_pct) * 100);
+                                if (pct >= 1) {
+                                    var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
+                                    var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
+                                    var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
+                                    deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pct + '%</span>';
+                                    deltaSort = String(signed);
+                                }
+                            }
+                            var tipParts = [];
+                            if (hasViews) {
+                                tipParts.push(viewsNum + ' ' + (us.unit_label || 'weekly US viewers'));
+                                if (us.method) tipParts.push(String(us.method));
+                                if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
+                            }
+                            var viewsTip = _tiqEsc(tipParts.join(' — '));
+                            var ctTag = ch.content_type
+                                ? '<div class="tiq-sheet-subline"><span class="tiq-sheet-tag">' + _tiqEsc(ch.content_type) + '</span></div>'
                                 : '';
-                            // Weekly US viewers chip. Rendered on its own
-                            // line beneath the channel name so the long
-                            // "WEEKLY US VIEWERS" label never squeezes the
-                            // name out or runs off the card's right edge.
-                            var viewsChip = _tiqAudienceChip(ch.us_streams);
                             var chName = _tiqEsc(ch.name);
-                            return '<div style="display:flex; flex-direction:column; gap:6px; padding:8px 12px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:8px;">' +
-                                   '<div style="display:flex; align-items:center; gap:8px; min-width:0;">' +
-                                     '<span style="color:var(--text-secondary); font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; min-width:22px; text-align:right; flex:none;">' + (ch.rank || (i+1)) + '</span>' +
-                                     '<span style="color:var(--text-primary); font-size:13px; font-weight:600; flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + chName + '">' + chName + '</span>' +
-                                   '</div>' +
-                                   '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">' +
-                                     ct +
-                                     (viewsChip || '') +
-                                   '</div>' +
-                                   '</div>';
+                            var rk = ch.rank || (i + 1);
+                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
+                                   '<td class="tiq-sheet-td-title">' +
+                                     '<div class="tiq-sheet-titlecell">' +
+                                       '<span class="tiq-sheet-rank">' + rk + '</span>' +
+                                       '<div class="tiq-sheet-titlemain">' +
+                                         '<div class="tiq-row-title" title="' + chName + '">' + chName + '</div>' +
+                                         ctTag +
+                                       '</div>' +
+                                     '</div>' +
+                                   '</td>' +
+                                   '<td class="tiq-sheet-td-num tiq-sheet-td-views" title="' + viewsTip + '">' + (viewsNum || '<span class="tiq-sheet-dim">—</span>') + '</td>' +
+                                   '<td class="tiq-sheet-td-num">' + deltaHtml + '</td>' +
+                                   '</tr>';
                         }).join('');
                         channelsHtml =
                             '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
                               'Ranking the ' + channels.length + ' most-watched channels on ' +
-                              _tiqEsc(s.label || k) + ' by weekly US viewers.' +
+                              _tiqEsc(s.label || k) + ' by weekly US viewers. Tap Views or Δ% to sort.' +
                             '</div>' +
-                            '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:6px;">' + chLis + '</div>';
+                            '<div class="tiq-card">' +
+                              '<table class="tiq-sheet">' +
+                                '<thead><tr>' +
+                                  '<th class="tiq-sheet-th-title">Channel</th>' +
+                                  '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
+                                  '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
+                                '</tr></thead>' +
+                                '<tbody>' + chRows + '</tbody>' +
+                              '</table>' +
+                            '</div>';
                     }
 
                     // ---- Mode toggle ------------------------------------------
