@@ -53202,14 +53202,15 @@ https://www.instagram.com/p/..."></textarea>
         // Trend direction (up/down/flat) folds into Change so a
         // spreadsheet sort by Change makes sense.
         //
-        // URL is deliberately excluded from the header list per user
-        // directive 2026-08-31 - the exporter does not surface source
-        // URLs in downloaded CSVs. Row builders may still populate a
-        // URL field; the emitter ignores keys not in the header list.
+        // URL and Source are deliberately excluded from the header
+        // list per user directive 2026-08-31 - the exporter does not
+        // surface source URLs or per-row source labels in downloaded
+        // CSVs. Row builders may still populate URL or Source fields;
+        // the emitter ignores keys not in the header list.
         // ============================================================
         var _TIQ_EXPORT_HEADERS = [
             'Tab', 'Section', 'Rank', 'Title', 'Subtitle',
-            'Source', 'Value', 'Unit', 'Change', 'Why'
+            'Value', 'Unit', 'Change', 'Why'
         ];
 
         function _tiqCsvCell(v) {
@@ -53304,7 +53305,6 @@ https://www.instagram.com/p/..."></textarea>
                         Rank: r.rank_today || (i + 1),
                         Title: r.term || '',
                         Subtitle: r.rank_prev ? ('was #' + r.rank_prev) : '',
-                        Source: driven,
                         Value: r.score || '',
                         Unit: r.score ? 'signal score' : '',
                         Change: _tiqMoverChange(r),
@@ -53324,7 +53324,6 @@ https://www.instagram.com/p/..."></textarea>
                     Rank: i + 1,
                     Title: r.title || '',
                     Subtitle: r.seendate || '',
-                    Source: r.source || '',
                     Value: '', Unit: '', Change: '',
                     Why: '', URL: r.url || ''
                 });
@@ -53336,7 +53335,6 @@ https://www.instagram.com/p/..."></textarea>
                         Rank: i + 1,
                         Title: a.title || '',
                         Subtitle: a.seendate || '',
-                        Source: src.source || '',
                         Value: '', Unit: '', Change: '',
                         Why: '', URL: a.url || ''
                     });
@@ -53348,7 +53346,6 @@ https://www.instagram.com/p/..."></textarea>
                     Rank: i + 1,
                     Title: r.title || '',
                     Subtitle: r.published || '',
-                    Source: r.source_label || r.source || '',
                     Value: '', Unit: '', Change: '',
                     Why: '', URL: r.url || ''
                 });
@@ -53359,7 +53356,6 @@ https://www.instagram.com/p/..."></textarea>
                     Rank: i + 1,
                     Title: r.title || '',
                     Subtitle: r.published || r.seendate || '',
-                    Source: r.source_label || r.source || '',
                     Value: '', Unit: '', Change: '',
                     Why: '', URL: r.url || ''
                 });
@@ -53370,7 +53366,6 @@ https://www.instagram.com/p/..."></textarea>
                     Rank: i + 1,
                     Title: r.title || '',
                     Subtitle: r.published || r.seendate || '',
-                    Source: r.source_label || r.source || '',
                     Value: '', Unit: '', Change: '',
                     Why: '', URL: r.url || ''
                 });
@@ -53388,7 +53383,6 @@ https://www.instagram.com/p/..."></textarea>
                         Rank: r.rank || (i + 1),
                         Title: r.term || '',
                         Subtitle: (r.related || []).slice(0, 1).join(''),
-                        Source: 'Google Trends',
                         Value: r.score || r.volume || '',
                         Unit: 'search volume',
                         Change: (typeof r.volume_growth_pct === 'number')
@@ -53415,7 +53409,6 @@ https://www.instagram.com/p/..."></textarea>
                     Rank: i + 1,
                     Title: r.title || '',
                     Subtitle: r.description || '',
-                    Source: 'Wikipedia',
                     Value: r.views_today || '',
                     Unit: 'views today',
                     Change: _tiqDirectionLabel(r),
@@ -53429,7 +53422,6 @@ https://www.instagram.com/p/..."></textarea>
                     Rank: i + 1,
                     Title: p.name || '',
                     Subtitle: p.description || '',
-                    Source: 'GDELT',
                     Value: p.mentions || '',
                     Unit: 'mentions',
                     Change: _tiqDirectionLabel(p),
@@ -53458,7 +53450,6 @@ https://www.instagram.com/p/..."></textarea>
                         Title: it.title || '',
                         Subtitle: it.artist || it.author || it.publisher ||
                                   it.subtitle || '',
-                        Source: label,
                         Value: se.value,
                         Unit: se.unit,
                         Change: it.weeks_in_top10
@@ -53495,7 +53486,6 @@ https://www.instagram.com/p/..."></textarea>
                             Rank: it.rank || (i + 1),
                             Title: it.title || '',
                             Subtitle: '',
-                            Source: label,
                             Value: se.value,
                             Unit: se.unit,
                             Change: it.weeks_in_top10
@@ -53517,13 +53507,57 @@ https://www.instagram.com/p/..."></textarea>
                         Rank: i + 1,
                         Title: ch.title || ch.name || '',
                         Subtitle: ch.content_type || '',
-                        Source: label,
                         Value: (ch.us_streams && ch.us_streams.estimate) || '',
                         Unit: (ch.us_streams && ch.us_streams.unit_label) || 'weekly US viewers',
                         Change: '',
                         Why: '',
                         URL: ch.url || ''
                     });
+                });
+            });
+            return out;
+        }
+
+        // Gaming exporter. Handles both panel shapes:
+        //   - single-list (Xbox): iterate panel.items.
+        //   - grouped (Meta Quest): iterate free + paid buckets,
+        //     labeling sections "Meta Quest - Free" / "Meta Quest -
+        //     Paid" (same "-" style FAST uses for Film / TV / Channels).
+        function _tiqExportRowsGaming(dict, tabLabel) {
+            var out = [];
+            Object.keys(dict || {}).forEach(function(slug) {
+                var panel = dict[slug] || {};
+                var label = panel.label || slug;
+                var pushRow = function(sectionSuffix, it, i) {
+                    var se = _tiqExtractStreamValue(it);
+                    out.push({
+                        Tab: tabLabel,
+                        Section: sectionSuffix
+                                    ? (label + ' - ' + sectionSuffix)
+                                    : label,
+                        Rank: it.bucket_rank || it.rank || (i + 1),
+                        Title: it.title || '',
+                        Subtitle: it.publisher || it.subtitle || '',
+                        Value: se.value,
+                        Unit: se.unit,
+                        Change: '',
+                        Why: it.why || '',
+                        URL: it.url || ''
+                    });
+                };
+                var hasFree = Array.isArray(panel.free);
+                var hasPaid = Array.isArray(panel.paid);
+                if (hasFree || hasPaid) {
+                    (panel.free || []).forEach(function(it, i) {
+                        pushRow('Free', it, i);
+                    });
+                    (panel.paid || []).forEach(function(it, i) {
+                        pushRow('Paid', it, i);
+                    });
+                    return;
+                }
+                (panel.items || []).forEach(function(it, i) {
+                    pushRow('', it, i);
                 });
             });
             return out;
@@ -53538,7 +53572,6 @@ https://www.instagram.com/p/..."></textarea>
                     Rank: i + 1,
                     Title: w.title || w.name || '',
                     Subtitle: w.geo || '',
-                    Source: w.source || '',
                     Value: '', Unit: '', Change: '',
                     Why: '', URL: ''
                 });
@@ -53560,7 +53593,7 @@ https://www.instagram.com/p/..."></textarea>
                 case 'streaming': return _tiqExportRowsFilmTvSplit(cards.streaming_trending || {}, tabLabel);
                 case 'films':     return _tiqExportRowsPanelDict(cards.films_ticketing, tabLabel, '');
                 case 'fast':      return _tiqExportRowsFilmTvSplit(cards.fast_trending || {}, tabLabel);
-                case 'gaming':    return _tiqExportRowsPanelDict(cards.gaming_trending, tabLabel, '');
+                case 'gaming':    return _tiqExportRowsGaming(cards.gaming_trending || {}, tabLabel);
                 case 'watchlist': return _tiqExportRowsWatchlist();
                 default:          return [];
             }
@@ -55973,18 +56006,19 @@ https://www.instagram.com/p/..."></textarea>
             if (typeof applyTrendsIQLens === 'function') applyTrendsIQLens();
         };
 
-        // Gaming panel: currently one platform (Xbox Game Pass Ultimate)
-        // but the backend ships every registered gaming provider as its
-        // own key so PlayStation Plus / Nintendo Switch Online / Steam
-        // can slot in later without changing the payload shape or CSS.
-        // Layout follows the same tab-strip pattern as Social + Streaming
-        // for consistency.
+        // Gaming panel: two pills today (Xbox Game Pass Ultimate;
+        // Meta Quest - whose panel splits into Free + Paid columns,
+        // parity with the FAST tab's Film / TV column split). Adding
+        // PlayStation Plus / Nintendo Switch Online / Steam later is
+        // a one-line addition to the backend GAMING_PLATFORMS tuple;
+        // the frontend picks up the new pill without CSS or renderer
+        // changes as long as the shape stays single-list-or-grouped.
         function renderTIQGaming(gaming) {
             var allKeys = Object.keys(gaming || {});
             if (!allKeys.length) {
                 return '<div class="tiq-empty">Gaming rankings are warming up.</div>';
             }
-            var order = ['xbox_gamepass', 'meta_quest_free', 'meta_quest_paid'];
+            var order = ['xbox_gamepass', 'meta_quest'];
             var keys = order.filter(function(k) { return gaming[k]; })
                 .concat(allKeys.filter(function(k) { return order.indexOf(k) === -1; }));
 
@@ -56002,6 +56036,53 @@ https://www.instagram.com/p/..."></textarea>
                 return '<div class="tiq-social-tab' + active + unavail + '" onclick="setTrendsIQGaming(\'' + k + '\')">' + _tiqEsc(s.label || k) + '</div>';
             }).join('');
 
+            // Row renderer shared by both panel shapes. Matches the
+            // existing card style; grouped panels move these rows
+            // into two side-by-side columns instead of one list.
+            var renderRow = function(it, i) {
+                var rk = it.bucket_rank || it.rank || (i + 1);
+                var img = _tiqPosterCell(it.image);
+                var pub = it.publisher
+                    ? '<span class="tiq-gaming-pub">' + _tiqEsc(it.publisher) + '</span>'
+                    : '';
+                var genre = it.genre
+                    ? '<span class="tiq-gaming-genre">' + _tiqEsc(it.genre) + '</span>'
+                    : '';
+                var newBadge = it.recently_added
+                    ? '<span class="tiq-gaming-new">NEW</span>'
+                    : '';
+                var url = it.url || '#';
+                // Projected-US-plays chip. `us_streams` stamped by
+                // _annotate_gaming_with_streams in trends_iq.py.
+                // Reads 'weekly US plays' (unique subs who launched
+                // this game in the past 7 days).
+                var audience = _tiqAudienceChip(it.us_streams);
+                var metaSep = (pub && genre) ? ' · ' : '';
+                var metaCore = pub + metaSep + genre;
+                var metaLine = metaCore + (audience || '');
+                return '<div class="tiq-row">' +
+                       '<div class="tiq-rank">' + rk + '</div>' +
+                       img +
+                       '<div class="tiq-row-body">' +
+                         '<div class="tiq-row-title">' +
+                           '<a href="' + _tiqEsc(url) + '" target="_blank" rel="noopener">' +
+                           _tiqEsc(it.title) + '</a> ' + newBadge +
+                         '</div>' +
+                         (metaLine ? '<div class="tiq-row-meta">' + metaLine + '</div>' : '') +
+                       '</div>' +
+                       '</div>';
+            };
+
+            var renderCol = function(colLabel, rows) {
+                var rowsHtml = (rows || []).map(renderRow).join('');
+                return '<div class="tiq-card"><h4>' +
+                       _tiqEsc(colLabel) + ' (' + (rows || []).length + ')</h4>' +
+                       (rowsHtml
+                           ? '<div class="tiq-rows">' + rowsHtml + '</div>'
+                           : '<div class="tiq-empty">No games right now.</div>') +
+                       '</div>';
+            };
+
             var panels = keys.map(function(k) {
                 var s = gaming[k] || {};
                 var active = (k === window.__trendsIQ.activeGaming) ? ' active' : '';
@@ -56011,47 +56092,33 @@ https://www.instagram.com/p/..."></textarea>
                            '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
                            '<div>Loading.</div>' +
                            '</div>';
+                } else if (Array.isArray(s.free) || Array.isArray(s.paid)) {
+                    // Grouped panel (Meta Quest): two columns side-by-
+                    // side. Collapse to one column when only one bucket
+                    // has data (same graceful fallback FAST uses when
+                    // Amazon Live TV has only Film or only TV).
+                    var freeRows = s.free || [];
+                    var paidRows = s.paid || [];
+                    if (!freeRows.length && !paidRows.length) {
+                        body = '<div class="tiq-empty">No trending games right now.</div>';
+                    } else {
+                        var cols = (freeRows.length && paidRows.length)
+                            ? '1fr 1fr' : '1fr';
+                        var gridInner = '';
+                        if (freeRows.length) gridInner += renderCol('Free', freeRows);
+                        if (paidRows.length) gridInner += renderCol('Paid', paidRows);
+                        body = '<div class="tiq-cards-grid" style="grid-template-columns: ' + cols + ';">' +
+                               gridInner +
+                               '</div>';
+                    }
                 } else if (!(s.items || []).length) {
                     body = '<div class="tiq-empty">No trending games right now.</div>';
                 } else {
-                    var subtitle = 'Top ' + (s.items || []).length +
-                                    ' games on ' + _tiqEsc(s.label || k) +
-                                    ' (current US chart popularity).';
-                    var lis = (s.items || []).map(function(it, i) {
-                        var rk = it.rank || (i + 1);
-                        var img = _tiqPosterCell(it.image);
-                        var pub = it.publisher
-                            ? '<span class="tiq-gaming-pub">' + _tiqEsc(it.publisher) + '</span>'
-                            : '';
-                        var genre = it.genre
-                            ? '<span class="tiq-gaming-genre">' + _tiqEsc(it.genre) + '</span>'
-                            : '';
-                        var newBadge = it.recently_added
-                            ? '<span class="tiq-gaming-new">NEW</span>'
-                            : '';
-                        var url = it.url || '#';
-                        // Projected-US-plays chip. `us_streams` stamped by
-                        // _annotate_gaming_with_streams in trends_iq.py.
-                        // Reads 'weekly US plays' (unique subs who launched
-                        // this game in the past 7 days).
-                        var audience = _tiqAudienceChip(it.us_streams);
-                        var metaSep = (pub && genre) ? ' · ' : '';
-                        var metaCore = pub + metaSep + genre;
-                        var metaLine = metaCore + (audience || '');
-                        return '<div class="tiq-row">' +
-                               '<div class="tiq-rank">' + rk + '</div>' +
-                               img +
-                               '<div class="tiq-row-body">' +
-                                 '<div class="tiq-row-title">' +
-                                   '<a href="' + _tiqEsc(url) + '" target="_blank" rel="noopener">' +
-                                   _tiqEsc(it.title) + '</a> ' + newBadge +
-                                 '</div>' +
-                                 (metaLine ? '<div class="tiq-row-meta">' + metaLine + '</div>' : '') +
-                               '</div>' +
-                               '</div>';
-                    }).join('');
-                    body = '<div class="tiq-panel-subtitle">' + subtitle + '</div>' +
-                           '<div class="tiq-rows">' + lis + '</div>';
+                    // Single-list panel (Xbox). No subtitle - the pill
+                    // label already identifies the platform (parity
+                    // with the terser Meta Quest header 2026-08-31).
+                    var lis = (s.items || []).map(renderRow).join('');
+                    body = '<div class="tiq-rows">' + lis + '</div>';
                 }
                 return '<div class="tiq-social-panel' + active + '" data-tiq-gaming="' + k + '">' + body + '</div>';
             }).join('');

@@ -339,13 +339,15 @@ STREAMING_PLATFORMS = [
 ]
 
 # 2026-08-20: Gaming tab. First platform was Xbox Game Pass Ultimate;
-# 2026-08-31 added Meta Quest (Top Free + Top Paid). PlayStation Plus,
-# Nintendo Switch Online, and Steam trending slot in here without
-# touching the frontend or payload shape - each new provider just
-# needs a scraper that writes to `trends_iq_snapshots/latest/{slug}.json`.
+# 2026-08-31 added Meta Quest (Top Free + Top Paid) as one grouped pill
+# whose panel renders Free + Paid side-by-side (parity with the FAST
+# tab's Film/TV column split). PlayStation Plus, Nintendo Switch Online,
+# and Steam trending slot in here without touching the frontend or
+# payload shape - each new provider just needs a scraper that writes to
+# `trends_iq_snapshots/latest/{slug}.json`.
 #
 # Tuple shape: (panel_key, panel_label, default_available,
-#               snapshot_slug, source_key_or_None)
+#               snapshot_slug, source_spec)
 #   panel_key         - Frontend + estimator key. Also the CSV export
 #                       section slug.
 #   panel_label       - Human-readable label rendered on the pill.
@@ -353,17 +355,46 @@ STREAMING_PLATFORMS = [
 #                       the snapshot lands (True) vs. show a "warming
 #                       up" state (False).
 #   snapshot_slug     - Name of the S3 snapshot file (without extension).
-#                       Xbox uses its own; both Meta Quest panels share
-#                       one `meta_quest.json`.
-#   source_key        - When None, `_fetch_gaming_trending` reads
-#                       `snap['national']` (Xbox pattern). When set,
-#                       reads `snap['sources'][source_key]['items']`
-#                       (FAST + Meta Quest pattern - one snapshot,
-#                       multiple panels).
+#   source_spec       - Controls how items are read out of the snapshot:
+#                         None                          -> read
+#                                                          `snap['national']`
+#                                                          (Xbox pattern);
+#                                                          emit as one
+#                                                          flat `items`
+#                                                          list on the
+#                                                          panel.
+#                         '<source_key>'                -> read
+#                                                          `snap['sources'][source_key]['items']`
+#                                                          (FAST pattern);
+#                                                          emit as one
+#                                                          flat `items`
+#                                                          list.
+#                         [(bucket, source_key), ...]   -> grouped panel.
+#                                                          Read each
+#                                                          `snap['sources'][source_key]`
+#                                                          and emit as
+#                                                          `<bucket>` on
+#                                                          the panel
+#                                                          (frontend
+#                                                          renders each
+#                                                          bucket as its
+#                                                          own column,
+#                                                          mirroring the
+#                                                          FAST Film/TV
+#                                                          split). Meta
+#                                                          Quest uses
+#                                                          this: one
+#                                                          `meta_quest`
+#                                                          pill with
+#                                                          `free` +
+#                                                          `paid`
+#                                                          columns
+#                                                          rendered
+#                                                          side-by-side.
 GAMING_PLATFORMS = [
-    ('xbox_gamepass',    'Xbox Game Pass Ultimate', False, 'xbox_gamepass', None),
-    ('meta_quest_free',  'Meta Quest - Top Free',   False, 'meta_quest',    'meta_quest_free'),
-    ('meta_quest_paid',  'Meta Quest - Top Paid',   False, 'meta_quest',    'meta_quest_paid'),
+    ('xbox_gamepass',  'Xbox Game Pass Ultimate', False, 'xbox_gamepass', None),
+    ('meta_quest',     'Meta Quest',              False, 'meta_quest',
+     [('free', 'meta_quest_free'), ('paid', 'meta_quest_paid')]),
 ]
 
 # How old a snapshot can be before we treat the source as unavailable
@@ -2985,17 +3016,29 @@ _FAST_PANEL_TO_PLATFORM = {
     'pluto':  'pluto',
     'amazon': 'amazon',
 }
-# Gaming: three panels today (Xbox Game Pass Ultimate + Meta Quest
-# Top Free + Meta Quest Top Paid). Adding PS Plus / Nintendo Switch
-# Online / Steam later is a one-line addition here (plus a new
-# platform entry in stream_estimates._GAMING_PLATFORMS_META). Panel
-# key is identity-mapped to platform key so the estimator's per-
-# platform `us_streams` block lines up with the panel the row is
-# rendered under.
+# Gaming: two pills today (Xbox Game Pass Ultimate; Meta Quest -
+# whose panel splits into Free / Paid columns). Adding PS Plus /
+# Nintendo Switch Online / Steam later is a one-line addition here
+# (plus a new platform entry in stream_estimates._GAMING_PLATFORMS_META).
+#
+# The lookup key here matches the stream_estimates platform `key`
+# value in `_GAMING_PLATFORMS_META`. For single-list panels (Xbox)
+# the panel_slug and platform key are identical. For grouped panels
+# (Meta Quest) the platform key is per-bucket (meta_quest_free,
+# meta_quest_paid) - the annotator walks each bucket separately via
+# `_GAMING_PANEL_BUCKETS` below so Free rows anchor to the Free
+# ceiling and Paid rows anchor to the Paid ceiling.
 _GAMING_PANEL_TO_PLATFORM = {
     'xbox_gamepass':    'xbox_gamepass',
     'meta_quest_free':  'meta_quest_free',
     'meta_quest_paid':  'meta_quest_paid',
+}
+# For grouped Gaming panels: which bucket names on the panel map to
+# which stream_estimates platform key. Non-grouped panels are absent
+# from this dict; the annotator falls back to the single-list walk.
+_GAMING_PANEL_BUCKETS = {
+    'meta_quest': [('free', 'meta_quest_free'),
+                    ('paid', 'meta_quest_paid')],
 }
 # book_charts panels -> per-platform key. Libby panels come from a
 # separate snapshot (`libby_trends`) but plug into the same book
@@ -3409,10 +3452,37 @@ def _annotate_fast_channels_with_views(fast_trending: dict,
                     "annotated/total channels)", summary)
 
 
+def _gaming_panel_count(panel: dict) -> int:
+    """Total item count for a Gaming panel, shape-agnostic:
+      - single-list (Xbox): len(items)
+      - grouped (Meta Quest): sum of every bucket list registered
+        in `_GAMING_PANEL_BUCKETS` that appears on the panel.
+    Used by the `counts.gaming` roll-up so the tab badge stays
+    accurate after the 2026-08-31 Meta Quest merge."""
+    if not panel:
+        return 0
+    n = len(panel.get('items') or [])
+    for bucket_specs in _GAMING_PANEL_BUCKETS.values():
+        for bucket, _pk in bucket_specs:
+            if bucket in panel:
+                n += len(panel.get(bucket) or [])
+    return n
+
+
 def _annotate_gaming_with_streams(gaming_trending: dict,
                                     estimates: dict) -> None:
     """Attach per-platform `us_streams` to every game row: a row on
-    the Xbox Game Pass Ultimate panel gets Xbox-only weekly US plays.
+    the Xbox Game Pass Ultimate panel gets Xbox-only weekly US plays;
+    a row on the Meta Quest Free column gets Meta-Quest-Free-only
+    weekly US plays.
+
+    Handles two panel shapes:
+      - Single-list (Xbox): walk `panel['items']` with one platform
+        key (`_GAMING_PANEL_TO_PLATFORM[panel_slug]`).
+      - Grouped (Meta Quest): walk each bucket in
+        `_GAMING_PANEL_BUCKETS[panel_slug]` separately, using each
+        bucket's own platform key so Free rows read Meta Quest Free
+        ceilings and Paid rows read Meta Quest Paid ceilings.
 
     Gaming estimates are keyed `game:<norm_title>` (title-only, no
     publisher qualifier since AAA game titles don't collide in the
@@ -3423,13 +3493,22 @@ def _annotate_gaming_with_streams(gaming_trending: dict,
     for panel_slug, panel in (gaming_trending or {}).items():
         if not panel:
             continue
-        platform_key = _GAMING_PANEL_TO_PLATFORM.get(panel_slug, '')
-        for row in panel.get('items') or []:
-            title = (row.get('title') or '').strip()
-            key = f'game:{_cp_normalize(title)}'
-            _stamp_stream_estimate(row, items_lookup.get(key),
-                                     platform_key=platform_key,
-                                     kind_hint='game')
+        # Grouped panel? Walk each bucket with its own platform key.
+        bucket_specs = _GAMING_PANEL_BUCKETS.get(panel_slug)
+        if bucket_specs:
+            walk = [(_GAMING_PANEL_TO_PLATFORM.get(pk, ''),
+                     panel.get(bucket) or [])
+                    for bucket, pk in bucket_specs]
+        else:
+            walk = [(_GAMING_PANEL_TO_PLATFORM.get(panel_slug, ''),
+                     panel.get('items') or [])]
+        for platform_key, rows in walk:
+            for row in rows:
+                title = (row.get('title') or '').strip()
+                key = f'game:{_cp_normalize(title)}'
+                _stamp_stream_estimate(row, items_lookup.get(key),
+                                         platform_key=platform_key,
+                                         kind_hint='game')
 
 
 # Libby local-to-US projection formula. LA County Library serves
@@ -5702,49 +5781,98 @@ def _fetch_gaming_trending(state: Optional[str], lookback_days: int,
     `_fetch_streaming_trending` so the frontend can reuse render
     helpers.
 
-    Handles two snapshot layouts:
+    Handles three snapshot layouts (see GAMING_PLATFORMS doc for the
+    tuple shape):
       - Direct-national (Xbox): items live on `snap['national']`.
-        Panel key == snapshot slug. Fed by `xbox_gamepass.json`.
-      - Sources-keyed (Meta Quest): one snapshot backs multiple panels
-        via `snap['sources'][<source_key>].items`. Fed by
-        `meta_quest.json` which packs both Top Free + Top Paid into
-        one S3 object. Snapshot reads are cached per call so we don't
-        re-hit S3 for the second Meta Quest panel.
+        Emit as one flat `items` list on the panel.
+      - Single sources-keyed (unused today, reserved for FAST-style
+        providers): items live on `snap['sources'][<source_key>].items`.
+        Emit as one flat `items` list.
+      - Grouped sources-keyed (Meta Quest): one snapshot backs
+        multiple buckets under one pill. `meta_quest.json` packs
+        Top Free + Top Paid into one S3 object; we emit them as
+        `free` + `paid` on a single `meta_quest` panel so the
+        frontend renders Free / Paid side-by-side (same visual
+        pattern as FAST Film/TV). Snapshot reads are cached per call
+        so we don't re-hit S3 for the second bucket.
 
-    Each panel ships an `items` list of up to 25 games with:
+    Each single-list panel ships an `items` list of up to 25 games
+    with:
       { rank, title, image, publisher, genre, url, product_id,
         category_display, recently_added: bool }
+
+    Each grouped panel ships one list per bucket (`free`, `paid`, ...)
+    of up to 25 games each. Rows carry `bucket_rank` (1..N within
+    the bucket) which the frontend uses as the visible rank in each
+    column; global `rank` fields stay in place for compatibility.
     """
     result: dict[str, dict] = {}
     snap_cache: dict[str, Optional[dict]] = {}
     for entry in GAMING_PLATFORMS:
         # Backwards-tolerant unpack: the pre-2026-08-31 tuple was
-        # 3-wide (panel_key, label, default_avail). Newer 5-wide adds
-        # (snapshot_slug, source_key). Fall back to panel_key as the
+        # 3-wide (panel_key, label, default_avail). 5-wide adds
+        # (snapshot_slug, source_spec). Fall back to panel_key as the
         # snapshot slug when a 3-tuple slips through so this never
         # crashes on a stale schema.
         if len(entry) == 5:
-            panel_key, label, _default_avail, snapshot_slug, source_key = entry
+            panel_key, label, _default_avail, snapshot_slug, source_spec = entry
         else:
             panel_key, label, _default_avail = entry[0], entry[1], entry[2]
-            snapshot_slug, source_key = panel_key, None
+            snapshot_slug, source_spec = panel_key, None
         if snapshot_slug not in snap_cache:
             snap_cache[snapshot_slug] = (_read_snapshot(snapshot_slug, asof)
                                           if asof else
                                           _read_snapshot(snapshot_slug))
         snap = snap_cache[snapshot_slug]
         if not snap:
-            result[panel_key] = {'label': label, 'items': [],
-                                  'available': False}
+            # Preserve the shape a healthy grouped panel would have
+            # (empty free/paid) so the frontend renderer's shape check
+            # doesn't fall through to the single-list branch.
+            if isinstance(source_spec, list):
+                empty = {'label': label, 'available': False}
+                for bucket, _sk in source_spec:
+                    empty[bucket] = []
+                result[panel_key] = empty
+            else:
+                result[panel_key] = {'label': label, 'items': [],
+                                      'available': False}
             continue
-        if source_key:
-            block = ((snap.get('sources') or {}).get(source_key) or {})
+        if isinstance(source_spec, list):
+            # Grouped panel: read every bucket, stamp bucket_rank
+            # 1..N within each bucket, and emit under the bucket name.
+            panel_out: dict = {
+                'label':      label,
+                'fetched_at': snap.get('fetched_at'),
+            }
+            any_items = False
+            first_note = None
+            for bucket, sk in source_spec:
+                block = ((snap.get('sources') or {}).get(sk) or {})
+                raw_items = list(block.get('items') or [])
+                bucket_items = raw_items[:25]
+                for i, it in enumerate(bucket_items, 1):
+                    it['bucket_rank'] = i
+                panel_out[bucket] = bucket_items
+                if bucket_items:
+                    any_items = True
+                bn = block.get('soft_block_reason') or block.get('note')
+                if bn and not first_note:
+                    first_note = bn
+            panel_out['available'] = any_items
+            if first_note:
+                panel_out['note'] = first_note
+            elif snap.get('error'):
+                panel_out['note'] = f"latest snapshot: {snap['error']}"
+            result[panel_key] = panel_out
+            continue
+        if source_spec:
+            block = ((snap.get('sources') or {}).get(source_spec) or {})
             raw_items = list(block.get('items') or [])
             # Panel-level metadata (available flag, note, stale marker)
             # rides through when the scraper set it explicitly. Geo
-            # slicing doesn't apply to source-keyed panels today (Meta
-            # Quest is national-only); a per-source `by_state` block
-            # can be added later if a provider ships regional charts.
+            # slicing doesn't apply to source-keyed panels today; a
+            # per-source `by_state` block can be added later if a
+            # provider ships regional charts.
             panel_available = block.get('available')
             panel_note = block.get('soft_block_reason') or block.get('note')
         else:
@@ -6458,7 +6586,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                     if (p or {}).get('available')),
             'fast':          sum(len(((fast_trending.get(k) or {}).get('items') or []))
                                   for k in ('roku', 'tubi', 'pluto', 'amazon')),
-            'gaming':        sum(len(((gaming_trending.get(k) or {}).get('items') or []))
+            'gaming':        sum(_gaming_panel_count(gaming_trending.get(k) or {})
                                   for k, *_rest in GAMING_PLATFORMS),
             'music':         sum(len(((music_charts.get(k) or {}).get('items') or []))
                                   for k in ('spotify', 'apple', 'tiktok', 'shazam', 'amazon')),
