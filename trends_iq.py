@@ -395,6 +395,13 @@ GAMING_PLATFORMS = [
     ('xbox_gamepass',  'Xbox Game Pass Ultimate', False, 'xbox_gamepass', None),
     ('meta_quest',     'Meta Quest',              False, 'meta_quest',
      [('free', 'meta_quest_free'), ('paid', 'meta_quest_paid')]),
+    # Steam: one pill with two columns (Most Played by 24-hour peak
+    # concurrent, Top Sellers by weekly US revenue). Snapshot shape
+    # matches Meta Quest - one steam_charts.json packs both under
+    # sources[steam_most_played] / sources[steam_top_sellers].
+    ('steam',          'Steam',                   False, 'steam_charts',
+     [('most_played', 'steam_most_played'),
+      ('top_sellers', 'steam_top_sellers')]),
 ]
 
 # How old a snapshot can be before we treat the source as unavailable
@@ -3043,6 +3050,8 @@ _GAMING_PANEL_TO_PLATFORM = {
     'xbox_gamepass':    'xbox_gamepass',
     'meta_quest_free':  'meta_quest_free',
     'meta_quest_paid':  'meta_quest_paid',
+    'steam_most_played': 'steam_most_played',
+    'steam_top_sellers': 'steam_top_sellers',
 }
 # For grouped Gaming panels: which bucket names on the panel map to
 # which stream_estimates platform key. Non-grouped panels are absent
@@ -3050,6 +3059,8 @@ _GAMING_PANEL_TO_PLATFORM = {
 _GAMING_PANEL_BUCKETS = {
     'meta_quest': [('free', 'meta_quest_free'),
                     ('paid', 'meta_quest_paid')],
+    'steam':      [('most_played', 'steam_most_played'),
+                    ('top_sellers', 'steam_top_sellers')],
 }
 # book_charts panels -> per-platform key. Libby panels come from a
 # separate snapshot (`libby_trends`) but plug into the same book

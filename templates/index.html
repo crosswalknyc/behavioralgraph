@@ -53212,7 +53212,7 @@ https://www.instagram.com/p/..."></textarea>
                 { key: 'fast',      label: 'FAST',             count: counts.fast      || 0, icon: '📡',
                   tip: 'FAST channels: Top 100 titles on Roku Channel, Tubi, Pluto TV, and Amazon (ad-supported tier). Ranked by JustWatch US popularity, interleaved Film and TV.' },
                 { key: 'gaming',    label: 'Gaming',           count: counts.gaming    || 0, icon: '🎮',
-                  tip: 'Gaming: Top games on Xbox Game Pass Ultimate (cloud-play popularity) plus Meta Quest Top Free and Top Paid (the store\'s own trending and revenue rails). PlayStation Plus, Nintendo Switch Online, and Steam are on the roadmap.' },
+                  tip: 'Gaming: Top games on Xbox Game Pass Ultimate (cloud-play popularity), Meta Quest Top Free and Top Paid (the store\'s own trending and revenue rails), and Steam Most Played and Top Sellers (Valve\'s 24-hour peak concurrent and weekly US revenue rails). PlayStation Plus and Nintendo Switch Online are on the roadmap.' },
                 { key: 'watchlist', label: 'Watchlist',        count: watchCount,            icon: '★',
                   tip: 'Watchlist: The trends you have starred. Populates the daily digest email so you get pinged when anything on this list breaks out, drops off, or crosses a threshold you set.' },
             ];
@@ -53742,6 +53742,19 @@ https://www.instagram.com/p/..."></textarea>
         //     Paid" (same "-" style FAST uses for Film / TV / Channels).
         function _tiqExportRowsGaming(dict, tabLabel) {
             var out = [];
+            // Bucket-key -> section-suffix map for every grouped
+            // gaming panel. `Meta Quest` panel uses free / paid;
+            // `Steam` panel uses most_played / top_sellers. Adding
+            // a new grouped platform is a one-line addition here
+            // (plus the matching entries in renderTIQGaming's
+            // groupedBuckets and trends_iq.py's GAMING_PLATFORMS).
+            var bucketSuffix = {
+                'free':        'Free',
+                'paid':        'Paid',
+                'most_played': 'Most Played',
+                'top_sellers': 'Top Sellers'
+            };
+            var bucketKeys = Object.keys(bucketSuffix);
             Object.keys(dict || {}).forEach(function(slug) {
                 var panel = dict[slug] || {};
                 var label = panel.label || slug;
@@ -53765,14 +53778,14 @@ https://www.instagram.com/p/..."></textarea>
                         URL: it.url || ''
                     });
                 };
-                var hasFree = Array.isArray(panel.free);
-                var hasPaid = Array.isArray(panel.paid);
-                if (hasFree || hasPaid) {
-                    (panel.free || []).forEach(function(it, i) {
-                        pushRow('Free', it, i);
-                    });
-                    (panel.paid || []).forEach(function(it, i) {
-                        pushRow('Paid', it, i);
+                var populatedBucketKeys = bucketKeys.filter(function(bk) {
+                    return Array.isArray(panel[bk]);
+                });
+                if (populatedBucketKeys.length) {
+                    populatedBucketKeys.forEach(function(bk) {
+                        (panel[bk] || []).forEach(function(it, i) {
+                            pushRow(bucketSuffix[bk], it, i);
+                        });
                     });
                     return;
                 }
@@ -56265,7 +56278,7 @@ https://www.instagram.com/p/..."></textarea>
             if (!allKeys.length) {
                 return '<div class="tiq-empty">Gaming rankings are warming up.</div>';
             }
-            var order = ['xbox_gamepass', 'meta_quest'];
+            var order = ['xbox_gamepass', 'meta_quest', 'steam'];
             var keys = order.filter(function(k) { return gaming[k]; })
                 .concat(allKeys.filter(function(k) { return order.indexOf(k) === -1; }));
 
@@ -56330,30 +56343,46 @@ https://www.instagram.com/p/..."></textarea>
                        '</div>';
             };
 
+            // Grouped-panel bucket schema. Each grouped Gaming pill
+            // (Meta Quest, Steam) lists its two column keys plus the
+            // user-facing header shown above each column. Order is
+            // the display order (left column first).
+            var groupedBuckets = {
+                'meta_quest': [['free',        'Free'],
+                                ['paid',        'Paid']],
+                'steam':      [['most_played', 'Most Played'],
+                                ['top_sellers', 'Top Sellers']]
+            };
+
             var panels = keys.map(function(k) {
                 var s = gaming[k] || {};
                 var active = (k === window.__trendsIQ.activeGaming) ? ' active' : '';
                 var body;
+                var buckets = groupedBuckets[k];
                 if (!s.available) {
                     body = '<div class="tiq-placeholder">' +
                            '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
                            '<div>Loading.</div>' +
                            '</div>';
-                } else if (Array.isArray(s.free) || Array.isArray(s.paid)) {
-                    // Grouped panel (Meta Quest): two columns side-by-
-                    // side. Collapse to one column when only one bucket
-                    // has data (same graceful fallback FAST uses when
-                    // Amazon Live TV has only Film or only TV).
-                    var freeRows = s.free || [];
-                    var paidRows = s.paid || [];
-                    if (!freeRows.length && !paidRows.length) {
+                } else if (buckets && buckets.some(function(b) { return Array.isArray(s[b[0]]); })) {
+                    // Grouped panel (Meta Quest, Steam): render each
+                    // configured bucket as its own column, side-by-
+                    // side. Collapse to a single column when only
+                    // one bucket has rows (same graceful fallback
+                    // FAST uses when Amazon Live TV has only Film or
+                    // only TV).
+                    var populated = buckets.filter(function(b) {
+                        return (s[b[0]] || []).length;
+                    });
+                    if (!populated.length) {
                         body = '<div class="tiq-empty">No trending games right now.</div>';
                     } else {
-                        var cols = (freeRows.length && paidRows.length)
-                            ? '1fr 1fr' : '1fr';
-                        var gridInner = '';
-                        if (freeRows.length) gridInner += renderCol('Free', freeRows);
-                        if (paidRows.length) gridInner += renderCol('Paid', paidRows);
+                        var cols = populated.length === 1
+                            ? '1fr'
+                            : populated.map(function() { return '1fr'; }).join(' ');
+                        var gridInner = populated.map(function(b) {
+                            return renderCol(b[1], s[b[0]]);
+                        }).join('');
                         body = '<div class="tiq-cards-grid" style="grid-template-columns: ' + cols + ';">' +
                                gridInner +
                                '</div>';

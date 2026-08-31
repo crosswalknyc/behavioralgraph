@@ -129,7 +129,7 @@ _MAX_FAST_ITEMS      = 350
 # collapses any title that charts on multiple providers (e.g. Beat
 # Saber if it ever landed on Game Pass). Room to grow when we add
 # PlayStation Plus / Nintendo Switch Online / Steam later.
-_MAX_GAMING_ITEMS    = 80
+_MAX_GAMING_ITEMS    = 140
 # FAST-CHANNEL RANKER: micro-channels inside each FAST platform
 # (LaurenZSide, Mythical 24/7, Nick Jr. Pluto TV, Forensic Files
 # 24/7, ...). Roku ships ~619, Amazon ~655, Pluto ~410, Tubi ~169
@@ -324,9 +324,14 @@ _FAST_SLUGS = (
 # When source_key is None -> read `national` off the snapshot named
 #   `snapshot_slug`. When set -> read `sources[source_key].items`.
 _GAMING_SLUGS = (
-    ('xbox_gamepass',    'Xbox Game Pass Ultimate', 'xbox_gamepass', None),
-    ('meta_quest_free',  'Meta Quest - Top Free',   'meta_quest',    'meta_quest_free'),
-    ('meta_quest_paid',  'Meta Quest - Top Paid',   'meta_quest',    'meta_quest_paid'),
+    ('xbox_gamepass',      'Xbox Game Pass Ultimate', 'xbox_gamepass', None),
+    ('meta_quest_free',    'Meta Quest - Top Free',   'meta_quest',    'meta_quest_free'),
+    ('meta_quest_paid',    'Meta Quest - Top Paid',   'meta_quest',    'meta_quest_paid'),
+    # Steam. Two rails packed in one snapshot. Most Played is anchored
+    # to Valve's live concurrent-player integer (published by the JSON
+    # API), Top Sellers is a pure research pass.
+    ('steam_most_played',  'Steam - Most Played',     'steam_charts',  'steam_most_played'),
+    ('steam_top_sellers',  'Steam - Top Sellers',     'steam_charts',  'steam_top_sellers'),
 )
 
 
@@ -467,6 +472,17 @@ def _collect_gaming(max_items: int = _MAX_GAMING_ITEMS) -> list[dict]:
             e['chart_labels'].append(f'{label} #{rank}')
             if rank < e['best_rank']:
                 e['best_rank'] = rank
+            # Steam Most Played rows carry Valve's live 24-hour peak
+            # concurrent players as a hard prior. `_build_prompt` for
+            # kind=game surfaces this as `steam_peak_in_game` so the
+            # Claude research call only has to reason the weekly
+            # multiplier + US share, not the raw active-player count.
+            cp = it.get('current_players')
+            if cp and 'steam_peak_in_game' not in e:
+                try:
+                    e['steam_peak_in_game'] = int(cp)
+                except (TypeError, ValueError):
+                    pass
     return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
 
 
@@ -1476,6 +1492,71 @@ _GAMING_PLATFORMS_META = [
          'revenue charts, UploadVR weekly revenue tracker, Meta '
          'Reality Labs paid-catalog disclosures.'
      )},
+    # Steam. Valve's public JSON APIs deliver two rails: Most Played
+    # (24-hour peak concurrent players, an integer we treat as a hard
+    # prior) and Top Sellers (weekly revenue rank, no concurrent
+    # anchor, pure research). Steam active US user base ~24-29M
+    # weekly (Steam 2023 recap = ~132M global MAU x ~18-22% US share
+    # per Newzoo PC gaming distribution). Global peak concurrent ~35-
+    # 40M; US peak concurrent proportionally ~5-8M. Ceiling for any
+    # single title's weekly US unique-player count is ~24M (the whole
+    # weekly-active US Steam base). Realistic per-title top-of-chart
+    # weekly US 1-3M for a viral moment (Counter-Strike 2 launch,
+    # Palworld launch week), 200K-800K for a steady top-10 title
+    # (Dota 2, PUBG steady state), 40K-200K middle-of-rail, 5K-25K
+    # long-tail. Titles with heavier international skew (Dota 2,
+    # PUBG: BATTLEGROUNDS, PlayerUnknown's Battlegrounds Mobile,
+    # Chinese Path of Exile competitors) run US share 12-16% instead
+    # of the ~20% average; US-native indies + heavy-US-marketing
+    # AAAs (Marvel Rivals, Palworld, Baldur's Gate 3) run 25-30%.
+    {'key': 'steam_most_played',
+     'label': 'Steam - Most Played',
+     'ceiling': 5_000_000,
+     'anchors': (
+         'Steam Most Played rows carry Valve\'s live 24-hour peak '
+         'concurrent US+global player integer as `steam_peak_in_game`. '
+         'Convert to weekly US uniques via: weekly_us = peak_concurrent '
+         '* peak_to_weekly_multiplier * us_share. peak_to_weekly_'
+         'multiplier ~= 6-10x (a single instantaneous peak underrepres'
+         'ents the weekly unique-player pool because players cycle in '
+         'and out over the week). us_share defaults to ~0.20 (Steam '
+         'weekly US audience ~24M vs. ~132M global MAU). Titles skew '
+         'us_share by publisher / audience: Dota 2 / PUBG / Chinese '
+         'indies 0.12-0.16, mainstream AAAs (Marvel Rivals, Palworld, '
+         'Baldur\'s Gate 3, Cyberpunk 2077, GTA V) 0.22-0.30, US-first '
+         'indies 0.30-0.40. The concurrent-player integer is a hard '
+         'prior - the returned weekly US number must be within '
+         '6-10x * (0.12-0.40) of the concurrent count. Ceiling ~5M '
+         'weekly US for the biggest concurrent-league titles '
+         '(Counter-Strike 2 peak windows). Anchor: Steam 2023 recap '
+         'MAU disclosure, Newzoo PC gaming distribution, Circana US '
+         'Games Tracker, GamesIndustry.biz Steam concurrency reports.'
+     )},
+    {'key': 'steam_top_sellers',
+     'label': 'Steam - Top Sellers',
+     'ceiling': 4_500_000,
+     'anchors': (
+         'Steam Top Sellers is ranked by weekly gross revenue (Valve '
+         'does not publish unit counts). No live concurrent anchor - '
+         'a title on this rail may or may not appear on Most Played. '
+         'Convert weekly revenue rank to weekly US unique players by '
+         'reasoning: chart position, base price ($0-$70), average '
+         'discount, publisher category, expected buyer-to-player '
+         'ratio (~1:1 for new releases in launch week, ~1:1.2 for '
+         'evergreen bundles, ~1:3 for gift-heavy holiday windows). '
+         'Big launch week (Baldur\'s Gate 3 week 1, Palworld launch, '
+         'Cyberpunk 2077 relaunch) 800K-3M US weekly players. Steady '
+         'top-10 evergreen (Counter-Strike 2, Dota 2, Rust) 300K-1M '
+         'weekly. Mid-tier top-25 (Helldivers 2 quiet-week steady '
+         'state, PUBG mid-week, EA Sports FC 25 off-week) 100K-400K '
+         'weekly. Long-tail top-50 (Terraria evergreen, Stardew '
+         'Valley evergreen, Rimworld) 40K-150K weekly. Where a title '
+         'ALSO appears on Steam Most Played, cap the Top Sellers '
+         'estimate at the Most Played estimate for that title '
+         '(revenue rank is a subset of the weekly active pool). '
+         'Anchor: Steam 2023 recap, SteamDB weekly revenue leader'
+         'board, Circana US Games Tracker, GamesIndustry.biz.'
+     )},
 ]
 
 
@@ -1595,6 +1676,12 @@ _CHART_LABEL_TO_PLATFORM = (
     ('xbox game pass ultimate', 'xbox_gamepass'),
     ('xbox game pass',   'xbox_gamepass'),
     ('xbox',             'xbox_gamepass'),
+    # Steam (Valve). Two rails packed in one snapshot; each rail
+    # gets its own platform key so anchors + ceilings apply per-rail.
+    ('steam - most played', 'steam_most_played'),
+    ('steam - top sellers', 'steam_top_sellers'),
+    ('steam most played',   'steam_most_played'),
+    ('steam top sellers',   'steam_top_sellers'),
 )
 
 
@@ -1682,15 +1769,28 @@ def _build_prompt(item: dict) -> str:
                      f'{display_title}')
     elif kind == 'game':
         # Weekly US plays / players = unique US subs / headset owners
-        # who LAUNCHED the title in the past 7 days. The specific
-        # platform anchor depends on which gaming rail this title
-        # actually charts on (Xbox Game Pass vs Meta Quest Top Free
-        # vs Meta Quest Top Paid) - each rail has a very different
-        # user base and per-title reach curve, so we route to the
-        # right anchor language + search query per platform.
-        plat_keys = focus_keys & {'xbox_gamepass', 'meta_quest_free',
-                                   'meta_quest_paid'}
+        # / Steam players who LAUNCHED the title in the past 7 days.
+        # The specific platform anchor depends on which gaming rail
+        # this title actually charts on - each rail has a very
+        # different user base and per-title reach curve, so we route
+        # to the right anchor language + search query per platform.
+        plat_keys = focus_keys & {'xbox_gamepass',
+                                   'meta_quest_free', 'meta_quest_paid',
+                                   'steam_most_played', 'steam_top_sellers'}
         pub_str = f'\nPUBLISHER: {artist}' if artist else ''
+        # Steam Most Played rows carry Valve's live 24-hour peak
+        # concurrent-player integer as a hard prior. Surface it in the
+        # prompt so Claude reasons the multiplier + US share instead
+        # of guessing the raw active-player count.
+        peak = item.get('steam_peak_in_game')
+        peak_line = ''
+        if peak:
+            peak_line = (f'\nSTEAM PEAK CONCURRENT (24hr): {int(peak):,} '
+                         'players (Valve public JSON API). '
+                         'weekly_us = peak_concurrent * '
+                         'peak_to_weekly_multiplier * us_share; '
+                         'multiplier ~6-10x, us_share ~0.12-0.30 '
+                         'depending on title.')
         if 'xbox_gamepass' in plat_keys:
             unit  = ('weekly US plays (unique US Game Pass Ultimate '
                      'subscribers who launched the game in the past 7 days)')
@@ -1716,16 +1816,38 @@ def _build_prompt(item: dict) -> str:
                          'base mid-2026; paid catalog runs 3-5x smaller '
                          'unique-user counts than the free rail because the '
                          'purchase gate compresses the funnel)')
+        elif 'steam_most_played' in plat_keys:
+            unit  = ('weekly US players (unique US Steam accounts that '
+                     'launched the game in the past 7 days)')
+            query = (f'"{display_title}" Steam weekly US players concurrent '
+                     f'SteamDB Newzoo Circana 2026')
+            plat_line = ('Steam - Most Played (~24-29M US weekly active '
+                         'Steam users mid-2026; the concurrent-player '
+                         'integer above is a hard prior; reason the '
+                         'weekly multiplier + US share, not the raw '
+                         'player count)')
+        elif 'steam_top_sellers' in plat_keys:
+            unit  = ('weekly US players (unique US Steam accounts that '
+                     'launched or purchased the game in the past 7 days)')
+            query = (f'"{display_title}" Steam weekly sales US players '
+                     f'SteamDB revenue Circana 2026')
+            plat_line = ('Steam - Top Sellers (~24-29M US weekly active '
+                         'Steam users mid-2026; ranked by weekly revenue, '
+                         'no live concurrent anchor; reason from chart '
+                         'position + base price + expected buyer-to-'
+                         'player ratio; where the title ALSO appears on '
+                         'Most Played cap at that estimate)')
         else:
             unit  = ('weekly US plays (unique US subscribers / headset '
-                     'owners who launched the game in the past 7 days)')
+                     'owners / Steam accounts who launched the game in the '
+                     'past 7 days)')
             query = (f'"{display_title}" weekly US players Xbox Game Pass '
-                     f'Meta Quest VR Newzoo Circana Ampere 2026')
+                     f'Meta Quest VR Steam Newzoo Circana Ampere 2026')
             plat_line = ('one of Xbox Game Pass Ultimate, Meta Quest Top '
-                         'Free, or Meta Quest Top Paid; use the chart '
-                         'labels above to identify which rail this title '
-                         'actually lives on')
-        item_line = (f'GAME TITLE: {display_title}{pub_str}\n'
+                         'Free, Meta Quest Top Paid, Steam Most Played, or '
+                         'Steam Top Sellers; use the chart labels above to '
+                         'identify which rail this title actually lives on')
+        item_line = (f'GAME TITLE: {display_title}{pub_str}{peak_line}\n'
                      f'PLATFORM: {plat_line}')
     elif kind == 'fast_channel':
         # "Weekly US viewers" = unique US TVs / households that tuned
