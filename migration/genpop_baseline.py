@@ -53,6 +53,7 @@ GENPOP_COLS = (GENPOP_PEN_COL, GENPOP_IDX_COL)
 CAT_COL = "Column"
 VAL_COL = "Value"
 BP_COL = "Brand Penetration (Row)"
+RAW_COL = "Original Raw Numbers"
 
 METADATA_COLS = {
     "BRAND INPUT", "SAMPLE SIZE", "BRAND CATEGORY", "SUBJECT",
@@ -161,6 +162,62 @@ def strip_genpop_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop(columns=drop) if drop else df
 
 
+def _collapse_within_file_mirror(pens, idxs, meta, verbose=False):
+    """Force ONE Gen Pop denominator per same-measurement group.
+
+    Partner finding (2026-08-31): a brand filed under two sections with
+    byte-identical reach AND byte-identical raw is the same measurement
+    filed twice (a rule #3b purchase-family mirror - e.g. MOST PURCHASED
+    BRANDS + CPG). If the appended baseline cells differ, that one
+    measurement publishes two denominators -> two indexes, and a
+    consumer's number depends on which section their loader reads first.
+
+    Gen Pop is normally mirror-coherent (the daily reconcile keeps it
+    so), so this is a NO-OP; it only fires when Gen Pop is transiently
+    mid-drift for a brand. Scope is deliberately narrow: only rows with
+    the SAME brand AND identical reach AND identical raw group together,
+    so a token shared across unrelated demo / interest categories (which
+    never share reach) is never touched. Identical reach means identical
+    BP, so the recomputed index lands identical across the group too.
+
+    Guarantees the delivered file's internal COHERENCE; it does not
+    chase value freshness (that is Gen Pop's job via the daily reconcile
+    + baseline refresh). Deterministic tie-break: the mode, then the
+    lower denominator - the value the reconcile has been observed to
+    converge toward - and the file self-heals to the reconciled value on
+    any later baseline refresh. Mutates pens/idxs in place; returns the
+    number of groups collapsed."""
+    from collections import Counter, defaultdict
+    groups = defaultdict(list)
+    for i, m in enumerate(meta):
+        if not m or not pens[i] or not m.get("bn") or not m.get("reach"):
+            continue
+        groups[(m["bn"], m["reach"], m["raw"])].append(i)
+    collapsed = 0
+    for _key, rows in groups.items():
+        if len({pens[i] for i in rows}) <= 1:
+            continue
+        cnt = Counter(pens[i] for i in rows)
+        top_freq = cnt.most_common(1)[0][1]
+        cands = [v for v, f in cnt.items() if f == top_freq]
+        canon = min(cands, key=lambda s: (
+            _parse_bp(s) if _parse_bp(s) is not None else float("inf")))
+        gp_v = _parse_bp(canon)
+        for i in rows:
+            pens[i] = canon
+            bp = meta[i].get("bp")
+            if bp is not None and gp_v and gp_v > 0:
+                idxs[i] = f"{(bp / gp_v * 100.0):.1f}"
+            else:
+                idxs[i] = ""
+        collapsed += 1
+    if collapsed and verbose:
+        print(f"  [genpop_baseline] within-file mirror coherence: "
+              f"collapsed {collapsed} same-measurement group(s) to a "
+              f"single denominator")
+    return collapsed
+
+
 def append_genpop_columns(df: pd.DataFrame, genpop_map=None,
                           s3_client=None, verbose=True) -> pd.DataFrame:
     """Append the two baseline columns as the LAST columns of df.
@@ -178,12 +235,13 @@ def append_genpop_columns(df: pd.DataFrame, genpop_map=None,
                 print("  [genpop_baseline] empty Gen Pop map; "
                       "baseline columns skipped")
             return df
-        pens, idxs = [], []
+        pens, idxs, meta = [], [], []
         for _, row in df.iterrows():
             cat = _norm_cat(row.get(CAT_COL))
             if not cat or cat in METADATA_COLS:
                 pens.append("")
                 idxs.append("")
+                meta.append(None)
                 continue
             bn = _norm_brand(row.get(VAL_COL))
             hit = genpop_map.get((cat, bn))
@@ -192,17 +250,27 @@ def append_genpop_columns(df: pd.DataFrame, genpop_map=None,
                     hit = genpop_map.get((_norm_cat(fb_cat), bn))
                     if hit is not None:
                         break
+            bp = _parse_bp(row.get(BP_COL))
             if hit is None:
                 pens.append("")
                 idxs.append("")
+                meta.append(None)
                 continue
             gp_v, gp_raw = hit
             pens.append(gp_raw)
-            bp = _parse_bp(row.get(BP_COL))
             if bp is not None and gp_v and gp_v > 0:
                 idxs.append(f"{(bp / gp_v * 100.0):.1f}")
             else:
                 idxs.append("")
+            meta.append({
+                "bn": bn,
+                "reach": str(row.get(BP_COL) or "").strip(),
+                "raw": str(row.get(RAW_COL) or "").strip(),
+                "bp": bp,
+            })
+        # Guarantee no brand's same measurement ships two denominators
+        # (2026-08-31 partner finding). No-op when Gen Pop is coherent.
+        _collapse_within_file_mirror(pens, idxs, meta, verbose=verbose)
         df = df.copy()
         df[GENPOP_PEN_COL] = pens
         df[GENPOP_IDX_COL] = idxs
