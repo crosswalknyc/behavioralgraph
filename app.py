@@ -53677,6 +53677,36 @@ def _spec_from_draft(draft):
             })
         if normalized:
             spec['persona_doc'] = {'clickstream_signals': normalized}
+
+    # Caller-supplied competitor brands (2026-08-31): the set of brands
+    # the caller wants represented inside this subject's profile. Rides
+    # from the partner API /run body or a chatbot draft; folded onto the
+    # spec here so the research phase (build_persona_brief) can reason
+    # them into the relevant categories at real values. Cleaned + apos-
+    # stripped + capped again here so a chatbot-sourced list is held to
+    # the same bar as the partner API one. Fresh builds only - derived
+    # cuts inherit their brand set from the parent and never carry this.
+    cb_seed = draft.get('competitor_brands') or []
+    if isinstance(cb_seed, list) and cb_seed:
+        cb_clean = []
+        cb_seen = set()
+        for entry in cb_seed:
+            name = _scrub(str(entry or ''), field='competitor_brand',
+                          subject=subject, max_len=80, single_line=True)
+            for _ap in ("'", '\u2019', '\u2018', '\u02bc', '`'):
+                name = name.replace(_ap, '')
+            name = ' '.join(name.split()).strip()
+            if not name:
+                continue
+            key = name.lower()
+            if key in cb_seen:
+                continue
+            cb_seen.add(key)
+            cb_clean.append(name)
+            if len(cb_clean) >= 50:
+                break
+        if cb_clean:
+            spec['competitor_brands'] = cb_clean
     return spec
 
 
@@ -60687,7 +60717,8 @@ def _v1_build_brief_summary(draft, decision, d_type=None, cuts=None,
     return text
 
 
-def _v1_conclude(prompt, run_avid=True, identity_context=None):
+def _v1_conclude(prompt, run_avid=True, identity_context=None,
+                 competitor_brands=None):
     """THE single decision function for /api/v1/profiles/check and
     /api/v1/profiles/run. Runs interpret -> promoters -> normalize ->
     spec construction -> enqueue-validation mirror, identically for
@@ -60697,6 +60728,11 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None):
     identity_context (optional dict of domain/category/description)
     is subject-identity disambiguation only - it feeds interpret and
     subject verification, never decision semantics (no-overrides).
+
+    competitor_brands (optional list of brand names) is a research
+    INPUT seed only. It is attached to the draft AFTER every decision /
+    promoter / demotion step below, so it can never influence the
+    verdict; _spec_from_draft folds it onto spec['competitor_brands'].
 
     Returns (conclusion_dict, None) on success or (None,
     (flask_response, http_status)) when the prompt could not be
@@ -61039,6 +61075,16 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None):
             pass
         return conclusion, None
 
+    # Caller-supplied competitor brands (2026-08-31): attached here,
+    # AFTER every decision/promoter/demotion step above, so it can
+    # never influence the verdict (no-external-overrides rule: input
+    # fields like target audience are allowed; override flags are not).
+    # _spec_from_draft reads draft['competitor_brands'] and folds it
+    # onto spec['competitor_brands'] for the research phase.
+    if competitor_brands:
+        draft['competitor_brands'] = [b for b in competitor_brands
+                                      if isinstance(b, str) and b.strip()]
+
     if decision != 'existing_match':
         # Build the spec on BOTH routes. This is where audience sizing
         # becomes concrete, and it is what the engine host validates at
@@ -61140,41 +61186,58 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None):
 # --------------------------------------------------------------------
 
 _V1_BODY_KNOWN_FIELDS = ('prompt', 'text', 'run_avid', 'domain',
-                         'category', 'description')
+                         'category', 'description', 'competitor_brands')
+
+# Max competitor brand names accepted per request, and per-name length
+# cap (2026-08-31). A caller-supplied INPUT seed for research only.
+_V1_COMPETITOR_MAX = 50
+_V1_COMPETITOR_NAME_MAX = 80
+
+
+def _v1_clean_competitor_name(raw):
+    """Strip apostrophes (they never appear in clickstream) and collapse
+    whitespace on a single competitor brand name. Returns '' if empty."""
+    name = str(raw or '')
+    for _ap in ("'", '\u2019', '\u2018', '\u02bc', '`'):
+        name = name.replace(_ap, '')
+    return re.sub(r'\s+', ' ', name).strip()
 
 
 def _v1_parse_check_run_body(body):
     """Validate a /check or /run JSON body. Returns
-    (prompt, run_avid, identity_context, error_response_or_None)."""
+    (prompt, run_avid, identity_context, competitor_brands,
+    error_response_or_None). competitor_brands is a cleaned list of
+    brand-name strings (or None when absent) - a research INPUT seed
+    only, never a decision override."""
     if not isinstance(body, dict):
-        return None, True, None, (jsonify({
+        return None, True, None, None, (jsonify({
             'success': False,
             'error': 'request body must be a JSON object'}), 400)
     for k in body.keys():
         if k not in _V1_BODY_KNOWN_FIELDS:
-            return None, True, None, (jsonify({
+            return None, True, None, None, (jsonify({
                 'success': False,
                 'error': (f'unknown field: "{k}". Accepted fields: '
                           'prompt (required), run_avid, domain, '
-                          'category, description. See GET '
-                          '/api/v1/schema.')}), 400)
+                          'category, description, competitor_brands. '
+                          'See GET /api/v1/schema.')}), 400)
     prompt_raw = body.get('prompt', body.get('text'))
     if prompt_raw is not None and not isinstance(prompt_raw, str):
-        return None, True, None, (jsonify({
+        return None, True, None, None, (jsonify({
             'success': False,
             'error': '"prompt" must be a string'}), 400)
     prompt = (prompt_raw or '').strip()
     if not prompt:
-        return None, True, None, (jsonify({
+        return None, True, None, None, (jsonify({
             'success': False,
             'error': 'required field: "prompt"'}), 400)
     if len(prompt) > 4000:
-        return None, True, None, (jsonify({
+        return None, True, None, None, (jsonify({
             'success': False,
             'error': 'prompt exceeds 4000 characters'}), 400)
     run_avid_raw = body.get('run_avid', True)
     if not isinstance(run_avid_raw, bool):
-        return None, True, None, (jsonify({
+        return None, True, None, None, (jsonify({
             'success': False,
             'error': '"run_avid" must be a boolean'}), 400)
     ictx = {}
@@ -61184,14 +61247,14 @@ def _v1_parse_check_run_body(body):
         if v is None:
             continue
         if not isinstance(v, str):
-            return None, True, None, (jsonify({
+            return None, True, None, None, (jsonify({
                 'success': False,
                 'error': f'"{k}" must be a string'}), 400)
         v = v.strip()
         if not v:
             continue
         if len(v) > cap:
-            return None, True, None, (jsonify({
+            return None, True, None, None, (jsonify({
                 'success': False,
                 'error': f'"{k}" exceeds {cap} characters'}), 400)
         if k == 'domain':
@@ -61200,12 +61263,58 @@ def _v1_parse_check_run_body(body):
             v = v.split('/', 1)[0].split('?', 1)[0].strip().lower()
             v = v[4:] if v.startswith('www.') else v
             if not re.match(r'^[a-z0-9.-]+\.[a-z]{2,}$', v):
-                return None, True, None, (jsonify({
+                return None, True, None, None, (jsonify({
                     'success': False,
                     'error': ('"domain" must be a website domain like '
                               'example.com')}), 400)
         ictx[k] = v
-    return prompt, run_avid_raw, (ictx or None), None
+
+    # competitor_brands (2026-08-31): optional array of brand names the
+    # caller wants represented inside this subject's profile. Cleaned
+    # here, folded onto the spec by _spec_from_draft, and threaded into
+    # research by build_persona_brief. It is an INPUT, not a behavior
+    # flag: it never touches the decision / existing_match / cut path.
+    competitor_brands = None
+    cb_raw = body.get('competitor_brands')
+    if cb_raw is not None:
+        if not isinstance(cb_raw, list):
+            return None, True, None, None, (jsonify({
+                'success': False,
+                'error': '"competitor_brands" must be a list of brand '
+                         'names'}), 400)
+        if len(cb_raw) > _V1_COMPETITOR_MAX:
+            return None, True, None, None, (jsonify({
+                'success': False,
+                'error': (f'"competitor_brands" accepts at most '
+                          f'{_V1_COMPETITOR_MAX} entries')}), 400)
+        cleaned = []
+        seen = set()
+        for entry in cb_raw:
+            if not isinstance(entry, str):
+                return None, True, None, None, (jsonify({
+                    'success': False,
+                    'error': '"competitor_brands" entries must be '
+                             'strings'}), 400)
+            name = _v1_clean_competitor_name(entry)
+            if not name:
+                return None, True, None, None, (jsonify({
+                    'success': False,
+                    'error': '"competitor_brands" entries must be '
+                             'non-empty brand names'}), 400)
+            if len(name) > _V1_COMPETITOR_NAME_MAX:
+                return None, True, None, None, (jsonify({
+                    'success': False,
+                    'error': (f'"competitor_brands" entries must be '
+                              f'{_V1_COMPETITOR_NAME_MAX} characters or '
+                              f'fewer')}), 400)
+            key = name.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(name)
+        competitor_brands = cleaned or None
+
+    return prompt, run_avid_raw, (ictx or None), competitor_brands, None
 
 
 # Caveats surfaced on /check for run-side conditions that genuinely
@@ -61255,7 +61364,8 @@ def api_v1_profiles_check():
         traceback.print_exc()
         return jsonify({'success': False,
                          'error': 'invalid JSON body'}), 400
-    prompt, run_avid, identity_ctx, body_err = _v1_parse_check_run_body(body)
+    prompt, run_avid, identity_ctx, competitor_brands, body_err = \
+        _v1_parse_check_run_body(body)
     if body_err is not None:
         return body_err
 
@@ -61272,7 +61382,8 @@ def api_v1_profiles_check():
     # the same prompt, including the audience-size bounds the engine
     # host enforces at enqueue time.
     conclusion, err_resp = _v1_conclude(prompt, run_avid=run_avid,
-                                        identity_context=identity_ctx)
+                                        identity_context=identity_ctx,
+                                        competitor_brands=competitor_brands)
     if err_resp is not None:
         return err_resp
 
@@ -61413,7 +61524,8 @@ def api_v1_profiles_run():
         return jsonify({'success': False,
                          'error': 'invalid JSON body'}), 400
 
-    prompt, run_avid, identity_ctx, body_err = _v1_parse_check_run_body(body)
+    prompt, run_avid, identity_ctx, competitor_brands, body_err = \
+        _v1_parse_check_run_body(body)
     if body_err is not None:
         return body_err
 
@@ -61444,7 +61556,8 @@ def api_v1_profiles_run():
     # _v1_conclude, so this route cannot reach a different verdict than
     # the /check the partner quoted from.
     conclusion, err_resp = _v1_conclude(prompt, run_avid=run_avid,
-                                        identity_context=identity_ctx)
+                                        identity_context=identity_ctx,
+                                        competitor_brands=competitor_brands)
     if err_resp is not None:
         return err_resp
 
@@ -61904,12 +62017,26 @@ def api_v1_schema():
                         'type': 'string', 'required': False,
                         'description': ('one-line description of the '
                                         'subject entity')},
+                    'competitor_brands': {
+                        'type': 'array of strings', 'required': False,
+                        'max_items': 50, 'max_item_length': 80,
+                        'description': ('brand names that should appear '
+                                        'inside this profile (the '
+                                        "subject's competitive set). We "
+                                        'fold them into our research so '
+                                        'they show up in the output. '
+                                        'Plain names, e.g. ["Holley", '
+                                        '"FiTech"]. Apostrophes are '
+                                        'stripped. Absent = default '
+                                        'behavior.')},
                 },
                 'notes': ('Unknown top-level fields are rejected with '
                           'HTTP 400 naming the field. domain / category '
                           '/ description identify WHICH entity the '
                           'subject is; they never change decision '
-                          'logic or pricing.'),
+                          'logic or pricing. competitor_brands is a '
+                          'research input only; it never changes the '
+                          'decision or price.'),
                 'response': {
                     'success': 'boolean',
                     'buildable': 'boolean',
