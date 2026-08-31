@@ -1404,6 +1404,17 @@ _CHART_LABEL_TO_PLATFORM = (
     ('pluto',            'pluto'),
     ('shazam',           'shazam'),
     ('tiktok',           'tiktok'),
+    # Gaming (order matters - specific pill labels first so the
+    # 'Top Free' / 'Top Paid' suffixes route to the right Meta
+    # Quest panel key). `_GAMING_SLUGS` labels are 'Xbox Game Pass
+    # Ultimate', 'Meta Quest - Top Free', 'Meta Quest - Top Paid'.
+    ('meta quest - top free', 'meta_quest_free'),
+    ('meta quest - top paid', 'meta_quest_paid'),
+    ('meta quest top free',   'meta_quest_free'),
+    ('meta quest top paid',   'meta_quest_paid'),
+    ('xbox game pass ultimate', 'xbox_gamepass'),
+    ('xbox game pass',   'xbox_gamepass'),
+    ('xbox',             'xbox_gamepass'),
 )
 
 
@@ -1490,18 +1501,52 @@ def _build_prompt(item: dict) -> str:
         item_line = (f'{noun} TITLE (FAST / ad-supported free tier): '
                      f'{display_title}')
     elif kind == 'game':
-        # "Weekly US plays" = unique US Game Pass Ultimate subs that
-        # LAUNCHED the title (console, PC, cloud) in the past 7 days.
-        # Anchor Claude to Microsoft first-party engagement, Newzoo
-        # Cloud Gaming Insights, Circana US Games Tracker, and any
-        # Xbox Wire / GamesIndustry.biz weekly-concurrency data.
-        unit  = 'weekly US plays (unique US subscribers who launched the game in the past 7 days)'
-        query = (f'"{display_title}" Xbox Game Pass weekly US players '
-                 f'Newzoo Circana Ampere Analysis 2026')
+        # Weekly US plays / players = unique US subs / headset owners
+        # who LAUNCHED the title in the past 7 days. The specific
+        # platform anchor depends on which gaming rail this title
+        # actually charts on (Xbox Game Pass vs Meta Quest Top Free
+        # vs Meta Quest Top Paid) - each rail has a very different
+        # user base and per-title reach curve, so we route to the
+        # right anchor language + search query per platform.
+        plat_keys = focus_keys & {'xbox_gamepass', 'meta_quest_free',
+                                   'meta_quest_paid'}
         pub_str = f'\nPUBLISHER: {artist}' if artist else ''
+        if 'xbox_gamepass' in plat_keys:
+            unit  = ('weekly US plays (unique US Game Pass Ultimate '
+                     'subscribers who launched the game in the past 7 days)')
+            query = (f'"{display_title}" Xbox Game Pass weekly US players '
+                     f'Newzoo Circana Ampere Analysis 2026')
+            plat_line = ('Xbox Game Pass Ultimate (~25M US subs, includes '
+                         'console + PC + Xbox Cloud Gaming)')
+        elif 'meta_quest_free' in plat_keys:
+            unit  = ('weekly US players (unique US Meta Quest headset '
+                     'owners who launched this free title in the past 7 days)')
+            query = (f'"{display_title}" Meta Quest VR weekly US players '
+                     f'Newzoo Ampere Sensor Tower Reality Labs 2026')
+            plat_line = ('Meta Quest - Top Free (~14-16M US active headset '
+                         'base mid-2026; free titles reach the majority of '
+                         'the installed base with longer per-session times '
+                         'than paid rail because there is no purchase gate)')
+        elif 'meta_quest_paid' in plat_keys:
+            unit  = ('weekly US players (unique US Meta Quest headset '
+                     'owners who launched this paid title in the past 7 days)')
+            query = (f'"{display_title}" Meta Quest VR weekly US players '
+                     f'UploadVR Ampere Reality Labs revenue 2026')
+            plat_line = ('Meta Quest - Top Paid (~14-16M US active headset '
+                         'base mid-2026; paid catalog runs 3-5x smaller '
+                         'unique-user counts than the free rail because the '
+                         'purchase gate compresses the funnel)')
+        else:
+            unit  = ('weekly US plays (unique US subscribers / headset '
+                     'owners who launched the game in the past 7 days)')
+            query = (f'"{display_title}" weekly US players Xbox Game Pass '
+                     f'Meta Quest VR Newzoo Circana Ampere 2026')
+            plat_line = ('one of Xbox Game Pass Ultimate, Meta Quest Top '
+                         'Free, or Meta Quest Top Paid; use the chart '
+                         'labels above to identify which rail this title '
+                         'actually lives on')
         item_line = (f'GAME TITLE: {display_title}{pub_str}\n'
-                     f'PLATFORM: Xbox Game Pass Ultimate (~25M US subs, '
-                     f'includes console + PC + Xbox Cloud Gaming)')
+                     f'PLATFORM: {plat_line}')
     elif kind == 'fast_channel':
         # "Weekly US viewers" = unique US TVs / households that tuned
         # to this 24/7 linear channel on this specific FAST platform
@@ -1725,6 +1770,42 @@ def _per_title_jitter_factor(title: str, platform_key: str) -> float:
     return 0.95 + (n / 0xFFFFFFFF) * 0.10
 
 
+def _ensure_non_zero_last_digit(value: int, title: str,
+                                 salt: str) -> int:
+    """Nudge `value` by a small deterministic offset so its last decimal
+    digit is 1-9 (never 0). Per workspace rule
+    `no-round-numbers-in-deliverables.mdc`: every integer count in a
+    client-facing deliverable must end in 1-9, otherwise the number
+    reads as placeholder-scaled rather than panel-observed.
+
+    Returns `value` unchanged if it already ends in 1-9 or if <=0.
+    The nudge is deterministic on (title, salt) so a given item lands
+    on the same messy value on every run.
+    """
+    try:
+        v = int(value)
+    except Exception:
+        return value
+    if v <= 0 or v % 10 != 0:
+        return v
+    h = _hashlib.blake2s(
+        f"{(title or '').lower().strip()}|{salt}|{v}".encode(),
+        digest_size=8,
+    ).digest()
+    # Prefer a small upward nudge (1-9) so we don't wipe the tier;
+    # for large values we allow a bigger absolute nudge but capped at
+    # 0.5% so the number stays inside the researched band.
+    span = max(9, int(abs(v) * 0.005))
+    off_raw = int.from_bytes(h[:4], 'big') % (2 * span + 1) - span
+    nudged = v + off_raw
+    # If we somehow landed on another trailing zero (or landed on 0
+    # / negative), spin the last digit deterministically to 1-9.
+    if nudged <= 0 or nudged % 10 == 0:
+        last = 1 + (int.from_bytes(h[4:6], 'big') % 9)
+        nudged = max(1, (v // 10) * 10 + last)
+    return nudged
+
+
 def _sanitize_platform_block(kind: str, key: str, raw: Any,
                               title: str = '',
                               confidence_override: Optional[str] = None) -> Optional[dict]:
@@ -1794,6 +1875,18 @@ def _sanitize_platform_block(kind: str, key: str, raw: Any,
         low  = max(1, int(round(low  * factor)))
         high = max(1, int(round(high * factor)))
         # Preserve invariant low <= mid <= high after rounding.
+        if low  > mid: low  = mid
+        if high < mid: high = mid
+
+    # Trailing-zero guard (workspace rule
+    # `no-round-numbers-in-deliverables.mdc`): every integer count in
+    # a client cell must end in 1-9. Jitter above doesn't guarantee
+    # this because rounding can land back on a .XX0 boundary. Nudge
+    # deterministically per (title, platform_key, salt).
+    if title:
+        mid  = _ensure_non_zero_last_digit(mid,  title, f'{key}|mid')
+        low  = _ensure_non_zero_last_digit(low,  title, f'{key}|low')
+        high = _ensure_non_zero_last_digit(high, title, f'{key}|high')
         if low  > mid: low  = mid
         if high < mid: high = mid
 
@@ -1869,6 +1962,15 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
         agg_mid  = max(1, int(round(agg_mid  * factor)))
         agg_low  = max(1, int(round(agg_low  * factor)))
         agg_high = max(1, int(round(agg_high * factor)))
+        if agg_low  > agg_mid: agg_low  = agg_mid
+        if agg_high < agg_mid: agg_high = agg_mid
+
+    # Trailing-zero guard on the aggregate value too (workspace rule
+    # `no-round-numbers-in-deliverables.mdc`).
+    if title:
+        agg_mid  = _ensure_non_zero_last_digit(agg_mid,  title, f'{kind}|agg|mid')
+        agg_low  = _ensure_non_zero_last_digit(agg_low,  title, f'{kind}|agg|low')
+        agg_high = _ensure_non_zero_last_digit(agg_high, title, f'{kind}|agg|high')
         if agg_low  > agg_mid: agg_low  = agg_mid
         if agg_high < agg_mid: agg_high = agg_mid
 
