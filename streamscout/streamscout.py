@@ -463,8 +463,9 @@ def main() -> int:
                                            seasons, start, end)
                 rows = [unify_slug_row(platform, r) for r in slug_rows]
         if not rows:
-            paste = ask("  Still nothing. Paste a peacocktv.com URL "
-                        "(stream-tv / movie link) or press Enter to skip: ")
+            paste = ask("  Still nothing. Paste a peacocktv.com URL (stream-tv, "
+                        "watch-online/tv/<slug>/<seriesId>, or movie link) "
+                        "or press Enter to skip: ")
             if paste.strip():
                 try:
                     rows = resolver_lookup(platform, title, kind, seasons,

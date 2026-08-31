@@ -13,7 +13,12 @@ where the trailing <UUID> is exactly the playback id used at
 `peacocktv.com/watch/playback/vod/_/<UUID>`.
 
 Discovery: the slug is just the title ("Brilliant Minds" -> "brilliant-minds"),
-so we guess `/stream-tv/<slug>` first, then fall back to a web search.
+so we guess `/stream-tv/<slug>` first, then fall back to a web search. Some
+titles (esp. Telemundo/Spanish series like "La Casa de los Famosos") have NO
+`/stream-tv/<slug>` page at all -- they only live at the canonical
+`/watch-online/tv/<slug>/<seriesId>` URL. We handle those by (a) fetching a
+pasted `/watch-online/tv/...` URL directly and (b) letting the web-search
+fallback return that series-id page too.
 
 Usage
 -----
@@ -102,55 +107,92 @@ def _slug_from_url(u):
     return m.group(1) if m else None
 
 
-def search_stream_tv(title):
-    """Fallback: find a peacocktv.com/stream-tv/<slug> link via web search."""
-    for q in (f"{title} peacock stream-tv", f"{title} peacocktv.com"):
-        try:
-            _, _, html = fetch("https://html.duckduckgo.com/html/",
-                               data=urllib.parse.urlencode({"q": q}).encode())
-        except Exception:
-            time.sleep(1.0)
+# A "content page" URL that embeds the full episode tree: either a /stream-tv/
+# landing page, or a canonical /watch-online/tv/<slug>/<seriesId> (the only home
+# some Telemundo/Spanish titles have). watch/asset/tv/<slug>/<seriesId> works too.
+_CONTENT_URL = re.compile(
+    r"peacocktv\.com/(?:stream-tv/[a-z0-9-]+"
+    r"|(?:watch-online|watch/asset)/tv/[a-z0-9-]+/\d+)", re.I)
+# Show-page links we accept from a web-search result page.
+_PAGE_LINK = re.compile(
+    r"https?://www\.peacocktv\.com/(?:stream-tv/[a-z0-9-]+"
+    r"|watch-online/tv/[a-z0-9-]+/\d+)", re.I)
+
+
+def _fetch_tree(u):
+    """Fetch a full Peacock content URL; return (final, html) iff it carries the
+    __NEXT_DATA__ episode tree, else (None, None)."""
+    try:
+        u = u if u.startswith("http") else "https://" + u.lstrip("/")
+        _, final, html = fetch(u)
+        if _NEXT.search(html):
+            return final, html
+    except Exception:
+        pass
+    return None, None
+
+
+def search_peacock_page(title):
+    """Fallback: find a Peacock show page via web search. Returns a /stream-tv/
+    or /watch-online/tv/<slug>/<seriesId> URL (the latter is what covers titles
+    with no stream-tv page, e.g. "La Casa de los Famosos")."""
+    want = set(tokens(title))
+
+    def _slug_score(u):
+        m = re.search(r"/(?:stream-tv|watch-online/tv)/([a-z0-9-]+)", u)
+        return len(want & set(tokens(m.group(1)))) if m else 0
+
+    for q in (f"{title} peacock watch-online tv",
+              f"{title} peacock stream-tv",
+              f"site:peacocktv.com {title}"):
+        html = ""
+        for engine in ("https://html.duckduckgo.com/html/",
+                       "https://lite.duckduckgo.com/lite/"):
+            try:
+                _, _, html = fetch(engine,
+                                   data=urllib.parse.urlencode({"q": q}).encode())
+                break
+            except Exception:
+                time.sleep(0.8)
+        if not html:
             continue
-        links = [urllib.parse.unquote(x) for x in re.findall(
-            r'https?%3A%2F%2Fwww\.peacocktv\.com%2Fstream-tv%2F[a-z0-9-]+', html)]
-        links += re.findall(r'https?://www\.peacocktv\.com/stream-tv/[a-z0-9-]+',
-                            html)
-        if links:
-            want = set(tokens(title))
-            links.sort(key=lambda u: -len(want & set(tokens(u.rsplit("/", 1)[-1]))))
+        # DDG wraps hrefs percent-encoded; search both raw + decoded text.
+        blob = html + "\n" + urllib.parse.unquote(html)
+        links = sorted(set(_PAGE_LINK.findall(blob)), key=lambda u: -_slug_score(u))
+        if links and _slug_score(links[0]) > 0:
             return links[0]
     return None
 
 
 def _load_page(title, url):
-    """Return (final_url, html) for the stream-tv page, or (None, None)."""
-    slug = None
+    """Return (final_url, html) for a page carrying the episode tree, else
+    (None, None). Order: pasted content URL -> /stream-tv/<slug> guess ->
+    web-search (stream-tv OR watch-online/tv/<seriesId>)."""
+    # 1) a pasted full content URL (stream-tv, or watch-online/tv/<seriesId>).
     if url:
-        if "/stream-tv/" in url:
-            u = url if url.startswith("http") else "https://" + url.lstrip("/")
-            try:
-                _, final, html = fetch(u)
-                return final, html
-            except Exception:
-                pass
-        slug = _slug_from_url(url)
+        m = _CONTENT_URL.search(url)
+        if m:
+            # try the exact pasted URL first (may point straight at /seasons/N),
+            # then the trimmed canonical page.
+            for cand in (url, m.group(0)):
+                final, html = _fetch_tree(cand)
+                if html:
+                    return final, html
+    # 2) guess /stream-tv/<slug> from the url slug or the title.
+    slug = _slug_from_url(url) if url else None
     if not slug and title:
         slug = slugify(title)
     if slug:
-        try:
-            _, final, html = fetch("https://www.peacocktv.com/stream-tv/" + slug)
-            if _NEXT.search(html):
-                return final, html
-        except Exception:
-            pass
-    if title:  # web-search fallback for odd slugs
-        link = search_stream_tv(title)
+        final, html = _fetch_tree("https://www.peacocktv.com/stream-tv/" + slug)
+        if html:
+            return final, html
+    # 3) web-search fallback (covers titles with no stream-tv page at all).
+    if title:
+        link = search_peacock_page(title)
         if link:
-            try:
-                _, final, html = fetch(link)
+            final, html = _fetch_tree(link)
+            if html:
                 return final, html
-            except Exception:
-                pass
     return None, None
 
 
@@ -304,7 +346,8 @@ def main():
     ap.add_argument("--type", choices=["movie", "series"])
     ap.add_argument("--title")
     ap.add_argument("--seasons", help="e.g. 1 | 1,3 | 1-4 | all")
-    ap.add_argument("--url", help="a peacocktv.com/stream-tv (or watch/asset) URL")
+    ap.add_argument("--url", help="a peacocktv.com URL: /stream-tv/<slug> OR "
+                    "/watch-online/tv/<slug>/<seriesId>")
     ap.add_argument("--outdir", default=os.path.expanduser("~/Desktop"))
     args = ap.parse_args()
 
@@ -330,8 +373,9 @@ def main():
             print("  ! Not found on Peacock right now (licensing windows "
                   "rotate). Try --url with the peacocktv.com movie link.")
         else:
-            print("  ! Couldn't find episodes. Re-run with "
-                  "--url https://www.peacocktv.com/stream-tv/<slug>.")
+            print("  ! Couldn't find episodes. Re-run with --url — either "
+                  "https://www.peacocktv.com/stream-tv/<slug> or the canonical "
+                  "https://www.peacocktv.com/watch-online/tv/<slug>/<seriesId>.")
         return 2
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")

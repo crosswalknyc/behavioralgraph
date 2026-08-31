@@ -16,8 +16,11 @@ episode_title for every episode.  The site is behind Akamai, which 406s Python's
 TLS fingerprint, so we shell out to `curl` (real TLS) for every request.
 
 Discovery: the show slug is just the title ("Landman" -> "landman"), confirmed by
-fetching /shows/<slug>/.  Movies are catalog-JS-rendered, so movie-by-title is
-best-effort (slug guess); pasting a paramountplus.com URL always works.
+fetching /shows/<slug>/.  Some slugs use underscores ("Big Brother" ->
+"big_brother"); the hyphen guess 301s to the underscore form, so we follow the
+redirect (curl -L) and adopt the canonical slug from the final URL.  Movies are
+catalog-JS-rendered, so movie-by-title is best-effort (slug guess); pasting a
+paramountplus.com URL always works.
 
 Usage
 -----
@@ -78,31 +81,37 @@ def ask(prompt):
         return ""
 
 
-def curl(url, json_accept=False, timeout=45):
-    """Fetch via curl (bypasses Akamai's Python-TLS 406). Returns (code, body)."""
+def curl(url, json_accept=False, timeout=45, with_url=False):
+    """Fetch via curl (bypasses Akamai's Python-TLS 406). Follows redirects (-L)
+    so a slug like `big-brother` that 301s to the canonical `big_brother`
+    resolves. Returns (code, body) — or (code, body, final_url) if with_url."""
     accept = ("application/json, text/plain, */*" if json_accept
               else "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-    cmd = ["curl", "-s", "--compressed", "-A", UA,
+    cmd = ["curl", "-sL", "--compressed", "-A", UA,
            "-H", "Accept: " + accept,
            "-H", "Accept-Language: en-US,en;q=0.9",
            "-H", "Referer: https://www.paramountplus.com/"]
     if json_accept:
         cmd += ["-H", "X-Requested-With: XMLHttpRequest"]
-    cmd += ["-w", "\n" + _SENTINEL + "%{http_code}", url]
+    wfmt = "%{http_code}" + ("|%{url_effective}" if with_url else "")
+    cmd += ["-w", "\n" + _SENTINEL + wfmt, url]
     try:
         out = subprocess.run(cmd, capture_output=True, text=True,
                              timeout=timeout).stdout
     except Exception:
-        return 0, ""
-    code = 0
+        return (0, "", "") if with_url else (0, "")
+    code, final = 0, ""
     if _SENTINEL in out:
-        out, _, c = out.rpartition(_SENTINEL)
+        out, _, meta = out.rpartition(_SENTINEL)
+        meta = meta.strip()
+        cstr, final = (meta.split("|", 1) if with_url and "|" in meta
+                       else (meta, ""))
         try:
-            code = int(c.strip())
+            code = int(cstr.strip())
         except ValueError:
             code = 0
         out = out[:-1] if out.endswith("\n") else out
-    return code, out
+    return (code, out, final) if with_url else (code, out)
 
 
 def show_name(html, fallback=""):
@@ -112,6 +121,7 @@ def show_name(html, fallback=""):
         t = re.sub(r"^\s*watch\s+", "", t, flags=re.I)
         t = re.sub(r"\s+movies?\s*(?:-|on)\s*paramount\+?.*$", "", t, flags=re.I)
         t = re.sub(r"\s+on\s+paramount\+?.*$", "", t, flags=re.I)
+        t = re.sub(r"\s*[-–—|]\s*watch\s*$", "", t, flags=re.I)
         if t.strip():
             return t.strip()
     return fallback
@@ -180,19 +190,27 @@ def _resolve_series(slug, seasons):
 
 
 def _series_slug(title, url):
-    """Return (slug, show_name) or (None, name). Confirms via /shows/<slug>/."""
+    """Return (slug, show_name) or (None, name). Confirms via /shows/<slug>/.
+
+    Paramount slugs sometimes use underscores ("big_brother"), while slugify
+    produces hyphens ("big-brother") — the hyphen form 301s to the underscore
+    form, so we follow the redirect and adopt the canonical slug from the final
+    URL (otherwise the /xhr/episodes feed 404s)."""
     slug = None
     if url:
-        m = re.search(r"/shows/([a-z0-9-]+)/", url)
+        m = re.search(r"/shows/([a-z0-9_-]+)/", url)
         if m and m.group(1) not in ("video",):
             slug = m.group(1)
     if not slug and title:
         slug = slugify(title)
     if not slug:
         return None, title or ""
-    code, html = curl("%s/shows/%s/" % (BASE, slug))
-    if code == 200 and "/xhr/episodes" not in html and _OG_TITLE.search(html):
-        # 200 with a real show page — accept it
+    code, html, final = curl("%s/shows/%s/" % (BASE, slug), with_url=True)
+    # adopt the post-redirect canonical slug (e.g. big-brother -> big_brother)
+    fm = re.search(r"/shows/([a-z0-9_-]+)", final or "")
+    if fm and fm.group(1) != "video":
+        slug = fm.group(1)
+    if code == 200 and (_OG_TITLE.search(html) or "/xhr/episodes" in html):
         return slug, show_name(html, title or "")
     if code == 200:
         return slug, show_name(html, title or "")
