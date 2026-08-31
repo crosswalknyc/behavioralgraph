@@ -25906,6 +25906,29 @@ https://www.instagram.com/p/..."></textarea>
                  whenever no film title is picked, no assets loaded, or no
                  rated assets in-window. -->
             <div id="iiqTrendModule" style="display: none; margin: 0 0 0.85rem; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;"></div>
+            <!-- ===== Explore drawer (Phase 5, film campaigns only) =====
+                 Wraps the legacy sub-tab bar + its 6 iiqPanel-* divs.
+                 State classes on #iiqExploreDrawer:
+                   .is-passthrough  brand campaigns; header + divider +
+                                    hint hidden; body renders as before.
+                   .is-collapsed    film default; body hidden, header +
+                                    hint visible so the four Phase 1-4
+                                    cards fill the viewport.
+                   .is-expanded     film opened; body visible, hint
+                                    hidden. Toggled by the header row.
+                 Managed by _iiqRenderExploreDrawer + _iiqExploreDrawer
+                 Toggle in the script block below. -->
+            <div id="iiqExploreDrawer" class="iiq-explore-drawer is-passthrough">
+                <div class="iiq-explore-divider"></div>
+                <div class="iiq-explore-header" role="button" tabindex="0"
+                     aria-controls="iiqExploreBody" aria-expanded="true"
+                     onclick="_iiqExploreDrawerToggle()"
+                     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();_iiqExploreDrawerToggle();}">
+                    <span class="iiq-explore-eyebrow">Explore the full breakdown</span>
+                    <span class="iiq-explore-chevron" id="iiqExploreChevron" aria-hidden="true">&#9662;</span>
+                </div>
+                <div class="iiq-explore-hint" id="iiqExploreHint">Timeline, Assets, Performance, Intent to Conversion, ROI.</div>
+                <div class="iiq-explore-body" id="iiqExploreBody">
             <div class="iiq-subtab-bar">
                 <button class="iiq-subtab active" data-iiq-subtab="overview" onclick="showIntentIQSubtab('overview')">📊 TIMELINE</button>
                 <button class="iiq-subtab" data-iiq-subtab="assets" onclick="showIntentIQSubtab('assets')">🎞️ ASSETS</button>
@@ -26070,6 +26093,8 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
                 <div id="iiqROIContent"><div class="iiq-empty" style="padding:1.5rem;">Loading ROI model...</div></div>
             </div>
+                </div><!-- /.iiq-explore-body -->
+            </div><!-- /#iiqExploreDrawer -->
         </div>
 
         <script>
