@@ -50913,6 +50913,25 @@ def api_synth_chat_clarify():
         chose_broad = bool(_re.search(
             r'\b(broad|engag|anyone|everyone|every one|all|standard|'
             r'wide|full|both|general)\w*\b', low))
+        # A season / film scope answer (2026-08-31 Love Island death-
+        # loop) only makes sense for the viewers universe - you never
+        # scope seasons for a broad engager audience. When the reply
+        # names a scope, treat it as the viewers pick and let the SAME
+        # answer bind in the viewer-scope chain below. This also rescues
+        # a stale client that keeps the step pinned at ip_scope: the
+        # reply resolves the build instead of re-asking broad-vs-viewers
+        # in a loop. Forced past the broad detector, which would else
+        # fire on the 'all' in 'all seasons'.
+        _scope_like = bool(_re.search(
+            r'\ball\s+seasons?\b|\bevery\s+season\b|\bmost\s+recent\b|'
+            r'\blatest\b|\bnewest\b|\bcurrent\s+season\b|'
+            r'\bspecific\s+season\b|\bthis\s+season\b|\bseason\s*\d|'
+            r'\bs\d{1,2}\b|\bwhole\s+franchise\b|\ball\s+films?\b|'
+            r'\bmost\s+recent\s+film\b|\bspecific\s+film\b|'
+            r'\blatest\s+film\b', low))
+        if _scope_like:
+            chose_consumers = True
+            chose_broad = False
         if chose_broad and not chose_consumers:
             _apply_ip_scope_to_draft(draft, 'broad')
             head = (f"Broad it is - the profile covers everyone who "

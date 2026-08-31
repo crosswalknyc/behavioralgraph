@@ -66835,10 +66835,22 @@ https://www.instagram.com/p/..."></textarea>
                     _synthChatShowBrief(synthChatCurrentDraft, null);
                     return;
                 }
+                // Follow the server's next_step authoritatively.
+                // It may name a step discovered mid-flow that was never
+                // in the interpret-time clarify_steps (ip_scope only
+                // chains to viewer_scope AFTER the scope pick, so the
+                // season question is never in the initial list). If the
+                // step isn't in st.steps, splice it in right after the
+                // current one so the NEXT answer carries THIS step, not
+                // the stale one - otherwise the season answer kept being
+                // re-sent as ip_scope and the broad-vs-viewers question
+                // looped forever (2026-08-31 Love Island death-loop).
                 var ni = st.steps.indexOf(next);
-                if (ni >= 0) {
-                    st.idx = ni;
-                } // same step repeats when the server re-asks
+                if (ni < 0) {
+                    st.steps.splice(st.idx + 1, 0, next);
+                    ni = st.idx + 1;
+                }
+                st.idx = ni; // a re-ask keeps the same step (indexOf hit)
             } catch (e) {
                 console.error('[brief-chat] clarify failed', e);
                 _synthChatReportClientError('brief-chat/clarify', e);
