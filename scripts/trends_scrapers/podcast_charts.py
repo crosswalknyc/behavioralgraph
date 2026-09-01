@@ -300,6 +300,24 @@ def _fetch_spotify_podcasts(limit: int = 100) -> tuple[list[dict], str]:
 # deep-link so tapping a tile lands on the show's episode list.
 _YOUTUBE_PODCASTS_URL = 'https://www.youtube.com/podcasts'
 
+# YouTube serves EU datacenter IPs (Hetzner is in Germany) a
+# consent-gate shell instead of the real page. The shell carries
+# ~586KB of HTML, includes ~17 references to `consent.youtube.com`,
+# and contains ZERO `ytInitialData` - so every scrape from Hetzner
+# came back empty even though the request itself succeeded. Sending
+# these three cookies is the well-known bypass: `SOCS` tells Google
+# that consent choices were made, `CONSENT=YES+...` marks the user
+# as consented, and `PREF=tz=...&hl=en&gl=US` forces the US
+# storefront + English so the shelves render in the expected shape.
+# With the cookies set, the same request returns the full 2.2MB
+# page with `var ytInitialData = { ... };` matching (~1.46MB JSON).
+_YT_CONSENT_COOKIES = {
+    'SOCS':    ('CAISNQgDEitib3FfaWRlbnRpdHlmcm9udGVuZHVpc2Vydm'
+                'VyXzIwMjMwODIyLjAyX3AwGgJlbiACGgYIgIPtqAY'),
+    'CONSENT': 'YES+cb.20240101-17-p0.en+FX+000',
+    'PREF':    'tz=America.New_York&hl=en&gl=US',
+}
+
 # Match the ytInitialData JSON blob. YouTube uses two formats
 # depending on the response variant: `var ytInitialData = { ... };`
 # and `window["ytInitialData"] = { ... };`.
@@ -386,6 +404,11 @@ def _fetch_youtube_podcasts(limit: int = 50) -> tuple[list[dict], str]:
     try:
         r = requests.get(
             _YOUTUBE_PODCASTS_URL,
+            # `hl=en&gl=US` on the URL doubles up with the PREF cookie
+            # so the US shelves render even if the cookie is somehow
+            # ignored.
+            params={'hl': 'en', 'gl': 'US'},
+            cookies=_YT_CONSENT_COOKIES,
             headers={
                 'User-Agent':      _UA,
                 'Accept':          ('text/html,application/xhtml+xml,'
@@ -406,9 +429,15 @@ def _fetch_youtube_podcasts(limit: int = 50) -> tuple[list[dict], str]:
 
     m = _YT_INITIAL_DATA_RE.search(html)
     if not m:
+        # The consent gate is the historical failure mode on Hetzner
+        # (see _YT_CONSENT_COOKIES above). If we ever land here again,
+        # the shell has changed AGAIN, so log both the length and
+        # whether we hit the consent gate for fast triage.
+        consent_hit = 'consent.youtube.com' in html
         logger.warning("youtube podcasts: no ytInitialData in response "
-                       "(len=%d) - youtube may have changed the shell",
-                       len(html))
+                       "(len=%d, consent_gate=%s) - youtube may have "
+                       "changed the shell",
+                       len(html), consent_hit)
         return [], 'Warming up.'
     try:
         data = _json.loads(m.group(1))
@@ -428,10 +457,18 @@ def _fetch_youtube_podcasts(limit: int = 50) -> tuple[list[dict], str]:
     # shelf is the canonical source. Curated genre shelves ("Curious
     # minds", "News & Politics", etc.) that carry the same tile shape
     # are also included to reach the 30-50 range without dipping into
-    # episode-only shelves.
+    # episode-only shelves. The topical shelves ("Meditation",
+    # "Cold cases", "Wealth", "Finances", "Friendship", ...) that
+    # YouTube started emitting on the podcasts landing page as of
+    # ~2026-09 are folded in too so the panel stays deep even when
+    # the topical carousel rotates.
     _SHELF_ALLOW = ('popular', 'curious', 'news', 'comedy', 'business',
                     'sports', 'true crime', 'health', 'science',
-                    'society', 'talk')
+                    'society', 'talk', 'meditation', 'cold', 'civiliz',
+                    'wealth', 'finance', 'friendship', 'extraterrestrial',
+                    'history', 'politics', 'religion', 'spirituality',
+                    'true stories', 'philosophy', 'psychology',
+                    'relationships', 'food', 'travel', 'music')
 
     items: list[dict] = []
     seen: set[str] = set()
@@ -457,13 +494,18 @@ def _fetch_youtube_podcasts(limit: int = 50) -> tuple[list[dict], str]:
                 'image':     rec['image'],
             })
 
-    # Pass 1: Popular podcasts shelf (always first if present).
+    # Pass 1: every shelf whose title starts with "popular". YouTube
+    # currently emits "Popular episodes" BEFORE "Popular podcasts",
+    # and the episode shelf carries a different tile shape that
+    # `_yt_parse_podcast_tile` correctly skips - so iterating both
+    # is safe and picks up "Popular podcasts" no matter which order
+    # YouTube ships them in (2026-09-01: shelf reorder observed on
+    # Hetzner where "Popular episodes" is now shelf[0]).
     for s in sections:
         shelf = ((s.get('richSectionRenderer') or {}).get('content') or {}).get('richShelfRenderer') or {}
         title_text = _yt_text(shelf.get('title') or {}).strip().lower()
         if title_text.startswith('popular'):
             _add_from_shelf(shelf)
-            break
 
     # Pass 2: fold in additional podcast-genre shelves until we hit
     # `limit`. Episode-only shelves ("New shows and episodes", "Live
