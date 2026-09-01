@@ -56712,7 +56712,9 @@ https://www.instagram.com/p/..."></textarea>
                 var theatreLine = it.theatre
                     ? '<div class="tiq-row-meta"><span>' + _tiqEsc(it.theatre) + '</span></div>'
                     : '';
+                var img = _tiqPosterCell(it.image || it.image_url);
                 return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
+                       img +
                        '<div class="tiq-row-body">' +
                        '<div class="tiq-row-title">' + titleLine +
                        _tiqActions('broadway', 'broadway_weekly_attendance', showKey, showKey, 'National') +
@@ -56724,6 +56726,7 @@ https://www.instagram.com/p/..."></textarea>
             var card =
                 '<div class="tiq-card">' +
                 '<h4>Show Rank</h4>' +
+                '<div class="tiq-card-sub" style="margin:2px 0 12px;font-size:0.72rem;">% capacity sourced from The Broadway League.</div>' +
                 '<div class="tiq-headline-list" style="max-height:640px;overflow-y:auto;">' +
                 rows +
                 '</div>' +
