@@ -3928,39 +3928,462 @@ def _direction_for(delta_pct: Optional[float],
     return 'flat'
 
 
-def _fold_fast_delta(row: dict, delta_pct: Optional[float],
-                      prev_rank: Optional[int] = None,
-                      prev_estimate: Optional[int] = None,
-                      prev_date: Optional[str] = None) -> None:
-    """Overwrite (or create) `row.us_streams` with the FAST-side
-    delta signal so the frontend chip renders yesterday-vs-today
-    movement.  Preserves every other field the stream_estimates
-    annotator may have set (us_estimate, unit_label, method, ...);
-    only touches the delta-adjacent keys.
+def _fold_ranked_delta(row: dict, delta_pct: Optional[float],
+                        prev_rank: Optional[int] = None,
+                        prev_estimate: Optional[int] = None,
+                        prev_date: Optional[str] = None,
+                        target_field: str = 'us_streams') -> None:
+    """Overwrite (or create) `row[target_field].delta_pct` +
+    `.direction` so the frontend chip renders yesterday-vs-today
+    movement.  Preserves every other field the upstream annotator
+    may have set (us_estimate, unit_label, method, ...); only
+    touches the delta-adjacent keys.
+
+    target_field:
+      'us_streams' for entertainment tabs (streaming / FAST / books /
+                    comics / gaming / podcast / music / films)
+      'us_readers' for headline tabs (business_news / wall_street_news
+                    / philanthropy_news) whose chip renders off
+                    `us_readers`.
 
     Anti-clobber: leave any pre-existing non-zero `delta_pct` alone
     if our computed delta is trivially flat (|delta| < 0.001).  This
-    means when stream_estimates eventually starts writing real
-    per-row view-count deltas, we won't zero them out just because
-    the yesterday-vs-today rank / view estimate didn't move.
+    means when the upstream estimator eventually starts writing real
+    per-row deltas, we won't zero them out just because the
+    yesterday-vs-today snapshot didn't move.
     """
     if delta_pct is None:
         return
-    us = dict(row.get('us_streams') or {})
-    existing = us.get('delta_pct')
+    dest = dict(row.get(target_field) or {})
+    existing = dest.get('delta_pct')
     if abs(delta_pct) < 0.001 and isinstance(existing, (int, float)) \
             and abs(existing) >= 0.001:
         # Keep the informative existing delta rather than zero it.
         return
-    us['delta_pct'] = delta_pct
-    us['direction'] = _direction_for(delta_pct)
+    dest['delta_pct'] = delta_pct
+    dest['direction'] = _direction_for(delta_pct)
     if prev_rank is not None:
-        us['prev_rank'] = prev_rank
+        dest['prev_rank'] = prev_rank
     if prev_estimate is not None:
-        us['prev_estimate'] = prev_estimate
+        dest['prev_estimate'] = prev_estimate
     if prev_date:
-        us['prev_date'] = prev_date
-    row['us_streams'] = us
+        dest['prev_date'] = prev_date
+    row[target_field] = dest
+
+
+# Backward-compat alias so the FAST callsites written earlier keep
+# working with the generic helper.
+_fold_fast_delta = _fold_ranked_delta
+
+
+# ============================================================================
+# Shared ranked-list rank-delta helpers (2026-09-01 extension of the FAST
+# pattern to every ranked Trends IQ tab).
+# ============================================================================
+#
+# Every ranked tab (Streaming, Films/Ticketing, Books, Libby, Wattpad,
+# Goodreads, Comics, Gaming, Podcast, Music, Headlines) writes a dated
+# snapshot to `trends_iq_snapshots/YYYY-MM-DD/<source>.json` alongside
+# `latest/`.  We already exploited this for FAST; the same trick applies
+# to every other tab whose rows carry a stable per-row identifier.
+#
+# Per-tab annotators below all boil down to:
+#   1. Load yesterday's dated snapshot for this tab's source(s).
+#   2. Index prior items by a stable key (URL, ASIN, product_id, etc.).
+#   3. For each row today, look up prior rank, compute
+#      delta_pct = (prev_rank - today_rank) / prev_rank, fold into the
+#      row's `us_streams` (or `us_readers` for headlines).
+#
+# All annotators run AFTER the shared stream_estimates / headline_
+# estimates stampers so our rank delta overwrites their empty
+# 0.0 / 'stable' default.  Anti-clobber in `_fold_ranked_delta`
+# preserves any pre-existing non-zero delta the estimator wrote.
+
+# Stable-key preference order.  A row with any of these fields uses that
+# value verbatim; everything else falls back to a lowercased title.  A
+# `field:` prefix keeps ids from different fields from ever colliding
+# (justwatch_id 940647 will never match product_id 940647).
+_RANK_DELTA_STABLE_ID_KEYS = (
+    'justwatch_id', 'product_id', 'reserve_id', 'asin', 'isbn',
+    'url', 'permalink', 'link', 'id', 'story_id', 'episode_id',
+)
+
+
+def _stable_row_key(item: dict) -> Optional[str]:
+    """Return the best per-row stable key for cross-day matching.
+    First non-empty value from `_RANK_DELTA_STABLE_ID_KEYS`, else a
+    lowercased trimmed title.  Returns None when nothing usable is
+    present (row cannot be matched to a prior day; the annotator
+    skips it and the chip stays hidden)."""
+    if not isinstance(item, dict):
+        return None
+    for k in _RANK_DELTA_STABLE_ID_KEYS:
+        v = item.get(k)
+        if v not in (None, '', 0):
+            return f'{k}:{v}'
+    t = (item.get('title') or '').strip().lower()
+    if t:
+        return f'title:{t}'
+    return None
+
+
+def _row_rank(item: dict, rank_field) -> Optional[int]:
+    """Read the first-present rank field from `item`.  `rank_field`
+    may be a single string or a tuple/list of candidate field names
+    tried in order (e.g. ('bucket_rank', 'rank') so a re-ranked
+    per-column bucket wins over the raw scraper rank)."""
+    if not isinstance(item, dict):
+        return None
+    fields = (rank_field,) if isinstance(rank_field, str) else tuple(rank_field)
+    for f in fields:
+        v = item.get(f)
+        if isinstance(v, int) and v > 0:
+            return v
+    return None
+
+
+def _index_prev_ranks(items: list, rank_field='rank',
+                       key_fn=None) -> dict:
+    """Build {stable_key: prev_rank} from a list of prior-day items.
+    First occurrence per key wins so a duplicated title doesn't shift
+    the recorded rank down."""
+    key_fn = key_fn or _stable_row_key
+    out: dict = {}
+    for it in items or []:
+        k = key_fn(it)
+        r = _row_rank(it, rank_field)
+        if k and r is not None and k not in out:
+            out[k] = r
+    return out
+
+
+def _apply_rank_deltas(current_items: list,
+                        prev_items: list,
+                        rank_field='rank',
+                        target_field: str = 'us_streams',
+                        prev_date: Optional[str] = None,
+                        key_fn=None,
+                        prev_rank_field=None) -> tuple:
+    """For each row in `current_items`, match by stable key to
+    `prev_items` and fold the rank delta into `row[target_field]`.
+    Returns (matched, total).  Idempotent: a second call with the
+    same inputs re-computes the identical delta.
+
+    `rank_field` may be a string or a tuple of candidate fields
+    (first-present wins per row).  `prev_rank_field` (optional)
+    lets the caller point at a different rank field on the prior
+    side (e.g. today has re-stamped `bucket_rank` but yesterday's
+    raw snapshot only carries `rank`)."""
+    key_fn = key_fn or _stable_row_key
+    prev_index = _index_prev_ranks(
+        prev_items, prev_rank_field or rank_field, key_fn)
+    matched = 0
+    total = 0
+    for row in current_items or []:
+        total += 1
+        k = key_fn(row)
+        today_rank = _row_rank(row, rank_field)
+        if not k or today_rank is None:
+            continue
+        prev_rank = prev_index.get(k)
+        if prev_rank is None:
+            continue
+        delta = _rank_delta_pct(prev_rank, today_rank)
+        if delta is None:
+            continue
+        _fold_ranked_delta(row, delta, prev_rank=prev_rank,
+                             prev_date=prev_date,
+                             target_field=target_field)
+        matched += 1
+    return matched, total
+
+
+# ---------------------------------------------------------------------------
+# Streaming (Netflix, Hulu, HBO Max, Disney+, Prime Video, ESPN+, BritBox,
+# MGM+, Starz).  One dated snapshot per platform (`trends_iq_snapshots/
+# YYYY-MM-DD/<slug>.json`).  Films / TV columns are ranked independently
+# by `bucket_rank` after the panel is split by `_split_streaming_items`;
+# a flat `items` list is also present and keyed by the raw `rank`.
+# ---------------------------------------------------------------------------
+
+def _annotate_streaming_with_rank_change(streaming_trending: dict,
+                                           asof: Optional[str] = None) -> None:
+    if not streaming_trending:
+        return
+    prev_iso = _yesterday_iso(asof)
+    total_m = total_n = 0
+    for slug, panel in (streaming_trending or {}).items():
+        if not panel:
+            continue
+        prev_snap = _read_snapshot(slug, asof=prev_iso)
+        if not prev_snap:
+            continue
+        prev_items = _snapshot_items_for_geo(prev_snap, None) or []
+        prev_films, prev_tv = _split_streaming_items(prev_items)
+        # Netflix ships an authoritative films / tv split via its
+        # weekly TSV; mirror the live-side preference so day-over-
+        # day matching stays consistent with what the frontend
+        # rendered yesterday.
+        if slug == 'netflix':
+            nf_films = prev_snap.get('us_films') or []
+            nf_tv    = prev_snap.get('us_tv')    or []
+            if nf_films or nf_tv:
+                prev_films = nf_films[:20]
+                prev_tv    = nf_tv[:20]
+        # Re-rank prior-day bucket lists the same way live does so
+        # `bucket_rank` compares apples-to-apples for the panels that
+        # use bucket_rank (Hulu / HBO Max / Disney+ / Prime / BritBox /
+        # MGM+ / Starz).  Netflix's live films / tv use raw `rank`
+        # (1..N per column via TSV ordering); its prior side already
+        # matches under the ('bucket_rank', 'rank') fallback list.
+        for i, r in enumerate(prev_films, 1):
+            r.setdefault('bucket_rank', i)
+        for i, r in enumerate(prev_tv, 1):
+            r.setdefault('bucket_rank', i)
+        # ESPN+ collapses Film + TV into TV only on the live side.
+        # Mirror on prior day so the TV bucket includes both.
+        if slug == 'espnplus':
+            prev_tv    = prev_films + prev_tv
+            prev_films = []
+            for i, r in enumerate(prev_tv, 1):
+                r['bucket_rank'] = i
+
+        for cur_bkey, prev_bucket, rank_f in (
+            ('films', prev_films, ('bucket_rank', 'rank')),
+            ('tv',    prev_tv,    ('bucket_rank', 'rank')),
+            ('items', prev_items, 'rank'),
+        ):
+            m, n = _apply_rank_deltas(
+                panel.get(cur_bkey) or [], prev_bucket,
+                rank_field=rank_f, prev_date=prev_iso,
+            )
+            total_m += m
+            total_n += n
+    logger.info('streaming rank delta: %d / %d rows vs %s',
+                 total_m, total_n, prev_iso)
+
+
+# ---------------------------------------------------------------------------
+# Multi-sub-source snapshot helper: for tabs whose dated snapshot is a
+# single file with `snap['sources'][slug]['items']` (books, comics,
+# podcast, music, films/ticketing, libby, wattpad, goodreads,
+# meta_quest, steam).
+# ---------------------------------------------------------------------------
+
+def _annotate_sources_snapshot_rank_change(
+        trending_panel: dict,
+        snapshot_source: str,
+        panel_slug_to_source_slug: Optional[dict] = None,
+        bucket_map: Optional[dict] = None,
+        default_bucket: str = 'items',
+        rank_field: str = 'rank',
+        target_field: str = 'us_streams',
+        asof: Optional[str] = None,
+        label: str = '') -> None:
+    """Generic annotator for any tab whose dated snapshot lives in
+    `snap['sources'][<slug>]['items']`.
+
+    trending_panel  {panel_slug: {bucket_key: [items,...], ...}}
+    snapshot_source S3 slug (e.g. 'book_charts', 'comics_charts')
+    panel_slug_to_source_slug  Optional remap; defaults to identity.
+    bucket_map      Optional {panel_slug: [(cur_bkey, prev_bkey,
+                     rank_field), ...]}  For panels with multiple
+                     buckets like meta_quest (free/paid) or steam
+                     (most_played/top_sellers).
+    default_bucket  Fallback bucket key when bucket_map is not set.
+    """
+    if not trending_panel:
+        return
+    prev_iso = _yesterday_iso(asof)
+    prev_snap = _read_snapshot(snapshot_source, asof=prev_iso)
+    if not prev_snap:
+        logger.info('%s rank delta: no prior snapshot for %s; chips '
+                     'populate once yesterdays snapshot is on S3',
+                     label or snapshot_source, prev_iso)
+        return
+    prev_sources = (prev_snap.get('sources') or {})
+    total_m = total_n = 0
+    for panel_slug, panel in (trending_panel or {}).items():
+        if not panel:
+            continue
+        src_slug = (panel_slug_to_source_slug or {}).get(
+            panel_slug, panel_slug)
+        prev_block = prev_sources.get(src_slug) or {}
+        buckets = None
+        if bucket_map:
+            buckets = bucket_map.get(panel_slug)
+        if not buckets:
+            buckets = [(default_bucket, default_bucket, rank_field)]
+        for cur_bkey, prev_bkey, rank_f in buckets:
+            m, n = _apply_rank_deltas(
+                panel.get(cur_bkey) or [],
+                prev_block.get(prev_bkey) or [],
+                rank_field=rank_f,
+                target_field=target_field,
+                prev_date=prev_iso,
+            )
+            total_m += m
+            total_n += n
+    logger.info('%s rank delta: %d / %d rows vs %s',
+                 label or snapshot_source, total_m, total_n, prev_iso)
+
+
+# ---------------------------------------------------------------------------
+# Books tab wraps THREE separate snapshots: book_charts (Amazon / Apple /
+# Audible retail rails), wattpad_charts (six community rails), and
+# goodreads_charts (Most Read This Week).  Each ships its own dated
+# snapshot; we run three light-weight annotators over the shared
+# `books_trending` dict.
+# ---------------------------------------------------------------------------
+
+def _annotate_books_with_rank_change(books_trending: dict,
+                                       libby_trending: dict,
+                                       asof: Optional[str] = None) -> None:
+    """Fold day-over-day rank delta into every Books-tab surface:
+    retail rails, community rails, and Libby (which is a top-level
+    sibling card that renders inside the Books tab)."""
+    if books_trending:
+        # Retail: Amazon / Apple / Audible from book_charts.json
+        _annotate_sources_snapshot_rank_change(
+            {k: v for k, v in books_trending.items()
+             if k in _BOOK_PANEL_TO_PLATFORM},
+            snapshot_source='book_charts',
+            asof=asof, label='books.retail')
+        # Wattpad rails (6) from wattpad_charts.json
+        _annotate_sources_snapshot_rank_change(
+            {k: v for k, v in books_trending.items()
+             if k in _WATTPAD_PANEL_TO_PLATFORM},
+            snapshot_source='wattpad_charts',
+            asof=asof, label='books.wattpad')
+        # Goodreads from goodreads_charts.json
+        _annotate_sources_snapshot_rank_change(
+            {k: v for k, v in books_trending.items()
+             if k in _GOODREADS_PANEL_TO_PLATFORM},
+            snapshot_source='goodreads_charts',
+            asof=asof, label='books.goodreads')
+    if libby_trending:
+        _annotate_sources_snapshot_rank_change(
+            libby_trending,
+            snapshot_source='libby_trends',
+            asof=asof, label='books.libby')
+
+
+# ---------------------------------------------------------------------------
+# Gaming panels use TWO snapshot shapes: xbox_gamepass has a flat
+# `snap['national']` list, while meta_quest + steam are sources-shaped
+# (`snap['sources'][sub_bucket]['items']`).  Their live panel shape
+# mirrors the snapshot: xbox_gamepass has `items`; meta_quest has
+# `free` + `paid`; steam has `most_played` + `top_sellers`.
+# ---------------------------------------------------------------------------
+
+def _annotate_gaming_with_rank_change(gaming_trending: dict,
+                                        asof: Optional[str] = None) -> None:
+    if not gaming_trending:
+        return
+    prev_iso = _yesterday_iso(asof)
+    total_m = total_n = 0
+    # xbox_gamepass: single flat list from snap['national']
+    xbox_panel = gaming_trending.get('xbox_gamepass') or {}
+    if xbox_panel:
+        prev_snap = _read_snapshot('xbox_gamepass', asof=prev_iso)
+        if prev_snap:
+            prev_items = _snapshot_items_for_geo(prev_snap, None) or []
+            m, n = _apply_rank_deltas(
+                xbox_panel.get('items') or [], prev_items,
+                rank_field='rank', prev_date=prev_iso)
+            total_m += m
+            total_n += n
+    # meta_quest: sources file, buckets free + paid keyed off
+    # 'meta_quest_free' / 'meta_quest_paid'.  Both sides carry `rank`
+    # (1..N within each bucket) so we compare on the raw rank field
+    # regardless of which side stamped a redundant `bucket_rank`.
+    mq_panel = gaming_trending.get('meta_quest') or {}
+    if mq_panel:
+        prev_snap = _read_snapshot('meta_quest', asof=prev_iso)
+        prev_sources = (prev_snap or {}).get('sources') or {}
+        for cur_bkey, src_slug in (('free', 'meta_quest_free'),
+                                     ('paid', 'meta_quest_paid')):
+            prev_items = ((prev_sources.get(src_slug) or {})
+                          .get('items') or [])
+            m, n = _apply_rank_deltas(
+                mq_panel.get(cur_bkey) or [], prev_items,
+                rank_field='rank', prev_date=prev_iso)
+            total_m += m
+            total_n += n
+    # steam: sources file, buckets most_played + top_sellers keyed off
+    # 'steam_most_played' / 'steam_top_sellers'.  Snapshot carries
+    # both `rank` and `bucket_rank`; use `rank` on both sides for
+    # consistency with the rest of the tab.
+    st_panel = gaming_trending.get('steam') or {}
+    if st_panel:
+        prev_snap = _read_snapshot('steam_charts', asof=prev_iso)
+        prev_sources = (prev_snap or {}).get('sources') or {}
+        for cur_bkey, src_slug in (('most_played', 'steam_most_played'),
+                                     ('top_sellers', 'steam_top_sellers')):
+            prev_items = ((prev_sources.get(src_slug) or {})
+                          .get('items') or [])
+            m, n = _apply_rank_deltas(
+                st_panel.get(cur_bkey) or [], prev_items,
+                rank_field='rank', prev_date=prev_iso)
+            total_m += m
+            total_n += n
+    logger.info('gaming rank delta: %d / %d rows vs %s',
+                 total_m, total_n, prev_iso)
+
+
+# ---------------------------------------------------------------------------
+# Headlines: two flat lists (business_news + wall_street_news) plus their
+# `*_by_source` per-outlet dicts.  Delta folds into `us_readers` (chip
+# on the headline row reads from us_readers, not us_streams).
+# ---------------------------------------------------------------------------
+
+def _annotate_headlines_with_rank_change(headline_lists: list,
+                                           snapshot_source: str,
+                                           by_source_dict: Optional[dict] = None,
+                                           asof: Optional[str] = None,
+                                           label: str = '') -> None:
+    """headline_lists: the flat ranked list rendered as the primary
+    tab body.  by_source_dict: optional {source: {'items': [...]}} for
+    the per-publisher grouped view."""
+    prev_iso = _yesterday_iso(asof)
+    prev_snap = _read_snapshot(snapshot_source, asof=prev_iso)
+    if not prev_snap:
+        logger.info('%s rank delta: no prior snapshot for %s',
+                     label or snapshot_source, prev_iso)
+        return
+    prev_flat = (prev_snap.get('national')
+                 or prev_snap.get('items') or [])
+    # Rank field on the FLAT list is `rank` (assigned by
+    # _sort_wall_street_by_readership and the business-news
+    # aggregator at compute_view time).  URL is the stable key on
+    # every headline.
+    m1, n1 = _apply_rank_deltas(
+        headline_lists or [], prev_flat,
+        rank_field='rank', target_field='us_readers',
+        prev_date=prev_iso)
+    m2 = n2 = 0
+    if by_source_dict:
+        prev_by_source = (prev_snap.get('by_source') or {})
+        for src, block in (by_source_dict or {}).items():
+            if not block:
+                continue
+            # `block` may be either a raw ranked list (compute_view
+            # stores by_source as {src: [rows]}) OR a wrapper dict
+            # {'items': [...]} on the snapshot side.  Handle both.
+            cur_rows = block if isinstance(block, list) else \
+                (block.get('items') or [])
+            prev_block_raw = prev_by_source.get(src)
+            prev_rows = prev_block_raw if isinstance(prev_block_raw, list) \
+                else ((prev_block_raw or {}).get('items') or [])
+            m, n = _apply_rank_deltas(
+                cur_rows, prev_rows,
+                rank_field='rank', target_field='us_readers',
+                prev_date=prev_iso)
+            m2 += m
+            n2 += n
+    logger.info('%s rank delta: %d / %d flat rows + %d / %d by-source '
+                 'rows vs %s', label or snapshot_source,
+                 m1, n1, m2, n2, prev_iso)
 
 
 def _annotate_fast_with_rank_change(fast_trending: dict,
@@ -7127,17 +7550,29 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # `fast_channel:<platform>:<norm_name>` per platform (no cross-
     # platform dedup).
     _annotate_fast_channels_with_views(fast_trending, stream_estimates_snap)
-    # FAST day-over-day deltas (2026-09-01, Jenna: "on fast none of the
-    # deltas are working. you should be able to delta over yesterday
-    # since we scrape and capture values each day and save them.").
-    # Rank delta for Film / TV rows, view-count delta for channels.
-    # Runs AFTER the stream_estimate stampers so the folded delta
-    # overwrites the shared stamper's empty 0.0 / 'stable' default.
+    # Day-over-day RANK deltas across every ranked tab (2026-09-01,
+    # Jenna: "hostly fo reverything ...streaming, etc").  Mirrors the
+    # FAST rank-delta shipped 2026-09-01: read yesterday's dated
+    # snapshot, match rows by a stable per-tab key (URL / ASIN /
+    # product_id / justwatch_id / reserve_id / title), fold rank
+    # movement into `us_streams.delta_pct` + `.direction` so every
+    # renderer's shared `_tiqAudienceChip` reads the same fields.
+    # Each of these runs AFTER its tab's stream_estimate stamper so
+    # the fold overwrites the stamper's empty 0.0 / 'stable' default.
+    # Anti-clobber in `_fold_ranked_delta` preserves any pre-existing
+    # non-zero delta the estimator wrote.
     _annotate_fast_with_rank_change(fast_trending)
     _annotate_fast_channels_with_view_change(fast_trending)
+    _annotate_streaming_with_rank_change(streaming_trending)
+    _annotate_sources_snapshot_rank_change(
+        music_charts, snapshot_source='music_charts', label='music')
+    _annotate_sources_snapshot_rank_change(
+        podcast_charts, snapshot_source='podcast_charts',
+        label='podcast')
     # Gaming: Xbox Game Pass Ultimate rows get a weekly-US-plays
     # estimate. Keyed `game:<norm_title>` in the estimates snapshot.
     _annotate_gaming_with_streams(gaming_trending, stream_estimates_snap)
+    _annotate_gaming_with_rank_change(gaming_trending)
     # Books: pass BOTH the book_charts sub-dict (amazon/apple/audible)
     # AND the libby_trends sub-dict (ebook/audiobook) - a single item
     # can appear on both, and both share the same `book:<title
@@ -7159,6 +7594,23 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # (`goodreads_book`) so a title that also charts on Amazon /
     # Apple / Audible / Libby doesn't cross-contaminate estimates.
     _annotate_goodreads_with_streams(goodreads_trending, stream_estimates_snap)
+    # Day-over-day rank deltas for every Books-tab surface + Libby.
+    # Books retail rails (Amazon / Apple / Audible), community rails
+    # (Wattpad 6 panels), and Goodreads Most-Read each ride their
+    # own dated snapshot; Libby ships its own dated snapshot too.
+    # Runs AFTER every books-side stamper so the fold overwrites
+    # the estimator's default 'stable' when applicable.
+    _annotate_books_with_rank_change(
+        {**book_charts, **wattpad_trending, **goodreads_trending},
+        libby_trends,
+    )
+    # Films / ticketing tab: Fandango + AMC + Regal + Cinemark daily
+    # rank of top-selling titles.  film_ticketing.json is a single
+    # snapshot with `sources.<platform>.items`.  URL is the stable
+    # key on every row.
+    _annotate_sources_snapshot_rank_change(
+        film_sources, snapshot_source='film_ticketing',
+        label='films')
 
     # Broadway weekly attendance: NO Claude estimator. Attendance IS
     # the audience integer, drawn straight from the Broadway League's
@@ -7189,6 +7641,12 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # US number computed from their raw LA County hold count so every
     # visible row can render a chip.
     _annotate_comics_with_streams(comics_charts, stream_estimates_snap)
+    # Comics rank delta: comics_charts.json holds Amazon Kindle Comics
+    # (free + paid), Apple Books Comics, Libby Comics under
+    # `sources.<slug>.items`.  URL / ASIN is the stable per-row key.
+    _annotate_sources_snapshot_rank_change(
+        comics_charts, snapshot_source='comics_charts',
+        label='comics')
 
     # Stamp `us_readers` (daily US-gen-pop reader estimate + DoD trend)
     # onto every headline surface: the flat "Top trending" list, the
@@ -7206,6 +7664,21 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         philanthropy_by_source    = philanthropy_by_source,
         business_by_source        = business_by_source,
         wall_street_by_source     = wall_street_by_source)
+    # Headlines rank delta: Business + Wall Street sub-tabs each ride
+    # their own flat top-N ranked list plus a `by_source` dict.  URL
+    # is the stable per-row key so a persistent headline (same URL
+    # yesterday and today) gets a chip when its rank moved, while a
+    # brand-new headline (no prior day match) gets no chip.  Delta
+    # folds into `us_readers` because the headline chip renders off
+    # `_tiqAudienceChip(r.us_readers)`.
+    _annotate_headlines_with_rank_change(
+        business_news, snapshot_source='business_news',
+        by_source_dict=business_by_source,
+        label='headlines.business')
+    _annotate_headlines_with_rank_change(
+        wall_street_news, snapshot_source='wall_street_news',
+        by_source_dict=wall_street_by_source,
+        label='headlines.wall_street')
 
     # Rank the Wall Street sub-tab so the single flat list reads
     # "most-read first" instead of stacking one publisher's block
