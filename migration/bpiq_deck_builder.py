@@ -1960,6 +1960,43 @@ def _slide_final_insight(prs, ctx: DeckCtx, idx: int, total: int):
     return s
 
 
+def _sig_floor_line(ctx: DeckCtx) -> str:
+    """Compose the panel-size-aware detection-floor line for slide 13.
+
+    Replaces a legacy hardcoded 'At n=10M the detection floor is roughly
+    a tenth of a percentage point' string that misread whenever a BPIQ
+    payload was scoped to a cohort smaller than the 10M panel construct
+    (e.g. Boomer / age cuts, DMA cuts). Reads panel_size + payload's own
+    detection_floor_pp so every rebuild speaks the payload's actual base.
+    """
+    n_panel = int(ctx.panel_size or 0)
+    diag_sig = ((ctx.data.get("diagnostics") or {})
+                .get("significance") or {})
+    floor = diag_sig.get("detection_floor_pp")
+    try:
+        floor_val = float(floor) if floor is not None else None
+    except (TypeError, ValueError):
+        floor_val = None
+    floor_txt = (f"approximately {floor_val:.2f}pp"
+                 if floor_val is not None else "computed per payload")
+    n_txt = f"{n_panel:,}" if n_panel else "the observed cohort"
+    if n_panel and n_panel >= 1_000_000:
+        # Large-panel language: p-value collapses, drop from slide.
+        return (
+            f"On the observed cohort of {n_txt} panelists, the detection "
+            f"floor is {floor_txt}; p-values are omitted on client-facing "
+            "slides because they collapse to zero for anything above the "
+            "floor and add no decision-relevant information."
+        )
+    # Smaller-panel language: p-value stays on slide 4.
+    return (
+        f"On the observed cohort of {n_txt} panelists, the detection "
+        f"floor is {floor_txt}; p-values are reported on slide 4 alongside "
+        "the point estimate and 95% CI because they remain decision "
+        "relevant at this cohort size."
+    )
+
+
 def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
     s = _blank(prs)
     _add_bg(s, BG_DARK)
@@ -2004,11 +2041,8 @@ def _slide_source(prs, ctx: DeckCtx, idx: int, total: int):
          "Same-panel pre/post design. Primary test: pooled two-sample "
          "z on the paired marginals (conservative for a within-panel "
          "read). We report the point estimate, the z-score, and a 95% "
-         "confidence interval derived from the same variance. At n=10M "
-         "the detection floor is roughly a tenth of a percentage point; "
-         "p-values are omitted on client-facing slides because they "
-         "collapse to zero for anything above the floor and add no "
-         "decision-relevant information."),
+         "confidence interval derived from the same variance. "
+         + _sig_floor_line(ctx)),
     ]
     base_y = 2.35
     row_spacing = 0.75
