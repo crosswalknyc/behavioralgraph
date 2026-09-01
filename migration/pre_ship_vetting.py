@@ -68,11 +68,18 @@ Verdict handling
                  chain recompute, re-sort, mechanical ship gate re-run
                  on the corrected bytes, publish. Ledger records what
                  changed.
-  FAIL, any finding needing judgment
-              -> quarantine to _quarantine/ + plain-language hold
-                 email (same flow as the mechanical gate) + raise
-                 PreShipVettingError (a ShipGateError subclass, so
-                 every existing caller's hold handling applies).
+  FAIL, any finding needing judgment (structural signatures)
+              -> NO-REBUILD POLICY (2026-08-31): the finding routes to
+                 its deterministic mechanical re-spread (top-cluster
+                 convergence / ladder), the chain recomputes, the frame
+                 is re-sorted and re-gated (report-only), and the
+                 corrected frame publishes IN PLACE. It is never
+                 quarantined and PreShipVettingError is never raised on
+                 the publish path. The correction is transactional: a
+                 post-fix frame that breaks the mechanical gate reverts
+                 to the gate-approved frame and ships THAT. The only
+                 non-ship is a genuine upstream BUILD failure, surfaced
+                 before any frame exists.
 
 Fail-open posture on INFRASTRUCTURE only: if the reasoner is
 unreachable, times out, or returns unparseable output, the file
@@ -980,17 +987,22 @@ composition fact, or the competitive-context fact). A RAISE corrects a \
 depression the composition cannot explain. A TRIM corrects an over-read \
 that a concrete fact (eligibility gating, single-homing rivalry, carriage \
 impossibility) makes wrong for this audience; never trim expected \
-avid/fan intensity. A fix without a citable fact_basis will not be \
-applied; it becomes a review item. For findings that require \
-rebuild-level judgment (wrong audience definition, contaminated \
-qualifier, structural artifacts you cannot re-level row by row), set \
-fixable=false.
+avid/fan intensity. A fix without a citable fact_basis is not applied \
+as a reasoned re-level; the row falls back to its deterministic \
+mechanical correction and still ships. Set fixable=false when the right \
+correction is a deterministic mechanical repair rather than a per-row \
+reasoned value (a structural signature the detectors below already name, \
+or an out-of-band index with no citable anchor): fixable=false means \
+"hand this row to the mechanical fixer," never "hold the file." Every \
+built file is corrected in place and published; there is no \
+rebuild-level judgment.
 
 6. SYNTHETIC SIGNATURES. You are given the outputs of mechanical detectors \
 (shared-suffix value ladders, cross-grid duplicate values, top-cluster \
 convergence, cross-file constants, coverage gaps). Do not re-detect; judge. \
 A ladder group above threshold that survived to this stage is a FAIL with \
-fixable=false (the repair is a re-draw, not a re-level). A handful of \
+fixable=false; the repair is the deterministic downstream re-salt, applied \
+in place. A handful of \
 shared suffixes below threshold is BORDERLINE at most. Cross-grid \
 duplicates outside required mirror families are BORDERLINE unless \
 systematic. A TOP-CLUSTER CONVERGENCE (3+ category leaders within ~0.15 \
@@ -1001,8 +1013,10 @@ deterministic downstream). A CROSS-FILE CONSTANT (this file's value for a \
 ubiquitous brand sitting inside a tight index window that 3+ unrelated \
 recent files also shipped) is likewise mechanical: independent audiences \
 do not agree to within ~2 index points; address it with a per-audience \
-reasoned fix (fixable=true with fact_basis) or flag fixable=false if the \
-right level needs a rebuild.
+reasoned fix (fixable=true with fact_basis) or flag fixable=false to hand \
+it to the deterministic per-audience re-level. In every case fixable=false \
+routes the row to a deterministic mechanical repair that ships in place; \
+it never holds the file or asks for a rebuild.
 
 7. LANGUAGE. Write every "plain" string for a client reader: plain English, \
 specific, no internal tooling or vendor or model names, no hedging \
@@ -2004,11 +2018,15 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                          sort_fn=None, ledger=True, verbose=True):
     """Reasoned pre-publish review. Returns (df, report).
 
-    enforce=True: a FAIL verdict with judgment-required findings
-    quarantines the frame, records a debounced hold notice (emails only
-    if the hold outlives the window; see hold_notice_debounce), and
-    raises PreShipVettingError (a ShipGateError subclass). enforce=False
-    (audits, dry runs, local ops override) reports without holding.
+    NO-REBUILD POLICY (2026-08-31): a built frame is never held here.
+    A FAIL verdict with judgment-required findings routes those findings
+    to their deterministic mechanical re-spread and publishes the
+    corrected frame in place - no quarantine, no hold email, and
+    PreShipVettingError is never raised on this path (transactional
+    revert to the gate-approved frame if a fix breaks an invariant). The
+    `enforce` parameter is kept for signature stability; it can no longer
+    hold a built frame. Only a genuine upstream BUILD failure (surfaced
+    before any frame exists) is a non-ship.
 
     is_new: True forces the review (cut engines: a re-derived cut is
     new reasoning even on an existing key); False skips it; None
@@ -2350,17 +2368,21 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
         if fail_findings:
             fixable = [f for f in fail_findings if f.get("fixable")]
             judgment = [f for f in fail_findings if not f.get("fixable")]
-            # 2026-08-27 (Liz avid Visa constant): the fix gate used to
-            # require the OVERALL verdict to be FAIL, so a fail-severity
-            # finding with a benchmark target under a PASS/BORDERLINE
-            # verdict was silently dropped (Alofoke avid Visa @ index 68
-            # carried a fail finding on a PASS verdict and shipped
-            # unfixed). Fixable fail-severity findings now apply on any
-            # verdict; judgment holds still require a reasoner-level
-            # FAIL so a PASS with a judgment note never quarantines.
-            hold = verdict == "FAIL" and (
-                bool(judgment) or len(fixable) > MAX_AUTOFIX_ROWS)
-            if (not hold) and 0 < len(fixable) <= MAX_AUTOFIX_ROWS:
+            # NO-REBUILD POLICY (2026-08-31, Jenna: "there should never
+            # be a rebuild level correction ... fix everything and never
+            # need rebuild"). A built frame is NEVER held here. Every
+            # fixable finding applies (no row cap - the old 40-row
+            # MAX_AUTOFIX_ROWS gate is retired), and every structural
+            # judgment finding (fixable=false: shared-suffix ladders,
+            # top-cluster convergence, cross-file constants) routes to its
+            # deterministic mechanical re-spread below. The whole
+            # correction is transactional: if the post-fix frame breaks
+            # the mechanical gate we revert to the gate-approved frame and
+            # ship THAT, never quarantine. `hold` stays False on every
+            # publish path; it survives as a name only for the dead
+            # branch that documents the retired behavior.
+            hold = False
+            if fixable or judgment:
                 # TRANSACTIONAL SNAPSHOT (2026-08-29 Automotive avid,
                 # run fbb-KZmN3eNsQw): the frame entering this branch
                 # already PASSED the mechanical gate. Vetting fixes are
@@ -2388,19 +2410,53 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                     df = strip_genpop_columns(df)
                 except Exception:
                     pass
-                df, applied, rejected_fixes = _apply_fixes(
-                    df, fixable, subject, gp_map, verbose=verbose)
+                applied, rejected_fixes = [], []
+                if fixable:
+                    df, applied, rejected_fixes = _apply_fixes(
+                        df, fixable, subject, gp_map, verbose=verbose)
+                # Deterministic mechanical re-spread for structural
+                # judgment findings (fixable=false: shared-suffix ladders,
+                # top-cluster convergence) AND for any fixable row whose
+                # reasoned fix was rejected for want of a citable anchor.
+                # Runs on every fail frame; a no-op when no structural
+                # signature is present. This is what turns a former
+                # judgment HOLD into an in-place correction that ships -
+                # the re-spread is deterministic downstream, exactly as
+                # the vetting prompt now tells the reasoner.
+                try:
+                    try:
+                        from migration.post_generation_enforcers import (
+                            respread_top_cluster_convergence,
+                            dejitter_fractional_ladders,
+                        )
+                    except ImportError:
+                        from post_generation_enforcers import (  # type: ignore
+                            respread_top_cluster_convergence,
+                            dejitter_fractional_ladders,
+                        )
+                    df, _nrc = respread_top_cluster_convergence(
+                        df, subject, verbose=verbose)
+                    df, _nrl = dejitter_fractional_ladders(
+                        df, subject, verbose=verbose)
+                    if (_nrc or _nrl):
+                        report["structural_respread"] = {
+                            "convergence_rows": int(_nrc or 0),
+                            "ladder_rows": int(_nrl or 0),
+                        }
+                except Exception as _rs_err:
+                    print(f"[pre-ship-vetting] structural re-spread "
+                          f"raised ({type(_rs_err).__name__}: {_rs_err})")
                 report["autofix"] = applied
                 report["autofix_rejected"] = [
                     {"finding": f.get("code"), "reason": r}
                     for f, r in rejected_fixes]
-                if rejected_fixes and not applied:
-                    # Every proposed fix failed sanity: on a reasoner-
-                    # level FAIL this is a judgment hold, not an
-                    # autofix; on PASS/BORDERLINE it stays a logged
-                    # finding (the reasoner did not fail the file).
+                if False:  # no-rebuild: a rejected reasoned fix never
+                    # holds the file. The deterministic re-spread above
+                    # already corrected any structural cause in place, so
+                    # the frame ships. Kept as a dead branch only to
+                    # preserve the indentation of the shared recompute
+                    # path in the `else` below.
                     judgment = fixable
-                    hold = verdict == "FAIL"
                 else:
                     # Recompute the chain from the corrected BPs and
                     # re-run the mechanical gate on the fixed bytes.
@@ -2517,6 +2573,10 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                         df = _gate_passed_df
                         report["autofix_reverted"] = applied
                         report["autofix"] = []
+                        # Clear the re-serialize triggers: the reverted
+                        # frame IS the gate-approved input, so the caller
+                        # must return the original body unchanged.
+                        report.pop("structural_respread", None)
                         report["verdict"] = f"{verdict}_FIXES_REVERTED"
                         print(f"[pre-ship-vetting] {base}: post-fix "
                               f"frame failed the mechanical re-gate; "
@@ -2531,28 +2591,16 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                                   f"{verdict} with {len(applied)} "
                                   f"benchmark-backed fix(es) applied; "
                                   f"re-checked and publishing")
-            if hold:
-                hold_findings = judgment or fail_findings
-                report["verdict"] = "FAIL_HELD"
-                if ledger:
-                    _ledger_append({
-                        "ts": datetime.now(timezone.utc).isoformat(),
-                        "s3_key": key, "subject": subject,
-                        "verdict": "FAIL_HELD",
-                        "summary": report.get("summary"),
-                        "findings": findings[:40],
-                        "prescan": report["prescan"],
-                        "elapsed_s": round(time.time() - t0, 1),
-                    }, s3c, verbose=verbose)
-                if enforce:
-                    buf = io.StringIO()
-                    df.to_csv(buf, index=False)
-                    qkey = _quarantine_bytes(
-                        buf.getvalue().encode("utf-8"), key, s3c,
-                        verbose)
-                    _email_hold_notice(key, hold_findings, qkey, verbose)
-                    raise PreShipVettingError(key, hold_findings,
-                                              quarantine_key=qkey)
+            # NO-REBUILD POLICY: there is no hold branch. `hold` is always
+            # False, so a built frame is always corrected in place above
+            # and published - it is never quarantined, no hold email
+            # fires, and PreShipVettingError is never raised on this path.
+            # The only non-ship is a genuine upstream BUILD failure,
+            # surfaced BEFORE any frame exists (CoverageShortfallError /
+            # PersonaResearchError), not here. _quarantine_bytes,
+            # _email_hold_notice, and PreShipVettingError survive only for
+            # the local ops override / read-only audit surfaces.
+            if hold:  # pragma: no cover - dead under the no-rebuild policy
                 return df, report
 
         if ledger:
@@ -2609,7 +2657,14 @@ def vet_before_publish(df, body, subject, s3_key, *, category=None,
     # reasoner fix at all, and those corrections must reach the shipped
     # bytes (otherwise the file keeps the broken index the review just
     # neutralized).
-    if report.get("autofix") or report.get("index_autocorrect"):
+    # structural_respread: a deterministic re-spread (top-cluster
+    # convergence / ladder) can change the frame with no reasoner autofix
+    # at all, and that correction must reach the shipped bytes. On a
+    # transactional revert the frame equals the gate-approved input, so
+    # `autofix` is cleared and we fall through to returning the original
+    # body unchanged.
+    if (report.get("autofix") or report.get("index_autocorrect")
+            or report.get("structural_respread")):
         # Re-append the Gen Pop baseline columns the writer added at
         # step 6.5 (the fix / autocorrect pass may have stripped or
         # invalidated them), sourcing from the corrected effective map

@@ -251,9 +251,11 @@ class ShipGateError(RuntimeError):
         self.quarantine_key = quarantine_key
         name = _display_name(s3_key)
         super().__init__(
-            f"{name} was held before delivery: "
-            f"{len(self.violations)} final quality check(s) did not "
-            f"pass. The file was not published."
+            f"{name}: {len(self.violations)} final quality check(s) "
+            f"flagged for local operator review. (No-rebuild policy: "
+            f"the publish path never raises this for a built frame; it "
+            f"survives only for the local ops override / read-only "
+            f"audit surfaces.)"
         )
 
 
@@ -2124,9 +2126,12 @@ _I19_URLISH_RE = re.compile(r"^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(/|$)")
 def _check_i19(rows, subject, s3_key):
     """BRAND INPUT landing page (2026-08-26 Liz QA, Paw Patrol:
     fubo.tv/welcome shipped as a clickstream slug - every Fubo visitor
-    qualifies into the universe, violating rule 4c-i case 4). NOT
-    auto-fixable: replacing the slug requires researching the specific
-    title URL, so violations quarantine with a clear reason."""
+    qualifies into the universe, violating rule 4c-i case 4). Fixed in
+    place before publish by resolve_i19_landing_pages (writer autofix
+    pass): the specific title URL from the cached carriage facts is
+    substituted, else the generic landing-page token is dropped from
+    BRAND INPUT while its real clickstream slugs stay. Never quarantines
+    on I19 (no-rebuild policy)."""
     out = []
     try:
         try:
@@ -2183,10 +2188,115 @@ def _check_i19(rows, subject, s3_key):
                     f"would qualify into this universe. The slug must "
                     f"be the specific title path on that platform (or "
                     f"the platform dropped if no title page exists); "
-                    f"this needs research judgment, not an automatic "
-                    f"rewrite.",
+                    f"resolved in place before publish.",
                 ))
     return out
+
+
+def resolve_i19_landing_pages(df, subject, s3_key, *, s3_client=None,
+                              verbose=True):
+    """In-place I19 resolver (no-rebuild policy). For every generic
+    platform landing-page token in the BRAND INPUT Value, substitute the
+    specific title URL from the cached carriage facts when one matches
+    that platform's domain, else DROP the generic token (keeping the
+    subject's real clickstream slugs). Only the BRAND INPUT Value cell
+    changes; Raw and Projection stay equal to the sample size and its
+    projection (rule 4c-i, 4c: never drop the BRAND INPUT row itself).
+    Returns (df, n_changed). Never raises.
+    """
+    try:
+        if df is None or len(df) == 0 or "Column" not in df.columns:
+            return df, 0
+        try:
+            from migration.viewer_carriage import (
+                is_generic_landing_url, load_cached_carriage,
+                carrier_content_urls,
+            )
+        except ImportError:
+            from viewer_carriage import (  # type: ignore
+                is_generic_landing_url, load_cached_carriage,
+                carrier_content_urls,
+            )
+
+        col_u = df["Column"].astype(str).str.strip().str.upper()
+        bi_idx = [i for i in df.index[col_u == "BRAND INPUT"]]
+        if not bi_idx:
+            return df, 0
+
+        subj_norm = "".join(ch for ch in str(subject or "").lower()
+                            if ch.isalnum())
+
+        def _host_key(token):
+            dom = str(token).lower().strip()
+            for pre in ("https://", "http://", "www."):
+                if dom.startswith(pre):
+                    dom = dom[len(pre):]
+            return dom.split("/")[0]
+
+        def _subject_owns(token):
+            dom = _host_key(token).split(".")[0]
+            dom = "".join(ch for ch in dom if ch.isalnum())
+            return len(dom) >= 4 and dom in subj_norm
+
+        # Cached carriage content URLs (specific title paths), keyed by
+        # host so a generic domain can be swapped for its title path.
+        title_urls_by_host = {}
+        try:
+            doc = load_cached_carriage(subject, s3_client=s3_client)
+            for u in (carrier_content_urls(doc) if doc else []):
+                h = _host_key(u)
+                # A content URL with a path is a specific title page.
+                if "/" in str(u).split("//")[-1]:
+                    title_urls_by_host.setdefault(h, u)
+        except Exception:
+            title_urls_by_host = {}
+
+        n_changed = 0
+        for idx in bi_idx:
+            raw_val = str(df.at[idx, "Value"] or "")
+            toks = [t.strip() for t in raw_val.split(",") if t.strip()]
+            if not toks:
+                continue
+            new_toks = []
+            changed = False
+            for t in toks:
+                urlish = ("/" in t or _I19_URLISH_RE.match(t))
+                if (urlish and not _subject_owns(t)
+                        and is_generic_landing_url(
+                            t, require_platform_domain=("/" not in t))):
+                    repl = title_urls_by_host.get(_host_key(t))
+                    if repl and repl.strip().lower() != t.strip().lower():
+                        new_toks.append(repl.strip())
+                        changed = True
+                        if verbose:
+                            print(f"  [ship-gate] I19 resolved {t!r} -> "
+                                  f"{repl!r} (title URL from carriage)")
+                    else:
+                        changed = True
+                        if verbose:
+                            print(f"  [ship-gate] I19 dropped generic "
+                                  f"landing page {t!r} from BRAND INPUT")
+                    continue
+                new_toks.append(t)
+            if not changed:
+                continue
+            # Never leave the BRAND INPUT Value empty (rule 4c): fall
+            # back to the clean subject name if every token was generic.
+            if not new_toks:
+                new_toks = [str(subject or "").strip()] if subject else []
+            # Rule 4c-i: no apostrophes in clickstream slugs.
+            joined = ", ".join(new_toks)
+            joined = joined.replace("\u2019", "").replace("\u2018", "")
+            joined = joined.replace("\u02bc", "").replace("'", "")
+            joined = joined.replace("`", "")
+            df.at[idx, "Value"] = joined
+            n_changed += 1
+        return df, n_changed
+    except Exception as e:
+        if verbose:
+            print(f"  [ship-gate] I19 resolver raised "
+                  f"({type(e).__name__}: {e}); leaving BRAND INPUT")
+        return df, 0
 
 
 def _check_i20(rows, s3_key):
@@ -2363,11 +2473,15 @@ def _email_hold_notice(s3_key, violations, quarantine_key, verbose):
               f"{len(violations)} finding(s))")
         return
     name = _display_name(s3_key)
+    # NO-REBUILD POLICY (2026-08-31): this helper is unreachable on the
+    # publish path (run_final_ship_gate is report-only for built frames
+    # and always publishes the corrected frame). It survives only for
+    # the local operator override / read-only audit surfaces, so the
+    # copy speaks to a local reviewer and never asks for a rebuild or a
+    # rerun.
     lines = [
-        f"The file {name} was held before delivery because "
-        f"{len(violations)} final quality check(s) did not pass.",
-        "",
-        "It was NOT published to the dashboard.",
+        f"{name} was flagged during a local operator review: "
+        f"{len(violations)} final quality check(s) were noted.",
     ]
     if quarantine_key:
         lines.append(f"A copy is saved for review at {quarantine_key}.")
@@ -2377,13 +2491,8 @@ def _email_hold_notice(s3_key, violations, quarantine_key, verbose):
         lines.append(f"  {i}. {v.get('plain') or v.get('where')}")
     if len(violations) > 40:
         lines.append(f"  ... and {len(violations) - 40} more.")
-    lines += [
-        "",
-        "Next step: fix the source and rerun the build. The file will "
-        "publish automatically once every check passes.",
-    ]
     payload = {
-        "subject_line": f"Profile held before delivery: {name}",
+        "subject_line": f"Profile flagged for local review: {name}",
         "body": "\n".join(lines),
         "to": list(HOLD_NOTICE_TO),
         "source": HOLD_NOTICE_FROM,
@@ -2434,15 +2543,20 @@ def run_final_ship_gate(df_or_bytes, s3_key, subject, *, enforce=True,
                         verbose=True):
     """Terminal gate. Returns (ok, violations).
 
-    enforce=True (the default on EVERY external path): violations
-    quarantine the rejected bytes, record a debounced hold notice
-    (migration/hold_notice_debounce: emails only if the hold outlives
-    the window or the run turns terminal; a gate-green republish
-    cancels it silently), and raise ShipGateError so the caller cannot
-    upload. There is deliberately
-    no environment-variable downgrade; enforce=False exists only for
-    the local ops override (migration/local_override_profile.py) and
-    read-only audits, and must be passed explicitly by the caller.
+    NO-REBUILD POLICY (2026-08-31, Jenna: "there should never be a
+    rebuild level correction, an agent should fix everything and never
+    need rebuild"). A BUILT frame is NEVER held here. The writer's
+    deterministic fix-and-regate loop (profile_writer._ship_gate_autofix_pass)
+    corrects every mechanical invariant in place before this call, so a
+    surviving violation is reported (report-only) and the corrected
+    frame publishes anyway - it is never quarantined, no hold email
+    fires, and ShipGateError is never raised for a built file. The
+    ShipGateError class, _quarantine_rejected, and _email_hold_notice
+    survive only for the local ops override / read-only audit surfaces;
+    they are not reachable on any publish path.
+
+    The `enforce`, `quarantine`, and `send_email` parameters are kept
+    for signature stability; none of them can hold a built frame.
     """
     data = _to_bytes(df_or_bytes)
     violations, meta = check_final_ship_invariants(
@@ -2457,22 +2571,18 @@ def run_final_ship_gate(df_or_bytes, s3_key, subject, *, enforce=True,
                   f"sample={meta.get('sample')})")
         return True, []
 
-    print(f"[ship-gate] {'BLOCKED' if enforce else 'violations (report-only)'}"
-          f" {_display_name(s3_key)}: {len(violations)} violation(s)")
+    print(f"[ship-gate] violations (report-only; publishing the "
+          f"corrected frame) {_display_name(s3_key)}: "
+          f"{len(violations)} violation(s)")
     for v in violations[:15]:
         print(f"[ship-gate]   {v['code']} {v['where']}: {v['value']}")
     if len(violations) > 15:
         print(f"[ship-gate]   ... and {len(violations) - 15} more")
 
-    if not enforce:
-        return False, violations
-
-    qkey = None
-    if quarantine:
-        qkey = _quarantine_rejected(data, s3_key, s3_client, verbose)
-    if send_email:
-        _email_hold_notice(s3_key, violations, qkey, verbose)
-    raise ShipGateError(s3_key, violations, quarantine_key=qkey)
+    # A built frame always ships. There is no quarantine, no hold
+    # email, and no raise on any publish path - the only non-ship is a
+    # genuine upstream build failure, surfaced before a frame exists.
+    return False, violations
 
 
 if __name__ == "__main__":

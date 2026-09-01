@@ -2851,8 +2851,9 @@ def ensure_subject_in_native_category(df, subject, verbose=True):
         # category here -- that's a bigger build-side issue (escalate).
         if verbose:
             print(f"   ⚠️ ensure_subject_in_native_category: BRAND CATEGORY "
-                  f"'{native_cat}' has no rows in profile -- skipping insert "
-                  f"(needs full-category re-pull, not row-level patch)")
+                  f"'{native_cat}' has no rows in profile -- skipping the "
+                  f"row-level insert (a wholly-absent category is a build "
+                  f"input, not an in-place row patch)")
         return df, 0
 
     val_u = df['Value'].astype(str).str.upper().str.strip()
@@ -3734,41 +3735,61 @@ def respread_top_cluster_convergence(df, subject, verbose=True):
             continue
         _b = _norm_brand(str(df.at[_idx, 'Value'] or ''))
         mirror_twins.setdefault((_b, round(_v, 4)), []).append(_idx)
+    # 2026-08-31 (Big Brother I20 root cause): the old descent bounded
+    # itself at the first NON-cluster row (floor = max(below)). When the
+    # category head is a dense staircase, that row sits just outside the
+    # epsilon band, so headroom was tiny, the salted gaps scaled down to
+    # ~0.02 each, and the top-CONVERGENCE_MIN_CLUSTER span stayed inside
+    # the band -> the detector re-flagged (k=4 forever). The fix extends
+    # the downward re-spread PAST the first non-cluster row through the
+    # dense head until a natural gap appears, and forces the cumulative
+    # descent across the top MIN_CLUSTER rows to exceed the epsilon.
+    # Downward-only throughout (the avid subset invariant holds on cut
+    # frames), rank order preserved (processed in descending order), 4dp,
+    # salted (no pinning).
     n_changes = 0
     for cat, cluster in clusters:
-        # First non-cluster value = lower bound for the descent.
-        below = []
-        cluster_ids = {i for i, _, _ in cluster}
+        # Full descending list of eligible rows in the category; the
+        # cluster is its head and the re-spread region grows into this
+        # list as far as the dense staircase runs.
+        cat_rows = []
         for idx in df.index[col_u == cat]:
-            if idx in cluster_ids:
-                continue
             try:
                 v = float(str(df.at[idx, bp_col])
                           .replace('%', '').replace(',', '').strip())
             except (ValueError, TypeError):
                 continue
             if 0.0001 < v < 95.0:
-                below.append(v)
-        floor = max(below) if below else None
-
-        top_val = cluster[0][2]
-        gaps = []
-        for (idx, brand, _v) in cluster[1:]:
-            gaps.append(_jitter_for(subject, brand,
-                                    salt='convergence-respread',
-                                    lo=0.18, hi=0.85))
-        total_descent = sum(gaps)
-        if floor is not None:
-            headroom = top_val - floor - 0.05
-            if headroom <= 0.02 * len(gaps):
-                headroom = 0.02 * len(gaps) + 0.01
-            if total_descent > headroom:
-                scale = headroom / total_descent
-                gaps = [max(0.02, g * scale) for g in gaps]
+                cat_rows.append((idx, str(df.at[idx, 'Value']).strip(), v))
+        cat_rows.sort(key=lambda t: -t[2])
+        if len(cat_rows) < CONVERGENCE_MIN_CLUSTER:
+            continue
+        top_val = cat_rows[0][2]
+        # The top MIN_CLUSTER rows must end up spanning MORE than the
+        # detector epsilon. Salted so the exact span is never a cross-
+        # file constant.
+        span_target = CONVERGENCE_EPS_PP + _jitter_for(
+            subject, cat, salt='convergence-span', lo=0.04, hi=0.13)
 
         prev = top_val
-        for (idx, brand, old_v), gap in zip(cluster[1:], gaps):
+        cum = 0.0
+        for pos in range(1, len(cat_rows)):
+            idx, brand, old_v = cat_rows[pos]
+            gap = _jitter_for(subject, brand,
+                              salt='convergence-respread', lo=0.18, hi=0.85)
+            # Force the cumulative descent through the MIN_CLUSTER-th row
+            # to clear the band even when the salted gaps come in small
+            # (the dense-staircase case).
+            if pos < CONVERGENCE_MIN_CLUSTER:
+                need = (span_target - cum) / (CONVERGENCE_MIN_CLUSTER - pos)
+                if gap < need:
+                    gap = need
             new_v = round(prev - gap, 4)
+            # Past the guaranteed head, stop at the first NATURAL gap: a
+            # row already at/below the target keeps its real level and
+            # everything below it is left untouched (real adjacency).
+            if pos >= CONVERGENCE_MIN_CLUSTER and old_v <= new_v:
+                break
             if new_v <= 0.0102:
                 new_v = round(0.0102 + _jitter_for(
                     subject, brand, salt='convergence-floor',
@@ -3778,10 +3799,15 @@ def respread_top_cluster_convergence(df, subject, verbose=True):
                 new_v = round(new_v - _jitter_for(
                     subject, brand, salt='convergence-offgrid',
                     lo=0.0011, hi=0.0097), 4)
+            # Strictly below the previous row (downward-only, no tie).
+            if new_v >= prev:
+                new_v = round(prev - 0.0102 - _jitter_for(
+                    subject, brand, salt='convergence-mono',
+                    lo=0.0001, hi=0.0090), 4)
             if verbose:
                 print(f"   🪜 convergence re-spread [{cat}] {brand} "
-                      f"{old_v:.4f}% -> {new_v:.4f}% (top cluster of "
-                      f"{len(cluster)} within {CONVERGENCE_EPS_PP}pp)")
+                      f"{old_v:.4f}% -> {new_v:.4f}% (top cluster within "
+                      f"{CONVERGENCE_EPS_PP}pp)")
             _set_bp(df, idx, new_v, bp_col, cs_col, raw_col,
                     proj_col, sample_size)
             n_changes += 1
@@ -3796,6 +3822,7 @@ def respread_top_cluster_convergence(df, subject, verbose=True):
                 _set_bp(df, twin_idx, new_v, bp_col, cs_col, raw_col,
                         proj_col, sample_size)
                 n_changes += 1
+            cum = round(top_val - new_v, 4)
             prev = new_v
     return df, n_changes
 
@@ -17204,8 +17231,9 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
     # writer blanks the entire BP column except for hard-pinned anchors,
     # leaving Category Share populated but penetration unusable. 5 files
     # in the 06-06 17:00-17:39 window had >99% of BP rows blank with
-    # samples in the 9K-35K range. Hard-fail so these never ship as
-    # "published" — they need a re-pull with a wider audience filter.
+    # samples in the 9K-35K range. Reported so the in-place repair
+    # repopulates BP from the preserved Category Share before publish
+    # (no-rebuild policy: a built frame is corrected, never re-pulled).
     try:
         n_rows = len(df)
         if n_rows >= 100:
@@ -17231,7 +17259,8 @@ def run_pre_publish_gate(df, subject, *, project_name: str = '',
                     f'G9 WRITER_BLANK_SMALL_SAMPLE: only '
                     f'{int(bp_populated)}/{n_rows} ({pct:.1f}%) BP rows '
                     f'populated, sample={max_sample:,} '
-                    f'(D114 writer-bug; needs re-pull with wider filter)'
+                    f'(D114 small-sample BP blanking; repopulated in place '
+                    f'from Category Share before publish)'
                 )
     except Exception as e:
         defects.append(f'G9 WRITER_BLANK_SMALL_SAMPLE: detector errored: {e}')

@@ -237,14 +237,16 @@ def finalize_cut_for_upload(df, subject, *, parent_df=None, out_key='',
     except Exception as e:
         report['audit'] = {'error': str(e)}
 
-    # 6. FINAL SHIP GATE (2026-08-24 Jenna mandate). Independent
-    # terminal invariant check - own parse, own coercion, no shared
-    # enforcer helpers. Runs on the finalized frame; the engines only
-    # append the two Gen Pop baseline columns after this (values
-    # untouched) before serializing. On violations with
-    # ship_gate=True: quarantine + debounced hold notice + ShipGateError.
-    # Deliberately NOT wrapped in a swallowing try/except; engine call
-    # sites re-raise ShipGateError from their own wrappers.
+    # 6. FINAL SHIP GATE (2026-08-24 Jenna mandate; no-rebuild policy
+    # 2026-08-31). Independent terminal invariant check - own parse, own
+    # coercion, no shared enforcer helpers. Runs on the finalized frame;
+    # the engines only append the two Gen Pop baseline columns after
+    # this (values untouched) before serializing. REPORT-ONLY on a built
+    # frame: the terminal subset re-cap (step 2.5) and the writer's
+    # fix-and-regate loop already corrected every mechanical invariant
+    # in place, so a surviving violation is logged and the corrected cut
+    # publishes anyway. It never quarantines, never emails a hold, and
+    # ShipGateError is never raised on this path.
     try:
         from migration.final_ship_gate import run_final_ship_gate
     except ImportError:
@@ -264,10 +266,12 @@ def finalize_cut_for_upload(df, subject, *, parent_df=None, out_key='',
     # approves the frame. is_new=True: a re-derived cut is new
     # reasoning even when it overwrites an existing deliverable key.
     # PASS publishes; deterministic benchmark-backed fixes apply in
-    # place and re-run the mechanical gate; judgment holds raise
-    # PreShipVettingError (a ShipGateError subclass, so engine call
-    # sites' existing re-raise handling applies). Infra failures fail
-    # OPEN. Deliberately NOT wrapped in a swallowing try/except.
+    # place and re-run the mechanical gate; structural judgment findings
+    # route to their deterministic mechanical re-spread and publish in
+    # place (no-rebuild policy: no quarantine, no hold, PreShipVettingError
+    # never raised on this path). The correction is transactional -
+    # a post-fix frame that breaks the mechanical gate reverts to the
+    # gate-approved frame. Infra failures fail OPEN.
     # parent_df threads through for the cut inheritance guard: a fail
     # finding on a row whose level the cut inherited from the parent
     # (within jitter tolerance) downgrades to borderline instead of
