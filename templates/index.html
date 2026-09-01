@@ -146190,7 +146190,11 @@ https://www.instagram.com/p/..."></textarea>
         }
         
         function getComparisonSectionSortType(sectionKey) {
-            return comparisonSectionSortTypes[sectionKey] || 'pct';
+            if (comparisonSectionSortTypes[sectionKey]) return comparisonSectionSortTypes[sectionKey];
+            // Age comparison defaults to age order (youngest → oldest) so
+            // "65 or Older" always sits at the bottom, matching the
+            // individual-profile Demographics tab. Other sections rank by %.
+            return sectionKey === 'demo_age' ? 'age' : 'pct';
         }
 
         // Per-column chart type: 'bar' (horizontal) or 'column' (vertical). Key: section -> profileIdx -> 'bar'|'column'
@@ -146220,6 +146224,14 @@ https://www.instagram.com/p/..."></textarea>
             
             currentSortColumn = profileIndex;
             currentSortSection = section;
+            
+            // The Age card defaults to age order. Clicking a profile
+            // column should sort by that column's value instead, so flip
+            // its sort type to %; clicking the Age label header restores
+            // youngest→oldest age order.
+            if (section === 'age') {
+                comparisonSectionSortTypes['demo_age'] = (profileIndex === -1) ? 'age' : 'pct';
+            }
             
             // Re-render the comparison with sorting applied
             renderComparison(profiles, section, profileIndex);
