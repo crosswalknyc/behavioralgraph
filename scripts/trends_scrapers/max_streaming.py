@@ -132,6 +132,27 @@ _NAV_STOPWORDS = frozenset({
 })
 
 
+def _load_previous_max_snapshot() -> list[dict] | None:
+    """Read the current latest/ HBO Max snapshot from S3. Returns the
+    national items list on success, None on any failure. Used to
+    preserve last-known-good when today's fetch stumbles on a
+    transient network glitch (like the 2026-09-01 08:00 launchd run
+    that got a 16KB error page after Wi-Fi flickered), a consent
+    shell, or a future tile-shape regression - same pattern
+    disneyplus.py uses for Bamgrid soft-blocks."""
+    try:
+        import boto3, json as _json
+        s3 = boto3.client('s3', region_name='us-east-2')
+        o = s3.get_object(Bucket='dashboard-inputs',
+                          Key='trends_iq_snapshots/latest/max.json')
+        d = _json.loads(o['Body'].read().decode('utf-8'))
+        items = d.get('national') or []
+        return items if isinstance(items, list) and items else None
+    except Exception as e:
+        logger.info("max: could not read previous snapshot: %s", e)
+        return None
+
+
 def _extract_max_dom(html: str, limit: int = 40) -> list[dict]:
     """Dedupe by the trailing UUID (the stable entity id across the
     /show/<uuid>, /shows/<slug>/<uuid>, /movie/<uuid>, and
@@ -201,21 +222,41 @@ def fetch() -> dict[str, Any]:
     for i, it in enumerate(all_items[:25], start=1):
         it['rank'] = i
 
-    # Empty result => cookies are missing/stale OR the account isn't
-    # signed in (the anonymous marketing shell still returns ~10-30
-    # promoted tiles, so a truly-empty parse means the render failed).
-    # Fire the offline notifier so operators know to re-donate from
-    # play.hbomax.com; the dashboard itself just shows a neutral
-    # 'warming up' tile per the no-operator-hints rule.
+    # Empty result => cookies are missing/stale, account isn't signed
+    # in, transient network glitch (2026-09-01 08:00 launchd got a
+    # 16KB error page after Wi-Fi flickered), consent shell, or a
+    # future tile-shape regression. Fire the offline notifier so
+    # operators know to look; the dashboard itself just shows a
+    # neutral 'warming up' tile per the no-operator-hints rule.
+    #
+    # Then preserve yesterday's snapshot rather than overwriting the
+    # tile with an empty list. Same pattern as disneyplus.py. Only
+    # falls back to empty when there is no prior good snapshot to
+    # preserve (first-ever run, permanent regression, etc.), so the
+    # cookie-gap 'warming up' state can still take over.
     if not all_items:
+        biggest = max((len(html) for _, html in rendered), default=0)
+        reason = (f'HBO Max home rail returned 0 titles from largest '
+                  f'{biggest}-byte page; sign in at play.hbomax.com in '
+                  'Chrome and re-donate cookies for hbomax.com, or wait '
+                  'for the next scheduled run if this was a transient '
+                  'network glitch')
         try:
             from .cookie_gap_notify import notify_cookie_gap
-            notify_cookie_gap('max', 'hbomax.com',
-                              reason=('HBO Max home rail returned 0 titles; '
-                                      'sign in at play.hbomax.com in Chrome, '
-                                      'then re-donate cookies for hbomax.com'))
+            notify_cookie_gap('max', 'hbomax.com', reason=reason)
         except Exception as e:
             logger.info("max cookie_gap notify failed: %s", e)
+        prev = _load_previous_max_snapshot()
+        if prev:
+            logger.warning("max: preserving previous snapshot (%d items) "
+                           "instead of overwriting with 0",
+                           len(prev))
+            return {'national': prev,
+                    'stale_from_previous': True,
+                    'soft_block_reason': reason}
+        logger.warning("max: no previous snapshot available; letting "
+                       "empty result write so the cookie-gap 'warming "
+                       "up' state takes over")
 
     return {'national': all_items[:25]}
 
