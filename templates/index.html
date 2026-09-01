@@ -55896,7 +55896,7 @@ https://www.instagram.com/p/..."></textarea>
                               '</div>';
                 }
                 goodreadsHtml =
-                    '<div class="tiq-card" data-tiq-goodreads-card="1" style="margin-top:16px;">' +
+                    '<div class="tiq-card" data-tiq-goodreads-card="1">' +
                     '<h4>GOODREADS</h4>' +
                     '<div data-tiq-goodreads-body="1">' + _grBody + '</div>' +
                     '</div>';
@@ -56003,7 +56003,7 @@ https://www.instagram.com/p/..."></textarea>
                 }
 
                 wattpadHtml =
-                    '<div class="tiq-card" data-tiq-wattpad-card="1" style="margin-top:16px;">' +
+                    '<div class="tiq-card" data-tiq-wattpad-card="1">' +
                     '<h4>WATTPAD</h4>' +
                     '<div class="tiq-social-tabs" style="margin-bottom:12px;">' + subpills + '</div>' +
                     '<div data-tiq-wattpad-body="1">' + wpBody + '</div>' +
@@ -56011,8 +56011,8 @@ https://www.instagram.com/p/..."></textarea>
             }
 
             return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' +
-                   storeCards + libbyCards +
-                   '</div>' + goodreadsHtml + wattpadHtml;
+                   storeCards + libbyCards + goodreadsHtml + wattpadHtml +
+                   '</div>';
         }
 
         // Wattpad sub-pill handler. Flips the active rail and repaints
