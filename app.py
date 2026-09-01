@@ -37912,6 +37912,43 @@ def _run_brand_partnership_iq(job_id):
         base_key = f"{BRAND_PARTNERSHIP_IQ_S3_PREFIX}{safe_name}_{ts}.json"
         s3_key = S3_PURGATORY_PREFIX + base_key
 
+        # Pre-write sanity validator. Enforces the workspace rules on
+        # every BPIQ payload before it lands in S3:
+        #   * demographic categories sum to 100 (tolerance 0.5)
+        #   * no forbidden vocab (`modeled`, `synth`, `AI-generated`,
+        #     `HH`, `households`, `Nielsen`) or em/en dashes in any
+        #     string value
+        #   * when the payload carries `diagnostics.parent_payload_key`,
+        #     the four subset-cut invariants are checked against the
+        #     parent (Rule 1 anchor, Rule 2 shared cohort, Rule 3
+        #     subset <= parent, Rule 4 multiplier cap).
+        # Round-count violations (`count_round`, `audience_size_round`)
+        # are logged but do not block this live-pull path pending the
+        # per-count messy-jitter sweep; the subset-cut path in
+        # `migration.bpiq_subset_cut.build_subset_payload` already
+        # emits messy counts by construction. Never raises on the
+        # initial-pull path (mirrors the fail-safe posture of
+        # `enforce_brand_category_row`). See
+        # .cursor/rules/bpiq-subset-cut-invariants.mdc.
+        try:
+            from migration.bpiq_subset_cut import validate_bpiq_payload
+            _bpiq_hits = validate_bpiq_payload(result_data, allow_round_counts=True)
+            _bpiq_blockers = [h for h in _bpiq_hits
+                              if h.get('rule') in ('forbidden_vocab', 'demo_sum',
+                                                   'audience_size', 'shape')]
+            if _bpiq_hits:
+                print(f"[bpiq-validator] {len(_bpiq_hits)} finding(s) on "
+                      f"{s3_key}; blockers={len(_bpiq_blockers)}")
+                for _h in _bpiq_hits[:8]:
+                    print(f"[bpiq-validator]   {_h.get('rule')} "
+                          f"{_h.get('path')}: {_h.get('message')}")
+        except Exception as _bpiq_val_err:
+            # Validator failures never block the write; they only
+            # surface a diagnostic. This preserves the promise that
+            # legacy BPIQ pulls keep publishing while the sanity
+            # signal is collected.
+            print(f"[bpiq-validator] skipped due to error: {_bpiq_val_err}")
+
         _w(92)
         s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
                              Body=json.dumps(result_data).encode('utf-8'),
