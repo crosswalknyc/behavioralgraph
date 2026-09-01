@@ -1152,18 +1152,24 @@ def _slide_total_value_hero(prs, ctx: DeckCtx, idx: int, total: int):
               fmt_money(ctx.total_value),
               size=150, bold=True, color=FG_DARK,
               font=FONT_NUMERIC, spacing=0.85, align="left")
-    # "Attributable to Partnership" subtotal, C5-strict version.
-    # Reads from the payload's precomputed strict-attributable
-    # figure (Brand Lift + adjusted-lift-share of Conversion Value)
-    # so we don't double-count total observed conversions as if the
-    # entire post-window audience were incremental. Falls back to
-    # BLV + full CV only if the payload doesn't carry the strict
-    # figure (legacy payloads).
-    val = ctx.data.get("valuation") or {}
-    attributable = val.get("attributable_to_partnership")
-    if attributable is None:
-        attributable = ctx.blv + (ctx.cv if ctx.has_conversions else 0)
-    attributable = float(attributable)
+    # "Attributable to Partnership" subtotal.
+    # 2026-09-01 house standard: BLV + CV × min(1.0, max(0.0,
+    # adj_lift_pp / pre_baseline_pct)). See
+    # bg-webapp/migration/bpiq_attributable.py and
+    # .cursor/rules/bpiq-attributable-formula.mdc.
+    #
+    # Priority: read the payload's precomputed value first (keeps
+    # every shipped payload byte-stable when rebuilt); recompute via
+    # the helper when the payload carries the ingredients but not
+    # the field; fall back to BLV + full CV only for legacy payloads
+    # that pre-date the strict-attributable field entirely.
+    from .bpiq_attributable import resolve_attributable_from_payload
+    attributable = float(resolve_attributable_from_payload(
+        ctx.data,
+        fallback_blv=ctx.blv,
+        fallback_cv=ctx.cv,
+        fallback_has_conversions=ctx.has_conversions,
+    ))
     _add_text(s, Inches(0.6), Inches(4.75), Inches(6.5), Inches(0.35),
               "OF WHICH ATTRIBUTABLE TO PARTNERSHIP",
               size=10, bold=True, color=FG_DARK, letter_spacing=0.16)
