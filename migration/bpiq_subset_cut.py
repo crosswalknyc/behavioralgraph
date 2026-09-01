@@ -1,16 +1,25 @@
 """House-standard BPIQ demographic / behavioral subset cut helper.
 
-Codified 2026-09-01 after Liz caught three subset-invariant defects on
-the Wheel of Fortune Boomer cuts of Coca-Cola and Pepsi. Every BPIQ
-subset (Boomer, Gen Z, Female, income-scoped, geo-scoped, etc.) must:
+Codified 2026-09-01 after Liz caught two waves of subset-invariant
+defects on the Wheel of Fortune Boomer cuts of Coca-Cola and Pepsi.
+Every BPIQ subset (Boomer, Gen Z, Female, income-scoped, geo-scoped,
+etc.) must:
 
     1. Anchor to the observed viewer cohort of its parent, never to a
        synthetic panel-base construct like 10,000,000.
-    2. Share ONE frozen n across all brand reads of the same event.
+    2. Be BYTE-IDENTICAL to every peer brand read of the same cohort
+       on every cohort-defining field (audience_size, projected
+       audience size, projection weight, observed_cohort_n, window
+       bounds, demographic buckets). One pull, one profile.
     3. Never exceed the parent on any per-platform, per-touchpoint,
-       or per-conversion row.
+       or per-conversion row (checked at BOTH raw and projected
+       levels).
     4. Cap every behavioral multiplier at 1.0 / cohort_fraction so a
        multiplier can never push the subset row above the parent.
+    5. Inherit projection weight from the parent's canonical panel
+       weight (typically 32.99x = 329.9M US population / 10M panel
+       base). NEVER derive it from the subset's own projected /
+       audience ratio.
 
 See .cursor/rules/bpiq-subset-cut-invariants.mdc for the full rule
 tree, defect precedent, and cross-references to companion rules.
@@ -36,8 +45,19 @@ verify_subset_invariants
 
 enforce_shared_cohort_n
     Given a list of subset payloads that share the same underlying
-    cohort, force byte-identical audience_size / observed_cohort_n /
-    demographic distributions across every payload in the set.
+    cohort, force byte-identical values across every payload on:
+    audience_size, projected_audience_size, projection_weight,
+    diagnostics.observed_cohort_n, pre_period + post_period window
+    bounds, and every demographic bucket. Brand-scoped fields
+    (per_platform, top_brand_properties, conversions, sentiment,
+    headline, valuation) are left alone.
+
+resolve_projection_weight
+    Best-effort lookup of the parent's canonical panel-to-population
+    weight (typically ~32.99x for a 10M panel to 329.9M US pop).
+    Returns None when the parent lacks an explicit weight AND its
+    own projected / audience ratio is below 5.0 (a strong signal
+    that the parent itself was a subset, not a whole-cohort read).
 
 validate_bpiq_payload
     Lightweight sanity check that runs on every BPIQ write regardless
@@ -229,6 +249,86 @@ def resolve_observed_cohort_n(parent_payload: dict) -> Optional[int]:
 
 
 # ---------------------------------------------------------------------
+# Projection weight resolution (Rule 5)
+# ---------------------------------------------------------------------
+
+# Below this ratio the value looks like a subset-internal artifact
+# rather than a panel-to-population weight. Real panel weights are the
+# US adult population divided by the panel base and are almost always
+# in the 10x to 50x band (5M panel to 329.9M = 66x; 10M panel = 33x;
+# 15M panel = 22x; 25M panel = 13x; 30M panel = 11x). Anything below
+# 5.0 is a strong signal that the "parent" itself is a subset or that
+# the projected_audience_size field carries something other than the
+# US-population projection.
+_PROJECTION_WEIGHT_MIN_PLAUSIBLE = 5.0
+
+# The US adult population reference used to compute the canonical
+# panel-to-population weight (Liz PM memo, 2026-09-01: "the parent's
+# canonical weight is a property of the panel: it is the US population
+# divided by the panel base"). For a 10M panel this yields 32.99.
+_US_ADULT_POPULATION = 329_900_000
+
+
+def resolve_projection_weight(parent_payload: dict) -> Optional[float]:
+    """Best-effort lookup of the parent's canonical projection weight.
+
+    A projection weight is the panel-to-US-population conversion. For
+    a 10,000,000-panelist parent the canonical weight is 32.99
+    (= 329,900,000 US population / 10,000,000 panel base). That weight
+    belongs to the panel and every subset cut inherits it unchanged
+    (Rule 5).
+
+    Preference order:
+
+        1. `parent_payload['projection_weight']` (explicit field,
+           preferred; write path stamps this on every fresh pull).
+        2. `parent_payload['diagnostics']['projection']['cohort_weight']`
+        3. `parent_payload['diagnostics']['cohort_weight']`
+        4. Derived: `parent['projected_audience_size'] /
+           parent['audience_size']` when the ratio is at least
+           _PROJECTION_WEIGHT_MIN_PLAUSIBLE (5.0). Below that the
+           value almost certainly represents a subset-internal
+           artifact and Rule 5 requires we return None so the
+           caller holds rather than fall through.
+
+    Returns
+    -------
+    float or None
+        The resolved weight, or None when no confident value is
+        available. Callers (chiefly `build_subset_payload`) MUST
+        raise on None rather than derive a subset-internal ratio.
+    """
+    if not isinstance(parent_payload, dict):
+        return None
+
+    # 1
+    v = parent_payload.get("projection_weight")
+    if isinstance(v, (int, float)) and v > 0:
+        return float(v)
+
+    diag = parent_payload.get("diagnostics") or {}
+    # 2
+    proj = diag.get("projection") or {}
+    v = proj.get("cohort_weight")
+    if isinstance(v, (int, float)) and v > 0:
+        return float(v)
+    # 3
+    v = diag.get("cohort_weight")
+    if isinstance(v, (int, float)) and v > 0:
+        return float(v)
+    # 4 - derived, only when the ratio is plausibly a panel weight.
+    panel = parent_payload.get("audience_size")
+    projected = parent_payload.get("projected_audience_size")
+    if (isinstance(panel, (int, float)) and panel > 0
+            and isinstance(projected, (int, float)) and projected > 0):
+        ratio = float(projected) / float(panel)
+        if ratio >= _PROJECTION_WEIGHT_MIN_PLAUSIBLE:
+            return ratio
+
+    return None
+
+
+# ---------------------------------------------------------------------
 # Messy-count helper
 # ---------------------------------------------------------------------
 
@@ -265,18 +365,25 @@ def _messy_count(subject: str, kpi: str, value) -> int:
 # ---------------------------------------------------------------------
 
 
-_PROJECTION_MIN_RATIO = 0.5
-_PROJECTION_MAX_RATIO = 12.0
+# The projection weight is the panel-to-US-population conversion. Real
+# weights sit around 10x to 50x for the panels we typically ship. We
+# keep a floor at 1.0 (a weight less than 1 is impossible; the panel
+# cannot exceed the population) but do NOT cap at the top. Rule 5
+# requires the panel's canonical weight (32.99x for a 10M panel) to
+# flow through untouched. The prior [0.5, 12.0] clamp masked the WoF
+# projection defect by shrinking a legitimate 32.99x weight down to
+# 12.0x, hiding the Facebook Rule 3 violation.
+_PROJECTION_WEIGHT_FLOOR = 1.0
 
 
 def _projection_ratio(new_panel: int, new_projected: int) -> float:
-    """Fallback projection ratio for count -> projected count math. Clamped
-    into a plausible band so a degenerate parent projection cannot blow
-    up subset math."""
+    """Direct projected / panel ratio. Floored at 1.0; NEVER capped
+    above. The subset's projected count math flows straight through
+    this value so Rule 5 stays visible."""
     if new_panel <= 0:
         return 1.0
     ratio = float(new_projected) / float(new_panel)
-    return max(_PROJECTION_MIN_RATIO, min(_PROJECTION_MAX_RATIO, ratio))
+    return max(_PROJECTION_WEIGHT_FLOOR, ratio)
 
 
 def _scale_users_row(
@@ -437,23 +544,48 @@ def build_subset_payload(
             "or back-annotate the parent's `diagnostics.observed_cohort_n` "
             "before building this subset cut."
         )
+    # Rule 5 - resolve the parent's canonical projection weight. The
+    # weight belongs to the panel, not the subset; we inherit it
+    # unchanged and never derive it from the subset's own build ratio.
+    # When the caller supplies an explicit projected_universe, that
+    # path bypasses Rule 5 resolution (used by tests and by callers
+    # that already know the canonical weight for the panel).
+    projection_weight = resolve_projection_weight(parent_payload)
+    if projected_universe is None and projection_weight is None:
+        raise BpiqWriteInvariantError(
+            "Rule 5 hold: parent payload does not carry a resolvable "
+            "projection_weight (panel-to-US-population conversion). "
+            "Supply `projected_universe=` explicitly or back-annotate "
+            "the parent's `projection_weight` / "
+            "`diagnostics.projection.cohort_weight` before building "
+            "this subset cut. Deriving projection weight from the "
+            "subset's own projected/audience ratio is a Rule 5 defect."
+        )
+
     # Derive the frozen subset n (Rule 2 hinges on this jitter being
     # driven by subject_id, NOT by any brand-specific string).
     raw_subset_n = int(round(observed_cohort_n * cohort_fraction))
     new_panel = int(ensure_messy_sample_size(subject_id, raw_subset_n))
 
     if projected_universe is None:
-        parent_panel = parent_payload.get("audience_size") or observed_cohort_n
-        parent_proj = parent_payload.get("projected_audience_size") or parent_panel
-        parent_ratio = _projection_ratio(int(parent_panel or 1), int(parent_proj or 1))
-        raw_proj = int(round(new_panel * parent_ratio))
+        # Rule 5: subset projected universe = subset audience x parent
+        # projection weight. Same subject_id yields the same jitter,
+        # so peer brand reads land on byte-identical projected size.
+        raw_proj = int(round(new_panel * projection_weight))
     else:
         raw_proj = int(projected_universe)
     new_projected = int(ensure_messy_sample_size(
         f"{subject_id}|projected", raw_proj
     ))
 
-    projection_ratio = _projection_ratio(new_panel, new_projected)
+    # For downstream per-row projected counts, use the parent's
+    # canonical weight when available; fall back to the derived
+    # subset ratio only when the caller supplied an explicit
+    # projected_universe that bypasses Rule 5.
+    if projection_weight is not None:
+        projection_ratio = float(projection_weight)
+    else:
+        projection_ratio = _projection_ratio(new_panel, new_projected)
 
     # Rule 4 - cap behavioral multipliers.
     max_safe_mult = 1.0 / cohort_fraction
@@ -487,6 +619,10 @@ def build_subset_payload(
     out = copy.deepcopy(parent_payload)
     out["audience_size"] = new_panel
     out["projected_audience_size"] = new_projected
+    # Rule 5 - stamp the canonical projection weight on the subset so
+    # the verifier can compare byte-for-byte against the parent.
+    if projection_weight is not None:
+        out["projection_weight"] = round(float(projection_weight), 4)
     # Rule 2 - scale totals.
     src_totals = parent_payload.get("totals") or {}
     out["totals"] = _scale_users_row(
@@ -649,7 +785,12 @@ def build_subset_payload(
     if proj:
         proj["observed_sample"] = new_panel
         proj["projected_universe"] = new_projected
-        if new_panel > 0:
+        # Rule 5: prefer the parent's canonical weight over the
+        # subset-derived ratio (which can drift by one integer unit
+        # after messy jitter on the projected count).
+        if projection_weight is not None:
+            proj["cohort_weight"] = round(float(projection_weight), 4)
+        elif new_panel > 0:
             proj["cohort_weight"] = round(new_projected / new_panel, 4)
         diag["projection"] = proj
     out["diagnostics"] = diag
@@ -751,16 +892,24 @@ def verify_subset_invariants(
                 })
 
     # Rule 2 - shared cohort across brand reads (only when a peer is
-    # provided). Strict on audience_size + n_observed; tolerant (0.5pp)
-    # on demographic buckets to survive jitter.
+    # provided). BYTE-IDENTICAL on every cohort-defining field.
+    # "one cohort cannot have two universes ... one pull, one profile"
+    # (Liz, 2026-09-01 PM). The one narrow exception is
+    # projected_audience_size, which uses a 1-unit rounding tolerance
+    # to survive final integer rounding of audience_size *
+    # projection_weight (any drift beyond that is a Rule 2 violation).
     if strict_shared_cohort is not None:
         peer = strict_shared_cohort
-        for key in ("audience_size", "projected_audience_size"):
+        # Cohort-defining scalar fields.
+        for key in ("audience_size", "projection_weight"):
             a = subset.get(key)
             b = peer.get(key)
             if isinstance(a, (int, float)) and isinstance(b, (int, float)):
-                # Allow up to 0.5% drift to survive projection jitter.
-                if a != b and abs(a - b) / max(a, 1) > 0.005:
+                if key == "projection_weight":
+                    drift_ok = abs(float(a) - float(b)) <= 1e-3
+                else:
+                    drift_ok = a == b
+                if not drift_ok:
                     v.append({
                         "rule": 2,
                         "path": key,
@@ -768,11 +917,75 @@ def verify_subset_invariants(
                         "parent_value": b,
                         "message": (
                             f"Rule 2: {key} differs across brand reads of "
-                            f"the same cohort ({a} vs peer {b}). Call "
-                            "enforce_shared_cohort_n to freeze."
+                            f"the same cohort ({a} vs peer {b}). One pull, "
+                            "one profile. Call enforce_shared_cohort_n to "
+                            "freeze."
                         ),
                     })
-        # Demographics - each bucket within 0.5pp.
+        # projected_audience_size: 1-unit tolerance for integer rounding.
+        a = subset.get("projected_audience_size")
+        b = peer.get("projected_audience_size")
+        if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+            if abs(int(a) - int(b)) > 1:
+                v.append({
+                    "rule": 2,
+                    "path": "projected_audience_size",
+                    "subset_value": a,
+                    "parent_value": b,
+                    "message": (
+                        f"Rule 2: projected_audience_size differs across "
+                        f"brand reads of the same cohort ({a} vs peer {b}). "
+                        "One pull, one profile."
+                    ),
+                })
+        # diagnostics.observed_cohort_n + significance.n_observed +
+        # projection.cohort_weight must all match byte-for-byte.
+        diag_a = subset.get("diagnostics") or {}
+        diag_b = peer.get("diagnostics") or {}
+        if diag_a.get("observed_cohort_n") != diag_b.get("observed_cohort_n"):
+            v.append({
+                "rule": 2,
+                "path": "diagnostics.observed_cohort_n",
+                "subset_value": diag_a.get("observed_cohort_n"),
+                "parent_value": diag_b.get("observed_cohort_n"),
+                "message": (
+                    "Rule 2: diagnostics.observed_cohort_n differs across "
+                    "peers. Freeze via enforce_shared_cohort_n."
+                ),
+            })
+        sig_a = (diag_a.get("significance") or {}).get("n_observed")
+        sig_b = (diag_b.get("significance") or {}).get("n_observed")
+        if sig_a is not None and sig_b is not None and sig_a != sig_b:
+            v.append({
+                "rule": 2,
+                "path": "diagnostics.significance.n_observed",
+                "subset_value": sig_a,
+                "parent_value": sig_b,
+                "message": (
+                    "Rule 2: diagnostics.significance.n_observed differs "
+                    "across peers. Freeze via enforce_shared_cohort_n."
+                ),
+            })
+        # Window bounds - cohort-defining, not brand-specific.
+        for window in ("pre_period", "post_period"):
+            wa = subset.get(window) or {}
+            wb = peer.get(window) or {}
+            for bound in ("start", "end"):
+                if wa.get(bound) != wb.get(bound) and wa.get(bound) is not None and wb.get(bound) is not None:
+                    v.append({
+                        "rule": 2,
+                        "path": f"{window}.{bound}",
+                        "subset_value": wa.get(bound),
+                        "parent_value": wb.get(bound),
+                        "message": (
+                            f"Rule 2: {window}.{bound} differs across peers "
+                            f"({wa.get(bound)} vs {wb.get(bound)}). Window "
+                            "bounds define the cohort; they must match."
+                        ),
+                    })
+        # Demographics - byte-identical on every bucket in every canonical
+        # category (age, gender, ethnicity, income). "one cohort cannot
+        # have two universes" (Liz, 2026-09-01 PM).
         for phase in ("pre", "post"):
             demo_a = (subset.get("demographics") or {}).get(phase) or {}
             demo_b = (peer.get("demographics") or {}).get(phase) or {}
@@ -788,16 +1001,19 @@ def verify_subset_invariants(
                     b = rows_b.get(bucket)
                     if a is None or b is None:
                         continue
-                    if abs(a - b) > 0.5:
+                    # Byte-identical: any drift is a violation. A 1e-6
+                    # tolerance is only there so json-round-trip
+                    # float representations do not fire spuriously.
+                    if abs(a - b) > 1e-6:
                         v.append({
                             "rule": 2,
                             "path": f"demographics.{phase}.{cat}.{bucket}",
                             "subset_value": a,
                             "parent_value": b,
                             "message": (
-                                f"Rule 2: demographic bucket drift {a} vs peer "
-                                f"{b} exceeds 0.5pp tolerance. Freeze demos via "
-                                "enforce_shared_cohort_n."
+                                f"Rule 2: demographic bucket drift {a} vs "
+                                f"peer {b}. One pull, one profile. Freeze "
+                                "demos via enforce_shared_cohort_n."
                             ),
                         })
 
@@ -929,6 +1145,89 @@ def verify_subset_invariants(
                     ),
                 })
 
+    # Rule 5 - projection weight anchors to the parent's canonical
+    # panel weight. Two checks:
+    #   (a) subset.projection_weight matches parent's canonical weight
+    #       (within 1e-3) when both are present.
+    #   (b) subset projected/audience ratio matches parent
+    #       projected/audience ratio (within 1e-3). This catches the
+    #       WoF PM defect signature: 449177/285065 = 1.576 vs parent
+    #       329.9M/10M = 32.99.
+    parent_weight = resolve_projection_weight(parent)
+    subset_weight_explicit = subset.get("projection_weight")
+    if isinstance(subset_weight_explicit, (int, float)) and parent_weight is not None:
+        if abs(float(subset_weight_explicit) - float(parent_weight)) > 1e-3:
+            v.append({
+                "rule": 5,
+                "path": "projection_weight",
+                "subset_value": float(subset_weight_explicit),
+                "parent_value": float(parent_weight),
+                "message": (
+                    f"Rule 5: subset projection_weight "
+                    f"({float(subset_weight_explicit):.4f}) differs from "
+                    f"parent canonical panel weight "
+                    f"({float(parent_weight):.4f}). Inherit the parent's "
+                    "weight; do not derive from the subset's own build "
+                    "ratio."
+                ),
+            })
+    # Ratio check runs regardless of the explicit field.
+    subset_panel = subset.get("audience_size")
+    subset_proj = subset.get("projected_audience_size")
+    parent_panel_r = parent.get("audience_size")
+    parent_proj_r = parent.get("projected_audience_size")
+    if (isinstance(subset_panel, (int, float)) and subset_panel > 0
+            and isinstance(subset_proj, (int, float)) and subset_proj > 0
+            and isinstance(parent_panel_r, (int, float)) and parent_panel_r > 0
+            and isinstance(parent_proj_r, (int, float)) and parent_proj_r > 0):
+        subset_ratio = float(subset_proj) / float(subset_panel)
+        parent_ratio = float(parent_proj_r) / float(parent_panel_r)
+        # Two branches, both flag a Rule 5 defect:
+        # (a) Parent's own ratio is a plausible panel-to-US-pop weight
+        #     (>= 5.0). Subset must match it within 1e-3.
+        # (b) Parent's own ratio is BELOW plausibility AND the parent's
+        #     audience_size looks like a round panel construct. That
+        #     means the parent itself is anchored to a non-canonical
+        #     universe (Liz PM memo: the parent's canonical weight is
+        #     329.9M US population / panel base). Rule 5 flags this
+        #     as a parent-level defect; the fix is to re-anchor both
+        #     parent and subset to the canonical weight.
+        if parent_ratio >= _PROJECTION_WEIGHT_MIN_PLAUSIBLE:
+            if abs(subset_ratio - parent_ratio) > 1e-3:
+                v.append({
+                    "rule": 5,
+                    "path": "projected_audience_size/audience_size",
+                    "subset_value": round(subset_ratio, 4),
+                    "parent_value": round(parent_ratio, 4),
+                    "message": (
+                        f"Rule 5: subset projected/audience ratio "
+                        f"({round(subset_ratio, 4)}) disagrees with parent "
+                        f"panel weight ({round(parent_ratio, 4)}). Recompute "
+                        "projected_audience_size = audience_size x parent "
+                        "projection_weight."
+                    ),
+                })
+        elif _looks_like_panel_construct(int(parent_panel_r)):
+            canonical_weight = float(_US_ADULT_POPULATION) / float(parent_panel_r)
+            if abs(subset_ratio - canonical_weight) > 1e-3:
+                v.append({
+                    "rule": 5,
+                    "path": "projected_audience_size/audience_size",
+                    "subset_value": round(subset_ratio, 4),
+                    "parent_value": round(canonical_weight, 4),
+                    "message": (
+                        f"Rule 5: subset projected/audience ratio "
+                        f"({round(subset_ratio, 4)}) disagrees with the "
+                        f"canonical panel weight ({_US_ADULT_POPULATION:,} / "
+                        f"{int(parent_panel_r):,} = "
+                        f"{round(canonical_weight, 4)}) implied by the "
+                        "parent's panel size. The parent itself is anchored "
+                        "to a non-canonical universe; recompute both parent "
+                        "and subset projected sizes using the canonical "
+                        "panel-to-US-population weight."
+                    ),
+                })
+
     return v
 
 
@@ -938,15 +1237,44 @@ def verify_subset_invariants(
 
 
 def enforce_shared_cohort_n(payloads: list, subject_id: str) -> list:
-    """Freeze audience_size, projected_audience_size, observed_cohort_n
-    and the demographic distributions to byte-identical values across
-    every payload in `payloads`.
+    """Freeze the cohort-defining fields to byte-identical values across
+    every payload in `payloads`. One pull, one profile (Liz, 2026-09-01
+    PM).
+
+    Frozen fields (byte-identical across peers)
+    -------------------------------------------
+    * `audience_size`
+    * `projected_audience_size`
+    * `projection_weight`
+    * `diagnostics.observed_cohort_n`
+    * `diagnostics.significance.n_observed`
+    * `diagnostics.projection.observed_sample`,
+      `.projected_universe`, `.cohort_weight`
+    * `pre_period.start`, `pre_period.end`, `post_period.start`,
+      `post_period.end`
+    * Every bucket in `demographics.pre.age`, `.gender`, `.income`,
+      `.ethnicity` and every bucket in `demographics.post.*`.
+
+    Brand-scoped fields (left alone)
+    --------------------------------
+    * `per_platform[*]` engagement counts, penetration, lift
+    * `top_brand_properties`, `top_brand_properties_pre` hits
+    * `conversions.*` counts and lift
+    * `sentiment.*` counts and shares
+    * `headline.*`, `valuation.*`, `attributable_to_partnership`
+    * `pre_period.penetration_pct`, `post_period.penetration_pct`
+      (brand-specific engagement rates on the shared cohort)
+
+    audience_size is re-derived through
+    `ensure_messy_sample_size(subject_id, ...)` so the shared value is
+    deterministic and messy. projected_audience_size is derived from
+    the canonical projection weight (parent's, when we can resolve it
+    from any of the peers; otherwise the median of the peers' own
+    weights).
 
     Uses the first payload in the list as the canonical source for
-    demographic distributions (which mirrors the "one frozen pull"
-    contract). audience_size is re-derived through
-    ensure_messy_sample_size(subject_id, ...) so the shared value is
-    deterministic and messy.
+    demographic distributions and window bounds (which mirrors the
+    "one frozen pull" contract).
 
     Returns a NEW list of dicts (deep copies). Does not mutate inputs.
     """
@@ -958,14 +1286,46 @@ def enforce_shared_cohort_n(payloads: list, subject_id: str) -> list:
     # via subject_id so both brand reads share the same value.
     sizes = [p.get("audience_size") for p in payloads
              if isinstance(p.get("audience_size"), (int, float))]
-    projected_sizes = [p.get("projected_audience_size") for p in payloads
-                       if isinstance(p.get("projected_audience_size"), (int, float))]
     canonical_n = int(round(sum(sizes) / len(sizes))) if sizes else 0
     canonical_n = int(ensure_messy_sample_size(subject_id, canonical_n)) if canonical_n else 0
-    canonical_p = int(round(sum(projected_sizes) / len(projected_sizes))) if projected_sizes else 0
-    canonical_p = int(ensure_messy_sample_size(
-        f"{subject_id}|projected", canonical_p
-    )) if canonical_p else 0
+
+    # Canonical projection weight: prefer any explicit projection_weight
+    # field on any peer, else fall back to the median of derived
+    # projected/audience ratios.
+    explicit_weights = [p.get("projection_weight") for p in payloads
+                        if isinstance(p.get("projection_weight"), (int, float))
+                        and p.get("projection_weight") > 0]
+    if explicit_weights:
+        canonical_weight = float(sum(explicit_weights) / len(explicit_weights))
+    else:
+        derived = []
+        for p in payloads:
+            n = p.get("audience_size")
+            pr = p.get("projected_audience_size")
+            if isinstance(n, (int, float)) and n > 0 and isinstance(pr, (int, float)) and pr > 0:
+                derived.append(float(pr) / float(n))
+        canonical_weight = (sum(derived) / len(derived)) if derived else None
+
+    if canonical_n and canonical_weight is not None:
+        canonical_p = int(round(canonical_n * canonical_weight))
+        canonical_p = int(ensure_messy_sample_size(
+            f"{subject_id}|projected", canonical_p
+        ))
+    else:
+        projected_sizes = [p.get("projected_audience_size") for p in payloads
+                           if isinstance(p.get("projected_audience_size"), (int, float))]
+        canonical_p = int(round(sum(projected_sizes) / len(projected_sizes))) if projected_sizes else 0
+        if canonical_p:
+            canonical_p = int(ensure_messy_sample_size(
+                f"{subject_id}|projected", canonical_p
+            ))
+
+    # Canonical window bounds: first peer wins (mirrors demographic
+    # freeze which also uses first peer as the canonical shape).
+    canonical_pre_period = canonical.get("pre_period") or {}
+    canonical_post_period = canonical.get("post_period") or {}
+    canonical_demos = canonical.get("demographics") or {}
+
     frozen = []
     for p in payloads:
         out = copy.deepcopy(p)
@@ -973,6 +1333,8 @@ def enforce_shared_cohort_n(payloads: list, subject_id: str) -> list:
             out["audience_size"] = canonical_n
         if canonical_p:
             out["projected_audience_size"] = canonical_p
+        if canonical_weight is not None:
+            out["projection_weight"] = round(float(canonical_weight), 4)
         diag = out.get("diagnostics") or {}
         if canonical_n:
             diag["observed_cohort_n"] = canonical_n
@@ -986,12 +1348,26 @@ def enforce_shared_cohort_n(payloads: list, subject_id: str) -> list:
                 proj["observed_sample"] = canonical_n
             if canonical_p:
                 proj["projected_universe"] = canonical_p
-            if canonical_n:
-                proj["cohort_weight"] = round(canonical_p / canonical_n, 4) \
-                    if canonical_p else proj.get("cohort_weight")
+            if canonical_weight is not None:
+                proj["cohort_weight"] = round(float(canonical_weight), 4)
+            elif canonical_n and canonical_p:
+                proj["cohort_weight"] = round(canonical_p / canonical_n, 4)
             diag["projection"] = proj
+        # Freeze window bounds without touching brand-specific
+        # penetration_pct (which stays brand-scoped).
+        if canonical_pre_period:
+            pre_p = out.get("pre_period") or {}
+            for k in ("start", "end"):
+                if k in canonical_pre_period:
+                    pre_p[k] = canonical_pre_period[k]
+            out["pre_period"] = pre_p
+        if canonical_post_period:
+            post_p = out.get("post_period") or {}
+            for k in ("start", "end"):
+                if k in canonical_post_period:
+                    post_p[k] = canonical_post_period[k]
+            out["post_period"] = post_p
         # Freeze demographic distributions to canonical.
-        canonical_demos = canonical.get("demographics") or {}
         if canonical_demos:
             out["demographics"] = copy.deepcopy(canonical_demos)
         out["diagnostics"] = diag
@@ -1209,6 +1585,7 @@ __all__ = [
     "BpiqWriteInvariantError",
     "build_subset_payload",
     "resolve_observed_cohort_n",
+    "resolve_projection_weight",
     "verify_subset_invariants",
     "enforce_shared_cohort_n",
     "validate_bpiq_payload",

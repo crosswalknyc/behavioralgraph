@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """Regression tests for the BPIQ subset-cut helper.
 
-Codified 2026-09-01 after Liz caught three subset-invariant defects on
-the same-day Wheel of Fortune Boomer cuts of Coca-Cola and Pepsi. See
-.cursor/rules/bpiq-subset-cut-invariants.mdc for the rule tree and
-bg-webapp/migration/bpiq_subset_cut.py for the helper.
+Codified 2026-09-01 after Liz caught two waves of subset-invariant
+defects on the same-day Wheel of Fortune Boomer cuts of Coca-Cola
+and Pepsi. See .cursor/rules/bpiq-subset-cut-invariants.mdc for the
+rule tree and bg-webapp/migration/bpiq_subset_cut.py for the helper.
 
-Covers the four subset invariants:
+Covers the five subset invariants:
 
   1. Anchor to observed cohort n, not the panel-base construct.
-  2. One frozen n across all brand reads of the same event.
+  2. Byte-identical cohort-defining fields across every peer brand
+     read of the same event. One pull, one profile.
   3. Subset never exceeds parent on any per-platform / per-touchpoint /
-     conversion row.
+     conversion row (checked at BOTH raw and projected levels).
   4. Behavioral multipliers x cohort_fraction never exceed 1.0.
+  5. Projection weight anchors to the parent's canonical panel weight;
+     never derived from the subset's own projected/audience ratio.
 
 Plus the always-on sanity validator (round-number check, demographic
 sums, forbidden vocab, em dashes).
@@ -33,6 +36,7 @@ from migration.bpiq_subset_cut import (  # noqa: E402
     build_subset_payload,
     enforce_shared_cohort_n,
     resolve_observed_cohort_n,
+    resolve_projection_weight,
     validate_before_write,
     validate_bpiq_payload,
     verify_subset_invariants,
@@ -239,13 +243,18 @@ except BpiqWriteInvariantError as e:
 _check("build_subset_payload raises Rule 1 hold when anchor unresolvable",
        hold_raised, "expected BpiqWriteInvariantError")
 
-# Supplying explicit observed_cohort_n bypasses the hold.
+# Supplying explicit observed_cohort_n bypasses the Rule 1 hold.
+# A naked parent still lacks a projection weight anchor (Rule 5), so
+# the caller must also supply `projected_universe=` explicitly (which
+# is the operator-override path for parents that pre-date both the
+# observed_cohort_n AND projection_weight conventions).
 override = build_subset_payload(
     naked_parent, 0.599, "fixture_hold", "Boomer",
     observed_cohort_n=475_902,
+    projected_universe=9_404_397,  # 285,065 x 32.99, jittered
 )
 _check(
-    "explicit observed_cohort_n bypasses hold",
+    "explicit observed_cohort_n + projected_universe bypass Rule 1+5 hold",
     abs(override["audience_size"] - 285_065) / 285_065 < 0.05,
     f"got {override['audience_size']:,}",
 )
@@ -554,7 +563,365 @@ _check("HHI (household income overlay) does NOT trip forbidden vocab",
 
 
 # ---------------------------------------------------------------------
-# 9. Smoke test: real shipped WoF Boomer payloads (when available)
+# 9. Rule 5 - projection weight anchors to parent's canonical panel weight
+# ---------------------------------------------------------------------
+#
+# Codified same afternoon as the AM defects, after Liz caught that the
+# AM rescope kept a 1.576x subset-internal ratio instead of the
+# parent's canonical 32.99x panel-to-population weight. That defect
+# hid a Rule 3 Facebook violation: at 32.99x the subset row exceeds
+# parent; at 1.576x both sides shrink together and the check falsely
+# passes.
+
+print()
+print("--- test_projection_weight_anchors_to_parent_rule5 ---")
+
+
+def _parent_with_weight(observed_n=475_902, panel=10_000_007,
+                        projection_weight=32.99):
+    """Fixture parent with an explicit canonical panel weight (defaults
+    to the WoF-shaped 10M panel to 329.9M US pop conversion)."""
+    projected = int(round(panel * projection_weight))
+    # Make sure the projected value does not end in 0.
+    if projected % 10 == 0:
+        projected += 3
+    p = _parent_payload(observed_n=observed_n)
+    p["audience_size"] = panel
+    p["projected_audience_size"] = projected
+    p["projection_weight"] = round(float(projection_weight), 4)
+    p.setdefault("diagnostics", {}).setdefault("projection", {})
+    p["diagnostics"]["projection"]["cohort_weight"] = round(
+        float(projection_weight), 4
+    )
+    p["diagnostics"]["projection"]["projected_universe"] = projected
+    # Every parent per_platform row's projected companion must sit at
+    # raw x weight so subset scaling stays internally consistent
+    # (subset raw = parent raw x cohort_fraction, subset projected =
+    # subset raw x weight, must be <= parent projected).
+    for row in p.get("per_platform", []):
+        for k in ("pre_users", "post_users"):
+            raw = row.get(k) or 0
+            proj_key = f"{k}_projected"
+            proj_val = int(round(raw * projection_weight))
+            if proj_val % 10 == 0:
+                proj_val += 3
+            row[proj_key] = proj_val
+    tot = p.get("totals") or {}
+    for k in ("pre_users", "post_users"):
+        raw = tot.get(k) or 0
+        proj_val = int(round(raw * projection_weight))
+        if proj_val % 10 == 0:
+            proj_val += 3
+        tot[f"{k}_projected"] = proj_val
+    conv = p.get("conversions") or {}
+    if conv:
+        for k in ("pre_users", "post_users"):
+            raw = conv.get(k) or 0
+            proj_val = int(round(raw * projection_weight))
+            if proj_val % 10 == 0:
+                proj_val += 3
+            conv[f"{k}_projected"] = proj_val
+    for prop_key in ("top_brand_properties", "top_brand_properties_pre"):
+        for prop in p.get(prop_key) or []:
+            hits = prop.get("hits") or 0
+            hp = int(round(hits * projection_weight))
+            if hp % 10 == 0:
+                hp += 3
+            prop["hits_projected"] = hp
+    return p
+
+
+parent32 = _parent_with_weight(observed_n=475_902, projection_weight=32.99)
+sub = build_subset_payload(
+    parent32,
+    cohort_fraction=0.599,
+    subject_id="fixture_rule5_anchor",
+    subset_label="Boomer",
+)
+
+expected_projected_from_32 = int(round(sub["audience_size"] * 32.99))
+# Allow +/- 1 unit for the messy jitter on the projected count.
+_check(
+    "subset projected_audience_size within 3% of audience_size x 32.99",
+    abs(sub["projected_audience_size"] - expected_projected_from_32) /
+        max(expected_projected_from_32, 1) < 0.03,
+    (f"got projected={sub['projected_audience_size']:,}, expected near "
+     f"{expected_projected_from_32:,} (from {sub['audience_size']:,} x 32.99)"),
+)
+_check(
+    "subset carries explicit projection_weight = parent's canonical weight",
+    "projection_weight" in sub and abs(sub["projection_weight"] - 32.99) < 1e-3,
+    f"got projection_weight={sub.get('projection_weight')!r}, expected ~32.99",
+)
+# Rule 5 verifier should agree on the anchor.
+v = verify_subset_invariants(sub, parent32, 0.599)
+rule5 = [x for x in v if x["rule"] == 5]
+_check(
+    "verify_subset_invariants: zero Rule 5 violations on properly-built subset",
+    len(rule5) == 0,
+    f"got {len(rule5)}: {rule5[:2]}",
+)
+
+
+print()
+print("--- test_projection_weight_hold_when_ambiguous ---")
+
+# Parent with only audience_size + a below-plausibility projected size,
+# no explicit projection_weight, no diagnostics.projection block.
+ambiguous_parent = _parent_payload(observed_n=475_902)
+ambiguous_parent["audience_size"] = 10_000_007
+ambiguous_parent["projected_audience_size"] = 12_000_003  # ratio 1.2, subset-shaped
+ambiguous_parent.pop("projection_weight", None)
+ambiguous_parent["diagnostics"].pop("projection", None)
+ambiguous_parent["diagnostics"].pop("cohort_weight", None)
+
+_check(
+    "resolve_projection_weight returns None on a subset-shaped ratio parent",
+    resolve_projection_weight(ambiguous_parent) is None,
+    (f"expected None; got "
+     f"{resolve_projection_weight(ambiguous_parent)!r}"),
+)
+
+hold_raised = False
+try:
+    build_subset_payload(
+        ambiguous_parent, 0.599, "fixture_rule5_hold", "Boomer",
+    )
+except BpiqWriteInvariantError as e:
+    hold_raised = True
+    print(f"    [OK raise] {str(e)[:160]}")
+_check(
+    "build_subset_payload raises Rule 5 hold when weight unresolvable",
+    hold_raised, "expected BpiqWriteInvariantError",
+)
+
+
+print()
+print("--- test_projection_weight_rejects_subset_ratio_derivation ---")
+
+# Parent that carries only audience_size + projected_audience_size
+# where the derived ratio is a subset artifact (1.58, well below the
+# 5.0 plausibility floor). resolve_projection_weight must NOT return
+# that value, because it would let a subset-internal ratio masquerade
+# as the panel-to-population weight.
+subset_shape = _parent_payload(observed_n=285_063)
+subset_shape["audience_size"] = 285_063
+subset_shape["projected_audience_size"] = 449_179  # ratio 1.58
+subset_shape.pop("projection_weight", None)
+subset_shape["diagnostics"].pop("projection", None)
+subset_shape["diagnostics"].pop("cohort_weight", None)
+_check(
+    "resolve_projection_weight refuses derivation when ratio < 5.0",
+    resolve_projection_weight(subset_shape) is None,
+    (f"expected None; got "
+     f"{resolve_projection_weight(subset_shape)!r}"),
+)
+
+# But when the parent's ratio IS plausible (>= 5.0), derivation is
+# allowed and returns the ratio.
+plausible = _parent_payload(observed_n=475_902)
+plausible["audience_size"] = 10_000_007
+plausible["projected_audience_size"] = 329_923_141  # ratio ~32.99
+plausible.pop("projection_weight", None)
+plausible["diagnostics"].pop("projection", None)
+plausible["diagnostics"].pop("cohort_weight", None)
+derived = resolve_projection_weight(plausible)
+_check(
+    "resolve_projection_weight derives from ratio when >= 5.0",
+    derived is not None and abs(derived - 32.99) < 0.01,
+    f"got {derived!r}, expected ~32.99",
+)
+
+
+print()
+print("--- test_shared_projected_universe_byte_identical ---")
+
+# Two brand parents at 32.99x. Build subsets with the same subject_id.
+# Rule 2: projected_audience_size must be byte-equal (within 1-unit
+# integer-rounding tolerance) across peers.
+parent_coke_32 = _parent_with_weight(observed_n=475_902, projection_weight=32.99)
+parent_coke_32["brand_partner"] = "Coke"
+parent_pepsi_32 = _parent_with_weight(observed_n=475_902, projection_weight=32.99)
+parent_pepsi_32["brand_partner"] = "Pepsi"
+
+sub_c32 = build_subset_payload(
+    parent_coke_32, 0.599, "fixture_rule5_shared", "Boomer",
+)
+sub_p32 = build_subset_payload(
+    parent_pepsi_32, 0.599, "fixture_rule5_shared", "Boomer",
+)
+
+_check(
+    "peer projected_audience_size byte-identical (same subject_id)",
+    sub_c32["projected_audience_size"] == sub_p32["projected_audience_size"],
+    (f"coke={sub_c32['projected_audience_size']:,}, "
+     f"pepsi={sub_p32['projected_audience_size']:,}"),
+)
+_check(
+    "peer projection_weight byte-identical (both inherit 32.99)",
+    sub_c32.get("projection_weight") == sub_p32.get("projection_weight"),
+    (f"coke={sub_c32.get('projection_weight')!r}, "
+     f"pepsi={sub_p32.get('projection_weight')!r}"),
+)
+
+
+print()
+print("--- test_shared_demographics_byte_identical ---")
+
+# Parents whose demos drift slightly (58.5 vs 58.9 on 65+). After
+# enforce_shared_cohort_n, every demographic bucket must be
+# byte-identical across the pair. Liz: one pull, one profile.
+parent_a = _parent_with_weight(observed_n=475_902, projection_weight=32.99)
+parent_b = _parent_with_weight(observed_n=475_902, projection_weight=32.99)
+# Manually drift Pepsi's 65+ bucket.
+for row in parent_b["demographics"]["pre"]["age"]:
+    if row["value"] == "65 or Older":
+        row["percentage"] = 33.9  # drifted from parent_a's 33.5
+
+sub_a = build_subset_payload(
+    parent_a, 0.599, "fixture_rule2_strict", "Boomer",
+)
+sub_b = build_subset_payload(
+    parent_b, 0.599, "fixture_rule2_strict", "Boomer",
+)
+# Before enforce_shared_cohort_n, demos drift.
+frozen = enforce_shared_cohort_n([sub_a, sub_b], "fixture_rule2_strict")
+_check(
+    "post-freeze: every demographic.pre.age bucket byte-identical",
+    json.dumps(frozen[0]["demographics"]["pre"]["age"], sort_keys=True) ==
+    json.dumps(frozen[1]["demographics"]["pre"]["age"], sort_keys=True),
+    "demographics.pre.age drifted after freeze",
+)
+_check(
+    "post-freeze: every demographic.pre.gender bucket byte-identical",
+    json.dumps(frozen[0]["demographics"]["pre"]["gender"], sort_keys=True) ==
+    json.dumps(frozen[1]["demographics"]["pre"]["gender"], sort_keys=True),
+    "demographics.pre.gender drifted after freeze",
+)
+_check(
+    "post-freeze: audience_size byte-identical",
+    frozen[0]["audience_size"] == frozen[1]["audience_size"],
+    "audience_size drifted after freeze",
+)
+_check(
+    "post-freeze: projection_weight byte-identical",
+    frozen[0].get("projection_weight") == frozen[1].get("projection_weight"),
+    "projection_weight drifted after freeze",
+)
+
+
+print()
+print("--- test_verify_flags_projection_weight_drift ---")
+
+# Hand-craft a payload whose projection_weight sits at 1.58 while the
+# parent's canonical weight is 32.99. Verifier must flag a Rule 5
+# violation.
+parent32 = _parent_with_weight(observed_n=475_902, projection_weight=32.99)
+sub_broken = build_subset_payload(
+    parent32, 0.599, "fixture_rule5_broken", "Boomer",
+)
+# Post-hoc: set projection_weight AND recompute projected_audience_size
+# with the wrong 1.58 ratio, mirroring the AM rescope defect.
+sub_broken["projection_weight"] = 1.5761
+sub_broken["projected_audience_size"] = int(round(
+    sub_broken["audience_size"] * 1.5761
+))
+# Also drift so it does not end in 0.
+if sub_broken["projected_audience_size"] % 10 == 0:
+    sub_broken["projected_audience_size"] += 3
+
+v = verify_subset_invariants(sub_broken, parent32, 0.599)
+rule5 = [x for x in v if x["rule"] == 5]
+_check(
+    "verify_subset_invariants flags Rule 5 on projection_weight drift",
+    len(rule5) >= 1,
+    f"expected at least one Rule 5 hit; got {len(rule5)}: {rule5[:3]}",
+)
+# Both flavors of the check should fire: explicit weight mismatch AND
+# the derived-ratio mismatch.
+paths = {x["path"] for x in rule5}
+_check(
+    "Rule 5 fires on projection_weight scalar mismatch",
+    "projection_weight" in paths,
+    f"paths={paths}",
+)
+_check(
+    "Rule 5 fires on projected/audience ratio mismatch",
+    "projected_audience_size/audience_size" in paths,
+    f"paths={paths}",
+)
+
+
+print()
+print("--- test_verify_flags_universe_divergence_across_peers ---")
+
+# Hand-craft two peer payloads with different projected_audience_size
+# on the same cohort. Rule 2 (strict) must fire.
+parent32 = _parent_with_weight(observed_n=475_902, projection_weight=32.99)
+peer_a = build_subset_payload(
+    parent32, 0.599, "fixture_rule2_diverge", "Boomer",
+)
+peer_b = copy.deepcopy(peer_a)
+# Diverge Pepsi peer's projected size (mirrors the shipped 449177 vs
+# 445186 defect, scaled to the fixture).
+peer_b["projected_audience_size"] = peer_a["projected_audience_size"] + 3_993
+
+v = verify_subset_invariants(
+    peer_a, parent32, 0.599, strict_shared_cohort=peer_b,
+)
+rule2 = [x for x in v if x["rule"] == 2]
+_check(
+    "Rule 2 (strict) flags peer projected_audience_size divergence",
+    any("projected_audience_size" in x["path"] for x in rule2),
+    f"got Rule 2 hits: {[x['path'] for x in rule2[:5]]}",
+)
+
+
+print()
+print("--- test_verify_flags_demographic_divergence_across_peers ---")
+
+# Hand-craft two peer payloads with a 0.5pp drift on the 65+ bucket.
+# Rule 2 (byte-identical) must fire; the AM tolerance of 0.5pp is gone.
+parent32 = _parent_with_weight(observed_n=475_902, projection_weight=32.99)
+peer_a = build_subset_payload(
+    parent32, 0.599, "fixture_rule2_demo", "Boomer",
+)
+peer_b = copy.deepcopy(peer_a)
+for row in peer_b["demographics"]["pre"]["age"]:
+    if row["value"] == "65 or Older":
+        row["percentage"] = row["percentage"] + 0.5
+        break
+
+v = verify_subset_invariants(
+    peer_a, parent32, 0.599, strict_shared_cohort=peer_b,
+)
+rule2 = [x for x in v if x["rule"] == 2]
+_check(
+    "Rule 2 (byte-identical) flags 0.5pp demographic bucket drift",
+    any("demographics.pre.age" in x["path"] for x in rule2),
+    (f"got Rule 2 hits: {[x['path'] for x in rule2[:5]]}"),
+)
+# And drift below 1e-6 must NOT fire (proves the tolerance is at
+# json-serialization noise level, not at 0.5pp).
+peer_c = copy.deepcopy(peer_a)
+for row in peer_c["demographics"]["pre"]["age"]:
+    if row["value"] == "65 or Older":
+        row["percentage"] = row["percentage"] + 1e-9  # noise
+        break
+v = verify_subset_invariants(
+    peer_a, parent32, 0.599, strict_shared_cohort=peer_c,
+)
+rule2_noise = [x for x in v if x["rule"] == 2
+               and "demographics.pre.age" in x["path"]]
+_check(
+    "Rule 2 does NOT fire on json-serialization noise (< 1e-6)",
+    len(rule2_noise) == 0,
+    f"got {rule2_noise[:2]}",
+)
+
+
+# ---------------------------------------------------------------------
+# 10. Smoke test: real shipped WoF Boomer payloads (when available)
 # ---------------------------------------------------------------------
 
 print()
@@ -579,26 +946,66 @@ if all(os.path.exists(p) for p in (coke_b_path, pepsi_b_path, coke_p_path, pepsi
     for p in (coke_p, pepsi_p):
         p.setdefault("diagnostics", {})["observed_cohort_n"] = 475_902
 
+    # Under the extended rule set (Rule 5 added, Rule 2 tightened
+    # 2026-09-01 PM), the shipped Boomer payloads are EXPECTED to
+    # flag the projection-weight defect Liz caught. This smoke test
+    # asserts that the extended verifier CORRECTLY surfaces those
+    # defects; it is not a data-fix (data-fix is a separate agent).
     for tag, sub, parent in (("Coke", coke_b, coke_p),
                              ("Pepsi", pepsi_b, pepsi_p)):
         v = verify_subset_invariants(sub, parent, 0.599)
+        rule1 = [x for x in v if x["rule"] == 1]
+        rule3 = [x for x in v if x["rule"] == 3]
+        rule4 = [x for x in v if x["rule"] == 4]
+        rule5 = [x for x in v if x["rule"] == 5]
+        print(f"    [info] shipped {tag} Boomer under extended rules: "
+              f"rule1={len(rule1)}, rule3={len(rule3)}, "
+              f"rule4={len(rule4)}, rule5={len(rule5)}")
+        for x in rule5[:2]:
+            print(f"      Rule 5 - {x['path']}: subset={x['subset_value']}, "
+                  f"parent={x['parent_value']}")
+        for x in rule3[:2]:
+            print(f"      Rule 3 - {x['path']}: subset={x['subset_value']:,}, "
+                  f"parent={x['parent_value']:,}")
+        # Rules 1 + 4 should be clean on the rescoped payloads.
         _check(
-            f"real shipped {tag} Boomer: zero subset invariant violations",
-            len(v) == 0,
-            f"got {len(v)}: first={v[0] if v else None}",
+            f"shipped {tag} Boomer: Rule 1 clean (anchor correctly at 285,065)",
+            len(rule1) == 0,
+            f"got Rule 1 hits: {rule1[:2]}",
+        )
+        _check(
+            f"shipped {tag} Boomer: Rule 4 clean (no uncapped multiplier at raw level)",
+            len(rule4) == 0,
+            f"got Rule 4 hits: {rule4[:2]}",
+        )
+        # Rule 5 SHOULD fire because the AM rescope kept 1.576x
+        # instead of the parent's 32.99x. This is the defect Liz
+        # flagged in the PM memo.
+        _check(
+            f"shipped {tag} Boomer: Rule 5 correctly flags projection weight defect",
+            len(rule5) >= 1,
+            (f"expected Rule 5 to fire (subset uses 1.576x, parent "
+             f"canonical is 32.99x); got zero hits"),
         )
 
-    # Peer coherence: shipped payloads share n but demos drift slightly
-    # (built independently per brand rather than through the shared
-    # helper). We report the strict-tolerance drift so Jenna can decide
-    # whether to re-run through enforce_shared_cohort_n.
-    v = verify_subset_invariants(coke_b, coke_p, 0.599, strict_shared_cohort=pepsi_b)
+    # Peer coherence: shipped payloads share n but demos drift.
+    # Under the tightened Rule 2 (byte-identical, no jitter tolerance),
+    # this drift SHOULD fire. Assert it does.
+    v = verify_subset_invariants(
+        coke_b, coke_p, 0.599, strict_shared_cohort=pepsi_b,
+    )
     rule2 = [x for x in v if x["rule"] == 2]
     print(f"    [info] shipped Coke vs Pepsi Boomer Rule 2 drift: "
-          f"{len(rule2)} bucket(s) exceed 0.5pp / 0.5% tolerance")
-    for x in rule2[:3]:
-        print(f"      - {x['path']}: coke={x['subset_value']}, "
+          f"{len(rule2)} field(s) fail byte-identical peer coherence")
+    for x in rule2[:5]:
+        print(f"      Rule 2 - {x['path']}: coke={x['subset_value']}, "
               f"pepsi={x['parent_value']}")
+    _check(
+        "shipped Coke vs Pepsi Boomer: Rule 2 (strict) flags peer drift",
+        len(rule2) >= 1,
+        ("expected byte-identical Rule 2 to fire on shipped payloads "
+         "(demos drift 59.8% vs 59.4% on 65+ per Liz PM memo)"),
+    )
 else:
     print(f"    [skip] shipped payloads not present at {_ship_dir}")
 
