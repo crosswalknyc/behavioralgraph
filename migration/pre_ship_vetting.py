@@ -131,6 +131,7 @@ import io
 import json
 import os
 import re
+import statistics
 import time
 from datetime import datetime, timezone
 from typing import Callable, Optional
@@ -198,6 +199,48 @@ MIRROR_FAMILY_CATS = {
     "SOCCER", "AL", "NL", "AFC", "NFC", "AL/NL", "AFC/NFC",
     "WESTERN CONFERENCE", "EASTERN CONFERENCE",
 }
+
+# ---------------------------------------------------------------------------
+# Impossible-index autocorrect thresholds (Jenna 2026-08-31: "I dont
+# need emails if it is automatically fixing it, just if it cant
+# actually launch it. Ideally it would fix then launch and we would be
+# none the wiser"). An absurd Index vs Gen Pop is a broken ratio, not a
+# real audience signal, and it is ALWAYS correctable to a shippable
+# state, so it must auto-fix silently, never hold the whole file.
+#
+# IMPOSSIBLE_INDEX_CEIL: an index above this is not a credible over-
+# index for a single brand and is treated as an artifact to correct.
+# Engaged / niche audiences legitimately reach 3-10x (index 300-1000)
+# and a title's own subject / host can run higher, but those ride on a
+# SOLID Gen Pop denominator (the peer test below never flags them). 15x
+# sits comfortably above sustained real over-indices while catching the
+# broken-ratio range (50x-40000x) that a tiny / near-zero denominator
+# produces. It is a nomination line, not a blind clamp: the peer-aware
+# classifier decides whether each flagged row is a denominator artifact
+# (adopt a peer-median baseline), a coverage gap (blank the index), a
+# numerator artifact (clamp the reach), or a real over-index (leave it
+# for the reasoner) - so a solid-denominator high index is never
+# clamped by magnitude alone.
+IMPOSSIBLE_INDEX_CEIL = 1500.0
+# A Gen Pop penetration below this (~<33K US people) is treated as no
+# reliable baseline: the index is a coverage gap, not a real ratio.
+NEAR_ZERO_BASELINE_PEN = 0.01
+# A row whose own baseline is more than this many times below its
+# category peer median is an anomalously-low (artifact) denominator.
+BASELINE_SUSPECT_RATIO = 10.0
+# Peers needed in a category before its median baseline is trusted.
+MIN_PEERS_FOR_MEDIAN = 5
+# Only rescue a suspect denominator (adopt the peer median) for brands
+# with real audience traction; below this, blank as a long-tail gap.
+MIN_BP_TO_ADOPT = 2.0
+# Ignore baselines below this when computing a category peer median, so
+# other artifacts in the same column do not drag the median down.
+PEER_BASELINE_FLOOR = 0.05
+# Where per-file Gen Pop baseline anomalies are recorded for the Gen Pop
+# worker to reconcile the global baseline (non-contended with the Gen
+# Pop CSV itself and with the registration JSONs). Append-only, silent,
+# never emails (per Jenna's directive above).
+GENPOP_ANOMALY_PREFIX = "system/genpop_baseline_anomalies"
 
 # ---------------------------------------------------------------------------
 # Benchmark bands (2026-08-26 audit gap 4). Index vs Gen Pop bands for
@@ -1614,6 +1657,345 @@ def _ledger_append(entry, s3_client, verbose=True):
 # Public API
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Impossible-index autocorrect (Jenna 2026-08-31)
+# ---------------------------------------------------------------------------
+
+def _gp_native_cat(c):
+    """The exact category normalizer the Gen Pop map is keyed by, so an
+    override lands under the same key _gp_get and append_genpop_columns
+    resolve. Falls back to the local normalizer if the twin is
+    unavailable."""
+    try:
+        try:
+            from migration.genpop_baseline import _norm_cat as _n
+        except ImportError:
+            from genpop_baseline import _norm_cat as _n  # type: ignore
+        return _n(c)
+    except Exception:
+        return _norm_cat(c)
+
+
+def _flush_genpop_baseline_anomalies(records, s3_client, verbose=True):
+    """Append per-file baseline anomalies to a dated, append-only S3
+    sink for the Gen Pop worker to reconcile the GLOBAL baseline.
+
+    Non-contended: distinct key prefix from Gen_Pop_2026.csv and the
+    registration JSONs. Silent and best-effort - never emails, never
+    raises, never blocks a publish (per Jenna 2026-08-31: no email when
+    the pipeline auto-fixes)."""
+    if not records:
+        return
+    try:
+        s3c = _s3(s3_client)
+    except Exception:
+        return
+    try:
+        day = datetime.now(timezone.utc).strftime("%Y_%m_%d")
+        key = f"{GENPOP_ANOMALY_PREFIX}/{day}.jsonl"
+        existing = b""
+        try:
+            existing = s3c.get_object(Bucket=BUCKET, Key=key)["Body"].read()
+        except Exception:
+            existing = b""
+        lines = [json.dumps(r, ensure_ascii=False) for r in records]
+        body = existing + ("\n".join(lines) + "\n").encode("utf-8")
+        s3c.put_object(Bucket=BUCKET, Key=key, Body=body,
+                       ContentType="application/x-ndjson")
+        if verbose:
+            print(f"  [pre-ship-vetting] flagged {len(records)} Gen Pop "
+                  f"baseline anomaly record(s) -> s3://{BUCKET}/{key}")
+    except Exception as e:
+        if verbose:
+            print(f"  [pre-ship-vetting] baseline-anomaly flag skipped "
+                  f"({type(e).__name__}: {e})")
+
+
+def autocorrect_impossible_index(df, subject, gp_map, s3_key, *,
+                                 verbose=True):
+    """Deterministically neutralize impossible Index vs Gen Pop values
+    BEFORE the reasoned review, so a broken ratio auto-fixes and ships
+    instead of holding the whole file.
+
+    Index = profile Brand Penetration / Gen Pop Penetration * 100. An
+    index above IMPOSSIBLE_INDEX_CEIL is almost always a broken ratio
+    driven by a tiny / near-zero Gen Pop denominator, not a real
+    audience signal. Each flagged (category, brand) is classified by
+    comparing its own baseline to its category peers:
+
+      * DENOMINATOR ARTIFACT (adopt): the brand's baseline is >10x below
+        its category peer median AND its reach is meaningful (>=2%). The
+        brand is real but under-baselined in Gen Pop (e.g. a premium
+        brand the panel under-observes). Adopt the category peer median
+        as the baseline across ALL the brand's rows (mirror-coherent),
+        which lands the index in a sane range. Reach is untouched. Flag
+        the global Gen Pop baseline for reconciliation.
+
+      * COVERAGE GAP (blank): the baseline is near-zero (<0.01%), OR
+        suspect-low with sub-2% reach (obscure long-tail). No reliable
+        denominator exists, so the index is a gap: blank both baseline
+        cells (remove the map entry so append leaves them empty). Reach
+        is untouched. Flag it.
+
+      * NUMERATOR ARTIFACT (clamp): suspect-low denominator, meaningful
+        reach, but even the adopted peer median leaves the index above
+        the ceiling (a degenerate peer set). Rather than discard a
+        meaningful reach's index, clamp the reach to the ceiling-implied
+        level given the adopted baseline (subject-salted jitter, no
+        pinning), recompute the chain, and flag it. Rare.
+
+      * REAL OVER-INDEX (leave): the denominator is plausible relative
+        to peers (not suspect, not near-zero). A high index here rides
+        on a solid baseline and is a genuine composition effect (a
+        show's own host / a hyper-relevant niche among its own viewers).
+        It is left for the reasoner, which weighs composition and
+        relevance and whose above-band direction guard downgrades any
+        unfounded trim to borderline. Deterministically clamping these
+        by magnitude alone would destroy legitimate signal - exactly
+        the wrong-direction fix the workspace rules forbid.
+
+    Returns a dict:
+      df              - frame with any numerator clamps applied + chain
+                        recomputed (unchanged when only baselines moved)
+      eff_gp_map      - gp_map with per-(cat, brand) overrides applied on
+                        a COPY (the shared cache is never mutated); the
+                        reasoner, prescan, prompt, and final append all
+                        consume this so corrected indices are what ships
+      baseline_changed- bool: adopt / blank overrides were made
+      bp_clamped      - bool: a numerator clamp changed reach
+      corrections     - list of per-brand correction records (report)
+      gap_flags       - list of records for the Gen Pop anomaly sink
+
+    Never raises: any failure returns the inputs unchanged so a defect
+    in this pass can never wedge a publish.
+    """
+    result = {
+        "df": df, "eff_gp_map": gp_map, "baseline_changed": False,
+        "bp_clamped": False, "corrections": [], "gap_flags": [],
+    }
+    try:
+        if not gp_map or df is None or len(df) == 0:
+            return result
+        cols = _detect_cols(df)
+        if not cols["cat"] or not cols["val"] or not cols["bp"]:
+            return result
+
+        from collections import defaultdict
+        rows = []
+        for idx in df.index:
+            cu = _norm_cat(df.at[idx, cols["cat"]])
+            if not cu or cu in META_CATS or cu in DEMO_CATS or cu in FAN_CATS:
+                continue
+            bp = _num(df.at[idx, cols["bp"]])
+            if bp is None:
+                continue
+            brand = str(df.at[idx, cols["val"]]).strip()
+            bn = _norm_brand(brand)
+            if not bn:
+                continue
+            gp_hit = _gp_get(gp_map, cu, bn)
+            if not gp_hit or not gp_hit[0] or gp_hit[0] <= 0:
+                continue
+            base = float(gp_hit[0])
+            rows.append({"idx": idx, "cu": cu, "brand": brand, "bn": bn,
+                         "bp": bp, "base": base,
+                         "index": bp / base * 100.0})
+
+        candidates = [r for r in rows
+                      if r["index"] > IMPOSSIBLE_INDEX_CEIL]
+        if not candidates:
+            return result
+
+        # Peer median EXCLUDES the impossible-index rows themselves, so a
+        # brand's own artifact baseline can never bias the median used to
+        # correct it (a suspect brand at 0.069% would otherwise drag its
+        # category median down and under-correct the index).
+        cand_idxs = {r["idx"] for r in candidates}
+        cat_baselines = defaultdict(list)
+        for r in rows:
+            if r["idx"] in cand_idxs:
+                continue
+            if r["base"] >= PEER_BASELINE_FLOOR:
+                cat_baselines[r["cu"]].append(r["base"])
+        peer_median = {}
+        for cu, bases in cat_baselines.items():
+            if len(bases) >= MIN_PEERS_FOR_MEDIAN:
+                peer_median[cu] = statistics.median(bases)
+
+        all_by_brand = defaultdict(list)
+        for r in rows:
+            all_by_brand[r["bn"]].append(r)
+        cand_brands = {}
+        for r in candidates:
+            cand_brands.setdefault(r["bn"], r["brand"])
+
+        eff = dict(gp_map)
+        baseline_changed = False
+        bp_clamped = False
+        corrections = []
+        gap_flags = []
+        ts = datetime.now(timezone.utc).isoformat()
+        base_name = os.path.basename(str(s3_key or ""))
+
+        for bn, brand_disp in cand_brands.items():
+            brand_rows = all_by_brand[bn]
+            cats = sorted({r["cu"] for r in brand_rows})
+            pms = [peer_median[c] for c in cats if c in peer_median]
+            best_pm = max(pms) if pms else None
+            target_pm = statistics.median(pms) if pms else None
+            own_base = min(r["base"] for r in brand_rows)
+            rep_bp = max(r["bp"] for r in brand_rows)
+            worst_idx = max(r["index"] for r in brand_rows
+                            if r["index"] > IMPOSSIBLE_INDEX_CEIL)
+
+            near_zero = own_base < NEAR_ZERO_BASELINE_PEN
+            suspect = (best_pm is not None
+                       and own_base < best_pm / BASELINE_SUSPECT_RATIO)
+
+            # Real over-index: plausible denominator, leave for reasoner.
+            if not suspect and not near_zero:
+                continue
+
+            # Denominator artifact: adopt peer median (mirror-coherent).
+            if (suspect and rep_bp >= MIN_BP_TO_ADOPT and target_pm
+                    and (rep_bp / target_pm * 100.0) <= IMPOSSIBLE_INDEX_CEIL):
+                new_idx = rep_bp / target_pm * 100.0
+                for c in cats:
+                    eff[(_gp_native_cat(c), bn)] = (
+                        target_pm, f"{target_pm:.4f}%")
+                baseline_changed = True
+                corrections.append({
+                    "brand": brand_disp, "categories": cats,
+                    "kind": "adopt_peer_baseline",
+                    "before": {"bp": round(rep_bp, 4),
+                               "baseline": round(own_base, 4),
+                               "index": round(worst_idx, 1)},
+                    "after": {"bp": round(rep_bp, 4),
+                              "baseline": round(target_pm, 4),
+                              "index": round(new_idx, 1)},
+                })
+                gap_flags.append({
+                    "ts": ts, "s3_key": base_name, "subject": subject,
+                    "brand": brand_disp, "categories": cats,
+                    "action": "adopt_peer_baseline",
+                    "current_genpop_pen": round(own_base, 4),
+                    "peer_median_pen": round(target_pm, 4),
+                    "note": ("Gen Pop baseline is >10x below category "
+                             "peers; per-file adopted the peer median so "
+                             "the index is credible. Reconcile the "
+                             "global Gen Pop baseline for this brand."),
+                })
+                continue
+
+            # Numerator artifact: suspect denom, meaningful reach, but
+            # even the peer median leaves the index absurd. Clamp reach.
+            if (suspect and rep_bp >= MIN_BP_TO_ADOPT and target_pm):
+                jit = (_unit(f"{subject}|{bn}|impossible_index") - 0.5) * 0.02
+                clamped_bp = max(
+                    0.0001,
+                    (IMPOSSIBLE_INDEX_CEIL * target_pm / 100.0) * (1.0 + jit))
+                mirror_idxs = [r["idx"] for r in brand_rows
+                               if abs(r["bp"] - rep_bp) < 1e-6]
+                for i in mirror_idxs:
+                    _write_cell_like(df, i, cols["bp"], clamped_bp)
+                for c in cats:
+                    eff[(_gp_native_cat(c), bn)] = (
+                        target_pm, f"{target_pm:.4f}%")
+                bp_clamped = True
+                baseline_changed = True
+                corrections.append({
+                    "brand": brand_disp, "categories": cats,
+                    "kind": "clamp_reach",
+                    "before": {"bp": round(rep_bp, 4),
+                               "baseline": round(own_base, 4),
+                               "index": round(worst_idx, 1)},
+                    "after": {"bp": round(clamped_bp, 4),
+                              "baseline": round(target_pm, 4),
+                              "index": round(clamped_bp / target_pm * 100.0,
+                                             1)},
+                })
+                gap_flags.append({
+                    "ts": ts, "s3_key": base_name, "subject": subject,
+                    "brand": brand_disp, "categories": cats,
+                    "action": "clamp_reach",
+                    "current_genpop_pen": round(own_base, 4),
+                    "peer_median_pen": round(target_pm, 4),
+                    "note": ("Suspect-low Gen Pop baseline with a "
+                             "degenerate peer set; clamped reach to the "
+                             "index ceiling. Reconcile the global Gen "
+                             "Pop baseline for this brand."),
+                })
+                continue
+
+            # Coverage gap: near-zero or suspect-low with thin reach.
+            for c in cats:
+                eff.pop((_gp_native_cat(c), bn), None)
+                eff.pop((c, bn), None)
+            baseline_changed = True
+            corrections.append({
+                "brand": brand_disp, "categories": cats,
+                "kind": "blank_gap_baseline",
+                "before": {"bp": round(rep_bp, 4),
+                           "baseline": round(own_base, 4),
+                           "index": round(worst_idx, 1)},
+                "after": {"bp": round(rep_bp, 4),
+                          "baseline": None, "index": None},
+            })
+            gap_flags.append({
+                "ts": ts, "s3_key": base_name, "subject": subject,
+                "brand": brand_disp, "categories": cats,
+                "action": "blank_gap_baseline",
+                "current_genpop_pen": round(own_base, 4),
+                "peer_median_pen": (round(target_pm, 4)
+                                    if target_pm else None),
+                "note": ("Near-zero / unreliable Gen Pop baseline; "
+                         "blanked the index as a coverage gap. Add a "
+                         "credible global Gen Pop baseline for this "
+                         "brand."),
+            })
+
+        if bp_clamped:
+            try:
+                try:
+                    from migration.post_generation_enforcers import (
+                        apply_recompute_category_share,
+                        recompute_raw_and_projection,
+                    )
+                except ImportError:
+                    from post_generation_enforcers import (  # type: ignore
+                        apply_recompute_category_share,
+                        recompute_raw_and_projection,
+                    )
+                df, _ = recompute_raw_and_projection(df, subject,
+                                                     verbose=False)
+                df, _ = apply_recompute_category_share(df, subject,
+                                                       verbose=False)
+                result["df"] = df
+            except Exception as e:
+                if verbose:
+                    print(f"  [pre-ship-vetting] post-clamp recompute "
+                          f"skipped ({type(e).__name__}: {e})")
+
+        result["eff_gp_map"] = eff if baseline_changed else gp_map
+        result["baseline_changed"] = baseline_changed
+        result["bp_clamped"] = bp_clamped
+        result["corrections"] = corrections
+        result["gap_flags"] = gap_flags
+        if verbose and corrections:
+            kinds = defaultdict(int)
+            for c in corrections:
+                kinds[c["kind"]] += 1
+            summary = ", ".join(f"{k}={v}" for k, v in sorted(kinds.items()))
+            print(f"  [pre-ship-vetting] {base_name}: impossible-index "
+                  f"autocorrect ({summary})")
+        return result
+    except Exception as e:
+        if verbose:
+            print(f"  [pre-ship-vetting] impossible-index autocorrect "
+                  f"skipped ({type(e).__name__}: {e})")
+        return result
+
+
 def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                          s3_client=None,
                          claude_call: Optional[Callable] = None,
@@ -1688,6 +2070,29 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                 s3c = None
 
         gp_map = _load_genpop(genpop_map, s3c, verbose)
+
+        # Deterministic impossible-index autocorrect (Jenna 2026-08-31):
+        # neutralize broken Index vs Gen Pop ratios BEFORE the reasoned
+        # review so a fixable artifact (a tiny / near-zero baseline)
+        # auto-corrects and ships silently instead of holding the file.
+        # The reasoner, prescan, prompt, and final baseline re-append
+        # all consume the returned effective map, so the corrected
+        # indices are what the review sees AND what ships. The frame may
+        # carry a reach clamp (rare); baseline moves never touch reach.
+        ac = autocorrect_impossible_index(df, subject, gp_map, key,
+                                          verbose=verbose)
+        df = ac["df"]
+        gp_map = ac["eff_gp_map"]
+        if ac["corrections"]:
+            report["index_autocorrect"] = ac["corrections"]
+            report["index_autocorrect_bp_clamped"] = ac["bp_clamped"]
+            # Thread the corrected map so vet_before_publish re-appends
+            # the baseline columns from it (never the stale global map).
+            if ac["baseline_changed"]:
+                report["_effective_genpop_map"] = gp_map
+            _flush_genpop_baseline_anomalies(ac["gap_flags"], s3c,
+                                             verbose=verbose)
+
         facts = _deterministic_prescan(df, subject, key, gp_map,
                                        verbose=verbose)
         report["prescan"] = {
@@ -2198,9 +2603,18 @@ def vet_before_publish(df, body, subject, s3_key, *, category=None,
         print(f"[pre-ship-vetting] wrapper error "
               f"({type(e).__name__}: {e}); publishing original bytes")
         return df, body, {"error": str(e)}
-    if report.get("autofix"):
+    # Re-serialize when a reasoner autofix OR the deterministic
+    # impossible-index autocorrect changed the frame. The autocorrect
+    # can move baselines / blank indices / clamp a reach with no
+    # reasoner fix at all, and those corrections must reach the shipped
+    # bytes (otherwise the file keeps the broken index the review just
+    # neutralized).
+    if report.get("autofix") or report.get("index_autocorrect"):
         # Re-append the Gen Pop baseline columns the writer added at
-        # step 6.5 (the fix pass stripped them), then re-serialize.
+        # step 6.5 (the fix / autocorrect pass may have stripped or
+        # invalidated them), sourcing from the corrected effective map
+        # when the autocorrect moved a baseline, so the shipped index is
+        # the corrected one, never the stale global-map value.
         try:
             try:
                 from migration.genpop_baseline import (
@@ -2210,8 +2624,9 @@ def vet_before_publish(df, body, subject, s3_key, *, category=None,
                 from genpop_baseline import (  # type: ignore
                     append_genpop_columns,
                 )
-            df2 = append_genpop_columns(df2, s3_client=s3_client,
-                                        verbose=False)
+            df2 = append_genpop_columns(
+                df2, genpop_map=report.get("_effective_genpop_map"),
+                s3_client=s3_client, verbose=False)
         except Exception as e:
             print(f"[pre-ship-vetting] baseline re-append skipped: {e}")
         buf = io.StringIO()
