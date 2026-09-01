@@ -118,6 +118,18 @@ _MAX_STREAMING_ITEMS = 300   # was 200 - 9 platforms (netflix, disneyplus,
                               # mgmplus, starz) x top ~30-40 unique
 _MAX_BOOK_ITEMS      = 400   # was 220 - 3 book + 3 libby panels each
                               # ship 30-100 unique-per-panel
+# Wattpad: 6 rails (Hot 50 + Originals 25 + 4 genre rails 25 each =
+# 175 gross). Cross-rail dedup collapses a lot (a Wattpad Original
+# tagged Romance can appear on both `wattpad_originals` and
+# `wattpad_romance`). 200 gives headroom for days with minimal
+# cross-rail overlap.
+_MAX_WATTPAD_ITEMS   = 200
+# Goodreads Most-Read-This-Week ships ~50 titles on one rail. 60 leaves
+# a small buffer if Goodreads grows the panel or we later add a second
+# rail (Choice Awards / genre-specific). Kept as its own kind
+# ('goodreads_book') so anchor tiers don't cross-contaminate the
+# Amazon / Apple / Audible / Libby platform ceilings.
+_MAX_GOODREADS_ITEMS = 60
 # FAST-channels: 4 platforms x top 100 = 400 gross, ~250-300 after
 # cross-platform dedup (Alone / Everybody Loves Raymond / etc. appear
 # on 2-3 platforms). Cap at 350 for safety headroom on days there is
@@ -652,6 +664,164 @@ def _collect_books(max_items: int = _MAX_BOOK_ITEMS) -> list[dict]:
     return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
 
 
+def _collect_goodreads(max_items: int = _MAX_GOODREADS_ITEMS) -> list[dict]:
+    """Union top items across the goodreads_charts snapshot (one rail
+    today: Most Read This Week), deduped by (normalized title +
+    author). Every row carries the Goodreads-side native priors -
+    `currently_reading_count` (the community weekly-read count printed
+    on the tile), cumulative `avg_rating` + `ratings_count`, and
+    whether the book looks like a recent release - so the Claude
+    prompt can lean on the ground-truth community signal rather than
+    reason from chart position alone. Kept as its own kind
+    ('goodreads_book') rather than folded into 'book' because the
+    anchor tier is different: Goodreads reflects the broader US
+    reading audience (including people who read outside Goodreads
+    apps) while Amazon / Apple / Audible / Libby anchor to their own
+    platform's US buyer / listener / borrower base.
+    """
+    snap = _read_snapshot('goodreads_charts') or {}
+    per: dict[str, dict] = {}
+
+    _PANEL_META = [
+        ('goodreads_most_read', 'Goodreads - Most Read This Week'),
+    ]
+
+    sources = snap.get('sources') or {}
+    for panel_slug, chart_prefix in _PANEL_META:
+        panel = sources.get(panel_slug) or {}
+        for i, it in enumerate((panel.get('items') or [])[:50]):
+            title  = (it.get('title')  or '').strip()
+            artist = (it.get('artist') or it.get('author') or '').strip()
+            if not title:
+                continue
+            key = _cp_normalize(f'{title} {artist}')
+            if not key:
+                continue
+            rank = i + 1
+            currently_reading = int(it.get('currently_reading_count') or 0)
+            ratings_count = int(it.get('ratings_count') or 0)
+            try:
+                avg_rating = float(it.get('avg_rating') or 0.0)
+            except Exception:
+                avg_rating = 0.0
+            try:
+                published_year = int(it.get('published_year') or 0)
+            except Exception:
+                published_year = 0
+            is_new_release = bool(it.get('is_new_release'))
+            e = per.setdefault(key, {
+                'kind':          'goodreads_book',
+                'display_title': title,
+                'artist':        artist,
+                'best_rank':     rank,
+                'chart_labels':  [],
+                'image':         it.get('image') or it.get('cover_url'),
+                'url':           it.get('book_url') or it.get('url'),
+                'goodreads_priors': {
+                    'currently_reading_count': currently_reading,
+                    'avg_rating':              avg_rating,
+                    'ratings_count':           ratings_count,
+                    'published_year':          published_year,
+                    'is_new_release':          is_new_release,
+                },
+            })
+            e['chart_labels'].append(f'{chart_prefix} #{rank}')
+            if rank < e['best_rank']:
+                e['best_rank'] = rank
+    return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
+
+
+def _collect_wattpad(max_items: int = _MAX_WATTPAD_ITEMS) -> list[dict]:
+    """Union top items across the wattpad_charts snapshot's 6 rails
+    (Hot / Originals / Romance / Teen Fiction / Fanfiction / Fantasy),
+    deduped by (normalized title + author). A story that appears on
+    multiple rails gets a SINGLE Claude call whose prompt sees every
+    rail label + rank the story earned, plus the native Wattpad
+    signals (cumulative reads, votes, chapters, Originals flag) so
+    per-item reasoning is well-anchored.
+
+    Wattpad exposes native `reads` counts on every story - these are
+    CUMULATIVE all-time reads across the platform (not weekly).
+    Passed through `native_priors` so Claude can convert them to
+    weekly US readers using the platform's ~90M global MAU, ~40-50%
+    US share, and a decay factor accounting for tapering read
+    velocity over time.
+    """
+    snap = _read_snapshot('wattpad_charts') or {}
+    per: dict[str, dict] = {}
+
+    # Panel slug -> (chart label prefix, us_share_boost). The
+    # us_share_boost is passed to Claude as a hint: Wattpad Originals
+    # is North-America-heavy per Wattpad Studios public coverage, so
+    # per-row US share bumps to ~0.55 vs the platform default ~0.42.
+    _PANEL_META = [
+        ('wattpad_hot',          'Wattpad - Hot Stories',   1.00),
+        ('wattpad_originals',    'Wattpad - Originals',     1.30),
+        ('wattpad_romance',      'Wattpad - Romance',       1.00),
+        ('wattpad_teen_fiction', 'Wattpad - Teen Fiction',  1.00),
+        ('wattpad_fanfiction',   'Wattpad - Fanfiction',    1.00),
+        ('wattpad_fantasy',      'Wattpad - Fantasy',       1.00),
+    ]
+
+    sources = snap.get('sources') or {}
+    for panel_slug, chart_prefix, us_share_boost in _PANEL_META:
+        panel = sources.get(panel_slug) or {}
+        for i, it in enumerate((panel.get('items') or [])[:50]):
+            title  = (it.get('title')  or '').strip()
+            artist = (it.get('artist') or it.get('author') or '').strip()
+            if not title:
+                continue
+            key = _cp_normalize(f'{title} {artist}')
+            if not key:
+                continue
+            rank = i + 1
+            reads = int(it.get('reads') or 0)
+            votes = int(it.get('votes') or 0)
+            chapters = int(it.get('chapters') or 0)
+            genre = (it.get('genre_primary') or '').strip()
+            originals_flag = bool(it.get('wattpad_originals_flag'))
+            is_new = bool(it.get('is_new'))
+            completed = bool(it.get('is_completed'))
+            e = per.setdefault(key, {
+                'kind':          'wattpad_story',
+                'display_title': title,
+                'artist':        artist,
+                'best_rank':     rank,
+                'chart_labels':  [],
+                'image':         it.get('cover_url') or it.get('image'),
+                'url':           it.get('story_url') or it.get('url'),
+                # Native Wattpad-side priors travel with the item so
+                # the Claude prompt can cite them directly.
+                'native_priors': {
+                    'wattpad_reads_cumulative':    reads,
+                    'wattpad_votes':               votes,
+                    'wattpad_chapters':            chapters,
+                    'wattpad_genre_primary':       genre,
+                    'wattpad_originals':           originals_flag,
+                    'wattpad_is_completed':        completed,
+                    'wattpad_is_new_14d':          is_new,
+                    # `us_share_hint` picks the max across rails a
+                    # story appears on (Originals rail wins).
+                    'us_share_hint':               us_share_boost,
+                },
+            })
+            e['chart_labels'].append(f'{chart_prefix} #{rank}')
+            if rank < e['best_rank']:
+                e['best_rank'] = rank
+            # If this rail says the story is an Original, elevate the
+            # flag on the merged item (an Original tagged Romance
+            # appears on both `wattpad_originals` and
+            # `wattpad_romance`; only the Originals rail sets the
+            # flag).
+            if originals_flag:
+                e['native_priors']['wattpad_originals'] = True
+                if us_share_boost > e['native_priors'].get('us_share_hint',
+                                                             1.0):
+                    e['native_priors']['us_share_hint'] = us_share_boost
+
+    return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
+
+
 # Comics coverage cap: 3 panels * ~50 top rows each, post-dedup by
 # (title + author). Amazon Comics ships 60, Apple Books Comics 50,
 # Libby Comics 35 = 145 gross; cross-panel dedup collapses maybe
@@ -1008,6 +1178,20 @@ def _lookup_key(kind: str, display_title: str, artist: str = '') -> str:
         return f'song:{_cp_normalize(f"{display_title} {artist}")}'
     if kind == 'book':
         return f'book:{_cp_normalize(f"{display_title} {artist}")}'
+    if kind == 'goodreads_book':
+        # Distinct kind so a title that ALSO charts on Amazon / Apple /
+        # Audible / Libby (as most Goodreads bestsellers do) doesn't
+        # collide with those platforms' anchor tiers. `_annotate_
+        # goodreads_with_streams` uses the same key shape on the
+        # trends_iq side.
+        return f'goodreads_book:{_cp_normalize(f"{display_title} {artist}")}'
+    if kind == 'wattpad_story':
+        # Wattpad stories collide by title alone (multiple authors can
+        # use the same title, and fanfic titles overlap heavily across
+        # authors). Key by normalized title+author so 'The Dating
+        # Deal' by author A and 'The Dating Deal' by author B don't
+        # cross-contaminate estimates.
+        return f'wattpad_story:{_cp_normalize(f"{display_title} {artist}")}'
     if kind == 'comic':
         return f'comic:{_cp_normalize(f"{display_title} {artist}")}'
     if kind == 'game':
@@ -1466,6 +1650,99 @@ _COMICS_PLATFORMS = [
          "Libraries digital-loan press. Bias LOW: many comics titles "
          "carry small hold counts (single-digit) because comics "
          "borrows are dominated by walk-ins vs holds queues."
+     )},
+]
+
+
+# ---------------------------------------------------------------------------
+# Wattpad. Distinct kind='wattpad_story' rather than folding into
+# 'book' because Wattpad is a fundamentally different platform:
+# serialized, user-generated fiction with cumulative all-time reads
+# (not weekly units), a ~90M global MAU / ~15-20M US weekly reader
+# base, and a much longer per-story reach curve than a published
+# book. The chart signal is native `reads` + `votes` + Wattpad
+# Originals flag; the estimator's job is to convert cumulative reads
+# to weekly US readers using platform-level anchors.
+_WATTPAD_PLATFORMS = [
+    {'key': 'wattpad',
+     'label': 'Wattpad (serialized fiction)',
+     'ceiling': 20_000_000,
+     'anchors': (
+         "Wattpad reports ~90M global monthly active users (public "
+         "2024). US share of MAU: ~40-50% (Wattpad Studios public "
+         "coverage; skews higher on Originals rail, ~55%). Weekly "
+         "US readers on the platform overall: ~15-20M peak. "
+         "Per-story weekly US readers estimation: cumulative "
+         "all-time READS (shown as `wattpad_reads_cumulative` in "
+         "CHART CONTEXT) is the strongest single anchor; convert to "
+         "weekly by taking a decay-adjusted fraction of the cumulative "
+         "total * US share. Practical brackets: top-of-Hot mega-hits "
+         "(cumulative reads >100M, votes >1M) land ~200K-800K weekly "
+         "US readers on the current trending cohort; steady-state "
+         "top-10 (cum reads 5-50M) ~15K-150K weekly US readers; long "
+         "tail newly-charting (cum reads <1M) ~200-2000 weekly US "
+         "readers. Wattpad Originals rail (paid / studio-invested "
+         "serialized fiction, `wattpad_originals=True` in the native "
+         "priors) skews HIGHER US share (~0.55 vs ~0.42 platform "
+         "default) and higher engagement per reader, so bump the "
+         "converted number ~20-30%. `wattpad_is_new_14d=True` = "
+         "story first-published in the last 14 days = fresh-cohort "
+         "multiplier ~2-5x on the tail-decay math (early reader "
+         "velocity peaks in the first 30 days). `wattpad_votes` is "
+         "a floor signal: >1M votes over any window guarantees a "
+         "mega-hit tier regardless of the reads number. NEVER "
+         "return a weekly US number that implies more readers than "
+         "the total cumulative reads (a story with 50K cumulative "
+         "reads cannot have 60K weekly US readers). Bias LOW when "
+         "signals are thin."
+     )},
+]
+
+
+# Goodreads community-driven weekly read chart. Distinct kind
+# ('goodreads_book') rather than folded into 'book' because Goodreads
+# reflects the broader US reading audience (including people who read
+# outside Goodreads apps): the metric is unique US readers who read a
+# given book this week across ALL surfaces (Kindle, print, audio,
+# library, Goodreads-native), projected from the community weekly-
+# read signal Goodreads exposes on each tile. Single platform key
+# because there is one rail (Most Read This Week).
+_GOODREADS_PLATFORMS = [
+    {'key': 'goodreads_most_read',
+     'label': 'Goodreads Most Read This Week (US)',
+     'ceiling': 20_000_000,
+     'anchors': (
+         "Goodreads reports ~150M global users; US share ~35-40% "
+         "(~50-60M US Goodreads users). Weekly US actives on the "
+         "platform: ~15-20M readers. RAW ANCHOR: Goodreads's own "
+         "`currently_reading_count` surfaced on the tile as 'X "
+         "people read it' - counts US Goodreads users who logged "
+         "this book as read/reading in the past 7 days and drives "
+         "the Most-Read-This-Week ordering itself. Cross-platform "
+         "scale: Goodreads-active adults are ~10-20% of all US "
+         "book readers (Pew Research 2024 - ~72% of US adults read "
+         "at least one book/year, only a subset log activity on "
+         "Goodreads), so total US weekly readers for a title = "
+         "roughly currently_reading_count * 6-10x depending on "
+         "tier: mass-market #1 title (currently_reading >15K) "
+         "-> 300K-800K weekly US readers; steady-state top-10 "
+         "(currently_reading 5-15K) -> 60K-200K; mid-tier ranks "
+         "20-50 (currently_reading 3-6K) -> 20K-70K. Multiplier "
+         "BIASES DOWN for genre-fiction and up for literary + "
+         "book-club releases (which over-index on Goodreads). The "
+         "`is_new_release=True` flag = published in the last "
+         "~30 days = fresh-cohort multiplier ~1.3-1.8x on the base "
+         "conversion. `avg_rating * ratings_count` is a cumulative-"
+         "popularity floor signal: a title with >500K lifetime "
+         "ratings can never be at long-tail weekly readers even if "
+         "this week's community count is thin (there is a durable "
+         "base of returning readers). NEVER return a weekly US "
+         "number LESS than `currently_reading_count` itself - that "
+         "is the community-observed floor. Ceiling for the panel "
+         "is 20M weekly US readers (roughly = US Goodreads weekly "
+         "actives). Bias LOW when signals are thin, and NEVER "
+         "guess if `currently_reading_count` is 0 - return 0 and "
+         "let the next daily fetch pick it up."
      )},
 ]
 
@@ -1963,6 +2240,10 @@ def _platforms_for_kind(kind: str) -> list[dict]:
         return _GAMING_PLATFORMS_META
     if kind == 'book':
         return _BOOK_PLATFORMS
+    if kind == 'goodreads_book':
+        return _GOODREADS_PLATFORMS
+    if kind == 'wattpad_story':
+        return _WATTPAD_PLATFORMS
     if kind == 'comic':
         return _COMICS_PLATFORMS
     if kind == 'search_term':
@@ -2011,6 +2292,26 @@ _CHART_LABEL_TO_PLATFORM = (
     ('libby: popular audiobooks', 'libby_audio'),
     ('libby popular ebooks',      'libby_ebook'),
     ('libby popular audiobooks',  'libby_audio'),
+    # Goodreads community weekly-read rail. One panel label today
+    # ('Goodreads - Most Read This Week') that routes to the single
+    # `goodreads_most_read` platform key. Kept as its own kind
+    # ('goodreads_book') so the anchor tier is 20M US Goodreads
+    # weekly actives, not the Amazon / Apple / Audible / Libby
+    # per-store buyer / borrower base.
+    ('goodreads - most read this week', 'goodreads_most_read'),
+    ('goodreads most read this week',   'goodreads_most_read'),
+    ('goodreads',                       'goodreads_most_read'),
+
+    # Wattpad. All 6 rails route to the single `wattpad` platform key
+    # (the anchor block reasons per-item, not per-rail; the rail
+    # labels ride along in CHART CONTEXT for Claude's reference).
+    ('wattpad - hot stories',   'wattpad'),
+    ('wattpad - originals',     'wattpad'),
+    ('wattpad - romance',       'wattpad'),
+    ('wattpad - teen fiction',  'wattpad'),
+    ('wattpad - fanfiction',    'wattpad'),
+    ('wattpad - fantasy',       'wattpad'),
+    ('wattpad',                 'wattpad'),
     ('apple books',       'apple'),
     ('amazon best-sellers (books)', 'amazon'),
     ('audible best-sellers',  'audible'),
@@ -2337,6 +2638,153 @@ def _build_prompt(item: dict) -> str:
                               'must be projected up):\n  '
                               + '\n  '.join(parts))
         libby_note = '\n' + _LIBBY_PROJECTION_NOTE
+    elif kind == 'goodreads_book':
+        unit = ('weekly US readers (unique US readers who read this '
+                'book in the past 7 days, projected from the '
+                'Goodreads community weekly-read signal)')
+        query = (f'"{display_title}" "{artist}" Goodreads currently '
+                 f'reading US weekly readers 2026')
+        priors = item.get('goodreads_priors') or {}
+        try:
+            currently_reading = int(priors.get('currently_reading_count') or 0)
+        except Exception:
+            currently_reading = 0
+        try:
+            ratings_count = int(priors.get('ratings_count') or 0)
+        except Exception:
+            ratings_count = 0
+        try:
+            avg_rating = float(priors.get('avg_rating') or 0.0)
+        except Exception:
+            avg_rating = 0.0
+        try:
+            published_year = int(priors.get('published_year') or 0)
+        except Exception:
+            published_year = 0
+        is_new_release = bool(priors.get('is_new_release'))
+
+        signal_lines = [
+            (f'GOODREADS COMMUNITY WEEKLY READ COUNT: '
+             f'{currently_reading:,} (native Goodreads, THE strongest '
+             f'single anchor - this is the count of US Goodreads users '
+             f'who logged this book as read/reading in the past 7 days '
+             f'and drives the Most-Read-This-Week ordering itself)'),
+            (f'CUMULATIVE RATINGS COUNT: {ratings_count:,} (lifetime, '
+             f'proxies durable-base popularity)'),
+            (f'AVERAGE RATING: {avg_rating:.2f} / 5'),
+        ]
+        if published_year:
+            signal_lines.append(f'PUBLISHED YEAR: {published_year}')
+        if is_new_release:
+            signal_lines.append(
+                'RECENTLY PUBLISHED (<=~30d): YES (fresh-cohort '
+                'multiplier ~1.3-1.8x on the base Goodreads-to-US '
+                'conversion; early reader velocity peaks in the '
+                'first ~30 days)'
+            )
+        signal_str = '\n'.join(signal_lines)
+        item_line = (
+            f'BOOK TITLE: {display_title}\n'
+            f'AUTHOR: {artist or "(unknown)"}\n'
+            f'{signal_str}\n'
+            f'REASONING GUIDANCE: the metric is unique US readers who '
+            f'read this book in the past 7 days across ALL surfaces '
+            f'(Kindle, print, audio, library, Goodreads-native), '
+            f'projected from the Goodreads community signal. Goodreads '
+            f'reports ~150M global users, ~35-40% US share (~50-60M US '
+            f'Goodreads users); weekly US actives ~15-20M readers. '
+            f'Goodreads-active adults are ~10-20% of all US book '
+            f'readers per Pew, so total US weekly readers ~= '
+            f'goodreads_currently_reading * 6-10x depending on tier: '
+            f'mass-market #1 (currently_reading >15K) -> 300K-800K '
+            f'weekly US; steady-state top-10 (currently_reading '
+            f'5-15K) -> 60K-200K; mid ranks 20-50 (currently_reading '
+            f'3-6K) -> 20K-70K. Bias DOWN for genre-fiction, UP for '
+            f'literary + book-club releases (they over-index on '
+            f'Goodreads). Apply the fresh-release multiplier when the '
+            f'flag is set. Sanity-check bounds: weekly_us MUST be >= '
+            f'currently_reading_count (Goodreads-observed floor) AND '
+            f'<= 20M platform ceiling. If currently_reading is 0, '
+            f'return 0 - never guess. Bias LOW when signals are thin.'
+        )
+    elif kind == 'wattpad_story':
+        # Weekly US readers = unique US Wattpad users who opened at
+        # least one chapter of this story in the past 7 days.
+        # Cumulative all-time reads is the single strongest per-item
+        # anchor - Wattpad exposes it natively on every story - and
+        # the Originals flag / recently-published flag shape the
+        # decay math. Aim for a defensible fraction of the cumulative,
+        # not a raw pick.
+        unit  = ('weekly US readers (unique US Wattpad users who '
+                 'opened at least one chapter of this story in the '
+                 'past 7 days)')
+        query = (f'"{display_title}" "{artist}" Wattpad reads votes '
+                 f'US weekly readers 2026')
+        priors = item.get('native_priors') or {}
+        cum_reads = int(priors.get('wattpad_reads_cumulative') or 0)
+        votes = int(priors.get('wattpad_votes') or 0)
+        chapters = int(priors.get('wattpad_chapters') or 0)
+        genre = priors.get('wattpad_genre_primary') or ''
+        is_originals = bool(priors.get('wattpad_originals'))
+        is_new_14d = bool(priors.get('wattpad_is_new_14d'))
+        is_completed = bool(priors.get('wattpad_is_completed'))
+
+        signal_lines = [
+            f'CUMULATIVE ALL-TIME READS: {cum_reads:,} (native Wattpad, '
+            f'strongest single anchor)',
+            f'CUMULATIVE VOTES / LIKES: {votes:,}',
+            f'CHAPTERS: {chapters}',
+        ]
+        if genre:
+            signal_lines.append(f'PRIMARY GENRE: {genre}')
+        if is_originals:
+            signal_lines.append(
+                'WATTPAD ORIGINALS: YES (paid / studio-invested '
+                'serialized fiction; US share skews HIGHER on this '
+                'rail, ~0.55 vs platform default ~0.42; bump the '
+                'converted weekly-US-readers ~20-30% vs a comparable '
+                'non-Originals story with the same cumulative reads)'
+            )
+        if is_new_14d:
+            signal_lines.append(
+                'FIRST-PUBLISHED IN LAST 14 DAYS: YES (fresh-cohort '
+                'multiplier ~2-5x on the tail-decay math - early '
+                'reader velocity peaks in the first ~30 days after '
+                'publication)'
+            )
+        if is_completed:
+            signal_lines.append(
+                'STORY STATUS: completed (ongoing tail readership; '
+                'no new-chapter reader-spike, level curve)'
+            )
+        else:
+            signal_lines.append(
+                'STORY STATUS: ongoing (new-chapter drops trigger '
+                'reader-spike windows; current weekly readership '
+                'runs above the long-run tail)'
+            )
+        signal_str = '\n'.join(signal_lines)
+        item_line = (
+            f'WATTPAD STORY: {display_title}\n'
+            f'AUTHOR: {artist or "(unknown)"}\n'
+            f'{signal_str}\n'
+            f'REASONING GUIDANCE: the metric is unique US Wattpad '
+            f'users who opened at least one chapter in the past 7 '
+            f'days, NOT total chapter opens or session count. '
+            f'Wattpad total: ~90M global MAU, ~40-50% US share '
+            f'(platform default), ~15-20M weekly US readers overall. '
+            f'Convert cumulative reads to weekly US using a '
+            f'decay-adjusted fraction of the cumulative total * US '
+            f'share; use the per-item flags above to shape the '
+            f'decay + share. Sanity-check bounds: weekly_us must be '
+            f'< cumulative_reads (impossible to have more weekly '
+            f'readers than lifetime reads). Ceiling for the '
+            f'platform is 20M weekly US readers, but a real story '
+            f'top-of-Hot mega-hit lands ~200K-800K weekly US on '
+            f'current-trending fresh cohorts; steady-state top-10 '
+            f'~15K-150K; long-tail newly-charting 200-2000. Bias '
+            f'LOW when signals are thin.'
+        )
     elif kind == 'comic':
         unit  = ('weekly US audience per platform (amazon_kindle = '
                  'weekly US buyers of the physical / trade edition, '
@@ -2549,6 +2997,19 @@ _MAX_ESTIMATE_BY_KIND = {
     # down to 500K. A weekly release-week best-seller might hit this;
     # steady-state top-10 books read far below.
     'book':    500_000,
+    # Goodreads community weekly-read audience: the metric is unique
+    # US readers who read a given book this week across ALL surfaces
+    # (Kindle, print, audio, library, Goodreads-native), projected
+    # from the Goodreads community weekly-read signal. Ceiling
+    # ~= US Goodreads weekly actives (~15-20M) with a small buffer
+    # for the projected-outside-Goodreads slice on a mega title.
+    'goodreads_book': 20_000_000,
+    # Wattpad: single-platform (all 6 rails route to the `wattpad`
+    # key). Ceiling matches the platform ceiling: US Wattpad weekly
+    # reader base ~20M. A mega-hit at peak on the current Hot rail
+    # could plausibly reach ~500-800K weekly US readers; ceiling of
+    # 20M is a hard-limit safety, not a target.
+    'wattpad_story': 20_000_000,
     # `comic` covers Amazon Comics (physical) + Apple Books Comics
     # (digital) + Libby Comics (public-library digital). Sum of
     # per-platform ceilings ~85K; aggregate ceiling biased down to
@@ -2601,6 +3062,16 @@ def _default_unit_for_kind(kind: str) -> str:
         # the aggregate uses a neutral 'weekly US readers' framing
         # and the per-panel annotate overrides with the precise
         # unit for that platform.
+        return 'weekly US readers'
+    if kind == 'goodreads_book':
+        # Goodreads maps a single kind to a single platform. Unit
+        # is unique US readers of the book this week across every
+        # reading surface, projected from the community signal.
+        return 'weekly US readers'
+    if kind == 'wattpad_story':
+        # Wattpad measures reads (not sales / borrows / listens).
+        # Single-platform kind so the per-panel annotate keeps this
+        # label instead of overriding it.
         return 'weekly US readers'
     if kind == 'game':
         return 'weekly US plays'
@@ -3033,7 +3504,10 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
     """Read podcast / music / streaming / book / fast snapshots,
     research each unique top item's US audience via Claude +
     web_search, and return the combined snapshot dict."""
-    wanted = only or {'podcast', 'song', 'streaming', 'book', 'comic',
+    wanted = only or {'podcast', 'song', 'streaming', 'book',
+                       'goodreads_book',
+                       'wattpad_story',
+                       'comic',
                        'fast', 'fast_channel', 'gaming',
                        'search_term', 'trending_person', 'wiki_topic'}
 
@@ -3046,6 +3520,10 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
         items.extend(_collect_streaming())
     if 'book' in wanted:
         items.extend(_collect_books())
+    if 'goodreads_book' in wanted:
+        items.extend(_collect_goodreads())
+    if 'wattpad_story' in wanted:
+        items.extend(_collect_wattpad())
     if 'comic' in wanted:
         items.extend(_collect_comics())
     if 'fast' in wanted:
@@ -3077,7 +3555,8 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
         }
 
     logger.info("stream_estimates: total unique items = %d "
-                "(podcast=%d, song=%d, streaming=%d, book=%d, comic=%d, "
+                "(podcast=%d, song=%d, streaming=%d, book=%d, "
+                "goodreads=%d, wattpad=%d, comic=%d, "
                 "fast=%d, fast_channel=%d, gaming=%d, "
                 "search=%d, person=%d, wiki=%d)",
                 len(items),
@@ -3085,6 +3564,8 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
                 sum(1 for it in items if it['kind'] == 'song'),
                 sum(1 for it in items if it['kind'] in ('film', 'tv', 'title')),
                 sum(1 for it in items if it['kind'] == 'book'),
+                sum(1 for it in items if it['kind'] == 'goodreads_book'),
+                sum(1 for it in items if it['kind'] == 'wattpad_story'),
                 sum(1 for it in items if it['kind'] == 'comic'),
                 sum(1 for it in items if it['kind'] in ('fast_film', 'fast_tv')),
                 sum(1 for it in items if it['kind'] == 'fast_channel'),
@@ -3173,14 +3654,37 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--only', default='',
                         help='Comma-separated: podcast,song,streaming,book,'
-                              'comic,fast,fast_channel,gaming,'
-                              'search_term,trending_person,wiki_topic')
+                              'goodreads_book (aliases: goodreads,'
+                              'goodreads_most_read),wattpad_story '
+                              '(aliases: wattpad,wattpad_hot,'
+                              'wattpad_originals,wattpad_romance,'
+                              'wattpad_teen_fiction,wattpad_fanfiction,'
+                              'wattpad_fantasy),comic,fast,'
+                              'fast_channel,gaming,search_term,'
+                              'trending_person,wiki_topic')
     args = parser.parse_args()
+    # CLI aliases so `--only goodreads_most_read` (matching the
+    # snapshot's panel slug) and `--only goodreads` both resolve to
+    # the `goodreads_book` kind the fetch() branch expects. Same
+    # trick for every Wattpad rail (there is one Claude call per
+    # unique story regardless of which rail it came from).
+    _RAIL_ALIASES = {
+        'goodreads_most_read':  'goodreads_book',
+        'goodreads':            'goodreads_book',
+        'wattpad':              'wattpad_story',
+        'wattpad_hot':          'wattpad_story',
+        'wattpad_originals':    'wattpad_story',
+        'wattpad_romance':      'wattpad_story',
+        'wattpad_teen_fiction': 'wattpad_story',
+        'wattpad_fanfiction':   'wattpad_story',
+        'wattpad_fantasy':      'wattpad_story',
+    }
     only = set()
     for tok in args.only.split(','):
         t = tok.strip().lower()
-        if t:
-            only.add(t)
+        if not t:
+            continue
+        only.add(_RAIL_ALIASES.get(t, t))
 
     from ._base import run_scraper
     def _fetch():

@@ -57,6 +57,18 @@ SCRAPERS = [
     # alongside book_charts in the standard daily batch.
     ('comics_charts',      'scripts.trends_scrapers.comics_charts',      'Comics',               'comics'),
     ('libby_trends',       'scripts.trends_scrapers.libby_trends',       'Libby popular',        'libby'),
+    # Wattpad serialized fiction: six rails (Hot / Originals / four
+    # genre rankings) rolled up into a single snapshot. Rides on the
+    # Books tab as a sixth source alongside Amazon / Apple / Audible
+    # / Libby. Public browse surfaces; no cookies required.
+    ('wattpad_charts',     'scripts.trends_scrapers.wattpad_charts',     'Wattpad',              'wattpad'),
+    # Goodreads community-driven weekly read chart. One rail today
+    # (Most Read This Week, ~50 titles). Rides on the Books tab as a
+    # seventh source right after Amazon Kindle so the community
+    # signal reads adjacent to the retail signal it summarizes.
+    # Public browse surface; no cookies required (curl_cffi Chrome-
+    # TLS impersonation used defensively).
+    ('goodreads_charts',   'scripts.trends_scrapers.goodreads_charts',   'Goodreads',            'goodreads'),
     ('philanthropy_news',  'scripts.trends_scrapers.philanthropy_news',  'Philanthropy news',    'news'),
     ('business_news',      'scripts.trends_scrapers.business_news',      'Business news',        'news'),
     ('wall_street_news',   'scripts.trends_scrapers.wall_street_news',   'Wall Street news',     'news'),

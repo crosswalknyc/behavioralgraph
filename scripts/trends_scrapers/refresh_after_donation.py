@@ -118,6 +118,18 @@ DOMAIN_REFRESH_MAP: dict[str, dict[str, list[str]]] = {
     # TikTok Creative Center session feeds the viral-songs chart
     # inside music_charts.
     'ads.tiktok.com':   {'runall': ['music_charts']},
+    # Wattpad serialized-fiction chart. Six rails (Hot / Originals /
+    # four genre rankings) rolled up into a single snapshot. Public
+    # browse surfaces + v3 API - no cookies required today, so a
+    # wattpad.com donation is a no-op, but keeping the map in place
+    # means a future auth-gated surface picks up the refresh chain
+    # without a wiring change.
+    'wattpad.com':      {'runall': ['wattpad_charts']},
+    # Goodreads community weekly-read rail. Most Read This Week
+    # renders publicly (no auth needed), so a goodreads.com donation
+    # is a no-op today - but keeping the map in place means a future
+    # auth-gated surface picks up the refresh chain automatically.
+    'goodreads.com':    {'runall': ['goodreads_charts']},
 }
 
 # Lookback windows the dashboard UI exposes (templates/index.html

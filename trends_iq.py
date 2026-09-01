@@ -2915,6 +2915,17 @@ _DEFAULT_UNIT_BY_KIND = {
     'search_term':     'weekly US searchers',
     'trending_person': 'weekly US audience',
     'wiki_topic':      'weekly US audience',
+    # Wattpad serialized fiction: unique US readers who opened this
+    # story on Wattpad in the past 7 days. See
+    # `stream_estimates._WATTPAD_PLATFORMS` for anchor language +
+    # per-story ceiling.
+    'wattpad_story':   'weekly US readers',
+    # Goodreads community weekly-read: unique US readers who read this
+    # book in the past 7 days across ALL surfaces (Kindle, print,
+    # audio, library, Goodreads-native), projected from the Goodreads
+    # community weekly-read signal. See
+    # `stream_estimates._GOODREADS_PLATFORMS` for anchor + ceiling.
+    'goodreads_book':  'weekly US readers',
 }
 
 # Per (kind, platform) unit label. Wins over Claude's aggregate
@@ -2936,6 +2947,15 @@ _PLATFORM_UNIT_LABEL = {
     ('comic', 'amazon_kindle'): 'weekly US readers',
     ('comic', 'apple_comics'):  'weekly US readers',
     ('comic', 'libby_comics'):  'weekly US library comic borrows',
+    # Wattpad serialized fiction: every rail rolls up to the single
+    # `wattpad` platform anchor tier (see
+    # `stream_estimates._WATTPAD_PLATFORMS`). Same "readers" noun as
+    # a Kindle / Apple Books row so the Books tab reads consistently.
+    ('wattpad_story', 'wattpad'): 'weekly US readers',
+    # Goodreads community weekly-read rail: one platform key today
+    # (`goodreads_most_read`). Reader-count unit matches the rest of
+    # the Books tab so cross-panel comparisons read consistently.
+    ('goodreads_book', 'goodreads_most_read'): 'weekly US readers',
 }
 
 
@@ -3098,6 +3118,27 @@ _COMIC_PANEL_TO_PLATFORM = {
     'amazon_kindle': 'amazon_kindle',
     'apple_comics':  'apple_comics',
     'libby_comics':  'libby_comics',
+}
+# wattpad_charts panels -> per-platform key. Every Wattpad rail rolls
+# up to the single `wattpad` platform anchor tier in stream_estimates
+# (see `_WATTPAD_PLATFORMS`) because a story is the same story
+# regardless of which rail it appeared on. The stream_estimates lookup
+# key is `wattpad_story:<title author>` (matches `_collect_wattpad`).
+_WATTPAD_PANEL_TO_PLATFORM = {
+    'wattpad_hot':          'wattpad',
+    'wattpad_originals':    'wattpad',
+    'wattpad_romance':      'wattpad',
+    'wattpad_teen_fiction': 'wattpad',
+    'wattpad_fanfiction':   'wattpad',
+    'wattpad_fantasy':      'wattpad',
+}
+# goodreads_charts panels -> per-platform key. Single rail today
+# (Most Read This Week) that rolls up to the single
+# `goodreads_most_read` platform anchor tier in stream_estimates.
+# The stream_estimates lookup key is
+# `goodreads_book:<title author>` (matches `_collect_goodreads`).
+_GOODREADS_PANEL_TO_PLATFORM = {
+    'goodreads_most_read': 'goodreads_most_read',
 }
 
 
@@ -3663,6 +3704,63 @@ def _annotate_books_with_streams(book_charts: dict,
     _stamp_panel(book_charts,   _BOOK_PANEL_TO_PLATFORM,   'book')
     _stamp_panel(libby_trends,  _LIBBY_PANEL_TO_PLATFORM,  'book',
                   libby_fallback=True)
+
+
+def _annotate_wattpad_with_streams(wattpad_trending: dict,
+                                     estimates: dict) -> None:
+    """Attach `us_streams` (weekly US readers) to every Wattpad row.
+    Rows key by `wattpad_story:<normalized title + author>` in the
+    estimates snapshot (matches `_collect_wattpad`).
+
+    Every Wattpad rail rolls up to the single `wattpad` platform
+    anchor tier because a story is the same story regardless of the
+    rail it charted on. When a story appears on multiple rails
+    (e.g. an Original also charting on the Romance genre rail), the
+    same weekly US reader number lands on every occurrence, which is
+    the correct behavior: it's the same audience.
+    """
+    if not wattpad_trending:
+        return
+    items_lookup = (estimates or {}).get('items') or {}
+    for panel_slug, panel in (wattpad_trending or {}).items():
+        platform_key = _WATTPAD_PANEL_TO_PLATFORM.get(panel_slug, '')
+        if not platform_key:
+            continue
+        for row in (panel or {}).get('items') or []:
+            title  = (row.get('title')  or '').strip()
+            artist = (row.get('artist') or row.get('author') or '').strip()
+            key = f'wattpad_story:{_cp_normalize(f"{title} {artist}")}'
+            _stamp_stream_estimate(row, items_lookup.get(key),
+                                     platform_key=platform_key,
+                                     kind_hint='wattpad_story')
+
+
+def _annotate_goodreads_with_streams(goodreads_trending: dict,
+                                       estimates: dict) -> None:
+    """Attach `us_streams` (weekly US readers) to every Goodreads row.
+    Rows key by `goodreads_book:<normalized title + author>` in the
+    estimates snapshot (matches `_collect_goodreads`).
+
+    Single rail today (Most Read This Week), so a single platform
+    anchor tier - the community weekly-read count that already drives
+    the Most-Read-This-Week ordering itself. Kept in its own kind so
+    a title that also charts on Amazon / Apple / Audible / Libby
+    doesn't cross-contaminate anchor tiers.
+    """
+    if not goodreads_trending:
+        return
+    items_lookup = (estimates or {}).get('items') or {}
+    for panel_slug, panel in (goodreads_trending or {}).items():
+        platform_key = _GOODREADS_PANEL_TO_PLATFORM.get(panel_slug, '')
+        if not platform_key:
+            continue
+        for row in (panel or {}).get('items') or []:
+            title  = (row.get('title')  or '').strip()
+            artist = (row.get('artist') or row.get('author') or '').strip()
+            key = f'goodreads_book:{_cp_normalize(f"{title} {artist}")}'
+            _stamp_stream_estimate(row, items_lookup.get(key),
+                                     platform_key=platform_key,
+                                     kind_hint='goodreads_book')
 
 
 def _annotate_comics_with_streams(comics_charts: dict,
@@ -6467,6 +6565,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'comics_charts':       lambda: _read_snapshot('comics_charts',      asof),
             'film_ticketing':      lambda: _read_snapshot('film_ticketing',     asof),
             'libby_trends':        lambda: _read_snapshot('libby_trends',       asof),
+            'wattpad_charts':      lambda: _read_snapshot('wattpad_charts',     asof),
+            'goodreads_charts':    lambda: _read_snapshot('goodreads_charts',   asof),
             'philanthropy_news':   lambda: _read_snapshot('philanthropy_news',  asof),
             'business_news':       lambda: _read_snapshot('business_news',      asof),
             'wall_street_news':    lambda: _read_snapshot('wall_street_news',   asof),
@@ -6502,6 +6602,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'comics_charts':       lambda: _read_snapshot('comics_charts'),
             'film_ticketing':      lambda: _read_snapshot('film_ticketing'),
             'libby_trends':        lambda: _read_snapshot('libby_trends'),
+            'wattpad_charts':      lambda: _read_snapshot('wattpad_charts'),
+            'goodreads_charts':    lambda: _read_snapshot('goodreads_charts'),
             'philanthropy_news':   lambda: _read_snapshot('philanthropy_news'),
             'business_news':       lambda: _read_snapshot('business_news'),
             'wall_street_news':    lambda: _read_snapshot('wall_street_news'),
@@ -6599,6 +6701,24 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     libby_snap    = results.get('libby_trends') or {}
     libby_trends  = libby_snap.get('sources') or {}
 
+    # Wattpad serialized fiction (Hot + Originals + 4 genre rails).
+    # Six panels: wattpad_hot, wattpad_originals, wattpad_romance,
+    # wattpad_teen_fiction, wattpad_fanfiction, wattpad_fantasy. Rides
+    # inside the Books tab as a sixth source alongside Amazon / Apple
+    # / Audible / Libby (all serialized-fiction, not a full ebook, so
+    # placed after Libby).
+    wattpad_snap  = results.get('wattpad_charts') or {}
+    wattpad_trending = wattpad_snap.get('sources') or {}
+
+    # Goodreads community-driven weekly-read rail. Single panel today
+    # ('goodreads_most_read' = 'Most Read Books This Week In The
+    # United States'). Rides inside the Books tab alongside Amazon /
+    # Apple / Audible / Libby / Wattpad; positioned in the pill strip
+    # right after Amazon Kindle so the community signal reads
+    # adjacent to the retail signal it summarizes.
+    goodreads_snap     = results.get('goodreads_charts') or {}
+    goodreads_trending = goodreads_snap.get('sources') or {}
+
     # Philanthropy news snapshot -> combined list + per-source split.
     # Frontend picks how to slice; both shapes travel in the payload.
     phil_snap        = results.get('philanthropy_news') or {}
@@ -6676,6 +6796,30 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         {'sources': libby_trends},
         stream_estimates_snap,
     )
+    # Wattpad rides on the Books tab as a sixth source. Every rail
+    # (Hot / Originals / four genres) rolls up to the same `wattpad`
+    # platform anchor tier in stream_estimates because a story is
+    # the same story regardless of which rail it charted on. Keyed
+    # `wattpad_story:<title author>` in the estimates snapshot.
+    _annotate_wattpad_with_streams(wattpad_trending, stream_estimates_snap)
+    # Goodreads community-driven weekly-read rail. Single panel
+    # (Most Read This Week) that anchors to its own kind
+    # (`goodreads_book`) so a title that also charts on Amazon /
+    # Apple / Audible / Libby doesn't cross-contaminate estimates.
+    _annotate_goodreads_with_streams(goodreads_trending, stream_estimates_snap)
+
+    # Merge Wattpad's six panels + Goodreads's Most-Read-This-Week
+    # panel into the Books tab's `books_trending` dict so the
+    # frontend renders them as sub-pills of the Books source strip
+    # alongside Amazon / Apple / Audible / Libby. The exporter picks
+    # each panel's `label` verbatim so the CSV emits e.g.
+    # "Wattpad - Hot Stories" / "Goodreads - Most Read This Week"
+    # as section headers.
+    books_trending_merged = dict(book_charts)
+    for _wp_slug, _wp_panel in (wattpad_trending or {}).items():
+        books_trending_merged[_wp_slug] = _wp_panel
+    for _gr_slug, _gr_panel in (goodreads_trending or {}).items():
+        books_trending_merged[_gr_slug] = _gr_panel
     # Comics: same three-source (Amazon Comics / Apple Books Comics /
     # Libby Comics) card layout as the Books tab, but each row lands
     # in a comics-only platform anchor tier (see
@@ -6803,7 +6947,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'wikipedia_trending':             wikipedia_trending,
             'music_trending':                 music_charts,
             'podcasts_trending':              podcast_charts,
-            'books_trending':                 book_charts,
+            'books_trending':                 books_trending_merged,
             'comics_trending':                comics_charts,
             'films_ticketing':                film_sources,
             'libby_trending':                 libby_trends,
@@ -6865,11 +7009,15 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                   for k in ('apple', 'spotify', 'amazon', 'audible')),
             # Libby folds into the Books tab as three sibling cards
             # (Popular eBooks / Audiobooks / Magazines), so its item
-            # counts roll into `books` for the tab badge.
+            # counts roll into `books` for the tab badge. Goodreads
+            # adds one community-driven weekly-read rail on the same
+            # tab; count it too.
             'books':         (sum(len(((book_charts.get(k) or {}).get('items') or []))
                                   for k in ('amazon', 'apple', 'audible', 'spotify')) +
                               sum(len(((libby_trends.get(k) or {}).get('items') or []))
-                                  for k in ('ebook', 'audiobook', 'magazine'))),
+                                  for k in ('ebook', 'audiobook', 'magazine')) +
+                              sum(len(((goodreads_trending.get(k) or {}).get('items') or []))
+                                  for k in (goodreads_trending or {}))),
             'comics':        sum(len(((comics_charts.get(k) or {}).get('items') or []))
                                   for k in ('amazon_kindle', 'apple_comics', 'libby_comics')),
             'films':         sum(len(((film_sources.get(k) or {}).get('items') or []))
