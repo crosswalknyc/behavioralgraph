@@ -146389,9 +146389,13 @@ https://www.instagram.com/p/..."></textarea>
                     const medianAge = (typeof calculateMedianAgeFromDistribution === 'function' && p.demographics?.age)
                         ? calculateMedianAgeFromDistribution(p.demographics.age) : 0;
                     const displayTitle = getProfileDisplayTitle(openTab.name, p.brandCategory, p.behavioral, openTab.displayOverride);
+                    // Compare tab shows content titles WITHOUT the streaming-platform
+                    // suffix (e.g. "Golden Girls Viewers" not "... - Hulu/Disney+").
+                    const _platSuffix1 = getEffectivePlatformForTitle(p.brandCategory, p.behavioral, openTab.displayOverride);
+                    const displayTitleNoPlatform = (_platSuffix1 && displayTitle.endsWith(' - ' + _platSuffix1)) ? displayTitle.slice(0, -(3 + _platSuffix1.length)) : displayTitle;
                     const profileData = {
                         id: openTab.id,
-                        name: displayTitle.toUpperCase(),
+                        name: displayTitleNoPlatform.toUpperCase(),
                         color: profileColors[idx % profileColors.length],
                         sampleSize: p.sampleSize,
                         projectedUS: p.projectedUS,
@@ -146438,10 +146442,13 @@ https://www.instagram.com/p/..."></textarea>
                         const displayName = data.brand || (profile ? getProfileFullName(profile) : id.split('_')[0]);
                         // Same title as dashboard for SERIES (e.g. "Cobra Kai - Netflix")
                         const displayTitle = getProfileDisplayTitle(displayName, parsed.brandCategory, parsed.behavioral, data.display_override);
+                        // Compare tab shows content titles WITHOUT the streaming-platform suffix.
+                        const _platSuffix2 = getEffectivePlatformForTitle(parsed.brandCategory, parsed.behavioral, data.display_override);
+                        const displayTitleNoPlatform = (_platSuffix2 && displayTitle.endsWith(' - ' + _platSuffix2)) ? displayTitle.slice(0, -(3 + _platSuffix2.length)) : displayTitle;
                         
                         const profileData = {
                             id: id,
-                            name: displayTitle.toUpperCase(),
+                            name: displayTitleNoPlatform.toUpperCase(),
                             color: profileColors[idx % profileColors.length],
                             sampleSize: parsed.sampleSize,
                             projectedUS: parsed.projectedUS,
