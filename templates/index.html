@@ -25172,7 +25172,7 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-fast-kind.tv   { background: rgba(168,85,247,0.18); color: #c4b5fd; }
             #trendsIQView .tiq-fast-year { font-size: 0.75rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.3rem; }
             #trendsIQView .tiq-fast-genres { margin-top: 0.15rem; font-size: 0.7rem; color: var(--text-secondary); opacity: 0.75; }
-            #trendsIQView .tiq-audience-chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.68rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: rgba(129, 140, 248, 0.14); color: #c7d2fe; border: 1px solid rgba(129, 140, 248, 0.22); font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; }
+            #trendsIQView .tiq-audience-chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.68rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: rgba(129, 140, 248, 0.14); color: #c7d2fe; border: 1px solid rgba(129, 140, 248, 0.22); font-weight: 600; letter-spacing: 0.01em; white-space: normal; max-width: 100%; flex-wrap: wrap; }
             #trendsIQView .tiq-audience-delta { font-weight: 700; margin-left: 0.15rem; }
             #trendsIQView .tiq-audience-delta.up   { color: #86efac; }
             #trendsIQView .tiq-audience-delta.down { color: #fca5a5; }
@@ -52648,6 +52648,11 @@ https://www.instagram.com/p/..."></textarea>
             if (!us || !us.us_estimate || us.us_estimate <= 0) return '';
             var num  = _tiqCompactNum(us.us_estimate);
             var unit = us.unit_label || 'weekly US views';
+            // The pill shows a concise unit; a long trailing parenthetical
+            // (e.g. trending-people "weekly US individuals (searched, read
+            // news, watched, ...)") is dropped from the visible chip so it
+            // stays compact, but kept in full in the hover tooltip below.
+            var unitShort = unit.replace(/\s*\([^)]*\)\s*$/, '');
             var arrow = '';
             if (typeof us.delta_pct === 'number' && us.delta_pct !== 0 && us.direction) {
                 var pct = Math.round(Math.abs(us.delta_pct) * 100);
@@ -52667,7 +52672,7 @@ https://www.instagram.com/p/..."></textarea>
             if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
             var tip = _tiqEsc(tipParts.join(' \u2014 '));
             return '<span class="tiq-audience-chip" title="' + tip + '">' +
-                   '\uD83D\uDC65 ' + _tiqEsc(num) + ' ' + _tiqEsc(unit) +
+                   '\uD83D\uDC65 ' + _tiqEsc(num) + ' ' + _tiqEsc(unitShort) +
                    arrow + '</span>';
         }
 
