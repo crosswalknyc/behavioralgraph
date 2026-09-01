@@ -722,6 +722,154 @@ def _collect_comics(max_items: int = _MAX_COMIC_ITEMS) -> list[dict]:
     return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
 
 
+_MAX_SEARCH_TERM_ITEMS     = 400
+_MAX_TRENDING_PERSON_ITEMS = 60
+_MAX_WIKI_TOPIC_ITEMS      = 60
+
+
+def _score_to_interest_100(score: int) -> int:
+    """The `google_wide` snapshot's `score` field is an internal
+    proxy (weighted mention count, can run into the hundreds of
+    thousands). The dashboard chip is anchored to Google Trends'
+    canonical 0-100 interest score. Compress the score into that
+    band via a log-tapered mapping so low-signal queries stay near
+    the bottom of the band and top-of-day breakouts hit 90-100."""
+    try:
+        s = int(score or 0)
+    except (TypeError, ValueError):
+        return 0
+    if s <= 0:
+        return 0
+    if s >= 200_000:
+        return 100
+    if s >= 100_000:
+        return 90
+    if s >= 40_000:
+        return 75
+    if s >= 15_000:
+        return 60
+    if s >= 5_000:
+        return 45
+    if s >= 1_500:
+        return 30
+    if s >= 500:
+        return 20
+    if s >= 100:
+        return 10
+    return 5
+
+
+def _collect_search_terms(max_items: int = _MAX_SEARCH_TERM_ITEMS) -> list[dict]:
+    """Union trending search queries from `google_wide` (the wide
+    aggregation from Hetzner) so every currently-trending US query
+    surfaces with a weekly-searchers estimate."""
+    snap = _read_snapshot('google_wide')
+    if not snap:
+        return []
+    per: dict[str, dict] = {}
+    rows = snap.get('national') or []
+    for i, r in enumerate(rows):
+        term = (r.get('term') or '').strip()
+        if not term:
+            continue
+        key = _cp_normalize(term)
+        if not key or key in per:
+            continue
+        related = list(r.get('related') or [])[:5]
+        per[key] = {
+            'kind':               'search_term',
+            'display_title':      term,
+            'artist':             '',
+            'best_rank':          i + 1,
+            'chart_labels':       ['Google Trends (US)'],
+            'interest_score':     _score_to_interest_100(r.get('score')),
+            'volume_growth_pct':  int(r.get('volume_growth_pct') or 0),
+            'category':           r.get('category') or '',
+            'related':            related,
+        }
+    return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
+
+
+def _collect_trending_people(max_items: int = _MAX_TRENDING_PERSON_ITEMS) -> list[dict]:
+    """Union trending people from today's `gdelt-people` snapshot
+    (falls back to the most recent snapshot within the past 7 days
+    when today's isn't written yet). Wikipedia daily pageviews
+    ride along so the prompt can anchor to the strongest single
+    signal we have for lesser-known names."""
+    people_rows: list[dict] = []
+    for days_back in range(0, 8):
+        d = date.today() - timedelta(days=days_back)
+        key = f'{_S3_DATED.format(date=d.isoformat())}gdelt-people.json'
+        try:
+            obj = _s3().get_object(Bucket=_S3_BUCKET, Key=key)
+            data = json.loads(obj['Body'].read().decode('utf-8'))
+        except Exception:
+            continue
+        if isinstance(data, dict):
+            rows = data.get('national') or []
+        else:
+            rows = data or []
+        if rows:
+            people_rows = rows
+            break
+    per: dict[str, dict] = {}
+    for i, r in enumerate(people_rows):
+        name = (r.get('name') or '').strip()
+        if not name:
+            continue
+        key = _cp_normalize(name)
+        if not key or key in per:
+            continue
+        # gdelt-people persists `pageviews` as a total (not per-day).
+        # trends_iq's `_write_history_snapshots` writes whatever
+        # `wikipedia_pageviews` returned (lookback_days rolled up).
+        # Convert to a daily average so the prompt anchor formula is
+        # consistent. Assume 7-day window when no explicit day count.
+        pv_total = int(r.get('pageviews') or 0)
+        wiki_daily = int(pv_total / 7) if pv_total else 0
+        per[key] = {
+            'kind':                 'trending_person',
+            'display_title':        name,
+            'artist':               '',
+            'best_rank':            i + 1,
+            'chart_labels':         ['Trending People (US)'],
+            'wiki_daily_pageviews': wiki_daily,
+            'news_mentions':        int(r.get('mentions') or 0),
+        }
+    return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
+
+
+def _collect_wiki_topics(max_items: int = _MAX_WIKI_TOPIC_ITEMS) -> list[dict]:
+    """Union trending Wikipedia entries from `wikipedia_trending`
+    (both people and non-people). The trending-people collector
+    handles the person subset via a stronger cross-source signal,
+    but every Wikipedia entry that renders on the dashboard should
+    also carry a chip - `wiki_topic` covers the ones that never
+    made the news / search pool."""
+    snap = _read_snapshot('wikipedia_trending')
+    if not snap:
+        return []
+    per: dict[str, dict] = {}
+    for i, r in enumerate(snap.get('national') or []):
+        title = (r.get('title') or '').strip()
+        if not title:
+            continue
+        key = _cp_normalize(title)
+        if not key or key in per:
+            continue
+        desc = (r.get('description') or '').strip()
+        per[key] = {
+            'kind':                 'wiki_topic',
+            'display_title':        title,
+            'artist':               desc,
+            'best_rank':            i + 1,
+            'chart_labels':         ['Wikipedia Trending (US)'],
+            'wiki_daily_pageviews': int(r.get('views_today') or 0),
+            'wiki_description':     desc,
+        }
+    return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
+
+
 def _lookup_key(kind: str, display_title: str, artist: str = '') -> str:
     """Storage key for an item. Podcasts/streaming key by title;
     songs key by (title + artist) because titles collide across
@@ -747,6 +895,21 @@ def _lookup_key(kind: str, display_title: str, artist: str = '') -> str:
         return f'fast_channel:{plat}:{_cp_normalize(display_title)}'
     if kind in ('film', 'tv', 'title'):
         return f'{kind}:{_cp_normalize(display_title)}'
+    if kind == 'search_term':
+        # Search queries collide by title only in rare cases (e.g.
+        # multiple sources ranking the same query); key by normalized
+        # query text so cross-source rows dedupe.
+        return f'search_term:{_cp_normalize(display_title)}'
+    if kind == 'trending_person':
+        # Person names collide by title only in rare cases (e.g.
+        # actor + politician named "Chris Cooper"). Keying by
+        # normalized full name is fine for the currently-trending
+        # window: at most one Chris Cooper is trending in a week.
+        return f'trending_person:{_cp_normalize(display_title)}'
+    if kind == 'wiki_topic':
+        # Wikipedia entry titles are already unique globally, so a
+        # normalized entry title is a safe key.
+        return f'wiki_topic:{_cp_normalize(display_title)}'
     return f'{kind}:{_cp_normalize(display_title)}'
 
 
@@ -1560,6 +1723,101 @@ _GAMING_PLATFORMS_META = [
 ]
 
 
+# Search terms + trending people + wiki topics + fused-trending headline
+# rows. These are audience-interest counts, NOT sales/streams. The
+# metric is "weekly US individuals who searched for OR read about the
+# subject in the past 7 days" - a blend of Google search volume, news-
+# mention exposure, and Wikipedia pageview interest that all funnel
+# into the same underlying "engaged audience of the topic" number.
+#
+# One platform per kind because there's only one measurable surface for
+# each: Google/Bing/DuckDuckGo aggregate to one search-audience count;
+# news pickup + Wikipedia pageviews aggregate to one people-audience
+# count. Ceilings match the US adult population (~260M) so a genuinely
+# universal topic (Grand Canyon flood, Trump ruling) has headroom.
+_SEARCH_TERM_PLATFORMS = [
+    {'key': 'search_audience',
+     'label': 'Weekly US searchers',
+     'ceiling': 60_000_000,
+     'anchors': (
+         "Weekly US individuals who searched for this query on Google "
+         "or a comparable engine in the past 7 days. Anchor to the "
+         "trendspy Google Trends interest-score band (0-100, where 100 "
+         "= a top-of-day breakout query) and typical US weekly search "
+         "volume tiers: score 90-100 + volume 500K+ -> 8-30M weekly US "
+         "searchers (Super Bowl weekend, iPhone launch tier); score "
+         "70-89 -> 2-8M; score 50-69 -> 500K-2M; score 30-49 -> "
+         "100-500K; score <30 -> 20-100K. Multiply UP by volume_growth_pct "
+         "when a query is a fresh breakout (200%+ growth = 1.4-1.8x the "
+         "band midpoint). Multiply DOWN when a query is stale (score "
+         "trending flat + no news pickup = 0.6-0.8x). Category matters: "
+         "sports team matchups spike hard for one weekend then decay "
+         "(overweight); political/court-ruling queries have longer "
+         "readership tails; celebrity-death queries spike then fade "
+         "within 48h. Anchor sources: Google Trends US volume bands "
+         "(SimilarWeb + Semrush cross-check), Comscore Media Metrix "
+         "search-audience reports, Chartbeat + Parse.ly homepage-refer "
+         "shares for the top news queries."
+     )},
+]
+
+_TRENDING_PERSON_PLATFORMS = [
+    {'key': 'audience_interest',
+     'label': 'Weekly US audience interest',
+     'ceiling': 80_000_000,
+     'anchors': (
+         "Weekly US individuals who searched for, read a news article "
+         "about, watched a video of, or read the Wikipedia entry for "
+         "this person in the past 7 days. This is an interest funnel "
+         "count, not a fan count. Anchor to Wikipedia English-project "
+         "US pageview share (~55-70% of English-Wikipedia traffic is "
+         "US); Comscore Media Metrix person-topic reach; Chartbeat + "
+         "Parse.ly per-name reader counts from the daily news pickup; "
+         "SimilarWeb search-audience for the person's name query. "
+         "Tiers: household-name celebrity in a major news moment "
+         "(Trump, Elon, Taylor Swift album drop, world-champion athlete "
+         "in their sport's peak week) -> 25-80M weekly US individuals; "
+         "top-tier trending in their category (Aaron Judge in October, "
+         "Novak Djokovic at a Grand Slam, a Supreme Court justice on a "
+         "ruling day, an actor with a major theatrical release) -> "
+         "5-25M; mid-tier trending person (a niche podcast host with a "
+         "viral moment, a state-level politician in a national news "
+         "cycle, a chef with a New York Times profile) -> 800K-5M; "
+         "long-tail trending (a local-news figure, a business exec in "
+         "their industry press only, an athlete off-season) -> 100K-800K. "
+         "Wikipedia pageview lookups (accessible via the pageviews API) "
+         "are the strongest single anchor for lesser-known names - "
+         "convert daily pageviews to weekly US individuals via: "
+         "weekly_us = daily_pageviews * 7 * 0.60 (US share) * 0.85 "
+         "(unique-per-week share of gross views)."
+     )},
+]
+
+_WIKI_TOPIC_PLATFORMS = [
+    {'key': 'audience_interest',
+     'label': 'Weekly US audience interest',
+     'ceiling': 60_000_000,
+     'anchors': (
+         "Weekly US individuals who visited this Wikipedia entry, "
+         "searched for the entity, or read a news article about it "
+         "in the past 7 days. Wikipedia trending surfaces both people "
+         "and non-people entities (events, places, organizations, "
+         "franchises, songs, films), so anchor by category: household-"
+         "name topic in a peak news moment (a chart-topping film's "
+         "Wikipedia entry, a state visit, a Supreme Court ruling) -> "
+         "10-40M weekly US; a well-known topic mid-cycle (Yellowstone, "
+         "Everest, NASA mission) -> 1-8M; niche or historical topic "
+         "with fresh news pickup (a scientist rediscovered in a news "
+         "cycle, a lesser-known battle referenced in current events) -> "
+         "300K-2M; long-tail topics with limited outside coverage -> "
+         "40-300K. Anchor: Wikipedia pageview API US-share (~55-70%), "
+         "Wikipedia Statistics dashboards, Chartbeat topic-reader data. "
+         "Weekly conversion: weekly_us_readers = daily_pageviews * 7 * "
+         "0.60 (US share) * 0.85 (unique-per-week share of gross views)."
+     )},
+]
+
+
 def _platforms_for_kind(kind: str) -> list[dict]:
     if kind == 'song':
         return _SONG_PLATFORMS
@@ -1577,6 +1835,12 @@ def _platforms_for_kind(kind: str) -> list[dict]:
         return _BOOK_PLATFORMS
     if kind == 'comic':
         return _COMICS_PLATFORMS
+    if kind == 'search_term':
+        return _SEARCH_TERM_PLATFORMS
+    if kind == 'trending_person':
+        return _TRENDING_PERSON_PLATFORMS
+    if kind == 'wiki_topic':
+        return _WIKI_TOPIC_PLATFORMS
     return []
 
 
@@ -1736,6 +2000,38 @@ def _build_prompt(item: dict) -> str:
         query = (f'"{display_title} podcast" Podtrac US weekly '
                  f'listeners Edison Podcast Metrics 2026')
         item_line = f'PODCAST TITLE: {display_title}\nPUBLISHER: {artist or "(unknown)"}'
+        # If a podcast row's chart labels come from YouTube ONLY (no
+        # Apple / Spotify / Amazon Music / Audible / Netflix in the
+        # label set), treat it as a YouTube-native video podcast. Many
+        # of these (Rotten Mango, Dr. Insanity, Lawyer You Know,
+        # Nightcap, MeidasTouch, Kill Tony, Diary of a CEO, ShxtsNGigs,
+        # ...) never appear on Podtrac or Edison rankings because those
+        # rankers were audio-only for years; the show is real and
+        # measurable via its YouTube channel. Anchor to the channel
+        # subscriber count + weekly views on the podcast-episode
+        # uploads, using the youtube_podcasts platform block below. Do
+        # NOT return 0 for youtube_podcasts on these rows just because
+        # Podtrac/Edison have no entry.
+        yt_only = ('youtube_podcasts' in focus_keys
+                   and not (focus_keys & {'apple', 'spotify', 'amazon',
+                                          'audible', 'netflix'}))
+        if yt_only:
+            query = (f'"{display_title}" YouTube channel subscribers '
+                     f'weekly views podcast episodes 2026')
+            item_line += (
+                '\nYOUTUBE-EXCLUSIVE ROUTING: this show appears ONLY on '
+                'the YouTube Popular Podcasts ranker. Anchor the '
+                'youtube_podcasts number to the show\'s YouTube channel '
+                'subscriber base + typical weekly views on new episode '
+                'uploads (weekly_us ~= 0.15-0.30 x weekly video views on '
+                'the channel, then multiply by US share ~0.55-0.75 for '
+                'US-native shows). Return 0 for apple/spotify/amazon/'
+                'audible/netflix - those platforms don\'t carry this '
+                'show - but DO return a defensible number for '
+                'youtube_podcasts. Do not return 0 across the board just '
+                'because Podtrac / Edison don\'t list this show; the '
+                'ranker itself is proof the show has meaningful US reach.'
+            )
     elif kind == 'song':
         unit  = 'weekly US streams'
         query = (f'"{display_title}" "{artist}" Luminate US streams '
@@ -1934,6 +2230,113 @@ def _build_prompt(item: dict) -> str:
                           f'LA County holds: {raw_holds:,}')
         libby_note = '\n' + _LIBBY_PROJECTION_NOTE.replace(
             'libby_ebook and libby_audio', 'libby_comics')
+    elif kind == 'search_term':
+        unit  = ('weekly US searchers (unique US individuals who '
+                 'searched for this query on Google or a comparable '
+                 'engine in the past 7 days)')
+        query = (f'"{display_title}" Google Trends US weekly search '
+                 f'volume Semrush SimilarWeb 2026')
+        interest = item.get('interest_score')
+        growth = item.get('volume_growth_pct')
+        category = item.get('category') or ''
+        signal_lines = []
+        if interest is not None:
+            signal_lines.append(
+                f'GOOGLE TRENDS INTEREST SCORE (0-100, higher = hotter '
+                f'right now): {interest}'
+            )
+        if growth is not None:
+            signal_lines.append(
+                f'WEEK-OVER-WEEK VOLUME GROWTH: {growth}% '
+                f'(triple-digit growth = fresh breakout, apply the '
+                f'1.4-1.8x multiplier from the anchor guidance)'
+            )
+        if category:
+            signal_lines.append(f'CATEGORY: {category}')
+        signal_str = ('\n' + '\n'.join(signal_lines)) if signal_lines else ''
+        item_line = (
+            f'SEARCH QUERY: {display_title}{signal_str}\n'
+            f'REASONING GUIDANCE: this is a trending search query. '
+            f'The metric is unique US individuals who searched for '
+            f'this query in the past 7 days, NOT total impressions or '
+            f'clicks. Anchor to the interest-score band above; use '
+            f'the category and growth to shape the multiplier. Sports '
+            f'matchups spike hard for one weekend then decay. Political '
+            f'/ court-ruling queries have longer reader tails. '
+            f'Celebrity-death queries spike then fade within 48h.'
+        )
+    elif kind == 'trending_person':
+        unit  = ('weekly US audience interest (unique US individuals '
+                 'who searched for, read a news article about, watched '
+                 'a video of, or read the Wikipedia entry for this '
+                 'person in the past 7 days)')
+        query = (f'"{display_title}" Wikipedia pageviews US weekly news '
+                 f'coverage Chartbeat Parse.ly 2026')
+        role = artist or item.get('role') or ''
+        wiki_daily = item.get('wiki_daily_pageviews')
+        news_count = item.get('news_mentions')
+        signal_lines = []
+        if role:
+            signal_lines.append(f'ROLE / CATEGORY: {role}')
+        if wiki_daily:
+            signal_lines.append(
+                f'WIKIPEDIA DAILY PAGEVIEWS (English project, last 7-day '
+                f'avg): {int(wiki_daily):,}. Convert: weekly_us = '
+                f'daily * 7 * 0.60 (US share) * 0.85 (unique-per-week '
+                f'share of gross views).'
+            )
+        if news_count:
+            signal_lines.append(
+                f'NEWS MENTIONS (last 7 days, aggregated across US '
+                f'outlets): {int(news_count):,}. Use as a secondary '
+                f'signal - high mentions + high pageviews = broad '
+                f'news-cycle audience; low mentions + high pageviews '
+                f'= fan-driven or evergreen interest.'
+            )
+        signal_str = ('\n' + '\n'.join(signal_lines)) if signal_lines else ''
+        item_line = (
+            f'PERSON NAME: {display_title}{signal_str}\n'
+            f'REASONING GUIDANCE: this is a currently-trending person. '
+            f'The metric is US individuals who engaged with any '
+            f'information about them in the past 7 days (search + news '
+            f'read + Wikipedia lookup + video view - deduped to unique '
+            f'individuals). This is an interest funnel, not a fan count. '
+            f'Use the Wikipedia pageview signal as the strongest single '
+            f'anchor when present; otherwise anchor to the role/category '
+            f'tiers in the platform guidance.'
+        )
+    elif kind == 'wiki_topic':
+        unit  = ('weekly US audience interest (unique US individuals '
+                 'who visited this Wikipedia entry, searched for the '
+                 'entity, or read a news article about it in the past '
+                 '7 days)')
+        query = (f'"{display_title}" Wikipedia pageviews US weekly news '
+                 f'coverage 2026')
+        wiki_daily = item.get('wiki_daily_pageviews')
+        wiki_desc = artist or item.get('wiki_description') or ''
+        signal_lines = []
+        if wiki_desc:
+            signal_lines.append(f'WIKIPEDIA SHORT DESCRIPTION: {wiki_desc}')
+        if wiki_daily:
+            signal_lines.append(
+                f'WIKIPEDIA DAILY PAGEVIEWS (English project, last 7-day '
+                f'avg): {int(wiki_daily):,}. Convert: weekly_us = '
+                f'daily * 7 * 0.60 (US share) * 0.85 (unique-per-week '
+                f'share of gross views). Adjust down if the topic is '
+                f'primarily non-US in scope; adjust up if the topic is '
+                f'in a peak news moment where non-Wikipedia readership '
+                f'(news + search) exceeds Wikipedia readership.'
+            )
+        signal_str = ('\n' + '\n'.join(signal_lines)) if signal_lines else ''
+        item_line = (
+            f'WIKIPEDIA TRENDING TOPIC: {display_title}{signal_str}\n'
+            f'REASONING GUIDANCE: this is a trending Wikipedia entry. '
+            f'The metric is US individuals who read the entry, searched '
+            f'for the entity, or read a news article about it in the '
+            f'past 7 days - a blended interest funnel. Use the Wikipedia '
+            f'pageview conversion above as the strongest single anchor; '
+            f'add news + search overlay based on the topic category.'
+        )
     else:
         unit  = 'weekly US views'
         query = f'"{display_title}" weekly viewers US streaming 2026'
@@ -2039,6 +2442,12 @@ _MAX_ESTIMATE_BY_KIND = {
     # platform - there's no cross-platform aggregation for channels
     # the way there is for a title that runs on Roku + Tubi + Pluto.
     'fast_channel': 4_000_000,
+    # Search / person / wiki-topic - single-platform kinds. Ceiling
+    # matches the platform ceiling (search 60M / person 80M / topic
+    # 60M) because there is exactly one measurable surface per row.
+    'search_term':      60_000_000,
+    'trending_person':  80_000_000,
+    'wiki_topic':       60_000_000,
 }
 _CLAMP_TO_FRACTION = 0.4         # Bias clamped values conservative (was 0.5)
 
@@ -2067,6 +2476,10 @@ def _default_unit_for_kind(kind: str) -> str:
         return 'weekly US plays'
     if kind == 'fast_channel':
         return 'weekly US viewers'
+    if kind == 'search_term':
+        return 'weekly US searchers'
+    if kind in ('trending_person', 'wiki_topic'):
+        return 'weekly US audience'
     return 'weekly US views'
 
 
@@ -2491,7 +2904,8 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
     research each unique top item's US audience via Claude +
     web_search, and return the combined snapshot dict."""
     wanted = only or {'podcast', 'song', 'streaming', 'book', 'comic',
-                       'fast', 'fast_channel', 'gaming'}
+                       'fast', 'fast_channel', 'gaming',
+                       'search_term', 'trending_person', 'wiki_topic'}
 
     items: list[dict] = []
     if 'podcast' in wanted:
@@ -2510,6 +2924,12 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
         items.extend(_collect_fast_channels())
     if 'gaming' in wanted:
         items.extend(_collect_gaming())
+    if 'search_term' in wanted:
+        items.extend(_collect_search_terms())
+    if 'trending_person' in wanted:
+        items.extend(_collect_trending_people())
+    if 'wiki_topic' in wanted:
+        items.extend(_collect_wiki_topics())
 
     if not items:
         # Preserve prior snapshot so a no-op run (e.g. --only gaming
@@ -2528,7 +2948,8 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
 
     logger.info("stream_estimates: total unique items = %d "
                 "(podcast=%d, song=%d, streaming=%d, book=%d, comic=%d, "
-                "fast=%d, fast_channel=%d, gaming=%d)",
+                "fast=%d, fast_channel=%d, gaming=%d, "
+                "search=%d, person=%d, wiki=%d)",
                 len(items),
                 sum(1 for it in items if it['kind'] == 'podcast'),
                 sum(1 for it in items if it['kind'] == 'song'),
@@ -2537,7 +2958,10 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
                 sum(1 for it in items if it['kind'] == 'comic'),
                 sum(1 for it in items if it['kind'] in ('fast_film', 'fast_tv')),
                 sum(1 for it in items if it['kind'] == 'fast_channel'),
-                sum(1 for it in items if it['kind'] == 'game'))
+                sum(1 for it in items if it['kind'] == 'game'),
+                sum(1 for it in items if it['kind'] == 'search_term'),
+                sum(1 for it in items if it['kind'] == 'trending_person'),
+                sum(1 for it in items if it['kind'] == 'wiki_topic'))
 
     # Incremental behavior (two goals):
     #
@@ -2619,7 +3043,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--only', default='',
                         help='Comma-separated: podcast,song,streaming,book,'
-                              'comic,fast,fast_channel,gaming')
+                              'comic,fast,fast_channel,gaming,'
+                              'search_term,trending_person,wiki_topic')
     args = parser.parse_args()
     only = set()
     for tok in args.only.split(','):

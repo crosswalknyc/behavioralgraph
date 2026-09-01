@@ -2908,6 +2908,13 @@ _DEFAULT_UNIT_BY_KIND = {
     # 7 days. Not to be confused with `fast_film` / `fast_tv` which
     # are per-title reach on the same platforms.
     'fast_channel': 'weekly US viewers',
+    # Search / trending person / trending wiki topic. Weekly-US
+    # audience interest counts, not measured behavior on a specific
+    # platform - see `stream_estimates._SEARCH_TERM_PLATFORMS` /
+    # `_TRENDING_PERSON_PLATFORMS` / `_WIKI_TOPIC_PLATFORMS`.
+    'search_term':     'weekly US searchers',
+    'trending_person': 'weekly US audience',
+    'wiki_topic':      'weekly US audience',
 }
 
 # Per (kind, platform) unit label. Wins over Claude's aggregate
@@ -3133,7 +3140,10 @@ def _annotate_headlines_with_readers(trending_headlines: list,
                                        philanthropy_news: list,
                                        estimates: dict,
                                        business_news: Optional[list] = None,
-                                       wall_street_news: Optional[list] = None) -> None:
+                                       wall_street_news: Optional[list] = None,
+                                       philanthropy_by_source: Optional[dict] = None,
+                                       business_by_source: Optional[dict] = None,
+                                       wall_street_by_source: Optional[dict] = None) -> None:
     """Stamp `us_readers` on every headline row across the surfaces
     the Headlines tab renders:
       1. `trending_headlines`         - flat "top" list
@@ -3144,6 +3154,9 @@ def _annotate_headlines_with_readers(trending_headlines: list,
                                         (WSJ / Barron's / FT / Bloomberg
                                          / MarketWatch / CNBC Markets /
                                          IBD / Seeking Alpha / Reuters)
+      6. `philanthropy_by_source`     - {outlet_slug: [rows]} dict
+      7. `business_by_source`         - {outlet_slug: [rows]} dict
+      8. `wall_street_by_source`      - {outlet_slug: [rows]} dict
 
     All surfaces key by normalized title so a single Claude estimate
     powers every surface the article appears on. Missing snapshot
@@ -3174,6 +3187,15 @@ def _annotate_headlines_with_readers(trending_headlines: list,
         _stamp(row)
     for row in (wall_street_news or []):
         _stamp(row)
+    for _outlet_slug, rows in (philanthropy_by_source or {}).items():
+        for row in (rows or []):
+            _stamp(row)
+    for _outlet_slug, rows in (business_by_source or {}).items():
+        for row in (rows or []):
+            _stamp(row)
+    for _outlet_slug, rows in (wall_street_by_source or {}).items():
+        for row in (rows or []):
+            _stamp(row)
 
 
 # Tier order for Wall Street outlets when a row has no us_readers
@@ -3689,6 +3711,120 @@ def _annotate_comics_with_streams(comics_charts: dict,
                     # book-y).
                     fb['unit_label'] = 'weekly US library comic borrows'
                     row['us_streams'] = fb
+
+
+def _annotate_search_terms_with_audience(
+    trending_searches:       list[dict],
+    searches_by_category:    dict,
+    movers:                  dict,
+    estimates:               dict) -> None:
+    """Stamp `us_streams` (weekly US searchers) on every trending-
+    search row across the Search tab and every category bucket, plus
+    the Movers card (breakout/rising/falling/sustained). Keyed
+    `search_term:<normalized term>` in the estimates snapshot.
+
+    Rows that came from the fallback pools (headlines / people /
+    wiki / articles-by-source, stamped with an `origin` field by
+    `_augment_thin_buckets_from_pools`) are ALSO priced here - the
+    normalized key is the row's `title` when there is no `term`, so
+    the same estimate can serve a category card that was augmented
+    with a headline entry.
+    """
+    if not estimates:
+        return
+    items_lookup = (estimates or {}).get('items') or {}
+
+    def _stamp(row: dict) -> None:
+        raw = (row.get('term')
+               or row.get('query')
+               or row.get('title')
+               or '').strip()
+        if not raw:
+            return
+        key = f'search_term:{_cp_normalize(raw)}'
+        entry = items_lookup.get(key)
+        if entry:
+            _stamp_stream_estimate(row, entry, kind_hint='search_term')
+
+    for row in (trending_searches or []):
+        _stamp(row)
+    for _bucket, bucket_rows in (searches_by_category or {}).items():
+        for row in (bucket_rows or []):
+            _stamp(row)
+    for _bucket in ('breakout', 'rising', 'falling', 'sustained'):
+        for row in ((movers or {}).get(_bucket) or []):
+            _stamp(row)
+
+
+def _annotate_trending_people_with_audience(
+    trending_people:      list[dict],
+    wikipedia_trending:   list[dict],
+    estimates:            dict) -> None:
+    """Stamp `us_streams` (weekly US audience interest) on every
+    row of the Trending People card and the Wikipedia Trending
+    card.
+
+    Trending People rows key by `trending_person:<normalized name>`.
+    Wikipedia rows try `wiki_topic:<normalized title>` first and
+    then fall back to `trending_person:<normalized title>` because
+    many trending wiki entries are people (Aaron Donald, Kofi
+    Kingston, etc.).
+    """
+    if not estimates:
+        return
+    items_lookup = (estimates or {}).get('items') or {}
+
+    for row in (trending_people or []):
+        name = (row.get('name') or '').strip()
+        if not name:
+            continue
+        norm = _cp_normalize(name)
+        entry = (items_lookup.get(f'trending_person:{norm}')
+                 or items_lookup.get(f'wiki_topic:{norm}'))
+        if entry:
+            _stamp_stream_estimate(row, entry, kind_hint='trending_person')
+
+    for row in (wikipedia_trending or []):
+        title = (row.get('title') or '').strip()
+        if not title:
+            continue
+        norm = _cp_normalize(title)
+        entry = (items_lookup.get(f'wiki_topic:{norm}')
+                 or items_lookup.get(f'trending_person:{norm}'))
+        if entry:
+            _stamp_stream_estimate(row, entry, kind_hint='wiki_topic')
+
+
+def _annotate_fused_trending_with_audience(
+    fused_trending:    list[dict],
+    estimates:         dict) -> None:
+    """Stamp `us_streams` on every row of the Trending Overall
+    (fused) card.
+
+    Fused rows blend signals from Search + People + Wiki + Movers +
+    Music + Podcasts + Books + Films. The chip should reflect the
+    audience interest for the entity as a whole, so lookup priority
+    is: trending_person (if the entity is a person in today's
+    trending-people list) -> wiki_topic -> search_term. First hit
+    wins; rows with no hit stay chip-less.
+    """
+    if not estimates or not fused_trending:
+        return
+    items_lookup = (estimates or {}).get('items') or {}
+    for row in fused_trending or []:
+        name = (row.get('name') or row.get('display_name') or '').strip()
+        if not name:
+            continue
+        norm = _cp_normalize(name)
+        for prefix, hint in (
+            ('trending_person', 'trending_person'),
+            ('wiki_topic',      'wiki_topic'),
+            ('search_term',     'search_term'),
+        ):
+            entry = items_lookup.get(f'{prefix}:{norm}')
+            if entry:
+                _stamp_stream_estimate(row, entry, kind_hint=hint)
+                break
 
 
 def _annotate_cross_platform_moments(
@@ -6517,8 +6653,11 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     _annotate_headlines_with_readers(
         headlines, articles_by_source, philanthropy_news,
         headline_estimates_snap,
-        business_news    = business_news,
-        wall_street_news = wall_street_news)
+        business_news             = business_news,
+        wall_street_news          = wall_street_news,
+        philanthropy_by_source    = philanthropy_by_source,
+        business_by_source        = business_by_source,
+        wall_street_by_source     = wall_street_by_source)
 
     # Rank the Wall Street sub-tab so the single flat list reads
     # "most-read first" instead of stacking one publisher's block
@@ -6702,6 +6841,29 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         },
     }
 
+    # Search / People / Wiki audience-interest annotators. Same
+    # source of truth as the music / podcasts / streaming chips
+    # (`stream_estimates.json` in S3), but the new `search_term` /
+    # `trending_person` / `wiki_topic` kinds. Every row in the
+    # Search tab (overall + every category bucket), Movers, Trending
+    # People, and Wikipedia Trending gets a weekly-US-searchers /
+    # weekly-US-audience-interest chip.
+    try:
+        _annotate_search_terms_with_audience(
+            trending_searches,
+            searches_by_category,
+            movers,
+            stream_estimates_snap)
+    except Exception as e:
+        logger.warning("search-term audience annotate failed: %s", e)
+    try:
+        _annotate_trending_people_with_audience(
+            trending_people,
+            wikipedia_trending,
+            stream_estimates_snap)
+    except Exception as e:
+        logger.warning("trending-people audience annotate failed: %s", e)
+
     # Fused Trending feed - computed after the payload is assembled so
     # it can score every signal in one pass. Populated in-place on both
     # the `cards` and `counts` dicts.
@@ -6712,6 +6874,15 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
         fused = []
     payload['cards']['fused_trending'] = fused
     payload['counts']['trending']      = len(fused)
+
+    # Trending Overall audience chip - stamped AFTER the fused list is
+    # computed so every fused row can inherit from its underlying
+    # trending_person / wiki_topic / search_term estimate.
+    try:
+        _annotate_fused_trending_with_audience(
+            fused, stream_estimates_snap)
+    except Exception as e:
+        logger.warning("fused-trending audience annotate failed: %s", e)
 
     _cache_put(filters, payload)
     _write_history_snapshots(headlines, trending_people)
