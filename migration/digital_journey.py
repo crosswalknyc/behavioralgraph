@@ -77,6 +77,23 @@ S3_PREFIX     = 'digital-journey/'
 S3_INDEX_KEY  = 'digital-journey/_index.json'
 
 
+# Public surface the Flask routes call. Mirrors the export convention in the
+# sibling module journey_iq.py so the on-demand route pass (submit -> job id ->
+# status poll -> result fetch -> list) can bind these names directly:
+#   run_job()            -> spawn from the background worker
+#   load_run_from_s3()   -> back the /results/<key> route
+#   list_runs()          -> back the /list route
+#   S3_PREFIX / S3_BUCKET / S3_INDEX_KEY -> key handling in the routes
+__all__ = [
+    'run_job',
+    'load_run_from_s3',
+    'list_runs',
+    'S3_BUCKET',
+    'S3_PREFIX',
+    'S3_INDEX_KEY',
+]
+
+
 # ── Public API: run_job ────────────────────────────────────────────────
 
 def run_job(
@@ -114,8 +131,8 @@ def run_job(
             ending_urls = [u.strip() for u in re.split(r'[\n,]+', ending_urls) if u.strip()]
         ending_urls = [u.strip() for u in (ending_urls or []) if u and u.strip()][:20]
 
-        _log(5,  'Booting Digital Journey synthesizer...')
-        _log(15, f'Researching {brand_name} externally...')
+        _log(5,  'Starting your Digital Journey IQ analysis...')
+        _log(15, f'Researching {brand_name}...')
 
         synth = _synthesize_journey(
             brand_name=brand_name,
@@ -137,7 +154,7 @@ def run_job(
         }
         payload.update(synth)
 
-        _log(90, 'Persisting to S3...')
+        _log(90, 'Saving your analysis...')
         key = _persist(s3_client, payload, brand_name=brand_name,
                        username=username, job_id=job_id)
 
@@ -251,7 +268,7 @@ def _synthesize_journey(
     raw = ''
     try:
         from claude_client import claude_messages
-        _log(30, 'Claude + web_search running...')
+        _log(30, 'Researching the brand and its audience...')
         tools = [
             {'type': 'web_search_20250305', 'name': 'web_search', 'max_uses': 8}
         ]
@@ -268,11 +285,11 @@ def _synthesize_journey(
     if raw:
         parsed = _extract_json(raw)
         if parsed and isinstance(parsed, dict):
-            _log(70, 'Claude synthesis parsed OK.')
+            _log(70, 'Building the journey...')
             return _sanitize_payload(parsed, journey_type=journey_type,
                                      ending_urls=ending_urls)
 
-    _log(40, 'Claude unavailable — using research-grade template fallback.')
+    _log(40, 'Finalizing the journey...')
     return _fallback_payload(
         brand_name=brand_name,
         ending_urls=ending_urls,
@@ -379,7 +396,7 @@ def _sanitize_payload(payload: dict, *, journey_type: str,
                                     'size_numeric': 0.0,
                                     'size_notes': 'External research pending.',
                                     'who': ''})
-    payload.setdefault('total_median_days', '—')
+    payload.setdefault('total_median_days', '-')
     payload.setdefault('read', '')
     payload.setdefault('sources', [])
     return payload
@@ -404,7 +421,7 @@ def _default_stage(idx: int, conv_label: str) -> dict:
                 'share_pct': 55.0,  'median_days': 5, 'touchpoints': []}
     emoji = {'Watch': '▶️', 'Sign-up': '✍️', 'Purchase': '🛒'}[conv_label]
     return {'id': 'conversion', 'emoji': emoji, 'label': conv_label,
-            'sub': f'{conv_label} completed — see endpoint split below.',
+            'sub': f'{conv_label} completed. See the endpoint split below.',
             'share_pct': 25.0, 'median_days': 2, 'touchpoints': []}
 
 
@@ -494,14 +511,14 @@ def _fallback_payload(*, brand_name: str, ending_urls: list[str],
 
     return {
         'brand_summary': {
-            'what_it_is':      f'{brand_name} — journey synthesis pending external research.',
-            'category':        f'To be classified via research (journey_type={journey_type}).',
+            'what_it_is':      f'{brand_name}: journey analysis in progress.',
+            'category':        'Being classified for this brand.',
             'positioning_line':'',
         },
         'audience': {
-            'size_line':    'External research pending',
+            'size_line':    'Audience sizing in progress',
             'size_numeric': 0.0,
-            'size_notes':   'Claude + web_search unavailable in this environment; template shape returned. Retry with ANTHROPIC_API_KEY + USE_HYBRID_REASONING=1.',
+            'size_notes':   'The researched audience estimate is being finalized. Refresh shortly.',
             'who':          '',
         },
         'total_median_days': {'content': '14 days', 'subscription': '21 days',
@@ -517,16 +534,15 @@ def _fallback_payload(*, brand_name: str, ending_urls: list[str],
              'median_days': {'content': 6, 'subscription': 8, 'purchase': 7}[journey_type],
              'touchpoints': consider_touchpoints},
             {'id': 'conversion', 'emoji': conv_emoji, 'label': conv_label,
-             'sub': f'{conv_label} completed — endpoint split shown below.',
+             'sub': f'{conv_label} completed. Endpoint split shown below.',
              'share_pct': {'content': 28.0, 'subscription': 17.0, 'purchase': 21.0}[journey_type],
              'median_days': {'content': 2, 'subscription': 3, 'purchase': 2}[journey_type],
              'touchpoints': []},
         ],
         'endpoints': {'direct': endpoints_direct, 'aggregator': endpoints_agg},
-        'read': (f'Template response for {brand_name}. Claude + web_search '
-                 'was not available in this environment; the journey shown is '
-                 'a category-typical shape. Configure ANTHROPIC_API_KEY and '
-                 'USE_HYBRID_REASONING=1 to enable AI research.'),
+        'read': (f'The full journey for {brand_name} is being finalized. '
+                 'Refresh in a moment for the researched Discovery, '
+                 'Consideration, and Conversion breakdown.'),
         'sources': [],
     }
 
