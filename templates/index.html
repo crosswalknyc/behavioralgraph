@@ -53207,6 +53207,8 @@ https://www.instagram.com/p/..."></textarea>
                   tip: 'Comics: Best-selling comics, manga, and graphic novels across Amazon Comics & Graphic Novels, Apple Books, and Libby (LA County Library).' },
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺',
                   tip: 'Streaming: Daily Top-10 rankings on Netflix, Disney+, Hulu, Max, Prime Video, and ESPN+, split into Film and TV.' },
+                { key: 'broadway',  label: 'Broadway',         count: counts.broadway  || 0, icon: '🎭',
+                  tip: 'Broadway: Every currently-running Broadway show, ranked by weekly attendance. Also shows the sold-out percentage and week-over-week attendance change.' },
                 { key: 'films',     label: 'Films',            count: counts.films     || 0, icon: '🎬',
                   tip: 'Films: Top titles in theaters right now across Fandango, Cinemark, AMC, and Regal. Ranking on each platform reflects that platform\'s own front-page merchandising and sales density.' },
                 { key: 'fast',      label: 'FAST',             count: counts.fast      || 0, icon: '📡',
@@ -53247,6 +53249,7 @@ https://www.instagram.com/p/..."></textarea>
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
                 _renderTIQPanel('comics',    renderTIQComics(cards.comics_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
+                _renderTIQPanel('broadway',  renderTIQBroadway(cards.broadway_trending || {}, cards.broadway_week_ending || '')) +
                 _renderTIQPanel('films',     renderTIQFilms(cards.films_ticketing || {})) +
                 _renderTIQPanel('fast',      renderTIQFast(cards.fast_trending || {})) +
                 _renderTIQPanel('gaming',    renderTIQGaming(cards.gaming_trending || {})) +
@@ -53631,6 +53634,59 @@ https://www.instagram.com/p/..."></textarea>
             return out;
         }
 
+        function _tiqExportRowsBroadway(dict, tabLabel) {
+            // Broadway is a single-panel tab today (Weekly Attendance).
+            // One row per currently-running production. Change column
+            // carries weekly_change_attendance (%, derived from Playbill's
+            // week-over-week capacity delta), US Audience carries the
+            // native attendance integer, Why carries % capacity so the
+            // CSV keeps that context in a human-readable form without
+            // widening the 9-column header shape (see _TIQ_EXPORT_HEADERS).
+            var out = [];
+            Object.keys(dict || {}).forEach(function(slug) {
+                var panel = dict[slug] || {};
+                (panel.items || []).forEach(function(it, i) {
+                    var aud = _tiqExportAudience(it);
+                    var change = '';
+                    var wca = it.weekly_change_attendance;
+                    if (typeof wca === 'number') {
+                        var pct = Math.round(Math.abs(wca) * 1000) / 10;
+                        if (pct >= 0.1) {
+                            change = (wca > 0 ? '+' : '-') + pct + '%';
+                        } else {
+                            change = 'flat';
+                        }
+                    }
+                    var why = '';
+                    if (typeof it.pct_capacity === 'number') {
+                        why = 'capacity ' + Math.round(it.pct_capacity * 1000) / 10 + '%';
+                        if (typeof it.performances === 'number' && it.performances > 0) {
+                            why += ', ' + it.performances + ' perfs';
+                        }
+                        if (it.is_preview) why += ', in previews';
+                    }
+                    out.push({
+                        Tab: tabLabel,
+                        // Fixed section label per Jenna 2026-09-01: the
+                        // panel + CSV both read "Weekly Attendance" now
+                        // that dollar columns are dropped. If a future
+                        // rail lands (Off-Broadway, Broadway matinees,
+                        // etc.) it can use its own panel.label instead.
+                        Section: 'Broadway - Weekly Attendance',
+                        Rank: it.rank || (i + 1),
+                        Title: it.title || '',
+                        Subtitle: it.theatre || it.subtitle || '',
+                        Change: change,
+                        'US Audience': aud.value,
+                        'Audience Unit': aud.unit,
+                        Why: why,
+                        URL: it.url || ''
+                    });
+                });
+            });
+            return out;
+        }
+
         function _tiqExportRowsPanelDict(dict, tabLabel, sectionPrefix) {
             // Generic per-platform panel exporter used by Music /
             // Podcasts / Books / Films / Gaming (single-list per
@@ -53811,6 +53867,7 @@ https://www.instagram.com/p/..."></textarea>
                 case 'books':     return _tiqExportRowsBooks(cards, tabLabel);
                 case 'comics':    return _tiqExportRowsPanelDict(cards.comics_trending, tabLabel, '');
                 case 'streaming': return _tiqExportRowsFilmTvSplit(cards.streaming_trending || {}, tabLabel);
+                case 'broadway':  return _tiqExportRowsBroadway(cards.broadway_trending || {}, tabLabel);
                 case 'films':     return _tiqExportRowsPanelDict(cards.films_ticketing, tabLabel, '');
                 case 'fast':      return _tiqExportRowsFilmTvSplit(cards.fast_trending || {}, tabLabel);
                 case 'gaming':    return _tiqExportRowsGaming(cards.gaming_trending || {}, tabLabel);
@@ -53830,6 +53887,7 @@ https://www.instagram.com/p/..."></textarea>
             books:     'Books',
             comics:    'Comics',
             streaming: 'Streaming',
+            broadway:  'Broadway',
             films:     'Films',
             fast:      'FAST',
             gaming:    'Gaming',
@@ -53861,7 +53919,7 @@ https://www.instagram.com/p/..."></textarea>
             }
             var order = ['searches', 'movers', 'headlines', 'people',
                           'music', 'podcasts', 'books', 'comics', 'streaming',
-                          'films', 'fast', 'gaming', 'watchlist'];
+                          'broadway', 'films', 'fast', 'gaming', 'watchlist'];
             var all = [];
             order.forEach(function(k) {
                 all = all.concat(_tiqBuildRowsForTab(k, data.cards));
@@ -55663,7 +55721,17 @@ https://www.instagram.com/p/..."></textarea>
             var libbyKeys = ['ebook', 'audiobook', 'magazine'];
             var libby = libbySources || {};
             var libbyPresent = libbyKeys.filter(function(k) { return libby[k]; });
-            if (!storePresent.length && !libbyPresent.length) {
+            // Wattpad rides on the Books tab as a sixth source with
+            // six rails (Hot / Originals / Romance / Teen Fiction /
+            // Fanfiction / Fantasy). Panels sit inside `sources`
+            // (books_trending) alongside the store panels; we filter
+            // them out of the store loop and render them in a
+            // dedicated card below with a sub-pill strip.
+            var wattpadKeys = ['wattpad_hot', 'wattpad_originals',
+                               'wattpad_romance', 'wattpad_teen_fiction',
+                               'wattpad_fanfiction', 'wattpad_fantasy'];
+            var wattpadPresent = wattpadKeys.filter(function(k) { return sources[k]; });
+            if (!storePresent.length && !libbyPresent.length && !wattpadPresent.length) {
                 return '<div class="tiq-empty">Book charts are warming up. Check back later.</div>';
             }
 
@@ -55751,10 +55819,148 @@ https://www.instagram.com/p/..."></textarea>
                 return cardFor(libby[k] || {}, 'libby', 'libby-' + k, libbyLabelMap[k]);
             }).join('');
 
+            // Wattpad card: single wide card with a sub-pill strip
+            // (Hot / Originals / Romance / Teen Fiction / Fanfiction
+            // / Fantasy) and a single-column ranked list per active
+            // rail. Story rows carry rank + cover + title + author +
+            // genre badge + reads chip + weekly-US-readers chip.
+            var wattpadHtml = '';
+            if (wattpadPresent.length) {
+                var wattpadLabelMap = {
+                    'wattpad_hot':          'Hot Stories',
+                    'wattpad_originals':    'Originals',
+                    'wattpad_romance':      'Romance',
+                    'wattpad_teen_fiction': 'Teen Fiction',
+                    'wattpad_fanfiction':   'Fanfiction',
+                    'wattpad_fantasy':      'Fantasy',
+                };
+                window.__trendsIQ = window.__trendsIQ || {};
+                if (!window.__trendsIQ.activeWattpad ||
+                    wattpadPresent.indexOf(window.__trendsIQ.activeWattpad) === -1) {
+                    window.__trendsIQ.activeWattpad = wattpadPresent[0];
+                }
+                var activeWp = window.__trendsIQ.activeWattpad;
+
+                var subpills = wattpadPresent.map(function(k) {
+                    var active = (k === activeWp) ? ' active' : '';
+                    return '<div class="tiq-social-tab' + active + '"' +
+                           ' onclick="setTrendsIQWattpad(\'' + k + '\')">' +
+                           _tiqEsc(wattpadLabelMap[k] || k) + '</div>';
+                }).join('');
+
+                var wpRowsFor = function(items, sourceSlug) {
+                    return (items || []).map(function(it, i) {
+                        var img = _tiqPosterCell(it.cover_url || it.image);
+                        var storyUrl = it.story_url || it.url;
+                        var titleLine = storyUrl
+                            ? '<a href="' + _tiqEsc(storyUrl) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
+                            : _tiqEsc(it.title);
+                        var rowKey = (it.title || '') + ' - ' + (it.author || it.artist || sourceSlug);
+                        var meta = '';
+                        var authorName = it.author || it.artist;
+                        if (authorName) meta += '<span>by ' + _tiqEsc(authorName) + '</span>';
+                        if (it.wattpad_originals_flag) {
+                            meta += '<span class="tiq-badge">Original</span>';
+                        }
+                        if (it.is_completed) {
+                            meta += '<span class="tiq-badge">Completed</span>';
+                        }
+                        if (it.is_new) {
+                            meta += '<span class="tiq-badge">New</span>';
+                        }
+                        // Genre badge - only meaningful on Hot / Originals
+                        // rails; on genre-scoped rails the badge is
+                        // redundant so we suppress it.
+                        var suppressGenre = (sourceSlug === 'wattpad_romance' ||
+                                              sourceSlug === 'wattpad_teen_fiction' ||
+                                              sourceSlug === 'wattpad_fanfiction' ||
+                                              sourceSlug === 'wattpad_fantasy');
+                        if (it.genre_primary && !suppressGenre) {
+                            meta += '<span class="tiq-badge">' + _tiqEsc(it.genre_primary) + '</span>';
+                        }
+                        // Cumulative reads chip (secondary signal).
+                        // Reads is Wattpad's native all-time count.
+                        var readsVal = Number(it.reads);
+                        if (isFinite(readsVal) && readsVal > 0) {
+                            meta += '<span title="Cumulative all-time reads on Wattpad">' +
+                                    _tiqEsc(_tiqCompactNum(readsVal)) + ' reads</span>';
+                        }
+                        if (typeof it.votes === 'number' && it.votes > 0) {
+                            meta += '<span>' + _tiqEsc(_tiqCompactNum(it.votes)) + ' votes</span>';
+                        }
+                        if (typeof it.chapters === 'number' && it.chapters > 0) {
+                            meta += '<span>' + _tiqEsc(String(it.chapters)) + ' chapters</span>';
+                        }
+                        var audience = _tiqAudienceChip(it.us_streams);
+                        if (audience) meta += audience;
+                        return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                               '<div class="tiq-row-body">' +
+                               '<div class="tiq-row-title">' + titleLine +
+                               _tiqCrossPlatformBadge(it) +
+                               _tiqActions('book', sourceSlug, rowKey, rowKey, 'National') +
+                               '</div>' +
+                               (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
+                               '</div></div>';
+                    }).join('');
+                };
+
+                var wpPanel = sources[activeWp] || {};
+                var wpItems = wpPanel.items || [];
+                var wpLabel = wpPanel.label || wattpadLabelMap[activeWp] || activeWp;
+                var wpBody;
+                if (!wpPanel.available || !wpItems.length) {
+                    wpBody = '<div class="tiq-placeholder">' +
+                             '<div class="tiq-placeholder-title">' + _tiqEsc(wpLabel) + '</div>' +
+                             '<div>' + _tiqEsc(wpPanel.sub || 'Warming up.') + '</div>' +
+                             '</div>';
+                } else {
+                    wpBody = '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
+                             wpRowsFor(wpItems, activeWp) +
+                             '</div>';
+                }
+
+                wattpadHtml =
+                    '<div class="tiq-card" data-tiq-wattpad-card="1" style="margin-top:16px;">' +
+                    '<h4>WATTPAD</h4>' +
+                    '<div class="tiq-social-tabs" style="margin-bottom:12px;">' + subpills + '</div>' +
+                    '<div data-tiq-wattpad-body="1">' + wpBody + '</div>' +
+                    '</div>';
+            }
+
             return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' +
                    storeCards + libbyCards +
-                   '</div>';
+                   '</div>' + wattpadHtml;
         }
+
+        // Wattpad sub-pill handler. Flips the active rail and repaints
+        // just the Wattpad body inside the Books panel. Preserves the
+        // outer panel wrapper (which carries the active-tab class) and
+        // keeps the pill strip live via className toggles - no full
+        // Books-tab re-render needed.
+        window.setTrendsIQWattpad = function(key) {
+            window.__trendsIQ = window.__trendsIQ || {};
+            window.__trendsIQ.activeWattpad = key;
+            var books = (window.__trendsIQ.lastData &&
+                         window.__trendsIQ.lastData.cards &&
+                         window.__trendsIQ.lastData.cards.books_trending) || {};
+            var libby = (window.__trendsIQ.lastData &&
+                         window.__trendsIQ.lastData.cards &&
+                         window.__trendsIQ.lastData.cards.libby_trending) || {};
+            var panel = document.querySelector(
+                '#trendsIQPanels [data-tiq-panel="books"]');
+            if (panel && typeof renderTIQBooks === 'function') {
+                panel.innerHTML = renderTIQBooks(books, libby);
+                if (typeof _tiqApplyTooltips === 'function') {
+                    _tiqApplyTooltips();
+                }
+                if (typeof _tiqInstallCardSearches === 'function') {
+                    _tiqInstallCardSearches(panel);
+                }
+                if (typeof applyTrendsIQLens === 'function') {
+                    applyTrendsIQLens();
+                }
+            }
+        };
 
         // Comics renderer. Same three-source card layout as
         // renderTIQBooks (Amazon / Apple / Libby), but for the
@@ -56169,6 +56375,84 @@ https://www.instagram.com/p/..."></textarea>
         // and sales density. Atom Tickets was retired after the Regal
         // Next.js parser landed (Jenna 2026-07-29). Restored 2026-08-21
         // after the July 19 rollback removed the tab.
+        function renderTIQBroadway(sources, weekEnding) {
+            // Single-panel tab today: 'broadway_weekly_attendance'.
+            // Each row = one currently-running Broadway show. Primary
+            // chip = native attendance integer (rendered via
+            // _tiqAudienceChip from us_streams). Secondary chip =
+            // sold-out percentage. Tertiary chip = week-over-week
+            // attendance change (up/down/flat glyph + %).
+            var panel = (sources || {}).broadway_weekly_attendance || {};
+            var items = panel.items || [];
+            if (!items.length) {
+                return '<div class="tiq-empty">Broadway weekly attendance is warming up. Check back later.</div>';
+            }
+            var weLabel = weekEnding ? (' - Week ending ' + _tiqEsc(weekEnding)) : '';
+            var subheader =
+                '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
+                'Weekly Attendance' + weLabel +
+                '</div>';
+            var rows = items.map(function(it, i) {
+                var titleLine = it.url
+                    ? '<a href="' + _tiqEsc(it.url) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
+                    : _tiqEsc(it.title);
+                var showKey = it.title;
+                var audience = _tiqAudienceChip(it.us_streams);
+                var capChip = '';
+                if (typeof it.pct_capacity === 'number' && it.pct_capacity > 0) {
+                    var capPct = Math.round(it.pct_capacity * 1000) / 10;
+                    capChip = '<span class="tiq-chip">' + capPct + '% capacity</span>';
+                }
+                var changeChip = '';
+                var wca = it.weekly_change_attendance;
+                if (typeof wca === 'number') {
+                    var absPct = Math.round(Math.abs(wca) * 1000) / 10;
+                    if (absPct >= 0.1) {
+                        var glyph = wca > 0 ? '▲' : '▼';
+                        var dcls  = wca > 0 ? 'up'      : 'down';
+                        changeChip = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + absPct + '%</span>';
+                    } else {
+                        changeChip = '<span class="tiq-sheet-delta flat">· flat</span>';
+                    }
+                }
+                var flags = '';
+                if (it.is_preview) {
+                    flags += '<span class="tiq-chip" style="opacity:0.7;">in previews</span>';
+                }
+                var perfsBit = '';
+                if (typeof it.performances === 'number' && it.performances > 0) {
+                    perfsBit = '<span class="tiq-chip" style="opacity:0.7;">' + it.performances + ' perfs</span>';
+                }
+                var metaBits = '';
+                if (audience)   metaBits += audience;
+                if (capChip)    metaBits += capChip;
+                if (changeChip) metaBits += changeChip;
+                if (perfsBit)   metaBits += perfsBit;
+                if (flags)      metaBits += flags;
+                var theatreLine = it.theatre
+                    ? '<div class="tiq-row-meta"><span>' + _tiqEsc(it.theatre) + '</span></div>'
+                    : '';
+                return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
+                       '<div class="tiq-row-body">' +
+                       '<div class="tiq-row-title">' + titleLine +
+                       _tiqActions('broadway', 'broadway_weekly_attendance', showKey, showKey, 'National') +
+                       '</div>' +
+                       theatreLine +
+                       (metaBits ? '<div class="tiq-row-meta">' + metaBits + '</div>' : '') +
+                       '</div></div>';
+            }).join('');
+            var card =
+                '<div class="tiq-card">' +
+                '<h4>Weekly Attendance</h4>' +
+                '<div class="tiq-headline-list" style="max-height:640px;overflow-y:auto;">' +
+                rows +
+                '</div>' +
+                '</div>';
+            return subheader +
+                   '<div class="tiq-cards-grid" style="grid-template-columns: 1fr;">' +
+                   card + '</div>';
+        }
+
         function renderTIQFilms(sources) {
             var keys = ['fandango', 'cinemark', 'amc', 'regal'];
             var present = keys.filter(function(k) { return sources[k]; });
@@ -56851,6 +57135,7 @@ https://www.instagram.com/p/..."></textarea>
                 _renderTIQPanel('books',     renderTIQBooks(cards.books_trending || {}, cards.libby_trending || {})) +
                 _renderTIQPanel('comics',    renderTIQComics(cards.comics_trending || {})) +
                 _renderTIQPanel('streaming', renderTIQStreaming(cards.streaming_trending || {})) +
+                _renderTIQPanel('broadway',  renderTIQBroadway(cards.broadway_trending || {}, cards.broadway_week_ending || '')) +
                 _renderTIQPanel('films',     renderTIQFilms(cards.films_ticketing || {})) +
                 _renderTIQPanel('fast',      renderTIQFast(cards.fast_trending || {})) +
                 _renderTIQPanel('gaming',    renderTIQGaming(cards.gaming_trending || {})) +

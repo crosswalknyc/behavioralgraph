@@ -69,6 +69,12 @@ SCRAPERS = [
     # Public browse surface; no cookies required (curl_cffi Chrome-
     # TLS impersonation used defensively).
     ('goodreads_charts',   'scripts.trends_scrapers.goodreads_charts',   'Goodreads',            'goodreads'),
+    # Broadway weekly attendance: single-panel scrape of the Playbill
+    # grosses page, which mirrors the Broadway League Tuesday report.
+    # One row per currently-running production sorted by attendance
+    # desc. Public HTML surface; curl_cffi Chrome-TLS impersonation
+    # used defensively. Attendance is native (no Claude estimator).
+    ('broadway_grosses',   'scripts.trends_scrapers.broadway_grosses',   'Broadway',             'broadway'),
     ('philanthropy_news',  'scripts.trends_scrapers.philanthropy_news',  'Philanthropy news',    'news'),
     ('business_news',      'scripts.trends_scrapers.business_news',      'Business news',        'news'),
     ('wall_street_news',   'scripts.trends_scrapers.wall_street_news',   'Wall Street news',     'news'),

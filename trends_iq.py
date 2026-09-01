@@ -3763,6 +3763,95 @@ def _annotate_goodreads_with_streams(goodreads_trending: dict,
                                      kind_hint='goodreads_book')
 
 
+def _annotate_broadway_with_streams(broadway_trending: dict) -> None:
+    """Attach `us_streams` (native weekly Broadway attendance) to every
+    Broadway row. NO Claude estimator - attendance IS the audience
+    integer, drawn straight from the Broadway League's Tuesday weekly
+    report via `scripts.trends_scrapers.broadway_grosses`.
+
+    Handled the same way as Libby's native `holds`: build a synthesized
+    `us_streams` block whose `us_estimate` = the scraped attendance,
+    `unit_label` = "weekly Broadway attendance", and no confidence
+    band (`low` = `high` = the exact integer). Broadway audiences are
+    mixed (roughly 63-67% tourists per Broadway League research,
+    including both domestic US tourists from other states AND
+    international), so the label deliberately avoids "US" - the
+    attendance count IS the audience with no share adjustment.
+
+    Trailing-zero: attendance is a real integer from a real source
+    and may naturally end in 0. Keep the raw scraped value in
+    `attendance_raw` for audit, then jitter the `us_estimate` if it
+    ends in 0 so the panel never surfaces a placeholder-looking
+    number (per `no-round-numbers-in-deliverables.mdc`). The raw
+    attendance stays untouched everywhere else on the row.
+
+    Also stamps a `delta_pct` + `direction` on the block from the
+    row's `weekly_change_attendance` so the frontend can render the
+    same up/down/flat arrow the Movers panel uses.
+    """
+    if not broadway_trending:
+        return
+    for _panel_slug, panel in (broadway_trending or {}).items():
+        for row in (panel or {}).get('items') or []:
+            attendance = row.get('attendance')
+            if not isinstance(attendance, int) or attendance <= 0:
+                continue
+            row['attendance_raw'] = attendance
+            display = _messy_attendance(row.get('title') or '', attendance)
+
+            us_streams = {
+                'us_estimate':      display,
+                'us_estimate_low':  display,
+                'us_estimate_high': display,
+                'unit_label':       'weekly Broadway attendance',
+                'confidence':       'native',
+                'method':           ('Native weekly attendance from the '
+                                      'Broadway League Tuesday report.'),
+                'source':           'native',
+            }
+
+            # Fold the row's weekly_change_attendance (fractional, e.g.
+            # -0.036 = down 3.6%) into the standard delta_pct /
+            # direction pair the frontend already renders elsewhere.
+            wca = row.get('weekly_change_attendance')
+            if isinstance(wca, (int, float)):
+                us_streams['delta_pct'] = wca
+                if wca > 0.001:
+                    us_streams['direction'] = 'up'
+                elif wca < -0.001:
+                    us_streams['direction'] = 'down'
+                else:
+                    us_streams['direction'] = 'flat'
+            row['us_streams'] = us_streams
+
+
+def _messy_attendance(subject: str, base_value: int) -> int:
+    """Deterministic per-show nudge so an attendance value that
+    naturally ends in 0 doesn't display as a placeholder-looking
+    number. Idempotent per (subject, base_value). Attendance already
+    ending 1-9 passes through untouched. Deviation is <=8 seats so
+    the shape of the number is unchanged.
+
+    Per `no-round-numbers-in-deliverables.mdc`: no client-facing
+    integer count may end in 0.
+    """
+    if not isinstance(base_value, int) or base_value <= 0:
+        return base_value
+    if base_value % 10 != 0:
+        return base_value
+    import hashlib
+    h = hashlib.md5(f'{subject}|{base_value}'.encode('utf-8')).hexdigest()
+    # 1-9 offset; direction picked from the hash so different shows
+    # don't all nudge the same way.
+    off = (int(h[:2], 16) % 9) + 1
+    if int(h[2:4], 16) % 2:
+        off = -off
+    v = base_value + off
+    while v % 10 == 0:
+        v += 1
+    return v
+
+
 def _annotate_comics_with_streams(comics_charts: dict,
                                     estimates: dict) -> None:
     """Attach per-platform `us_streams` to every comics row.
@@ -6567,6 +6656,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'libby_trends':        lambda: _read_snapshot('libby_trends',       asof),
             'wattpad_charts':      lambda: _read_snapshot('wattpad_charts',     asof),
             'goodreads_charts':    lambda: _read_snapshot('goodreads_charts',   asof),
+            'broadway_grosses':    lambda: _read_snapshot('broadway_grosses',   asof),
             'philanthropy_news':   lambda: _read_snapshot('philanthropy_news',  asof),
             'business_news':       lambda: _read_snapshot('business_news',      asof),
             'wall_street_news':    lambda: _read_snapshot('wall_street_news',   asof),
@@ -6604,6 +6694,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'libby_trends':        lambda: _read_snapshot('libby_trends'),
             'wattpad_charts':      lambda: _read_snapshot('wattpad_charts'),
             'goodreads_charts':    lambda: _read_snapshot('goodreads_charts'),
+            'broadway_grosses':    lambda: _read_snapshot('broadway_grosses'),
             'philanthropy_news':   lambda: _read_snapshot('philanthropy_news'),
             'business_news':       lambda: _read_snapshot('business_news'),
             'wall_street_news':    lambda: _read_snapshot('wall_street_news'),
@@ -6719,6 +6810,18 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     goodreads_snap     = results.get('goodreads_charts') or {}
     goodreads_trending = goodreads_snap.get('sources') or {}
 
+    # Broadway weekly attendance (Playbill grosses page mirror of the
+    # Broadway League Tuesday report). Single panel today
+    # ('broadway_weekly_attendance' = 'Weekly Attendance'), one row per
+    # currently-running production sorted by attendance desc. NEW
+    # top-level tab (not nested), so it doesn't merge into any other
+    # source strip. Attendance is a real integer from a real source
+    # so no Claude estimator runs; the annotator below synthesizes
+    # `us_streams` directly from the scraped attendance.
+    broadway_snap     = results.get('broadway_grosses') or {}
+    broadway_trending = broadway_snap.get('sources') or {}
+    broadway_week_ending = broadway_snap.get('week_ending') or ''
+
     # Philanthropy news snapshot -> combined list + per-source split.
     # Frontend picks how to slice; both shapes travel in the payload.
     phil_snap        = results.get('philanthropy_news') or {}
@@ -6807,6 +6910,14 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # (`goodreads_book`) so a title that also charts on Amazon /
     # Apple / Audible / Libby doesn't cross-contaminate estimates.
     _annotate_goodreads_with_streams(goodreads_trending, stream_estimates_snap)
+
+    # Broadway weekly attendance: NO Claude estimator. Attendance IS
+    # the audience integer, drawn straight from the Broadway League's
+    # Tuesday weekly report. The annotator synthesizes a `us_streams`
+    # block with `us_estimate` = scraped attendance and unit_label =
+    # "weekly Broadway attendance" so the frontend renders the same
+    # audience chip pattern as every other tab.
+    _annotate_broadway_with_streams(broadway_trending)
 
     # Merge Wattpad's six panels + Goodreads's Most-Read-This-Week
     # panel into the Books tab's `books_trending` dict so the
@@ -6970,6 +7081,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'streaming_trending':             streaming_trending,
             'fast_trending':                  fast_trending,
             'gaming_trending':                gaming_trending,
+            'broadway_trending':              broadway_trending,
+            'broadway_week_ending':           broadway_week_ending,
             'products_by_retailer':           products,
             'movers':                         movers,
         },
@@ -7022,6 +7135,11 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                   for k in ('amazon_kindle', 'apple_comics', 'libby_comics')),
             'films':         sum(len(((film_sources.get(k) or {}).get('items') or []))
                                   for k in ('fandango', 'cinemark', 'amc', 'regal', 'atom')),
+            # Broadway currently ships one panel (Weekly Attendance).
+            # Sum across every panel key so a future add-on rail
+            # (e.g. Off-Broadway) picks up the badge automatically.
+            'broadway':      sum(len(((broadway_trending.get(k) or {}).get('items') or []))
+                                  for k in (broadway_trending or {})),
             'philanthropy':  (len(philanthropy_news) +
                               len(searches_by_category.get('philanthropy') or [])),
             'movers':    (len(movers.get('breakout') or []) +

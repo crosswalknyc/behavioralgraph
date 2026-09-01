@@ -130,6 +130,15 @@ DOMAIN_REFRESH_MAP: dict[str, dict[str, list[str]]] = {
     # is a no-op today - but keeping the map in place means a future
     # auth-gated surface picks up the refresh chain automatically.
     'goodreads.com':    {'runall': ['goodreads_charts']},
+    # Broadway weekly attendance. The Playbill grosses page mirrors
+    # the Broadway League Tuesday report and renders publicly, so
+    # cookies are never required today - but keeping every plausible
+    # Broadway-adjacent domain in the refresh map means a future
+    # auth-gated fallback (BroadwayWorld / IBDB / a Playbill member
+    # rail) picks up the refresh chain without a wiring change.
+    'playbill.com':         {'runall': ['broadway_grosses']},
+    'broadwayleague.com':   {'runall': ['broadway_grosses']},
+    'broadwayworld.com':    {'runall': ['broadway_grosses']},
 }
 
 # Lookback windows the dashboard UI exposes (templates/index.html
