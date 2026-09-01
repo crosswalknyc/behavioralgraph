@@ -3852,6 +3852,247 @@ def _messy_attendance(subject: str, base_value: int) -> int:
     return v
 
 
+# ============================================================================
+# FAST day-over-day deltas (2026-09-01, Jenna: "on fast none of the deltas
+# are working. you should be able to delta over yesterday since we scrape
+# and capture values each day and save them.")
+# ============================================================================
+#
+# The FAST tab (Amazon Live TV / Roku / Pluto / Tubi -> Films + TV columns
+# + Channel Ranker sub-view) reads `us_streams.delta_pct` + `.direction`
+# off each row to render the up/down chip. The stream_estimates annotator
+# stamps a per-platform delta from view-count history, which for FAST
+# starts at 0.0 / 'stable' (view-count history warm-up), so the chip
+# never shows.
+#
+# We already scrape + dated-snapshot `fast_channels.json` daily. So we
+# compute the RANK delta here directly from yesterday's snapshot vs
+# today's, keyed on `justwatch_id` per bucket (Film / TV rank in each
+# platform's column stays independent). For the Channel Ranker sub-view
+# we use yesterday's `stream_estimates.json` (also dated) to get the
+# same per-channel view-estimate we render today, then compute a real
+# view-count delta.
+#
+# Both annotators run AFTER the stream_estimate annotators so their
+# rank/view-delta overwrites the empty 0.0/'stable' the shared stamper
+# writes.
+#
+# First run after this ships is a no-op for any row we can't match to a
+# prior-day entry (new-to-chart titles / channels): `delta_pct` and
+# `direction` stay whatever the stream_estimates annotator set (usually
+# 0.0/'stable' -> chip hidden by the frontend). Existing chart entries
+# get real chips today because yesterday's dated snapshot is already on
+# S3 (verified: 2026-08-31 fast_channels.json + stream_estimates.json
+# both present).
+
+
+def _yesterday_iso(today_iso: Optional[str] = None) -> str:
+    """Return YYYY-MM-DD for the day BEFORE `today_iso` (defaults to
+    UTC now).  Used to pick the prior-day dated snapshot for delta
+    computation."""
+    if today_iso:
+        try:
+            today = datetime.fromisoformat(today_iso).date()
+        except Exception:
+            today = datetime.now(timezone.utc).date()
+    else:
+        today = datetime.now(timezone.utc).date()
+    return (today - timedelta(days=1)).isoformat()
+
+
+def _rank_delta_pct(prev_rank: Optional[int],
+                     today_rank: Optional[int]) -> Optional[float]:
+    """Rank climb / fall as a fraction.  Positive = climbed toward #1.
+
+    Fractional so the frontend's shared render
+    (Math.round(Math.abs(delta_pct) * 100)) reads it the same way it
+    reads Broadway's `weekly_change_attendance`.
+    """
+    if not isinstance(prev_rank, int) or not isinstance(today_rank, int):
+        return None
+    if prev_rank <= 0 or today_rank <= 0:
+        return None
+    return (prev_rank - today_rank) / prev_rank
+
+
+def _direction_for(delta_pct: Optional[float],
+                    threshold: float = 0.001) -> str:
+    """Map a fractional delta_pct to the 'up' / 'down' / 'flat' string
+    the frontend renderer consumes."""
+    if delta_pct is None:
+        return 'flat'
+    if delta_pct > threshold:
+        return 'up'
+    if delta_pct < -threshold:
+        return 'down'
+    return 'flat'
+
+
+def _fold_fast_delta(row: dict, delta_pct: Optional[float],
+                      prev_rank: Optional[int] = None,
+                      prev_estimate: Optional[int] = None,
+                      prev_date: Optional[str] = None) -> None:
+    """Overwrite (or create) `row.us_streams` with the FAST-side
+    delta signal so the frontend chip renders yesterday-vs-today
+    movement.  Preserves every other field the stream_estimates
+    annotator may have set (us_estimate, unit_label, method, ...);
+    only touches the delta-adjacent keys.
+
+    Anti-clobber: leave any pre-existing non-zero `delta_pct` alone
+    if our computed delta is trivially flat (|delta| < 0.001).  This
+    means when stream_estimates eventually starts writing real
+    per-row view-count deltas, we won't zero them out just because
+    the yesterday-vs-today rank / view estimate didn't move.
+    """
+    if delta_pct is None:
+        return
+    us = dict(row.get('us_streams') or {})
+    existing = us.get('delta_pct')
+    if abs(delta_pct) < 0.001 and isinstance(existing, (int, float)) \
+            and abs(existing) >= 0.001:
+        # Keep the informative existing delta rather than zero it.
+        return
+    us['delta_pct'] = delta_pct
+    us['direction'] = _direction_for(delta_pct)
+    if prev_rank is not None:
+        us['prev_rank'] = prev_rank
+    if prev_estimate is not None:
+        us['prev_estimate'] = prev_estimate
+    if prev_date:
+        us['prev_date'] = prev_date
+    row['us_streams'] = us
+
+
+def _annotate_fast_with_rank_change(fast_trending: dict,
+                                     asof: Optional[str] = None) -> None:
+    """Fold day-over-day RANK change into `us_streams.delta_pct` +
+    `.direction` on every FAST Film / TV row.
+
+    Matches items by `justwatch_id` (stable JustWatch content id
+    stamped by `fast_channels._normalize_node`).  Compares each
+    row's current `bucket_rank` (per-column rank within its Film /
+    TV bucket on that platform) against the same id's `bucket_rank`
+    in yesterday's snapshot on the same platform.
+
+    Runs AFTER `_annotate_fast_with_streams` so the folded delta
+    overwrites the shared stamper's empty 0.0/'stable'.
+    """
+    if not fast_trending:
+        return
+    prev_iso = _yesterday_iso(asof)
+    prev_snap = _read_snapshot('fast_channels', asof=prev_iso)
+    if not prev_snap:
+        logger.info('fast rank delta: no prior snapshot for %s; '
+                     'chips will populate once yesterdays snapshot is on S3',
+                     prev_iso)
+        return
+    prev_sources = (prev_snap.get('sources') or {})
+    matched = 0
+    total   = 0
+    for panel_slug, panel in (fast_trending or {}).items():
+        if not panel:
+            continue
+        prev_block = (prev_sources.get(panel_slug) or {})
+        prev_items = prev_block.get('items') or []
+        # Build a per-bucket lookup so film-rank #5 on Roku doesn't
+        # collide with tv-rank #5 on Roku.  Key by justwatch_id
+        # (stable across days barring a JustWatch re-catalog event).
+        prev_film_by_id: dict = {}
+        prev_tv_by_id:   dict = {}
+        for prev_it in prev_items:
+            jw = prev_it.get('justwatch_id')
+            if jw is None:
+                continue
+            cat = (prev_it.get('category_display') or '').lower()
+            br  = prev_it.get('bucket_rank')
+            if not isinstance(br, int):
+                continue
+            if cat == 'film':
+                prev_film_by_id[jw] = br
+            elif cat == 'tv':
+                prev_tv_by_id[jw] = br
+
+        for bucket_key, prev_lookup in (('films', prev_film_by_id),
+                                          ('tv',    prev_tv_by_id)):
+            for row in (panel.get(bucket_key) or []):
+                total += 1
+                jw = row.get('justwatch_id')
+                if jw is None:
+                    continue
+                prev_rank = prev_lookup.get(jw)
+                today_rank = row.get('bucket_rank')
+                if prev_rank is None or not isinstance(today_rank, int):
+                    continue
+                delta = _rank_delta_pct(prev_rank, today_rank)
+                if delta is None:
+                    continue
+                _fold_fast_delta(row, delta,
+                                   prev_rank=prev_rank,
+                                   prev_date=prev_iso)
+                matched += 1
+
+    logger.info('fast rank delta: annotated %d / %d film+tv rows vs %s',
+                 matched, total, prev_iso)
+
+
+def _annotate_fast_channels_with_view_change(fast_trending: dict,
+                                                asof: Optional[str] = None) -> None:
+    """Fold day-over-day VIEW-count change into `us_streams.delta_pct`
+    + `.direction` on every FAST-channel row (Channel Ranker sub-view).
+
+    Reads yesterday's dated `stream_estimates.json` (which carries a
+    per-channel `by_platform.<slug>.us_estimate` under the key
+    `fast_channel:<slug>:<norm_name>`) and compares against today's
+    stamped `us_streams.us_estimate` on the channel row.  Channels
+    without a prior view estimate keep the stream_estimates annotator's
+    default (usually 0.0/'stable' -> chip hidden).
+
+    Runs AFTER `_annotate_fast_channels_with_views` so the folded
+    delta overwrites the shared stamper's empty 0.0/'stable'.
+    """
+    if not fast_trending:
+        return
+    prev_iso = _yesterday_iso(asof)
+    prev_snap = _read_snapshot('stream_estimates', asof=prev_iso)
+    if not prev_snap:
+        logger.info('fast channel view delta: no prior stream_estimates '
+                     'for %s; chips will populate once yesterdays snapshot '
+                     'is on S3', prev_iso)
+        return
+    prev_items = (prev_snap.get('items') or {})
+    matched = 0
+    total   = 0
+    for panel_slug, panel in (fast_trending or {}).items():
+        if not panel:
+            continue
+        for row in (panel.get('channels') or []):
+            total += 1
+            us_today = row.get('us_streams') or {}
+            today_est = us_today.get('us_estimate')
+            if not isinstance(today_est, (int, float)) or today_est <= 0:
+                continue
+            name = (row.get('name') or '').strip()
+            norm = _cp_normalize(name)
+            if not norm:
+                continue
+            key = f'fast_channel:{panel_slug}:{norm}'
+            entry = prev_items.get(key)
+            if not entry:
+                continue
+            by_plat = (entry.get('by_platform') or {}).get(panel_slug) or {}
+            prev_est = by_plat.get('us_estimate') or entry.get('us_estimate')
+            if not isinstance(prev_est, (int, float)) or prev_est <= 0:
+                continue
+            delta = (today_est - prev_est) / prev_est
+            _fold_fast_delta(row, delta,
+                               prev_estimate=int(prev_est),
+                               prev_date=(entry.get('as_of_date') or prev_iso))
+            matched += 1
+
+    logger.info('fast channel view delta: annotated %d / %d channel rows '
+                 'vs %s', matched, total, prev_iso)
+
+
 def _annotate_comics_with_streams(comics_charts: dict,
                                     estimates: dict) -> None:
     """Attach per-platform `us_streams` to every comics row.
@@ -6886,6 +7127,14 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # `fast_channel:<platform>:<norm_name>` per platform (no cross-
     # platform dedup).
     _annotate_fast_channels_with_views(fast_trending, stream_estimates_snap)
+    # FAST day-over-day deltas (2026-09-01, Jenna: "on fast none of the
+    # deltas are working. you should be able to delta over yesterday
+    # since we scrape and capture values each day and save them.").
+    # Rank delta for Film / TV rows, view-count delta for channels.
+    # Runs AFTER the stream_estimate stampers so the folded delta
+    # overwrites the shared stamper's empty 0.0 / 'stable' default.
+    _annotate_fast_with_rank_change(fast_trending)
+    _annotate_fast_channels_with_view_change(fast_trending)
     # Gaming: Xbox Game Pass Ultimate rows get a weekly-US-plays
     # estimate. Keyed `game:<norm_title>` in the estimates snapshot.
     _annotate_gaming_with_streams(gaming_trending, stream_estimates_snap)
