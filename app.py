@@ -8181,6 +8181,11 @@ def get_admin_content():
                     key = obj['Key']
                     if not key.endswith('.json') or key.startswith(S3_PURGATORY_PREFIX):
                         continue
+                    # Never surface files that live under
+                    # `brand-partnership-iq/_backups/` - those are internal
+                    # pre-mutation snapshots, not browseable profiles.
+                    if _bpiq_is_backup_key(key):
+                        continue
                     bare_key = key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
                     name_without_ext = bare_key.replace('.json', '')
                     match = re.match(r'^(.+)_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$', name_without_ext)
@@ -24494,20 +24499,32 @@ def save_ticket_sales_tracker_metadata(metadata):
 def load_bpiq_metadata():
     """Load Brand Partnership IQ per-result metadata (display_name, category,
     image_url) from S3. Keys are bare S3 keys inside the BPIQ prefix (no
-    leading 'brand-partnership-iq/')."""
+    leading 'brand-partnership-iq/').
+
+    Defense in depth: strip any keys pointing into `_backups/` so a stale
+    sidecar entry can never resurface a snapshot as a browseable row."""
     if not s3_client:
         return {}
     try:
         response = s3_client.get_object(Bucket=S3_BUCKET, Key=BPIQ_METADATA_KEY)
-        return json.loads(response['Body'].read().decode('utf-8'))
+        raw = json.loads(response['Body'].read().decode('utf-8')) or {}
+        if not isinstance(raw, dict):
+            return {}
+        return {k: v for k, v in raw.items() if not _bpiq_is_backup_key(k)}
     except Exception:
         return {}
 
 def save_bpiq_metadata(metadata):
-    """Save Brand Partnership IQ metadata to S3."""
+    """Save Brand Partnership IQ metadata to S3.
+
+    Strips any `_backups/` keys before writing so a stale caller can
+    never re-introduce a snapshot into the sidecar."""
     if not s3_client:
         return False
     try:
+        if isinstance(metadata, dict):
+            metadata = {k: v for k, v in metadata.items()
+                        if not _bpiq_is_backup_key(k)}
         s3_client.put_object(
             Bucket=S3_BUCKET,
             Key=BPIQ_METADATA_KEY,
@@ -36535,6 +36552,25 @@ def list_ecommerce_iq():
 
 BRAND_PARTNERSHIP_IQ_S3_PREFIX = 'brand-partnership-iq/'
 
+
+def _bpiq_is_backup_key(key):
+    """Return True if a BPIQ S3 key (or bare key) points into the backup
+    tree. Never surface these in any listing or metadata sidecar - they
+    are internal snapshots, not browseable profiles.
+
+    Matches full keys like `brand-partnership-iq/_backups/foo.json`,
+    bare metadata sidecar keys like `_backups/foo.json`, and any legacy
+    variant containing `_backups/` anywhere in the path."""
+    if not key:
+        return False
+    k = str(key)
+    if '/_backups/' in k:
+        return True
+    if k.startswith('_backups/'):
+        return True
+    return False
+
+
 # "Movie context" needles. Audience qualifies when the movie name appears
 # alongside ANY of these in the same row — covers ticket buyers, trailer
 # watchers, review readers, IMDb/RT/Letterboxd lookups, studio pages,
@@ -38006,6 +38042,9 @@ def get_brand_partnership_iq_result(s3_key):
         full_key = s3_key if s3_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX) \
                    else BRAND_PARTNERSHIP_IQ_S3_PREFIX + s3_key
         bare_key = full_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
+        # Never serve internal `_backups/` snapshots as browseable results.
+        if _bpiq_is_backup_key(full_key) or _bpiq_is_backup_key(bare_key):
+            return jsonify({'success': False, 'error': 'not found'}), 404
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=full_key)
         data = json.loads(obj['Body'].read().decode('utf-8'))
         meta = (load_bpiq_metadata() or {}).get(bare_key, {}) or {}
@@ -38042,6 +38081,11 @@ def list_brand_partnership_iq():
             for obj in page.get('Contents', []):
                 key = obj['Key']
                 if not key.endswith('.json') or key.startswith(S3_PURGATORY_PREFIX):
+                    continue
+                # Never surface files that live under
+                # `brand-partnership-iq/_backups/` - those are internal
+                # pre-mutation snapshots, not browseable profiles.
+                if _bpiq_is_backup_key(key):
                     continue
                 bare_key = key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
                 name_part = bare_key.replace('.json', '')

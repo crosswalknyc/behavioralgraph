@@ -60338,6 +60338,18 @@ https://www.instagram.com/p/..."></textarea>
             meta += ' · Attribution: ' + (data.attribution_window_days || 0) + 'd';
             meta += ' · Pre-window: ' + (preP.start || '') + ' → ' + (preP.end || '') + ' (' + (preP.days || 0) + 'd)';
             meta += ' · Post-window: ' + (evP.start || '') + ' → ' + (poP.end || '') + ' (' + ((evP.days || 0) + (poP.days || 0)) + 'd)';
+            // Streaming platform label - shown on a second line under the
+            // campaign / windows summary when the payload identifies the
+            // service that carried the show (Netflix, Amazon Prime Video,
+            // Hulu, ...). Rendered only when the payload actually carries
+            // the field; nothing is shown otherwise (no placeholder text).
+            var _bpiqStreamPlat = ((data && data.streaming_platform) || '').toString().trim();
+            if (_bpiqStreamPlat) {
+                var _bpiqStreamPlatSafe = _bpiqStreamPlat
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                meta += '<br>Streamed on ' + _bpiqStreamPlatSafe;
+            }
             document.getElementById('bpiqDashMeta').innerHTML = meta;
 
             // Each KPI card's value cell stacks the absolute count on top
