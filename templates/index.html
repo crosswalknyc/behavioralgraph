@@ -25213,7 +25213,10 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-sheet-titlesort option { background: var(--bg-card); color: var(--text-primary); }
             #trendsIQView .tiq-sheet-genresort { font-family: inherit; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.02em; text-transform: none; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 1px 4px; margin-left: 0.35rem; cursor: pointer; vertical-align: middle; -webkit-appearance: none; -moz-appearance: none; appearance: none; width: 2.9rem; box-sizing: border-box; text-align: center; text-align-last: center; }
             #trendsIQView .tiq-sheet-genresort option { background: var(--bg-card); color: var(--text-primary); text-transform: none; }
+            #trendsIQView .tiq-sheet-yearsort { font-family: inherit; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.02em; text-transform: none; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 1px 4px; margin-left: 0.35rem; cursor: pointer; vertical-align: middle; -webkit-appearance: none; -moz-appearance: none; appearance: none; width: 2.9rem; box-sizing: border-box; text-align: center; text-align-last: center; }
+            #trendsIQView .tiq-sheet-yearsort option { background: var(--bg-card); color: var(--text-primary); text-transform: none; }
             #trendsIQView .tiq-sheet-row.tiq-genre-hidden { display: none !important; }
+            #trendsIQView .tiq-sheet-row.tiq-year-hidden { display: none !important; }
             #trendsIQView .tiq-sheet-all td.tiq-sheet-td-num:last-child, #trendsIQView .tiq-sheet-all th.tiq-sheet-th-num:last-child { padding-left: 4rem; }
             #trendsIQView .tiq-sheet-cardhead { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.35rem; }
             #trendsIQView .tiq-sheet-cardhead h4 { margin: 0; }
@@ -52715,6 +52718,62 @@ https://www.instagram.com/p/..."></textarea>
             }
         };
 
+        // Release-year filter options for a title sheet. Fixed decade
+        // buckets, newest first; only a bucket that actually has a row
+        // is emitted (mirrors _tiqGenreOptions so the pill never lists
+        // an empty era). Value is a "lo-hi" range the filter parses.
+        var _TIQ_YEAR_BUCKETS = [
+            { v: '2020-9999', lo: 2020, hi: 9999, label: '2020 – present' },
+            { v: '2010-2019', lo: 2010, hi: 2019, label: '2010 – 2019' },
+            { v: '2000-2009', lo: 2000, hi: 2009, label: '2000 – 2009' },
+            { v: '1990-1999', lo: 1990, hi: 1999, label: '1990 – 1999' },
+            { v: '1980-1989', lo: 1980, hi: 1989, label: '1980 – 1989' },
+            { v: '1970-1979', lo: 1970, hi: 1979, label: '1970 – 1979' },
+            { v: '0-1969',    lo: 0,    hi: 1969, label: 'pre-1970' }
+        ];
+        function _tiqYearOptions(rows) {
+            var present = {};
+            (rows || []).forEach(function(it) {
+                var y = parseInt(it.year, 10);
+                if (!isFinite(y) || y <= 0) return;
+                for (var b = 0; b < _TIQ_YEAR_BUCKETS.length; b++) {
+                    var bk = _TIQ_YEAR_BUCKETS[b];
+                    if (y >= bk.lo && y <= bk.hi) { present[bk.v] = true; break; }
+                }
+            });
+            var opts = '<option value="">Year</option><option value="all">ALL</option>';
+            _TIQ_YEAR_BUCKETS.forEach(function(bk) {
+                if (present[bk.v]) opts += '<option value="' + bk.v + '">' + _tiqEsc(bk.label) + '</option>';
+            });
+            return opts;
+        }
+
+        // Filter a title sheet by release-year bucket (matches row
+        // data-year against the selected "lo-hi" range). Composes with
+        // the genre filter via its own .tiq-year-hidden class so both
+        // filters AND together.
+        window.tiqFilterFastYear = function(sel) {
+            var table = sel.closest ? sel.closest('table') : null;
+            if (!table) return;
+            var val = (sel.value || '');
+            var showAll = (!val || val === 'all');
+            var lo = 0, hi = 9999;
+            if (!showAll) {
+                var parts = val.split('-');
+                lo = parseInt(parts[0], 10); if (!isFinite(lo)) lo = 0;
+                hi = parseInt(parts[1], 10); if (!isFinite(hi)) hi = 9999;
+            }
+            var rows = table.querySelectorAll('tbody tr.tiq-sheet-row');
+            for (var i = 0; i < rows.length; i++) {
+                var match = showAll;
+                if (!showAll) {
+                    var y = parseInt(rows[i].getAttribute('data-year'), 10);
+                    match = isFinite(y) && y >= lo && y <= hi;
+                }
+                rows[i].classList.toggle('tiq-year-hidden', !match);
+            }
+        };
+
         // Card header with an Export-CSV dropdown for a FAST sheet.
         function _tiqSheetCardHead(label) {
             return '<div class="tiq-sheet-cardhead">' +
@@ -52760,7 +52819,7 @@ https://www.instagram.com/p/..."></textarea>
             var entity = table.getAttribute('data-entity') || 'Title';
             var fileLabel = table.getAttribute('data-export') || 'fast';
             var isTitle = (entity === 'Title');
-            var allRows = Array.prototype.slice.call(table.querySelectorAll('tbody tr.tiq-sheet-row')).filter(function(r) { return !r.classList.contains('tiq-genre-hidden'); });
+            var allRows = Array.prototype.slice.call(table.querySelectorAll('tbody tr.tiq-sheet-row')).filter(function(r) { return !r.classList.contains('tiq-genre-hidden') && !r.classList.contains('tiq-year-hidden'); });
             var rows = (limit && limit > 0) ? allRows.slice(0, limit) : allRows;
             var header = isTitle
                 ? ['Rank', 'Title', 'Year', 'Genres', 'Views', 'Change %']
@@ -56378,6 +56437,7 @@ https://www.instagram.com/p/..."></textarea>
                     // >=8 weeks of tracked history and the values differ.
                     var renderCol = function(label, rows, forceIndexRank) {
                         var genreOpts = _tiqGenreOptions(rows);
+                        var yearOpts = _tiqYearOptions(rows);
                         var rowsHtml = (rows || []).map(function(it, i) {
                             var us = it.us_streams || {};
                             var estimate = Number(us.us_estimate);
@@ -56433,7 +56493,7 @@ https://www.instagram.com/p/..."></textarea>
                         return '<div class="tiq-card">' + _tiqSheetCardHead(label) +
                                '<table class="tiq-sheet' + (forceIndexRank ? ' tiq-sheet-all' : '') + '" data-entity="Title" data-export="' + _tiqEsc(String(k) + '-' + label) + '">' +
                                  '<thead><tr>' +
-                                   '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Title</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select><select class="tiq-sheet-genresort" onchange="tiqFilterFastGenre(this)">' + genreOpts + '</select></th>' +
+                                   '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Title</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select><select class="tiq-sheet-genresort" onchange="tiqFilterFastGenre(this)">' + genreOpts + '</select><select class="tiq-sheet-yearsort" onchange="tiqFilterFastYear(this)">' + yearOpts + '</select></th>' +
                                    '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
                                    '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
                                  '</tr></thead>' +
@@ -56696,6 +56756,7 @@ https://www.instagram.com/p/..."></textarea>
                                     ' (US popularity, ad-supported tier). Tap Views or Δ% to sort.';
                     var renderCol = function(label, rows, forceIndexRank) {
                         var genreOpts = _tiqGenreOptions(rows);
+                        var yearOpts = _tiqYearOptions(rows);
                         var rowsHtml = (rows || []).map(function(it, i) {
                             var us = it.us_streams || {};
                             var estimate = Number(us.us_estimate);
@@ -56751,7 +56812,7 @@ https://www.instagram.com/p/..."></textarea>
                         return '<div class="tiq-card">' + _tiqSheetCardHead(label) +
                                '<table class="tiq-sheet' + (forceIndexRank ? ' tiq-sheet-all' : '') + '" data-entity="Title" data-export="' + _tiqEsc(String(k) + '-' + label) + '">' +
                                  '<thead><tr>' +
-                                   '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Title</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select><select class="tiq-sheet-genresort" onchange="tiqFilterFastGenre(this)">' + genreOpts + '</select></th>' +
+                                   '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Title</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select><select class="tiq-sheet-genresort" onchange="tiqFilterFastGenre(this)">' + genreOpts + '</select><select class="tiq-sheet-yearsort" onchange="tiqFilterFastYear(this)">' + yearOpts + '</select></th>' +
                                    '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
                                    '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
                                  '</tr></thead>' +
