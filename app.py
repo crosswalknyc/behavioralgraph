@@ -8195,7 +8195,13 @@ def get_admin_content():
                         default_display = name_without_ext.replace('_', ' ')
                     meta = bpiq_metadata.get(bare_key, {})
                     project_name = (meta.get('display_name') or default_display).strip()
-                    category = (meta.get('category') or 'Uncategorized').strip() or 'Uncategorized'
+                    # BPIQ categories are canonical UPPERCASE (admin
+                    # dropdown starter is ['BEAUTY', 'AUTOMOTIVE', ...]).
+                    # Normalize so a mixed-case sidecar entry
+                    # ("beauty" vs "BEAUTY") doesn't fragment the admin
+                    # content list or the user-facing tree.
+                    raw_cat = (meta.get('category') or '').strip()
+                    category = raw_cat.upper() if raw_cat else 'Uncategorized'
                     image_url = meta.get('image_url') or ''
                     last_modified = obj['LastModified'].isoformat() if obj.get('LastModified') else None
                     bpiq_files.append({
@@ -38093,7 +38099,13 @@ def list_brand_partnership_iq():
                                       '', name_part).replace('_', ' ')
                 meta = bpiq_metadata.get(bare_key, {})
                 display_name = (meta.get('display_name') or default_name).strip()
-                category = (meta.get('category') or '').strip() or 'Uncategorized'
+                # BPIQ categories are canonical UPPERCASE (see the admin
+                # dropdown in templates/admin.html and the starter list
+                # ['BEAUTY', 'AUTOMOTIVE', 'FASHION', 'CPG', ...]).
+                # Normalize here defense-in-depth so any drift in the
+                # sidecar ("beauty" vs "BEAUTY" vs "Beauty ") cannot
+                # re-fragment the frontend tree grouping.
+                category = (meta.get('category') or '').strip().upper() or 'Uncategorized'
                 image_url = meta.get('image_url') or ''
                 files.append({
                     'key': key,

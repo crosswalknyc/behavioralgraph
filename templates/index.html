@@ -59781,15 +59781,22 @@ https://www.instagram.com/p/..."></textarea>
                     }
                     // Group by admin-managed category (Profile IQ-style tree).
                     // Files with no category land under "Uncategorized".
+                    // Group key is normalized to UPPERCASE + trimmed so a
+                    // sidecar carrying "beauty", "BEAUTY", and "Beauty "
+                    // collapses to one bucket. The canonical BPIQ store is
+                    // UPPERCASE (see the admin dropdown in admin.html) but
+                    // this frontend guard means a future drift into any
+                    // case cannot re-fragment the tree.
                     var byCat = {};
                     files.forEach(function(f) {
-                        var cat = (f.category || 'Uncategorized').toString().trim() || 'Uncategorized';
+                        var raw = (f.category || 'Uncategorized').toString().trim() || 'Uncategorized';
+                        var cat = raw.toUpperCase();
                         if (!byCat[cat]) byCat[cat] = [];
                         byCat[cat].push(f);
                     });
                     var sortedCats = Object.keys(byCat).sort(function(a, b) {
-                        if (a === 'Uncategorized') return 1;
-                        if (b === 'Uncategorized') return -1;
+                        if (a === 'UNCATEGORIZED') return 1;
+                        if (b === 'UNCATEGORIZED') return -1;
                         return a.localeCompare(b);
                     });
                     function esc(s) {
