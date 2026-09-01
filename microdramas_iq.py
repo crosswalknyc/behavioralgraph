@@ -3228,10 +3228,10 @@ def _sort_titles(titles: list[dict], sort_key: str) -> list[dict]:
     # view_28d as the sort key on a 1d / 7d / custom window puts a
     # title with a strong 28-day sum ahead of a title that scored
     # higher IN THE ACTIVE WINDOW, which is what Jenna hit on
-    # 2026-08-14: Mafia Prince ranked #2 (106K in-window) below
-    # Billionaire's Secret Bride at #1 (70K in-window) because 
-    # Billionaire's 28-day sum was slightly higher (1.79M vs 1.75M).
-    # Sorting by the window-scoped estimate resolves the mismatch.
+    # 2026-08-14: on Peacock a second-rail title ranked #2 (106K
+    # in-window) below a hero title at #1 (70K in-window) because the
+    # hero's 28-day sum was slightly higher (1.79M vs 1.75M). Sorting
+    # by the window-scoped estimate resolves the mismatch.
     return sorted(
         titles,
         key=lambda t: (

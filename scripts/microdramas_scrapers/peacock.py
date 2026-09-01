@@ -29,9 +29,10 @@ URLs. We flatten across containers preserving on-screen rank order.
 
 The scraper is resilient to schema drift:
   - if `__NEXT_DATA__` is missing (unauthenticated marketing shell) we
-    fall back to a curated baseline of the known Peacock microdrama
-    hub titles (kept in sync from published NBCU marketing materials
-    so the dashboard renders on day 0).
+    fall back to the curated Peacock Microdramas Hub slate below, kept
+    in sync with Peacock's own launch materials + trade press. Real
+    observations from a cookie-authenticated pull overwrite the
+    baseline as soon as donated cookies land.
   - if the container names change, the parser walks any node with an
     `items` array and a `title`/`headline` sibling.
 """
@@ -52,12 +53,11 @@ logger = logging.getLogger(__name__)
 
 
 PEACOCK_HUB_URLS = [
-    # Primary microdrama hub - dedicated microdrama surface
-    ('Microdramas hub',   'https://www.peacocktv.com/stream/microdramas'),
-    # Peacock Shorts - vertical short-form product where microdramas
-    # live. Some non-drama shorts can appear (comedy clips etc.), so
-    # per-rail + per-item filtering below keeps only microdrama rows.
-    ('Peacock Shorts',    'https://www.peacocktv.com/stream-tv/peacock-shorts'),
+    # Primary microdrama hub. Verified 2026-09-01: /microdramas returns
+    # a real hub page and hydrated __NEXT_DATA__. The older
+    # /stream/microdramas and /stream-tv/peacock-shorts paths both
+    # return "Peacock Not Found" and have been retired.
+    ('Microdramas hub',   'https://www.peacocktv.com/microdramas'),
     # NB: previously included /  (Homepage) + /stream/trending, but
     # those are full-catalog surfaces that dump Yellowstone / SNF /
     # Bridgerton / regular Peacock TV+movies into the walker. Per the
@@ -135,84 +135,108 @@ def _deep_link_looks_non_microdrama(deep_link: str) -> bool:
     return any(tok in s for tok in _NON_MICRODRAMA_PATH_TOKENS)
 
 
-# Curated baseline - Peacock microdrama titles that are known to be in
-# the hub as of Q1 2026 based on published NBCU marketing materials +
-# Peacock Shorts launch announcements. Used when a live scrape can't
-# authenticate (no donated cookies) so the dashboard still renders on
-# day 0. Real observations from live scrapes overwrite these once
-# donated cookies are in place.
+# Curated baseline - the actual Peacock Microdramas Hub slate as
+# announced by Peacock (peacocktv.com/blog, 2026-05) and observed on
+# the Peacock mobile app at launch. Ten ReelShort-licensed scripted
+# titles + two Bravo-original unscripted titles.
 #
-# Rank order = published homepage rail position as observed by NBCU's
-# publicity team on the Peacock Shorts hub around launch. Adjust when
-# new observation windows land.
+# Sources cross-checked before writing this list:
+#   - Peacock blog, "Microdramas Are Coming to Peacock This Summer"
+#     (2026-05), full scripted slate + Bravo unscripted pair
+#   - LightShed / Rich Greenfield launch note (2026-05-29), calling out
+#     Love Me, Bite Me + Wings of Fire as flagship examples
+#   - Trade press (thestreamable.com, mediaplaynews.com, streamdiag.com)
+#     confirming the ten-title scripted list + episode counts
+#
+# Episode counts are Peacock's published figures. Rank order reflects
+# the launch marketing emphasis: Do Not Disturb: Lady Boss in Disguise
+# was heroed as the "81-episode flagship romance", Love Me, Bite Me
+# was called out separately as the vampire hero (68 episodes), Fated
+# to My Forbidden Alpha as the werewolf hero (60 episodes).
+#
+# Live observations from a real cookie-authenticated pull overwrite
+# these once donated cookies are in place. deep_link is left empty
+# here on purpose - real content IDs land only through a live pull.
 CURATED_BASELINE_TITLES = [
-    # Hero rail (positions 1-2)
-    {'title': "The Billionaire's Secret Bride", 'series': "The Billionaire's Secret Bride",
-     'rank': 1, 'surface': 'hero', 'genre': 'Billionaire',
-     'episodes': ['Ep 1', 'Ep 2', 'Ep 3', 'Ep 4', 'Ep 5', 'Ep 6', 'Ep 7', 'Ep 8']},
-    {'title': "Mafia Prince's Runaway Wife", 'series': "Mafia Prince's Runaway Wife",
-     'rank': 2, 'surface': 'hero', 'genre': 'Mafia',
-     'episodes': ['Ep 1', 'Ep 2', 'Ep 3', 'Ep 4', 'Ep 5', 'Ep 6']},
-    # Top rail (positions 3-8)
-    {'title': 'Married to My Alpha CEO', 'series': 'Married to My Alpha CEO',
-     'rank': 3, 'surface': 'top_rail', 'genre': 'CEO',
-     'episodes': ['Ep 1', 'Ep 2', 'Ep 3', 'Ep 4']},
-    {'title': "Stepbrother, You're Mine Now", 'series': "Stepbrother, You're Mine Now",
-     'rank': 4, 'surface': 'top_rail', 'genre': 'Second Chance',
-     'episodes': ['Ep 1', 'Ep 2', 'Ep 3']},
-    {'title': 'The Werewolf Boss Next Door', 'series': 'The Werewolf Boss Next Door',
-     'rank': 5, 'surface': 'top_rail', 'genre': 'Werewolf',
-     'episodes': ['Ep 1', 'Ep 2', 'Ep 3', 'Ep 4', 'Ep 5']},
-    {'title': 'Revenge on the Ivy Elite', 'series': 'Revenge on the Ivy Elite',
+    # Hero rail (positions 1-2) - the two most-heavily promoted at launch
+    {'title': 'Do Not Disturb: Lady Boss in Disguise',
+     'series': 'Do Not Disturb: Lady Boss in Disguise',
+     'rank': 1, 'surface': 'hero', 'genre': 'Romance',
+     'episodes': [f'Ep {i}' for i in range(1, 82)]},  # 81 episodes
+    {'title': 'Love Me, Bite Me', 'series': 'Love Me, Bite Me',
+     'rank': 2, 'surface': 'hero', 'genre': 'Vampire',
+     'episodes': [f'Ep {i}' for i in range(1, 69)]},  # 68 episodes
+    # Top rail (positions 3-8) - the rest of the ReelShort scripted slate
+    {'title': 'Fated to My Forbidden Alpha',
+     'series': 'Fated to My Forbidden Alpha',
+     'rank': 3, 'surface': 'top_rail', 'genre': 'Werewolf',
+     'episodes': [f'Ep {i}' for i in range(1, 61)]},  # 60 episodes
+    {'title': 'Straight A Pregnancy', 'series': 'Straight A Pregnancy',
+     'rank': 4, 'surface': 'top_rail', 'genre': 'YA',
+     'episodes': [f'Ep {i}' for i in range(1, 66)]},  # 65 episodes
+    {'title': 'Wings of Fire: The Dragon Slayer Is My Ex-Lover',
+     'series': 'Wings of Fire: The Dragon Slayer Is My Ex-Lover',
+     'rank': 5, 'surface': 'top_rail', 'genre': 'Fantasy',
+     'episodes': [f'Ep {i}' for i in range(1, 61)]},  # 60 episodes
+    {'title': "30 Days Till I Marry My Husband's Nemesis",
+     'series': "30 Days Till I Marry My Husband's Nemesis",
      'rank': 6, 'surface': 'top_rail', 'genre': 'Revenge',
-     'episodes': ['Ep 1', 'Ep 2']},
-    {'title': "The Vampire's Contract Fiancee", 'series': "The Vampire's Contract Fiancee",
-     'rank': 7, 'surface': 'top_rail', 'genre': 'Werewolf',
-     'episodes': ['Ep 1', 'Ep 2', 'Ep 3']},
-    {'title': 'My Fake Marriage to a Real Mafia', 'series': 'My Fake Marriage to a Real Mafia',
-     'rank': 8, 'surface': 'top_rail', 'genre': 'Mafia',
-     'episodes': ['Ep 1', 'Ep 2']},
-    # Mid rail (positions 9-16)
-    {'title': 'Rewriting My Sports-Star Ex', 'series': 'Rewriting My Sports-Star Ex',
-     'rank': 9, 'surface': 'mid_rail', 'genre': 'Revenge',
-     'episodes': ['Ep 1', 'Ep 2', 'Ep 3']},
-    {'title': 'The Undercover Cop Wants Me', 'series': 'The Undercover Cop Wants Me',
-     'rank': 10, 'surface': 'mid_rail', 'genre': 'Mafia',
-     'episodes': ['Ep 1', 'Ep 2']},
-    {'title': 'Secret Assassin, Doting Wife', 'series': 'Secret Assassin, Doting Wife',
-     'rank': 11, 'surface': 'mid_rail', 'genre': 'Mafia',
-     'episodes': ['Ep 1']},
-    {'title': 'Sold to the Highest Bidder', 'series': 'Sold to the Highest Bidder',
-     'rank': 12, 'surface': 'mid_rail', 'genre': 'Billionaire',
-     'episodes': ['Ep 1', 'Ep 2']},
-    {'title': "The Nanny's Billionaire", 'series': "The Nanny's Billionaire",
-     'rank': 13, 'surface': 'mid_rail', 'genre': 'Billionaire',
-     'episodes': ['Ep 1', 'Ep 2', 'Ep 3', 'Ep 4']},
-    {'title': 'Dumped, Rich, and Ready for Payback',
-     'series': 'Dumped, Rich, and Ready for Payback',
-     'rank': 14, 'surface': 'mid_rail', 'genre': 'Second Chance',
-     'episodes': ['Ep 1', 'Ep 2']},
-    {'title': 'Trapped by the Vampire King', 'series': 'Trapped by the Vampire King',
-     'rank': 15, 'surface': 'mid_rail', 'genre': 'Werewolf',
-     'episodes': ['Ep 1']},
-    {'title': 'Bride of the Snow Mountain General',
-     'series': 'Bride of the Snow Mountain General',
-     'rank': 16, 'surface': 'mid_rail', 'genre': 'CEO',
-     'episodes': ['Ep 1', 'Ep 2']},
-    # Deep rail (positions 17+)
-    {'title': 'The Bodyguard Who Loved Me', 'series': 'The Bodyguard Who Loved Me',
-     'rank': 17, 'surface': 'deep_rail', 'genre': 'Billionaire',
-     'episodes': ['Ep 1']},
-    {'title': "CEO's Substitute Bride", 'series': "CEO's Substitute Bride",
-     'rank': 18, 'surface': 'deep_rail', 'genre': 'CEO',
-     'episodes': ['Ep 1']},
-    {'title': 'The Return of the Divorced Wife', 'series': 'The Return of the Divorced Wife',
-     'rank': 19, 'surface': 'deep_rail', 'genre': 'Second Chance',
-     'episodes': ['Ep 1']},
-    {'title': 'Warrior Werewolves of the East Coast',
-     'series': 'Warrior Werewolves of the East Coast',
-     'rank': 20, 'surface': 'deep_rail', 'genre': 'Werewolf',
-     'episodes': ['Ep 1']},
+     'episodes': [f'Ep {i}' for i in range(1, 55)]},  # 54 episodes
+    {'title': 'Baby Just Say Yes', 'series': 'Baby Just Say Yes',
+     'rank': 7, 'surface': 'top_rail', 'genre': 'Billionaire',
+     'episodes': [f'Ep {i}' for i in range(1, 59)]},  # 58 episodes
+    {'title': 'Duke with Benefits', 'series': 'Duke with Benefits',
+     'rank': 8, 'surface': 'top_rail', 'genre': 'Historical Romance',
+     'episodes': [f'Ep {i}' for i in range(1, 51)]},  # 50 episodes
+    # Mid rail (positions 9-12) - remaining ReelShort scripted + Bravo unscripted
+    {'title': 'Call Boy I Met in Paris', 'series': 'Call Boy I Met in Paris',
+     'rank': 9, 'surface': 'mid_rail', 'genre': 'Billionaire',
+     'episodes': [f'Ep {i}' for i in range(1, 53)]},  # 52 episodes
+    {'title': 'Undercover Prison King', 'series': 'Undercover Prison King',
+     'rank': 10, 'surface': 'mid_rail', 'genre': 'Crime',
+     'episodes': [f'Ep {i}' for i in range(1, 49)]},  # 48 episodes
+    {'title': 'Campus Confidential: Miami',
+     'series': 'Campus Confidential: Miami',
+     'rank': 11, 'surface': 'mid_rail', 'genre': 'Reality',
+     'episodes': [f'Ep {i}' for i in range(1, 21)]},  # 20 episodes
+    {'title': 'Salon Confessionals with Madison LeCroy',
+     'series': 'Salon Confessionals with Madison LeCroy',
+     'rank': 12, 'surface': 'mid_rail', 'genre': 'Reality',
+     'episodes': [f'Ep {i}' for i in range(1, 21)]},  # 20 episodes
+]
+
+# Titles that shipped in an earlier draft of this file but do NOT
+# exist on the actual Peacock Microdramas Hub. Kept here as a purge
+# list so a seed-mode run can remove them from the persistent catalog
+# on S3. See _purge_legacy_baseline_from_catalog() below.
+#
+# These strings were early working names never validated against
+# Peacock's shipped slate. Every one was replaced in the 2026-09-01
+# correction after a customer reported that "The Vampire's Contract
+# Fiancee" (row #1 by views on the dashboard) could not be found on
+# Peacock. Google surfaced the real Peacock vampire title as
+# "Love Me, Bite Me" (rank 2 above) instead.
+LEGACY_BASELINE_TITLES_TO_PURGE = [
+    "The Billionaire's Secret Bride",
+    "Mafia Prince's Runaway Wife",
+    "Married to My Alpha CEO",
+    "Stepbrother, You're Mine Now",
+    "The Werewolf Boss Next Door",
+    "Revenge on the Ivy Elite",
+    "The Vampire's Contract Fiancee",
+    "My Fake Marriage to a Real Mafia",
+    "Rewriting My Sports-Star Ex",
+    "The Undercover Cop Wants Me",
+    "Secret Assassin, Doting Wife",
+    "Sold to the Highest Bidder",
+    "The Nanny's Billionaire",
+    "Dumped, Rich, and Ready for Payback",
+    "Trapped by the Vampire King",
+    "Bride of the Snow Mountain General",
+    "The Bodyguard Who Loved Me",
+    "CEO's Substitute Bride",
+    "The Return of the Divorced Wife",
+    "Warrior Werewolves of the East Coast",
 ]
 
 
@@ -389,8 +413,55 @@ def fetch() -> dict:
     }
 
 
-def _write_snapshot(payload: dict) -> None:
-    """Write snapshot to S3 and merge into the persistent catalog."""
+def _purge_legacy_baseline_from_catalog(catalog: dict) -> int:
+    """Drop stale Peacock catalog entries whose title matches a legacy
+    baseline row that has since been retired. Case + punctuation
+    insensitive via `_norm_key`.
+
+    Returns the number of entries removed. Safe to call on any catalog:
+    if none of the legacy strings are present, this is a no-op.
+
+    The persistent catalog is additive by design (see
+    `microdramas_iq.integrate_snapshot`), so replacing a baseline row
+    in this file does not on its own remove the ghost entry from
+    S3. This helper does the removal, in place, on the same catalog
+    key. Consistent with the workspace rule 'no rebuild-level
+    correction': we never ask for a re-pull, never quarantine, we
+    fix the persistent record in place.
+    """
+    try:
+        # Resolve microdramas_iq from bg-webapp regardless of cwd
+        here = os.path.dirname(os.path.abspath(__file__))
+        bgapp = os.path.abspath(os.path.join(here, '..', '..'))
+        if bgapp not in sys.path:
+            sys.path.insert(0, bgapp)
+        from microdramas_iq import _norm_key  # type: ignore
+    except Exception:
+        # Fallback: same normalization inline
+        import re as _re
+
+        def _norm_key(s: str) -> str:  # type: ignore
+            return _re.sub(r'[^a-z0-9]+', '', (s or '').lower())
+
+    titles = catalog.get('titles') or {}
+    purge_keys = {_norm_key(t) for t in LEGACY_BASELINE_TITLES_TO_PURGE}
+    removed = 0
+    for k in list(titles.keys()):
+        if k in purge_keys:
+            titles.pop(k, None)
+            removed += 1
+    return removed
+
+
+def _write_snapshot(payload: dict, *, purge_legacy: bool = False) -> None:
+    """Write snapshot to S3 and merge into the persistent catalog.
+
+    When `purge_legacy` is True, remove any ghost entries in the
+    persistent catalog whose title matches `LEGACY_BASELINE_TITLES_TO_PURGE`
+    BEFORE merging the new snapshot. This is how a `--seed` run
+    corrects the persistent catalog in place: it replaces the stale
+    rows with the current baseline atomically.
+    """
     try:
         import boto3  # type: ignore
     except ImportError:
@@ -417,7 +488,8 @@ def _write_snapshot(payload: dict) -> None:
                    ContentType='application/json')
     print(f'  wrote s3://{bucket}/{key_dated}')
 
-    # Merge into the catalog
+    # Merge into the catalog (with optional in-place purge of
+    # retired baseline rows).
     try:
         # Resolve microdramas_iq from bg-webapp regardless of cwd
         here = os.path.dirname(os.path.abspath(__file__))
@@ -425,7 +497,15 @@ def _write_snapshot(payload: dict) -> None:
         if bgapp not in sys.path:
             sys.path.insert(0, bgapp)
         import microdramas_iq  # type: ignore
-        catalog = microdramas_iq.integrate_snapshot(payload)
+        catalog = microdramas_iq.read_catalog()
+        if purge_legacy:
+            removed = _purge_legacy_baseline_from_catalog(catalog)
+            print(f'  purged {removed} legacy baseline entries from catalog')
+        catalog = microdramas_iq.integrate_snapshot(payload)  # re-reads then merges
+        # integrate_snapshot re-reads inside; re-apply the purge to the
+        # merged result so we always publish a clean catalog.
+        if purge_legacy:
+            _purge_legacy_baseline_from_catalog(catalog)
         microdramas_iq.write_catalog(catalog)
         print(f'  merged into catalog ({len(catalog.get("titles") or {})} titles total)')
     except Exception as e:
@@ -435,9 +515,14 @@ def _write_snapshot(payload: dict) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description='Peacock microdramas scraper.')
     ap.add_argument('--seed', action='store_true',
-                     help='Skip live pull; write curated baseline only.')
+                     help='Skip live pull; write curated baseline only. '
+                          'Automatically purges retired baseline rows '
+                          'from the persistent catalog before merge.')
     ap.add_argument('--dry-run', action='store_true',
                      help='Print payload to stdout, do not upload.')
+    ap.add_argument('--purge-legacy', action='store_true',
+                     help='Force the legacy-baseline purge even on a '
+                          'live-pull run. Safe on any run.')
     args = ap.parse_args()
 
     logging.basicConfig(level=logging.INFO,
@@ -458,7 +543,10 @@ def main() -> int:
         print(json.dumps(payload, indent=2))
         return 0
 
-    _write_snapshot(payload)
+    # A seed run always purges the retired baseline rows, so the
+    # persistent catalog matches the baseline in this file. Live runs
+    # opt in via --purge-legacy.
+    _write_snapshot(payload, purge_legacy=(args.seed or args.purge_legacy))
     return 0
 
 
