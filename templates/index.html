@@ -25371,9 +25371,9 @@ https://www.instagram.com/p/..."></textarea>
                 <div>
                     <label for="trendsIQLookback">Window</label>
                     <select id="trendsIQLookback">
-                        <option value="1">Today</option>
+                        <option value="1" selected>Today</option>
                         <option value="3">Last 3 days</option>
-                        <option value="7" selected>Last 7 days</option>
+                        <option value="7">Last 7 days</option>
                         <option value="14">Last 14 days</option>
                         <option value="30">Last 30 days</option>
                     </select>
@@ -52503,7 +52503,7 @@ https://www.instagram.com/p/..."></textarea>
             var filters = {
                 geo_type:      document.getElementById('trendsIQGeoType').value || 'National',
                 geo_value:     document.getElementById('trendsIQGeoValue').value || '',
-                lookback_days: parseInt(document.getElementById('trendsIQLookback').value || '7', 10),
+                lookback_days: parseInt(document.getElementById('trendsIQLookback').value || '1', 10),
                 asof:          asOfVal || null,
             };
             if ((filters.geo_type === 'State' || filters.geo_type === 'DMA') && !filters.geo_value) {
@@ -53307,7 +53307,7 @@ https://www.instagram.com/p/..."></textarea>
             if (meta) {
                 var _asOfSuffix = filters.historic ? (' | Viewing ' + filters.asof) : '';
                 meta.textContent = 'Trending for ' + (filters.geo_label || 'National')
-                                   + ' - last ' + (filters.lookback_days || 7) + ' days'
+                                   + ' - last ' + (filters.lookback_days || 1) + ' days'
                                    + _asOfSuffix;
                 // Historic-mode styling: a small purple accent on the meta
                 // line makes it obvious the user is time-travelling and
