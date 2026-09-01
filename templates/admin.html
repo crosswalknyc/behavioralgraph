@@ -4143,68 +4143,57 @@
                         </div>
                     </div>
                     
-                    <!-- 📈 TRENDS group (2026-07-30 consolidation per Jenna:
-                         "do trends as a drop down then within trends do
-                         trends, talent, microdramas"). Mirrors the SELECT
-                         PRODUCT dropdown's Trends group so admins can grant
-                         all three products at once or individually from a
-                         single collapsible card. Master checkbox in the
-                         header is a synthetic control (has no backend flag);
-                         it just mass-toggles the three real inputs
-                         (hasTrendsIQAccess / hasRankersIQAccess /
-                         hasMicrodramasIQAccess) whose values are what the
-                         create/edit user POST payloads actually read.
-                         Master state (checked / unchecked / indeterminate)
-                         is reconciled by syncTrendsGroupMaster() whenever a
-                         child toggles or the modal loads. -->
+                    <!-- 2026-09-01: Trends / Rankers / Microdramas listed as
+                         THREE INDEPENDENT grants. Previously a single "📈 TRENDS"
+                         group whose synthetic master (hasTrendsGroupAccess)
+                         cascaded bulk grant/revoke to all three children,
+                         which risked grandfathering existing Trends users
+                         into Rankers. Each real flag now lives in its own
+                         header and is granted individually. The
+                         has_trends_iq_access / has_rankers_iq_access /
+                         has_microdramas_iq_access flags all default False in
+                         app.py, so nothing is granted implicitly. -->
                     <div class="dashboard-access-item" data-access-group="trends">
-                        <div class="dashboard-access-header" onclick="toggleDashboardSection('trendsGroup')">
-                            <label class="checkbox-group" onclick="event.stopPropagation()">
-                                <input type="checkbox" id="hasTrendsGroupAccess" onchange="onTrendsGroupMasterChange()">
-                                <span style="font-weight: 600;">📈 TRENDS</span>
-                                <span style="font-size: 0.7rem; color: var(--text-secondary); margin-left: 0.4rem; font-weight: 400; text-transform: none;">3 products</span>
+                        <div class="dashboard-access-header" style="cursor: default;">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasTrendsIQAccess">
+                                <span style="font-weight: 600;">📈 Trends</span>
                             </label>
-                            <span class="collapse-icon rotated" id="trendsGroupIcon">▼</span>
                         </div>
-                        <div id="trendsGroupSection" class="dashboard-access-content" style="display: none;">
-                            <div style="padding: 0.6rem 0.9rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.4rem; display: flex; flex-direction: column; gap: 0.4rem;">
-                                <label class="checkbox-group" style="margin: 0;">
-                                    <input type="checkbox" id="hasTrendsIQAccess" onchange="syncTrendsGroupMaster()">
-                                    <span style="text-transform: none;">📈 Trends</span>
-                                </label>
-                                <label class="checkbox-group" style="margin: 0;">
-                                    <input type="checkbox" id="hasRankersIQAccess" onchange="syncTrendsGroupMaster()">
-                                    <span style="text-transform: none;">📊 Rankers</span>
-                                </label>
-                                <label class="checkbox-group" style="margin: 0;">
-                                    <input type="checkbox" id="hasMicrodramasIQAccess" onchange="syncTrendsGroupMaster()">
-                                    <span style="text-transform: none;">📱 Microdramas</span>
-                                </label>
-                                <small style="color: var(--text-secondary); font-size: 0.68rem; margin-top: 0.3rem;">
-                                    Grants per-user access to each Trends-group product in the SELECT PRODUCT dropdown. Toggle the header to grant all three at once.
-                                </small>
-                            </div>
-                            <!-- Vestigial legacy Talent Ranker sub-inputs kept
-                                 in DOM (permanently hidden) so createUser /
-                                 editUser POST payload builders and the
-                                 ranker-option select-all helpers can still
-                                 read their .checked values without null-deref.
-                                 See prior card revisions for context. -->
-                            <div id="rankersIQSection" style="display: none;" aria-hidden="true"></div>
-                            <span id="rankersIQIcon" class="collapse-icon rotated" style="display: none !important;">▼</span>
-                            <div style="display: none !important;" aria-hidden="true">
-                                <input type="checkbox" id="rankerAllNetflix" class="ranker-option-checkbox">
-                                <input type="checkbox" id="rankerDailySeries" class="ranker-option-checkbox">
-                                <input type="checkbox" id="rankerDailySeasons" class="ranker-option-checkbox">
-                                <input type="checkbox" id="rankerDailyEpisodes" class="ranker-option-checkbox">
-                                <input type="checkbox" id="rankerTrends" class="ranker-option-checkbox">
-                                <input type="checkbox" id="rankerGenre" class="ranker-option-checkbox">
-                                <input type="checkbox" id="rankerTopShows" class="ranker-option-checkbox">
-                                <input type="checkbox" id="rankerInsights" class="ranker-option-checkbox">
-                                <input type="checkbox" id="rankerGoodshort" class="ranker-option-checkbox">
-                                <input type="checkbox" id="rankerShorttv" class="ranker-option-checkbox">
-                                <input type="checkbox" id="rankerReelshort" class="ranker-option-checkbox">
-                            </div>
+                    </div>
+                    <div class="dashboard-access-item" data-access-group="trends">
+                        <div class="dashboard-access-header" style="cursor: default;">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasRankersIQAccess">
+                                <span style="font-weight: 600;">📊 Rankers</span>
+                            </label>
+                        </div>
+                        <!-- Vestigial legacy Talent Ranker sub-inputs kept in
+                             DOM (permanently hidden) so createUser / editUser
+                             POST payload builders + ranker-option helpers can
+                             still read their .checked values without null-deref. -->
+                        <div id="rankersIQSection" style="display: none;" aria-hidden="true"></div>
+                        <span id="rankersIQIcon" class="collapse-icon rotated" style="display: none !important;">▼</span>
+                        <div style="display: none !important;" aria-hidden="true">
+                            <input type="checkbox" id="rankerAllNetflix" class="ranker-option-checkbox">
+                            <input type="checkbox" id="rankerDailySeries" class="ranker-option-checkbox">
+                            <input type="checkbox" id="rankerDailySeasons" class="ranker-option-checkbox">
+                            <input type="checkbox" id="rankerDailyEpisodes" class="ranker-option-checkbox">
+                            <input type="checkbox" id="rankerTrends" class="ranker-option-checkbox">
+                            <input type="checkbox" id="rankerGenre" class="ranker-option-checkbox">
+                            <input type="checkbox" id="rankerTopShows" class="ranker-option-checkbox">
+                            <input type="checkbox" id="rankerInsights" class="ranker-option-checkbox">
+                            <input type="checkbox" id="rankerGoodshort" class="ranker-option-checkbox">
+                            <input type="checkbox" id="rankerShorttv" class="ranker-option-checkbox">
+                            <input type="checkbox" id="rankerReelshort" class="ranker-option-checkbox">
+                        </div>
+                    </div>
+                    <div class="dashboard-access-item" data-access-group="trends">
+                        <div class="dashboard-access-header" style="cursor: default;">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasMicrodramasIQAccess">
+                                <span style="font-weight: 600;">📱 Microdramas</span>
+                            </label>
                         </div>
                     </div>
                 </div>
