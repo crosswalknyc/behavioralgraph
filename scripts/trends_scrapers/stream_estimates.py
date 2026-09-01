@@ -722,9 +722,15 @@ def _collect_comics(max_items: int = _MAX_COMIC_ITEMS) -> list[dict]:
     return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
 
 
-_MAX_SEARCH_TERM_ITEMS     = 400
-_MAX_TRENDING_PERSON_ITEMS = 60
-_MAX_WIKI_TOPIC_ITEMS      = 60
+# Bumped 2026-08-31 (Jenna: "everything should have a value in US Audience
+# except films"). Cap now sized to accommodate the union of compute_view's
+# rendered rows (Search tab ~300 + per-category ~350 + Movers ~100 = ~750
+# unique) AND the wider google_wide snapshot's ~800 tail so both sources
+# fit comfortably. Collectors seed compute_view rows FIRST so the actually-
+# rendered items always land in the cap even on days the snapshot outsizes.
+_MAX_SEARCH_TERM_ITEMS     = 1200
+_MAX_TRENDING_PERSON_ITEMS = 120
+_MAX_WIKI_TOPIC_ITEMS      = 120
 
 
 def _score_to_interest_100(score: int) -> int:
@@ -759,43 +765,178 @@ def _score_to_interest_100(score: int) -> int:
     return 5
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# compute_view augmenter (Search / People / Wiki)
+# ─────────────────────────────────────────────────────────────────────────
+# The Search / People / Wiki cards in trends_iq render a LIVE list of
+# entities dynamically mined from headlines + searches + social every
+# time compute_view runs. Those lists diverge from the daily
+# `gdelt-people.json` / `wikipedia_trending.json` / `google_wide.json`
+# snapshots the daily scrapers write, so a collector that only reads
+# snapshots will price entities the dashboard never surfaces (and miss
+# the ones it does).
+#
+# The lazy augmenter below imports trends_iq.compute_view on demand and
+# extracts the currently-rendered entities so every rendered row can
+# actually be priced. The import is intentionally deferred to the first
+# call so unrelated scraper runs (song / podcast / book / etc.) don't
+# pay the compute_view warm-up cost.
+_COMPUTE_VIEW_CACHE: Optional[dict] = None
+
+
+def _compute_view_cards() -> dict:
+    """Return `cards` from a compute_view() call, cached for the
+    duration of this process. Prefers the warm S3 cache (matches what
+    the dashboard is currently rendering); falls back to a fresh
+    build if that returns empty. Best-effort: returns {} on total
+    failure."""
+    global _COMPUTE_VIEW_CACHE
+    if _COMPUTE_VIEW_CACHE is not None:
+        return _COMPUTE_VIEW_CACHE
+    try:
+        import sys as _sys
+        _here = os.path.dirname(os.path.abspath(__file__))
+        _webapp = os.path.abspath(os.path.join(_here, '..', '..'))
+        if _webapp not in _sys.path:
+            _sys.path.insert(0, _webapp)
+        from trends_iq import compute_view  # type: ignore
+        # Warm-cache read first (0.1s S3 read, matches dashboard state).
+        try:
+            payload = compute_view({}, force_refresh=False) or {}
+        except Exception as e_warm:
+            logger.warning("compute_view warm-cache read failed (%s), "
+                            "retrying with force_refresh=True", e_warm)
+            payload = {}
+        cards = payload.get('cards') or {}
+        # If cache was cold or shape looked empty, try a full rebuild.
+        if not cards or not (cards.get('trending_searches')
+                              or cards.get('trending_people')):
+            try:
+                payload = compute_view({}, force_refresh=True) or {}
+                cards = payload.get('cards') or {}
+            except Exception as e_fresh:
+                logger.warning("compute_view force_refresh failed (%s); "
+                                "using whatever the warm read returned",
+                                e_fresh)
+        _COMPUTE_VIEW_CACHE = cards or {}
+        logger.info("compute_view augmenter: cached %d card keys "
+                     "(trending_searches=%d, trending_people=%d, wiki=%d)",
+                     len(_COMPUTE_VIEW_CACHE),
+                     len(_COMPUTE_VIEW_CACHE.get('trending_searches') or []),
+                     len(_COMPUTE_VIEW_CACHE.get('trending_people') or []),
+                     len(_COMPUTE_VIEW_CACHE.get('wikipedia_trending') or []))
+    except Exception as e:
+        logger.warning("compute_view augmenter: import/call failed (%s), "
+                        "falling back to snapshot-only collection", e)
+        _COMPUTE_VIEW_CACHE = {}
+    return _COMPUTE_VIEW_CACHE
+
+
 def _collect_search_terms(max_items: int = _MAX_SEARCH_TERM_ITEMS) -> list[dict]:
-    """Union trending search queries from `google_wide` (the wide
-    aggregation from Hetzner) so every currently-trending US query
-    surfaces with a weekly-searchers estimate."""
-    snap = _read_snapshot('google_wide')
-    if not snap:
-        return []
+    """Union trending search queries from what compute_view is
+    currently rendering (Search tab + per-category buckets + Movers)
+    PLUS the wider `google_wide` snapshot tail. compute_view rows go
+    FIRST so the dashboard-visible items always land inside the cap
+    even on days the snapshot outsizes; snapshot rows backfill the
+    long tail so tomorrow's compute_view rebuild still has coverage
+    for terms that trended overnight without a fresh scraper run."""
     per: dict[str, dict] = {}
-    rows = snap.get('national') or []
-    for i, r in enumerate(rows):
-        term = (r.get('term') or '').strip()
-        if not term:
-            continue
-        key = _cp_normalize(term)
+    next_rank = 1
+
+    def _add(term: str, source_label: str, row: dict, category: str = '') -> None:
+        nonlocal next_rank
+        t = (term or '').strip()
+        if not t:
+            return
+        key = _cp_normalize(t)
         if not key or key in per:
-            continue
-        related = list(r.get('related') or [])[:5]
+            return
         per[key] = {
             'kind':               'search_term',
-            'display_title':      term,
+            'display_title':      t,
             'artist':             '',
-            'best_rank':          i + 1,
-            'chart_labels':       ['Google Trends (US)'],
-            'interest_score':     _score_to_interest_100(r.get('score')),
-            'volume_growth_pct':  int(r.get('volume_growth_pct') or 0),
-            'category':           r.get('category') or '',
-            'related':            related,
+            'best_rank':          next_rank,
+            'chart_labels':       [source_label],
+            'interest_score':     _score_to_interest_100(
+                row.get('score_today') or row.get('score')),
+            'volume_growth_pct':  int(row.get('volume_growth_pct') or 0),
+            'category':           category or row.get('category') or '',
+            'related':            list(row.get('related') or [])[:5],
         }
+        next_rank += 1
+
+    # 1) compute_view live pass FIRST - every row here is currently
+    #    rendered on the dashboard. Pricing these guarantees the chip
+    #    shows for what the user sees.
+    cards = _compute_view_cards()
+    if cards:
+        for row in (cards.get('trending_searches') or []):
+            _add(row.get('term') or row.get('title') or '',
+                  'Google Trends (US)', row)
+        for _bucket, bucket_rows in (cards.get('trending_searches_by_category') or {}).items():
+            for row in (bucket_rows or []):
+                _add(row.get('term') or row.get('title') or '',
+                      'Google Trends (US)', row, category=_bucket)
+        movers = cards.get('movers') or {}
+        for _bkey in ('breakout', 'rising', 'falling', 'sustained'):
+            for row in (movers.get(_bkey) or []):
+                _add(row.get('term') or row.get('title') or '',
+                      'Google Trends Movers (US)', row, category=_bkey)
+
+    # 2) Snapshot backfill - fills the tail with google_wide items so
+    #    tomorrow's compute_view still has ready-to-serve estimates
+    #    for terms that trended overnight without a fresh scraper run.
+    snap = _read_snapshot('google_wide')
+    if snap:
+        for r in (snap.get('national') or []):
+            _add(r.get('term') or '', 'Google Trends (US)', r)
+
     return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
 
 
 def _collect_trending_people(max_items: int = _MAX_TRENDING_PERSON_ITEMS) -> list[dict]:
-    """Union trending people from today's `gdelt-people` snapshot
-    (falls back to the most recent snapshot within the past 7 days
-    when today's isn't written yet). Wikipedia daily pageviews
-    ride along so the prompt can anchor to the strongest single
-    signal we have for lesser-known names."""
+    """Union trending people from compute_view's live `trending_people`
+    list (what the dashboard is rendering RIGHT NOW) PLUS today's
+    `gdelt-people` snapshot as tail backfill. trends_iq mints
+    trending_people dynamically at request time from headlines +
+    searches + wiki + articles so its list can diverge from the daily
+    snapshot; compute_view rows go FIRST so the visible chip coverage
+    stays aligned with what the user sees."""
+    per: dict[str, dict] = {}
+    next_rank = 1
+
+    def _add(name: str, row: dict) -> None:
+        nonlocal next_rank
+        n = (name or '').strip()
+        if not n:
+            return
+        key = _cp_normalize(n)
+        if not key or key in per:
+            return
+        # `pageviews` is a 7-day total on the snapshot rows; some
+        # compute_view rows store a `views_today` (daily) instead.
+        pv_total = int(row.get('pageviews') or 0)
+        wiki_daily = (int(row.get('views_today'))
+                       if row.get('views_today') is not None
+                       else (int(pv_total / 7) if pv_total else 0))
+        per[key] = {
+            'kind':                 'trending_person',
+            'display_title':        n,
+            'artist':               '',
+            'best_rank':            next_rank,
+            'chart_labels':         ['Trending People (US)'],
+            'wiki_daily_pageviews': wiki_daily,
+            'news_mentions':        int(row.get('mentions') or 0),
+        }
+        next_rank += 1
+
+    # 1) compute_view live pass FIRST.
+    cards = _compute_view_cards()
+    if cards:
+        for row in (cards.get('trending_people') or []):
+            _add(row.get('name') or '', row)
+
+    # 2) gdelt-people snapshot backfill (last 8 days).
     people_rows: list[dict] = []
     for days_back in range(0, 8):
         d = date.today() - timedelta(days=days_back)
@@ -812,61 +953,50 @@ def _collect_trending_people(max_items: int = _MAX_TRENDING_PERSON_ITEMS) -> lis
         if rows:
             people_rows = rows
             break
-    per: dict[str, dict] = {}
-    for i, r in enumerate(people_rows):
-        name = (r.get('name') or '').strip()
-        if not name:
-            continue
-        key = _cp_normalize(name)
-        if not key or key in per:
-            continue
-        # gdelt-people persists `pageviews` as a total (not per-day).
-        # trends_iq's `_write_history_snapshots` writes whatever
-        # `wikipedia_pageviews` returned (lookback_days rolled up).
-        # Convert to a daily average so the prompt anchor formula is
-        # consistent. Assume 7-day window when no explicit day count.
-        pv_total = int(r.get('pageviews') or 0)
-        wiki_daily = int(pv_total / 7) if pv_total else 0
-        per[key] = {
-            'kind':                 'trending_person',
-            'display_title':        name,
-            'artist':               '',
-            'best_rank':            i + 1,
-            'chart_labels':         ['Trending People (US)'],
-            'wiki_daily_pageviews': wiki_daily,
-            'news_mentions':        int(r.get('mentions') or 0),
-        }
+    for r in people_rows:
+        _add(r.get('name') or '', r)
+
     return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
 
 
 def _collect_wiki_topics(max_items: int = _MAX_WIKI_TOPIC_ITEMS) -> list[dict]:
-    """Union trending Wikipedia entries from `wikipedia_trending`
-    (both people and non-people). The trending-people collector
-    handles the person subset via a stronger cross-source signal,
-    but every Wikipedia entry that renders on the dashboard should
-    also carry a chip - `wiki_topic` covers the ones that never
-    made the news / search pool."""
-    snap = _read_snapshot('wikipedia_trending')
-    if not snap:
-        return []
+    """Union compute_view's live Wikipedia rail PLUS the snapshot
+    tail. compute_view rows first so the visible chip coverage stays
+    aligned; snapshot backfills the tail."""
     per: dict[str, dict] = {}
-    for i, r in enumerate(snap.get('national') or []):
-        title = (r.get('title') or '').strip()
-        if not title:
-            continue
-        key = _cp_normalize(title)
+    next_rank = 1
+
+    def _add(title: str, row: dict) -> None:
+        nonlocal next_rank
+        t = (title or '').strip()
+        if not t:
+            return
+        key = _cp_normalize(t)
         if not key or key in per:
-            continue
-        desc = (r.get('description') or '').strip()
+            return
+        desc = (row.get('description') or row.get('extract') or '').strip()
         per[key] = {
             'kind':                 'wiki_topic',
-            'display_title':        title,
+            'display_title':        t,
             'artist':               desc,
-            'best_rank':            i + 1,
+            'best_rank':            next_rank,
             'chart_labels':         ['Wikipedia Trending (US)'],
-            'wiki_daily_pageviews': int(r.get('views_today') or 0),
+            'wiki_daily_pageviews': int(row.get('views_today')
+                                         or row.get('pageviews') or 0),
             'wiki_description':     desc,
         }
+        next_rank += 1
+
+    cards = _compute_view_cards()
+    if cards:
+        for row in (cards.get('wikipedia_trending') or []):
+            _add(row.get('title') or '', row)
+
+    snap = _read_snapshot('wikipedia_trending')
+    if snap:
+        for r in (snap.get('national') or []):
+            _add(r.get('title') or '', r)
+
     return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
 
 

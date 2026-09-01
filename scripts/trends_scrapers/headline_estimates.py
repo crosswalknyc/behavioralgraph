@@ -85,11 +85,15 @@ _S3_DATED  = 'trends_iq_snapshots/{date}/'
 
 
 # -------------------------------------------------------------------------
-# Caps. ~22 outlets x top 5 = 110 articles / day; dedup drops ~10-15% for
-# syndicated stories. Sonnet 4.5 + web_search ~$0.02/item -> ~$2/day.
-# Well within budget.
+# Caps. Bumped 2026-08-31 (Jenna: "everything should have a value in US
+# Audience except films") to 800: the dashboard renders top 15 overall +
+# ~19 outlets x 5 + Business 40 + Wall Street 50 + Philanthropy 40 +
+# each of the *_by_source dicts (~200 more) ~= 500-600 unique headlines
+# per compute_view. 800 gives headroom for churn. Sonnet 4.5 web_search
+# ~$0.02/item -> ~$12-16/day, offset intra-day by the "already researched
+# today" dedupe below.
 # -------------------------------------------------------------------------
-_MAX_HEADLINE_ITEMS  = 200
+_MAX_HEADLINE_ITEMS  = 800
 
 _WEBSEARCH_MODEL      = (os.environ.get('HEADLINE_ESTIMATES_MODEL')
                           or 'claude-sonnet-4-5')
@@ -131,24 +135,157 @@ def _read_dated_snapshot(source: str, days_back: int) -> Optional[dict]:
         return None
 
 
+def _read_snapshot(source: str) -> Optional[dict]:
+    try:
+        obj = _s3().get_object(Bucket=_S3_BUCKET,
+                                Key=f'{_S3_LATEST}{source}.json')
+        return json.loads(obj['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+
+
 # -------------------------------------------------------------------------
 # Item collection.
 #
-# We reuse `trends_iq._fetch_all_news_feeds` so this stays in lock-step
-# with whatever the dashboard actually renders. Any new outlet added to
-# `trends_iq.NEWS_FEEDS` is automatically covered.
+# 2026-08-31 update: collectors now seed from compute_view's live
+# render output FIRST so every headline the dashboard is actually
+# showing gets priced. Snapshot + RSS pools backfill the tail so
+# tomorrow's compute_view still has ready-to-serve estimates for
+# stories that broke overnight without a fresh scraper run.
 # -------------------------------------------------------------------------
+_COMPUTE_VIEW_CACHE: Optional[dict] = None
+
+
+def _compute_view_cards() -> dict:
+    """Return `cards` from a compute_view() call, cached for the
+    duration of this process. Prefers the warm S3 cache (matches what
+    the dashboard is currently rendering); falls back to a fresh
+    build if that returns empty. Best-effort: returns {} on total
+    failure."""
+    global _COMPUTE_VIEW_CACHE
+    if _COMPUTE_VIEW_CACHE is not None:
+        return _COMPUTE_VIEW_CACHE
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__)))))
+        from trends_iq import compute_view  # type: ignore
+        try:
+            payload = compute_view({}, force_refresh=False) or {}
+        except Exception as e_warm:
+            logger.warning("headline_estimates: compute_view warm read "
+                            "failed (%s), retrying force_refresh=True",
+                            e_warm)
+            payload = {}
+        cards = payload.get('cards') or {}
+        if not cards or not (cards.get('trending_headlines')
+                              or cards.get('articles_by_source')):
+            try:
+                payload = compute_view({}, force_refresh=True) or {}
+                cards = payload.get('cards') or {}
+            except Exception as e_fresh:
+                logger.warning("headline_estimates: compute_view "
+                                "force_refresh failed (%s)", e_fresh)
+        _COMPUTE_VIEW_CACHE = cards or {}
+        logger.info("headline_estimates: compute_view cached %d card keys",
+                     len(_COMPUTE_VIEW_CACHE))
+    except Exception as e:
+        logger.warning("headline_estimates: compute_view unavailable (%s); "
+                        "falling back to snapshot-only collection", e)
+        _COMPUTE_VIEW_CACHE = {}
+    return _COMPUTE_VIEW_CACHE
+
+
 def _collect_headlines(max_items: int = _MAX_HEADLINE_ITEMS) -> list[dict]:
-    """Union of all articles across every NEWS_FEEDS outlet + the
-    philanthropy_news S3 snapshot, deduped by normalized title.
-
-    Preserves best-source-rank so an item that led on NYT beats the
-    same item as #4 on HuffPost. Keeps `source` and `url` from the
-    canonical (best-ranked) copy for Claude context.
-    """
+    """Union of every headline compute_view is currently rendering
+    (Trending Headlines + by-source outlets + Business + Wall Street
+    + Philanthropy + each of the *_by_source dicts) PLUS the live
+    RSS pool + snapshot backfill. compute_view rows go FIRST so the
+    dashboard-visible items always land inside the cap; snapshot +
+    RSS backfill fills the tail."""
     per: dict[str, dict] = {}
+    next_rank = 1
 
-    # 1. Live RSS pool.
+    def _add(title: str, source: str, url: str = '', image: str = '',
+              seendate: str = '', origin: str = '') -> None:
+        nonlocal next_rank
+        t = (title or '').strip()
+        if not t:
+            return
+        key = _cp_normalize(t)
+        if not key or key in per:
+            return
+        per[key] = {
+            'kind':          'headline',
+            'display_title': t[:200],
+            'source':        source or '',
+            'domain':        '',
+            'url':           url or '',
+            'image':         image or '',
+            'seendate':      seendate or '',
+            'best_rank':     next_rank,
+            'chart_labels':  [f'{origin or (source or "unknown")} #{next_rank}'],
+        }
+        next_rank += 1
+
+    # 1) compute_view live pass FIRST - this is what the dashboard
+    #    is rendering right now, so every priced key hits a visible
+    #    row.
+    cards = _compute_view_cards()
+    if cards:
+        for a in (cards.get('trending_headlines') or []):
+            _add(a.get('title') or '', a.get('source') or '',
+                  a.get('url') or '', a.get('image') or '',
+                  a.get('published') or a.get('seendate') or '',
+                  origin='trending')
+        for outlet in (cards.get('articles_by_source') or []):
+            src = (outlet.get('source') or '').strip()
+            for a in (outlet.get('articles') or []):
+                _add(a.get('title') or '', src,
+                      a.get('url') or '', a.get('image') or '',
+                      a.get('published') or a.get('seendate') or '',
+                      origin=src)
+        for a in (cards.get('business_news') or []):
+            _add(a.get('title') or '',
+                  a.get('source_label') or a.get('source') or 'business',
+                  a.get('url') or '', a.get('image') or '',
+                  a.get('published') or a.get('seendate') or '',
+                  origin='business')
+        for a in (cards.get('wall_street_news') or []):
+            _add(a.get('title') or '',
+                  a.get('source_label') or a.get('source') or 'wall_street',
+                  a.get('url') or '', a.get('image') or '',
+                  a.get('published') or a.get('seendate') or '',
+                  origin='wall_street')
+        for a in (cards.get('philanthropy_news') or []):
+            _add(a.get('title') or '',
+                  a.get('source_label') or a.get('source') or 'philanthropy',
+                  a.get('url') or '', a.get('image') or '',
+                  a.get('published') or a.get('seendate') or '',
+                  origin='philanthropy')
+        for _slug, rows in (cards.get('business_news_by_source') or {}).items():
+            for a in (rows or []):
+                _add(a.get('title') or '',
+                      a.get('source_label') or a.get('source') or _slug,
+                      a.get('url') or '', a.get('image') or '',
+                      a.get('published') or a.get('seendate') or '',
+                      origin=f'business/{_slug}')
+        for _slug, rows in (cards.get('wall_street_news_by_source') or {}).items():
+            for a in (rows or []):
+                _add(a.get('title') or '',
+                      a.get('source_label') or a.get('source') or _slug,
+                      a.get('url') or '', a.get('image') or '',
+                      a.get('published') or a.get('seendate') or '',
+                      origin=f'wall_street/{_slug}')
+        for _slug, rows in (cards.get('philanthropy_news_by_source') or {}).items():
+            for a in (rows or []):
+                _add(a.get('title') or '',
+                      a.get('source_label') or a.get('source') or _slug,
+                      a.get('url') or '', a.get('image') or '',
+                      a.get('published') or a.get('seendate') or '',
+                      origin=f'philanthropy/{_slug}')
+
+    # 2) Live RSS pool backfill (matches what the dashboard fetches
+    #    on its next request but not yet cached).
     try:
         sys.path.insert(0, os.path.dirname(os.path.dirname(
             os.path.dirname(os.path.abspath(__file__)))))
@@ -159,86 +296,33 @@ def _collect_headlines(max_items: int = _MAX_HEADLINE_ITEMS) -> list[dict]:
         outlet_lists = []
 
     for outlet_items in outlet_lists:
-        for rank, art in enumerate((outlet_items or [])[:8]):
-            title  = (art.get('title')  or '').strip()
-            key    = _cp_normalize(title)
-            if not key:
-                continue
-            e = per.setdefault(key, {
-                'kind':          'headline',
-                'display_title': title[:200],
-                'source':        art.get('source')  or '',
-                'domain':        art.get('domain')  or '',
-                'url':           art.get('url')     or '',
-                'image':         art.get('image')   or '',
-                'seendate':      art.get('seendate') or '',
-                'best_rank':     rank + 1,
-                'chart_labels':  [],
-            })
-            label = art.get('source') or 'unknown'
-            e['chart_labels'].append(f'{label} #{rank + 1}')
-            if rank + 1 < e['best_rank']:
-                e['best_rank'] = rank + 1
-                # prefer the leading outlet's URL when we see it
-                e['source'] = art.get('source')  or e['source']
-                e['url']    = art.get('url')     or e['url']
+        for art in (outlet_items or [])[:8]:
+            _add(art.get('title') or '', art.get('source') or '',
+                  art.get('url') or '', art.get('image') or '',
+                  art.get('seendate') or art.get('published') or '',
+                  origin=art.get('source') or 'rss')
 
-    # 2. Philanthropy snapshot (separate news feed pool - Chronicle of
-    #    Philanthropy, Nonprofit Quarterly, SSIR, etc). Same shape as
-    #    RSS items, just wrapped in the scraper snapshot envelope.
-    try:
-        obj = _s3().get_object(Bucket=_S3_BUCKET,
-                                Key=f'{_S3_LATEST}philanthropy_news.json')
-        phil = json.loads(obj['Body'].read().decode('utf-8'))
-    except Exception:
-        phil = {}
-    for rank, art in enumerate((phil.get('national') or [])[:40]):
-        title = (art.get('title') or '').strip()
-        key = _cp_normalize(title)
-        if not key or key in per:
-            continue
-        per[key] = {
-            'kind':          'headline',
-            'display_title': title[:200],
-            'source':        art.get('source_label') or art.get('source') or '',
-            'domain':        '',
-            'url':           art.get('url') or '',
-            'image':         art.get('image') or '',
-            'seendate':      art.get('published') or '',
-            'best_rank':     rank + 1,
-            'chart_labels':  [f'philanthropy #{rank + 1}'],
-        }
+    # 3) Snapshot backfill - philanthropy / business / wall_street /
+    #    articles_by_source. Same-day snapshots the daily scraper cron
+    #    already wrote for us.
+    for snap_key, origin in (('philanthropy_news', 'philanthropy'),
+                              ('business_news', 'business'),
+                              ('wall_street_news', 'wall_street')):
+        try:
+            obj = _s3().get_object(Bucket=_S3_BUCKET,
+                                    Key=f'{_S3_LATEST}{snap_key}.json')
+            snap = json.loads(obj['Body'].read().decode('utf-8'))
+        except Exception:
+            snap = {}
+        for art in (snap.get('national') or [])[:60]:
+            _add(art.get('title') or '',
+                  art.get('source_label') or art.get('source') or origin,
+                  art.get('url') or '', art.get('image') or '',
+                  art.get('published') or art.get('seendate') or '',
+                  origin=origin)
 
-    # 3. Business snapshot (NYT + WSJ business sections). Added
-    #    2026-08-20 to close the last gap in the Headlines tab -
-    #    the Business sub-tab was rendering 40 rows with no US-
-    #    readers chip because this collector ignored the snapshot.
-    try:
-        obj = _s3().get_object(Bucket=_S3_BUCKET,
-                                Key=f'{_S3_LATEST}business_news.json')
-        biz = json.loads(obj['Body'].read().decode('utf-8'))
-    except Exception:
-        biz = {}
-    for rank, art in enumerate((biz.get('national') or [])[:40]):
-        title = (art.get('title') or '').strip()
-        key = _cp_normalize(title)
-        if not key or key in per:
-            continue
-        per[key] = {
-            'kind':          'headline',
-            'display_title': title[:200],
-            'source':        art.get('source_label') or art.get('source') or '',
-            'domain':        '',
-            'url':           art.get('url') or '',
-            'image':         art.get('image') or '',
-            'seendate':      art.get('published') or '',
-            'best_rank':     rank + 1,
-            'chart_labels':  [f'business #{rank + 1}'],
-        }
-
-    ranked = sorted(per.values(),
-                     key=lambda e: (e['best_rank'], e['display_title']))
-    return ranked[:max_items]
+    return sorted(per.values(),
+                   key=lambda e: (e['best_rank'], e['display_title']))[:max_items]
 
 
 # -------------------------------------------------------------------------
@@ -514,23 +598,55 @@ def fetch() -> dict[str, Any]:
     items = _collect_headlines()
 
     if not items:
+        # Preserve prior snapshot on a no-op run (same safety principle
+        # as stream_estimates.fetch()) so an intra-day rerun with a
+        # temporarily empty RSS pool doesn't clobber the already-priced
+        # snapshot.
+        prior_snap = _read_snapshot('headline_estimates') or {}
         return {
-            'items': {},
-            'count': 0,
-            'error': 'no headlines collected upstream',
-            'model': _WEBSEARCH_MODEL,
+            'items':           prior_snap.get('items') or {},
+            'count':           len(prior_snap.get('items') or {}),
+            'error':           'no headlines collected upstream',
+            'model':           _WEBSEARCH_MODEL,
+            'preserved_prior': bool(prior_snap.get('items')),
         }
 
     logger.info("headline_estimates: total unique headlines = %d", len(items))
 
-    researched = _research_all(items)
-
+    # Incremental behavior: don't re-price items already covered today
+    # (matches stream_estimates.fetch()'s intra-day dedupe pattern so
+    # a re-run to catch newly-broken headlines doesn't pay for the
+    # ones the earlier cron already priced).
     today_iso = date.today().isoformat()
+    prior_snap = _read_snapshot('headline_estimates') or {}
+    prior_items = prior_snap.get('items') or {}
+    already_today = {
+        k for k, v in prior_items.items()
+        if v.get('as_of_date') == today_iso and v.get('us_estimate')
+    }
+    items_to_research = [
+        it for it in items
+        if _lookup_key(it['display_title']) not in already_today
+    ]
+    if len(items_to_research) < len(items):
+        logger.info("headline_estimates: skipping %d items already researched "
+                     "today (intra-day rerun); researching %d new items",
+                     len(items) - len(items_to_research),
+                     len(items_to_research))
+
+    researched_new = _research_all(items_to_research)
+
     prev_date_iso = (date.today() - timedelta(days=1)).isoformat()
     yesterday = _read_dated_snapshot('headline_estimates', days_back=1)
     if not yesterday:
         yesterday = _read_dated_snapshot('headline_estimates', days_back=2)
         prev_date_iso = (date.today() - timedelta(days=2)).isoformat()
+
+    # Compose the final researched dict as the union of prior_items
+    # (preserves items priced earlier today) + newly researched
+    # (wins on collision).
+    researched = dict(prior_items)
+    researched.update(researched_new)
     researched = _attach_dod_trend(researched, yesterday,
                                      prev_date_iso=prev_date_iso,
                                      today_iso=today_iso)

@@ -3802,29 +3802,73 @@ def _annotate_fused_trending_with_audience(
     (fused) card.
 
     Fused rows blend signals from Search + People + Wiki + Movers +
-    Music + Podcasts + Books + Films. The chip should reflect the
-    audience interest for the entity as a whole, so lookup priority
-    is: trending_person (if the entity is a person in today's
-    trending-people list) -> wiki_topic -> search_term. First hit
-    wins; rows with no hit stay chip-less.
+    Music + Podcasts + Books + Films + TV + FAST + Games. Lookup
+    priority walks every priced kind so a row that originated from
+    a song / podcast / book / TV title still surfaces its audience
+    number even if that entity isn't also on the search-term list.
+
+    Films are intentionally excluded (Jenna 2026-08-31: "everything
+    should have a value in US Audience except for films"). A row
+    that only matches a `film:` key stays chip-less.
     """
     if not estimates or not fused_trending:
         return
     items_lookup = (estimates or {}).get('items') or {}
+    # Priority: person / wiki / search (identity-level signals) FIRST
+    # so a headline-grade entity ("Taylor Swift", "Aaron Donald")
+    # picks up its identity audience rather than a same-name song or
+    # podcast title. Then fall back to media-level kinds (song,
+    # podcast, book, tv, comic, game, fast_channel, title) so a
+    # media-only fused row (Music/Podcasts/Books/TV/etc.) still gets
+    # its audience number.
     for row in fused_trending or []:
         name = (row.get('name') or row.get('display_name') or '').strip()
         if not name:
             continue
         norm = _cp_normalize(name)
+        matched = False
         for prefix, hint in (
             ('trending_person', 'trending_person'),
             ('wiki_topic',      'wiki_topic'),
             ('search_term',     'search_term'),
+            ('song',            'song'),
+            ('podcast',         'podcast'),
+            ('book',            'book'),
+            ('comic',           'comic'),
+            ('tv',              'tv'),
+            ('title',           'title'),
+            ('fast_tv',         'fast_tv'),
+            ('fast_film',       'fast_film'),
+            ('game',            'game'),
         ):
             entry = items_lookup.get(f'{prefix}:{norm}')
             if entry:
                 _stamp_stream_estimate(row, entry, kind_hint=hint)
+                matched = True
                 break
+        # Song keys are `song:<title> <artist>` (title+artist) - try
+        # a title-only match against every song key as a fallback so
+        # a fused-song row without an artist attached still lands.
+        if not matched:
+            song_prefix = f'song:{norm} '
+            song_only = f'song:{norm}'
+            for k, v in items_lookup.items():
+                if k == song_only or k.startswith(song_prefix):
+                    _stamp_stream_estimate(row, v, kind_hint='song')
+                    matched = True
+                    break
+        # Book / comic same pattern (key is `book:<title> <artist>`).
+        if not matched:
+            for kind in ('book', 'comic'):
+                pfx_space = f'{kind}:{norm} '
+                pfx_only  = f'{kind}:{norm}'
+                for k, v in items_lookup.items():
+                    if k == pfx_only or k.startswith(pfx_space):
+                        _stamp_stream_estimate(row, v, kind_hint=kind)
+                        matched = True
+                        break
+                if matched:
+                    break
 
 
 def _annotate_cross_platform_moments(
