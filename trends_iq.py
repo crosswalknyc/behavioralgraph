@@ -3816,6 +3816,9 @@ def _annotate_broadway_with_streams(broadway_trending: dict) -> None:
             wca = row.get('weekly_change_attendance')
             if isinstance(wca, (int, float)):
                 us_streams['delta_pct'] = wca
+                # Broadway = attendance % change, not rank movement.
+                # Chip stays as `↑ N%` / `↓ N%` (existing behavior).
+                us_streams['delta_kind'] = 'metric'
                 if wca > 0.001:
                     us_streams['direction'] = 'up'
                 elif wca < -0.001:
@@ -3932,12 +3935,14 @@ def _fold_ranked_delta(row: dict, delta_pct: Optional[float],
                         prev_rank: Optional[int] = None,
                         prev_estimate: Optional[int] = None,
                         prev_date: Optional[str] = None,
-                        target_field: str = 'us_streams') -> None:
-    """Overwrite (or create) `row[target_field].delta_pct` +
-    `.direction` so the frontend chip renders yesterday-vs-today
-    movement.  Preserves every other field the upstream annotator
-    may have set (us_estimate, unit_label, method, ...); only
-    touches the delta-adjacent keys.
+                        target_field: str = 'us_streams',
+                        delta_positions: Optional[int] = None,
+                        delta_kind: str = 'metric') -> None:
+    """Overwrite (or create) `row[target_field]` delta fields so the
+    frontend chip renders yesterday-vs-today movement.  Preserves
+    every other field the upstream annotator may have set
+    (us_estimate, unit_label, method, ...); only touches the
+    delta-adjacent keys.
 
     target_field:
       'us_streams' for entertainment tabs (streaming / FAST / books /
@@ -3946,22 +3951,55 @@ def _fold_ranked_delta(row: dict, delta_pct: Optional[float],
                     / philanthropy_news) whose chip renders off
                     `us_readers`.
 
+    delta_kind (2026-09-01 follow-up):
+      'rank'   - rank-position deltas (Streaming, FAST film/tv,
+                  Films, Books, Libby, Comics, Gaming, Podcast,
+                  Music, Headlines).  The chip renders `↑ N spot(s)`
+                  / `↓ N spot(s)` off `delta_positions` (integer).
+                  `delta_pct` is ALSO written for downstream
+                  consumers, clamped symmetrically to [-1, +1] via
+                  the caller so `↓ 800%`-style artifacts never
+                  render.
+      'metric' - view-count / attendance / percentage-of-something
+                  deltas (Broadway attendance change, FAST channel
+                  view-count change, stream_estimates deltas).  The
+                  chip renders `↑ N%` / `↓ N%` off `delta_pct` as
+                  before.
+
     Anti-clobber: leave any pre-existing non-zero `delta_pct` alone
-    if our computed delta is trivially flat (|delta| < 0.001).  This
-    means when the upstream estimator eventually starts writing real
-    per-row deltas, we won't zero them out just because the
-    yesterday-vs-today snapshot didn't move.
+    if our computed delta is trivially flat (|delta| < 0.001) AND
+    we are not producing a rank chip with a non-zero delta_positions.
+    Rank-based deltas write through so a persistent rank-stable row
+    doesn't leak a stale metric-based percentage from the estimator.
     """
-    if delta_pct is None:
+    if delta_pct is None and delta_positions is None:
         return
     dest = dict(row.get(target_field) or {})
     existing = dest.get('delta_pct')
-    if abs(delta_pct) < 0.001 and isinstance(existing, (int, float)) \
+    # Anti-clobber applies only when we bring nothing new to the
+    # table.  A non-zero delta_positions is "new information" even
+    # when the derived delta_pct is trivially small.
+    is_flat = (delta_pct is not None and abs(delta_pct) < 0.001)
+    if is_flat and (delta_positions in (None, 0)) \
+            and isinstance(existing, (int, float)) \
             and abs(existing) >= 0.001:
-        # Keep the informative existing delta rather than zero it.
         return
-    dest['delta_pct'] = delta_pct
-    dest['direction'] = _direction_for(delta_pct)
+    if delta_pct is not None:
+        dest['delta_pct'] = delta_pct
+        dest['direction'] = _direction_for(delta_pct)
+    if delta_positions is not None:
+        dest['delta_positions'] = int(delta_positions)
+        # If the caller passed positions but no explicit direction
+        # via delta_pct, derive it from the positions sign so the
+        # renderer always has a direction to key off.
+        if delta_pct is None:
+            if delta_positions > 0:
+                dest['direction'] = 'up'
+            elif delta_positions < 0:
+                dest['direction'] = 'down'
+            else:
+                dest['direction'] = 'flat'
+    dest['delta_kind'] = delta_kind
     if prev_rank is not None:
         dest['prev_rank'] = prev_rank
     if prev_estimate is not None:
@@ -4088,12 +4126,22 @@ def _apply_rank_deltas(current_items: list,
         prev_rank = prev_index.get(k)
         if prev_rank is None:
             continue
-        delta = _rank_delta_pct(prev_rank, today_rank)
-        if delta is None:
+        # Symmetric clamp so a rank chip never renders |delta_pct| >
+        # 100%.  The signed-position delta is the truthful integer;
+        # delta_pct is a bounded [-1, +1] shape for legacy consumers.
+        # Formula: (prev - today) / max(prev, today), then clamp.
+        denom = max(prev_rank, today_rank)
+        if denom <= 0:
             continue
-        _fold_ranked_delta(row, delta, prev_rank=prev_rank,
+        raw_pct = (prev_rank - today_rank) / denom
+        delta_pct = max(-1.0, min(1.0, raw_pct))
+        delta_positions = prev_rank - today_rank  # + = climbed
+        _fold_ranked_delta(row, delta_pct,
+                             prev_rank=prev_rank,
                              prev_date=prev_date,
-                             target_field=target_field)
+                             target_field=target_field,
+                             delta_positions=delta_positions,
+                             delta_kind='rank')
         matched += 1
     return matched, total
 
@@ -4446,12 +4494,21 @@ def _annotate_fast_with_rank_change(fast_trending: dict,
                 today_rank = row.get('bucket_rank')
                 if prev_rank is None or not isinstance(today_rank, int):
                     continue
-                delta = _rank_delta_pct(prev_rank, today_rank)
-                if delta is None:
+                # Symmetric-clamp delta_pct + signed-position integer
+                # (2026-09-01 follow-up: rank isn't a ratio; a chip
+                # like `↓ 800%` reads as broken.  See _apply_rank_deltas
+                # for the same formula.)
+                denom = max(prev_rank, today_rank)
+                if denom <= 0:
                     continue
-                _fold_fast_delta(row, delta,
-                                   prev_rank=prev_rank,
-                                   prev_date=prev_iso)
+                raw_pct = (prev_rank - today_rank) / denom
+                delta_pct = max(-1.0, min(1.0, raw_pct))
+                delta_positions = prev_rank - today_rank
+                _fold_ranked_delta(row, delta_pct,
+                                     prev_rank=prev_rank,
+                                     prev_date=prev_iso,
+                                     delta_positions=delta_positions,
+                                     delta_kind='rank')
                 matched += 1
 
     logger.info('fast rank delta: annotated %d / %d film+tv rows vs %s',
@@ -4507,9 +4564,12 @@ def _annotate_fast_channels_with_view_change(fast_trending: dict,
             if not isinstance(prev_est, (int, float)) or prev_est <= 0:
                 continue
             delta = (today_est - prev_est) / prev_est
-            _fold_fast_delta(row, delta,
-                               prev_estimate=int(prev_est),
-                               prev_date=(entry.get('as_of_date') or prev_iso))
+            # Metric (view-count % change), not rank.  Chip stays as
+            # `↑ N%` / `↓ N%` (existing behavior).
+            _fold_ranked_delta(row, delta,
+                                 prev_estimate=int(prev_est),
+                                 prev_date=(entry.get('as_of_date') or prev_iso),
+                                 delta_kind='metric')
             matched += 1
 
     logger.info('fast channel view delta: annotated %d / %d channel rows '

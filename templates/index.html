@@ -52667,7 +52667,34 @@ https://www.instagram.com/p/..."></textarea>
             // stays compact, but kept in full in the hover tooltip below.
             var unitShort = unit.replace(/\s*\([^)]*\)\s*$/, '');
             var arrow = '';
-            if (typeof us.delta_pct === 'number' && us.delta_pct !== 0 && us.direction) {
+            var deltaTip = '';
+            // Rank-based deltas (Streaming / FAST film-tv / Books /
+            // Libby / Comics / Gaming / Podcast / Music / Films
+            // ticketing / Headlines) render as `\u2191 N` / `\u2193 N` off
+            // `delta_positions` because rank isn't a ratio (Jenna
+            // 2026-09-01: `\u2193 800%` reads as broken).  Metric deltas
+            // (Broadway attendance, FAST channel views, any
+            // estimator-driven delta) keep the `\u2191 N%` / `\u2193 N%`
+            // rendering off `delta_pct` (existing behavior).
+            var isRankDelta = us.delta_kind === 'rank' &&
+                              typeof us.delta_positions === 'number' &&
+                              us.delta_positions !== 0 &&
+                              us.direction;
+            if (isRankDelta) {
+                var pos = Math.abs(us.delta_positions);
+                var glyph = (us.direction === 'up')   ? '\u2191'
+                         : (us.direction === 'down') ? '\u2193'
+                         : '\u00B7';
+                var cls   = (us.direction === 'up')   ? 'up'
+                         : (us.direction === 'down') ? 'down'
+                         : 'flat';
+                arrow = ' <span class="tiq-audience-delta ' + cls + '">' +
+                        glyph + ' ' + pos + '</span>';
+                var verb = us.direction === 'up' ? 'up' : 'down';
+                var noun = pos === 1 ? 'spot' : 'spots';
+                deltaTip = 'Moved ' + verb + ' ' + pos + ' ' + noun +
+                           (us.prev_rank ? ' (was #' + us.prev_rank + ')' : '');
+            } else if (typeof us.delta_pct === 'number' && us.delta_pct !== 0 && us.direction) {
                 var pct = Math.round(Math.abs(us.delta_pct) * 100);
                 if (pct >= 1) {
                     var glyph = (us.direction === 'up')   ? '\u2191'
@@ -52681,6 +52708,7 @@ https://www.instagram.com/p/..."></textarea>
                 }
             }
             var tipParts = [num + ' ' + unit];
+            if (deltaTip) tipParts.push(deltaTip);
             if (us.method)     tipParts.push(String(us.method));
             if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
             var tip = _tiqEsc(tipParts.join(' \u2014 '));
@@ -56574,7 +56602,20 @@ https://www.instagram.com/p/..."></textarea>
                             var viewsNum = hasViews ? _tiqFullNum(estimate) : '';
                             var deltaHtml = '<span class="tiq-sheet-delta flat">—</span>';
                             var deltaSort = '';
-                            if (typeof us.delta_pct === 'number' && us.direction) {
+                            // Rank-position delta first so FAST Film/TV
+                            // rows render as `↑ 3` / `↓ 8` off
+                            // `delta_positions` (rank isn't a ratio).
+                            // FAST channel rows emit delta_kind='metric'
+                            // on the backend so this branch never fires
+                            // for them; they fall through to the
+                            // existing `↑ N%` behavior.
+                            if (us.delta_kind === 'rank' && typeof us.delta_positions === 'number' && us.delta_positions !== 0 && us.direction) {
+                                var pos = Math.abs(us.delta_positions);
+                                var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
+                                var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
+                                deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pos + '</span>';
+                                deltaSort = String((us.direction === 'up') ? pos : -pos);
+                            } else if (typeof us.delta_pct === 'number' && us.direction) {
                                 var pct = Math.round(Math.abs(us.delta_pct) * 100);
                                 if (pct >= 1) {
                                     var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
@@ -56896,7 +56937,20 @@ https://www.instagram.com/p/..."></textarea>
                             var viewsNum = hasViews ? _tiqFullNum(estimate) : '';
                             var deltaHtml = '<span class="tiq-sheet-delta flat">—</span>';
                             var deltaSort = '';
-                            if (typeof us.delta_pct === 'number' && us.direction) {
+                            // Rank-position delta first so FAST Film/TV
+                            // rows render as `↑ 3` / `↓ 8` off
+                            // `delta_positions` (rank isn't a ratio).
+                            // FAST channel rows emit delta_kind='metric'
+                            // on the backend so this branch never fires
+                            // for them; they fall through to the
+                            // existing `↑ N%` behavior.
+                            if (us.delta_kind === 'rank' && typeof us.delta_positions === 'number' && us.delta_positions !== 0 && us.direction) {
+                                var pos = Math.abs(us.delta_positions);
+                                var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
+                                var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
+                                deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pos + '</span>';
+                                deltaSort = String((us.direction === 'up') ? pos : -pos);
+                            } else if (typeof us.delta_pct === 'number' && us.direction) {
                                 var pct = Math.round(Math.abs(us.delta_pct) * 100);
                                 if (pct >= 1) {
                                     var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
@@ -56991,7 +57045,20 @@ https://www.instagram.com/p/..."></textarea>
                             var viewsNum = hasViews ? _tiqFullNum(estimate) : '';
                             var deltaHtml = '<span class="tiq-sheet-delta flat">—</span>';
                             var deltaSort = '';
-                            if (typeof us.delta_pct === 'number' && us.direction) {
+                            // Rank-position delta first so FAST Film/TV
+                            // rows render as `↑ 3` / `↓ 8` off
+                            // `delta_positions` (rank isn't a ratio).
+                            // FAST channel rows emit delta_kind='metric'
+                            // on the backend so this branch never fires
+                            // for them; they fall through to the
+                            // existing `↑ N%` behavior.
+                            if (us.delta_kind === 'rank' && typeof us.delta_positions === 'number' && us.delta_positions !== 0 && us.direction) {
+                                var pos = Math.abs(us.delta_positions);
+                                var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
+                                var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
+                                deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pos + '</span>';
+                                deltaSort = String((us.direction === 'up') ? pos : -pos);
+                            } else if (typeof us.delta_pct === 'number' && us.direction) {
                                 var pct = Math.round(Math.abs(us.delta_pct) * 100);
                                 if (pct >= 1) {
                                     var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
