@@ -54434,6 +54434,9 @@ https://www.instagram.com/p/..."></textarea>
                        _tiqMoverBadge(row) +
                        (rankPrev ? '<span class="tiq-badge">' + rankPrev + '</span>' : '') +
                        (relatedHtml ? '<span style="opacity:0.75;">' + relatedHtml + '</span>' : '') +
+                       // Weekly US searchers chip. Same source of truth
+                       // as the Search tab (search_term kind).
+                       _tiqAudienceChip(row.us_streams) +
                      '</div>' +
                      mixHtml +
                    '</div>' +
@@ -54535,6 +54538,7 @@ https://www.instagram.com/p/..."></textarea>
                         '<div class="tiq-row-title"><a href="' + _tiqEsc(r.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(r.title) + '</a>' +
                         _tiqActions('headline', 'gdelt', r.title, r.title, r.geo || 'National') + '</div>' +
                         '<div class="tiq-row-meta"><span class="tiq-badge">' + _tiqEsc(r.source || '') + '</span>' +
+                        _tiqAudienceChip(r.us_readers) +
                         (r.seendate ? '<span>' + _tiqEsc(r.seendate) + '</span>' : '') +
                         '</div></div></div>';
             });
@@ -54556,10 +54560,17 @@ https://www.instagram.com/p/..."></textarea>
                     html += '<div class="tiq-card-sub">No recent items.</div>';
                 } else {
                     articles.forEach(function(a, i) {
+                        // Assemble the row meta so the audience chip is
+                        // always shown when present, even for articles
+                        // with no seendate.
+                        var bySrcAudChip = _tiqAudienceChip(a.us_readers);
+                        var bySrcMeta = '';
+                        if (bySrcAudChip) bySrcMeta += bySrcAudChip;
+                        if (a.seendate) bySrcMeta += '<span>' + _tiqEsc(a.seendate) + '</span>';
                         html += '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
                                 '<div class="tiq-row-body">' +
                                 '<div class="tiq-row-title"><a href="' + _tiqEsc(a.url || '#') + '" target="_blank" rel="noopener">' + _tiqEsc(a.title) + '</a></div>' +
-                                (a.seendate ? '<div class="tiq-row-meta"><span>' + _tiqEsc(a.seendate) + '</span></div>' : '') +
+                                (bySrcMeta ? '<div class="tiq-row-meta">' + bySrcMeta + '</div>' : '') +
                                 '</div></div>';
                     });
                 }
@@ -54588,6 +54599,11 @@ https://www.instagram.com/p/..."></textarea>
                 var meta = srcLabel
                     ? '<span class="tiq-badge">' + _tiqEsc(srcLabel) + '</span>'
                     : '';
+                // Daily-US-readers chip. Same pattern as the Wall Street
+                // renderer. us_readers is stamped by
+                // _annotate_headlines_with_readers in trends_iq.py.
+                var philReaderChip = _tiqAudienceChip(r.us_readers);
+                if (philReaderChip) meta += philReaderChip;
                 if (r.published) {
                     meta += '<span class="tiq-started">' + _tiqEsc(_tiqShortDate(r.published)) + '</span>';
                 }
@@ -54619,6 +54635,11 @@ https://www.instagram.com/p/..."></textarea>
                 var meta = srcLabel
                     ? '<span class="tiq-badge">' + _tiqEsc(srcLabel) + '</span>'
                     : '';
+                // Daily-US-readers chip. Same pattern as the Wall Street
+                // renderer. us_readers is stamped by
+                // _annotate_headlines_with_readers in trends_iq.py.
+                var bizReaderChip = _tiqAudienceChip(r.us_readers);
+                if (bizReaderChip) meta += bizReaderChip;
                 if (r.published) {
                     meta += '<span class="tiq-started">' + _tiqEsc(_tiqShortDate(r.published)) + '</span>';
                 }
@@ -54844,6 +54865,11 @@ https://www.instagram.com/p/..."></textarea>
             if (started) {
                 badges += '<span class="tiq-started">' + _tiqEsc(started) + '</span>';
             }
+            // Weekly US searchers chip. us_streams is stamped by
+            // _annotate_search_terms_with_audience in trends_iq.py
+            // (kind=search_term). unit_label reads 'weekly US searchers'.
+            var searchAudience = _tiqAudienceChip(r.us_streams);
+            if (searchAudience) badges += searchAudience;
 
             var chips = '';
             if (breakdown.length) {
@@ -55430,6 +55456,14 @@ https://www.instagram.com/p/..."></textarea>
                 } else if (pageviewsProj > 0) {
                     metaLine = _tiqNum(pageviewsProj) + ' pageviews';
                 }
+                // Weekly-US-audience-interest chip. us_streams is stamped
+                // by _annotate_trending_people_with_audience in trends_iq.py
+                // (kind=trending_person for GDELT rows, wiki_topic for
+                // Wikipedia rows). unit_label reads 'weekly US audience'.
+                var personAudienceChip = _tiqAudienceChip(p.us_streams);
+                var personAudienceHtml = personAudienceChip
+                    ? '<div class="tiq-person-mentions" style="margin-top:3px;">' + personAudienceChip + '</div>'
+                    : '';
                 // Wiki-only rows have no GDELT signature - fall back to
                 // wikipedia as the watchlist / actions source key.
                 var actionsSrc = (p._wiki_only || (p.sources && p.sources.length === 1
@@ -55445,6 +55479,7 @@ https://www.instagram.com/p/..."></textarea>
                           _tiqActions('person', actionsSrc, p.name, p.name, 'National') +
                         '</div>' +
                         (metaLine ? '<div class="tiq-person-mentions">' + metaLine + '</div>' : '') +
+                        personAudienceHtml +
                         whyHtml +
                         '</div>' +
                         '</div>';
