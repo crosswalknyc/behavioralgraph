@@ -56366,7 +56366,7 @@ https://www.instagram.com/p/..."></textarea>
                     // add signal in the subtitle; for the other platforms
                     // the value was misleading anyway (we scrape daily,
                     // not weekly) - so no date stamp anywhere.
-                    var subtitle = 'Top titles on ' + _tiqEsc(s.label || k) + '.';
+                    var subtitle = 'Top titles on ' + _tiqEsc(s.label || k) + '. Tap Views or Δ% to sort.';
                     // Row meta is intentionally suppressed for streaming
                     // cards. The `weeks_in_top10` pill was removed because
                     // non-Netflix platforms are derived from our own snapshot
@@ -56376,53 +56376,92 @@ https://www.instagram.com/p/..."></textarea>
                     // Netflix, Disney+, Hulu, Max, Prime, and ESPN+, we show
                     // nothing. Bring the pill back once every platform has
                     // >=8 weeks of tracked history and the values differ.
-                    var renderCol = function(label, rows) {
-                        var lis = (rows || []).map(function(it, i) {
+                    var renderCol = function(label, rows, forceIndexRank) {
+                        var genreOpts = _tiqGenreOptions(rows);
+                        var rowsHtml = (rows || []).map(function(it, i) {
+                            var us = it.us_streams || {};
+                            var estimate = Number(us.us_estimate);
+                            var hasViews = isFinite(estimate) && estimate > 0;
+                            var viewsNum = hasViews ? _tiqFullNum(estimate) : '';
+                            var deltaHtml = '<span class="tiq-sheet-delta flat">—</span>';
+                            var deltaSort = '';
+                            if (typeof us.delta_pct === 'number' && us.direction) {
+                                var pct = Math.round(Math.abs(us.delta_pct) * 100);
+                                if (pct >= 1) {
+                                    var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
+                                    var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
+                                    var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
+                                    deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pct + '%</span>';
+                                    deltaSort = String(signed);
+                                }
+                            }
+                            var tipParts = [];
+                            if (hasViews) {
+                                tipParts.push(viewsNum + ' ' + (us.unit_label || 'weekly US views'));
+                                if (us.method) tipParts.push(String(us.method));
+                                if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
+                            }
+                            var viewsTip = _tiqEsc(tipParts.join(' — '));
                             var streamKey = it.title;
-                            // Poster tile: real iTunes artwork stacks
-                            // over the film-strip SVG placeholder. Titles
-                            // iTunes doesn't index (which happens on some
-                            // ESPN+ live shows and niche Prime originals)
-                            // still render the placeholder so the row's
-                            // vertical rhythm matches the ones with art.
                             var img = _tiqPosterCell(it.image);
-                            // Projected weekly US views chip - same
-                            // helper the FAST tab uses. Populated from
-                            // stream_estimates.by_platform[<platform>]
-                            // via _annotate_streaming_with_streams so
-                            // each row shows the platform-specific
-                            // weekly-viewer count for that title (a
-                            // Netflix row shows Netflix-only viewers,
-                            // a Disney+ row shows Disney+-only, etc).
-                            // Empty string when we have no estimate
-                            // yet - the row still renders cleanly.
-                            var views = _tiqAudienceChip(it.us_streams);
-                            return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' +
-                                   img +
-                                   '<div class="tiq-row-body">' +
-                                   '<div class="tiq-row-title">' + _tiqEsc(it.title) +
-                                   _tiqActions('streaming', k, streamKey, streamKey, 'National') + '</div>' +
-                                   (views ? '<div class="tiq-row-meta">' + views + '</div>' : '') +
-                                   '</div></div>';
+                            var year = it.year ? '<span class="tiq-fast-year">' + _tiqEsc(String(it.year)) + '</span>' : '';
+                            var genres = (it.genres && it.genres.length)
+                                ? '<div class="tiq-fast-genres">' + _tiqEsc(it.genres.slice(0, 3).join(' · ')) + '</div>'
+                                : '';
+                            var rk = forceIndexRank ? (i + 1) : (it.bucket_rank || (i + 1));
+                            var sortTitle = _tiqEsc(String(it.title || '').toLowerCase());
+                            var dispName = _tiqEsc(String(it.title || ''));
+                            var dataYear = it.year ? _tiqEsc(String(it.year)) : '';
+                            var dataGenres = (it.genres && it.genres.length) ? _tiqEsc(it.genres.slice(0, 3).join(' · ')) : '';
+                            var genreKey = (it.genres && it.genres.length) ? _tiqEsc(it.genres.slice(0, 3).map(function(g) { return String(g || '').toLowerCase().trim(); }).join('|')) : '';
+                            return '<tr class="tiq-sheet-row" data-order="' + i + '" data-title="' + sortTitle + '" data-name="' + dispName + '" data-year="' + dataYear + '" data-genres="' + dataGenres + '" data-genrekey="' + genreKey + '" data-views="' + (hasViews ? estimate : '') + '" data-delta="' + deltaSort + '">' +
+                                   '<td class="tiq-sheet-td-title">' +
+                                     '<div class="tiq-sheet-titlecell">' +
+                                       '<span class="tiq-sheet-rank">' + rk + '</span>' +
+                                       img +
+                                       '<div class="tiq-sheet-titlemain">' +
+                                         '<div class="tiq-row-title">' + _tiqEsc(it.title) + ' ' + year +
+                                         _tiqActions('streaming', k, streamKey, streamKey, 'National') + '</div>' +
+                                         genres +
+                                       '</div>' +
+                                     '</div>' +
+                                   '</td>' +
+                                   '<td class="tiq-sheet-td-num tiq-sheet-td-views" title="' + viewsTip + '">' + (viewsNum || '<span class="tiq-sheet-dim">—</span>') + '</td>' +
+                                   '<td class="tiq-sheet-td-num">' + deltaHtml + '</td>' +
+                                   '</tr>';
                         }).join('');
-                        return '<div class="tiq-card"><h4>' + _tiqEsc(label) + '</h4>' +
-                               '<div class="tiq-headline-list">' + (lis || '<div class="tiq-empty">No data.</div>') + '</div></div>';
+                        return '<div class="tiq-card">' + _tiqSheetCardHead(label) +
+                               '<table class="tiq-sheet' + (forceIndexRank ? ' tiq-sheet-all' : '') + '" data-entity="Title" data-export="' + _tiqEsc(String(k) + '-' + label) + '">' +
+                                 '<thead><tr>' +
+                                   '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Title</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High → Low</option><option value="lo">Low → High</option><option value="az">A–Z</option></select><select class="tiq-sheet-genresort" onchange="tiqFilterFastGenre(this)">' + genreOpts + '</select></th>' +
+                                   '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'views\')">Views<span class="tiq-sort-ind">⇅</span></th>' +
+                                   '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'delta\')">Δ%<span class="tiq-sort-ind">⇅</span></th>' +
+                                 '</tr></thead>' +
+                                 '<tbody>' + (rowsHtml || '<tr><td colspan="3" class="tiq-empty">No data.</td></tr>') + '</tbody>' +
+                               '</table></div>';
                     };
-                    // Hide an empty Film or TV column instead of
-                    // rendering a "No data." card. ESPN+ has no films and
-                    // any platform temporarily thin on one side collapses
-                    // to a single wide column rather than showing an empty
-                    // half.
+                    // Hide an empty Film or TV column instead of rendering a "No
+                    // data." card. ESPN+ has no films and any platform temporarily
+                    // thin on one side collapses to a single wide column.
                     var hasFilm = (filmRows || []).length > 0;
                     var hasTV   = (tvRows   || []).length > 0;
                     var cols    = (hasFilm && hasTV) ? '1fr 1fr' : '1fr';
-                    var gridInner = '';
-                    if (hasFilm) gridInner += renderCol('Film', filmRows);
-                    if (hasTV)   gridInner += renderCol('TV',   tvRows);
+                    var titlesGrid = '';
+                    if (hasFilm) titlesGrid += renderCol('Film', filmRows);
+                    if (hasTV)   titlesGrid += renderCol('TV',   tvRows);
+                    // Full-width "All" card: Film + TV re-ranked by weekly US views.
+                    var allRows = (filmRows || []).concat(tvRows || []);
+                    allRows.sort(function(a, b) {
+                        var av = Number((a.us_streams || {}).us_estimate); av = isFinite(av) ? av : -1;
+                        var bv = Number((b.us_streams || {}).us_estimate); bv = isFinite(bv) ? bv : -1;
+                        return bv - av;
+                    });
+                    var allCard = allRows.length ? renderCol('All', allRows, true) : '';
                     body = '<div class="tiq-card-sub" style="margin-bottom:12px;">' + subtitle + '</div>' +
                            '<div class="tiq-cards-grid" style="grid-template-columns: ' + cols + ';">' +
-                           gridInner +
-                           '</div>';
+                           titlesGrid +
+                           '</div>' +
+                           (allCard ? '<div class="tiq-cards-grid" style="grid-template-columns: 1fr; margin-top: 16px;">' + allCard + '</div>' : '');
                 }
                 return '<div class="tiq-social-panel' + active + '" data-tiq-streaming="' + k + '">' + body + '</div>';
             }).join('');
