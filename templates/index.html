@@ -55731,7 +55731,15 @@ https://www.instagram.com/p/..."></textarea>
                                'wattpad_romance', 'wattpad_teen_fiction',
                                'wattpad_fanfiction', 'wattpad_fantasy'];
             var wattpadPresent = wattpadKeys.filter(function(k) { return sources[k]; });
-            if (!storePresent.length && !libbyPresent.length && !wattpadPresent.length) {
+            // Goodreads community weekly-read rail. One panel today
+            // ('goodreads_most_read'), rendered as its own full-width
+            // card below the retail-source grid so the community
+            // signal reads adjacent to but distinct from Amazon /
+            // Apple / Audible / Libby buyer + borrow counts.
+            var goodreadsKeys = ['goodreads_most_read'];
+            var goodreadsPresent = goodreadsKeys.filter(function(k) { return sources[k]; });
+            if (!storePresent.length && !libbyPresent.length &&
+                !wattpadPresent.length && !goodreadsPresent.length) {
                 return '<div class="tiq-empty">Book charts are warming up. Check back later.</div>';
             }
 
@@ -55818,6 +55826,81 @@ https://www.instagram.com/p/..."></textarea>
             var libbyCards = libbyPresent.map(function(k) {
                 return cardFor(libby[k] || {}, 'libby', 'libby-' + k, libbyLabelMap[k]);
             }).join('');
+
+            // Goodreads card: single wide card with a single-column
+            // ranked list (no sub-pills - only one rail today, Most
+            // Read This Week). Row cards carry rank + cover + title
+            // + author + currently_reading_count community chip +
+            // weekly-US-readers audience chip. The community count
+            // is the raw Goodreads-native signal the projection is
+            // derived from, so surfacing both side by side lets the
+            // reader eyeball the community-to-total-audience ratio.
+            var goodreadsHtml = '';
+            if (goodreadsPresent.length) {
+                var _grPanel = sources['goodreads_most_read'] || {};
+                var _grLabel = _grPanel.label || 'Goodreads - Most Read This Week';
+                var _grItems = _grPanel.items || [];
+                var _grBody;
+                if (!_grPanel.available || !_grItems.length) {
+                    _grBody = '<div class="tiq-placeholder">' +
+                              '<div class="tiq-placeholder-title">' + _tiqEsc(_grLabel) + '</div>' +
+                              '<div>' + _tiqEsc(_grPanel.sub || 'Warming up.') + '</div>' +
+                              '</div>';
+                } else {
+                    _grBody = '<div class="tiq-headline-list" style="max-height:520px;overflow-y:auto;">' +
+                              _grItems.map(function(it, i) {
+                                  var img = _tiqPosterCell(it.image || it.cover_url);
+                                  var storyUrl = it.book_url || it.url;
+                                  var titleLine = storyUrl
+                                      ? '<a href="' + _tiqEsc(storyUrl) + '" target="_blank" rel="noopener">' + _tiqEsc(it.title) + '</a>'
+                                      : _tiqEsc(it.title);
+                                  var authorName = it.author || it.artist;
+                                  var rowKey = (it.title || '') + ' - ' + (authorName || 'goodreads_most_read');
+                                  var meta = '';
+                                  if (authorName) meta += '<span>by ' + _tiqEsc(authorName) + '</span>';
+                                  if (it.is_new_release) {
+                                      meta += '<span class="tiq-badge">New</span>';
+                                  }
+                                  // Cumulative ratings + avg rating are a
+                                  // durable-popularity floor signal; skip
+                                  // when we don't have real numbers.
+                                  var ratingsCount = Number(it.ratings_count);
+                                  var avgRating = Number(it.avg_rating);
+                                  if (isFinite(avgRating) && avgRating > 0 &&
+                                      isFinite(ratingsCount) && ratingsCount > 0) {
+                                      meta += '<span title="Cumulative average rating and lifetime ratings on Goodreads">' +
+                                              avgRating.toFixed(2) + ' ★ ' +
+                                              _tiqEsc(_tiqCompactNum(ratingsCount)) + ' ratings</span>';
+                                  }
+                                  // Community weekly-read count (native Goodreads).
+                                  // This is what drives the Most-Read-This-Week
+                                  // ordering itself; surface it as a secondary
+                                  // chip so readers see the raw community signal
+                                  // alongside the projected audience chip below.
+                                  var curReading = Number(it.currently_reading_count);
+                                  if (isFinite(curReading) && curReading > 0) {
+                                      meta += '<span title="US Goodreads users who logged this book as read/reading in the past 7 days">' +
+                                              _tiqEsc(_tiqCompactNum(curReading)) + ' currently reading</span>';
+                                  }
+                                  var audience = _tiqAudienceChip(it.us_streams);
+                                  if (audience) meta += audience;
+                                  return '<div class="tiq-row"><div class="tiq-rank">' + (i + 1) + '</div>' + img +
+                                         '<div class="tiq-row-body">' +
+                                         '<div class="tiq-row-title">' + titleLine +
+                                         _tiqCrossPlatformBadge(it) +
+                                         _tiqActions('book', 'goodreads_most_read', rowKey, rowKey, 'National') +
+                                         '</div>' +
+                                         (meta ? '<div class="tiq-row-meta">' + meta + '</div>' : '') +
+                                         '</div></div>';
+                              }).join('') +
+                              '</div>';
+                }
+                goodreadsHtml =
+                    '<div class="tiq-card" data-tiq-goodreads-card="1" style="margin-top:16px;">' +
+                    '<h4>GOODREADS</h4>' +
+                    '<div data-tiq-goodreads-body="1">' + _grBody + '</div>' +
+                    '</div>';
+            }
 
             // Wattpad card: single wide card with a sub-pill strip
             // (Hot / Originals / Romance / Teen Fiction / Fanfiction
@@ -55929,7 +56012,7 @@ https://www.instagram.com/p/..."></textarea>
 
             return '<div class="tiq-cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">' +
                    storeCards + libbyCards +
-                   '</div>' + wattpadHtml;
+                   '</div>' + goodreadsHtml + wattpadHtml;
         }
 
         // Wattpad sub-pill handler. Flips the active rail and repaints
