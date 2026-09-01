@@ -16265,11 +16265,75 @@ def _require_trends_iq():
         return False, (jsonify({'success': False, 'error': 'Not authenticated'}), 401)
     role = _normalize_role(user.get('role', 'user'))
     acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
-    if not acc.get('has_trends_iq_access'):
+    # Trends and Rankers are independent products that happen to share this
+    # data pipeline: Trends serves the search/news/retail cards, Rankers
+    # serves the media cards (Music/Podcasts/Streaming/FAST/Gaming). EITHER
+    # flag admits the caller to these endpoints; /api/trends-iq/data then
+    # returns ONLY the card groups the user is entitled to (see
+    # _trends_iq_filter_payload), so a Trends-only user never receives media
+    # data and a Rankers-only user never receives Trends data.
+    if not (acc.get('has_trends_iq_access') or acc.get('has_rankers_iq_access')):
         return False, (jsonify({'success': False, 'error': 'Trends IQ access not enabled'}), 403)
     if _trends_iq is None:
         return False, (jsonify({'success': False, 'error': 'Trends IQ module not loaded'}), 500)
     return True, None
+
+
+# Card groups keyed to each product so /api/trends-iq/data only ever returns
+# what the caller is entitled to. Media cards belong to Rankers
+# (has_rankers_iq_access); everything else belongs to Trends
+# (has_trends_iq_access). Users with both flags see all of it.
+_TIQ_MEDIA_CARD_KEYS = ('music_trending', 'podcasts_trending',
+                        'streaming_trending', 'fast_trending', 'gaming_trending')
+_TIQ_MEDIA_COUNT_KEYS = ('music', 'podcasts', 'streaming', 'fast', 'gaming')
+_TIQ_TRENDS_CARD_KEYS = ('movers', 'trending_headlines', 'articles_by_source',
+                         'philanthropy_news', 'business_news', 'wall_street_news',
+                         'trending_searches', 'trending_searches_by_category',
+                         'trending_people', 'wikipedia_trending', 'books_trending',
+                         'libby_trending', 'comics_trending', 'broadway_trending',
+                         'broadway_week_ending', 'films_ticketing')
+_TIQ_TRENDS_COUNT_KEYS = ('searches', 'movers', 'headlines', 'people',
+                          'books', 'comics', 'broadway', 'films')
+
+
+def _trends_iq_entitlements():
+    """Return (has_trends, has_rankers) for the current user, honoring cloak."""
+    user = get_current_user()
+    if not user:
+        return False, False
+    role = _normalize_role(user.get('role', 'user'))
+    acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
+    return bool(acc.get('has_trends_iq_access')), bool(acc.get('has_rankers_iq_access'))
+
+
+def _trends_iq_filter_payload(payload, has_trends, has_rankers):
+    """Return a payload copy exposing only the card groups the user may see.
+
+    Media cards (Rankers) and Trends cards are stripped independently. Copies
+    are taken so the shared compute_view cache is never mutated.
+    """
+    if has_trends and has_rankers:
+        return payload
+    if not isinstance(payload, dict):
+        return payload
+    out = dict(payload)
+    cards = dict(out.get('cards') or {})
+    counts = dict(out.get('counts') or {})
+    if not has_rankers:
+        for _k in _TIQ_MEDIA_CARD_KEYS:
+            cards.pop(_k, None)
+        for _k in _TIQ_MEDIA_COUNT_KEYS:
+            if _k in counts:
+                counts[_k] = 0
+    if not has_trends:
+        for _k in _TIQ_TRENDS_CARD_KEYS:
+            cards.pop(_k, None)
+        for _k in _TIQ_TRENDS_COUNT_KEYS:
+            if _k in counts:
+                counts[_k] = 0
+    out['cards'] = cards
+    out['counts'] = counts
+    return out
 
 
 @app.route('/api/trends-iq/filter-options', methods=['GET'])
@@ -16314,6 +16378,10 @@ def api_trends_iq_data():
         }
         force = bool(req.get('force_refresh'))
         payload = _trends_iq.compute_view(filters, force_refresh=force)
+        # Return only the card groups this user is entitled to (Trends vs
+        # Rankers). Filtered on a copy so the shared cache stays intact.
+        _tiq_has_trends, _tiq_has_rankers = _trends_iq_entitlements()
+        payload = _trends_iq_filter_payload(payload, _tiq_has_trends, _tiq_has_rankers)
         return jsonify(payload)
     except Exception as e:
         traceback.print_exc()
