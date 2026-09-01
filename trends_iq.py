@@ -3771,7 +3771,7 @@ def _annotate_broadway_with_streams(broadway_trending: dict) -> None:
 
     Handled the same way as Libby's native `holds`: build a synthesized
     `us_streams` block whose `us_estimate` = the scraped attendance,
-    `unit_label` = "weekly Broadway attendance", and no confidence
+    `unit_label` = "weekly ticket buyers", and no confidence
     band (`low` = `high` = the exact integer). Broadway audiences are
     mixed (roughly 63-67% tourists per Broadway League research,
     including both domestic US tourists from other states AND
@@ -3803,9 +3803,9 @@ def _annotate_broadway_with_streams(broadway_trending: dict) -> None:
                 'us_estimate':      display,
                 'us_estimate_low':  display,
                 'us_estimate_high': display,
-                'unit_label':       'weekly Broadway attendance',
+                'unit_label':       'weekly ticket buyers',
                 'confidence':       'native',
-                'method':           ('Native weekly attendance from the '
+                'method':           ('Native weekly ticket buyers from the '
                                       'Broadway League Tuesday report.'),
                 'source':           'native',
             }
@@ -6812,7 +6812,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
 
     # Broadway weekly attendance (Playbill grosses page mirror of the
     # Broadway League Tuesday report). Single panel today
-    # ('broadway_weekly_attendance' = 'Weekly Attendance'), one row per
+    # ('broadway_weekly_attendance' = 'Show Rank'), one row per
     # currently-running production sorted by attendance desc. NEW
     # top-level tab (not nested), so it doesn't merge into any other
     # source strip. Attendance is a real integer from a real source
@@ -6915,7 +6915,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # the audience integer, drawn straight from the Broadway League's
     # Tuesday weekly report. The annotator synthesizes a `us_streams`
     # block with `us_estimate` = scraped attendance and unit_label =
-    # "weekly Broadway attendance" so the frontend renders the same
+    # "weekly ticket buyers" so the frontend renders the same
     # audience chip pattern as every other tab.
     _annotate_broadway_with_streams(broadway_trending)
 
@@ -7135,7 +7135,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
                                   for k in ('amazon_kindle', 'apple_comics', 'libby_comics')),
             'films':         sum(len(((film_sources.get(k) or {}).get('items') or []))
                                   for k in ('fandango', 'cinemark', 'amc', 'regal', 'atom')),
-            # Broadway currently ships one panel (Weekly Attendance).
+            # Broadway currently ships one panel (Show Rank).
             # Sum across every panel key so a future add-on rail
             # (e.g. Off-Broadway) picks up the badge automatically.
             'broadway':      sum(len(((broadway_trending.get(k) or {}).get('items') or []))

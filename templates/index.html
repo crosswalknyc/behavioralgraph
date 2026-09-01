@@ -53208,7 +53208,7 @@ https://www.instagram.com/p/..."></textarea>
                 { key: 'streaming', label: 'Streaming',        count: counts.streaming || 0, icon: '📺',
                   tip: 'Streaming: Daily Top-10 rankings on Netflix, Disney+, Hulu, Max, Prime Video, and ESPN+, split into Film and TV.' },
                 { key: 'broadway',  label: 'Broadway',         count: counts.broadway  || 0, icon: '🎭',
-                  tip: 'Broadway: Every currently-running Broadway show, ranked by weekly attendance. Also shows the sold-out percentage and week-over-week attendance change.' },
+                  tip: 'Broadway: Every currently-running Broadway show, ranked by weekly ticket buyers. Also shows the sold-out percentage and week-over-week change in ticket buyers.' },
                 { key: 'films',     label: 'Films',            count: counts.films     || 0, icon: '🎬',
                   tip: 'Films: Top titles in theaters right now across Fandango, Cinemark, AMC, and Regal. Ranking on each platform reflects that platform\'s own front-page merchandising and sales density.' },
                 { key: 'fast',      label: 'FAST',             count: counts.fast      || 0, icon: '📡',
@@ -53635,7 +53635,7 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         function _tiqExportRowsBroadway(dict, tabLabel) {
-            // Broadway is a single-panel tab today (Weekly Attendance).
+            // Broadway is a single-panel tab today (Show Rank).
             // One row per currently-running production. Change column
             // carries weekly_change_attendance (%, derived from Playbill's
             // week-over-week capacity delta), US Audience carries the
@@ -53668,11 +53668,11 @@ https://www.instagram.com/p/..."></textarea>
                     out.push({
                         Tab: tabLabel,
                         // Fixed section label per Jenna 2026-09-01: the
-                        // panel + CSV both read "Weekly Attendance" now
+                        // panel + CSV both read "Show Rank" now
                         // that dollar columns are dropped. If a future
                         // rail lands (Off-Broadway, Broadway matinees,
                         // etc.) it can use its own panel.label instead.
-                        Section: 'Broadway - Weekly Attendance',
+                        Section: 'Broadway - Show Rank',
                         Rank: it.rank || (i + 1),
                         Title: it.title || '',
                         Subtitle: it.theatre || it.subtitle || '',
@@ -56507,12 +56507,12 @@ https://www.instagram.com/p/..."></textarea>
             var panel = (sources || {}).broadway_weekly_attendance || {};
             var items = panel.items || [];
             if (!items.length) {
-                return '<div class="tiq-empty">Broadway weekly attendance is warming up. Check back later.</div>';
+                return '<div class="tiq-empty">Broadway show rank data is warming up. Check back later.</div>';
             }
             var weLabel = weekEnding ? (' - Week ending ' + _tiqEsc(weekEnding)) : '';
             var subheader =
                 '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
-                'Weekly Attendance' + weLabel +
+                'Show Rank' + weLabel +
                 '</div>';
             var rows = items.map(function(it, i) {
                 var titleLine = it.url
@@ -56565,7 +56565,7 @@ https://www.instagram.com/p/..."></textarea>
             }).join('');
             var card =
                 '<div class="tiq-card">' +
-                '<h4>Weekly Attendance</h4>' +
+                '<h4>Show Rank</h4>' +
                 '<div class="tiq-headline-list" style="max-height:640px;overflow-y:auto;">' +
                 rows +
                 '</div>' +

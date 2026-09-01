@@ -24,7 +24,7 @@ Snapshot shape (kind='broadway'):
       "week_ending": "2026-08-23",
       "sources": {
         "broadway_weekly_attendance": {
-          "label":     "Weekly Attendance",
+          "label":     "Show Rank",
           "items":     [ ~25-40 shows, sorted by attendance desc ],
           "available": true
         }
@@ -369,9 +369,9 @@ def fetch() -> dict[str, Any]:
 
     available = bool(items)
     panel = {
-        'label':      'Weekly Attendance',
+        'label':      'Show Rank',
         'sub':        ('Every currently-running Broadway show, ranked '
-                        'by weekly attendance.') if available else '',
+                        'by weekly ticket buyers.') if available else '',
         'items':      items,
         'available':  available,
     }
