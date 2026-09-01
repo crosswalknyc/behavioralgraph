@@ -49,6 +49,13 @@ MASTER_CATEGORIES: dict[str, list[str]] = {
     "BRAND": [
         "ACCESSORIES", "ACTIVEWEAR", "AMUSEMENT PARKS", "APPAREL",
         "APPAREL/FOOTWEAR", "AUTOMOBILE",
+        # 2026-09-01 (Jenna): AUTOMOTIVE PARTS is a sub-cut of AUTOMOBILE
+        # (hostmap SECTION "Automobile, Automotive Parts"), mirroring
+        # AUTOMOBILE's values the same way CPG mirrors MOST PURCHASED
+        # BRANDS. Parts brands (Edelbrock, K&N Filters, JEGS, Bilstein,
+        # Fox Shocks, Flowmaster, aFe Power, ...) land in AUTOMOBILE +
+        # AUTOMOTIVE PARTS at one identical value.
+        "AUTOMOTIVE PARTS",
         # 'BANK' is the canonical value the Profile-IQ pipeline writes into
         # the BRAND CATEGORY row for traditional retail banks (Bank of
         # America, Citibank, Wells Fargo, BMO, Bread Financial, ...). Older
