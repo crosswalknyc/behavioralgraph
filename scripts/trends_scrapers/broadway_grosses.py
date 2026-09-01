@@ -89,7 +89,7 @@ _PLAYBILL_URL = 'https://www.playbill.com/grosses'
 # ---------------------------------------------------------------------------
 # HTTP fetch
 # ---------------------------------------------------------------------------
-def _fetch_html(url: str) -> str:
+def _fetch_html(url: str, timeout: int = _TIMEOUT) -> str:
     """Return the page HTML or '' on any failure. curl_cffi Chrome-131
     first (real Chrome TLS fingerprint bypasses most CDN bot walls),
     plain requests as a fallback if curl_cffi isn't installed."""
@@ -98,7 +98,7 @@ def _fetch_html(url: str) -> str:
         from curl_cffi import requests as _ccr  # type: ignore
         r = _ccr.get(url, impersonate='chrome131',
                       headers={'Accept': 'text/html,application/xhtml+xml'},
-                      timeout=_TIMEOUT)
+                      timeout=timeout)
         if r.status_code == 200 and (r.text or ''):
             return r.text
         logger.info("playbill curl_cffi status=%s bytes=%d",
@@ -112,7 +112,7 @@ def _fetch_html(url: str) -> str:
         r = requests.get(url,
                           headers={'User-Agent': _UA,
                                     'Accept': 'text/html'},
-                          timeout=_TIMEOUT,
+                          timeout=timeout,
                           allow_redirects=True)
         if r.ok:
             return r.text or ''
@@ -355,6 +355,78 @@ def _parse_rows(table_html: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Poster enrichment (official Playbill cover art)
+# ---------------------------------------------------------------------------
+# The grosses table only links to each show's grosses DETAIL page
+# (`/production/gross?production=<uuid>`), which carries no poster. That
+# detail page, however, links out to the show's MAIN production page
+# (`/production/<slug>`), whose <meta property="og:image"> is the
+# official Playbill cover art. So poster fetch is a 2-hop walk:
+#   grosses detail  ->  main production page  ->  og:image
+# Everything here is best-effort: any miss just leaves image_url='' so
+# the frontend falls back to the branded placeholder tile.
+_MAIN_PROD_RE = re.compile(
+    r'href="(https://(?:www\.)?playbill\.com/production/[^"?]+)"',
+    re.IGNORECASE,
+)
+# Playbill emits `<meta content="..." property="og:image">` (content
+# BEFORE property), so match the whole og:image tag first, then pull
+# its content attribute regardless of attribute order.
+_OG_IMAGE_TAG_RE = re.compile(
+    r'<meta[^>]+property="og:image"[^>]*>',
+    re.IGNORECASE,
+)
+_META_CONTENT_RE = re.compile(r'content="([^"]+)"', re.IGNORECASE)
+_POSTER_TIMEOUT = 12
+
+
+def _extract_main_production_url(gross_html: str) -> str:
+    """First non-gross `/production/<slug>` link on the grosses detail
+    page = the show's main production page."""
+    if not gross_html:
+        return ''
+    for href in _MAIN_PROD_RE.findall(gross_html):
+        if 'gross' in href.lower():
+            continue
+        return href
+    return ''
+
+
+def _extract_poster(main_html: str) -> str:
+    """og:image on the main production page = official Playbill cover."""
+    if not main_html:
+        return ''
+    tag = _OG_IMAGE_TAG_RE.search(main_html)
+    if not tag:
+        return ''
+    c = _META_CONTENT_RE.search(tag.group(0))
+    return (c.group(1) or '').strip() if c else ''
+
+
+def _enrich_posters(rows: list[dict]) -> list[dict]:
+    """Fill `row['image_url']` with the show's official Playbill cover
+    via the 2-hop walk above. Fully defensive: never raises; a failed
+    lookup simply leaves the row's image_url as-is (empty)."""
+    for row in rows:
+        gross_url = (row.get('url') or '').strip()
+        if not gross_url or row.get('image_url'):
+            continue
+        try:
+            gross_html = _fetch_html(gross_url, timeout=_POSTER_TIMEOUT)
+            main_url = _extract_main_production_url(gross_html)
+            if not main_url:
+                continue
+            poster = _extract_poster(_fetch_html(main_url,
+                                                  timeout=_POSTER_TIMEOUT))
+            if poster:
+                row['image_url'] = poster
+        except Exception as e:
+            logger.info("broadway poster enrich failed for %r: %s",
+                         row.get('title'), e)
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 def fetch() -> dict[str, Any]:
@@ -366,6 +438,13 @@ def fetch() -> dict[str, Any]:
     week_ending = _find_selected_week(html)
     table_html = _find_grosses_table(html)
     items = _parse_rows(table_html)
+
+    # Best-effort: attach official Playbill cover art per show. Guarded
+    # so a poster-fetch hiccup can never sink the attendance snapshot.
+    try:
+        _enrich_posters(items)
+    except Exception as e:
+        logger.info("broadway poster enrichment skipped: %s", e)
 
     available = bool(items)
     panel = {
