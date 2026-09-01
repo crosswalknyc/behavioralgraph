@@ -146559,10 +146559,19 @@ https://www.instagram.com/p/..."></textarea>
         
         function getComparisonSectionSortType(sectionKey) {
             if (comparisonSectionSortTypes[sectionKey]) return comparisonSectionSortTypes[sectionKey];
-            // Age comparison defaults to age order (youngest → oldest) so
-            // "65 or Older" always sits at the bottom, matching the
-            // individual-profile Demographics tab. Other sections rank by %.
-            return sectionKey === 'demo_age' ? 'age' : 'pct';
+            // Default display order per demographic card (independent of the
+            // global sort-direction toggle), matching the individual-profile
+            // Demographics tab and the ordering Compare users expect:
+            //   • age    → youngest → oldest ("65 or Older" stays at bottom)
+            //   • income → low → high bracket order
+            //   • gender / relationship / parental status / occupation
+            //            → largest cohort first (big → small)
+            // All other sections rank by %.
+            if (sectionKey === 'demo_age') return 'age';
+            if (sectionKey === 'demo_income') return 'income';
+            if (sectionKey === 'demo_gender' || sectionKey === 'demo_relationship'
+                || sectionKey === 'demo_parental_status' || sectionKey === 'demo_occupation') return 'valdesc';
+            return 'pct';
         }
 
         // Per-column chart type: 'bar' (horizontal) or 'column' (vertical). Key: section -> profileIdx -> 'bar'|'column'
@@ -146593,12 +146602,19 @@ https://www.instagram.com/p/..."></textarea>
             currentSortColumn = profileIndex;
             currentSortSection = section;
             
-            // The Age card defaults to age order. Clicking a profile
-            // column should sort by that column's value instead, so flip
-            // its sort type to %; clicking the Age label header restores
-            // youngest→oldest age order.
-            if (section === 'age') {
-                comparisonSectionSortTypes['demo_age'] = (profileIndex === -1) ? 'age' : 'pct';
+            // Cards with a fixed default order (age / income / gender /
+            // relationship / parental status / occupation) keep that order
+            // until the user acts. Clicking a profile column sorts by that
+            // column's value (sort type → %); clicking the label header
+            // restores the card's canonical default order.
+            const _secKey = 'demo_' + section;
+            const _canonicalDefault = section === 'age' ? 'age'
+                : section === 'income' ? 'income'
+                : (section === 'gender' || section === 'relationship'
+                   || section === 'parental_status' || section === 'occupation') ? 'valdesc'
+                : null;
+            if (_canonicalDefault) {
+                comparisonSectionSortTypes[_secKey] = (profileIndex === -1) ? _canonicalDefault : 'pct';
             }
             
             // Re-render the comparison with sorting applied
@@ -147108,6 +147124,7 @@ https://www.instagram.com/p/..."></textarea>
                             <select onchange="setComparisonSectionSortType('demo_income', this.value)" style="padding: 0.2rem 0.4rem; font-size: 0.65rem; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-primary); min-width: 75px;">
                                 <option value="pct" ${incomeSortType === 'pct' ? 'selected' : ''}>By ${compDisplayMode === 'projection' ? '#' : '%'}</option>
                                 <option value="index" ${incomeSortType === 'index' ? 'selected' : ''}>By Index</option>
+                                <option value="income" ${incomeSortType === 'income' ? 'selected' : ''}>By Income ↑ (low → high)</option>
                             </select>
                         </span>
                     </div>
@@ -147974,18 +147991,39 @@ https://www.instagram.com/p/..."></textarea>
                 return nums && nums[0] ? parseInt(nums[0]) : 0;
             };
 
+            // Helper for income bracket ordering (low → high). "Under $25,000"
+            // / "Less than $25,000" is the floor; otherwise use the bracket's
+            // lower-bound dollar figure.
+            const getIncomeSortKey = (val) => {
+                const s = (val || '').toString().toLowerCase();
+                if (s.includes('under') || s.includes('less than')) return 0;
+                const m = s.replace(/,/g, '').match(/\d+/);
+                return m ? parseInt(m[0]) : 999999999;
+            };
+
             // Sort logic - label column (profileIndex -1), then dropdown sortType, then profile column
             if (sortByProfileIdx === -1) {
                 // Sort by label column: asc = A–Z / youngest first, desc = Z–A / oldest first
                 const dir = sortDir === 'asc' ? 1 : -1;
                 if (demoType === 'age') {
                     dataRows.sort((a, b) => dir * (getAgeSortKey(a.value) - getAgeSortKey(b.value)));
+                } else if (demoType === 'income') {
+                    dataRows.sort((a, b) => dir * (getIncomeSortKey(a.value) - getIncomeSortKey(b.value)));
                 } else {
                     dataRows.sort((a, b) => dir * (a.value || '').toString().localeCompare((b.value || '').toString(), undefined, { sensitivity: 'base' }));
                 }
             } else if (demoType === 'age' && sortType === 'age') {
                 // By age ascending (youngest first): <16 at top, then 17-18, 19-20, ..., 60+ at bottom
                 dataRows.sort((a, b) => getAgeSortKey(a.value) - getAgeSortKey(b.value));
+            } else if (demoType === 'income' && sortType === 'income') {
+                // By income bracket ascending (low → high): "Under $25,000" first, "$250,000 or More" last.
+                dataRows.sort((a, b) => getIncomeSortKey(a.value) - getIncomeSortKey(b.value));
+            } else if (sortType === 'valdesc') {
+                // Fixed "largest cohort first" default (gender / relationship /
+                // parental status / occupation). Independent of the global
+                // sort-direction toggle so these cards always read big → small.
+                const vIdx = (sortByProfileIdx !== null && sortByProfileIdx >= 0) ? sortByProfileIdx : ((primaryProfileIndex >= 0 && primaryProfileIndex < profiles.length) ? primaryProfileIndex : 0);
+                dataRows.sort((a, b) => getSortValue(b, vIdx) - getSortValue(a, vIdx));
             } else if (sortByProfileIdx !== null && sortByProfileIdx >= 0) {
                 // Sort by selected profile column
                 if (sortDir === 'asc') {
@@ -150136,8 +150174,11 @@ https://www.instagram.com/p/..."></textarea>
             const getSortVal = (row, idx) => { const raw = sortType === 'index' ? row.indexData[idx] : row.pctData[idx]; const num = typeof raw === 'number' ? raw : parseFloat(raw); return Number.isFinite(num) ? num : 0; };
             const sortDir = currentSortDirection || 'desc';
             const getAgeSortKey = (val) => { const s = (val || '').toString().trim(); if (/^<\d+/.test(s)) return 0; if (s.includes('+')) return parseInt(s.replace(/[^0-9]/g, '')) || 99; const nums = s.match(/\d+/g); return nums && nums[0] ? parseInt(nums[0]) : 0; };
+            const getIncomeSortKey = (val) => { const s = (val || '').toString().toLowerCase(); if (s.includes('under') || s.includes('less than')) return 0; const m = s.replace(/,/g, '').match(/\d+/); return m ? parseInt(m[0]) : 999999999; };
             const demoSortIdx = getSortProfileIdx(sectionKey);
             if (demoKey === 'age' && sortType === 'age') { dataRows.sort((a, b) => getAgeSortKey(a.value) - getAgeSortKey(b.value)); }
+            else if (demoKey === 'income' && sortType === 'income') { dataRows.sort((a, b) => getIncomeSortKey(a.value) - getIncomeSortKey(b.value)); }
+            else if (sortType === 'valdesc') { const idx = (demoSortIdx !== null && demoSortIdx >= 0) ? demoSortIdx : (primaryProfileIndex >= 0 ? primaryProfileIndex : 0); dataRows.sort((a, b) => getSortVal(b, idx) - getSortVal(a, idx)); }
             else if (demoSortIdx !== null && demoSortIdx >= 0) { dataRows.sort((a, b) => sortDir === 'asc' ? getSortVal(a, demoSortIdx) - getSortVal(b, demoSortIdx) : getSortVal(b, demoSortIdx) - getSortVal(a, demoSortIdx)); }
             else { const idx = primaryProfileIndex >= 0 ? primaryProfileIndex : 0; dataRows.sort((a, b) => getSortVal(b, idx) - getSortVal(a, idx)); }
             if (limit !== 'All' && !isNaN(parseInt(limit))) dataRows = dataRows.slice(0, parseInt(limit));
