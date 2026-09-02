@@ -56418,8 +56418,10 @@ https://www.instagram.com/p/..."></textarea>
             if (!allKeys.length) {
                 return '<div class="tiq-empty">Music charts are warming up. Check back later.</div>';
             }
+            // 'tiktok' (TikTok Sounds) is permanently unavailable - TikTok
+            // pulled the public Sounds tab - so keep it hidden entirely.
             var keys = order.filter(function(k) { return sources[k]; })
-                .concat(allKeys.filter(function(k) { return order.indexOf(k) === -1; }));
+                .concat(allKeys.filter(function(k) { return order.indexOf(k) === -1 && k !== 'tiktok'; }));
 
             // 2026-09-02 (v4): show every platform (empty ones become
             // 'warming up' placeholders so Amazon reappears once cookies are
