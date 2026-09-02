@@ -2340,6 +2340,60 @@
                             </p>
                         </div>
                     </div>
+
+                    <!-- 2026-09-02 (Jenna): Hide from LENS dropdown.
+                         Mirrors the Hide from SELECT PRODUCT block above, but
+                         targets the Trends IQ LENS dropdown. A lens checked
+                         here is hidden from every non-super-admin user by
+                         default unless the user has that lens explicitly in
+                         `allowed_lenses`. Super admins always see every lens.
+                         Keep in lock-step with DEFAULT_HIDDEN_LENSES in
+                         app.py and the LENS dropdown consumers in
+                         templates/index.html (`_tiqPopulateLensDropdown`). -->
+                    <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 1rem;">
+                        <h3 style="margin: 0 0 0.5rem 0; font-size: 1rem;">🚪 Hide from LENS dropdown</h3>
+                        <p style="color: var(--text-secondary); margin: 0 0 1rem 0; font-size: 0.85rem;">
+                            Check a lens to <strong>hide it by default from the Trends IQ LENS dropdown for every non-super-admin user</strong>. Per-user access still applies via the User section: a lens hidden here still appears for a user whose Lens Access grants it explicitly.
+                        </p>
+                        <div style="margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hiddenLensesSelectAll" onchange="toggleAllHiddenLenses()">
+                                <span>Hide All Lenses</span>
+                            </label>
+                            <button class="btn btn-small btn-primary" onclick="saveLiveFeatures()">💾 Save Live Features</button>
+                        </div>
+                        <div id="hiddenLensesGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.5rem;">
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-lens-checkbox" data-lens="ms_now_reader" onchange="updateHiddenLens('ms_now_reader', this.checked)">
+                                <span>📺 MS NOW Reader</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-lens-checkbox" data-lens="unlikely_collaborators_follower" onchange="updateHiddenLens('unlikely_collaborators_follower', this.checked)">
+                                <span>🧭 Unlikely Collaborators Follower</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-lens-checkbox" data-lens="gen_z" onchange="updateHiddenLens('gen_z', this.checked)">
+                                <span>🌐 Gen Z (Ages 18-28)</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-lens-checkbox" data-lens="millennials" onchange="updateHiddenLens('millennials', this.checked)">
+                                <span>☕ Millennials (Ages 29-44)</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-lens-checkbox" data-lens="gen_x" onchange="updateHiddenLens('gen_x', this.checked)">
+                                <span>📼 Gen X (Ages 45-60)</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-lens-checkbox" data-lens="baby_boomers" onchange="updateHiddenLens('baby_boomers', this.checked)">
+                                <span>📻 Baby Boomers (Ages 61-79)</span>
+                            </label>
+                        </div>
+                        <div style="margin-top: 0.75rem; padding: 0.6rem 0.75rem; background: rgba(124, 58, 237, 0.08); border-radius: 6px; border: 1px solid rgba(124, 58, 237, 0.25);">
+                            <p style="margin: 0; font-size: 0.8rem; color: var(--text-secondary);">
+                                <strong>Rule:</strong> any new lens added under <code>scripts/trends_scrapers/lens_personas/</code> must also be registered here (HTML row above + key in <code>DEFAULT_HIDDEN_LENSES</code> in <code>app.py</code>) so it can be globally hidden, and in the User section so per-user access can be toggled.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -4203,6 +4257,53 @@
                             </label>
                         </div>
                     </div>
+
+                    <!-- 2026-09-02 (Jenna): per-user Trends IQ LENS access.
+                         By default a user sees the four generational lenses
+                         (Gen Z / Millennials / Gen X / Baby Boomers) plus
+                         whatever the Live Features `Hide from LENS dropdown`
+                         grid currently leaves visible. MS NOW Reader and
+                         Unlikely Collaborators Follower are hidden by default
+                         and only appear for users who are explicitly granted
+                         them here (or wildcard grant below). Super admins
+                         always see every lens. -->
+                    <div class="access-section" id="lensAccessSection" data-access-group="trends" style="margin-top: 0.75rem;">
+                        <h4 style="margin-bottom: 0.5rem; text-align: left;">Lens Access</h4>
+                        <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 0.75rem; text-align: left;">
+                            Which Trends IQ lenses this user can pick from the LENS dropdown. Default-visible lenses (Gen Z / Millennials / Gen X / Baby Boomers) show up automatically unless hidden globally in Live Features. Check a lens below to grant access explicitly.
+                        </p>
+                        <label class="checkbox-group" style="justify-content: flex-start; margin-bottom: 0.5rem;">
+                            <input type="checkbox" id="allowAllLenses" onchange="onAllowAllLensesChanged()">
+                            <span style="font-weight: 600;">Grant access to all lenses (current and future)</span>
+                        </label>
+                        <div id="allowedLensesList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.4rem; margin-top: 0.5rem;">
+                            <label class="checkbox-group allowed-lens-row" style="padding: 0.5rem 0.6rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="allowed-lens-checkbox" data-lens="ms_now_reader">
+                                <span>📺 MS NOW Reader</span>
+                            </label>
+                            <label class="checkbox-group allowed-lens-row" style="padding: 0.5rem 0.6rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="allowed-lens-checkbox" data-lens="unlikely_collaborators_follower">
+                                <span>🧭 Unlikely Collaborators Follower</span>
+                            </label>
+                            <label class="checkbox-group allowed-lens-row" style="padding: 0.5rem 0.6rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="allowed-lens-checkbox" data-lens="gen_z">
+                                <span>🌐 Gen Z (Ages 18-28)</span>
+                            </label>
+                            <label class="checkbox-group allowed-lens-row" style="padding: 0.5rem 0.6rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="allowed-lens-checkbox" data-lens="millennials">
+                                <span>☕ Millennials (Ages 29-44)</span>
+                            </label>
+                            <label class="checkbox-group allowed-lens-row" style="padding: 0.5rem 0.6rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="allowed-lens-checkbox" data-lens="gen_x">
+                                <span>📼 Gen X (Ages 45-60)</span>
+                            </label>
+                            <label class="checkbox-group allowed-lens-row" style="padding: 0.5rem 0.6rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="allowed-lens-checkbox" data-lens="baby_boomers">
+                                <span>📻 Baby Boomers (Ages 61-79)</span>
+                            </label>
+                        </div>
+                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem; text-align: left;">User can see this lens: checked lenses show up in the LENS dropdown regardless of the global hide state. Unchecked lenses fall back to the Live Features default.</small>
+                    </div>
                 </div>
                 
                 <!-- Purgatory Approval Section (Super Admin Only) -->
@@ -4849,6 +4950,7 @@
             'has_blue_iq_access',
             'has_impact_iq_access','impact_iq_journeys',
             'has_trends_iq_access','has_microdramas_iq_access',
+            'allowed_lenses',
             'has_chatbot_profile_iq_access',
             'prometheus_access',
             'auto_access_new'
@@ -7724,6 +7826,19 @@
             customAnalysis: false, shareOfTimeIQ: false, workspace: false,
             helmIQ: false, microdramasIQ: false, chatbotProfileIQ: false
         };
+
+        // 2026-09-02 (Jenna): global default-hide state for Trends IQ
+        // lenses. Same shape + save flow as hiddenProductsData. Kept in
+        // lock-step with DEFAULT_HIDDEN_LENSES in app.py and the six
+        // canonical lens ids under scripts/trends_scrapers/lens_personas/.
+        let hiddenLensesData = {
+            ms_now_reader:                    true,
+            unlikely_collaborators_follower:  true,
+            gen_z:                            false,
+            millennials:                      false,
+            gen_x:                            false,
+            baby_boomers:                     false
+        };
         
         // Load Live Features from server
         async function loadLiveFeatures() {
@@ -7741,10 +7856,14 @@
                 if (data.success && data.hidden_products) {
                     hiddenProductsData = { ...hiddenProductsData, ...data.hidden_products };
                 }
+                if (data.success && data.hidden_lenses) {
+                    hiddenLensesData = { ...hiddenLensesData, ...data.hidden_lenses };
+                }
                 
                 // Update checkboxes
                 renderLiveFeaturesCheckboxes();
                 renderHiddenProductsCheckboxes();
+                renderHiddenLensesCheckboxes();
             } catch (error) {
                 console.error('Error loading live features:', error);
             }
@@ -7821,6 +7940,41 @@
                 hiddenProductsData[product] = isChecked;
             });
         }
+
+        // ----- Hidden Trends IQ LENS entries (global hide default) -----
+        // Mirrors the Hidden SELECT PRODUCT wiring above. Save flow rides
+        // the same /api/admin/live-features POST body (see saveLiveFeatures).
+        function renderHiddenLensesCheckboxes() {
+            document.querySelectorAll('.hidden-lens-checkbox').forEach(checkbox => {
+                const lens = checkbox.dataset.lens;
+                checkbox.checked = hiddenLensesData[lens] === true;
+            });
+            updateHiddenLensesSelectAll();
+        }
+
+        function updateHiddenLens(lens, isHidden) {
+            hiddenLensesData[lens] = isHidden;
+            updateHiddenLensesSelectAll();
+        }
+
+        function updateHiddenLensesSelectAll() {
+            const allCheckboxes = document.querySelectorAll('.hidden-lens-checkbox');
+            const allChecked = allCheckboxes.length > 0 && Array.from(allCheckboxes).every(cb => cb.checked);
+            const selectAllCheckbox = document.getElementById('hiddenLensesSelectAll');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = allChecked;
+            }
+        }
+
+        function toggleAllHiddenLenses() {
+            const selectAll = document.getElementById('hiddenLensesSelectAll');
+            const isChecked = selectAll.checked;
+            document.querySelectorAll('.hidden-lens-checkbox').forEach(checkbox => {
+                checkbox.checked = isChecked;
+                const lens = checkbox.dataset.lens;
+                hiddenLensesData[lens] = isChecked;
+            });
+        }
         
         // Save Live Features to server
         async function saveLiveFeatures() {
@@ -7831,7 +7985,8 @@
                     credentials: 'same-origin',
                     body: JSON.stringify({
                         features: liveFeaturesData,
-                        hidden_products: hiddenProductsData
+                        hidden_products: hiddenProductsData,
+                        hidden_lenses: hiddenLensesData
                     })
                 });
                 
@@ -9848,6 +10003,9 @@
             var iiqAccessReset = document.getElementById('hasImpactIQAccess');
             if (iiqAccessReset) iiqAccessReset.checked = false;
             setImpactIQJourneys(['*']);
+            // Reset per-user Trends IQ LENS access to "defaults apply"
+            // (no wildcard, no explicit grants -> Live Features defaults).
+            populateAllowedLensesCheckboxes([]);
             document.getElementById('hasTalentFitAccess').checked = false;
             document.getElementById('hasShareOfTimeAccess').checked = true;
             document.getElementById('hasShareOfTimeRunAccess').checked = true;
@@ -10016,6 +10174,10 @@
             if (tiqAccess) tiqAccess.checked = user.has_trends_iq_access === true; // Default false
             var mdAccess = document.getElementById('hasMicrodramasIQAccess');
             if (mdAccess) mdAccess.checked = user.has_microdramas_iq_access === true; // Default false
+            // 2026-09-02: Trends IQ per-user LENS access. Missing / null /
+            // empty list falls back to Live Features defaults; ['*'] means
+            // "grant everything".
+            populateAllowedLensesCheckboxes(user.allowed_lenses);
             var cbpiqAccess = document.getElementById('hasChatbotProfileIQAccess');
             if (cbpiqAccess) cbpiqAccess.checked = user.has_chatbot_profile_iq_access === true; // Default false
             // Prometheus access tier (2026-08-26): anything that is not
@@ -12579,6 +12741,62 @@
         }
 
         // ──────────────────────────────────────────────────────────────────
+        // Trends IQ - per-user LENS access (in user edit modal)
+        // ──────────────────────────────────────────────────────────────────
+        // Mirrors the Journey IQ / Attribution IQ patterns. When
+        // `allowAllLenses` is checked, individual checkboxes are visually
+        // disabled and the save payload is ['*']. Missing / unchecked
+        // wildcard + no individual grants sends an empty [] so the
+        // backend stores None and defaults apply.
+        function populateAllowedLensesCheckboxes(allowed) {
+            const allCb = document.getElementById('allowAllLenses');
+            const rows = document.querySelectorAll('.allowed-lens-checkbox');
+            const isAll = Array.isArray(allowed) && allowed.some(v => String(v) === '*');
+            if (allCb) allCb.checked = isAll;
+            const explicit = new Set(
+                Array.isArray(allowed)
+                    ? allowed.map(v => String(v)).filter(v => v !== '*')
+                    : []
+            );
+            rows.forEach(cb => {
+                const lens = cb.dataset.lens;
+                cb.checked = isAll ? true : explicit.has(lens);
+                cb.disabled = isAll;
+            });
+            _applyAllowedLensesWildcardStyling(isAll);
+        }
+
+        function onAllowAllLensesChanged() {
+            const allCb = document.getElementById('allowAllLenses');
+            const isAll = !!(allCb && allCb.checked);
+            document.querySelectorAll('.allowed-lens-checkbox').forEach(cb => {
+                cb.disabled = isAll;
+                if (isAll) cb.checked = true;
+            });
+            _applyAllowedLensesWildcardStyling(isAll);
+        }
+
+        function _applyAllowedLensesWildcardStyling(isAll) {
+            document.querySelectorAll('.allowed-lens-row').forEach(row => {
+                row.style.opacity = isAll ? '0.55' : '1';
+            });
+        }
+
+        function getAllowedLensesPayload() {
+            // What gets sent to /api/admin/users on save.
+            //   wildcard checked  -> ['*']
+            //   any individual box -> [lens_id, ...]
+            //   nothing            -> []  (backend stores None -> defaults apply)
+            const allCb = document.getElementById('allowAllLenses');
+            if (allCb && allCb.checked) return ['*'];
+            const out = [];
+            document.querySelectorAll('.allowed-lens-checkbox').forEach(cb => {
+                if (cb.checked && cb.dataset.lens) out.push(cb.dataset.lens);
+            });
+            return out;
+        }
+
+        // ──────────────────────────────────────────────────────────────────
         // Attribution IQ — per-user title gating (in user edit modal)
         // ──────────────────────────────────────────────────────────────────
         // Mirrors the Journey IQ pattern. _intentRunSelected = Set<slug> of
@@ -13072,6 +13290,7 @@
                 has_blue_iq_access: !!(document.getElementById('hasBlueIQAccess') && document.getElementById('hasBlueIQAccess').checked),
                 has_trends_iq_access: !!(document.getElementById('hasTrendsIQAccess') && document.getElementById('hasTrendsIQAccess').checked),
                 has_microdramas_iq_access: !!(document.getElementById('hasMicrodramasIQAccess') && document.getElementById('hasMicrodramasIQAccess').checked),
+                allowed_lenses: getAllowedLensesPayload(),
                 has_chatbot_profile_iq_access: !!(document.getElementById('hasChatbotProfileIQAccess') && document.getElementById('hasChatbotProfileIQAccess').checked),
                 prometheus_access: (document.getElementById('prometheusAccessPullsOnly') && document.getElementById('prometheusAccessPullsOnly').checked) ? 'pulls_only' : 'full',
                 has_impact_iq_access: !!(document.getElementById('hasImpactIQAccess') && document.getElementById('hasImpactIQAccess').checked),

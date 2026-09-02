@@ -2520,6 +2520,7 @@ _PRODUCT_ACCESS_FIELDS = frozenset([
     'has_blue_iq_access',
     'has_impact_iq_access', 'impact_iq_journeys',
     'has_trends_iq_access', 'has_microdramas_iq_access',
+    'allowed_lenses',
     'has_chatbot_profile_iq_access',
     'prometheus_access',
     'auto_access_new',
@@ -4941,6 +4942,17 @@ def create_user():
             'impact_iq_journeys': req_data.get('impact_iq_journeys', cd.get('impact_iq_journeys', ['*']) if cd else ['*']) or ['*'],
             'has_trends_iq_access': req_data.get('has_trends_iq_access', cd.get('has_trends_iq_access', False) if cd else False),
             'has_microdramas_iq_access': req_data.get('has_microdramas_iq_access', cd.get('has_microdramas_iq_access', False) if cd else False),
+            # Trends IQ per-user lens grant (2026-09-02). List of lens
+            # id strings or ['*'] for all. Missing / None means "defaults
+            # apply" - the user sees whichever lenses are default-visible
+            # via DEFAULT_HIDDEN_LENSES + the Live Features global-hide
+            # toggles. Only super admins may set this on create (gated by
+            # _reject_if_non_super_touches_restricted via _PRODUCT_ACCESS_FIELDS).
+            'allowed_lenses': (
+                list(req_data['allowed_lenses'])
+                if isinstance(req_data.get('allowed_lenses'), list)
+                else (list(cd.get('allowed_lenses')) if cd and isinstance(cd.get('allowed_lenses'), list) else None)
+            ),
             'has_chatbot_profile_iq_access': req_data.get('has_chatbot_profile_iq_access', cd.get('has_chatbot_profile_iq_access', False) if cd else False),
             # Prometheus tier (2026-08-26): 'full' (analysis and
             # everything else) unless the creating super_admin picked
@@ -5145,6 +5157,23 @@ def update_user(username):
             user['has_trends_iq_access'] = bool(req_data['has_trends_iq_access'])
         if 'has_microdramas_iq_access' in req_data:
             user['has_microdramas_iq_access'] = bool(req_data['has_microdramas_iq_access'])
+        if 'allowed_lenses' in req_data:
+            # Per-user gate for Trends IQ LENS dropdown (2026-09-02).
+            # ['*'] = all lenses regardless of Live Features hides.
+            # Explicit list of lens id strings = union with the currently
+            # default-visible set. Missing / non-list / empty stores None
+            # so the resolver falls back to Live Features defaults.
+            raw = req_data['allowed_lenses']
+            if isinstance(raw, list) and len(raw) > 0:
+                if any(str(v) == '*' for v in raw):
+                    user['allowed_lenses'] = ['*']
+                else:
+                    user['allowed_lenses'] = [
+                        str(v) for v in raw if str(v) in TRENDS_IQ_LENS_IDS
+                    ]
+            else:
+                # empty list or non-list stores None -> defaults apply.
+                user['allowed_lenses'] = None
         if 'has_chatbot_profile_iq_access' in req_data:
             user['has_chatbot_profile_iq_access'] = bool(req_data['has_chatbot_profile_iq_access'])
         if 'prometheus_access' in req_data:
@@ -8897,6 +8926,10 @@ def compute_product_access_flags(user, role):
             'has_helm_iq_access': True,
             'has_trends_iq_access': True,
             'has_microdramas_iq_access': True,
+            # Super admins bypass the lens-access gate entirely (they
+            # always see every lens); ['*'] communicates that to any
+            # caller that inspects the resolved access dict.
+            'allowed_lenses': ['*'],
             'has_chatbot_profile_iq_access': True,
             'prometheus_access': 'full',
             'pay_per_use_enabled': False,
@@ -8939,6 +8972,14 @@ def compute_product_access_flags(user, role):
         'has_helm_iq_access': role == 'super_admin',
         'has_trends_iq_access': bool(u.get('has_trends_iq_access', False)),
         'has_microdramas_iq_access': bool(u.get('has_microdramas_iq_access', False)),
+        # Trends IQ per-user lens grant (2026-09-02). Preserve None so
+        # the resolver can distinguish "defaults apply" from an explicit
+        # empty list. Missing / non-list value falls through to None.
+        'allowed_lenses': (
+            list(u.get('allowed_lenses'))
+            if isinstance(u.get('allowed_lenses'), list)
+            else None
+        ),
         'has_chatbot_profile_iq_access': (
             role == 'super_admin' or bool(u.get('has_chatbot_profile_iq_access', False))
         ),
@@ -16336,6 +16377,79 @@ def _trends_iq_filter_payload(payload, has_trends, has_rankers):
     return out
 
 
+def _trends_iq_apply_lens_access(payload, allowed_lens_ids):
+    """Trim `cards.lens_config`, `cards.lens_scores`, and `cards.lens_cutoffs`
+    to only the lens ids this user is allowed to see.
+
+    Runs after `_trends_iq_filter_payload` so we're already working on a
+    shallow copy of `cards` (well, we take our own copy anyway so this
+    is idempotent regardless of caller). Never mutates the shared
+    compute_view cache.
+
+    `allowed_lens_ids` is a set of canonical lens id strings. If it's
+    None or contains every canonical id, the payload is returned as-is.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    if allowed_lens_ids is None:
+        return payload
+    all_ids = set(TRENDS_IQ_LENS_IDS)
+    allowed = set(allowed_lens_ids) & all_ids
+    if allowed == all_ids:
+        # Full access -> no scrub needed.
+        return payload
+    out = dict(payload)
+    cards = dict(out.get('cards') or {})
+    # 1. Lens config list: keep only allowed lens entries; preserve order.
+    lens_config = cards.get('lens_config') or []
+    if isinstance(lens_config, list):
+        cards['lens_config'] = [
+            l for l in lens_config
+            if isinstance(l, dict) and str(l.get('id') or '') in allowed
+        ]
+    # 2. Per-item scores map: each value is {kind, title, scores: {lens_id: ...},
+    #    why: {lens_id: ...}}; strip disallowed lens ids from each sub-dict.
+    lens_scores = cards.get('lens_scores') or {}
+    if isinstance(lens_scores, dict):
+        scrubbed_scores = {}
+        for item_key, row in lens_scores.items():
+            if not isinstance(row, dict):
+                continue
+            row_scores = row.get('scores') or {}
+            row_why = row.get('why') or {}
+            if isinstance(row_scores, dict):
+                row_scores = {
+                    lid: sc for lid, sc in row_scores.items()
+                    if lid in allowed
+                }
+            else:
+                row_scores = {}
+            if isinstance(row_why, dict):
+                row_why = {
+                    lid: w for lid, w in row_why.items()
+                    if lid in allowed
+                }
+            else:
+                row_why = {}
+            # Drop rows that no longer carry any allowed lens data so
+            # the client isn't paying to serialize noise it can't use.
+            if not row_scores and not row_why:
+                continue
+            new_row = dict(row)
+            new_row['scores'] = row_scores
+            new_row['why'] = row_why
+            scrubbed_scores[item_key] = new_row
+        cards['lens_scores'] = scrubbed_scores
+    # 3. Per-kind cutoffs map: {lens_id: {kind: cutoff_score}}.
+    lens_cutoffs = cards.get('lens_cutoffs') or {}
+    if isinstance(lens_cutoffs, dict):
+        cards['lens_cutoffs'] = {
+            lid: v for lid, v in lens_cutoffs.items() if lid in allowed
+        }
+    out['cards'] = cards
+    return out
+
+
 @app.route('/api/trends-iq/filter-options', methods=['GET'])
 @requires_auth
 def api_trends_iq_filter_options():
@@ -16382,6 +16496,20 @@ def api_trends_iq_data():
         # Rankers). Filtered on a copy so the shared cache stays intact.
         _tiq_has_trends, _tiq_has_rankers = _trends_iq_entitlements()
         payload = _trends_iq_filter_payload(payload, _tiq_has_trends, _tiq_has_rankers)
+        # 2026-09-02: per-user Trends IQ lens access. Filter lens_config /
+        # lens_scores / lens_cutoffs down to the lenses this user is
+        # allowed to see (super admins get everything). Payload copies are
+        # taken inside the helper so compute_view's shared cache stays intact.
+        _tiq_user = get_current_user() or {}
+        _tiq_role = _normalize_role(_tiq_user.get('role', 'user'))
+        _tiq_access = apply_cloak_product_access_overrides(
+            compute_product_access_flags(_tiq_user, _tiq_role))
+        if _tiq_role == 'super_admin':
+            _tiq_allowed_lens_ids = set(TRENDS_IQ_LENS_IDS)
+        else:
+            _tiq_allowed_lens_ids = _resolve_allowed_lens_ids(
+                _tiq_access, _load_hidden_lenses_map())
+        payload = _trends_iq_apply_lens_access(payload, _tiq_allowed_lens_ids)
         return jsonify(payload)
     except Exception as e:
         traceback.print_exc()
@@ -20725,6 +20853,100 @@ DEFAULT_LIVE_FEATURES = {
 # value as a key here with default False (visible). The admin Live
 # Features tab grid in templates/admin.html must also be updated to
 # expose the toggle.
+# 2026-09-02 (Jenna): per-user Trends IQ lens access.
+# Canonical lens ids come from bg-webapp/scripts/trends_scrapers/lens_relevance.py
+# (see the `_LENSES` list) and are echoed here so the admin controls and
+# the payload filter don't need to import the scraper module.
+# ALWAYS keep this list in lock-step with lens_relevance._LENSES /
+# the persona docs under scripts/trends_scrapers/lens_personas/ AND the
+# hidden-lens grid in templates/admin.html.
+TRENDS_IQ_LENS_IDS = (
+    'ms_now_reader',
+    'unlikely_collaborators_follower',
+    'gen_z',
+    'millennials',
+    'gen_x',
+    'baby_boomers',
+)
+
+# Default global-hide state per lens (True = hidden from every non-super
+# admin unless the user has the lens id in their `allowed_lenses` list
+# or `allowed_lenses` is ['*']). Super admins always see all lenses.
+# Per Jenna 2026-09-02: MS NOW Reader and Unlikely Collaborators Follower
+# are hidden by default; the four generational lenses are visible by
+# default. Admins can flip either direction from Live Features.
+DEFAULT_HIDDEN_LENSES = {
+    'ms_now_reader':                    True,
+    'unlikely_collaborators_follower':  True,
+    'gen_z':                            False,
+    'millennials':                      False,
+    'gen_x':                            False,
+    'baby_boomers':                     False,
+}
+
+
+def _resolve_hidden_lenses_from_live(saved_hidden_lenses):
+    """Merge saved global-hide state with DEFAULT_HIDDEN_LENSES.
+
+    Unknown keys in the saved dict are dropped so a stale client can
+    never re-introduce a retired lens id.
+    """
+    merged = dict(DEFAULT_HIDDEN_LENSES)
+    if isinstance(saved_hidden_lenses, dict):
+        for _lid, _v in saved_hidden_lenses.items():
+            if _lid in DEFAULT_HIDDEN_LENSES:
+                merged[_lid] = bool(_v)
+    return merged
+
+
+def _resolve_allowed_lens_ids(user_access, hidden_lenses_map):
+    """Compute the set of lens ids this user can see.
+
+    * `user_access` is expected to expose an `allowed_lenses` field
+      (list of lens id strings, or ['*'], or missing / None). Missing
+      or empty means "defaults apply" (no explicit grant, no explicit
+      revoke).
+    * `hidden_lenses_map` is the DEFAULT_HIDDEN_LENSES-shape dict from
+      Live Features. A True value there means "globally hidden by
+      default" (still overridable per user via an explicit grant).
+
+    Wildcard rules:
+      - super admins never pass through this helper (they always see
+        all lenses; the caller shortcuts to `TRENDS_IQ_LENS_IDS`).
+      - `allowed_lenses == ['*']` -> all six lens ids, ignoring hides.
+      - explicit list -> default-visible ids UNION the explicit list.
+    """
+    all_ids = set(TRENDS_IQ_LENS_IDS)
+    raw = None
+    if isinstance(user_access, dict):
+        raw = user_access.get('allowed_lenses')
+    if isinstance(raw, list) and any(str(v) == '*' for v in raw):
+        return all_ids
+    default_visible = {
+        lid for lid in TRENDS_IQ_LENS_IDS
+        if not bool((hidden_lenses_map or {}).get(lid, DEFAULT_HIDDEN_LENSES.get(lid, False)))
+    }
+    if not isinstance(raw, list) or len(raw) == 0:
+        return default_visible
+    explicit = {str(v) for v in raw if str(v) in all_ids}
+    return default_visible | explicit
+
+
+def _load_hidden_lenses_map():
+    """Read the current Live Features `hidden_lenses` dict from S3.
+
+    Best-effort: returns DEFAULT_HIDDEN_LENSES on any failure so a
+    Live Features outage never opens or closes the lens dropdown by
+    accident.
+    """
+    try:
+        live_features = load_json_from_s3(LIVE_FEATURES_FILE) or {}
+        saved = live_features.get('hidden_lenses') or {}
+        return _resolve_hidden_lenses_from_live(saved)
+    except Exception:
+        return dict(DEFAULT_HIDDEN_LENSES)
+
+
 DEFAULT_HIDDEN_PRODUCTS = {
     'profileIQ': False,
     'subscriberIQ': False,
@@ -20799,10 +21021,18 @@ def get_live_features():
         # Merge with defaults so new keys (e.g. viewNumbers) are always present; saved values override
         features = {**DEFAULT_LIVE_FEATURES, **saved}
         hidden_products = {**DEFAULT_HIDDEN_PRODUCTS, **saved_hidden}
+        # 2026-09-02: Trends IQ lens global-hide state. Same shape as
+        # hidden_products (lens_id -> bool). Unknown keys are dropped
+        # by _resolve_hidden_lenses_from_live so stale clients can't
+        # reintroduce retired lens ids.
+        hidden_lenses = _resolve_hidden_lenses_from_live(
+            live_features.get('hidden_lenses') or {}
+        )
         resp = jsonify({
             'success': True,
             'features': features,
             'hidden_products': hidden_products,
+            'hidden_lenses': hidden_lenses,
         })
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
         resp.headers['Pragma'] = 'no-cache'
@@ -20813,6 +21043,7 @@ def get_live_features():
             'success': True,
             'features': dict(DEFAULT_LIVE_FEATURES),
             'hidden_products': dict(DEFAULT_HIDDEN_PRODUCTS),
+            'hidden_lenses': dict(DEFAULT_HIDDEN_LENSES),
         })
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
         resp.headers['Pragma'] = 'no-cache'
@@ -20835,10 +21066,17 @@ def save_live_features():
         # doesn't re-introduce the broken key into S3 alongside the correct
         # 'cultureRankerIQ' one.
         hidden_products = _migrate_legacy_hidden_product_keys(hidden_products)
+        # 2026-09-02: Trends IQ lens global-hide state. Only keys that
+        # match a canonical lens id survive the resolver; unknown ids
+        # are dropped so a stale client can't seed a retired lens.
+        hidden_lenses = _resolve_hidden_lenses_from_live(
+            data.get('hidden_lenses') or {}
+        )
 
         live_features = {
             'features': features,
             'hidden_products': hidden_products,
+            'hidden_lenses': hidden_lenses,
             'updated_at': datetime.now().isoformat(),
             'updated_by': session.get('username', 'unknown')
         }
@@ -20850,7 +21088,7 @@ def save_live_features():
             print(f"❌ {error_msg}")
             return jsonify({'success': False, 'error': error_msg}), 500
         
-        print(f"✅ Live features saved by {session.get('username')}: features={features}, hidden_products={hidden_products}")
+        print(f"✅ Live features saved by {session.get('username')}: features={features}, hidden_products={hidden_products}, hidden_lenses={hidden_lenses}")
         return jsonify({'success': True})
     except Exception as e:
         print(f"❌ Error saving live features: {e}")
