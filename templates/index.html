@@ -27589,6 +27589,20 @@ https://www.instagram.com/p/..."></textarea>
                 // agent didn't stamp title_type on early builds).
                 return true;
             }
+            // Per-title opt-out for the new film landing (Phase 1-4 cards:
+            // Weekly Summary, Asset-Ranked Table, Audience Response Table,
+            // Trend Module). Returns true only when this is a film campaign
+            // AND title.legacy_landing is not truthy. A film campaign with
+            // legacy_landing=true keeps every other film behavior (as-of
+            // picker, T-minus presets, Intent to Buy comp, Talent
+            // Attribution, Ticketing metric label) but bypasses the four
+            // top-of-view cards so the sub-tab bar renders directly.
+            // Introduced 2026-09-02 for Dhar Mann x Minions & Monsters;
+            // any future film campaign can opt out the same way by setting
+            // title.legacy_landing = true on its snapshot.
+            function _iiqHasNewFilmLanding(ov) {
+                return _iiqIsFilmCampaign(ov) && !(ov && ov.legacy_landing === true);
+            }
             // ================================================================
             // Explore drawer (Phase 5) helpers + state store.
             //
@@ -27656,38 +27670,26 @@ https://www.instagram.com/p/..."></textarea>
                 }
             };
             function _iiqRenderExploreDrawer() {
+                // Explore drawer collapse chrome retired 2026-09-02: the
+                // "Explore the full breakdown" eyebrow + chevron + hint
+                // that used to gate the sub-tab bar for film campaigns
+                // is hidden globally. Every campaign - film with the
+                // new landing cards (GOAT, Hades), film opted into the
+                // legacy landing (Dhar Mann), and brand (Chime, MyPay,
+                // Big Beef) - renders the sub-tab bar directly. The
+                // is-passthrough class hides the header/divider/hint
+                // via CSS. State store (window._iiqUIState
+                // .exploreDrawerOpenBySlug) is left dormant so if the
+                // chrome ever comes back the per-slug open/closed
+                // memory is still there. _iiqExploreDrawerToggle also
+                // short-circuits on is-passthrough, so a stray click
+                // handler on a stale DOM is a no-op.
                 var drawer = document.getElementById('iiqExploreDrawer');
                 if (!drawer) return;
-                var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
-                var isFilm = _iiqIsFilmCampaign(ov);
-                if (!isFilm) {
-                    // Brand campaign (Chime, MyPay, Big Beef, etc.):
-                    // pure passthrough. Sub-tab bar renders exactly as
-                    // it did pre-Phase-5. No header, no divider, no
-                    // chevron, no hint text, no click target.
-                    drawer.classList.add('is-passthrough');
-                    drawer.classList.remove('is-collapsed', 'is-expanded');
-                    var hdrB = drawer.querySelector('.iiq-explore-header');
-                    if (hdrB) hdrB.setAttribute('aria-expanded', 'true');
-                    return;
-                }
-                drawer.classList.remove('is-passthrough');
-                var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || '';
-                var open = false;
-                if (slug && Object.prototype.hasOwnProperty.call(window._iiqUIState.exploreDrawerOpenBySlug, slug)) {
-                    open = !!window._iiqUIState.exploreDrawerOpenBySlug[slug];
-                }
-                drawer.classList.toggle('is-expanded', open);
-                drawer.classList.toggle('is-collapsed', !open);
-                var chev = document.getElementById('iiqExploreChevron');
-                if (chev) chev.textContent = open ? '\u25B4' : '\u25BE';
+                drawer.classList.add('is-passthrough');
+                drawer.classList.remove('is-collapsed', 'is-expanded');
                 var hdr = drawer.querySelector('.iiq-explore-header');
-                if (hdr) hdr.setAttribute('aria-expanded', open ? 'true' : 'false');
-                var hint = document.getElementById('iiqExploreHint');
-                if (hint) {
-                    var txt = _iiqExploreDrawerHintText();
-                    if (txt) hint.textContent = txt;
-                }
+                if (hdr) hdr.setAttribute('aria-expanded', 'true');
             }
             function _iiqTodayIso() {
                 var d = new Date();
@@ -28074,7 +28076,9 @@ https://www.instagram.com/p/..."></textarea>
                 var host = document.getElementById('iiqAssetTableSection');
                 if (!host) return;
                 var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
-                var isFilm = _iiqIsFilmCampaign(ov);
+                // New-landing gate: hidden for brand campaigns and for
+                // film campaigns opted out via title.legacy_landing.
+                var isFilm = _iiqHasNewFilmLanding(ov);
                 if (!isFilm) {
                     host.style.display = 'none';
                     host.innerHTML = '';
@@ -28498,7 +28502,9 @@ https://www.instagram.com/p/..."></textarea>
                 var host = document.getElementById('iiqAudienceTableSection');
                 if (!host) return;
                 var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
-                var isFilm = _iiqIsFilmCampaign(ov);
+                // New-landing gate: hidden for brand campaigns and for
+                // film campaigns opted out via title.legacy_landing.
+                var isFilm = _iiqHasNewFilmLanding(ov);
                 if (!isFilm) {
                     host.style.display = 'none';
                     host.innerHTML = '';
@@ -28968,7 +28974,9 @@ https://www.instagram.com/p/..."></textarea>
                 var host = document.getElementById('iiqTrendModule');
                 if (!host) return;
                 var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
-                var isFilm = _iiqIsFilmCampaign(ov);
+                // New-landing gate: hidden for brand campaigns and for
+                // film campaigns opted out via title.legacy_landing.
+                var isFilm = _iiqHasNewFilmLanding(ov);
                 if (!isFilm) {
                     host.style.display = 'none';
                     host.innerHTML = '';
@@ -29219,7 +29227,9 @@ https://www.instagram.com/p/..."></textarea>
                 var card = document.getElementById('iiqWeeklySummaryCard');
                 if (!card) return;
                 var ov = (window.__intentIQ && window.__intentIQ.overview) || {};
-                var isFilm = _iiqIsFilmCampaign(ov);
+                // New-landing gate: hidden for brand campaigns and for
+                // film campaigns opted out via title.legacy_landing.
+                var isFilm = _iiqHasNewFilmLanding(ov);
                 if (!isFilm) {
                     card.style.display = 'none';
                     card.innerHTML = '';
