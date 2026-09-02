@@ -25068,6 +25068,25 @@ https://www.instagram.com/p/..."></textarea>
                 letter-spacing: 0.02em;
             }
             #trendsIQView .tiq-apply-btn:hover { filter: brightness(1.1); }
+            /* Light mode: the filter bar + inputs use undefined
+               --bg-secondary/--bg-primary vars that fall back to dark,
+               so in light mode they stayed dark with dark text (illegible).
+               Give them a light surface. (Jessie 2026-09-02) */
+            body[data-theme="light"] #trendsIQView .tiq-filter-bar {
+                background: #f1f4f9;
+                border-color: var(--border-color, #d1d9e6);
+            }
+            body[data-theme="light"] #trendsIQView .tiq-filter-bar select,
+            body[data-theme="light"] #trendsIQView .tiq-filter-bar input {
+                background: #ffffff;
+                color: var(--text-primary, #0a1929);
+                border-color: var(--border-color, #d1d9e6);
+            }
+            body[data-theme="light"] #trendsIQView .tiq-filter-bar button[onclick*="tiqResetAsOf"] {
+                background: #ffffff !important;
+                color: var(--text-primary, #0a1929) !important;
+                border: 1px solid var(--border-color, #d1d9e6) !important;
+            }
             #trendsIQView .tiq-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; font-size: 0.78rem; color: var(--text-secondary); gap: 0.75rem; flex-wrap: wrap; }
             #trendsIQView .tiq-meta-right { display: inline-flex; align-items: center; gap: 0.6rem; }
             /* Refresh button lives next to the "Updated ..." stamp. Clicking it force-refreshes the S3 cache tuple for the current filter; because the cache is shared across all users, one user's refresh updates the "Updated ..." stamp for everyone. */
@@ -53640,10 +53659,10 @@ https://www.instagram.com/p/..."></textarea>
             // "Trends" shows search/news/retail tabs; "Rankers" shows the
             // Talent Ranker leaderboard + Music/Podcasts/Streaming/FAST/Gaming.
             var _tiqProduct = (window.__trendsIQ.product === 'rankers') ? 'rankers' : 'trends';
-            var _rankersOrder = ['talentranker', 'music', 'podcasts', 'streaming', 'fast', 'gaming'];
+            var _rankersOrder = ['fast', 'music', 'podcasts', 'streaming', 'gaming', 'talentranker'];
             var _rankersSet = { talentranker: 1, music: 1, podcasts: 1, streaming: 1, fast: 1, gaming: 1 };
             if (_tiqProduct === 'rankers') {
-                if (!_rankersSet[window.__trendsIQ.activeTab]) window.__trendsIQ.activeTab = 'talentranker';
+                if (!_rankersSet[window.__trendsIQ.activeTab]) window.__trendsIQ.activeTab = 'fast';
                 var _byKey = {}; tabs.forEach(function(t) { _byKey[t.key] = t; });
                 tabs = _rankersOrder.map(function(k) { return _byKey[k]; }).filter(Boolean);
             } else {
@@ -59391,7 +59410,7 @@ https://www.instagram.com/p/..."></textarea>
             // as the first tab.
             window.__trendsIQ.product = 'rankers';
             var _rOnly = ['talentranker', 'music', 'podcasts', 'streaming', 'fast', 'gaming'];
-            if (_rOnly.indexOf(window.__trendsIQ.activeTab) < 0) window.__trendsIQ.activeTab = 'talentranker';
+            if (_rOnly.indexOf(window.__trendsIQ.activeTab) < 0) window.__trendsIQ.activeTab = 'fast';
             if (typeof _trendsIQHideAllOtherViews === 'function') _trendsIQHideAllOtherViews();
             var view = document.getElementById('trendsIQView');
             if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
