@@ -54117,6 +54117,82 @@ https://www.instagram.com/p/..."></textarea>
             watchlist: 'Watchlist'
         };
 
+        // -------------- lens / As-Of filter helpers --------------
+        // Byte-for-byte mirror of applyTrendsIQLens' per-row visibility
+        // test, but applied to the export row objects (which carry
+        // `Title` + optionally an `_exportKind`). No lens active -> return
+        // rows unchanged. Lens active but the tab has zero scored rows
+        // -> return rows unchanged (matches the DOM applier's safety net
+        // for panels the scraper hasn't caught up to yet). Otherwise
+        // drop any row whose score for the active lens is below the
+        // per-kind cutoff.
+        function _tiqFilterRowsByLens(rows, tabKey) {
+            var lensId = (window.__trendsIQ && window.__trendsIQ.activeLens) || '';
+            if (!lensId || !rows || !rows.length) return rows || [];
+            var byTitle = (window.__trendsIQ && window.__trendsIQ.lensScores) || {};
+            if (!Object.keys(byTitle).length) return rows;
+            var cutoffs = ((window.__trendsIQ.lensCutoffs || {})[lensId]) || {};
+            var panelKind = _TIQ_PANEL_TO_KIND[tabKey] || '';
+            var bags = new Array(rows.length);
+            var scoredCount = 0;
+            for (var i = 0; i < rows.length; i++) {
+                var t = _tiqLensNorm(rows[i] && rows[i].Title);
+                var b = t && byTitle[t];
+                bags[i] = b || null;
+                if (b) scoredCount++;
+            }
+            // Panel scraper hasn't caught up yet - no filter applied.
+            if (scoredCount === 0) return rows;
+            var out = [];
+            for (var j = 0; j < rows.length; j++) {
+                var b2 = bags[j];
+                if (!b2) continue;
+                var s = Number((b2.scores || {})[lensId]) || 0;
+                var kind = b2.kind || panelKind || '';
+                var cut = (kind && cutoffs[kind] != null)
+                          ? Number(cutoffs[kind])
+                          : _TIQ_LENS_THRESHOLD;
+                if (s >= cut) out.push(rows[j]);
+            }
+            return out;
+        }
+
+        // Prefer the As-Of date from the last payload's filters when in
+        // historic mode. The filename then reads e.g.
+        //   trends-iq-all-2026-08-15-millennials.csv
+        // for an August 15 As-Of + Millennials lens combo, so an ops
+        // hand-off later has zero ambiguity about which slice this is.
+        function _tiqExportDateStamp() {
+            var last = (window.__trendsIQ && window.__trendsIQ.lastData) || {};
+            var f = last.filters || {};
+            if (f.historic && f.asof) return String(f.asof);
+            return _tiqTodayStamp();
+        }
+
+        // Human-readable slug for the active lens dropdown option. Used
+        // only in filenames; the CSV itself carries no lens column so
+        // opening two lensed exports side-by-side is a diff.
+        function _tiqLensFilenameSlug(lensId) {
+            if (!lensId) return '';
+            var sel = document.getElementById('trendsIQLens');
+            var label = lensId;
+            if (sel) {
+                for (var i = 0; i < sel.options.length; i++) {
+                    if (sel.options[i].value === lensId) {
+                        label = sel.options[i].text || lensId;
+                        break;
+                    }
+                }
+            }
+            return String(label)
+                .replace(/[^A-Za-z0-9 _-]+/g, '')
+                .trim()
+                .replace(/\s+/g, '-')
+                .replace(/-+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .toLowerCase();
+        }
+
         // -------------- public entry points --------------
         window.tiqExportTab = function(tabKey) {
             var data = (window.__trendsIQ && window.__trendsIQ.lastData) || null;
@@ -54125,13 +54201,21 @@ https://www.instagram.com/p/..."></textarea>
                 return;
             }
             var rows = _tiqBuildRowsForTab(tabKey, data.cards);
+            var lensId = (window.__trendsIQ && window.__trendsIQ.activeLens) || '';
+            if (lensId) rows = _tiqFilterRowsByLens(rows, tabKey);
             if (!rows.length) {
-                alert('This tab has no rows to export in the current window.');
+                alert(lensId
+                    ? 'No rows on this tab match the active lens. Clear the lens or try a different tab.'
+                    : 'This tab has no rows to export in the current window.');
                 return;
             }
             var csv = _tiqRowsToCsv(rows);
             var label = (_TIQ_TAB_LABELS[tabKey] || tabKey).toLowerCase().replace(/\s+/g, '-');
-            _tiqDownloadCsv('trends-iq-' + label + '-' + _tiqTodayStamp() + '.csv', csv);
+            var slug = _tiqLensFilenameSlug(lensId);
+            var stamp = _tiqExportDateStamp();
+            var fname = 'trends-iq-' + label + '-' + stamp
+                        + (slug ? '-' + slug : '') + '.csv';
+            _tiqDownloadCsv(fname, csv);
         };
 
         window.tiqExportAllTabs = function() {
@@ -54143,16 +54227,25 @@ https://www.instagram.com/p/..."></textarea>
             var order = ['searches', 'movers', 'headlines', 'people',
                           'music', 'podcasts', 'books', 'comics', 'streaming',
                           'broadway', 'films', 'fast', 'gaming', 'watchlist'];
+            var lensId = (window.__trendsIQ && window.__trendsIQ.activeLens) || '';
             var all = [];
             order.forEach(function(k) {
-                all = all.concat(_tiqBuildRowsForTab(k, data.cards));
+                var built = _tiqBuildRowsForTab(k, data.cards);
+                if (lensId) built = _tiqFilterRowsByLens(built, k);
+                all = all.concat(built);
             });
             if (!all.length) {
-                alert('Nothing to export yet.');
+                alert(lensId
+                    ? 'Nothing matches the active lens in the current window. Clear the lens or widen the date range.'
+                    : 'Nothing to export yet.');
                 return;
             }
             var csv = _tiqRowsToCsv(all);
-            _tiqDownloadCsv('trends-iq-all-' + _tiqTodayStamp() + '.csv', csv);
+            var slug = _tiqLensFilenameSlug(lensId);
+            var stamp = _tiqExportDateStamp();
+            var fname = 'trends-iq-all-' + stamp
+                        + (slug ? '-' + slug : '') + '.csv';
+            _tiqDownloadCsv(fname, csv);
         };
 
         // ============================================================

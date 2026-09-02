@@ -7578,6 +7578,21 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # the dropdown just doesn't show the lens options + all items
     # render as normal.
     lens_snap        = results.get('lens_scores') or {}
+    # Graceful fallback for historic As-Of dates that predate the
+    # dated-lens-scores archive.  Every scraper writes to both the
+    # `latest/` and `{YYYY-MM-DD}/` prefixes via
+    # `scripts/trends_scrapers/_base.write_snapshot`, so any date the
+    # lens scorer ran on has a dated copy.  But dates before we started
+    # running the scorer daily have no dated lens_scores.json - a naive
+    # read returns {} and the lens dropdown loses every option.  Rather
+    # than blank the picker for those dates, fall back to the current
+    # `latest/lens_scores.json` so the persona picker stays usable.
+    # Titles that persist day-over-day (Crime Junkie, The Rachel Maddow
+    # Show, most trending books/films) still match and get filtered;
+    # titles unique to that historic date fall through the client-side
+    # applier's "panel not covered yet" safety net and render unfiltered.
+    if historic and asof and not lens_snap:
+        lens_snap = _read_snapshot('lens_scores') or {}
     lens_config      = list(lens_snap.get('lenses') or [])
     lens_scores_map  = dict(lens_snap.get('items') or {})
     # Per-kind top-50% cutoffs computed at scrape time (see
