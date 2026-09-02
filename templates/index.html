@@ -25602,6 +25602,7 @@ https://www.instagram.com/p/..."></textarea>
             #microdramasIQView .miq-platform-badge.miq-plat-dramabox  { background: rgba(168,85,247,0.22);  color: #d8b4fe; border-color: rgba(168,85,247,0.4); }
             #microdramasIQView .miq-platform-badge.miq-plat-goodshort { background: rgba(16,185,129,0.22);  color: #86efac; border-color: rgba(16,185,129,0.4); }
             #microdramasIQView .miq-platform-badge.miq-plat-netshort  { background: rgba(249,115,22,0.22);  color: #fdba74; border-color: rgba(249,115,22,0.4); }
+            #microdramasIQView .miq-platform-badge.miq-plat-dramashorts { background: rgba(245,158,11,0.22);  color: #fcd34d; border-color: rgba(245,158,11,0.4); }
             /* Platform rollup: which streaming provider has the most window views. Renders as a
                stacked share bar plus one small stat card per platform, sitting above the by-show ranker on the All Platforms tab. */
             #microdramasIQView .miq-platform-rollup { display: flex; flex-direction: column; gap: 0.6rem; margin: 0.35rem 0 0.85rem; padding: 0.75rem 0.85rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; }
@@ -25615,6 +25616,7 @@ https://www.instagram.com/p/..."></textarea>
             #microdramasIQView .miq-rollup-bar-seg.miq-plat-dramabox  { background: #a855f7; }
             #microdramasIQView .miq-rollup-bar-seg.miq-plat-goodshort { background: #10b981; }
             #microdramasIQView .miq-rollup-bar-seg.miq-plat-netshort  { background: #f97316; }
+            #microdramasIQView .miq-rollup-bar-seg.miq-plat-dramashorts { background: #f59e0b; }
             #microdramasIQView .miq-rollup-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.5rem; }
             #microdramasIQView .miq-rollup-card { padding: 0.55rem 0.65rem; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; gap: 0.25rem; }
             #microdramasIQView .miq-rollup-card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
@@ -25625,6 +25627,7 @@ https://www.instagram.com/p/..."></textarea>
             #microdramasIQView .miq-rollup-card-name .miq-rollup-dot.miq-plat-dramabox  { background: #a855f7; }
             #microdramasIQView .miq-rollup-card-name .miq-rollup-dot.miq-plat-goodshort { background: #10b981; }
             #microdramasIQView .miq-rollup-card-name .miq-rollup-dot.miq-plat-netshort  { background: #f97316; }
+            #microdramasIQView .miq-rollup-card-name .miq-rollup-dot.miq-plat-dramashorts { background: #f59e0b; }
             #microdramasIQView .miq-rollup-card-share { font-size: 0.7rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
             #microdramasIQView .miq-rollup-card-views-label { font-size: 0.62rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; }
             #microdramasIQView .miq-rollup-card-views { font-size: 1.05rem; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
@@ -25898,6 +25901,7 @@ https://www.instagram.com/p/..."></textarea>
                 <button type="button" class="miq-tab"        data-panel="dramabox"  onclick="setMicrodramasIQTab('dramabox')">DramaBox</button>
                 <button type="button" class="miq-tab"        data-panel="goodshort" onclick="setMicrodramasIQTab('goodshort')">GoodShort</button>
                 <button type="button" class="miq-tab"        data-panel="netshort"  onclick="setMicrodramasIQTab('netshort')">NetShort</button>
+                <button type="button" class="miq-tab"        data-panel="dramashorts" onclick="setMicrodramasIQTab('dramashorts')">DramaShorts</button>
             </div>
             <div id="microdramasIQLoading" class="miq-loading-overlay" style="display: none;">
                 <div class="miq-spinner"></div>
@@ -25932,6 +25936,10 @@ https://www.instagram.com/p/..."></textarea>
             <div class="miq-panel" data-panel="netshort">
                 <div id="microdramasIQNetShortMeta" class="miq-meta"></div>
                 <div id="microdramasIQNetShortGrid" class="miq-title-grid"></div>
+            </div>
+            <div class="miq-panel" data-panel="dramashorts">
+                <div id="microdramasIQDramaShortsMeta" class="miq-meta"></div>
+                <div id="microdramasIQDramaShortsGrid" class="miq-title-grid"></div>
             </div>
         </div>
 
@@ -51397,7 +51405,7 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         // Panels that use the competitor payload.
-        var _MIQ_COMPETITOR_PANELS = ['reelshort', 'dramabox', 'goodshort', 'netshort'];
+        var _MIQ_COMPETITOR_PANELS = ['reelshort', 'dramabox', 'goodshort', 'netshort', 'dramashorts'];
 
         function setMicrodramasIQTab(panel) {
             window.__microdramasIQ.activePanel = panel;
@@ -51434,7 +51442,7 @@ https://www.instagram.com/p/..."></textarea>
             // Show a loading state in every competitor panel; all four
             // platforms share one backend fetch.
             var loadingMsg = 'Loading competitor charts...';
-            ['ReelShort', 'DramaBox', 'GoodShort', 'NetShort'].forEach(function(p) {
+            ['ReelShort', 'DramaBox', 'GoodShort', 'NetShort', 'DramaShorts'].forEach(function(p) {
                 var meta = document.getElementById('microdramasIQ' + p + 'Meta');
                 if (meta) meta.textContent = loadingMsg;
             });
@@ -51466,7 +51474,7 @@ https://www.instagram.com/p/..."></textarea>
                 _miqUpdateDateStamp();
             } catch (e) {
                 console.error('Microdramas competitors error:', e);
-                ['ReelShort', 'DramaBox', 'GoodShort', 'NetShort'].forEach(function(p) {
+                ['ReelShort', 'DramaBox', 'GoodShort', 'NetShort', 'DramaShorts'].forEach(function(p) {
                     var meta = document.getElementById('microdramasIQ' + p + 'Meta');
                     var grid = document.getElementById('microdramasIQ' + p + 'Grid');
                     if (meta) meta.textContent = '';
@@ -51537,11 +51545,12 @@ https://www.instagram.com/p/..."></textarea>
 
         function _miqPlatformCssKey(platformLabel) {
             var s = String(platformLabel || '').toLowerCase();
-            if (s.indexOf('reelshort') >= 0)  return 'reelshort';
-            if (s.indexOf('dramabox')  >= 0)  return 'dramabox';
-            if (s.indexOf('goodshort') >= 0)  return 'goodshort';
-            if (s.indexOf('netshort')  >= 0)  return 'netshort';
-            if (s.indexOf('peacock')   >= 0)  return 'peacock';
+            if (s.indexOf('reelshort')   >= 0)  return 'reelshort';
+            if (s.indexOf('dramabox')    >= 0)  return 'dramabox';
+            if (s.indexOf('goodshort')   >= 0)  return 'goodshort';
+            if (s.indexOf('netshort')    >= 0)  return 'netshort';
+            if (s.indexOf('dramashorts') >= 0)  return 'dramashorts';
+            if (s.indexOf('peacock')     >= 0)  return 'peacock';
             return '';
         }
 

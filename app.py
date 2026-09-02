@@ -16557,10 +16557,10 @@ def api_microdramas_iq_all():
 
 @app.route('/api/cron/microdramas-scrapers', methods=['POST', 'GET'])
 def api_cron_microdramas_scrapers():
-    """Run the Microdramas IQ scrapers (Peacock + ReelShort + DramaBox) on
-    demand. Called by the `microdramas-scrapers-daily-cron` Render cron
-    at 05:30 UTC daily; also usable via curl to force an out-of-band
-    refresh:
+    """Run the Microdramas IQ scrapers (Peacock, ReelShort, DramaBox,
+    GoodShort, NetShort, DramaShorts) on demand. Called by the
+    `microdramas-scrapers-daily-cron` Render cron at 05:30 UTC daily;
+    also usable via curl to force an out-of-band refresh:
 
         curl -X POST 'https://.../api/cron/microdramas-scrapers?secret=$CRON_SECRET'
 
@@ -16578,11 +16578,12 @@ def api_cron_microdramas_scrapers():
         results = []
         total = 0
         for source, mod_path, label in [
-            ('peacock',   'scripts.microdramas_scrapers.peacock',   'Peacock'),
-            ('reelshort', 'scripts.microdramas_scrapers.reelshort', 'ReelShort'),
-            ('dramabox',  'scripts.microdramas_scrapers.dramabox',  'DramaBox'),
-            ('goodshort', 'scripts.microdramas_scrapers.goodshort', 'GoodShort'),
-            ('netshort',  'scripts.microdramas_scrapers.netshort',  'NetShort'),
+            ('peacock',     'scripts.microdramas_scrapers.peacock',     'Peacock'),
+            ('reelshort',   'scripts.microdramas_scrapers.reelshort',   'ReelShort'),
+            ('dramabox',    'scripts.microdramas_scrapers.dramabox',    'DramaBox'),
+            ('goodshort',   'scripts.microdramas_scrapers.goodshort',   'GoodShort'),
+            ('netshort',    'scripts.microdramas_scrapers.netshort',    'NetShort'),
+            ('dramashorts', 'scripts.microdramas_scrapers.dramashorts', 'DramaShorts'),
         ]:
             try:
                 module = importlib.import_module(mod_path)

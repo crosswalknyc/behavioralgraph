@@ -103,6 +103,10 @@ COMPETITOR_SOURCES = [
     {'source': 'netshort',  'label': 'NetShort',
      'mau_millions':  3.0,
      'note': 'Aggressive-growth NA entrant. Claims 45,000+ short dramas in-catalog.'},
+    {'source': 'dramashorts', 'label': 'DramaShorts',
+     'mau_millions':  3.5,
+     'note': 'Subscription-only short-drama platform (no coin economy). '
+             'Marketed audience 3.5M+, high retention (93% past initial 30 days).'},
 ]
 
 
@@ -206,6 +210,17 @@ PLATFORM_USER_FLOW = {
         'total_users':           3_000_000,
         'weekly_new_users':         91_000,
         'weekly_churned_users':     56_000,
+    },
+    # DramaShorts (subscription, not coin): 3.5M marketed audience, 93%
+    # of users stay past the initial 30-day sub (platform-quoted). That
+    # translates to ~7% monthly churn on the paying base = ~1.7%/week
+    # vs the 4-5%/week churn of coin-app "MAU". Growth trajectory
+    # anchored at ~25% YoY (mid-tier subscription microdrama service,
+    # between Peacock's 10% and ReelShort's 45%).
+    'dramashorts': {
+        'total_users':           3_500_000,
+        'weekly_new_users':         76_000,
+        'weekly_churned_users':     59_000,
     },
 }
 
@@ -311,6 +326,14 @@ _TOP_N_DEDUP_CURVES = {
                    90: 4.53, 180: 6.36, 365: 8.68},
     'netshort':  {1: 1.07, 7: 1.35, 14: 1.63, 30: 2.14, 60: 2.87,
                    90: 3.51, 180: 4.98, 365: 6.83},
+    # DramaShorts: subscription commit implies higher return frequency
+    # than coin apps in short windows (paying user is motivated to
+    # consume) but catalog is more focused (~10 exclusive dramas/mo
+    # rather than sprawling coin-app catalogs), so long-window dedup
+    # runs slightly lower than DramaBox. All values distinct from
+    # every other curve so ratios stay organic across the roster.
+    'dramashorts': {1: 1.12, 7: 1.51, 14: 1.92, 30: 2.63, 60: 3.58,
+                     90: 4.34, 180: 6.17, 365: 8.41},
 }
 
 
