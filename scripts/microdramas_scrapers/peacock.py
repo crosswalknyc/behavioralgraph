@@ -111,6 +111,11 @@ _NON_MICRODRAMA_PATH_TOKENS = (
     '/news/', '/kids/', '/telemundo/',
     '/tv/', '/shows/', '/show/', '/series/', '/season/',
     '/originals/', '/late-night/', '/reality/',
+    # Peacock also routes non-microdrama long-form through /stream-tv/
+    # (e.g. /stream-tv/the-miniature-wife). Microdramas do not.
+    '/stream-tv/', '/stream/tv', '/stream/movies', '/stream/news',
+    '/stream/kids', '/collections/', '/blog', '/help', '/terms',
+    '/sitemap', '/careers', '/advertise',
 )
 
 
@@ -217,6 +222,7 @@ CURATED_BASELINE_TITLES = [
 # Peacock. Google surfaced the real Peacock vampire title as
 # "Love Me, Bite Me" (rank 2 above) instead.
 LEGACY_BASELINE_TITLES_TO_PURGE = [
+    # Fabricated baseline seed (2026-Q1 - 2026-09-01)
     "The Billionaire's Secret Bride",
     "Mafia Prince's Runaway Wife",
     "Married to My Alpha CEO",
@@ -237,6 +243,55 @@ LEGACY_BASELINE_TITLES_TO_PURGE = [
     "CEO's Substitute Bride",
     "The Return of the Divorced Wife",
     "Warrior Werewolves of the East Coast",
+    # Marketing-shell contamination from the 2026-09-02 05:30 UTC cron
+    # run. Unauth /microdramas response served page nav + generic
+    # recommendations; the walker admitted them because the old
+    # `page_is_microdrama_only=True` shortcut bypassed the per-item
+    # title-token filter. Walker fixed same-day so this class can't
+    # happen again, but the ingested strings need to be evicted from
+    # the persistent catalog.
+    "TV Shows", "Movies", "News", "Kids", "Sports", "Channels",
+    "Sitemap", "Peacock Blog", "All Sports", "What to Watch",
+    "New on Peacock", "Reality TV", "Must-See Movies", "Bravo Hub",
+    "NBC Hub", "Romantic Movies & TV Shows", "Telemundo Hub",
+    "All Peacock Originals", "Premier League", "WNBA",
+    "Big Ten Football", "Bundesliga",
+    # Peacock TV series / movies that leaked in via broad-catalog
+    # scrapes (pre-microdrama-gate) or the 2026-09-02 marketing shell
+    "Married at First Sight", "The Miniature Wife", "The Traitors",
+    "All Her Fault", "The 'Burbs", "ted",
+    "The Super Mario Galaxy Movie", "The Five Star Weekend",
+    "Love Island", "The Copenhagen Test",
+    "Devil in Disguise: John Wayne Gacy", "The Paper",
+    "Love Island Games", "Twisted Metal", "Bel-Air",
+    "The Idaho Student Murders", "Love Island: Beyond the Villa",
+    "Long Bright River", "Law & Order: Organized Crime",
+    "Matthew Perry: A Hollywood Tragedy",
+    "Bridget Jones: Mad About the Boy",
+    "SNL50: Beyond Saturday Night",
+    "Diddy: The Making of a Bad Boy",
+    "Lockerbie: A Search for Truth", "Laid",
+    "Law & Order: Special Victims Unit", "Yellowstone",
+    "Zoey's Extraordinary Playlist", "The FBI Files",
+    "Velvet", "Velvet Coleccion", "Ms. X", "Fightland",
+    "Eres mi luz", "Person of Interest",
+    "Little House on the Prairie", "The Nowhere Man",
+    "Spartacus", "The White Princess", "Magic City",
+    "Black Sails", "Howards End", "Gravity", "The Missing",
+    "Dublin Murders", "Mary & George", "Power Book II: Ghost",
+    "Power Book III: Raising Kanan",
+    # Peacock hub / footer / nav / sports-league / merch entries that
+    # leaked into the persistent catalog from earlier pre-microdrama-
+    # gate broad scrapes. None of these are microdramas; render-time
+    # `_entry_is_microdrama` already suppresses them, but keeping the
+    # catalog tight is worth the extra purge line.
+    "MLB", "NBA", "Golf", "Cycling", "SuperMotocross", "IMSA",
+    "M.I.A.", "Reminders of Him", "Next Gen NYC", "Obsession",
+    "America's Got Talent (AGT)", "Below Deck Mediterranean",
+    "The Real Housewives of Orange County", "Law & Order: SVU",
+    "Compare Plans", "Closed Captioning", "Account",
+    "Apple App Store", "Google Play Store",
+    "Apple TV and Peacock Bundle", "Student Discount", "Gift Cards",
 ]
 
 
@@ -269,16 +324,24 @@ def _walk_rails(node: Any, out: list[dict], *,
     flattened.
 
     Filters items to microdramas only:
-      - If the surrounding rail's name/title matches a microdrama
-        signal (see _MICRODRAMA_RAIL_TOKENS) OR the entire page is a
-        microdrama-only surface, the rail is admitted and every item
-        on it is tagged is_microdrama=True.
-      - Otherwise, the walker still recurses into children (to catch
-        nested microdrama rails) but the items on THIS rail are
-        dropped, matching the product rule "just microdramas".
-      - Item-level safety net: if the item's deep_link routes to a
-        known non-microdrama path segment (/movies/, /sports/, etc.),
-        we drop it even inside a microdrama rail.
+      - Every item, on every rail, must satisfy at least one positive
+        microdrama signal: rail name is microdrama-labeled, OR the
+        title itself matches a microdrama title trope. This holds
+        even on /microdramas so an unauthenticated marketing shell
+        (which serves nav + generic recommendations that all key off
+        the hub URL) cannot dump nav items into the catalog just
+        because the page URL looks microdrama-shaped.
+      - `page_is_microdrama_only` is a soft hint: it just tells the
+        walker that this URL is EXPECTED to be a microdrama-only
+        surface, but it does NOT bypass the per-item title-token
+        filter. When we later get donated Peacock cookies and the
+        real microdrama titles come back, they'll pass the title
+        filter naturally (they all carry billionaire/vampire/alpha/
+        bride/ceo/etc. tokens). Nav items like "TV Shows" / "Movies"
+        / "Sports" will not.
+      - Item-level safety net: if the item's deep_link routes through
+        a known non-microdrama path segment (/movies/, /sports/,
+        /shows/, etc.), we drop it regardless of everything else.
     """
     if isinstance(node, dict):
         items = node.get('items') or node.get('tiles') or node.get('entries')
@@ -286,8 +349,7 @@ def _walk_rails(node: Any, out: list[dict], *,
             rail_name = str(node.get('title') or node.get('headline')
                              or node.get('name') or node.get('label')
                              or '').strip()
-            rail_is_microdrama = (page_is_microdrama_only
-                                   or _rail_looks_microdrama(rail_name))
+            rail_is_microdrama = _rail_looks_microdrama(rail_name)
             for item in items:
                 if not isinstance(item, dict):
                     continue
@@ -305,10 +367,13 @@ def _walk_rails(node: Any, out: list[dict], *,
                 # routes through a non-microdrama path we drop it.
                 if _deep_link_looks_non_microdrama(deep_link):
                     continue
-                # Admit if the rail is microdrama OR if the title
-                # itself matches microdrama tropes strongly enough to
-                # override an unlabeled rail (defensive: sometimes rail
-                # titles come back empty in Peacock's Next.js payload).
+                # Positive signal REQUIRED, per rail-name label OR
+                # per-title token match. `page_is_microdrama_only`
+                # never on its own admits an item - the /microdramas
+                # unauth marketing shell would otherwise ship nav
+                # ("TV Shows", "Movies", "Sports") + generic
+                # recommendations ("The Miniature Wife", "Yellowstone")
+                # as microdramas.
                 is_micro = rail_is_microdrama or _title_looks_microdrama(title_str)
                 if not is_micro:
                     continue
@@ -398,12 +463,32 @@ def fetch_baseline() -> list[dict]:
     return out
 
 
+# Minimum passing-titles a live pull must return before we trust it.
+# Below this, we assume we hit an unauthenticated marketing shell and
+# fall back to the curated baseline. Peacock ships 12+ microdramas at
+# any time so a real cookie-authenticated pull always clears this bar;
+# an unauth shell that leaked one or two token-matching recommendations
+# ("Yellowstone" wouldn't match; "The Miniature Wife" doesn't; but a
+# rogue mid-sized shell could conceivably clear 1-2) is caught.
+_MIN_LIVE_TITLES_FOR_TRUST = 3
+
+
 def fetch() -> dict:
     """Standard entrypoint. Live pull, falling back to curated baseline
-    when the live pull returns no titles."""
+    when the live pull returns nothing usable. A "usable" live pull
+    is one that returns at least `_MIN_LIVE_TITLES_FOR_TRUST` titles
+    that survived every filter in `_walk_rails` - rail-name label OR
+    per-title microdrama-token match, no non-microdrama deep-link
+    routing.
+    """
     titles = fetch_live()
-    if not titles:
-        logger.info('peacock: live pull empty, using curated baseline')
+    n = len(titles)
+    if n < _MIN_LIVE_TITLES_FOR_TRUST:
+        logger.info('peacock: live pull returned only %d usable titles '
+                     '(minimum %d for trust) - falling back to curated '
+                     'baseline. If this is unexpected, check whether '
+                     'donated Peacock cookies are still valid.',
+                     n, _MIN_LIVE_TITLES_FOR_TRUST)
         titles = fetch_baseline()
     return {
         'source': 'peacock',
@@ -453,14 +538,21 @@ def _purge_legacy_baseline_from_catalog(catalog: dict) -> int:
     return removed
 
 
-def _write_snapshot(payload: dict, *, purge_legacy: bool = False) -> None:
+def _write_snapshot(payload: dict, *, purge_legacy: bool = True) -> None:
     """Write snapshot to S3 and merge into the persistent catalog.
 
-    When `purge_legacy` is True, remove any ghost entries in the
-    persistent catalog whose title matches `LEGACY_BASELINE_TITLES_TO_PURGE`
-    BEFORE merging the new snapshot. This is how a `--seed` run
-    corrects the persistent catalog in place: it replaces the stale
-    rows with the current baseline atomically.
+    `purge_legacy` defaults to True as of 2026-09-02. Every write
+    (daily cron, manual seed, live pull) now automatically strips
+    the ghost titles in `LEGACY_BASELINE_TITLES_TO_PURGE` from the
+    persistent catalog before merging the fresh snapshot. Idempotent:
+    a no-op if the ghost list is empty for the current catalog.
+
+    Rationale: additive merge in `microdramas_iq.integrate_snapshot`
+    means any bad row that ever gets written (e.g. today's unauth
+    marketing-shell nav that leaked past the walker before the fix)
+    survives every subsequent write. The auto-purge keeps the
+    catalog reconciled with the current CURATED_BASELINE_TITLES on
+    every cron pass, so a bad day cannot linger.
     """
     try:
         import boto3  # type: ignore
@@ -520,9 +612,10 @@ def main() -> int:
                           'from the persistent catalog before merge.')
     ap.add_argument('--dry-run', action='store_true',
                      help='Print payload to stdout, do not upload.')
-    ap.add_argument('--purge-legacy', action='store_true',
-                     help='Force the legacy-baseline purge even on a '
-                          'live-pull run. Safe on any run.')
+    ap.add_argument('--no-purge-legacy', action='store_true',
+                     help='Skip the retired-baseline purge on the '
+                          'persistent catalog. Off by default; the '
+                          'purge is a no-op when nothing to remove.')
     args = ap.parse_args()
 
     logging.basicConfig(level=logging.INFO,
@@ -543,10 +636,8 @@ def main() -> int:
         print(json.dumps(payload, indent=2))
         return 0
 
-    # A seed run always purges the retired baseline rows, so the
-    # persistent catalog matches the baseline in this file. Live runs
-    # opt in via --purge-legacy.
-    _write_snapshot(payload, purge_legacy=(args.seed or args.purge_legacy))
+    # Purge is on by default; --no-purge-legacy opts out.
+    _write_snapshot(payload, purge_legacy=not args.no_purge_legacy)
     return 0
 
 

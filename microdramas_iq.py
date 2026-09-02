@@ -1684,9 +1684,10 @@ def prewarm_common_views() -> dict:
     Common queries (all cover the 5 platforms x N days worth of S3
     snapshot reads, which is the expensive part - warming them up
     front means every user click is a cached lookup):
-    - Peacock default (window_days=7, sort=view_28d, cut=all)
-    - Competitors: 7d, 30d, 60d, 90d, YTD (top_n=20, all genres)
-    - All-platforms: 7d, 30d, 60d, 90d, YTD (top_n=20, all genres)
+    - Peacock default (window_days=1, sort=view_28d, cut=all)
+    - Competitors: 1d (default), 7d, 14d, 30d, 60d, 90d, YTD
+      (top_n=20, all genres)
+    - All-platforms: same window set as competitors (top_n=20)
 
     YTD is resolved to (Jan 1 -> today) so the same S3 read path used
     by an actual YTD dashboard request gets primed. Without this, a
@@ -1709,13 +1710,16 @@ def prewarm_common_views() -> dict:
             warmed[key] = False
             warmed['errors'].append(f'{key}: {_e}')
 
-    # Peacock default (its own tab uses 28d window by design, but the
-    # cross-platform view uses 7d)
-    _try('peacock', lambda: compute_view({
-        'sort': 'view_28d', 'window_days': 7, 'audience_cut': 'all'}))
+    # Peacock default (2026-09-02: default lookback flipped from 7d to
+    # 1d "Today"). Warm the 1d + the 7d/28d fallbacks so the first
+    # click on any preset is instant.
+    for wd in (1, 7, 28):
+        _try(f'peacock_{wd}d', lambda wd=wd: compute_view({
+            'sort': 'view_28d', 'window_days': wd, 'audience_cut': 'all'}))
 
-    # Competitor views at every preset window the dashboard exposes
-    for wd in (7, 14, 30, 60, 90):
+    # Competitor views at every preset window the dashboard exposes.
+    # 1d is the dashboard default and gets warmed first.
+    for wd in (1, 7, 14, 30, 60, 90):
         _try(f'comp_{wd}d', lambda wd=wd:
              compute_competitors_view({'window_days': wd, 'top_n': 20}))
     _try('comp_ytd', lambda:
@@ -1723,7 +1727,7 @@ def prewarm_common_views() -> dict:
 
     # All-platforms landing tab at every preset. This is the one most
     # users see first, so warming it up front is highest impact.
-    for wd in (7, 14, 30, 60, 90):
+    for wd in (1, 7, 14, 30, 60, 90):
         _try(f'all_{wd}d', lambda wd=wd:
              compute_all_platforms_view({'window_days': wd, 'top_n': 20}))
     _try('all_ytd', lambda:
