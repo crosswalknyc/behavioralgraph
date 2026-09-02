@@ -1337,3 +1337,24 @@ if __name__ == '__main__':
            f"lenses={[l['id'] for l in result.get('lenses') or []]} "
            f"error={result.get('error')}",
            file=sys.stderr)
+
+    # A fresh lens_scores.json invalidates every live compute_view
+    # cache entry - those cached payloads still hold the OLD
+    # lens_config until their stale_until elapses (up to 24h away).
+    # The daily scraper cron self-heals via run_all.py's cache warm,
+    # but a standalone `python -m scripts.trends_scrapers.lens_relevance`
+    # run doesn't invalidate anything. Same guard as _bedrock_scorer.py;
+    # historic (asof=past-date) entries are never touched.
+    if not args.dry_run and not result.get('error'):
+        try:
+            import pathlib as _pathlib
+            _root = _pathlib.Path(__file__).resolve().parent.parent.parent
+            if str(_root) not in sys.path:
+                sys.path.insert(0, str(_root))
+            from trends_iq import invalidate_live_compute_view_caches  # noqa: E402
+            n = invalidate_live_compute_view_caches()
+            print(f"invalidated {n} live compute_view cache entries",
+                   file=sys.stderr)
+        except Exception as e:
+            print(f"WARN: compute_view cache invalidation failed: {e}",
+                   file=sys.stderr)

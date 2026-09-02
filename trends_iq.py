@@ -553,6 +553,65 @@ def _cache_put(filters: dict, payload: dict) -> None:
         logger.debug("trends_iq cache put failed: %s", e)
 
 
+def invalidate_live_compute_view_caches() -> int:
+    """Delete every LIVE (non-historic) compute_view S3 cache entry.
+
+    The compute_view payload is cached at
+    `s3://dashboard-inputs/trends_iq/cache/{hash}.json` for CACHE_TTL_S
+    seconds keyed on the filter tuple (asof + geo_type + geo_value +
+    lookback_days). When an upstream snapshot changes mid-day (e.g. a
+    fresh `lens_scores.json` write from a manual scoring run adding new
+    lenses), those cached payloads still serve the stale view until
+    their `stale_until` elapses. The dashboard then shows the old lens
+    set (or old chart values) for up to 24 hours after a snapshot
+    refresh.
+
+    Rule 0a of `profile-iq-pipeline-rules.mdc` and the no-rebuild-level-
+    correction rule both say: fix in place, never wait. This helper is
+    the fix-in-place - any writer that mutates a `latest/*.json`
+    snapshot should call it so the next dashboard request re-computes
+    against the fresh snapshot.
+
+    Historic entries (`filters.historic == True`) are PERMANENT
+    snapshots of a past day and are NEVER deleted. Only live-view
+    entries get invalidated.
+
+    Returns the number of live cache entries deleted (0 when nothing
+    to invalidate or when S3 isn't reachable - callers can safely
+    ignore the return value).
+    """
+    s3 = _s3_client()
+    if s3 is None:
+        return 0
+    deleted = 0
+    try:
+        paginator = s3.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=S3_CACHE_BUCKET,
+                                          Prefix=S3_CACHE_PREFIX):
+            for obj in page.get('Contents') or []:
+                key = obj.get('Key') or ''
+                if not key.endswith('.json'):
+                    continue
+                try:
+                    resp = s3.get_object(Bucket=S3_CACHE_BUCKET, Key=key)
+                    data = json.loads(resp['Body'].read().decode('utf-8'))
+                except Exception:
+                    continue
+                filters = data.get('filters') or {}
+                if bool(filters.get('historic')):
+                    continue
+                try:
+                    s3.delete_object(Bucket=S3_CACHE_BUCKET, Key=key)
+                    deleted += 1
+                except Exception as e:
+                    logger.debug("invalidate: delete %s failed: %s", key, e)
+    except Exception as e:
+        logger.debug("invalidate_live_compute_view_caches failed: %s", e)
+    if deleted:
+        logger.info("invalidated %d live compute_view cache entries", deleted)
+    return deleted
+
+
 # ============================================================================
 # Daily snapshot reader
 # ============================================================================

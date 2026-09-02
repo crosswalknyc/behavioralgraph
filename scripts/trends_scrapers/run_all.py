@@ -298,6 +298,23 @@ def main(argv: list[str] | None = None) -> int:
         sys.path.insert(0, os.path.abspath(
             os.path.join(os.path.dirname(__file__), '..', '..')))
         import trends_iq  # type: ignore
+        # Invalidate every LIVE compute_view cache entry first.  The
+        # warm step below only rebuilds three canonical filter tuples
+        # (National / 1d / 7d / 30d); any OTHER cached filter combo
+        # (state cut, DMA cut, non-default lookback) would keep
+        # serving its stale payload until its stale_until elapses -
+        # up to 24 hours after this cron.  Invalidation forces every
+        # user's first request to re-compute against the fresh
+        # `latest/*.json` snapshots this run just wrote.  Historic
+        # entries (asof=past-date) are permanent snapshots and are
+        # NEVER touched.  Best-effort - if S3 isn't reachable the
+        # canonical three still get warmed and everything else self-
+        # heals within 24h anyway.
+        try:
+            n = trends_iq.invalidate_live_compute_view_caches()
+            print(f"cache invalidate: {n} live compute_view entries cleared")
+        except Exception as e:
+            logging.warning("run_all: cache invalidation failed: %s", e)
         # Warm the three windows the dashboard actually renders. 1-day
         # is the new default ("live as of now") so it's warmed first
         # and most frequently checked by users; 7d and 30d cover the

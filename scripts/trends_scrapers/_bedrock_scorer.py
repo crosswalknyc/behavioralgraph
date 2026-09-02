@@ -372,6 +372,28 @@ def main() -> None:
     print(f"count={result['count']} lenses={[l['id'] for l in result['lenses']]}",
            file=sys.stderr)
 
+    # A fresh lens_scores.json invalidates every live compute_view
+    # cache entry - those cached payloads still hold the OLD lens_config
+    # (fewer lenses, older labels) until their stale_until elapses,
+    # which is up to 24 hours away.  The daily scraper cron self-heals
+    # via `run_all.py`'s `compute_view(force_refresh=True)` warm at the
+    # end of its run, but an out-of-cron scoring run (e.g. adding new
+    # lenses mid-day) does NOT.  Invalidate every live entry so the
+    # next dashboard request re-computes against the fresh snapshot.
+    # Historic entries are never touched.
+    try:
+        import pathlib as _pathlib
+        _root = _pathlib.Path(__file__).resolve().parent.parent.parent
+        if str(_root) not in sys.path:
+            sys.path.insert(0, str(_root))
+        from trends_iq import invalidate_live_compute_view_caches  # noqa: E402
+        n = invalidate_live_compute_view_caches()
+        print(f"INVALIDATED: {n} live compute_view cache entries",
+               file=sys.stderr)
+    except Exception as e:
+        print(f"WARN: compute_view cache invalidation failed: {e}",
+               file=sys.stderr)
+
 
 if __name__ == '__main__':
     main()
