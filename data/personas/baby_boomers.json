@@ -1,0 +1,278 @@
+{
+  "lens_id": "baby_boomers",
+  "display_name": "Baby Boomers (Ages 61-79)",
+  "emoji": "\ud83d\udcfb",
+  "source_profile": "Aggregated panel signal across Shark Tank - Boomers (2026-08-26), triangulated with cross-file 65-and-older cuts and public Pew / Nielsen / AARP research.",
+  "one_line": "US adults 61 to 79. Retirement-and-legacy decade. Cable news anchor loyalists, cruise-and-Viking-River travelers, Costco and QVC shoppers, AARP members, church-and-community-rooted, easy-listening and classic-rock, Hallmark and Great American Family, Fidelity and Edward Jones, medical-alert-and-CareCredit readers, aging-parent-of-adult-child role, grandparent identity.",
+
+  "demographics": {
+    "age_range": "61 to 79. Density in 65-or-older (idx 432) with a strong 55-64 tail (idx 132). Younger buckets fall below 6.",
+    "gender_skew": "Roughly 50 male / 48 female. Non-binary and trans identifiers present at low share. Read as gender-binary; slight female pull on wellness, faith, cooking, crafts; slight male pull on classic-cars, motorsports, sports.",
+    "income_band": "$100K-plus bands sit near index 96-97 (peak-earning behind them, but retirement assets are substantial). LESS THAN $25K over-indexes at 134 (fixed-income retirees on Social Security). Read as a two-mode distribution: comfortable-retirement homeowners plus fixed-income retirees.",
+    "education": "Some College / Associate 123, Bachelors 107, Graduate 106, HS or less 80. Mixed college and trade generation, slightly college-tilted.",
+    "occupation_skew": "Read as retired-or-semi-retired (OTHER category over-indexes massively). Among still-working: management / business / professional 43, healthcare 33, skilled trades 71 (older tradespeople staying on).",
+    "ethnicity_skew": "White 125, Black 88, Asian 72, Hispanic 61. Read as heaviest majority-white generation, meaningfully less diverse than any younger cohort.",
+    "life_stage": "Married 163, Divorced or Separated 146, Single 24, In a relationship 27. Has children over 18 idx 181 (grandparent decade). Empty-nest homeowners, sandwich-generation-caregiver-for-parents-flipping-to-cared-for-self, widowed emerging late-Boomer.",
+    "geo_skew": ["Florida (The Villages, Naples, Sarasota)", "Arizona (Sun City, Scottsdale)", "Southern California retiree zones", "Rust Belt (Pittsburgh Pa, Cleveland Oh, Detroit Mi)", "Deep South (Nashville Tn, Charlotte Nc, Atlanta Ga)", "Small-town and suburban America across the map"]
+  },
+
+  "psychographics": {
+    "values": [
+      "Retirement and legacy. RMDs, estate planning, grandchildren's 529s, family real estate, executor duties.",
+      "Community and faith. Alzheimers Association 284, Marine Toys for Tots 274, Wounded Warrior 260, American Kidney Fund 255, American Heart 217. TBN 264 and Great American Family 259 and Hallmark 230 in the cable rotation.",
+      "Cable news as core news habit. CNBC 435, Fox Business 424, Newsmax 356, C-SPAN 199, MS NOW 177, Fox News 155, CBS News 155, ABC 157, Bloomberg Live 159.",
+      "Cash-preservation-first finance. Fidelity 529, Edward Jones 551, Vanguard 380, Charles Schwab 391, Morgan Stanley 299. Robinhood at 32, Acorns at 31 (this cohort does NOT read as crypto-and-meme-stock).",
+      "Costco and QVC loyalty. Costco Optical 1,679, QVC 1,292, Costco 483 (as membership).",
+      "Cruises and mid-luxury travel. Viking Cruises 209, Holland America 208, Iberostar Resorts 275, Hyatt Vacation Club 291, Lindblad Expeditions 198.",
+      "Classic-rock and easy-listening. Led Zeppelin 664, Journey 482, Bee Gees 497, Blondie 539, Frank Sinatra 358, Bette Midler 315, Cher 289, Whitney Houston 299.",
+      "Aging-in-place tech. One Call Alert 1,842, LifeFone 961, Medical Alert 580, Life Alert 377, Aloe Care Health 420, Bay Alarm Medical 161.",
+      "AARP identity (AARP app 612). Grandparent identity. Sunday-lunch-with-family cadence.",
+      "Political and civic-engagement heavier than any younger cohort. Voting, campaign donation, RNC / DNC engagement, C-SPAN, PBS."
+    ],
+    "aesthetics": [
+      "Casual-dining diner (Perkins 326, Bob Evans 223, Cracker Barrel 183, Denny's 176, Golden Corral 170, IHOP 157, Cheddars 148, LongHorn 138)",
+      "Casual-luxury retail (Alberta Ferretti 1,535, Rogue Territory 1,233, Aspinal of London 965, Ralph Lauren Home 511, Waldorf Astoria 277)",
+      "Costco warehouse cart plus H-E-B (Texas) or Trader Joe's (coastal)",
+      "Home renovation and garden (Ancient Secrets 1,284, Floom 1,058, Landmann 999, RiverRidge Home 562, Lillian August 411, Custom Comfort Mattress 519)",
+      "Golf and classic-car (On Par Golf 1,360, Golf Magazine 293, Golf Digest 219, Classic Cars 174, Streetside Classics 161, Mecum Auctions 145)"
+    ],
+    "tone_they_respond_to": "Direct, warm, formal. Speaks to competence, community, and craft. Sunday-morning-news-anchor register. Long-form magazine essayism (Time, Newsweek, Atlantic legacy voice). Al Roker / Robin Roberts / Ina Garten warmth. Prestige-podcast register too when the host has authority (Ken Burns adjacency, David Attenborough, Doris Kearns Goodwin).",
+    "tone_they_reject": "TikTok-native slang, Gen Z hyper-native speech, meme-first framing without substantive read, alpha-bro grindset, crypto-bro content, K-pop / anime / manga-first framing, adult-content-adjacent snark, youth-influencer content."
+  },
+
+  "consumption_signals": {
+    "reads_hard": [
+      "The New York Times", "The Wall Street Journal", "The Washington Post", "USA Today", "Chicago Tribune",
+      "The Economist", "The Atlantic", "The New Yorker",
+      "Bloomberg (159)", "Barron's", "Kiplinger", "Fortune", "Time", "Newsweek",
+      "The Epoch Times (254)", "National Review", "The Weekly Standard legacy",
+      "AARP Bulletin, AARP Magazine (heavy)",
+      "Local newspapers still print-subscribed"
+    ],
+    "reads_soft": [
+      "Readers Digest (272)", "Parade (270)", "Women's Day (270)", "National Enquirer (230)", "New York Daily News (231)",
+      "Southern Living (220)", "Garden & Gun (247)", "This Old House",
+      "Golf Magazine (293)", "Golf Digest (219)",
+      "Country Music Association (312)", "The Boot (289)", "TBN Plus (285)",
+      "AARP Bulletin, AARP Magazine (core)",
+      "Guideposts, Christianity Today, Focus on the Family (faith slice)"
+    ],
+    "watches": {
+      "streaming": ["Netflix (200)", "Amazon Prime Video (192)", "Disney+/Hulu (221)", "Peacock (230)", "Apple TV+ (162)", "HBO Max (edge)", "Discovery+ (196)", "Hallmark Plus (209)", "MGM+ (260)", "Acorn TV (348)", "BritBox", "PBS Passport", "AMC Plus (164)", "MUBI (176)"],
+      "fast": ["Pluto TV", "Tubi", "Freevee", "Xumo", "Roku Channel", "Tablo"],
+      "film": ["Yellowstone franchise (1883, 1923, Landman)", "Blue Bloods", "NCIS franchise", "FBI franchise", "The Rookie", "Chicago franchise (Fire, PD, Med)", "Reacher", "Bosch", "Slow Horses (edge)", "The Old Man", "Bridgerton (edge)", "The Crown", "Downton Abbey", "All Creatures Great and Small", "Call the Midwife", "Poldark", "Foyle's War", "Endeavour", "Grantchester", "Hallmark movies", "Great American Family holiday movies", "Ken Burns documentaries", "PBS Masterpiece"],
+      "cable": ["CNBC (435)", "Fox Business (424)", "Newsmax (356)", "Fox News (155)", "MS NOW (177)", "C-SPAN (199)", "NewsNation (164)", "CBS News", "ABC News", "PBS (167)", "Great American Family (259)", "Hallmark Channel (230)", "TBN (221)", "MeTV (200)", "History (144)", "A&E Crime Central (161)", "TLC (163)", "Bloomberg Live (159)", "Magnolia (167)", "ESPN"]
+    },
+    "listens": {
+      "podcasts": [
+        "The Daily",
+        "60 Minutes",
+        "Fresh Air",
+        "This American Life",
+        "Ken Burns' USA Today with Susie Gharib",
+        "Serial",
+        "The Ezra Klein Show",
+        "The New Yorker Radio Hour",
+        "1A (NPR)",
+        "All Things Considered",
+        "Morning Edition",
+        "Prosecuting Donald Trump",
+        "Pod Save America (edge)",
+        "Rachel Maddow (edge)",
+        "The Ben Shapiro Show (edge)",
+        "The Dan Bongino Show (edge)",
+        "The Charlie Kirk Show (edge, faith slice)",
+        "SmartLess (accessible for older listeners)",
+        "Armchair Expert (edge)",
+        "The Tim Ferriss Show (edge)",
+        "Rich Roll (edge)",
+        "The Bill Simmons Podcast (sports slice)",
+        "60 Songs That Explain the '90s (edge)",
+        "The Rewatchables (older-movie catalog)",
+        "Hidden Brain",
+        "Radiolab",
+        "Amy Sedaris (surprise cohort signal)"
+      ],
+      "music_artists": [
+        "Led Zeppelin", "The Rolling Stones", "The Beatles", "Fleetwood Mac", "Bruce Springsteen", "Journey", "Bee Gees", "Blondie",
+        "Simon and Garfunkel", "Bob Dylan", "Joni Mitchell", "Carly Simon", "James Taylor",
+        "Frank Sinatra", "Tony Bennett", "Nat King Cole", "Ella Fitzgerald", "Sammy Davis Jr",
+        "Cher", "Bette Midler", "Barbra Streisand", "Dolly Parton", "Linda Ronstadt",
+        "Whitney Houston", "Diana Ross", "Aretha Franklin", "Marvin Gaye", "Stevie Wonder", "Bill Withers", "Al Green",
+        "Neil Diamond", "Elton John", "Rod Stewart", "Kenny Rogers", "Willie Nelson", "Johnny Cash",
+        "Rascal Flatts", "Darius Rucker", "Chris Young", "Florida Georgia Line", "Dierks Bentley", "Dan and Shay",
+        "Andrea Bocelli", "Yanni", "Yo-Yo Ma",
+        "Adele (crossover)"
+      ],
+      "music_genres": ["classic rock", "easy listening", "adult contemporary", "traditional country", "Nashville country", "adult R&B and Motown", "singer-songwriter", "American Songbook / standards", "jazz (Norah Jones, Diana Krall)", "classical crossover (Andrea Bocelli, Yo-Yo Ma, Yanni)"]
+    },
+    "reads_books": {
+      "formats": ["hardcover for the shelf", "large-print hardback", "audiobook (Audible idx 391) for the drive and for reduced eyesight", "library hardback"],
+      "genres": [
+        "prestige biography and political history (Ken Burns adjacent, Doris Kearns Goodwin, David McCullough, Ron Chernow, Erik Larson, Walter Isaacson)",
+        "spy thrillers and legal thrillers (John Grisham, Michael Connelly, Daniel Silva, David Baldacci, James Patterson, Vince Flynn / Kyle Mills, Louise Penny)",
+        "cozy mysteries (Louise Penny, Alexander McCall Smith, Anne Perry, Kate Morton)",
+        "prestige literary fiction (Anne Tyler, Ann Patchett, Elizabeth Strout, Amor Towles, Fredrik Backman)",
+        "prestige memoir (Michelle Obama, Barack Obama, Bono, Bruce Springsteen, Matthew Perry, Ina Garten, Al Roker)",
+        "personal-finance and retirement planning (Suze Orman, Ric Edelman, John Bogle canon)",
+        "faith and inspiration (Joel Osteen, Rick Warren, Anne Lamott, C.S. Lewis re-issues)",
+        "true-crime narrative (Michelle McNamara, Ann Rule backlist, Patrick Radden Keefe)",
+        "cookbook prestige (Ina Garten, Alton Brown, Julia Child re-issues)"
+      ],
+      "authors_or_titles": [
+        "John Grisham", "James Patterson", "David Baldacci", "Michael Connelly", "Louise Penny",
+        "Anne Tyler", "Ann Patchett", "Elizabeth Strout", "Amor Towles (The Lincoln Highway)", "Fredrik Backman (A Man Called Ove)",
+        "Erik Larson", "Ron Chernow", "Doris Kearns Goodwin", "Walter Isaacson",
+        "Barack Obama", "Michelle Obama", "Bruce Springsteen (Born to Run)",
+        "Ina Garten (Be Ready When the Luck Happens)", "Al Roker", "Matthew Perry",
+        "Suze Orman", "Ric Edelman", "James Clear (Atomic Habits crossover)",
+        "Joel Osteen", "Rick Warren", "Anne Lamott"
+      ]
+    },
+    "plays": [
+      "Wordle and NYT Games idx 1,289 to 1,532 (highest of any generation)",
+      "GeoGuessr (949), Chess.com, NYT Connections, Spelling Bee",
+      "Bridge and poker (both live and online)",
+      "Mah Jongg (live and online)",
+      "Solitaire, Sudoku, and crossword every day",
+      "Legacy franchises: Indiana Jones (1,875), Star Wars (1,302), Age of Empires (1,082), LEGO (659), Tony Hawk (571) for the grandkid co-op",
+      "Some casino app play (WSOP, Zynga Poker)"
+    ],
+    "shops": [
+      "Costco every-two-weeks (Costco Optical 1,679, Costco 483)",
+      "QVC (1,292) actually watched and ordered from",
+      "H-E-B (484) if Texas, Trader Joe's (497), Whole Foods, Wegmans in the Northeast, Publix in the Southeast",
+      "Ross Dress for Less (707), TJ Maxx, Marshalls, Kohl's, JCPenney (JCPenney Optical 437)",
+      "REI (524), Cabela's, Bass Pro Shops, Academy Sports (413)",
+      "Home Depot / Lowe's for the ongoing home project",
+      "Local church bazaar, garden center, farmers market",
+      "Dollar Tree (557), Dollar General (543), Family Dollar (fixed-income slice)",
+      "Chewy (352 in Gen X, similar here) for the pet, veterinary specialty food"
+    ],
+    "eats_at": [
+      "Perkins, Bob Evans, Cracker Barrel, Denny's, IHOP, Golden Corral",
+      "Longhorn Steakhouse (138), Outback (118), Cheesecake Factory (117), Carrabbas (146)",
+      "Panera, Chick-fil-A (143), Dunkin (172), Subway (161)",
+      "Local diner or family restaurant",
+      "Sunday brunch at hotel, occasional steakhouse (Shula's, Saltgrass, Chart House)",
+      "Retirement-community dining hall for the earlier-independent-living slice"
+    ],
+    "buys": [
+      "Medical-alert stack (One Call Alert 1,842, LifeFone 961, Medical Alert 580, Aloe Care 420, Life Alert 377, Bay Alarm 161)",
+      "Aging-in-place tech (UnaliWear 579, Medical Guardian 436, August Home 221, Alert1 237)",
+      "OTC medical (Sensodyne 237, Emergen-C 273, Bic 236)",
+      "Pantry-of-mass-consumer (Campbell's 261, Chips Ahoy 247, Sargento 242, Orville Redenbacher 238, Progresso 291, Swiffer 256)",
+      "Traditional beauty and hair (Max Factor 404, RoC Skincare 363, Naturespell 397, Trinny London 390)",
+      "Home renovation and garden (Landmann 999, RiverRidge Home 562, Ralph Lauren Home 511, Lillian August 411, LectroFan 475)",
+      "Golf and classic-car (On Par Golf 1,360, Callaway, Titleist, TaylorMade)",
+      "Pet supplements and specialty food (MaxBone 14,976, Little Hunter 7,298, JustFoodForDogs 1,909, Wuffes 1,848)"
+    ],
+    "follows_talent": [
+      "Ina Garten", "Al Roker", "Robin Roberts", "Deborah Roberts", "Martha Stewart", "Cindy Crawford",
+      "Goldie Hawn", "Molly Ringwald", "Bernadette Peters", "Marlee Matlin", "Mariska Hargitay", "Connie Britton", "Taraji P Henson",
+      "Tim Conway (legacy)", "Drew Carey", "Danny DeVito", "Billy Bob Thornton", "Nick Offerman", "Tony Goldwyn",
+      "Kevin Costner", "Denzel Washington", "Tom Hanks", "Julia Roberts", "Sandra Bullock", "Meryl Streep",
+      "Frank Sinatra legacy", "Bette Midler", "Cher", "Barbra Streisand", "Dolly Parton", "Willie Nelson", "Bruce Springsteen",
+      "Tiger Woods", "Serena Williams", "David Beckham", "Mikaela Shiffrin", "Chase Elliott", "Kyle Larson",
+      "Paul Hollywood (Great British Baking Show)", "Jeff Probst (Survivor)",
+      "Barack Obama", "Michelle Obama", "Doris Kearns Goodwin"
+    ]
+  },
+
+  "themes_they_care_about": [
+    "retirement and legacy (RMDs, estate planning, wills, POA, Trusts, grandchildren's 529s, executor duties)",
+    "Medicare enrollment, Medicare Advantage, Medicare Supplement (Aetna, Humana, UnitedHealth, Blue Cross), Part D drug plans",
+    "aging-in-place tech (One Call Alert, LifeFone, Medical Alert, UnaliWear, Aloe Care, August Home smart locks, Ring doorbell)",
+    "health for self and spouse (Alzheimer's Association, American Heart, cancer research, joint replacement, cataract surgery, hearing aids)",
+    "grandparent identity (birthday cards, holiday visits, 529 contributions, Disney trips with grandkids, Sunday-lunch cadence)",
+    "cruises and mid-luxury travel (Viking River, Holland America, Hyatt Vacation Club, Iberostar, National Park RV, Lindblad expeditions)",
+    "prestige TV with a slower burn and a moral center (Yellowstone, Blue Bloods, NCIS, Reacher, Bosch, The Crown, Downton Abbey, Call the Midwife, Grantchester)",
+    "Hallmark Channel and Great American Family holiday programming",
+    "faith, church, and community (TBN, Great American Family, local congregation, Wednesday Bible study, Sunday morning worship)",
+    "civic engagement and voting (heaviest voter turnout of any generation, PBS, C-SPAN, campaign donation, party engagement)",
+    "prestige podcast and NPR-adjacent listening (The Daily, Fresh Air, 60 Minutes, Ezra Klein, Ken Burns adjacent)",
+    "golf, classic cars, motorsports (NASCAR Chase Elliott / Kyle Larson, F1 as legacy Formula, PGA Sunday, Masters)",
+    "grandkid-co-op-adjacent legacy franchises (Star Wars, Indiana Jones, Harry Potter, LEGO, Barbie, Disney classics)"
+  ],
+  "themes_they_avoid": [
+    "TikTok-first framing without a substantive read",
+    "hyper-native Gen Z slang and youth-influencer creator content",
+    "K-pop, anime, manga, and Genshin-tier gaming",
+    "BookTok romantasy",
+    "crypto-and-meme-stock trading (Robinhood, Coinbase, meme-stock coverage as PRIMARY)",
+    "MLM and hustle-bro grindset",
+    "reality-dating on cable as PRIMARY content (Bachelor, Love Island, 90 Day)",
+    "adult-content-adjacent snark and podcast profanity as PRIMARY",
+    "streaming-first prestige TV that leans hyper-Millennial-nostalgia (Euphoria, Sex Lives of College Girls, HBO Max Girls-alumni content)",
+    "Andrew Tate and alpha-bro grindset content",
+    "hyper-progressive campus / activist framing without a substantive read"
+  ],
+
+  "filter_rules_for_agent": [
+    "KEEP items headlined by Boomer-coded talent: Ina Garten, Al Roker, Robin Roberts, Martha Stewart, Goldie Hawn, Molly Ringwald, Bernadette Peters, Julia Roberts, Sandra Bullock, Meryl Streep, Kevin Costner, Denzel Washington, Tom Hanks, Danny DeVito, Billy Bob Thornton, Nick Offerman, Tony Goldwyn, Mariska Hargitay, Connie Britton, Paul Hollywood, Jeff Probst, Marlee Matlin, Drew Carey, Cindy Crawford.",
+    "KEEP legacy music: The Beatles, Rolling Stones, Led Zeppelin, Fleetwood Mac, Bruce Springsteen, Journey, Bee Gees, Simon and Garfunkel, Bob Dylan, Frank Sinatra, Tony Bennett, Cher, Bette Midler, Barbra Streisand, Dolly Parton, Willie Nelson, Neil Diamond, Elton John, Rod Stewart, Kenny Rogers, Whitney Houston, Aretha Franklin, Stevie Wonder, Marvin Gaye, Bill Withers, Nashville-country (Rascal Flatts, Darius Rucker, Chris Young, Dierks Bentley, Florida Georgia Line, Dan and Shay), Andrea Bocelli, Yanni, Yo-Yo Ma.",
+    "KEEP prestige slower-burn TV: Yellowstone, 1883, 1923, Landman, Blue Bloods, NCIS franchise, FBI franchise, The Rookie, Chicago franchise, Reacher, Bosch, Slow Horses, The Old Man, The Crown, Downton Abbey, All Creatures Great and Small, Call the Midwife, Grantchester, Endeavour, Poldark. KEEP Hallmark / Great American Family holiday programming. KEEP Ken Burns documentaries, PBS Masterpiece, David Attenborough.",
+    "KEEP prestige biography and political history: Ken Burns, Doris Kearns Goodwin, David McCullough, Ron Chernow, Erik Larson, Walter Isaacson. KEEP spy thrillers and legal thrillers: John Grisham, James Patterson, David Baldacci, Daniel Silva, Michael Connelly, Louise Penny. KEEP cozy mysteries: Louise Penny, Anne Perry, Alexander McCall Smith, Kate Morton. KEEP prestige literary fiction: Anne Tyler, Ann Patchett, Elizabeth Strout, Amor Towles, Fredrik Backman. KEEP prestige memoir: Obamas, Bruce Springsteen, Matthew Perry, Ina Garten, Al Roker.",
+    "KEEP retirement / estate / Medicare stories: RMDs, IRA rollover, backdoor Roth, HYSA, index funds, Fidelity / Vanguard / Edward Jones / Charles Schwab / Morgan Stanley product news, Medicare Advantage news, Medicare Supplement, Part D drug plan changes, Suze Orman content.",
+    "KEEP prestige podcasts and NPR-adjacent: The Daily, Fresh Air, 60 Minutes, Ezra Klein, New Yorker Radio Hour, 1A, Morning Edition, All Things Considered, Hidden Brain, Radiolab, This American Life, Serial, Prosecuting Donald Trump. Also KEEP Ken Burns adjacent history podcasts.",
+    "KEEP cable-news anchor drama: CNN, Fox News, MSNBC / MS NOW, CNBC, Fox Business, Newsmax, PBS NewsHour, CBS Evening News, ABC News, C-SPAN, NewsNation, Bloomberg Live. This cohort follows cable-news anchor moves the way Millennials follow prestige-TV showrunners.",
+    "KEEP cruises and mid-luxury travel: Viking River, Viking Ocean, Holland America, Princess, Cunard, Hyatt Vacation Club, Ritz-Carlton, Waldorf Astoria, Iberostar Resorts, Lindblad Expeditions, National Park itineraries. KEEP RV, Airstream, and road-trip travel.",
+    "KEEP faith, church, and inspirational content: TBN, Great American Family, Hallmark, Guideposts, Focus on the Family, Rick Warren, Joel Osteen. Frame as observation, not endorsement.",
+    "KEEP civic engagement and voting stories: Election coverage, voter-turnout, campaign finance, Supreme Court, C-SPAN, PBS NewsHour features.",
+    "KEEP wellness stack for older adults: Alzheimer's Association, American Heart, cancer research, joint replacement, cataract surgery, hearing aids (Eargo, Lively), CareCredit, Weight Watchers, Silver Sneakers, gentle-yoga, tai chi, Curves.",
+    "KEEP aging-in-place tech: One Call Alert, LifeFone, Life Alert, Medical Alert, UnaliWear, Aloe Care Health, August Home, Ring doorbell, Nest, Kwikset smart locks.",
+    "KEEP grandparent-identity content: grandkid activities, 529 news, Disney trips with grandkids, Legoland, family-reunion planning.",
+    "KEEP golf, classic cars, and motorsports: Masters, US Open, PGA Championship, Ryder Cup, LPGA Solheim, NASCAR (Chase Elliott, Kyle Larson, Joe Gibbs Racing, Hendrick Motorsports), Formula 1 (as legacy), Indianapolis 500, Mecum Auctions, Barrett-Jackson, Streetside Classics.",
+    "KEEP casual-dining and diner news: Perkins, Bob Evans, Cracker Barrel, Denny's, IHOP, Golden Corral, Outback, LongHorn, Cheesecake Factory, Cheddars, Carrabbas, Chart House.",
+    "KEEP mass-consumer QSR: Chick-fil-A, Dunkin, Subway, Bluestone Lane (as accessible-coffee), Baskin Robbins, Krispy Kreme, Steak 'n Shake, A&W, Boston Market, Auntie Anne's.",
+    "KEEP prestige stand-up canon (Chris Rock, Jerry Seinfeld, Ellen DeGeneres backlist, Jay Leno legacy).",
+    "KEEP legacy franchises that grandkids co-watch: Star Wars, Indiana Jones, Harry Potter, LEGO, Barbie, Disney animation classics, Peanuts, Sesame Street.",
+    "KEEP any Doris Kearns Goodwin / David McCullough / Ron Chernow / Erik Larson / Malcolm Gladwell release. KEEP any Ken Burns documentary drop.",
+    "DROP TikTok-first framing without substantive read, hyper-Gen Z slang, Kai Cenat, Alix Earle, Salish Matter, Nara Aziza, MrBeast (edge, may pass as MID).",
+    "DROP K-pop, anime, manga, Hazbin Hotel, Helluva Boss, Genshin Impact, most Roblox stories.",
+    "DROP BookTok romantasy (Sarah J. Maas, Rebecca Yarros, Ana Huang, Colleen Hoover) as PRIMARY. Emily Henry / Taylor Jenkins Reid pass at low MID.",
+    "DROP crypto and meme-stock trading (Robinhood, Coinbase-as-thesis, WallStreetBets, Bitcoin ETF thesis stories, meme-stock coverage). Coinbase feature news is fine only if it is a fraud / regulation / consumer-protection story.",
+    "DROP MLM, hustle-bro grindset, Andrew Tate, alpha-bro content.",
+    "DROP reality-dating on cable as PRIMARY (Bachelor, Love Island, 90 Day Fiance).",
+    "DROP adult-content-adjacent podcast profanity as PRIMARY. Call Her Daddy passes only if the item is a business or media story.",
+    "DROP streaming-first Millennial-nostalgia prestige TV that leans hyper-Millennial-teen (Euphoria, Sex Lives of College Girls, Girls / Lena Dunham backlist, HBO Max coming-of-age).",
+    "DROP youth-influencer creator news (Kai Cenat, Livvy Dunne, Salish Matter, Alix Earle, Nara Aziza).",
+    "DROP hyper-progressive campus / activist framing that reads as youth-first identity politics without substantive read. Note: a slice of Boomers reads this content but the tab-wide bar is DROP unless the story is genuinely news (Supreme Court ruling, policy vote).",
+    "DROP most short-form video-and-drama content (DramaBox, GoodShort, ReelShort vertical shorts).",
+    "TIE-BREAK when unsure: does this touch retirement / legacy money, prestige slower-burn TV, full-season sports fandom, cable-news anchor drama, cruises / mid-luxury travel, faith / community / church, aging-in-place tech, grandparent identity, or a Boomer-coded talent? If yes, lean KEEP. If it reads as content aimed at their grandkid or their college-age relative, lean DROP."
+  ],
+
+  "expected_kept_share_per_tab": "25-45% of items per tab. Prestige slower-burn TV and classic music should retain a healthy share. Podcasts skew narrower than Gen X (a lot of Millennial / Gen Z-first pods fall out). BookTok drags Books lower. Games narrows the hardest because most gaming culture is younger-first. Headlines and Searches keep a healthy share because cable-news anchor content, retirement news, and Medicare stories all pass.",
+
+  "reasoned_from_profile": {
+    "profile_key": "Shark Tank - Boomers.csv (2026-08-26)",
+    "note": "Shark Tank cast rows (Lori Greiner, Barbara Corcoran, Mark Cuban, Kevin O'Leary, Daymond John) are Shark Tank contamination. Public research anchors: Pew Research Older Americans + Baby Boomer studies (2024, 2025), AARP Longevity Economy Outlook, Nielsen Cable + Streaming reports on 65-plus, Federal Reserve Survey of Consumer Finances (65+), Edison Infinite Dial for 55+.",
+    "notable_index_signals": [
+      "AGE 65 OR OLDER idx 432, 55-64 idx 132",
+      "INCOME LESS THAN $25K idx 134 (fixed-income retirees), $100K-plus near 96-97",
+      "EDUCATION Some College 123, Bachelors 107, Graduate 106",
+      "MARRIED 163, DIVORCED 146, HAS CHILDREN 181 (grandparent decade)",
+      "SOCIAL PARLER 974, TRUTH SOCIAL 517, PINTEREST 200, FACEBOOK 194, PATREON 148",
+      "APP SKYPE 3,075, WEIGHT WATCHERS 1,098, HELLOFRESH 986, HEADSPACE 897, INTUIT 816, AARP 612, CALM 592, COINBASE 496, GROUPON 486, GOODRX 426, AUDIBLE 391, SILVERSINGLES 359, OURTIME DATING 321",
+      "SEARCH METAGER 816, AOL 358, PHIND AI 300, BAGOODEX 264, EXA AI 243, YAHOO 219, MSN 216, PERPLEXITY 128, COPILOT 123",
+      "STREAMING ACORN TV 348, ESPN 335, MGM+ 260, PEACOCK 230, HALLMARK PLUS 209, DISCOVERY+ 196, PRIME 192, NETFLIX 200, BET+ 181, MUBI 176, TABLO 175, PARAMOUNT+ 167, AMC+ 164, APPLE TV+ 162",
+      "BROADCAST CNBC 435, FOX BUSINESS 424, NEWSMAX 356, GREAT AMERICAN FAMILY 259, HALLMARK CHANNEL 230, TBN 221, METV 200, C-SPAN 199, MS NOW 177, PBS 167, MAGNOLIA 167, NEWSNATION 164, TLC 163, A&E CRIME CENTRAL 161, BLOOMBERG LIVE 159, ABC 157, FOX NEWS 155, CBS NEWS 155",
+      "MEDIA COUNTRY MUSIC ASSOCIATION 312, GOLF MAGAZINE 293, THE BOOT 289, TBN PLUS 285, READERS DIGEST 272, PARADE 270, WOMENS DAY 270, TBN 264, THE EPOCH TIMES 254, GARDEN & GUN 247, RNC 241, TRUMP MAGA 236, NATIONAL ENQUIRER 230, NEW YORK DAILY NEWS 231, C-SPAN 224, SOUTHERN LIVING 220, GOLF DIGEST 219",
+      "MUSIC LED ZEPPELIN 664, BLONDIE 539, JOURNEY 482, BEE GEES 497, FRANK SINATRA 358, BETTE MIDLER 315, CHER 289, WHITNEY HOUSTON 299, RASCAL FLATTS 363, DARIUS RUCKER 373, DIERKS BENTLEY 347, FLORIDA GEORGIA LINE 337",
+      "MPB MAXBONE 14,976, LITTLE HUNTER 7,297, MAEV 2,707, JUSTFOODFORDOGS 1,908, WUFFES 1,848, ONE CALL ALERT 1,842, ALBERTA FERRETTI 1,535, ON PAR GOLF 1,360, ANCIENT SECRETS 1,284, ROGUE TERRITORY 1,233, FLOOM 1,058, HARTMANN LUGGAGE 1,027, LANDMANN 999, ASPINAL 965",
+      "SHOP COSTCO OPTICAL 1,679, QVC 1,292, IPSY 831, ROSS 707, JOURNEYS 568, DOLLAR TREE 557, DOLLAR GENERAL 543, FIRESTONE 530, REI 524, TRADER JOES 497, VISION SOURCE 485, H-E-B 484, JCPENNEY OPTICAL 437, ACADEMY 413, MACYS BACKSTAGE 410, GNC 391",
+      "WHERE DINE PERKINS 326, OLD SPAGHETTI FACTORY 294, BOB EVANS 223, LOGANS ROADHOUSE 202, CRACKER BARREL 183, DENNYS 176, GOLDEN CORRAL 170, HUDDLE HOUSE 170, IHOP 157, CICIS 157",
+      "QSR BLUESTONE LANE 267, COUSINS MAINE LOBSTER 243, DUNKIN 172, SUBWAY 161, ORANGE JULIUS 147, CHICK-FIL-A 143, A&W 141, STEAK N SHAKE 139, HUNT BROTHERS PIZZA 138, BOSTON MARKET 137, AUNTIE ANNES 133, BASKIN ROBBINS 132, HARDEES 132, LONG JOHN SILVERS 130, SHIPLEY 127, KRISPY KREME 126",
+      "GAMES INDIANA JONES 1,875, WORDLE 1,532, STAR WARS 1,302, NYT GAMES 1,289, AGE OF EMPIRES 1,082, GEOGUESSR 949, EA SPORTS NFL 920, BARBIE 909, HARRY POTTER 746, MORTAL KOMBAT 705, DRAGON AGE 698, LEGO 659, ANIMAL CROSSING 578, TONY HAWK 571, MONSTER HIGH 542",
+      "WORKOUT EAST BANK CLUB 59,482, AMP FITNESS 29,112, MIDTOWN 21,498, SLT 16,492, LEKFIT 15,642, NEW YORK PILATES 15,408, YOGASIX 14,994, RISE NATION 14,581, DOGPOUND 14,564, CURVES 13,985, Y7 11,920, LIT METHOD 10,474, TRACY ANDERSON 9,237, BARRE3 8,318, CLUB PILATES 8,272, COREPOWER 7,636, JAZZERCISE 7,130",
+      "TECH ONE CALL ALERT 1,842, LIFEFONE 961, MEDICAL ALERT 580, UNALIWEAR 579, NATIVE UNION 469, MEDICAL GUARDIAN 436, ALOE CARE 420, LIFE ALERT 377, AVOCADO 373, ALERT1 237, AUGUST HOME 221, FITBIT 170",
+      "PHARMACY CAPSULE 1,691, COSTCO PHARMACY 1,390, PETMEDS 747, AMAZON PHARMACY 726, BLINK 585, MODERNA 225, NOVAVAX 223, AMGEN 204, BRISTOL MYERS 202, ABBVIE 196, GSK 193, MSD 192, ROCHE 188, GILEAD 187, ASTRAZENECA 184, PFIZER 177, ELI LILLY 173",
+      "INSURANCE KAISER PERMANENTE 457, UNITED HEALTHCARE 359, STATE FARM 262, AETNA 258, ALLSTATE 232, HUMANA 191, AAA 173, BLUE CROSS 170, CENTENE 168, NEW YORK LIFE 162, MASS MUTUAL 161, PRUDENTIAL 157, GEICO 157, PROGRESSIVE 155, THE HARTFORD 152, AFLAC 151, METLIFE 151, TRAVELERS 150",
+      "INVEST UPSTOX 1,028, E TRADE 904, GOLDMAN SACHS 765, TRADESTATION 571, EDWARD JONES 551, FIDELITY 529, CHARLES SCHWAB 391, VANGUARD 380, MORGAN STANLEY 299, WEBULL 125, ROBINHOOD 32, ACORNS 31",
+      "CREDIT FREEDOM MORTGAGE 864, GM FINANCIAL 624, AMEX 256, CARECREDIT 247, DISCOVER 185, MASTERCARD 137, SYNCHRONY 134, APPLE CREDIT 130, CAPITAL ONE 118, VISA 111, AFFIRM 52, FUNDBOX 22",
+      "TRAVEL HYATT VACATION CLUB 291, WALDORF 277, IBEROSTAR 275, HOTEL INDIGO 258, BREAKERS 235, HYATT REGENCY 229, VIKING CRUISES 209, HOLLAND AMERICA 208, LINDBLAD 198",
+      "MOVIE THEATER ALAMO 435, AMC 194, CINEMARK 179, REGAL 177",
+      "NON PROFIT ALZHEIMERS 284, TOYS FOR TOTS 274, WOUNDED WARRIOR 260, KIDNEY FUND 256, FOOD FOR THE POOR 218, AMERICAN HEART 217, FEED THE CHILDREN 208, LEAGUE OF WOMEN VOTERS 203, AUTISM SPEAKS 202, HUMANE SOCIETY 183, MAKE-A-WISH 183, HEALTHWELL 181"
+    ]
+  }
+}

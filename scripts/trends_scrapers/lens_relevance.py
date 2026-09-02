@@ -10,21 +10,28 @@ The dashboard user picks a lens from a dropdown and the frontend
 instantly filters every card to just the rows the persona would
 actually be interested in.
 
-Two lenses ship today:
+Six lenses ship today:
 
-  - ms_now_reader : the MS NOW (formerly MSNBC) reader. College-
-                    educated, urban/suburban, Democratic-leaning
-                    (~85% D), skews 55+. Heavy on politics, foreign
-                    policy, cable-news personalities, Trump-era
-                    accountability journalism, media criticism, and
-                    progressive-adjacent podcasts.
-  - millennials   : ages 27-42 as of 2026 (born 1981-1996). Home-
-                    ownership + student-loan anxieties, nostalgic
-                    reboots (Cobra Kai, Barbie), heavy podcast
-                    consumption, migrating from Instagram to TikTok,
-                    DTC brands, index-fund investing, gaming
-                    (Nintendo / Zelda / Fortnite crossover), K-pop /
-                    Marvel / Star Wars.
+  - ms_now_reader             : the MS NOW (formerly MSNBC) reader.
+                                College-educated, urban / inner-suburban,
+                                Democratic-leaning, skews 55+.
+  - unlikely_collaborators_follower : the wellness / consciousness /
+                                Elizabeth Gilbert follower cohort.
+                                JSON-authored.
+  - gen_z                     : US adults 18-28. TikTok-first,
+                                identity-forward, BookTok, K-pop
+                                fluent, boutique-fitness curious.
+  - millennials               : US adults 29-44. Nostalgia-and-
+                                mortgage decade, prestige-TV loyal,
+                                heavy podcast reader.
+  - gen_x                     : US adults 45-60. Peak-earning-plus-
+                                peak-caregiving, cable still on,
+                                classic-rock + Nashville-country,
+                                F1 and college football.
+  - baby_boomers              : US adults 61-79. Retirement-and-
+                                legacy decade, cable-news anchor
+                                loyalist, cruise-and-Viking-River
+                                traveler, Costco and QVC shopper.
 
 Output shape (kind='meta'):
 
@@ -264,12 +271,22 @@ _LENSES: list[dict[str, Any]] = [
             "fitness / diet / hustle content, MLM content."
         ),
     },
+    # NOTE: the inline `millennials` block was retired 2026-09-02.
+    # The full generational stack (gen_z / millennials / gen_x /
+    # baby_boomers) is now authored in data/personas/*.json alongside
+    # `unlikely_collaborators_follower` so operators can edit each
+    # persona brief without touching Python.  See _JSON_PERSONA_FILES
+    # below.  The `_retired_inline_millennials` placeholder that
+    # follows is a KEEP-OUT: `_LENSES.extend(...)` filters it out
+    # via `id.startswith('_retired')` before returning so it never
+    # appears in the LENS dropdown, but the persona text is preserved
+    # as historical reference for the JSON author.
     {
-        'id':          'millennials',
-        'label':       'Millennials (Ages 27-42)',
+        'id':          '_retired_inline_millennials',
+        'label':       'Millennials (Ages 27-42) [retired inline]',
         'emoji':       '\u2615',                            # ☕
-        'description': ('Ages 27-42 as of 2026 (born 1981-1996). Home / '
-                         'career / nostalgia sweet spot.'),
+        'description': ('Retired inline copy.  See data/personas/'
+                         'millennials.json for the live brief.'),
         'persona': (
             "Millennial audience, ages 27-42 as of 2026 (born "
             "1981-1996).\n"
@@ -433,6 +450,10 @@ _LENSES: list[dict[str, Any]] = [
 # ---------------------------------------------------------------------------
 _JSON_PERSONA_FILES: list[str] = [
     'unlikely_collaborators_follower',
+    'gen_z',
+    'millennials',
+    'gen_x',
+    'baby_boomers',
 ]
 
 # Data dir sits at repo-root / bg-webapp / data / personas.  The
@@ -563,9 +584,17 @@ def _load_json_lenses() -> list[dict[str, Any]]:
     return out
 
 
+# Filter out any inline entries whose id starts with `_retired_`
+# (see the `_retired_inline_millennials` KEEP-OUT above) before we
+# extend with the JSON-authored set.  This keeps the dropdown clean
+# without deleting the inline persona-text history from source.
+_LENSES = [l for l in _LENSES if not str(l.get('id', '')).startswith('_retired_')]
+
 # Append JSON-authored personas to the inline set.  Order matters
 # only for the LENS dropdown ordering on the frontend (which mirrors
-# the order lens_config lands in the payload).
+# the order lens_config lands in the payload).  Current order:
+# ms_now_reader, unlikely_collaborators_follower, gen_z, millennials,
+# gen_x, baby_boomers.
 _LENSES.extend(_load_json_lenses())
 
 
@@ -659,6 +688,145 @@ _ANCHORS: dict[str, list[dict[str, Any]]] = {
         {'kind': 'person',   'title': 'Cillian Murphy',                        'score': 82},
         {'kind': 'person',   'title': 'Tucker Carlson',                        'score': 5},
         {'kind': 'person',   'title': 'Andrew Tate',                           'score': 3},
+    ],
+
+    # -----------------------------------------------------------------
+    # Gen Z (US adults 18-28) - phone-native, TikTok-first, identity-
+    # forward, BookTok, K-pop and Latin-crossover fluent, boutique-
+    # fitness curious, wellness-app obsessed.  Anchors deliberately
+    # span the range: youth-culture and identity items score high;
+    # cable-news anchor drama, cruise travel, Medicare, and boomer-
+    # coded talent all score low.
+    # -----------------------------------------------------------------
+    'gen_z': [
+        {'kind': 'podcast',  'title': 'Call Her Daddy',                        'score': 94},
+        {'kind': 'podcast',  'title': 'Anything Goes with Emma Chamberlain',   'score': 95},
+        {'kind': 'podcast',  'title': 'Rotten Mango',                          'score': 88},
+        {'kind': 'podcast',  'title': 'Distractible (Markiplier)',             'score': 82},
+        {'kind': 'podcast',  'title': 'The Daily',                             'score': 32},
+        {'kind': 'podcast',  'title': 'The Ben Shapiro Show',                  'score': 6},
+        {'kind': 'podcast',  'title': '60 Minutes',                            'score': 10},
+        {'kind': 'song',     'title': 'Good Luck Babe! (Chappell Roan)',       'score': 95},
+        {'kind': 'song',     'title': 'Espresso (Sabrina Carpenter)',          'score': 94},
+        {'kind': 'song',     'title': 'Not Like Us (Kendrick Lamar)',          'score': 90},
+        {'kind': 'song',     'title': 'La Diabla (Peso Pluma)',                'score': 86},
+        {'kind': 'song',     'title': 'God\u2019s Country (Blake Shelton)',    'score': 10},
+        {'kind': 'song',     'title': 'Fly Me to the Moon (Frank Sinatra)',    'score': 12},
+        {'kind': 'book',     'title': 'Fourth Wing (Rebecca Yarros)',          'score': 95},
+        {'kind': 'book',     'title': 'A Court of Thorns and Roses (Sarah J. Maas)', 'score': 94},
+        {'kind': 'book',     'title': 'Regime Change (Maggie Haberman)',       'score': 12},
+        {'kind': 'book',     'title': 'Being Ready When The Luck Happens (Ina Garten)', 'score': 15},
+        {'kind': 'film',     'title': 'Wednesday',                             'score': 94},
+        {'kind': 'film',     'title': 'Euphoria',                              'score': 93},
+        {'kind': 'film',     'title': 'Bottoms',                               'score': 90},
+        {'kind': 'film',     'title': 'Barbie',                                'score': 90},
+        {'kind': 'film',     'title': 'Yellowstone',                           'score': 18},
+        {'kind': 'film',     'title': 'Downton Abbey: A New Era',              'score': 10},
+        {'kind': 'search',   'title': 'chappell roan tour',                    'score': 92},
+        {'kind': 'search',   'title': 'depop resellers',                       'score': 88},
+        {'kind': 'search',   'title': 'medicare supplement plans',             'score': 5},
+        {'kind': 'search',   'title': 'edward jones near me',                  'score': 8},
+        {'kind': 'search',   'title': 'viking river cruise',                   'score': 6},
+        {'kind': 'person',   'title': 'Chappell Roan',                         'score': 96},
+        {'kind': 'person',   'title': 'Alix Earle',                            'score': 94},
+        {'kind': 'person',   'title': 'Kai Cenat',                             'score': 90},
+        {'kind': 'person',   'title': 'Al Roker',                              'score': 10},
+        {'kind': 'person',   'title': 'Barbara Corcoran',                      'score': 12},
+    ],
+
+    # -----------------------------------------------------------------
+    # Gen X (US adults 45-60) - peak-earning-plus-peak-caregiving,
+    # cable still on, classic-rock and Nashville-country, F1 and
+    # college football, Costco and Trader Joe's, Fidelity and
+    # Vanguard.  Anchors: prestige slower-burn TV and classic-rock
+    # canon score high; hyper-Gen-Z youth-influencer and BookTok
+    # romantasy score low.
+    # -----------------------------------------------------------------
+    'gen_x': [
+        {'kind': 'podcast',  'title': 'The Daily',                             'score': 92},
+        {'kind': 'podcast',  'title': 'The Bill Simmons Podcast',              'score': 90},
+        {'kind': 'podcast',  'title': 'Fresh Air',                             'score': 90},
+        {'kind': 'podcast',  'title': 'Pod Save America',                      'score': 82},
+        {'kind': 'podcast',  'title': 'Huberman Lab',                          'score': 85},
+        {'kind': 'podcast',  'title': 'Call Her Daddy',                        'score': 25},
+        {'kind': 'podcast',  'title': 'Anything Goes with Emma Chamberlain',   'score': 15},
+        {'kind': 'song',     'title': 'Stairway to Heaven (Led Zeppelin)',     'score': 95},
+        {'kind': 'song',     'title': 'Everlong (Foo Fighters)',               'score': 92},
+        {'kind': 'song',     'title': 'Tennessee Whiskey (Chris Stapleton)',   'score': 90},
+        {'kind': 'song',     'title': 'Something in the Orange (Zach Bryan)',  'score': 88},
+        {'kind': 'song',     'title': 'Espresso (Sabrina Carpenter)',          'score': 55},
+        {'kind': 'song',     'title': 'Super Shy (NewJeans)',                  'score': 15},
+        {'kind': 'song',     'title': 'La Diabla (Peso Pluma)',                'score': 30},
+        {'kind': 'book',     'title': 'Empire of Pain (Patrick Radden Keefe)', 'score': 94},
+        {'kind': 'book',     'title': 'A Time for Mercy (John Grisham)',       'score': 90},
+        {'kind': 'book',     'title': 'Outlive (Peter Attia)',                 'score': 92},
+        {'kind': 'book',     'title': 'Fourth Wing (Rebecca Yarros)',          'score': 28},
+        {'kind': 'book',     'title': 'Twisted Love (Ana Huang)',              'score': 15},
+        {'kind': 'film',     'title': 'Slow Horses',                           'score': 94},
+        {'kind': 'film',     'title': 'The Diplomat',                          'score': 92},
+        {'kind': 'film',     'title': 'Yellowstone',                           'score': 90},
+        {'kind': 'film',     'title': 'The Bear',                              'score': 88},
+        {'kind': 'film',     'title': 'Hazbin Hotel',                          'score': 8},
+        {'kind': 'film',     'title': 'KPop Demon Hunters',                    'score': 12},
+        {'kind': 'search',   'title': '401k rollover',                         'score': 90},
+        {'kind': 'search',   'title': 'masters golf leaderboard',              'score': 88},
+        {'kind': 'search',   'title': 'f1 miami grand prix',                   'score': 85},
+        {'kind': 'search',   'title': 'kai cenat live stream',                 'score': 10},
+        {'kind': 'search',   'title': 'livvy dunne',                           'score': 12},
+        {'kind': 'person',   'title': 'Bruce Springsteen',                     'score': 92},
+        {'kind': 'person',   'title': 'Nick Offerman',                         'score': 88},
+        {'kind': 'person',   'title': 'Aubrey Plaza',                          'score': 85},
+        {'kind': 'person',   'title': 'Salish Matter',                         'score': 5},
+        {'kind': 'person',   'title': 'Kai Cenat',                             'score': 12},
+    ],
+
+    # -----------------------------------------------------------------
+    # Baby Boomers (US adults 61-79) - retirement-and-legacy decade,
+    # cable-news anchor loyalist, cruise-and-Viking-River traveler,
+    # Costco and QVC shopper, AARP member, Fidelity and Edward Jones.
+    # Anchors: prestige slower-burn TV, classic music, and cable-news
+    # anchor drama score high; BookTok, K-pop, crypto trading, and
+    # youth-influencer creator content all score low.
+    # -----------------------------------------------------------------
+    'baby_boomers': [
+        {'kind': 'podcast',  'title': 'The Daily',                             'score': 92},
+        {'kind': 'podcast',  'title': '60 Minutes',                            'score': 96},
+        {'kind': 'podcast',  'title': 'Fresh Air',                             'score': 94},
+        {'kind': 'podcast',  'title': 'The New Yorker Radio Hour',             'score': 90},
+        {'kind': 'podcast',  'title': 'The Bill Simmons Podcast',              'score': 60},
+        {'kind': 'podcast',  'title': 'Call Her Daddy',                        'score': 8},
+        {'kind': 'podcast',  'title': 'Distractible (Markiplier)',             'score': 5},
+        {'kind': 'song',     'title': 'Fly Me to the Moon (Frank Sinatra)',    'score': 95},
+        {'kind': 'song',     'title': 'Stayin\u2019 Alive (Bee Gees)',         'score': 92},
+        {'kind': 'song',     'title': 'Believe (Cher)',                        'score': 90},
+        {'kind': 'song',     'title': 'Born to Run (Bruce Springsteen)',       'score': 92},
+        {'kind': 'song',     'title': 'Good Luck Babe! (Chappell Roan)',       'score': 18},
+        {'kind': 'song',     'title': 'La Diabla (Peso Pluma)',                'score': 10},
+        {'kind': 'song',     'title': 'Super Shy (NewJeans)',                  'score': 5},
+        {'kind': 'book',     'title': 'A Time for Mercy (John Grisham)',       'score': 92},
+        {'kind': 'book',     'title': 'The Demon of Unrest (Erik Larson)',     'score': 94},
+        {'kind': 'book',     'title': 'Being Ready When The Luck Happens (Ina Garten)', 'score': 90},
+        {'kind': 'book',     'title': 'Fourth Wing (Rebecca Yarros)',          'score': 12},
+        {'kind': 'book',     'title': 'It Ends With Us (Colleen Hoover)',      'score': 15},
+        {'kind': 'film',     'title': 'Yellowstone',                           'score': 92},
+        {'kind': 'film',     'title': 'Blue Bloods',                           'score': 90},
+        {'kind': 'film',     'title': 'The Crown',                             'score': 92},
+        {'kind': 'film',     'title': 'Downton Abbey: A New Era',              'score': 90},
+        {'kind': 'film',     'title': 'Euphoria',                              'score': 8},
+        {'kind': 'film',     'title': 'Wednesday',                             'score': 22},
+        {'kind': 'film',     'title': 'Hazbin Hotel',                          'score': 5},
+        {'kind': 'search',   'title': 'medicare advantage plans',              'score': 92},
+        {'kind': 'search',   'title': 'viking river cruise',                   'score': 90},
+        {'kind': 'search',   'title': 'edward jones near me',                  'score': 88},
+        {'kind': 'search',   'title': 'kai cenat live stream',                 'score': 5},
+        {'kind': 'search',   'title': 'depop resellers',                       'score': 8},
+        {'kind': 'person',   'title': 'Ina Garten',                            'score': 94},
+        {'kind': 'person',   'title': 'Julia Roberts',                         'score': 92},
+        {'kind': 'person',   'title': 'Bruce Springsteen',                     'score': 90},
+        {'kind': 'person',   'title': 'Barbara Corcoran',                      'score': 85},
+        {'kind': 'person',   'title': 'Alix Earle',                            'score': 10},
+        {'kind': 'person',   'title': 'Kai Cenat',                             'score': 5},
+        {'kind': 'person',   'title': 'Livvy Dunne',                           'score': 8},
     ],
 }
 
@@ -1096,8 +1264,9 @@ def fetch(only_lens: Optional[str] = None, dry_run: bool = False) -> dict[str, A
 
 def _compute_cutoffs(items: dict[str, dict],
                       lens_ids: list[str],
-                      top_pct: float = 0.50,
-                      floor: int = 20) -> dict[str, dict[str, int]]:
+                      top_pct: float = 0.40,
+                      floor: int = 20,
+                      min_keep: int = 5) -> dict[str, dict[str, int]]:
     """For every (lens, kind) return the score threshold above which
     items should be considered 'in the persona's top N% for this kind'.
 
@@ -1105,8 +1274,17 @@ def _compute_cutoffs(items: dict[str, dict],
     the persona's cohort simply scores that kind lower on average.
     Per-kind cutoffs preserve the relative ranking Claude produced.
 
-    A floor of 20 ensures we never show items that scored actively
-    anti-aligned (5-20 range) even if the whole kind is weak."""
+    Defaults tuned to keep roughly 25-45% of items per tab per lens
+    (2026-09-02): `top_pct=0.40` picks the score at the 40th-percentile
+    slot in descending order, so items >= that score make ~40% of the
+    tab.  The `floor` still gates out actively anti-aligned items in
+    the 5-19 band even when the whole kind is weak.
+
+    Empty-tab safeguard: if the computed cutoff would keep fewer than
+    `min_keep` items for a (lens, kind) pair, step the cutoff down 5
+    points at a time until at least `min_keep` items pass or the
+    cutoff hits 5.  This implements the "expand the cutoff by one
+    notch and try again" rule so a tab never ships empty."""
     from collections import defaultdict
     by_lens_kind: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(list))
     for entry in items.values():
@@ -1121,11 +1299,20 @@ def _compute_cutoffs(items: dict[str, dict],
             if not arr:
                 continue
             arr_sorted = sorted(arr, reverse=True)
-            # 50th percentile cutoff = the score at position N/2 in
-            # descending order.  Score >= this value is in the top half.
             idx = max(0, int(len(arr_sorted) * top_pct) - 1)
             cutoff = arr_sorted[idx] if arr_sorted else floor
-            out[lens_id][kind] = max(cutoff, floor)
+            cutoff = max(cutoff, floor)
+            # Anti-empty: if the cutoff excludes almost everything
+            # (very rare for broad personas, more common for narrow
+            # persona x niche-kind pairs like MS NOW x song), step
+            # down 5 points at a time until at least `min_keep`
+            # items pass, or we hit an absolute floor of 5.  The
+            # frontend never has to render an empty tab.
+            kept = sum(1 for s in arr_sorted if s >= cutoff)
+            while kept < min_keep and cutoff > 5:
+                cutoff = max(5, cutoff - 5)
+                kept = sum(1 for s in arr_sorted if s >= cutoff)
+            out[lens_id][kind] = cutoff
     return out
 
 
