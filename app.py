@@ -44072,6 +44072,86 @@ def _detect_implicit_list_subjects(text: str) -> list[str]:
     return subjects
 
 
+def _is_single_compound_audience(text: str) -> bool:
+    """True when the prompt describes ONE compound behavioral audience
+    (people who did X and/or satisfied one of an enumerated list of
+    criteria) rather than a list of INDEPENDENT subjects to build
+    separate profiles for.
+
+    This guards the batch splitters (`_detect_batch_subjects`,
+    `_detect_cartesian_batch`, and the 'for each' marker fallback) so a
+    single audience whose DEFINITION happens to contain a comma list
+    ("watched any one of the following A, B, C") or boolean behavioral
+    criteria ("anyone who watched X and Y") is never shattered into
+    pseudo-subjects. The subject count is then decided by the single
+    interpret model, which already reads stacked criteria as one persona
+    (see the DEMOGRAPHIC + BEHAVIORAL PERSONA rule in
+    _synth_chat_interpret_prompts). Per profile-iq-pipeline-rules.mdc
+    section 2 ("reasoning > floors"), prefer the model's understanding
+    of the ask over a brittle delimiter split.
+
+    Deliberately CONSERVATIVE: fires only on strong single-audience
+    signals so genuine bare batches ("Nike, Adidas, Puma"; "run profiles
+    on VIZIO, Samsung, LG owners") are left untouched and still fan out.
+
+    Defect precedent (2026-09-02): "Run a Profile IQ on anyone who
+    watched Blair Witch or The Blair Witch Project and watched any one of
+    the following Paranormal Activity, V/H/S, The Conjuring, Insidious,
+    ..." was comma/and/or split into ~17 pseudo-subjects and run as a
+    garbage batch. It is ONE build.
+    """
+    import re as _re
+    t = (text or '').strip()
+    if len(t) < 12:
+        return False
+
+    # S1: audience relative clause - "<audience noun/pronoun> who ...".
+    # A batch of independent subjects never says "anyone who watched X"
+    # or "people who bought Y". This alone resolves the Blair Witch ask.
+    if _re.search(
+        r'\b(?:any\s?(?:one|body)|every\s?(?:one|body)|some\s?(?:one|body)'
+        r'|no\s?(?:one|body)|people|persons?|folks?|individuals?|humans?'
+        r'|users?|viewers?|watchers?|streamers?|listeners?|readers?'
+        r'|gamers?|players?|fans?|customers?|consumers?|shoppers?'
+        r'|buyers?|subscribers?|members?|households?|audiences?'
+        r'|those|anybody|everybody|somebody)\s+who\b',
+            t, _re.IGNORECASE):
+        return True
+
+    # Behavioral context: a consumption verb OR an audience-consumption
+    # noun. Used to qualify the enumerated-criteria signal below so a
+    # bare build list with no behavior ("profiles on any of the
+    # following: Nike, Adidas") is NOT swallowed.
+    behavioral_ctx = bool(_re.search(
+        r'\b(?:'
+        r'watch(?:ed|es|ing)?|view(?:ed|s|ing)?|stream(?:ed|s|ing)?'
+        r'|saw|seen|binge(?:d|s|ing)?|bought|buy|buys|buying'
+        r'|purchas(?:e|ed|es|ing)|shop(?:ped|s|ping)?'
+        r'|subscrib(?:e|ed|es|ing)|play(?:ed|s|ing)?'
+        r'|listen(?:ed|s|ing)?|visit(?:ed|s|ing)?|download(?:ed|s|ing)?'
+        r'|attend(?:ed|s|ing)?|follow(?:ed|s|ing)?|rent(?:ed|s|ing)?'
+        r'|clicked|searched|engag(?:e|ed|es|ing)'
+        # audience-consumption nouns (people already scoped by behavior)
+        r'|viewers?|watchers?|streamers?|buyers?|shoppers?|subscribers?'
+        r'|listeners?|readers?|gamers?|players?'
+        r')\b',
+        t, _re.IGNORECASE))
+
+    # S2: enumerated-criteria phrase in a behavioral context. "Any one
+    # of the following A, B, C" / "at least one of" / "one or more of" /
+    # "one of the following" is a CRITERIA list (satisfy any one of
+    # them), not a list of separate subjects. Deliberately EXCLUDES
+    # "each of the following" / "all of the following" - those ARE
+    # genuine batch phrasings and must keep fanning out.
+    if behavioral_ctx and _re.search(
+        r'\b(?:any\s+one\s+of|at\s+least\s+one\s+of|one\s+or\s+more\s+of'
+        r'|one\s+of\s+the\s+following)\b',
+            t, _re.IGNORECASE):
+        return True
+
+    return False
+
+
 def _detect_batch_subjects(user_text: str) -> list[str]:
     """Return a list of subject strings if the prompt is a batch request,
     otherwise []. See module-header for detection rules.
@@ -44092,6 +44172,16 @@ def _detect_batch_subjects(user_text: str) -> list[str]:
     import re as _re
     text = (user_text or '').strip()
     if len(text) < 10:
+        return []
+
+    # SINGLE COMPOUND AUDIENCE GUARD (2026-09-02, Blair Witch defect):
+    # a single behavioral audience whose definition contains a comma
+    # list ("watched any one of the following A, B, C") or boolean
+    # criteria ("anyone who watched X and Y") is ONE build, not a batch.
+    # Bail so the prompt falls through to the single interpret, which
+    # already reads stacked criteria as one persona. See
+    # _is_single_compound_audience.
+    if _is_single_compound_audience(text):
         return []
 
     # Trigger phrases (case-insensitive). Ordered specific first.
@@ -52384,8 +52474,15 @@ def api_synth_chat_interpret():
     # Samsung, LG)") defers to the plain splitter's cleaner
     # one-entity slices.
     # ------------------------------------------------------------------
-    _batch_subjects = _detect_batch_subjects(text)
-    _cart = _detect_cartesian_batch(text)
+    # A single compound behavioral audience ("anyone who watched X and
+    # any one of the following A, B, C on streaming") is ONE build, not
+    # a batch - never let the list OR Cartesian splitters shatter it
+    # into pseudo-subjects. Fall through to the single interpret, which
+    # already reads stacked criteria as one persona. See
+    # _is_single_compound_audience + profile-iq-pipeline-rules.mdc s2.
+    _single_compound = _is_single_compound_audience(text)
+    _batch_subjects = [] if _single_compound else _detect_batch_subjects(text)
+    _cart = None if _single_compound else _detect_cartesian_batch(text)
     _cart_wins = bool(_cart) and (
         (len(_cart) >= 4 and _cart[3] == 'B')
         or (len(_cart) >= 3 and _cart[2] >= 2))
@@ -52452,7 +52549,8 @@ def api_synth_chat_interpret():
     # (empty subject list routes straight to its direct-retry path,
     # which finalizes each draft and returns the standard batch
     # payload).
-    if re.search(r'\bfor each\b|\bone (?:profile )?per\b'
+    if not _single_compound and re.search(
+                 r'\bfor each\b|\bone (?:profile )?per\b'
                  r'|\bprofiles? for each\b|\bper (?:platform|retailer'
                  r'|brand|market|title)\b', text, re.IGNORECASE):
         try:
