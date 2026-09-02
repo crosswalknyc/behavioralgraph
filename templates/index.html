@@ -25206,11 +25206,11 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-sheet-tag { display: inline-block; padding: 1px 7px; border-radius: 9999px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.03em; background: rgba(129,140,248,0.16); color: #c7d2fe; }
             body[data-theme="light"] #trendsIQView .tiq-sheet-tag { background: rgba(99,102,241,0.14); color: #4338ca; }
             #trendsIQView .tiq-sheet-th-label { margin-right: 0.4rem; }
-            #trendsIQView .tiq-sheet-chan { table-layout: fixed; }
-            #trendsIQView .tiq-sheet-chan .tiq-sheet-td-title, #trendsIQView .tiq-sheet-chan th.tiq-sheet-th-title { width: 36% !important; white-space: normal; }
-            #trendsIQView .tiq-sheet-chan .tiq-chan-views { width: 15% !important; }
-            #trendsIQView .tiq-sheet-chan .tiq-chan-delta { width: 15% !important; padding-left: 0; }
-            #trendsIQView .tiq-sheet-chan th.tiq-sheet-th-spacer, #trendsIQView .tiq-sheet-chan .tiq-sheet-td-spacer { width: 34% !important; padding: 0; }
+            #trendsIQView .tiq-sheet-chan, #trendsIQView .tiq-sheet-wide { table-layout: fixed; }
+            #trendsIQView .tiq-sheet-chan .tiq-sheet-td-title, #trendsIQView .tiq-sheet-chan th.tiq-sheet-th-title, #trendsIQView .tiq-sheet-wide .tiq-sheet-td-title, #trendsIQView .tiq-sheet-wide th.tiq-sheet-th-title { width: 36% !important; white-space: normal; }
+            #trendsIQView .tiq-sheet-chan .tiq-chan-views, #trendsIQView .tiq-sheet-wide .tiq-chan-views { width: 15% !important; }
+            #trendsIQView .tiq-sheet-chan .tiq-chan-delta, #trendsIQView .tiq-sheet-wide .tiq-chan-delta { width: 15% !important; padding-left: 0; }
+            #trendsIQView .tiq-sheet-chan th.tiq-sheet-th-spacer, #trendsIQView .tiq-sheet-chan .tiq-sheet-td-spacer, #trendsIQView .tiq-sheet-wide th.tiq-sheet-th-spacer, #trendsIQView .tiq-sheet-wide .tiq-sheet-td-spacer { width: 34% !important; padding: 0; }
             #trendsIQView .tiq-sheet-titlesort { font-family: inherit; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.02em; text-transform: none; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 1px 4px; cursor: pointer; vertical-align: middle; -webkit-appearance: none; -moz-appearance: none; appearance: none; width: 2.9rem; box-sizing: border-box; text-align: center; text-align-last: center; }
             #trendsIQView .tiq-sheet-titlesort option { background: var(--bg-card); color: var(--text-primary); }
             #trendsIQView .tiq-sheet-genresort { font-family: inherit; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.02em; text-transform: none; color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 1px 4px; margin-left: 0.35rem; cursor: pointer; vertical-align: middle; -webkit-appearance: none; -moz-appearance: none; appearance: none; width: 2.9rem; box-sizing: border-box; text-align: center; text-align-last: center; }
@@ -55807,6 +55807,7 @@ https://www.instagram.com/p/..."></textarea>
             var rows = opts.rows || [];
             var metricLabel = opts.metricLabel || 'Streams';
             var entity = opts.entity || 'Music';
+            var wide = !!opts.wide;
             var subOf   = (typeof opts.subOf   === 'function') ? opts.subOf   : function() { return ''; };
             var badgeOf = (typeof opts.badgeOf === 'function') ? opts.badgeOf : function() { return ''; };
             var keyOf   = (typeof opts.keyOf   === 'function') ? opts.keyOf   : function(it) { return it.title; };
@@ -55861,18 +55862,20 @@ https://www.instagram.com/p/..."></textarea>
                            '</div>' +
                          '</div>' +
                        '</td>' +
-                       '<td class="tiq-sheet-td-num tiq-sheet-td-views" title="' + valTip + '">' + (valNum || '<span class="tiq-sheet-dim">\u2014</span>') + '</td>' +
-                       '<td class="tiq-sheet-td-num">' + deltaHtml + '</td>' +
+                       '<td class="tiq-sheet-td-num tiq-sheet-td-views' + (wide ? ' tiq-chan-views' : '') + '" title="' + valTip + '">' + (valNum || '<span class="tiq-sheet-dim">\u2014</span>') + '</td>' +
+                       '<td class="tiq-sheet-td-num' + (wide ? ' tiq-chan-delta' : '') + '">' + deltaHtml + '</td>' +
+                       (wide ? '<td class="tiq-sheet-td-spacer"></td>' : '') +
                        '</tr>';
             }).join('');
             return '<div class="tiq-card">' + _tiqSheetCardHead(opts.label) +
-                   '<table class="tiq-sheet" data-entity="' + entity + '" data-metric="' + _tiqEsc(metricLabel) + '" data-export="' + _tiqEsc(String(source) + '-' + (opts.label || '')) + '">' +
+                   '<table class="tiq-sheet' + (wide ? ' tiq-sheet-wide' : '') + '" data-entity="' + entity + '" data-metric="' + _tiqEsc(metricLabel) + '" data-export="' + _tiqEsc(String(source) + '-' + (opts.label || '')) + '">' +
                      '<thead><tr>' +
                        '<th class="tiq-sheet-th-title"><span class="tiq-sheet-th-label">Title</span><select class="tiq-sheet-titlesort" onchange="tiqSortFastSheetTitle(this)"><option value="">Sort</option><option value="hi">High \u2192 Low</option><option value="lo">Low \u2192 High</option><option value="az">A\u2013Z</option></select></th>' +
-                       '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'views\')">' + _tiqEsc(metricLabel) + '<span class="tiq-sort-ind">\u21c5</span></th>' +
-                       '<th class="tiq-sheet-th-num tiq-sheet-sortable" onclick="tiqSortFastSheet(this,\'delta\')">\u0394%<span class="tiq-sort-ind">\u21c5</span></th>' +
+                       '<th class="tiq-sheet-th-num tiq-sheet-sortable' + (wide ? ' tiq-chan-views' : '') + '" onclick="tiqSortFastSheet(this,\'views\')">' + _tiqEsc(metricLabel) + '<span class="tiq-sort-ind">\u21c5</span></th>' +
+                       '<th class="tiq-sheet-th-num tiq-sheet-sortable' + (wide ? ' tiq-chan-delta' : '') + '" onclick="tiqSortFastSheet(this,\'delta\')">\u0394%<span class="tiq-sort-ind">\u21c5</span></th>' +
+                       (wide ? '<th class="tiq-sheet-th-spacer"></th>' : '') +
                      '</tr></thead>' +
-                     '<tbody>' + (rowsHtml || '<tr><td colspan="3" class="tiq-empty">No data.</td></tr>') + '</tbody>' +
+                     '<tbody>' + (rowsHtml || '<tr><td colspan="' + (wide ? '4' : '3') + '" class="tiq-empty">No data.</td></tr>') + '</tbody>' +
                    '</table></div>';
         }
 
@@ -55920,7 +55923,7 @@ https://www.instagram.com/p/..."></textarea>
                 } else {
                     body = _tiqSourceSheet({
                         kind: 'music', source: k, label: s.label || k, rows: items,
-                        metricLabel: 'Streams', entity: 'Music',
+                        metricLabel: 'Streams', entity: 'Music', wide: true,
                         keyOf: function(it) { return it.title + ' - ' + (it.artist || ''); },
                         subOf: function(it) { return it.artist ? _tiqEsc(it.artist) : ''; },
                         badgeOf: function(it) { return _tiqCrossPlatformBadge(it); }
@@ -56006,7 +56009,7 @@ https://www.instagram.com/p/..."></textarea>
                 } else {
                     body = _tiqSourceSheet({
                         kind: 'podcast', source: k, label: s.label || k, rows: items,
-                        metricLabel: 'Listeners', entity: 'Podcast',
+                        metricLabel: 'Listeners', entity: 'Podcast', wide: true,
                         keyOf: function(it) { return it.title + ' - ' + (it.artist || ''); },
                         subOf: function(it) { return it.artist ? _tiqEsc(it.artist) : ''; },
                         badgeOf: function(it) { return _tiqCrossPlatformBadge(it); }
@@ -57336,10 +57339,10 @@ https://www.instagram.com/p/..."></textarea>
                 var genre = it.genre ? _tiqEsc(it.genre) : '';
                 return pub + ((pub && genre) ? ' \u00b7 ' : '') + genre;
             };
-            var gameCol = function(colLabel, rows) {
+            var gameCol = function(colLabel, rows, wide) {
                 return _tiqSourceSheet({
                     kind: 'gaming', source: 'gaming', label: colLabel, rows: rows || [],
-                    metricLabel: 'Plays', entity: 'Gaming',
+                    metricLabel: 'Plays', entity: 'Gaming', wide: !!wide,
                     keyOf: function(it) { return it.title; },
                     subOf: gsub
                 });
@@ -57387,7 +57390,7 @@ https://www.instagram.com/p/..."></textarea>
                     body = '<div class="tiq-empty">No trending games right now.</div>';
                 } else {
                     // Single-list panel (Xbox).
-                    body = gameCol(s.label || k, s.items);
+                    body = gameCol(s.label || k, s.items, true);
                 }
                 return '<div class="tiq-social-panel' + active + '" data-tiq-gaming="' + k + '">' + body + '</div>';
             }).join('');
