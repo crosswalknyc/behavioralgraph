@@ -50207,10 +50207,26 @@ def _chatbot_error_email(route, err, user_email=None, payload=None,
             payload_str = str(payload)[:2000]
         ts = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
         subject_line = f"Chatbot error: {route}"
+        # Surface the user's ask explicitly (it also lives inside the
+        # payload dump, but a labeled line is faster to read). Defensive:
+        # any extraction failure just yields '(unavailable)' so the email
+        # still sends.
+        query_text = '(unavailable)'
+        try:
+            _pl = payload if isinstance(payload, dict) else {}
+            _sd = (_pl.get('spec_draft')
+                   if isinstance(_pl.get('spec_draft'), dict) else {})
+            query_text = (str(_pl.get('prompt') or '').strip()
+                          or str(_sd.get('user_prompt') or '').strip()
+                          or str(_sd.get('subject') or '').strip()
+                          or '(unavailable)')[:1500]
+        except Exception:
+            query_text = '(unavailable)'
         body_text = (
             f"Timestamp: {ts}\n"
             f"Route: {route}\n"
             f"User: {user_email or '(unknown)'}\n"
+            f"Query: {query_text}\n"
             f"Error: {err_name}: {err_text}\n\n"
             f"Request payload (truncated):\n{payload_str}\n\n"
             f"Traceback:\n{str(tb)[:12000]}\n"
@@ -52806,6 +52822,15 @@ def api_synth_chat_interpret():
             _scrub_draft_prose_dashes(spec_draft)
         except Exception:
             pass
+        # Thread the user's exact natural-language ask onto the draft so
+        # it round-trips back on approve and lands on the queued job. If
+        # the build later fails, the ops failure email can quote what the
+        # user actually asked. Best-effort; never blocks the response.
+        try:
+            if isinstance(spec_draft, dict) and text:
+                spec_draft['user_prompt'] = str(text)[:4000]
+        except Exception:
+            pass
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
@@ -54105,8 +54130,20 @@ def api_synth_chat_approve():
             'credits_remaining': _left,
         }), 402
 
+    # Thread the commissioning user + their exact ask onto the job so a
+    # failed build's ops email can name who asked and quote what they
+    # asked. The prompt round-trips on the draft (stamped at interpret);
+    # fall back to the subject so the field is never empty.
+    _approve_username = (session.get('username') or user.get('username')
+                         or '').strip()
+    _approve_prompt = (str(body.get('prompt')
+                           or draft.get('user_prompt')
+                           or draft.get('subject')
+                           or spec.get('name') or '').strip())[:4000]
     payload = {
         'user_email': user.get('email') or user.get('username') or 'unknown',
+        'username': _approve_username or (user.get('username') or ''),
+        'prompt': _approve_prompt,
         'run_avid': run_avid,
         'email_to': email_to,
         'spec': spec,
@@ -61994,6 +62031,10 @@ def api_v1_profiles_run():
 
     payload = {
         'user_email': user.get('email') or username,
+        'username': username,
+        # The partner's exact natural-language ask, so a failed build's
+        # ops email can quote what they asked (same as dashboard runs).
+        'prompt': (str(prompt or '').strip())[:4000],
         'run_avid': run_avid,
         'email_to': '',
         'spec': spec,
