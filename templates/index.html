@@ -21962,7 +21962,7 @@ https://www.instagram.com/p/..."></textarea>
                     <button class="ai-tab active" onclick="showAITab('business')">🎯 Business Q&A</button>
                     <button class="ai-tab" onclick="showAITab('insights')">💡 Insights</button>
                     <button class="ai-tab" onclick="showAITab('persona')">👤 Persona</button>
-                    <button class="ai-tab" onclick="showAITab('deck')">📊 Deck</button>
+                    <button class="ai-tab" data-feature="deckBuilder" onclick="showAITab('deck')">📊 Deck</button>
                 </div>
                 <div class="ai-content">
                     <!-- Business Q&A Tab (Primary) -->
@@ -22006,7 +22006,7 @@ https://www.instagram.com/p/..."></textarea>
                         <button class="btn btn-primary" onclick="generatePersona()" id="personaBtn">Generate Persona</button>
                         <div id="personaResult" class="ai-result"></div>
                     </div>
-                    <div id="ai-tab-deck" class="ai-tab-content">
+                    <div id="ai-tab-deck" class="ai-tab-content" data-feature="deckBuilder">
                         <p class="ai-description">Generate a presentation deck for your business question.</p>
                         <textarea id="deckQuestion" placeholder="What business question should the deck answer?" rows="3" style="width: 100%; margin-bottom: 0.5rem;"></textarea>
                         <button class="btn btn-primary" onclick="generateDeck()" id="deckBtn">📊 Generate Deck</button>
@@ -22029,8 +22029,8 @@ https://www.instagram.com/p/..."></textarea>
                                  Single-profile deck uses the currently loaded
                                  dashboard payload; combined deck packages every
                                  open profile tab into a comparison deck. -->
-                            <a href="javascript:void(0)" id="profileIqDeckLink" onclick="exportProfileIqDeck(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">🎨 Analysis Deck (.pptx)</a>
-                            <a href="javascript:void(0)" id="profileIqCombinedDeckLink" onclick="exportProfileIqCombinedDeck(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📊 Combined Deck (All Open Profiles)</a>
+                            <a href="javascript:void(0)" id="profileIqDeckLink" data-feature="deckBuilder" onclick="exportProfileIqDeck(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">🎨 Analysis Deck (.pptx)</a>
+                            <a href="javascript:void(0)" id="profileIqCombinedDeckLink" data-feature="deckBuilder" onclick="exportProfileIqCombinedDeck(); const d=document.getElementById('tabExportDropdown');if(d)d.style.display='none';">📊 Combined Deck (All Open Profiles)</a>
                         </div>
                     </div>
                     <div class="display-mode-toggle has-tooltip" id="hoverToggle" onclick="toggleHoverDescriptors()" data-tooltip="Hover: Toggle detailed tooltip descriptions on/off when hovering over data elements.">
@@ -44238,8 +44238,8 @@ https://www.instagram.com/p/..."></textarea>
             sponsorship: true,
             media: true,
             content: true,
-            collaborate: true,
-            deckBuilder: true,
+            collaborate: false,
+            deckBuilder: false,
             rankers: true,
             // Insights Sub Tabs
             insightsSummary: true,
@@ -44438,6 +44438,27 @@ https://www.instagram.com/p/..."></textarea>
                     }
                 }
             }
+            
+            // 2026-09-02: Deck Builder off = hide every 'Add to Deck' (.deck-btn)
+            // module button + the Deck Builder modal shell + the Deck launcher
+            // in the collaboration/workspace tab. Admin bypass preserved: super
+            // admin/admin still see everything so the toggle can be re-enabled
+            // from Admin -> Settings -> Live Features. Injects a single <style>
+            // tag once, then toggles a body class on every render.
+            try {
+                const deckOff = (liveFeatures.deckBuilder === false) && !isAdmin;
+                document.body.classList.toggle('bg-hide-deck-builder', deckOff);
+                if (!document.getElementById('bgHideDeckBuilderStyles')) {
+                    const s = document.createElement('style');
+                    s.id = 'bgHideDeckBuilderStyles';
+                    s.textContent = 'body.bg-hide-deck-builder .deck-btn,' +
+                        'body.bg-hide-deck-builder #deckBuilderModal,' +
+                        'body.bg-hide-deck-builder #deckBuilderStyles,' +
+                        'body.bg-hide-deck-builder [id="deckBuilderTitleInput"],' +
+                        'body.bg-hide-deck-builder .workspace-selector-bar { display: none !important; }';
+                    document.head.appendChild(s);
+                }
+            } catch (_) {}
         }
         
         // Helper function to apply visibility to a single feature element

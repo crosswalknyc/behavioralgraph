@@ -2196,9 +2196,16 @@
                             
                             <!-- Workspace (formerly Collaborate) -->
                             <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" class="live-feature-checkbox" data-feature="collaborate" checked onchange="updateLiveFeature('collaborate', this.checked)">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="collaborate" onchange="updateLiveFeature('collaborate', this.checked)">
                                 <span style="font-size: 1.25rem;">🗂️</span>
                                 <span style="font-size: 0.9rem;">Workspace</span>
+                            </label>
+                            
+                            <!-- Deck Builder (Add to Deck + Analysis Deck exports + AI Deck sub-tab + Deck Builder modal) -->
+                            <label class="checkbox-group" style="padding: 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="live-feature-checkbox" data-feature="deckBuilder" onchange="updateLiveFeature('deckBuilder', this.checked)">
+                                <span style="font-size: 1.25rem;">📊</span>
+                                <span style="font-size: 0.9rem;">Deck Builder</span>
                             </label>
                             
                             <!-- View Numbers (Subscriber IQ tab) -->
@@ -7689,7 +7696,7 @@
             media: true,
             content: true,
             collaborate: true,
-            deckBuilder: true,
+            deckBuilder: false,
             rankers: true,
             insightsSummary: true,
             overlapAnalysis: true,

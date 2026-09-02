@@ -20707,7 +20707,7 @@ def save_quick_selects():
 DEFAULT_LIVE_FEATURES = {
     'compare': True, 'segment': True, 'execSummary': True, 'keyInsightBuilder': True,
     'ecosystem': True, 'affinity': True, 'sponsorship': True, 'media': True,
-    'content': True, 'collaborate': True, 'deckBuilder': True, 'rankers': True,
+    'content': True, 'collaborate': False, 'deckBuilder': False, 'rankers': True,
     'overlapAnalysis': True, 'benchmarking': True, 'gapAnalysis': True,
     'insightsSummary': True, 'viewNumbers': True,
 }
@@ -20749,7 +20749,7 @@ DEFAULT_HIDDEN_PRODUCTS = {
     'flywheelConversion': False,
     'customAnalysis': False,
     'shareOfTimeIQ': False,
-    'workspace': False,
+    'workspace': True,
     'helmIQ': False,
     'microdramasIQ': False,     # 2026-07-22 added with <option value="microdramasIQ">
     'chatbotProfileIQ': False,  # 2026-08-17 Chatbot Profile IQ - Analysis IQ sub-tab
