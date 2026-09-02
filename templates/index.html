@@ -21403,16 +21403,16 @@ https://www.instagram.com/p/..."></textarea>
             }
             #prometheusWidget .pm-rs { display: none; }
         }
-        /* Light mode: Prometheus SEND button uses our lime gradient instead of the default blue. */
-        body[data-theme="light"] #synthChatSubmitBtn.btn-primary {
-            background: linear-gradient(135deg, #C7F23E, #A0D911);
-            border-color: #A0D911;
-            color: #14330A;
+        /* Prometheus SEND button uses our lime gradient in both themes. */
+        #synthChatSubmitBtn.btn-primary {
+            background: linear-gradient(135deg, #C7F23E, #A0D911) !important;
+            border-color: #A0D911 !important;
+            color: #14330A !important;
         }
-        body[data-theme="light"] #synthChatSubmitBtn.btn-primary:hover {
-            background: linear-gradient(135deg, #D3F95E, #B5E61A);
-            border-color: #B5E61A;
-            color: #14330A;
+        #synthChatSubmitBtn.btn-primary:hover {
+            background: linear-gradient(135deg, #D3F95E, #B5E61A) !important;
+            border-color: #B5E61A !important;
+            color: #14330A !important;
         }
 
         /* ---- Prometheus light-mode polish (2026-09-02) ------------------
@@ -21483,7 +21483,7 @@ https://www.instagram.com/p/..."></textarea>
         body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn {
             background: rgba(160,217,17,0.18) !important;
             border: 1px solid #A0D911 !important;
-            color: #3d5c04 !important;
+            color: #4d7c0f !important;
             font-weight: 600 !important;
         }
         #prometheusWidget #synthChatSuggestBtn:hover {
@@ -21492,7 +21492,7 @@ https://www.instagram.com/p/..."></textarea>
         }
         body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn:hover {
             background: rgba(160,217,17,0.28) !important;
-            color: #2c4303 !important;
+            color: #3d5c04 !important;
         }
         /* Input hint: lift off ghost-grey. */
         #prometheusWidget #synthChatInputHint {
@@ -21502,7 +21502,7 @@ https://www.instagram.com/p/..."></textarea>
             line-height: 1.2;
         }
         body[data-theme="light"] #prometheusWidget #synthChatInputHint {
-            color: #4b5563 !important;
+            color: #9AA09B !important;
             opacity: 1 !important;
         }
 
