@@ -65342,17 +65342,15 @@ https://www.instagram.com/p/..."></textarea>
             }
             window.__synthChatQueueTimer = setInterval(
                 _synthChatRefreshQueueBadge, 5000);
-            // Idle chips: after 2 min with no turns / typing, re-offer
-            // the starter chips (guards inside the tick).
+            // Idle chips DISABLED (2026-09-02 Jenna directive): "if you
+            // are idle dont have it put the suggestions up again only use
+            // suggestions if you click the button". The idle re-offer
+            // timer is no longer installed; suggestions are button-gated
+            // via synthChatSuggestionsShow(). Clear any previously
+            // installed timer defensively (double-init / stale handle).
             if (window.__synthChatIdleTimer) {
                 clearInterval(window.__synthChatIdleTimer);
-            }
-            window.__synthChatIdleTimer = setInterval(
-                _synthChatIdleChipsTick, 15000);
-            var _idleInput = document.getElementById('synthChatInput');
-            if (_idleInput) {
-                _idleInput.addEventListener('input', _synthChatBumpActivity);
-                _idleInput.addEventListener('focus', _synthChatBumpActivity);
+                window.__synthChatIdleTimer = null;
             }
             document.addEventListener('visibilitychange', function() {
                 if (document.visibilityState === 'visible') {
@@ -65690,36 +65688,25 @@ https://www.instagram.com/p/..."></textarea>
         // send or reply) clears it. Chip fill strings must not contain
         // quote characters - they ride inside an onclick attribute.
         var _synthChatWelcomeLastShown = 0;
-        // Idle repopulate (2026-08-21 Jenna directive): if the chat
-        // sits idle for 2+ minutes, re-offer the starter chips so the
-        // next action is always one click away. Any turn, typing, or
-        // chip send counts as activity and resets the clock.
+        // Idle repopulate REVERSED (2026-09-02 Jenna directive): "if you
+        // are idle dont have it put the suggestions up again only use
+        // suggestions if you click the button". The 2026-08-21 idle
+        // re-offer is disabled: the timer is no longer installed (see
+        // synthChatInit) and this tick is a guarded no-op if anything
+        // still calls it. Suggestions are now button-gated
+        // (synthChatSuggestionsShow). _synthChatBumpActivity /
+        // _synthChatLastActivityTs are retained (harmless; still called
+        // from send paths) in case idle behavior is ever reinstated.
         var _synthChatLastActivityTs = Date.now();
         var _SYNTH_CHAT_IDLE_CHIPS_MS = 120000;
         function _synthChatBumpActivity() {
             _synthChatLastActivityTs = Date.now();
         }
         function _synthChatIdleChipsTick() {
-            try {
-                if (document.visibilityState !== 'visible') return;
-                var box = document.getElementById('synthChatMessages');
-                if (!box) return;
-                if (!synthChatHistory.length) return;
-                if (Date.now() - _synthChatLastActivityTs <
-                        _SYNTH_CHAT_IDLE_CHIPS_MS) return;
-                // Already offering, or a reply is streaming in.
-                if (document.getElementById('synthChatWelcomeBubble')) return;
-                if (document.querySelector('.synth-thinking-bubble')) return;
-                // Never stomp a pending approval / question mid-flow
-                // (same guard set as the welcome-back renderer).
-                if (synthChatAwaitingDateConfirm || synthChatClarify ||
-                    synthChatBatchClarify ||
-                    synthChatCurrentDraft || synthChatDiscoveryOffer ||
-                    (synthChatBatchDrafts && synthChatBatchDrafts.length)) {
-                    return;
-                }
-                _synthChatShowWelcomeBack();
-            } catch (_) {}
+            // Disabled 2026-09-02: never auto re-offer suggestion chips
+            // on idle. Suggestions appear only via the Suggestions
+            // button (synthChatSuggestionsShow). Guarded no-op.
+            return;
         }
         function _synthChatShowWelcomeBack(force) {
             try {
