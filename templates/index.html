@@ -65355,11 +65355,13 @@ https://www.instagram.com/p/..."></textarea>
             document.addEventListener('visibilitychange', function() {
                 if (document.visibilityState === 'visible') {
                     _synthChatRefreshQueueBadge();
-                    // Coming back after 30+ min away counts as a
-                    // fresh visit - re-offer the day starters.
-                    if (Date.now() - _synthChatWelcomeLastShown > 1800000) {
-                        _synthChatShowWelcomeBack();
-                    }
+                    // Tab-return welcome DISABLED (2026-09-02 Jenna
+                    // directive): returning to the tab after 30+ min
+                    // away no longer re-offers the day starters - that
+                    // counts as an idle re-offer. Suggestions on
+                    // tab-return are button-gated via
+                    // synthChatSuggestionsShow(). The on-widget-open and
+                    // after-init welcomes are unchanged.
                     if (!window.__synthChatQueueTimer) {
                         window.__synthChatQueueTimer = setInterval(
                             _synthChatRefreshQueueBadge, 5000);
