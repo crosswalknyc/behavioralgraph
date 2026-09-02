@@ -60075,12 +60075,36 @@ def _identity_tokens_missing_from_prompt(subject, prompt):
     return missing
 
 
+_INTERNAL_FIELD_NAMES_IN_PROSE = (
+    'identity_confident', 'is_ip_content', 'identity_note',
+    'identity_qualifier', 'resolved_identity', 'resolved_title',
+)
+
+
 def _scrub_identity_dashes(s):
     """Em/en dashes never ship in user-facing identity copy (workspace
     rule). Model output flows straight into the approval card and the
-    /check response, so scrub here deterministically."""
+    /check response, so scrub here deterministically. Also strips any
+    internal draft-field-name references the model may have written
+    into prose (e.g. 'see identity_confident flag') per
+    no-modeled-or-source-language.mdc."""
     out = str(s or '').replace('\u2014', ' - ').replace('\u2013', ' - ')
-    return re.sub(r'  +', ' ', out).strip()
+    # Strip trailing "- see <field_name> flag" clauses and any bare
+    # mention of an internal draft field name.
+    for _fn in _INTERNAL_FIELD_NAMES_IN_PROSE:
+        # "- see identity_confident flag" or "; see identity_confident flag"
+        # to end of string (case-insensitive, tolerant of surrounding spaces).
+        out = re.sub(
+            r'\s*[-;,]\s*see\s+' + re.escape(_fn) + r'\s+flag\b\.?',
+            '', out, flags=re.IGNORECASE)
+        # Bare token anywhere (belt and suspenders).
+        out = re.sub(r'\b' + re.escape(_fn) + r'\b', '',
+                     out, flags=re.IGNORECASE)
+    # Normalize whitespace and clean up trailing punctuation artefacts
+    # left by the removal (e.g. dangling "; " or " - " at end).
+    out = re.sub(r'  +', ' ', out)
+    out = re.sub(r'\s*[-;,]\s*$', '', out)
+    return out.strip()
 
 
 def _set_resolved_identity_line(draft):

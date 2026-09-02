@@ -21790,7 +21790,7 @@ https://www.instagram.com/p/..."></textarea>
                                     </label>
                                     <label style="display: inline-flex; align-items: center; gap: 0.4rem; margin-top: 0.35rem; font-size: 0.78rem; color: var(--text-secondary); cursor: pointer;">
                                         <input type="checkbox" id="synthChatRememberEmail" onchange="synthChatSaveRememberedEmail()" style="width: auto; height: auto; margin: 0;">
-                                        <span>Remember this email on this device</span>
+                                        <span>Remember me</span>
                                     </label>
                                 </div>
                                 <div class="brief-actions-row">
@@ -69917,6 +69917,21 @@ https://www.instagram.com/p/..."></textarea>
             // wrong resolution is visible before approving.
             var _rid = String(s.resolved_identity || '').trim()
                 .replace(/\.$/, '');
+            // Safety net: strip internal draft-field-name references that
+            // may have leaked into identity prose from the interpret step
+            // (e.g. "- see identity_confident flag"). Server-side scrub
+            // in _scrub_identity_dashes is the primary fix; this catches
+            // any legacy draft that reaches the modal without a re-scrub.
+            if (_rid) {
+                var _INTERNAL_FIELDS = /(identity_confident|is_ip_content|identity_note|identity_qualifier|resolved_identity|resolved_title)/gi;
+                _rid = _rid
+                    .replace(/\s*[-;,]\s*see\s+\w+\s+flag\b\.?/gi, '')
+                    .replace(_INTERNAL_FIELDS, '')
+                    .replace(/\s{2,}/g, ' ')
+                    .replace(/\s*[-;,]\s*$/g, '')
+                    .trim()
+                    .replace(/\.$/, '');
+            }
             if (_rid) facts.push('Subject: ' + _rid);
             if (_dec === 'derive_cut' || _dec === 'cut_needs_parent') {
                 if (_dcCutLbl) {
