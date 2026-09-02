@@ -620,6 +620,16 @@ _ANCHORS: dict[str, list[dict[str, Any]]] = {
         {'kind': 'search',   'title': 'kamala harris',                 'score': 92},
         {'kind': 'search',   'title': 'aces vs liberty',               'score': 12},
         {'kind': 'podcast',  'title': 'The Tucker Carlson Show',       'score': 5},
+        # Gaming anchors. This cohort barely engages with gaming as
+        # a category. Even the most demographically neutral titles
+        # (Flight Simulator, Age of Empires) rarely break 20 for a
+        # 55+ college-educated news-first audience. Youth-coded
+        # multiplayer + VR bottoms out near 5.
+        {'kind': 'game',     'title': 'Microsoft Flight Simulator',    'score': 18},
+        {'kind': 'game',     'title': 'Age of Empires IV',             'score': 14},
+        {'kind': 'game',     'title': 'Fortnite',                      'score': 6},
+        {'kind': 'game',     'title': 'Roblox',                        'score': 4},
+        {'kind': 'game',     'title': 'Gorilla Tag',                   'score': 4},
     ],
     'millennials': [
         {'kind': 'podcast',  'title': 'SmartLess',                     'score': 95},
@@ -635,6 +645,18 @@ _ANCHORS: dict[str, list[dict[str, Any]]] = {
         {'kind': 'film',     'title': 'PBS Frontline: Ukraine',        'score': 18},
         {'kind': 'search',   'title': 'house of the dragon season 4',  'score': 92},
         {'kind': 'search',   'title': 'kamala harris',                 'score': 30},
+        # Gaming anchors. Millennials are the "grew up on consoles"
+        # cohort; Halo / Diablo / CoD are core, Fortnite is
+        # crossover-mainstream (kids + parents), Roblox / Gorilla
+        # Tag skew younger and score notably lower. Beat Saber sits
+        # mid-high on the wellness-adjacent VR overlap.
+        {'kind': 'game',     'title': 'Halo Infinite',                 'score': 78},
+        {'kind': 'game',     'title': 'Diablo IV',                     'score': 82},
+        {'kind': 'game',     'title': 'Call of Duty: Warzone',         'score': 74},
+        {'kind': 'game',     'title': 'Fortnite',                      'score': 58},
+        {'kind': 'game',     'title': 'Beat Saber',                    'score': 64},
+        {'kind': 'game',     'title': 'Roblox',                        'score': 32},
+        {'kind': 'game',     'title': 'Gorilla Tag',                   'score': 25},
     ],
     # Unlikely Collaborators Follower - young, queer-inclusive,
     # wellness-and-consciousness-forward.  Anchors deliberately span
@@ -688,6 +710,16 @@ _ANCHORS: dict[str, list[dict[str, Any]]] = {
         {'kind': 'person',   'title': 'Cillian Murphy',                        'score': 82},
         {'kind': 'person',   'title': 'Tucker Carlson',                        'score': 5},
         {'kind': 'person',   'title': 'Andrew Tate',                           'score': 3},
+        # Gaming anchors. Wellness-and-consciousness cohort is not
+        # a gaming-forward audience; mainstream shooters and battle
+        # royale score low. Mindfulness / rhythm / VR fitness titles
+        # (Beat Saber, Supernatural, meditation apps) score notably
+        # higher because they land inside the wellness KEEP rules.
+        {'kind': 'game',     'title': 'Beat Saber',                            'score': 65},
+        {'kind': 'game',     'title': 'Supernatural VR',                       'score': 68},
+        {'kind': 'game',     'title': 'Fortnite',                              'score': 22},
+        {'kind': 'game',     'title': 'Call of Duty: Warzone',                 'score': 12},
+        {'kind': 'game',     'title': 'Halo Infinite',                         'score': 15},
     ],
 
     # -----------------------------------------------------------------
@@ -732,6 +764,17 @@ _ANCHORS: dict[str, list[dict[str, Any]]] = {
         {'kind': 'person',   'title': 'Kai Cenat',                             'score': 90},
         {'kind': 'person',   'title': 'Al Roker',                              'score': 10},
         {'kind': 'person',   'title': 'Barbara Corcoran',                      'score': 12},
+        # Gaming anchors. Gen Z is the core cohort for Roblox,
+        # Fortnite, Gorilla Tag (Meta Quest) and the K-pop /
+        # anime-adjacent gaming stack. Boomer / dad-coded strategy
+        # titles score notably lower.
+        {'kind': 'game',     'title': 'Fortnite',                              'score': 92},
+        {'kind': 'game',     'title': 'Roblox',                                'score': 90},
+        {'kind': 'game',     'title': 'Gorilla Tag',                           'score': 82},
+        {'kind': 'game',     'title': 'Genshin Impact',                        'score': 86},
+        {'kind': 'game',     'title': 'Beat Saber',                            'score': 74},
+        {'kind': 'game',     'title': 'Microsoft Flight Simulator',            'score': 22},
+        {'kind': 'game',     'title': 'Age of Empires IV',                     'score': 20},
     ],
 
     # -----------------------------------------------------------------
@@ -778,6 +821,17 @@ _ANCHORS: dict[str, list[dict[str, Any]]] = {
         {'kind': 'person',   'title': 'Aubrey Plaza',                          'score': 85},
         {'kind': 'person',   'title': 'Salish Matter',                         'score': 5},
         {'kind': 'person',   'title': 'Kai Cenat',                             'score': 12},
+        # Gaming anchors. Gen X is the "grew up on the Atari + PC"
+        # cohort - strategy, sim, and lifelong-franchise titles
+        # (Halo, Age of Empires, Flight Sim, Civ) still resonate.
+        # Kid-coded Roblox / Gorilla Tag and Gen Z battle royale
+        # score notably lower.
+        {'kind': 'game',     'title': 'Halo Infinite',                         'score': 72},
+        {'kind': 'game',     'title': 'Microsoft Flight Simulator',            'score': 74},
+        {'kind': 'game',     'title': 'Age of Empires IV',                     'score': 68},
+        {'kind': 'game',     'title': 'Fortnite',                              'score': 32},
+        {'kind': 'game',     'title': 'Roblox',                                'score': 18},
+        {'kind': 'game',     'title': 'Gorilla Tag',                           'score': 12},
     ],
 
     # -----------------------------------------------------------------
@@ -827,6 +881,17 @@ _ANCHORS: dict[str, list[dict[str, Any]]] = {
         {'kind': 'person',   'title': 'Alix Earle',                            'score': 10},
         {'kind': 'person',   'title': 'Kai Cenat',                             'score': 5},
         {'kind': 'person',   'title': 'Livvy Dunne',                           'score': 8},
+        # Gaming anchors. Boomers are the least gaming-forward
+        # cohort on the panel. Bridge titles are the traditional
+        # "playing on the couch" long-tail (Flight Sim, Age of
+        # Empires, chess-like), never battle royale or VR. Even
+        # the highest game rarely breaks 30 for this audience.
+        {'kind': 'game',     'title': 'Microsoft Flight Simulator',            'score': 28},
+        {'kind': 'game',     'title': 'Age of Empires IV',                     'score': 22},
+        {'kind': 'game',     'title': 'Halo Infinite',                         'score': 10},
+        {'kind': 'game',     'title': 'Fortnite',                              'score': 4},
+        {'kind': 'game',     'title': 'Roblox',                                'score': 4},
+        {'kind': 'game',     'title': 'Gorilla Tag',                           'score': 3},
     ],
 }
 
@@ -1009,6 +1074,88 @@ def _collect_all_items() -> list[dict]:
             _add('social', it.get('title') or it.get('topic') or '',
                   extra=snap.get('label') or key,
                   source_label=snap.get('label') or key)
+
+    # FAST platforms (Roku Channel, Tubi, Pluto TV, Amazon Freevee).
+    # Snapshot shape: sources.<slug>.items, one item per trending title
+    # on that FAST platform. Every item has category_display in
+    # {'Film', 'TV', ...}; use that to route the row into the same
+    # `film` / `tv` kinds the streaming snapshots write to, so the
+    # existing per-kind cutoffs still apply. A title that also trends
+    # on Netflix or Hulu folds into a single scoring row by
+    # `_key(kind, title)` - Claude only sees one Bad Sisters row even
+    # if six services carry it.
+    fast = _read('fast_channels') or {}
+    for slug, panel in (fast.get('sources') or {}).items():
+        for it in (panel.get('items') or []):
+            title = it.get('title') or ''
+            if not title:
+                continue
+            cd = str(it.get('category_display') or '').lower()
+            kind = 'film' if cd in ('film', 'films', 'movie') else 'tv'
+            # Preserve year / short synopsis as context so Claude can
+            # distinguish "Steel Magnolias" (1989) from a same-titled
+            # remake, and can lean on the description for niche titles.
+            bits: list[str] = []
+            if it.get('year'):
+                bits.append(f'({it["year"]})')
+            if it.get('genres'):
+                gs = it['genres']
+                if isinstance(gs, list) and gs:
+                    bits.append(', '.join(str(g) for g in gs[:3]))
+            if it.get('description'):
+                bits.append(str(it['description'])[:160])
+            _add(kind, title,
+                  extra=' - '.join(bits)[:220],
+                  source_label=panel.get('label') or slug)
+
+    # Gaming (Xbox Game Pass Ultimate, Meta Quest Free + Paid, Steam).
+    # New `game` kind - not previously scored. Xbox has a flat
+    # `national` list; Meta Quest has sources.meta_quest_free +
+    # sources.meta_quest_paid; Steam is planned but not always live.
+    xbox = _read('xbox_gamepass') or {}
+    for it in (xbox.get('national') or []):
+        title = it.get('title') or ''
+        if not title:
+            continue
+        ctx: list[str] = []
+        if it.get('publisher'):
+            ctx.append(str(it['publisher'])[:80])
+        if it.get('genre'):
+            ctx.append(str(it['genre'])[:60])
+        _add('game', title,
+              extra=' - '.join(ctx)[:180],
+              source_label=xbox.get('label') or 'Xbox Game Pass Ultimate')
+
+    quest = _read('meta_quest') or {}
+    for slug, panel in (quest.get('sources') or {}).items():
+        for it in (panel.get('items') or []):
+            title = it.get('title') or ''
+            if not title:
+                continue
+            _add('game', title,
+                  extra=panel.get('label') or slug,
+                  source_label=panel.get('label') or slug)
+
+    # Steam - snapshot may or may not be present depending on cookie
+    # health; treat as best-effort. Two shapes seen in the wild:
+    # sources.<slug>.items (most_played + top_sellers) OR a flat
+    # `national` list; support both.
+    steam = _read('steam') or {}
+    for slug, panel in (steam.get('sources') or {}).items():
+        for it in (panel.get('items') or []):
+            title = it.get('title') or ''
+            if not title:
+                continue
+            _add('game', title,
+                  extra=panel.get('label') or slug,
+                  source_label=panel.get('label') or slug)
+    for it in (steam.get('national') or []):
+        title = it.get('title') or ''
+        if not title:
+            continue
+        _add('game', title,
+              extra=steam.get('label') or 'Steam',
+              source_label=steam.get('label') or 'Steam')
 
     return list(per.values())
 

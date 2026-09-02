@@ -53446,16 +53446,26 @@ https://www.instagram.com/p/..."></textarea>
         // its score to the right cutoff.  Also used to
         // hint kind for unscored rows so the display logic is fair.
         var _TIQ_PANEL_TO_KIND = {
-            headlines: 'headline',
-            searches:  'search',
-            people:    'person',
-            music:     'song',
-            podcasts:  'podcast',
-            books:     'book',
-            social:    'headline',
-            streaming: 'title',
-            films:     'film',
-            watchlist: 'headline'
+            headlines:    'headline',
+            searches:     'search',
+            people:       'person',
+            music:        'song',
+            podcasts:     'podcast',
+            books:        'book',
+            social:       'headline',
+            streaming:    'title',
+            films:        'film',
+            watchlist:    'headline',
+            // Rankers-product tabs. FAST rows carry film + tv titles;
+            // rows self-identify with `b.kind` so this fallback only
+            // matters for rows that couldn't be title-matched into the
+            // scored set. Gaming rows all use the new `game` kind
+            // added to lens_scores.json (Xbox Game Pass, Meta Quest,
+            // Steam). Talent Ranker leaderboard rows carry a person
+            // kind when the name matches the scored set.
+            fast:         'title',
+            gaming:       'game',
+            talentranker: 'person'
         };
 
         window.applyTrendsIQLens = function() {
@@ -53488,9 +53498,18 @@ https://www.instagram.com/p/..."></textarea>
             // unscored rows should hide (panel has some scored rows)
             // or stay visible (panel has zero scored rows -> the
             // scraper doesn't cover this feed yet, leave it alone).
+            //
+            // The Rankers product tabs (Music / Podcasts / Streaming
+            // / FAST / Gaming) render their rows as `.tiq-sheet-row`
+            // (table row inside `.tiq-sheet`), not `.tiq-row`. Both
+            // shapes are folded into the same per-panel bucket below
+            // so the filter treats them identically. `_tiqRowTitleText`
+            // already reads `.tiq-row-title` inside each row regardless
+            // of the outer tag, so no per-shape branch is needed.
             var byPanel = {};
             var allRows2 = panels.querySelectorAll(
-                '.tiq-panel .tiq-row, .tiq-panel .tiq-person-card');
+                '.tiq-panel .tiq-row, .tiq-panel .tiq-person-card, ' +
+                '.tiq-panel .tiq-sheet-row');
             for (var k = 0; k < allRows2.length; k++) {
                 var r = allRows2[k];
                 var panel = r.closest('.tiq-panel');
@@ -53560,6 +53579,47 @@ https://www.instagram.com/p/..."></textarea>
             var tipRows = panels.querySelectorAll('[data-lens-why]');
             for (var t = 0; t < tipRows.length; t++) {
                 tipRows[t].title = tipRows[t].getAttribute('data-lens-why');
+            }
+
+            // Empty-state banner. For every `.tiq-panel[data-tiq-panel]`
+            // that has rows, if every one is hidden by the active lens
+            // show a single "No items match the selected lens." banner
+            // at the top of the panel. Removed on subsequent repaints
+            // (either lens cleared, or new rows landed that pass the
+            // filter). Bannering happens after the tooltip pass so we
+            // never accidentally treat the banner itself as a row.
+            var _tiqLensPanels = panels.querySelectorAll('.tiq-panel[data-tiq-panel]');
+            for (var pi = 0; pi < _tiqLensPanels.length; pi++) {
+                var _p = _tiqLensPanels[pi];
+                var _existing = _p.querySelector(':scope > .tiq-lens-empty-banner');
+                var _rows = _p.querySelectorAll(
+                    '.tiq-row, .tiq-person-card, .tiq-sheet-row');
+                if (!_rows.length) {
+                    if (_existing) _existing.remove();
+                    continue;
+                }
+                var _hidden = 0;
+                for (var _ri = 0; _ri < _rows.length; _ri++) {
+                    if (_rows[_ri].style.display === 'none') _hidden++;
+                }
+                var _allHidden = (_hidden === _rows.length);
+                if (_allHidden) {
+                    if (!_existing) {
+                        _existing = document.createElement('div');
+                        _existing.className = 'tiq-lens-empty-banner';
+                        _existing.textContent = 'No items match the selected lens.';
+                        _existing.style.cssText =
+                            'padding: 1.25rem 1rem; margin: 0.5rem 0;' +
+                            'text-align: center; font-size: 0.85rem;' +
+                            'color: rgba(255,255,255,0.68);' +
+                            'background: rgba(255,255,255,0.04);' +
+                            'border: 1px dashed rgba(255,255,255,0.12);' +
+                            'border-radius: 6px;';
+                        _p.insertBefore(_existing, _p.firstChild);
+                    }
+                } else if (_existing) {
+                    _existing.remove();
+                }
             }
 
             _tiqLensUpdateMetaBanner(sel, lensId);
