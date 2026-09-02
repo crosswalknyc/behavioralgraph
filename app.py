@@ -43413,10 +43413,69 @@ def _universe_qualifiers_compatible(request_text, candidate_name):
             == _universe_qualifier_signature(cand_entity))
 
 
+# ── Subject-identity compatibility (2026-09-02) ──────────────────────
+# Companion to the universe-qualifier gate. The qualifier gate only
+# catches scope mismatches (est/tvod/members/window). It does NOT catch
+# a match to a totally UNRELATED subject when both names happen to carry
+# no qualifier: e.g. a broad 'Heavy Social Media Users 18-44' persona
+# linked as a "cut of data we already have" to an unrelated 'Trex
+# Contractor Consultation Requesters' file to shave credits. Enforce
+# that a picked candidate must share at least one REAL identity token
+# with the ask; generic filler / audience nouns and qualifier tokens do
+# not count. A generic behavioral/demographic persona with no compatible
+# parent is new_build, full stop (prefer new_build over a wrong link).
+_IDENTITY_STOP_TOKENS = {
+    # request framing / filler
+    'build', 'profile', 'profiles', 'audience', 'audiences', 'read',
+    'the', 'and', 'for', 'who', 'use', 'uses', 'using', 'with', 'over',
+    'per', 'day', 'days', 'hour', 'hours', 'least', 'past', 'year',
+    'years', 'more', 'than', 'that', 'this', 'their', 'they', 'active',
+    'engage', 'engages', 'engaged', 'engagement', 'high', 'low', 'mid',
+    'heavy', 'light', 'gender', 'skew', 'age', 'ages', 'old', 'olds',
+    'national', 'total', 'universe', 'like', 'etc',
+    # generic audience nouns (carry no identity on their own)
+    'people', 'consumers', 'consumer', 'buyers', 'buyer', 'shoppers',
+    'shopper', 'viewers', 'viewer', 'listeners', 'listener', 'fans',
+    'fan', 'adults', 'adult', 'teens', 'teen', 'teenagers', 'kids',
+    'kid', 'children', 'child', 'men', 'women', 'male', 'males',
+    'female', 'females', 'users', 'user', 'subscribers', 'subscriber',
+    'members', 'member', 'households', 'household', 'folks', 'those',
+    'social', 'media',
+}
+
+
+def _subject_identity_mismatch(prompt, subject, candidate_display):
+    """True when the picked candidate's ENTITY name (before any ' - '
+    cut suffix) shares NO real identity token with the ask (the prompt
+    plus the drafted subject). Generic filler, audience nouns, and
+    universe-qualifier tokens do not count as identity. An empty
+    candidate-identity set means we cannot judge, so it is NOT a
+    mismatch (leave that call to the qualifier gate). Never raises."""
+    try:
+        cand_entity = str(candidate_display or '').split(' - ', 1)[0]
+        cand_toks = {
+            t for t in _normalize_for_match(cand_entity).split()
+            if len(t) >= 3
+            and t not in _IDENTITY_STOP_TOKENS
+            and t not in _UNIVERSE_QUALIFIER_TOKENS
+        }
+        if not cand_toks:
+            return False
+        hay = _normalize_for_match(f"{prompt or ''} {subject or ''}")
+        hay_toks = set(hay.split())
+        for ct in cand_toks:
+            if ct in hay_toks or (len(ct) >= 5 and ct in hay):
+                return False
+        return True
+    except Exception:
+        return False
+
+
 def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
     """Guard on every interpret path: an existing_match (or refresh
     anchored the same way) whose picked candidate carries a different
-    universe-qualifier signature than the user's own words is NOT a
+    universe-qualifier signature than the user's own words - OR a
+    fundamentally different subject identity (2026-09-02) - is NOT a
     confident match.
 
     allow_ask=False (partner API, batch): demote to new_build for the
@@ -43440,16 +43499,24 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
     key = str(draft.get('existing_match_s3_key') or '').strip()
     if not disp or not key:
         return False, ''
-    if _universe_qualifiers_compatible(prompt, disp):
+    # Subject-identity mismatch (2026-09-02): a picked candidate that
+    # shares no real identity token with the ask is an unrelated
+    # subject (the 'Heavy Social Media Users' -> 'Trex Contractor'
+    # link). This overrides the qualifier-compat and derive-subset
+    # early exits below and always hard-demotes to new_build.
+    _identity_mismatch = _subject_identity_mismatch(
+        prompt, draft.get('subject'), disp)
+    if not _identity_mismatch and _universe_qualifiers_compatible(prompt, disp):
         return False, ''
     # derive_cut parents: the parent's qualifier set only needs to be
     # a SUBSET of the ask's (a 'Vizio TV Owners' ask deriving off the
     # 'Vizio TV Owners' parent is fine; deriving 'Apple buyers' off
     # 'Apple TV EST Buyers' is not). Extra ask-side qualifiers are the
-    # cut being derived.
+    # cut being derived. An identity mismatch is never a valid
+    # derive_cut, however cleanly the qualifier subset lines up.
     cand_sig = _universe_qualifier_signature(disp.split(' - ', 1)[0])
     req_sig = _universe_qualifier_signature(prompt)
-    if decision == 'derive_cut' and cand_sig <= req_sig:
+    if not _identity_mismatch and decision == 'derive_cut' and cand_sig <= req_sig:
         return False, ''
     days = _profile_age_days(key, draft.get('existing_match_last_modified'))
     built_label = _profile_built_label(
@@ -43466,10 +43533,16 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
             draft['subject'] = cleaned
             draft['name'] = cleaned
             draft.pop('file_stem', None)
-    note = (f"Universe-qualifier gate: ask "
-            f"{sorted(req_sig) or '(plain universe)'} vs candidate "
-            f"{disp!r} {sorted(cand_sig)} - not the same audience; "
-            f"{'asking' if allow_ask else 'demoted to new_build'}.")
+    if _identity_mismatch:
+        note = (f"Subject-identity gate: ask subject "
+                f"{str(draft.get('subject') or '')!r} shares no identity "
+                f"with candidate {disp!r} - unrelated audience; "
+                f"demoted to new_build.")
+    else:
+        note = (f"Universe-qualifier gate: ask "
+                f"{sorted(req_sig) or '(plain universe)'} vs candidate "
+                f"{disp!r} {sorted(cand_sig)} - not the same audience; "
+                f"{'asking' if allow_ask else 'demoted to new_build'}.")
     draft['related_profile_display_name'] = disp
     draft['decision'] = 'new_build'
     draft['decision_reason'] = (
@@ -43478,7 +43551,7 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
         f"audience scope, so a fresh build is planned.")
     draft.pop('derive_type', None)
     draft.pop('ask_existing_profile', None)
-    if allow_ask:
+    if allow_ask and not _identity_mismatch:
         draft['ask_qualifier_match'] = True
         draft['qualifier_match_data'] = {
             'display_name': disp,
@@ -45267,7 +45340,27 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "'Heavy Social Users 18-44 Female-Skewed'); `audience_type` "
         "stays 'general'; size per the 'Broad demographic + behavioral "
         "persona' band in SAMPLE-SIZE HEURISTICS (hundreds of "
-        "thousands to low millions, NOT a niche fandom count).\n\n"
+        "thousands to low millions, NOT a niche fandom count).\n"
+        "  * DEFAULT TO NO ADD-ON CUTS. A simple single-persona ask "
+        "returns just that ONE profile (its size, credits, build time) "
+        "with `addon_cuts` = []. Do NOT auto-propose a ladder of "
+        "derived cuts (an age ladder, a gender cut, a market cut) the "
+        "user never asked for. Only populate `addon_cuts` when the user "
+        "EXPLICITLY asks for cuts, breakdowns, or segments ('break it "
+        "out by age', 'also give me the female cut'). Otherwise leave "
+        "`addon_cuts` empty; at most add a single optional line in "
+        "`assumptions` that cuts can be added later.\n"
+        "  * NEVER propose a DEGENERATE cut. Every cut must be a "
+        "STRICT, meaningful subset of the parent: an age cut spanning "
+        "the persona's whole age band ('Ages 18-44' on an 18-44 "
+        "universe) IS the whole universe and is pointless; a 'Female "
+        "only' cut on an audience already defined with a female skew is "
+        "redundant. Emit neither.\n"
+        "  * A generic behavioral / demographic persona is a new_build "
+        "unless a candidate genuinely shares its subject AND universe "
+        "(see SUBJECT-IDENTITY COMPATIBILITY). NEVER link it to an "
+        "unrelated existing profile as a 'cut of data we already have' "
+        "to shave credits; when unsure, prefer new_build.\n\n"
 
         "OUTPUT SHAPE (strict JSON object, no prose outside):\n"
         "{\n"
@@ -45702,6 +45795,24 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "mean the plain brand universe). The closest existing profile "
         "may be mentioned in decision_reason by display name only.\n\n"
 
+        "SUBJECT-IDENTITY COMPATIBILITY (HARD RULE - 2026-09-02, the "
+        "'cut of data we already have' defect): existing_match, "
+        "time_shifted_refresh, and derive_cut ALL require that the "
+        "candidate genuinely shares the requested SUBJECT identity, not "
+        "just an overlapping filler word. A broad behavioral / "
+        "demographic persona (e.g. heavy social media users 18-44 with "
+        "a female skew) is NOT a cut of an unrelated profile (e.g. a "
+        "contractor-consultation audience) - they share no real "
+        "subject. When no candidate shares the actual subject and "
+        "universe, the decision is new_build, full stop. NEVER "
+        "fabricate a parent link, a derive_cut, or an existing_match "
+        "just to price it at cut credits instead of a full build. When "
+        "unsure whether a candidate is truly the same subject, choose "
+        "new_build. This sits alongside UNIVERSE-QUALIFIER "
+        "COMPATIBILITY: that rule guards scope (buyers vs EST buyers), "
+        "this rule guards identity (subject A vs unrelated subject "
+        "B).\n\n"
+
         "SUBJECT VERIFICATION (HARD RULE - 2026-08-25): before "
         "anything else, attest whether the subject resolves to a "
         "real, verifiable entity - a brand, person, title, "
@@ -45799,6 +45910,22 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "The list may be sloppy - unclosed parentheses, trailing "
         "clauses, an example tacked on the end ('like Amazon Prime "
         "Video - EST Buyers') - parse out the real items anyway.\n"
+        "  7-ONE-PERSONA-VS-BATCH (HARD RULE - 2026-09-02): a persona "
+        "audience defined by a LIST OF EXAMPLE brands / tools / topics "
+        "is ONE profile, not several. 'Parents of kids 14-17 who are "
+        "active on social AND engage with digital safety content like "
+        "Common Sense Media, Life360, family location / safety tools, "
+        "etc.' is a SINGLE persona: the listed brands / tools are "
+        "QUALIFIERS / screening terms describing who is in the audience "
+        "- they populate that one profile's BRAND INPUT scrape terms, "
+        "they are NOT separate subjects. 'etc.' is NEVER a subject. "
+        "Return ONE JSON object here. Return an ARRAY only for a "
+        "GENUINE batch of distinct standalone subjects ('run profiles "
+        "on Nike, Adidas, and Puma' - three real, separate brands), up "
+        "to the batch cap. If the items are introduced as examples of a "
+        "behavior ('like ...', 'such as ...', 'things like ...', a "
+        "trailing 'etc.'), they are qualifiers for one persona, never a "
+        "batch.\n"
         "  7a. ARRAY ELEMENTS RUN THE FULL DECISION LOGIC EACH: check "
         "CANDIDATE PROFILES for every element independently. If the "
         "user asks for a cohort of each item as 'a cut of X if it "
@@ -48057,6 +48184,9 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
         # Multi-cohort recovery: age cohorts named in the raw ask that
         # the interpreter dropped ride as additional cuts.
         _augment_multi_cohort_cuts(spec_draft, per_prompt)
+        # Drop degenerate cuts (whole-universe age band / skew-redundant
+        # gender) so a cut is always a strict, meaningful subset.
+        _drop_degenerate_addon_cuts(spec_draft)
         # Cuts-only promoter: existing TU parent -> derive the cuts
         # off it instead of rebuilding (3 x cuts, no base).
         try:
@@ -48202,6 +48332,7 @@ def _finalize_chat_draft(spec_draft: dict, prompt_text: str = '',
         _decompose_embedded_subject_cuts(spec_draft, prompt_text)
         if prompt_text:
             _augment_multi_cohort_cuts(spec_draft, prompt_text)
+        _drop_degenerate_addon_cuts(spec_draft)
         if catalog is not None:
             try:
                 _maybe_promote_embedded_cuts_to_parent(spec_draft, catalog)
@@ -49705,6 +49836,88 @@ def _augment_multi_cohort_cuts(draft, user_text):
             base_credits + ADDON_CUT_CREDITS * len(merged))
     except Exception as _e:
         print(f'[multi-cohort-augment] non-fatal: {_e}')
+
+
+def _drop_degenerate_addon_cuts(draft):
+    """Remove add-on cuts that are not a strict, meaningful subset of
+    the parent universe (Jenna 2026-09-02):
+      - an AGE cut whose buckets cover EVERY populated AGE bucket of the
+        universe is the whole universe, not a cut ('Ages 18-44' on an
+        18-44 persona).
+      - a GENDER cut matching a gender the universe is already defined
+        to skew toward (that bucket >= 60 in tu_demos) is redundant with
+        the persona's own shape ('Female only' on a female-skewed
+        persona).
+    A cut must be a strict subset of the parent. Reprices
+    estimated_credits = base + 3 x remaining cuts. Mutates in place;
+    never raises."""
+    try:
+        cuts = draft.get('addon_cuts')
+        if not isinstance(cuts, list) or not cuts:
+            return
+
+        def _f(v):
+            try:
+                return float(str(v).replace('%', '').replace(',', '').strip())
+            except (TypeError, ValueError):
+                return None
+
+        demos = draft.get('tu_demos') if isinstance(
+            draft.get('tu_demos'), dict) else {}
+        age = {str(k).upper(): _f(v)
+               for k, v in (demos.get('AGE') or {}).items()}
+        populated_age = {k for k, v in age.items()
+                         if v is not None and v >= 1.0}
+        gender = {str(k).upper(): _f(v)
+                  for k, v in (demos.get('GENDER') or {}).items()}
+        skew_gender = None
+        if gender:
+            top_k, top_v = max(gender.items(),
+                               key=lambda kv: (kv[1] or 0.0))
+            if (top_v or 0.0) >= 60.0:
+                if top_k.startswith('FEMALE'):
+                    skew_gender = 'female'
+                elif top_k.startswith('MALE'):
+                    skew_gender = 'male'
+
+        kept, dropped = [], []
+        for c in cuts:
+            if not isinstance(c, dict):
+                continue
+            pin_cat = str(c.get('pin_category') or '').upper()
+            cid = str(c.get('cut_id') or '').lower()
+            cbuckets = {str(b).upper() for b in (c.get('pin_buckets') or [])}
+            # whole-universe AGE cut (age_band or generation on AGE)
+            if pin_cat == 'AGE' and populated_age and cbuckets \
+                    and populated_age <= cbuckets:
+                dropped.append(c)
+                continue
+            # gender cut redundant with a defined skew
+            if pin_cat == 'GENDER' and skew_gender \
+                    and (cid == skew_gender
+                         or cbuckets == {skew_gender.upper()}):
+                dropped.append(c)
+                continue
+            kept.append(c)
+
+        if not dropped:
+            return
+        draft['addon_cuts'] = kept
+        base = draft.get('base_credits')
+        try:
+            base = int(base) if base is not None else (
+                int(draft.get('estimated_credits') or 5)
+                - ADDON_CUT_CREDITS * len(cuts))
+        except (TypeError, ValueError):
+            base = 5
+        base = max(base, 5)
+        draft['base_credits'] = base
+        draft['estimated_credits'] = base + ADDON_CUT_CREDITS * len(kept)
+        labels = ', '.join(str(c.get('name_label') or c.get('label')
+                               or c.get('cut_id')) for c in dropped)
+        print(f"[degenerate-cut-filter] dropped: {labels}")
+    except Exception as _e:
+        print(f"[degenerate-cut-filter] non-fatal: {_e}")
 
 
 def _parse_addon_cuts_answer(answer_text, subject):
@@ -52639,6 +52852,7 @@ def api_synth_chat_interpret():
         # interpreter sometimes collapses them into a single mangled
         # subject - rescan the raw ask and merge any missing cohorts.
         _augment_multi_cohort_cuts(spec_draft, text)
+        _drop_degenerate_addon_cuts(spec_draft)
         # Cuts-only promoter (2026-08-20): if the cleaned subject
         # already has a full-universe TU in the catalog, skip the
         # rebuild - flip to derive_cut/addon_cuts and charge 3 x cuts.
@@ -61162,6 +61376,7 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
         pass
     _decompose_embedded_subject_cuts(draft, prompt)
     _augment_multi_cohort_cuts(draft, prompt)
+    _drop_degenerate_addon_cuts(draft)
     _maybe_promote_embedded_cuts_to_parent(draft,
                                            allow_existing_match=False)
 
