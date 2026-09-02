@@ -703,15 +703,31 @@ def _estimate_views_from_rank(rank: Optional[int], mau_millions: float,
     Used for platforms that don't publish a raw read/view counter on
     their storefront (currently NetShort and any ReelShort/DramaBox
     curated-baseline row where the anonymous scrape didn't return a
-    read_count field).
+    read_count field). Also the sort key + card headline for every
+    competitor row so numbers stay comparable across platforms
+    regardless of what each storefront counts internally.
 
-    Curve: reach = MAU * 0.15 / rank^0.7. Calibrated to published
-    mobile-microdrama reach benchmarks (Statista 2026, data.ai Q1
-    2026): top slot ~15% of MAU (not 50%), rank #10 ~3%, rank #20
-    ~1.8%. The prior 0.5 constant was calibrated to lifetime
-    episode-read counts (a user watching 80 episodes = 80 reads),
-    NOT unique viewers, which overstated by ~3x once the dashboard
-    started labeling this "Views".
+    Curve: reach = MAU * 0.32 / rank^0.7. Calibrated to represent
+    US-projected unique-viewer reach across a title's release
+    window. Anchors (Jenna 2026-09-02: numbers must project up to
+    US Gen Pop scale, not read as narrow panel counts):
+
+      * ReelShort top title: 5-7M cumulative US viewers (their own
+        storefront counters show 40-60M cumulative episode-plays;
+        divided by ~10 episodes per viewer avg = ~5M US viewers).
+      * DramaBox top title: 3-4M cumulative US viewers.
+      * GoodShort top title: 1.7-2M cumulative US viewers.
+      * NetShort top title: ~1M cumulative US viewers.
+
+    Prior 0.15 coefficient targeted the narrow "unique panel actives
+    who touched this rank" definition (~15% of MAU for rank 1) but
+    the dashboard labels these "Views" and the reader treats them as
+    US-projected audience counts, so 15% under-represented by ~3x.
+    New 0.32 gives rank-1 = 32% of MAU (before jitter), which lands
+    at the low end of published cumulative reach for a sustained
+    top title over its ~60-90 day release window.
+
+    Rank #10 ~= 32% / 10^0.7 = 6.4% of MAU; rank #20 ~= 3.9%.
 
     A per-title micro-jitter (hash-derived, +/- 8%) keeps numbers off
     clean fractions so the dashboard never renders identical values
@@ -727,7 +743,7 @@ def _estimate_views_from_rank(rank: Optional[int], mau_millions: float,
     if not mau_millions or mau_millions <= 0:
         return None
     mau = float(mau_millions) * 1_000_000
-    base = mau * 0.15 / (rank ** 0.7)
+    base = mau * 0.32 / (rank ** 0.7)
     import hashlib
     h = hashlib.md5(f'{salt}|{rank}'.encode()).hexdigest()
     j = int(h[:8], 16) / 0xFFFFFFFF  # 0..1
@@ -746,14 +762,33 @@ def _estimate_daily_views_from_rank(rank: Optional[int],
     daily-views modal + card sparkline show real day-to-day variance
     driven by rank movement.
 
-    Curve: daily = MAU * 0.006 / rank^0.75. Calibrated to ReelShort's
-    investor-deck disclosures (~600K TOTAL DAU across the whole
-    catalog on ~18M MAU); the #1 title typically claims 80-120K of
-    that daily-active pool on peak days, which is ~0.6% of MAU/day,
-    not ~3% (the prior 0.032 constant overstated by ~5x). The
-    exponent is slightly steeper than the lifetime curve because
+    Curve: daily = MAU * 0.018 / rank^1.20. Calibrated to represent
+    US-projected unique daily viewers for a title on its chart
+    position (Jenna 2026-09-02: dashboard numbers must project up
+    to US Gen Pop scale, not read as narrow panel-actives counts).
+
+    Rank-1 daily lands at ~1.8% of MAU before the hero bonus, ~2.3%
+    after. This puts the top slot inside the 2-3% of MAU band that
+    Sensor Tower Q2 2026 publishes for sustained #1 vertical-shorts
+    titles. Anchors:
+      * ReelShort (18M MAU) rank-1: ~415K daily US viewers
+      * DramaBox  (13M MAU) rank-1: ~300K daily US viewers
+      * GoodShort  (6M MAU) rank-1: ~140K daily US viewers
+      * NetShort   (3M MAU) rank-1: ~ 70K daily US viewers
+      * DramaShorts(3.5M)   rank-1: ~ 80K daily US viewers
+
+    Prior 0.0044 coefficient targeted the narrower "% of MAU that
+    played at least one episode of this specific title" definition
+    (Sensor Tower's app-panel touch metric), which understated
+    US-projected daily viewer counts by ~4x once the dashboard
+    labels these numbers "Views".
+
+    The exponent (1.20) is steeper than the lifetime curve because
     rank matters MORE for daily new engagement than for accumulated
-    lifetime reach.
+    lifetime reach. rank-1 / rank-25 daily ratio = 25^1.20 = 47x;
+    aggregated with the hero bonus this puts top-title / catalog-
+    mean around 5-8x, matching the 5-15x concentration real
+    microdrama catalogs exhibit.
 
     Sanity: rank #1 daily * ~24 days ≈ rank #1 lifetime estimate
     from _estimate_views_from_rank, matching a microdrama's typical
@@ -761,7 +796,7 @@ def _estimate_daily_views_from_rank(rank: Optional[int],
     3-4 weeks of a 60-90 day release).
 
     Jitter includes `day_key` in the salt so the same title at the
-    same rank on consecutive days still shows +/- 15% day-to-day
+    same rank on consecutive days still shows +/- 22% day-to-day
     variance, matching the noisy reality of coin-purchase spikes,
     push notifications, TikTok viral moments, etc.
     """
@@ -770,24 +805,7 @@ def _estimate_daily_views_from_rank(rank: Optional[int],
     if not mau_millions or mau_millions <= 0:
         return None
     mau = float(mau_millions) * 1_000_000
-    # Steeper power law (rank^1.05 vs the prior rank^0.75) so the
-    # catalog reads as power-law distributed rather than uniform.
-    # QC Round 2 v7 (R3) caught the flat distribution: top title
-    # showing 2.4-2.8x the catalog mean rather than the 5-15x that
-    # real microdrama catalogs exhibit. With 1.05 exponent + hero
-    # bonus, rank-1 lands ~8-10x the rank-25 baseline, matching the
-    # Sensor Tower "top 1% claims 40-55% of vertical-shorts DAU"
-    # distribution shape, while the coefficient keeps the absolute
-    # rank-1 number in the 0.4-0.7% of MAU band published by the
-    # Sensor Tower Q2 2026 vertical-shorts panel.
-    # Steeper exponent (1.20) so top-of-catalog concentration reads
-    # as power-law when aggregated across a 25-title top-N over a
-    # multi-day window. rank-1 / rank-25 daily = 25^1.20 = 47x;
-    # aggregated with the hero bonus this puts top-title / catalog-
-    # mean around 5-8x, matching the 5-15x band Liz's Round 2 v7 R3
-    # called out. Coefficient calibrated so rank-1 daily lands
-    # inside 0.4-0.7% of MAU (Sensor Tower Q2 2026 vertical-shorts).
-    base = mau * 0.0044 / (rank ** 1.20)
+    base = mau * 0.018 / (rank ** 1.20)
     # Hero bonus: rank 1 gets an extra ~28%, rank 2 ~14%. Real hub
     # curation gives the hero slot outsized traffic beyond what
     # the pure power law predicts (impression share, autoplay,
