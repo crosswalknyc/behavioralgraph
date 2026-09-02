@@ -25119,6 +25119,14 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-sheet-scroll { max-height: 640px; overflow-y: auto; }
             #trendsIQView .tiq-sheet-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-secondary, #1e1e2e); }
             body[data-theme="light"] #trendsIQView .tiq-sheet-scroll thead th { background: #ffffff; }
+            /* Per-card HIDE button (lime) + bottom-left RESTORE dock. (Jessie 2026-09-02) */
+            #trendsIQView .tiq-hidewrap { margin: 6px 0 0; }
+            #trendsIQView .tiq-hide-btn { font-family: inherit; font-size: 0.6rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #14330A; background: linear-gradient(135deg, #C7F23E, #A0D911); border: 1px solid #A0D911; border-radius: 6px; padding: 2px 10px; cursor: pointer; }
+            #trendsIQView .tiq-hide-btn:hover { background: linear-gradient(135deg, #D3F95E, #B5E61A); }
+            #trendsIQView #tiqHiddenDock { position: fixed; left: 16px; bottom: 16px; z-index: 45; display: flex; flex-direction: column-reverse; gap: 6px; align-items: flex-start; }
+            #trendsIQView #tiqHiddenDock .tiq-restore-btn { font-family: inherit; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #14330A; background: linear-gradient(135deg, #C7F23E, #A0D911); border: 1px solid #A0D911; border-radius: 999px; padding: 7px 13px; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,0.28); display: inline-flex; align-items: center; gap: 6px; max-width: 260px; }
+            #trendsIQView #tiqHiddenDock .tiq-restore-btn:hover { background: linear-gradient(135deg, #D3F95E, #B5E61A); }
+            #trendsIQView #tiqHiddenDock .tiq-restore-label { font-weight: 600; text-transform: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
             #trendsIQView .tiq-card { background: var(--bg-secondary, #1e1e2e); border: 1px solid var(--border-color, #2c2c3e); border-radius: 10px; padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.55rem; }
             #trendsIQView .tiq-card h4 { margin: 0 0 0.15rem 0; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; }
             #trendsIQView .tiq-card-sub { font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.35rem; }
@@ -53195,6 +53203,64 @@ https://www.instagram.com/p/..."></textarea>
         };
 
         // Card header with an Export-CSV dropdown for a FAST sheet.
+        // ---- Card HIDE / RESTORE (Rankers source sheets) -----------
+        window.tiqHideCard = function(btn) {
+            var card = btn && btn.closest ? btn.closest('.tiq-card') : null;
+            if (!card) return;
+            var id = card.getAttribute('data-tiq-cardid');
+            if (!id) return;
+            var h = card.querySelector('.tiq-sheet-cardhead h4') || card.querySelector('h4');
+            var label = h ? h.textContent.trim() : id;
+            window.__trendsIQ.tiqHidden = window.__trendsIQ.tiqHidden || {};
+            window.__trendsIQ.tiqHidden[id] = label;
+            card.style.display = 'none';
+            _tiqRenderHiddenDock();
+        };
+        window.tiqRestoreCard = function(el) {
+            var id = el && el.getAttribute ? el.getAttribute('data-cardid') : el;
+            if (!id) return;
+            var map = (window.__trendsIQ && window.__trendsIQ.tiqHidden) || {};
+            delete map[id];
+            var sel = (window.CSS && CSS.escape) ? CSS.escape(id) : id.replace(/"/g, '\\"');
+            var cards = document.querySelectorAll('#trendsIQView .tiq-card[data-tiq-cardid="' + sel + '"]');
+            for (var i = 0; i < cards.length; i++) cards[i].style.display = '';
+            _tiqRenderHiddenDock();
+        };
+        function tiqApplyHidden() {
+            var map = (window.__trendsIQ && window.__trendsIQ.tiqHidden) || {};
+            var cards = document.querySelectorAll('#trendsIQView .tiq-card[data-tiq-cardid]');
+            for (var i = 0; i < cards.length; i++) {
+                var id = cards[i].getAttribute('data-tiq-cardid');
+                cards[i].style.display = map[id] ? 'none' : '';
+            }
+            _tiqRenderHiddenDock();
+        }
+        function _tiqRenderHiddenDock() {
+            var host = document.getElementById('trendsIQView');
+            if (!host) return;
+            var dock = document.getElementById('tiqHiddenDock');
+            var map = (window.__trendsIQ && window.__trendsIQ.tiqHidden) || {};
+            var ids = Object.keys(map);
+            if (!ids.length) { if (dock) dock.parentNode.removeChild(dock); return; }
+            if (!dock) { dock = document.createElement('div'); dock.id = 'tiqHiddenDock'; host.appendChild(dock); }
+            dock.innerHTML = ids.map(function(id) {
+                var lbl = _tiqEsc(map[id]);
+                return '<button type="button" class="tiq-restore-btn" data-cardid="' + _tiqEsc(id) + '"' +
+                       ' title="Restore ' + lbl + '" onclick="tiqRestoreCard(this)">\u21ba RESTORE' +
+                       ' <span class="tiq-restore-label">' + lbl + '</span></button>';
+            }).join('');
+        }
+        function _tiqHideWrap() {
+            return '<div class="tiq-hidewrap"><button type="button" class="tiq-hide-btn" onclick="tiqHideCard(this)">HIDE</button></div>';
+        }
+        function _tiqSourceEmptyCard(cardId, label, sub) {
+            return '<div class="tiq-card" data-tiq-cardid="' + _tiqEsc(cardId) + '">' +
+                     '<div class="tiq-sheet-cardhead"><h4>' + _tiqEsc(label) + '</h4></div>' +
+                     _tiqHideWrap() +
+                     '<div class="tiq-placeholder"><div>' + _tiqEsc(sub || 'Warming up.') + '</div></div>' +
+                   '</div>';
+        }
+
         function _tiqSheetCardHead(label) {
             return '<div class="tiq-sheet-cardhead">' +
                      '<h4>' + _tiqEsc(label) + '</h4>' +
@@ -55013,7 +55079,7 @@ https://www.instagram.com/p/..."></textarea>
                 // heading.
                 var afterEl = anchor;
                 var next = anchor.nextElementSibling;
-                if (next && next.classList && next.classList.contains('tiq-card-sub')) {
+                if (next && next.classList && (next.classList.contains('tiq-card-sub') || next.classList.contains('tiq-hidewrap'))) {
                     afterEl = next;
                 }
                 var wrap = document.createElement('div');
@@ -55076,6 +55142,7 @@ https://www.instagram.com/p/..."></textarea>
                     panel.appendChild(pwrap);
                 }
             }
+            if (typeof tiqApplyHidden === 'function') tiqApplyHidden();
         }
 
         window.setTrendsIQTab = function(key) {
@@ -56262,6 +56329,7 @@ https://www.instagram.com/p/..."></textarea>
             var entity = opts.entity || 'Music';
             var wide = !!opts.wide;
             var scroll = !!opts.scroll;
+            var hideBtn = !!opts.hideBtn;
             var subOf   = (typeof opts.subOf   === 'function') ? opts.subOf   : function() { return ''; };
             var badgeOf = (typeof opts.badgeOf === 'function') ? opts.badgeOf : function() { return ''; };
             var keyOf   = (typeof opts.keyOf   === 'function') ? opts.keyOf   : function(it) { return it.title; };
@@ -56321,7 +56389,8 @@ https://www.instagram.com/p/..."></textarea>
                        (wide ? '<td class="tiq-sheet-td-spacer"></td>' : '') +
                        '</tr>';
             }).join('');
-            return '<div class="tiq-card">' + _tiqSheetCardHead(opts.label) +
+            return '<div class="tiq-card"' + (hideBtn ? ' data-tiq-cardid="' + _tiqEsc(String(source) + '-' + (opts.label || '')) + '"' : '') + '>' + _tiqSheetCardHead(opts.label) +
+                   (hideBtn ? _tiqHideWrap() : '') +
                    (scroll ? '<div class="tiq-sheet-scroll">' : '') +
                    '<table class="tiq-sheet' + (wide ? ' tiq-sheet-wide' : '') + '" data-entity="' + entity + '" data-metric="' + _tiqEsc(metricLabel) + '" data-export="' + _tiqEsc(String(source) + '-' + (opts.label || '')) + '">' +
                      '<thead><tr>' +
@@ -56352,23 +56421,26 @@ https://www.instagram.com/p/..."></textarea>
             var keys = order.filter(function(k) { return sources[k]; })
                 .concat(allKeys.filter(function(k) { return order.indexOf(k) === -1; }));
 
-            // 2026-09-02 (v3): hide no-data sources; each card previews the
-            // top 10 then scrolls; Music runs 4 cards across. Sortable
-            // 3-column sheet (Title | Streams | Delta%).
+            // 2026-09-02 (v4): show every platform (empty ones become
+            // 'warming up' placeholders so Amazon reappears once cookies are
+            // re-donated); populated cards preview top 10, scroll, and carry
+            // a HIDE button. Music: 3 cards across.
             var cards = keys.map(function(k) {
                 var s = sources[k] || {};
                 var items = s.items || [];
-                if (!s.available || !items.length) return '';
+                var cid = k + '-' + (s.label || k);
+                if (!s.available || !items.length) {
+                    return _tiqSourceEmptyCard(cid, s.label || k, s.sub || 'Warming up.');
+                }
                 return _tiqSourceSheet({
                     kind: 'music', source: k, label: s.label || k, rows: items,
-                    metricLabel: 'Streams', entity: 'Music', wide: false, scroll: true,
+                    metricLabel: 'Streams', entity: 'Music', wide: false, scroll: true, hideBtn: true,
                     keyOf: function(it) { return it.title + ' - ' + (it.artist || ''); },
                     subOf: function(it) { return it.artist ? _tiqEsc(it.artist) : ''; },
                     badgeOf: function(it) { return _tiqCrossPlatformBadge(it); }
                 });
-            }).filter(Boolean);
-            if (!cards.length) return '<div class="tiq-empty">Music charts are warming up. Check back later.</div>';
-            return '<div class="tiq-cards-grid tiq-cards-4up">' + cards.join('') + '</div>';
+            }).join('');
+            return '<div class="tiq-cards-grid tiq-cards-3up">' + cards + '</div>';
         }
         window.setTrendsIQMusic = function(key) {
             window.__trendsIQ.activeMusic = key;
@@ -56418,22 +56490,25 @@ https://www.instagram.com/p/..."></textarea>
             var keys = order.filter(function(k) { return sources[k]; })
                 .concat(allKeys.filter(function(k) { return order.indexOf(k) === -1; }));
 
-            // 2026-09-02 (v3): hide no-data sources; top 10 then scroll;
-            // 3 cards per row.
+            // 2026-09-02 (v4): show every platform (empty -> 'warming up'
+            // placeholder so Amazon reappears once cookies are re-donated);
+            // populated cards preview top 10, scroll, and carry a HIDE button.
             var cards = keys.map(function(k) {
                 var s = sources[k] || {};
                 var items = s.items || [];
-                if (!s.available || !items.length) return '';
+                var cid = k + '-' + (s.label || k);
+                if (!s.available || !items.length) {
+                    return _tiqSourceEmptyCard(cid, s.label || k, s.sub || 'Warming up.');
+                }
                 return _tiqSourceSheet({
                     kind: 'podcast', source: k, label: s.label || k, rows: items,
-                    metricLabel: 'Listeners', entity: 'Podcast', wide: false, scroll: true,
+                    metricLabel: 'Listeners', entity: 'Podcast', wide: false, scroll: true, hideBtn: true,
                     keyOf: function(it) { return it.title + ' - ' + (it.artist || ''); },
                     subOf: function(it) { return it.artist ? _tiqEsc(it.artist) : ''; },
                     badgeOf: function(it) { return _tiqCrossPlatformBadge(it); }
                 });
-            }).filter(Boolean);
-            if (!cards.length) return '<div class="tiq-empty">Podcast charts are warming up. Check back later.</div>';
-            return '<div class="tiq-cards-grid tiq-cards-3up">' + cards.join('') + '</div>';
+            }).join('');
+            return '<div class="tiq-cards-grid tiq-cards-3up">' + cards + '</div>';
         }
         window.setTrendsIQPodcasts = function(key) {
             window.__trendsIQ.activePodcasts = key;
@@ -57743,7 +57818,7 @@ https://www.instagram.com/p/..."></textarea>
             var gameCol = function(colLabel, rows, wide) {
                 return _tiqSourceSheet({
                     kind: 'gaming', source: 'gaming', label: colLabel, rows: rows || [],
-                    metricLabel: 'Plays', entity: 'Gaming', wide: !!wide, scroll: true,
+                    metricLabel: 'Plays', entity: 'Gaming', wide: !!wide, scroll: true, hideBtn: true,
                     keyOf: function(it) { return it.title; },
                     subOf: gsub
                 });
@@ -57765,18 +57840,23 @@ https://www.instagram.com/p/..."></textarea>
                 var s = gaming[k] || {};
                 var buckets = groupedBuckets[k];
                 if (!s.available) {
-                    return;   // hide sources with no data
+                    cards.push(_tiqSourceEmptyCard('gaming-' + (s.label || k), s.label || k, 'Loading.'));
                 } else if (buckets && buckets.some(function(b) { return Array.isArray(s[b[0]]); })) {
-                    buckets.filter(function(b) { return (s[b[0]] || []).length; })
-                        .forEach(function(b) {
+                    var populated = buckets.filter(function(b) { return (s[b[0]] || []).length; });
+                    if (!populated.length) {
+                        cards.push(_tiqSourceEmptyCard('gaming-' + (s.label || k), s.label || k, 'No trending games right now.'));
+                    } else {
+                        populated.forEach(function(b) {
                             cards.push(gameCol((s.label ? s.label + ' \u00b7 ' : '') + b[1], s[b[0]]));
                         });
+                    }
                 } else if ((s.items || []).length) {
                     cards.push(gameCol(s.label || k, s.items));
+                } else {
+                    cards.push(_tiqSourceEmptyCard('gaming-' + (s.label || k), s.label || k, 'No trending games right now.'));
                 }
             });
 
-            if (!cards.length) return '<div class="tiq-empty">Gaming rankings are warming up.</div>';
             return '<div class="tiq-cards-grid tiq-cards-3up">' + cards.join('') + '</div>';
         }
         window.setTrendsIQGaming = function(key) {
