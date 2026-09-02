@@ -21452,33 +21452,55 @@ https://www.instagram.com/p/..."></textarea>
             color: #2f4d05 !important;
             font-weight: 600 !important;
         }
-        /* Hot-pink accent (in-house #ec4899) for Suggestions + mic,
-           per Jessie 2026-09-02. Chat highlight chips stay purple. */
-        #prometheusWidget #synthChatSuggestBtn,
+        /* Mic: in-house hot pink (#ec4899). Suggestions + the 'builds'
+           counter: lime (#C7F23E). Chat highlight chips stay purple.
+           (Jessie 2026-09-02) */
         #prometheusWidget #synthChatMicBtn {
             background: rgba(236,72,153,0.16) !important;
             border: 1px solid #ec4899 !important;
             color: #f9a8d4 !important;
             border-radius: 999px !important;
+            padding: 0.3rem 0.5rem !important;
         }
-        #prometheusWidget #synthChatMicBtn { padding: 0.3rem 0.5rem !important; }
-        body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn,
         body[data-theme="light"] #prometheusWidget #synthChatMicBtn {
             background: rgba(236,72,153,0.12) !important;
             border: 1px solid #ec4899 !important;
             color: #be185d !important;
         }
-        body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn { font-weight: 600 !important; }
-        #prometheusWidget #synthChatSuggestBtn:hover,
         #prometheusWidget #synthChatMicBtn:hover {
             background: rgba(236,72,153,0.24) !important;
             border-color: #db2777 !important;
         }
-        body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn:hover,
         body[data-theme="light"] #prometheusWidget #synthChatMicBtn:hover {
             color: #9d174d !important;
         }
+        #prometheusWidget #synthChatSuggestBtn {
+            background: rgba(199,242,62,0.16) !important;
+            border: 1px solid #C7F23E !important;
+            color: #C7F23E !important;
+            border-radius: 999px !important;
+        }
+        body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn {
+            background: rgba(160,217,17,0.18) !important;
+            border: 1px solid #A0D911 !important;
+            color: #3d5c04 !important;
+            font-weight: 600 !important;
+        }
+        #prometheusWidget #synthChatSuggestBtn:hover {
+            background: rgba(199,242,62,0.28) !important;
+            border-color: #A0D911 !important;
+        }
+        body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn:hover {
+            background: rgba(160,217,17,0.28) !important;
+            color: #2c4303 !important;
+        }
         /* Input hint: lift off ghost-grey. */
+        #prometheusWidget #synthChatInputHint {
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            line-height: 1.2;
+        }
         body[data-theme="light"] #prometheusWidget #synthChatInputHint {
             color: #4b5563 !important;
             opacity: 1 !important;
@@ -21575,7 +21597,7 @@ https://www.instagram.com/p/..."></textarea>
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:0.5rem; flex:0 0 auto;">
-                    <span id="synthChatQueueBadge" style="font-size: 0.72rem; color: #ec4899;"></span>
+                    <span id="synthChatQueueBadge" style="font-size: 0.72rem; color: #C7F23E;"></span>
                     <button type="button" id="prometheusCollapseBtn" onclick="prometheusCollapse()" aria-label="Collapse Prometheus" title="Collapse">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </button>
