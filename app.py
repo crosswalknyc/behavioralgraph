@@ -56278,6 +56278,222 @@ def _pm_read_status_write(job_id, payload):
         ContentType='application/json')
 
 
+# ------------------------------------------------------------------
+# "Email me when it is ready" for long tasks (2026-09-02).
+#
+# A generated read (analyze background job) and a deck build each take
+# a few minutes. When one starts, the chat offers to email the
+# finished OUTPUT to the requester. The opt-in is captured AFTER
+# kickoff (the offer is the ack's follow-up), so the email address is
+# threaded to the background thread through an S3 side-file keyed by
+# job id - the same job-id side-channel idea deck attribution uses at
+# enqueue, but S3-backed so the confirm POST and the worker thread can
+# land on different workers.
+#
+# On completion both jobs ALSO append the finished output to the
+# requester's chat thread (the existing per-user history store), so
+# the read / deck link is waiting when they return even if the tab
+# that started it is gone. The chat re-hydration is unconditional; the
+# email is the opt-in extra.
+# ------------------------------------------------------------------
+_PM_NOTIFY_PREFIX = 'system/prometheus_notify/'
+_PM_EMAIL_RE = re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+
+
+def _pm_iso_now():
+    return time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime())
+
+
+def _pm_clean_notify_email(raw):
+    """First syntactically valid address from a raw string, or ''."""
+    for part in re.split(r'[,;\n]+', str(raw or '')):
+        addr = part.strip()
+        if addr and _PM_EMAIL_RE.match(addr) and len(addr) <= 254:
+            return addr
+    return ''
+
+
+def _pm_notify_write(job_id, payload):
+    """Persist a requester's email opt-in for one background job."""
+    s3_client.put_object(
+        Bucket=S3_BUCKET, Key=f"{_PM_NOTIFY_PREFIX}{job_id}.json",
+        Body=json.dumps(payload).encode('utf-8'),
+        ContentType='application/json')
+
+
+def _pm_notify_read(job_id):
+    """Read the email opt-in for a job, or None when none was set."""
+    try:
+        resp = s3_client.get_object(
+            Bucket=S3_BUCKET, Key=f"{_PM_NOTIFY_PREFIX}{job_id}.json")
+        return json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+
+
+def _pm_notify_delete(job_id):
+    try:
+        s3_client.delete_object(
+            Bucket=S3_BUCKET, Key=f"{_PM_NOTIFY_PREFIX}{job_id}.json")
+    except Exception:
+        pass
+
+
+def _pm_send_output_email(kind, to_email, data):
+    """Email the finished OUTPUT of a long task to the requester.
+
+    Owned first-party voice, no internal vocabulary. `kind` is 'read'
+    or 'deck': a read carries the read itself in the body, a deck
+    carries its title and a download link. Reuses the same SES path
+    the rest of the chatbot uses (us-east-2, jenna@crosswalknyc.com).
+    The send runs on a daemon thread; never raises."""
+    import html as _html
+    to_email = _pm_clean_notify_email(to_email)
+    if not to_email:
+        return False
+    kind = 'deck' if str(kind) == 'deck' else 'read'
+    if kind == 'deck':
+        title = str((data or {}).get('title')
+                    or (data or {}).get('filename') or 'Your deck')[:200]
+        slides = (data or {}).get('slides')
+        url = str((data or {}).get('url') or '')
+        slide_note = (f" ({slides} slides)"
+                      if isinstance(slides, int) and slides else '')
+        subject_line = f"{title} is ready"
+        link_html = ''
+        if url.lower().startswith('https://'):
+            link_html = (
+                f'<p><a href="{_html.escape(url)}" '
+                'style="display:inline-block;background:#66d9ef;'
+                'color:#0a1929;padding:12px 24px;border-radius:6px;'
+                'text-decoration:none;font-weight:bold;margin-top:8px;">'
+                'Download the deck</a></p>')
+        body_html = _wrap_email_html(
+            f"<p>{_html.escape(title)}{slide_note} is ready.</p>"
+            f"{link_html}"
+            "<p>The link is good for 7 days. It is also waiting in the "
+            "chat on your dashboard.</p>"
+            "<p>Crosswalk IQ</p>",
+            title="Your deck is ready")
+        body_text = (
+            f"{title}{slide_note} is ready.\n\n"
+            + (f"Download the deck: {url}\n\n" if url else "")
+            + "The link is good for 7 days. It is also waiting in the "
+              "chat on your dashboard.\n\nCrosswalk IQ\n")
+    else:
+        reply = str((data or {}).get('reply') or '').strip()
+        if not reply:
+            return False
+        subject_line = "Your read is ready"
+        reply_html = _html.escape(reply).replace('\n', '<br>')
+        body_html = _wrap_email_html(
+            f"<p>{reply_html}</p>"
+            "<p>You can also pick this up in the chat on your "
+            "dashboard.</p>"
+            "<p>Crosswalk IQ</p>",
+            title="Your read is ready")
+        body_text = (
+            f"{reply}\n\n"
+            "You can also pick this up in the chat on your "
+            "dashboard.\n\nCrosswalk IQ\n")
+
+    def _send():
+        try:
+            ses = boto3.client('ses', region_name='us-east-2')
+            ses.send_email(
+                Source='Crosswalk IQ <jenna@crosswalknyc.com>',
+                Destination={'ToAddresses': [to_email]},
+                Message={'Subject': {'Data': subject_line[:200]},
+                         'Body': {'Html': {'Data': body_html},
+                                  'Text': {'Data': body_text}}})
+            print(f"[pm-notify] output email sent to {to_email} ({kind})")
+        except Exception as e:
+            print(f"[pm-notify] SES send failed: {e}")
+
+    threading.Thread(target=_send, daemon=True).start()
+    return True
+
+
+def _pm_flush_notify(job_id, kind, data):
+    """On successful completion: if the requester opted in, email them
+    the output, then clear the opt-in. No-op when none was set."""
+    try:
+        opt = _pm_notify_read(job_id)
+        if opt and opt.get('email'):
+            _pm_send_output_email(kind, opt.get('email'), data)
+    except Exception:
+        traceback.print_exc()
+    finally:
+        _pm_notify_delete(job_id)
+
+
+def _pm_history_has_job_turn(history, meta_key, job_id):
+    for t in (history or []):
+        try:
+            if (t or {}).get('meta', {}).get(meta_key) == job_id:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _pm_append_read_to_history(username, job_id, payload):
+    """Append a finished read to the requester's chat thread so it is
+    waiting when they return, even if the tab that started it is gone.
+    Uses the existing per-user history store; idempotent by
+    read_job_id so it never doubles a turn the widget also delivered."""
+    if not username:
+        return
+    try:
+        reply = str((payload or {}).get('reply') or '').strip()
+        if not reply:
+            return
+        history = _load_synth_chat_history(username) or []
+        if _pm_history_has_job_turn(history, 'read_job_id', job_id):
+            return
+        followups = [f for f in ((payload or {}).get('followups') or [])
+                     if isinstance(f, str)][:6]
+        history.append({
+            'role': 'agent', 'text': reply, 'ts': _pm_iso_now(),
+            'meta': {'read_job_id': job_id, 'kind': 'read',
+                     'options': [{'label': f, 'send': f}
+                                 for f in followups]}})
+        _save_synth_chat_history(username, history)
+    except Exception:
+        traceback.print_exc()
+
+
+def _pm_append_deck_to_history(username, job_id, status):
+    """Append a finished deck (title + download link) to the
+    requester's chat thread. Idempotent by deck_job_id."""
+    if not username:
+        return
+    try:
+        url = str((status or {}).get('url') or '')
+        if not url.lower().startswith('https://'):
+            return
+        history = _load_synth_chat_history(username) or []
+        if _pm_history_has_job_turn(history, 'deck_job_id', job_id):
+            return
+        title = str((status or {}).get('title')
+                    or (status or {}).get('filename')
+                    or 'Profile IQ deck')
+        slides = (status or {}).get('slides')
+        slide_note = (f" ({slides} slides)"
+                      if isinstance(slides, int) and slides else '')
+        history.append({
+            'role': 'agent',
+            'text': (f"Deck ready: {title}{slide_note}. "
+                     "The link is good for 7 days."),
+            'ts': _pm_iso_now(),
+            'meta': {'deck_job_id': job_id, 'kind': 'deck',
+                     'link': {'url': url,
+                              'label': 'Download the deck'}}})
+        _save_synth_chat_history(username, history)
+    except Exception:
+        traceback.print_exc()
+
+
 def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
                      digest_block, anchors_block, led):
     """Background body of one generated read. Writes the finished
@@ -56315,8 +56531,19 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             if isinstance(_verify, dict) and _verify:
                 _done['verify'] = _verify
             _pm_read_status_write(job_id, _done)
+            # Land the finished read in the requester's chat thread so
+            # it is waiting when they return, and (if they opted in)
+            # email them the read itself. A held read still lands in
+            # the thread as its calm one-liner, but carries no output
+            # to email, so only a clean read fires the notify.
+            _pm_append_read_to_history(pm_user, job_id, payload)
+            if not held:
+                _pm_flush_notify(job_id, 'read', payload)
+            else:
+                _pm_notify_delete(job_id)
         else:
             _pm_read_status_write(job_id, {**head, 'status': 'error'})
+            _pm_notify_delete(job_id)
         print(f"[pm-loop] read {job_id} "
               f"{'held' if held else 'done' if payload.get('success') else 'failed'} "
               f"for {pm_user}")
@@ -56330,6 +56557,7 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
             _pm_read_status_write(job_id, {**head, 'status': 'error'})
         except Exception:
             pass
+        _pm_notify_delete(job_id)
 
 
 @app.route('/api/brief-chat/read-status/<job_id>', methods=['GET'])
@@ -56355,6 +56583,75 @@ def api_synth_chat_read_status(job_id):
             and user.get('role') != 'super_admin'):
         return jsonify({'success': False, 'error': 'not your job'}), 403
     return jsonify({'success': True, **payload})
+
+
+@app.route('/api/brief-chat/notify-when-done', methods=['POST'])
+@requires_auth
+@_chatbot_route_guard('brief-chat/notify-when-done')
+def api_synth_chat_notify_when_done():
+    """Opt in to an email when a long read / deck finishes.
+
+    Called after the task's ack, once the user confirms the offer with
+    an address. The finished output always lands in the chat thread on
+    return; this endpoint is only the opt-in email extra. The address
+    rides an S3 side-file keyed by job id so the background thread
+    picks it up on completion regardless of which worker serves this
+    request. If the job already finished, the output email is sent
+    right away instead of queued.
+
+    Session-authenticated dashboard users only."""
+    user, err = _synth_chat_gate(allow_api_key=False)
+    if err:
+        return err
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception:
+        return jsonify({'success': False, 'error': 'bad request'}), 400
+    job_id = str(body.get('job_id') or '').strip()
+    kind = 'deck' if str(body.get('kind') or '') == 'deck' else 'read'
+    email = _pm_clean_notify_email(body.get('email'))
+    if not re.fullmatch(r'[0-9a-f]{12}', job_id):
+        return jsonify({'success': False, 'error': 'bad job id'}), 400
+    if not email:
+        return jsonify({'success': False,
+                        'error': 'enter a valid email'}), 400
+    uname = (user.get('username') or user.get('email') or '').strip()
+    prefix = _PM_DECK_PREFIX if kind == 'deck' else _PM_READ_PREFIX
+    try:
+        resp = s3_client.get_object(
+            Bucket=S3_BUCKET, Key=f"{prefix}{job_id}.json")
+        status = json.loads(resp['Body'].read().decode('utf-8'))
+    except Exception:
+        return jsonify({'success': False, 'error': 'unknown job'}), 404
+    if (status.get('user') and status.get('user') != uname
+            and user.get('role') != 'super_admin'):
+        return jsonify({'success': False, 'error': 'not your job'}), 403
+    st = str(status.get('status') or '').strip().lower()
+    # Already finished: send the output now (a held read / any error
+    # has no output to send, so those just confirm without a send).
+    if kind == 'read' and st in ('done', 'held', 'error'):
+        sent = False
+        if st == 'done':
+            sent = _pm_send_output_email('read', email,
+                                         status.get('payload') or {})
+        return jsonify({'success': True, 'already_done': True,
+                        'sent': bool(sent)})
+    if kind == 'deck' and st in ('done', 'error'):
+        sent = False
+        if st == 'done':
+            sent = _pm_send_output_email('deck', email, status)
+        return jsonify({'success': True, 'already_done': True,
+                        'sent': bool(sent)})
+    # Still running: stash the opt-in for the worker to pick up.
+    try:
+        _pm_notify_write(job_id, {'job_id': job_id, 'kind': kind,
+                                  'email': email, 'user': uname,
+                                  'requested_at': time.time()})
+    except Exception:
+        traceback.print_exc()
+        return jsonify({'success': False,
+                        'error': 'could not save your request'}), 500
+    return jsonify({'success': True, 'queued': True})
 
 
 @app.route('/api/brief-chat/analyze', methods=['POST'])
@@ -57146,6 +57443,14 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
         except Exception:
             traceback.print_exc()
         print(f"[prometheus] deck {job_id} done for {username}: {fname}")
+        # Land the finished deck in the requester's chat thread so the
+        # download link is waiting when they return, and (if they
+        # opted in) email them the link.
+        _deck_status = {'url': url, 'filename': fname,
+                        'title': plan.get('title'),
+                        'slides': len(plan.get('slides') or [])}
+        _pm_append_deck_to_history(username, job_id, _deck_status)
+        _pm_flush_notify(job_id, 'deck', _deck_status)
     except Exception as e:
         traceback.print_exc()
         _chatbot_error_email('brief-chat/deck-job', e,
@@ -57154,6 +57459,7 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
                                       'angle': str(angle)[:200]})
         _pm_deck_status_write(job_id, {**base, 'status': 'error',
                                        'error': str(e)[:400]})
+        _pm_notify_delete(job_id)
         if charge_user:
             try:
                 refund_credit(charge_user, credits=CREDITS_CHATBOT_DECK,

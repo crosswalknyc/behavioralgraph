@@ -65019,6 +65019,7 @@ https://www.instagram.com/p/..."></textarea>
                 .then(function(r) { return r.ok ? r.json() : { history: [] }; })
                 .then(function(d) {
                     synthChatHistory = (d && d.history) || [];
+                    try { _pmDedupeHistoryJobs(); } catch (_) {}
                     synthChatRerender();
                     // Resume polling for the most-recent still-running job
                     // in this user's history so a tab refresh / Render
@@ -65695,6 +65696,7 @@ https://www.instagram.com/p/..."></textarea>
                     if (code === 404 && ++misses >= 3) {
                         _pmReadIndicatorHide(jobId);
                         _pmUntrackReadJob(jobId);
+                        _pmHideNotifyOffer(jobId);
                         return;
                     }
                     continue;
@@ -65707,21 +65709,27 @@ https://www.instagram.com/p/..."></textarea>
                         st.payload && st.payload.reply) {
                     _pmReadIndicatorHide(jobId);
                     _pmUntrackReadJob(jobId);
+                    _pmHideNotifyOffer(jobId);
+                    // The server also lands this read in the thread on
+                    // completion so it survives a closed tab. If that
+                    // copy is already here, rerender and stop; do not
+                    // double the turn.
+                    if (_pmHistoryHasJob('read_job_id', jobId)) {
+                        synthChatRerender();
+                        return;
+                    }
                     var p = st.payload;
                     var opts = (p.followups || []).map(function(f) {
                         return { label: f, send: f };
                     });
-                    if (opts.length) {
-                        _synthChatPushTurnWithMeta('agent', p.reply,
-                            { options: opts });
-                    } else {
-                        synthChatPushTurn('agent', p.reply);
-                    }
+                    _synthChatPushTurnWithMeta('agent', p.reply,
+                        { options: opts, read_job_id: jobId });
                     return;
                 }
                 if (st.status === 'error') {
                     _pmReadIndicatorHide(jobId);
                     _pmUntrackReadJob(jobId);
+                    _pmHideNotifyOffer(jobId);
                     synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
                     return;
                 }
@@ -65913,6 +65921,170 @@ https://www.instagram.com/p/..."></textarea>
             if (!cur) return;
             delete _pmReadInd[jobId];
             if (cur.end) { try { cur.end(); } catch (_) {} }
+        }
+
+        // ------------------------------------------------------------
+        // "Email me when it is ready" for long reads / decks
+        // (2026-09-02). The task is already running; this offers to
+        // email the finished output to the requester. It is an
+        // ephemeral live bubble (never written to the thread), so it
+        // survives rerenders but leaves no residue. The finished
+        // output lands in the chat on return either way; the email is
+        // the opt-in extra.
+        // ------------------------------------------------------------
+        var _pmNotifyOffers = {};
+        function _pmShowNotifyOffer(jobId, kind) {
+            if (!jobId || _pmNotifyOffers[jobId]) return;
+            var box = document.getElementById('synthChatMessages');
+            if (!box) return;
+            kind = (kind === 'deck') ? 'deck' : 'read';
+            var thing = kind;
+            var prefill = '';
+            try {
+                prefill = currentUserEmail
+                    || localStorage.getItem('pmNotifyEmail_v1') || '';
+            } catch (_) { prefill = currentUserEmail || ''; }
+            var el = document.createElement('div');
+            el.setAttribute('data-pm-notify-job', jobId);
+            el.style.cssText = 'margin-bottom:0.55rem;padding:0.55rem 0.7rem;'
+                + 'background:rgba(255,255,255,0.05);border-radius:8px;';
+            el.innerHTML =
+                '<div class="pm-speaker" style="font-size:0.7rem;opacity:0.7;'
+                    + 'margin-bottom:0.25rem;">Prometheus</div>'
+                + '<div style="font-size:0.85rem;line-height:1.4;'
+                    + 'margin-bottom:0.5rem;">This one can take a few '
+                    + 'minutes. Want me to email you the finished ' + thing
+                    + ' when it lands? It will be here in the chat when you '
+                    + 'get back either way.</div>'
+                + '<div style="display:flex;flex-wrap:wrap;gap:0.4rem;'
+                    + 'align-items:center;">'
+                    + '<input type="email" class="pm-notify-email" '
+                        + 'placeholder="you@example.com" autocomplete="email" '
+                        + 'value="' + String(prefill).replace(/"/g, '&quot;')
+                        + '" style="flex:1 1 170px;min-width:150px;'
+                        + 'background:var(--bg-input);border:1px solid '
+                        + 'var(--border-color);color:var(--text-primary);'
+                        + 'border-radius:6px;padding:0.35rem 0.6rem;'
+                        + 'font-size:0.8rem;font-family:inherit;">'
+                    + '<button type="button" class="pm-notify-yes" '
+                        + 'style="background:rgba(199,242,62,0.12);border:1px '
+                        + 'solid rgba(199,242,62,0.45);color:#C7F23E;'
+                        + 'border-radius:999px;padding:0.3rem 0.85rem;'
+                        + 'font-size:0.75rem;font-weight:700;cursor:pointer;'
+                        + 'font-family:inherit;">Email me when it is ready'
+                        + '</button>'
+                    + '<button type="button" class="pm-notify-no" '
+                        + 'style="background:var(--bg-input);border:1px solid '
+                        + 'var(--border-color);color:var(--text-primary);'
+                        + 'border-radius:999px;padding:0.3rem 0.85rem;'
+                        + 'font-size:0.75rem;cursor:pointer;'
+                        + 'font-family:inherit;">No thanks</button>'
+                + '</div>'
+                + '<div class="pm-notify-msg" style="font-size:0.72rem;'
+                    + 'margin-top:0.4rem;color:var(--text-secondary);'
+                    + 'display:none;"></div>';
+            box.appendChild(el);
+            _pmLiveBubbles.push(el);
+            _pmNotifyOffers[jobId] = el;
+            box.scrollTop = box.scrollHeight;
+            var yesBtn = el.querySelector('.pm-notify-yes');
+            var noBtn = el.querySelector('.pm-notify-no');
+            var input = el.querySelector('.pm-notify-email');
+            if (yesBtn) yesBtn.addEventListener('click', function() {
+                _pmConfirmNotify(jobId, kind, (input && input.value) || '');
+            });
+            if (input) input.addEventListener('keydown', function(ev) {
+                if (ev.key === 'Enter') {
+                    ev.preventDefault();
+                    _pmConfirmNotify(jobId, kind, input.value || '');
+                }
+            });
+            if (noBtn) noBtn.addEventListener('click', function() {
+                _pmHideNotifyOffer(jobId);
+            });
+        }
+        function _pmHideNotifyOffer(jobId) {
+            var el = _pmNotifyOffers[jobId];
+            if (!el) return;
+            delete _pmNotifyOffers[jobId];
+            var at = _pmLiveBubbles.indexOf(el);
+            if (at !== -1) _pmLiveBubbles.splice(at, 1);
+            if (el.parentNode) el.parentNode.removeChild(el);
+        }
+        async function _pmConfirmNotify(jobId, kind, email) {
+            var el = _pmNotifyOffers[jobId];
+            var addr = String(email || '').trim();
+            var msg = el ? el.querySelector('.pm-notify-msg') : null;
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) {
+                if (msg) {
+                    msg.style.display = 'block';
+                    msg.style.color = '#ff9a9a';
+                    msg.textContent = 'That email does not look right. '
+                        + 'Try again.';
+                }
+                return;
+            }
+            try { localStorage.setItem('pmNotifyEmail_v1', addr); } catch (_) {}
+            if (el) {
+                var lock = el.querySelectorAll('button');
+                for (var i = 0; i < lock.length; i++) lock[i].disabled = true;
+            }
+            var ok = false;
+            try {
+                var r = await fetch('/api/brief-chat/notify-when-done', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ job_id: jobId, kind: kind,
+                                           email: addr })
+                });
+                var d = r.ok ? await r.json() : null;
+                ok = !!(d && d.success);
+            } catch (_) { ok = false; }
+            if (ok) {
+                if (el) {
+                    el.innerHTML =
+                        '<div class="pm-speaker" style="font-size:0.7rem;'
+                            + 'opacity:0.7;margin-bottom:0.25rem;">'
+                            + 'Prometheus</div>'
+                        + '<div style="font-size:0.85rem;line-height:1.4;">'
+                            + 'Done. I will email the finished ' + kind
+                            + ' to ' + _synthChatEscapeHtml(addr)
+                            + ' and it will be here in the chat too.</div>';
+                }
+            } else {
+                if (msg) {
+                    msg.style.display = 'block';
+                    msg.style.color = '#ff9a9a';
+                    msg.textContent = 'Could not set that up right now, but '
+                        + 'it will still be here in the chat when it is ready.';
+                }
+                if (el) {
+                    var un = el.querySelectorAll('button');
+                    for (var j = 0; j < un.length; j++) un[j].disabled = false;
+                }
+            }
+        }
+        function _pmHistoryHasJob(metaKey, jobId) {
+            if (!jobId) return false;
+            for (var i = 0; i < synthChatHistory.length; i++) {
+                var t = synthChatHistory[i];
+                if (t && t.meta && t.meta[metaKey] === jobId) return true;
+            }
+            return false;
+        }
+        function _pmDedupeHistoryJobs() {
+            var seen = {}, out = [];
+            for (var i = 0; i < synthChatHistory.length; i++) {
+                var t = synthChatHistory[i];
+                var key = t && t.meta
+                    && (t.meta.read_job_id || t.meta.deck_job_id);
+                if (key) {
+                    if (seen[key]) continue;
+                    seen[key] = 1;
+                }
+                out.push(t);
+            }
+            synthChatHistory = out;
         }
 
         // In-flight abort controller for interpret/approve fetches
@@ -67800,6 +67972,7 @@ https://www.instagram.com/p/..."></textarea>
                         'On it. The read will land right here when ' +
                         'it is ready.');
                     try { _pmPollReadJob(data.read_job_id); } catch (_) {}
+                    try { _pmShowNotifyOffer(data.read_job_id, 'read'); } catch (_) {}
                     return 'done';
                 }
                 if (data.memory_confirm) {
@@ -67926,6 +68099,7 @@ https://www.instagram.com/p/..."></textarea>
                     (data.subject ? data.subject + ' ' : '') +
                     'insights deck. The download link lands here when ' +
                     'it is ready.');
+                try { _pmShowNotifyOffer(job, 'deck'); } catch (_) {}
                 var waited = 0;
                 while (waited < 600000) {
                     await new Promise(function(res) { setTimeout(res, 5000); });
@@ -67938,13 +68112,22 @@ https://www.instagram.com/p/..."></textarea>
                     } catch (_) { st = null; }
                     if (!st) continue;
                     if (st.status === 'done' && st.url) {
+                        _pmHideNotifyOffer(job);
+                        // Server also lands the deck in the thread on
+                        // completion; skip if it is already here.
+                        if (_pmHistoryHasJob('deck_job_id', job)) {
+                            synthChatRerender();
+                            return;
+                        }
                         _synthChatPushTurnWithMeta('agent',
                             'Deck ready: ' + (st.title || st.filename || 'Profile IQ deck') +
                             ' (' + (st.slides || '?') + ' slides). The link is good for 7 days.',
-                            { link: { url: st.url, label: 'Download the deck' } });
+                            { link: { url: st.url, label: 'Download the deck' },
+                              deck_job_id: job });
                         return;
                     }
                     if (st.status === 'error') {
+                        _pmHideNotifyOffer(job);
                         console.error('[brief-chat] deck job errored');
                         synthChatPushTurn('agent', SYNTH_CHAT_CALM_MSG);
                         return;
@@ -68368,6 +68551,7 @@ https://www.instagram.com/p/..."></textarea>
                         // Analysis read generating in the background
                         // (2026-08-27): poll until it lands in-thread.
                         try { _pmPollReadJob(data.read_job_id); } catch (_) {}
+                        try { _pmShowNotifyOffer(data.read_job_id, 'read'); } catch (_) {}
                     }
                     return;
                 }
