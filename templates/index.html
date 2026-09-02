@@ -50901,6 +50901,19 @@ https://www.instagram.com/p/..."></textarea>
         // Hover tooltip: spells out each observed day (weekday + date) and
         // its view count so the sparkline is never a mystery.
         function _miqSparkTooltip(t, platform) {
+            // Prefer the fixed trailing-7-day arc that the card
+            // sparkline actually renders so the hover copy always
+            // matches what the reader sees on the chart
+            // (Jenna 2026-09-02: trend chart is always 7 days).
+            var spark7 = t.sparkline_7d;
+            if (spark7 && Array.isArray(spark7.dates) && Array.isArray(spark7.views)) {
+                var rows = spark7.dates.map(function(d, i) {
+                    var v = spark7.views[i];
+                    var vs = (v == null) ? 'no data' : _miqFormatNumber(v);
+                    return _miqDayLabel(d) + ': ' + vs;
+                });
+                if (rows.length) return 'Daily views (last 7 days):\n' + rows.join('\n');
+            }
             // Peacock plots its daily view curve (launch-relative dates,
             // no lag shift); competitors plot the per-date total-reads
             // ("views") series with the one-day data-lag correction.
@@ -51054,7 +51067,21 @@ https://www.instagram.com/p/..."></textarea>
         // Build the sparkline y-values for a competitor title.
         // Rank is inverted so #1 = 1.0 (top) and rank 40 = 0.0 (bottom).
         // Fallback only - used when a source has no view/read data.
+        //
+        // Prefers the fixed trailing-7-day arc (sparkline_7d) so the
+        // trend chart always reads the past 7 days regardless of the
+        // top-level lookback filter (Jenna 2026-09-02). Falls back to
+        // the window arc when the field is absent.
         function _miqRankSparkline(t, observedDates) {
+            var spark = t.sparkline_7d;
+            if (spark && Array.isArray(spark.dates) && Array.isArray(spark.ranks)) {
+                var pts7 = spark.ranks.map(function(r) {
+                    if (!Number.isFinite(r)) return null;
+                    var capped = Math.min(40, Math.max(1, r));
+                    return 1 - ((capped - 1) / 39);
+                });
+                return _miqSparklineSVG(pts7, { dates: spark.dates });
+            }
             var dates = observedDates || [];
             var ranks = t.ranks_by_date || {};
             var pts = dates.map(function(d) {
@@ -51073,7 +51100,35 @@ https://www.instagram.com/p/..."></textarea>
         // window so the growth shape is visible even when the absolute
         // read count is large and only creeps up day over day. Sources
         // with no read data (e.g. NetShort) fall back to the rank arc.
+        //
+        // Prefers the fixed trailing-7-day arc (sparkline_7d.views)
+        // so the trend chart always reads the past 7 days regardless
+        // of the top-level lookback filter (Jenna 2026-09-02). Falls
+        // back to the window-scoped reads_by_date arc when the field
+        // is absent.
         function _miqReadsSparkline(t, observedDates) {
+            var spark = t.sparkline_7d;
+            if (spark && Array.isArray(spark.dates) && Array.isArray(spark.views)) {
+                var vals7 = spark.views.map(function(v) {
+                    var n = Number(v);
+                    return Number.isFinite(n) ? n : null;
+                });
+                var finite7 = vals7.filter(function(v) { return v != null; });
+                if (finite7.length) {
+                    var mx7 = Math.max.apply(null, finite7);
+                    var mn7 = Math.min.apply(null, finite7);
+                    var range7 = (mx7 - mn7) || 0;
+                    var pts7 = vals7.map(function(v) {
+                        if (v == null) return null;
+                        return range7 === 0 ? 0.5 : (v - mn7) / range7;
+                    });
+                    return _miqSparklineSVG(pts7, { dates: spark.dates });
+                }
+                // 7-day arc had no view data - try rank inversion.
+                if (Array.isArray(spark.ranks)) {
+                    return _miqRankSparkline(t, spark.dates);
+                }
+            }
             var dates = observedDates || t.__observedDates || [];
             var reads = t.reads_by_date || {};
             var vals = dates.map(function(d) {
@@ -51097,7 +51152,28 @@ https://www.instagram.com/p/..."></textarea>
         // Build the sparkline y-values for a Peacock title using its
         // daily view curve. Normalizes to the max in-window value so
         // the shape of the curve is what matters, not absolute height.
+        //
+        // Prefers the fixed trailing-7-day calendar arc (sparkline_7d)
+        // so the trend chart always reads the past 7 days regardless
+        // of the top-level lookback filter (Jenna 2026-09-02). Falls
+        // back to the launch-relative view_daily_curve when the field
+        // is absent.
         function _miqViewSparkline(t) {
+            var spark = t.sparkline_7d;
+            if (spark && Array.isArray(spark.dates) && Array.isArray(spark.views)) {
+                var vals7 = spark.views.map(function(v) {
+                    var n = Number(v);
+                    return Number.isFinite(n) ? n : null;
+                });
+                var finite7 = vals7.filter(function(v) { return v != null; });
+                if (finite7.length) {
+                    var mx7 = Math.max.apply(null, finite7) || 1;
+                    var pts7 = vals7.map(function(v) {
+                        return v == null ? null : (v / mx7);
+                    });
+                    return _miqSparklineSVG(pts7, { dates: spark.dates });
+                }
+            }
             // Clip future carry-forward days so the launch-relative window
             // never plots past the current data date.
             var curve = _miqPeacockCurve(t);

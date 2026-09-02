@@ -1506,6 +1506,107 @@ def _daily_estimate(observations: list[dict],
     return curve, total_28
 
 
+def _trailing_7_iso_dates(latest_iso: str) -> list[str]:
+    """Return the 7 ISO calendar days ending at `latest_iso`, oldest first.
+
+    Used to build the fixed trailing-7-day sparkline arc that every
+    card carries regardless of the top-level lookback filter. Jenna's
+    directive 2026-09-02: "even tho the view is only today it should
+    still show the trend chart for the past 7 days always regardless
+    of duration selected."
+    """
+    try:
+        end = datetime.fromisoformat(latest_iso).date()
+    except Exception:
+        end = date.today()
+    return [(end - timedelta(days=(6 - i))).isoformat() for i in range(7)]
+
+
+def _peacock_trailing_7day_curve(entry: dict,
+                                   salt: str,
+                                   latest_iso: str) -> list[dict]:
+    """Return the trailing-7-day daily view curve for a Peacock title.
+
+    Calendar-anchored, always 7 days ending at `latest_iso` (today by
+    default). Days before the title's first_observed_date get views=None
+    so the frontend sparkline draws a gap. Same bucket + jitter logic
+    as `_daily_estimate` so numbers agree with the daily-views modal.
+    """
+    obs = entry.get('observations') or []
+    if not obs:
+        return []
+
+    # Best rank per day (matches _daily_estimate).
+    obs_by_date: dict[str, dict] = {}
+    for o in obs:
+        d = o.get('observed_date')
+        if not d:
+            continue
+        prev = obs_by_date.get(d)
+        rank = o.get('rank')
+        if prev is None or (
+            rank is not None
+            and (prev.get('rank') is None or rank < prev.get('rank'))
+        ):
+            obs_by_date[d] = o
+
+    if not obs_by_date:
+        return []
+
+    try:
+        first = datetime.fromisoformat(min(obs_by_date.keys())).date()
+    except Exception:
+        return []
+
+    import hashlib
+
+    dates = _trailing_7_iso_dates(latest_iso)
+    curve: list[dict] = []
+    last_rank = None
+    # Prime last_rank by walking the sorted observations up to the
+    # first sparkline day so carry-forward is stable.
+    for d in sorted(obs_by_date.keys()):
+        if d > dates[0]:
+            break
+        r = obs_by_date[d].get('rank')
+        if isinstance(r, int):
+            last_rank = r
+
+    for d in dates:
+        try:
+            cur_day = datetime.fromisoformat(d).date()
+        except Exception:
+            continue
+        if cur_day < first:
+            # Title not launched yet on this day - sparkline gap.
+            curve.append({
+                'date':   d,
+                'rank':   None,
+                'bucket': None,
+                'views':  None,
+            })
+            continue
+        obs_today = obs_by_date.get(d)
+        if obs_today and obs_today.get('rank') is not None:
+            last_rank = obs_today['rank']
+        rank = obs_today.get('rank') if obs_today else last_rank
+        bucket = _surface_bucket(rank)
+        low, mid, high = VIEW_ESTIMATE[bucket]
+        h = hashlib.md5(f'{salt}|{d}|{rank}|{bucket}'.encode()).hexdigest()
+        j = int(h[:8], 16) / 0xFFFFFFFF
+        if j < 0.5:
+            views = int(round(low + (mid - low) * (j * 2)))
+        else:
+            views = int(round(mid + (high - mid) * ((j - 0.5) * 2)))
+        curve.append({
+            'date':   d,
+            'rank':   rank,
+            'bucket': bucket,
+            'views':  views,
+        })
+    return curve
+
+
 # ============================================================================
 # S3 IO
 # ============================================================================
@@ -2223,6 +2324,51 @@ def _title_norm_key(title: str) -> str:
     return re.sub(r'[^a-z0-9]+', '', (title or '').lower())
 
 
+def _compute_source_7day_arc(source: str) -> tuple[list[str], dict[str, dict]]:
+    """Return the trailing-7-day (rank, read) arc for every title on a
+    competitor source, independent of any user window filter.
+
+    Fixed 7 calendar days ending today. Used to attach a `sparkline_7d`
+    block to every card so the card sparkline always reads the same
+    7-day story whether the top filter is "Today", "Last 30 days", or
+    "Year to date". Jenna's directive 2026-09-02.
+
+    Returns:
+        (dates_7d, per_title):
+            dates_7d = ['d-6', 'd-5', ..., 'd']  (7 ISO days, oldest first)
+            per_title = {
+                title_key: {
+                    'ranks_by_date': {'d': rank_int_or_None, ...},
+                    'reads_by_date': {'d': daily_views_int_or_None, ...},
+                }
+            }
+    """
+    today = date.today()
+    dates_7d = [(today - timedelta(days=(6 - i))).isoformat()
+                for i in range(7)]
+
+    per_title: dict[str, dict] = {}
+    for d in dates_7d:
+        snap = _read_dated_snapshot(source, d)
+        if not snap:
+            continue
+        for row in snap.get('titles') or []:
+            title = (row.get('title') or '').strip()
+            if not title:
+                continue
+            k = _title_norm_key(title)
+            slot = per_title.setdefault(k, {
+                'ranks_by_date': {},
+                'reads_by_date': {},
+            })
+            if row.get('rank') is not None:
+                slot['ranks_by_date'][d] = row['rank']
+            if row.get('read_count') is not None:
+                slot['reads_by_date'][d] = row['read_count']
+
+    return dates_7d, per_title
+
+
 def _build_arc(source: str, days: int,
                *, start_date: Optional[str] = None,
                end_date: Optional[str] = None) -> dict:
@@ -2525,6 +2671,49 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
             return 0
         all_titles.sort(key=_window_views_sum, reverse=True)
         titles = all_titles[:top_n]
+
+        # Fixed trailing-7-day sparkline arc. Independent of the user's
+        # active window so the card trend chart always reads the past
+        # 7 days regardless of what the top filter is set to
+        # (Jenna 2026-09-02). We fetch a supplementary 7-day pull from
+        # the raw dated snapshots, then normalize each title's daily
+        # reads exactly the same way the window arc does so numbers
+        # agree in shape.
+        _dates_7d, _per_title_7d = _compute_source_7day_arc(source)
+        for t in titles:
+            k = t.get('key')
+            raw_ranks = {}
+            raw_reads = {}
+            if k and k in _per_title_7d:
+                raw_ranks = dict(_per_title_7d[k].get('ranks_by_date') or {})
+                raw_reads = dict(_per_title_7d[k].get('reads_by_date') or {})
+            # Normalize the 7-day reads series to DAILY FLOW the same
+            # way _derive_daily_reads_by_date normalizes the window
+            # series. We build a lightweight per-title scratch entry
+            # so the shared helper can run without touching the
+            # window-scoped reads_by_date on `t`.
+            _spark_entry = {
+                'key':            k,
+                'title':          t.get('title'),
+                'series':         t.get('series') or t.get('title'),
+                'genre':          t.get('genre'),
+                'current_rank':   t.get('current_rank'),
+                'best_rank':      t.get('best_rank'),
+                'ranks_by_date':  raw_ranks,
+                'reads_by_date':  raw_reads,
+                'read_count':     t.get('read_count'),
+            }
+            _derive_daily_reads_by_date(
+                _spark_entry, mau_m, salt=f"{source}|{k}|spark7",
+                platform_dates=_dates_7d,
+            )
+            spark_ranks = _spark_entry.get('ranks_by_date') or {}
+            spark_reads = _spark_entry.get('reads_by_date') or {}
+            t['sparkline_7d'] = {
+                'dates':  _dates_7d,
+                'ranks':  [spark_ranks.get(d) for d in _dates_7d],
+                'views':  [spark_reads.get(d) for d in _dates_7d],
+            }
 
         # Attach per-episode retention curve + free/paid summary stats
         # to each title. Baseline attrition params live in
@@ -3118,6 +3307,15 @@ def _serialize_title(entry: dict, *, window_days: int) -> dict:
     curve_win = curve[:window_days]
     view_win  = sum(p['views'] for p in curve_win)
 
+    # Fixed trailing-7-day calendar arc for the card sparkline. Always
+    # 7 days ending today, regardless of the top-level lookback filter,
+    # so the trend chart on every card reads the same 7-day story
+    # whether the user has "Today", "Last 30 days", or "Year to date"
+    # selected. Jenna's directive 2026-09-02.
+    curve_7d = _peacock_trailing_7day_curve(
+        entry, salt=_title_salt, latest_iso=date.today().isoformat(),
+    )
+
     # Rank aggregates - across all observations, not just the window.
     ranks = [o.get('rank') for o in obs if isinstance(o.get('rank'), int)]
     surface_rank_best = min(ranks) if ranks else None
@@ -3225,6 +3423,15 @@ def _serialize_title(entry: dict, *, window_days: int) -> dict:
         'view_window_estimate': view_win,
         'view_28d_estimate':   total_28,
         'audience':            audience,
+        # Fixed trailing-7-day arc for the card sparkline. Same shape
+        # as competitor `sparkline_7d`: dates + per-day view values.
+        # Days before first_observed_date carry views=null so the
+        # sparkline draws a gap. Read by _miqViewSparkline on the FE.
+        'sparkline_7d': {
+            'dates':  [p['date']  for p in curve_7d],
+            'views':  [p['views'] for p in curve_7d],
+            'ranks':  [p['rank']  for p in curve_7d],
+        },
     }
 
 
