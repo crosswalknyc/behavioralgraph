@@ -43860,10 +43860,14 @@ def _synth_chat_gate(allow_api_key: bool = True):
 #   * Must have >= 2 comma-separated or "and"-separated items after
 #     stripping the trigger phrase.
 #   * Rejects if the whole prompt is under ~10 chars (typo territory).
-#   * Cap batch size at 15 so we don't self-DDoS the interpret step or
-#     nuke the worker pool.
+#   * Cap batch size at 100 (Jenna 2026-09-02, raised from 15 so a big
+#     list of subjects can be queued in one message). The interpret
+#     step fans out one Claude call per subject and the builds drain
+#     through the worker pool (~10 at a time), so a large batch queues
+#     in parallel and completes as workers free up rather than
+#     swamping the interpret step or the pool.
 # ---------------------------------------------------------------------------
-SYNTH_CHAT_BATCH_MAX = 15
+SYNTH_CHAT_BATCH_MAX = 100
 
 
 def _detect_implicit_list_subjects(text: str) -> list[str]:
@@ -43876,7 +43880,7 @@ def _detect_implicit_list_subjects(text: str) -> list[str]:
       - Every item must look like a name/brand (2-60 chars,
         starts with a capitalized letter or is fully upper-case,
         no verbs/prepositions/articles as the leading token).
-      - Total item count 2..15.
+      - Total item count 2..100.
       - Comma path: at least 2 commas OR 1 comma + a trailing
         ` and `/` & `. Also rejects sentence-shape leaders like
         `I want`, `Please`, etc. (those must use a trigger phrase).
@@ -45012,6 +45016,19 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "  * Cohort / audience segment (churners, switchers, consumer of X): "
         "3,000 - 200,000 depending on TAM (Spectrum churners ~30-80K; "
         "Amazon Prime members ~5-7M).\n"
+        "  * Broad demographic + behavioral persona (a whole-population "
+        "slice defined by an age band + an activity / behavior level + "
+        "a gender or ethnicity skew, with NO named brand / person / "
+        "title - e.g. '18-44 heavy social users, female-skewed'): SIZE "
+        "TO US-POPULATION INCIDENCE, not the niche fandom bands above. "
+        "The anchor is the US population in the stated age band x the "
+        "behavioral incidence x the gender / ethnicity share (all "
+        "countable). These land in the HUNDREDS OF THOUSANDS to LOW "
+        "MILLIONS of panelists. Worked example: ~116M US adults 18-44 "
+        "x ~0.55 heavy-social incidence x ~0.70 female ~= 44.7M "
+        "projected -> subject_raw_tu ~= 1,355,000. Never size such a "
+        "persona like a niche fandom (a few thousand); that under-sizes "
+        "it by 10-100x.\n"
         "  * Avid cohort: 20-40% of TU sample.\n"
         "  * HARD CEILING: subject_raw_tu must be <= 9,500,000 "
         "(the panel is 10M; leave headroom).\n"
@@ -45149,6 +45166,24 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "Every bucket in every canonical category MUST appear in demos and "
         "the sum MUST be 100.0 (four decimals fine).\n\n"
 
+        "GENDER SKEW VOCABULARY (HARD MAPPING - Jenna 2026-09-02): when "
+        "a request uses a gender-skew word, translate it to a concrete "
+        "FEMALE share in tu_demos / avid_demos GENDER (MALE takes most "
+        "of the remainder; keep small NON-BINARY / TRANS buckets so the "
+        "category still sums to 100):\n"
+        "  * 'low skew' / 'slight' / 'fairly balanced': FEMALE under 50 "
+        "(pick ~40-49).\n"
+        "  * 'mid skew' / 'skews female' / 'female-leaning': FEMALE 60 "
+        "or more (default ~60-65).\n"
+        "  * 'mid-to-heavy' female: FEMALE 60-80 (default ~70).\n"
+        "  * 'heavy' / 'heavily female' / 'strongly female': FEMALE 75 "
+        "or more (~75-85).\n"
+        "The mirror words map to a MALE skew (swap FEMALE for MALE). "
+        "Pick a specific messy value inside the band (e.g. 71.4, never "
+        "a flat 70), and NEVER emit a value that contradicts the stated "
+        "direction - a 'mid-to-heavy female' persona must land FEMALE "
+        "between 60 and 80, never near 50/50.\n\n"
+
         # ── Subject naming + embedded-cut decomposition (2026-08-20,
         # Jenna directive after Go-GURT shipped as 'Go GURT Consumers
         # 18 24 - Total Universe' with AGE pinned to 18-24): the TU is
@@ -45203,6 +45238,36 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "one of the cohorts. Only treat them as separate builds when "
         "the BASE audiences differ ('a Nike profile and a Adidas "
         "profile').\n\n"
+
+        "DEMOGRAPHIC + BEHAVIORAL PERSONA = ONE build (HARD RULE, Jenna "
+        "2026-09-02, after a request for a SINGLE audience - 'age 18-44, "
+        "high social-platform activity, mid-to-heavy female skew' - was "
+        "wrongly split into two profiles):\n"
+        "  * When the ENTIRE ask is ONE audience described by STACKED "
+        "criteria - an age band AND/OR an activity / behavior level "
+        "AND/OR a gender or ethnicity skew - with NO underlying named "
+        "brand / person / title, it is exactly ONE new_build persona. "
+        "Return a SINGLE JSON object - NEVER an array, NEVER two "
+        "drafts. The criteria are ANDed traits of one group, not a "
+        "list of separate audiences. 'Age 18-44' + 'heavy social use' "
+        "+ 'mid-to-heavy female' is ONE persona, not two or three.\n"
+        "  * Bake the criteria straight into `tu_demos` (and "
+        "`avid_demos`): concentrate AGE in the stated band, set GENDER "
+        "to the stated skew (see GENDER SKEW VOCABULARY), tilt any "
+        "stated ethnicity. HERE the demographic shape IS the universe "
+        "definition. This is the OPPOSITE of SUBJECT NAMING + EMBEDDED "
+        "CUTS: that rule keeps demos full ONLY because a named entity "
+        "owns the universe and the qualifier rides as a downstream "
+        "cut. A bare persona has no such entity, so ITS demos carry "
+        "the criteria.\n"
+        "  * Do NOT emit addon_cuts for the defining criteria, and do "
+        "NOT build a 'full universe' TU that ignores them - the "
+        "criteria ARE the audience.\n"
+        "  * `subject` = a short human label for the persona (e.g. "
+        "'Heavy Social Users 18-44 Female-Skewed'); `audience_type` "
+        "stays 'general'; size per the 'Broad demographic + behavioral "
+        "persona' band in SAMPLE-SIZE HEURISTICS (hundreds of "
+        "thousands to low millions, NOT a niche fandom count).\n\n"
 
         "OUTPUT SHAPE (strict JSON object, no prose outside):\n"
         "{\n"
@@ -47857,7 +47922,7 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
             system_prompt=system_prompt, user_prompt=user_prompt,
             max_tokens=16000, temperature=0.4,
             model=_SYNTH_CHAT_INTERPRET_MODEL,
-            usage_tag=('interpret', 'chatbot'),
+            usage_tag=('interpret', 'chatbot', _pm_attrib_extras() or None),
         )
         if not result.get('success'):
             return {
@@ -48306,10 +48371,13 @@ def _union_shortlist_for_multi(user_text: str, catalog) -> list:
 def _synth_chat_interpret_batch(user_text: str, subjects: list,
                                   history: list,
                                   shared_context_override: str = None):
-    """Fan-out interpret across a list of subjects. Runs up to 5 Claude
+    """Fan-out interpret across a list of subjects. Runs up to 10 Claude
     calls concurrently (well under our Anthropic key pool ceiling) and
     stitches the results into a single response with a `batch: true`
-    flag so the frontend can render N approval cards.
+    flag so the frontend can render N approval cards. Concurrency was
+    raised from 5 to 10 on 2026-09-02 alongside the SYNTH_CHAT_BATCH_MAX
+    100 cap so a large batch drains fast enough to return before the
+    HTTP request times out.
 
     `shared_context_override` (optional): when the caller has already
     computed the right per-subject context (e.g. the Cartesian
@@ -48326,7 +48394,7 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
           f"shared_context={shared_context!r}")
 
     results_by_index: dict = {}
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with ThreadPoolExecutor(max_workers=10) as pool:
         futs = {
             pool.submit(_synth_chat_interpret_one_subject,
                          subj, shared_context, history): idx
@@ -48390,7 +48458,7 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
                 max_tokens=32000, temperature=0.4,
                 model=_SYNTH_CHAT_INTERPRET_MODEL,
                 salvage_arrays=True,
-                usage_tag=('interpret', 'chatbot'))
+                usage_tag=('interpret', 'chatbot', _pm_attrib_extras() or None))
             _data = _res.get('data') if _res.get('success') else None
             if isinstance(_data, dict):
                 _data = [_data]
@@ -54603,6 +54671,19 @@ def _pm_claude_json(system_prompt, user_prompt, max_tokens=6000,
                                         bucket=S3_BUCKET)
     except Exception:
         pass
+    # Per-user attribution (2026-09-02): tag every dashboard chat call
+    # with the logged-in user so the daily spend email can break
+    # Prometheus cost out per user. _pm_attrib_extras() never sets
+    # pay_per_use, so billing and the credit gate (which key off
+    # _pm_usage_extras) are untouched; any real pay-as-you-go fields
+    # ride in via the caller's usage_extras and win the merge. The deck
+    # job runs on a background thread with no request context, so
+    # _pm_attrib_extras() is a no-op there and the caller's explicit
+    # usage_extras carries the enqueue-time attribution instead.
+    try:
+        usage_extras = _pm_merge_extras(_pm_attrib_extras(), usage_extras)
+    except Exception:
+        pass
     last = None
     # Tool plans (2026-08-27, the generation loop): when the caller
     # asks for web research, try the current web_search tool type,
@@ -54830,6 +54911,46 @@ def _pm_usage_extras(user):
     except Exception:
         traceback.print_exc()
         return None
+
+
+def _pm_attrib_extras():
+    """Always-on per-user attribution for a dashboard (Prometheus) model
+    call, independent of pay-as-you-go billing.
+
+    Returns {'user', 'user_email'} for the logged-in user when a request
+    context is present, else {} (background threads such as the deck job
+    have no request context and pass attribution explicitly instead).
+
+    This tags every Prometheus chat record with WHO caused it so the
+    daily spend email can break Prometheus cost out per user. It NEVER
+    sets pay_per_use, so billing and the credit gate (both keyed off
+    _pm_usage_extras returning None for subscribed users) are untouched.
+    Never raises."""
+    try:
+        from flask import has_request_context
+        if not has_request_context():
+            return {}
+        u = get_current_user() or {}
+        email = (u.get('email') or '').strip().lower()
+        uname = (session.get('username') or u.get('username') or '').strip()
+        if not (email or uname):
+            return {}
+        return {'user': uname or email, 'user_email': email or uname}
+    except Exception:
+        return {}
+
+
+def _pm_merge_extras(*parts):
+    """Merge attribution dicts left-to-right (later parts win on key
+    collisions). Returns a dict, or None when nothing merged (None keeps
+    the untagged code path in _run_nflx_claude_agent). Never raises."""
+    out = {}
+    for p in parts:
+        if isinstance(p, dict):
+            for k, v in p.items():
+                if v is not None:
+                    out[k] = v
+    return out or None
 
 
 _PM_BASE_GENERIC_TOKENS = {
@@ -56864,8 +56985,14 @@ def api_synth_chat_deck():
                 credits_used=CREDITS_CHATBOT_DECK)
         except Exception:
             traceback.print_exc()
-    if _pm_ppu:
-        _PM_DECK_PPU_EXTRAS[job_id] = _pm_ppu
+    # Attribute the deck's model spend to the enqueuing user for ALL
+    # users (not just pay-as-you-go), so the daily spend email's
+    # per-user Prometheus breakdown captures deck builds. The bg thread
+    # has no request context, so identity is captured here at enqueue;
+    # any pay-as-you-go billing fields in _pm_ppu are preserved.
+    _deck_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
+    if _deck_extras:
+        _PM_DECK_PPU_EXTRAS[job_id] = _deck_extras
     _pm_deck_status_write(job_id, {
         'job_id': job_id, 'user': username, 'status': 'queued',
         'angle': angle, 'started_at': time.time()})
