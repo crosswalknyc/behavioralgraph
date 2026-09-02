@@ -55624,8 +55624,8 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         return jsonify({
             'success': True, 'action': 'answer',
             'read_job_id': job_id,
-            'reply': ('On it. This one takes a real look at the data '
-                      'plus some research, so give me a moment - the '
+            'reply': ('On it. This one takes a real look at the data, '
+                      'so give me a moment - the '
                       'read will land right here when it is ready.'),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
     payload = _pm_generate_read_core(
