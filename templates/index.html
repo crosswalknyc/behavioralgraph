@@ -21433,15 +21433,13 @@ https://www.instagram.com/p/..."></textarea>
         /* Muted suggestion chips (Prep a pitch / Build / Size / Cut /
            Refresh - both the static row and the JS welcome chips) and the
            Suggestions button. */
-        body[data-theme="light"] #prometheusWidget button[onclick*="synthChatChipFill"],
-        body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn {
+        body[data-theme="light"] #prometheusWidget button[onclick*="synthChatChipFill"] {
             background: #efeafc !important;
             border: 1px solid #8b5cf6 !important;
             color: #4c1d95 !important;
             font-weight: 600 !important;
         }
-        body[data-theme="light"] #prometheusWidget button[onclick*="synthChatChipFill"]:hover,
-        body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn:hover {
+        body[data-theme="light"] #prometheusWidget button[onclick*="synthChatChipFill"]:hover {
             background: #e3d9fa !important;
             border-color: #7c3aed !important;
             color: #3b0f7a !important;
@@ -21454,22 +21452,36 @@ https://www.instagram.com/p/..."></textarea>
             color: #2f4d05 !important;
             font-weight: 600 !important;
         }
-        /* Mic button: defined purple pill to match. */
-        body[data-theme="light"] #prometheusWidget #synthChatMicBtn {
-            background: #efeafc !important;
-            border: 1px solid #8b5cf6 !important;
-            color: #6d28d9 !important;
+        /* Hot-pink accent (in-house #ec4899) for Suggestions + mic,
+           per Jessie 2026-09-02. Chat highlight chips stay purple. */
+        #prometheusWidget #synthChatSuggestBtn,
+        #prometheusWidget #synthChatMicBtn {
+            background: rgba(236,72,153,0.16) !important;
+            border: 1px solid #ec4899 !important;
+            color: #f9a8d4 !important;
             border-radius: 999px !important;
-            padding: 0.3rem 0.5rem !important;
         }
+        #prometheusWidget #synthChatMicBtn { padding: 0.3rem 0.5rem !important; }
+        body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn,
+        body[data-theme="light"] #prometheusWidget #synthChatMicBtn {
+            background: rgba(236,72,153,0.12) !important;
+            border: 1px solid #ec4899 !important;
+            color: #be185d !important;
+        }
+        body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn { font-weight: 600 !important; }
+        #prometheusWidget #synthChatSuggestBtn:hover,
+        #prometheusWidget #synthChatMicBtn:hover {
+            background: rgba(236,72,153,0.24) !important;
+            border-color: #db2777 !important;
+        }
+        body[data-theme="light"] #prometheusWidget #synthChatSuggestBtn:hover,
         body[data-theme="light"] #prometheusWidget #synthChatMicBtn:hover {
-            background: #e3d9fa !important;
-            border-color: #7c3aed !important;
+            color: #9d174d !important;
         }
         /* Input hint: lift off ghost-grey. */
         body[data-theme="light"] #prometheusWidget #synthChatInputHint {
-            color: #6b7280 !important;
-            opacity: 0.9 !important;
+            color: #4b5563 !important;
+            opacity: 1 !important;
         }
 
         /* ---- Empty-state design (2026-08-26 polish) ---------------------
@@ -21559,11 +21571,11 @@ https://www.instagram.com/p/..."></textarea>
                     <svg width="17" height="17" viewBox="0 0 64 64" aria-hidden="true" style="flex:0 0 auto;"><g transform="skewX(-14)" fill="#C7F23E"><rect x="24" y="10" width="8.5" height="44" rx="1.75"/><rect x="37" y="10" width="8.5" height="44" rx="1.75"/><rect x="50" y="10" width="8.5" height="44" rx="1.75"/></g></svg>
                     <div style="min-width:0;">
                         <div id="prometheusTitle">Prometheus</div>
-                        <div id="prometheusSub">Profile IQ assistant</div>
+                        <div id="prometheusSub">IQ Assistant</div>
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:0.5rem; flex:0 0 auto;">
-                    <span id="synthChatQueueBadge" style="font-size: 0.72rem; color: #c4b5fd;"></span>
+                    <span id="synthChatQueueBadge" style="font-size: 0.72rem; color: #ec4899;"></span>
                     <button type="button" id="prometheusCollapseBtn" onclick="prometheusCollapse()" aria-label="Collapse Prometheus" title="Collapse">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </button>
