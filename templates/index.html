@@ -26061,30 +26061,105 @@ https://www.instagram.com/p/..."></textarea>
             #intentIQView .iiq-explore-hint { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; color: #B7B3D8; padding: 0 0.2rem 0.6rem; }
             body[data-theme="light"] #intentIQView .iiq-explore-divider { border-top-color: rgba(0,0,0,0.08); }
             body[data-theme="light"] #intentIQView .iiq-explore-hint { color: #5C6560; }
+
+            /* ===== GOAT/Hades landing redesign 2026-09-02 =====
+               Hero card (Weekly Summary) sits alone at the top with generous
+               padding and a subtle Signal-Green accent border. Three drill
+               tables demote to supporting cards with a softer Pavement
+               hairline. Numeric cells use tabular figures so columns scan. */
+            #intentIQView .iiq-hero-card { background: #0C1618; border: 1px solid #27393D; border-left: 3px solid #C7F23E; border-radius: 12px; padding: 1.4rem 1.6rem; margin: 0.5rem 0 1.1rem; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+            #intentIQView .iiq-hero-eyebrow { font-size: 0.68rem; font-weight: 600; color: #C7F23E; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.5rem; }
+            #intentIQView .iiq-hero-eyebrow::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #C7F23E; display: inline-block; }
+            #intentIQView .iiq-hero-title { font-size: 1.4rem; font-weight: 700; color: #E9E8E1; line-height: 1.2; letter-spacing: -0.005em; }
+            #intentIQView .iiq-hero-meta { font-size: 0.78rem; color: #797F81; margin-top: 0.25rem; line-height: 1.35; }
+            #intentIQView .iiq-hero-intro { font-size: 0.82rem; color: #9AA09B; line-height: 1.45; margin: 0.6rem 0 1rem; max-width: 62ch; }
+            #intentIQView .iiq-hero-bullets { display: flex; flex-direction: column; gap: 0.55rem; margin: 0; padding: 0; list-style: none; }
+            #intentIQView .iiq-hero-bullets li { font-size: 0.88rem; line-height: 1.55; color: #9AA09B; padding-left: 0.9rem; position: relative; }
+            #intentIQView .iiq-hero-bullets li::before { content: ''; position: absolute; left: 0; top: 0.65rem; width: 4px; height: 4px; border-radius: 50%; background: #5E7E12; }
+            #intentIQView .iiq-hero-bullets strong { color: #C7F23E; font-weight: 500; letter-spacing: 0.005em; }
+            #intentIQView .iiq-hero-bullets strong.iiq-soft-label { color: #B7B3D8; }
+            #intentIQView .iiq-hero-wow { flex: 0 0 auto; }
+            #intentIQView .iiq-hero-wow-chip { font-size: 0.82rem; font-weight: 700; padding: 0.35rem 0.85rem; border-radius: 999px; white-space: nowrap; display: inline-block; }
+
+            #intentIQView .iiq-support-card { background: #0C1618; border: 1px solid rgba(59,61,56,0.55); border-radius: 10px; padding: 0.9rem 1.05rem 0.55rem; margin: 0 0 0.85rem; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+            #intentIQView .iiq-support-eyebrow { font-size: 0.64rem; font-weight: 600; color: #9AA09B; text-transform: uppercase; letter-spacing: 0.1em; }
+            #intentIQView .iiq-support-title { font-size: 0.88rem; font-weight: 700; color: #E9E8E1; line-height: 1.25; margin-top: 0.15rem; }
+            #intentIQView .iiq-support-intro { font-size: 0.78rem; color: #9AA09B; line-height: 1.45; margin-top: 0.2rem; max-width: 62ch; }
+            #intentIQView .iiq-support-meta { font-size: 0.72rem; color: #797F81; white-space: nowrap; }
+            #intentIQView .iiq-support-table { width: 100%; border-collapse: collapse; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; margin-top: 0.75rem; }
+            #intentIQView .iiq-support-table thead th { text-align: left; padding: 0.65rem 0.9rem; font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #797F81; border-bottom: 1px solid #3B3D38; cursor: pointer; user-select: none; white-space: nowrap; }
+            #intentIQView .iiq-support-table thead th.iiq-num { text-align: right; font-variant-numeric: tabular-nums; }
+            #intentIQView .iiq-support-table tbody td { padding: 0.95rem 0.9rem; border-bottom: 1px solid #3B3D38; vertical-align: middle; }
+            #intentIQView .iiq-support-table tbody td.iiq-num { text-align: right; font-variant-numeric: tabular-nums; }
+            #intentIQView .iiq-support-table tbody tr:last-child td { border-bottom: none; }
+            #intentIQView .iiq-support-table tbody tr { transition: background 0.12s ease-out; cursor: pointer; }
+            #intentIQView .iiq-support-table tbody tr:hover { background: rgba(199,242,62,0.04); }
+
+            #intentIQView .iiq-show-all-btn { display: block; width: 100%; margin-top: 0.55rem; padding: 0.65rem 0.9rem; background: transparent; border: 1px solid rgba(59,61,56,0.55); border-radius: 8px; color: #C7F23E; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; transition: background 0.12s ease-out; }
+            #intentIQView .iiq-show-all-btn:hover { background: rgba(199,242,62,0.06); }
+            #intentIQView .iiq-show-all-btn:focus { outline: 2px solid #3358FF; outline-offset: 2px; }
+
+            #intentIQView .iiq-icon-btn { background: transparent; border: 1px solid rgba(255,255,255,0.15); color: #E9E8E1; width: 34px; height: 34px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.05rem; line-height: 1; padding: 0; transition: background 0.12s ease-out; }
+            #intentIQView .iiq-icon-btn:hover { background: rgba(199,242,62,0.08); border-color: rgba(199,242,62,0.35); color: #C7F23E; }
+            #intentIQView .iiq-icon-btn:focus { outline: 2px solid #3358FF; outline-offset: 2px; }
+
+            #intentIQView .iiq-selector-bar-v2 { display: flex; flex-direction: column; gap: 0.6rem; padding: 0.75rem 1rem; background: #0C1618; border: 1px solid #27393D; border-radius: 10px; margin: 0.5rem 0 0.85rem; }
+            #intentIQView .iiq-selector-bar-v2 label { font-size: 0.68rem; color: #797F81; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 0.3rem; display: block; }
+            #intentIQView .iiq-selector-bar-v2 select, #intentIQView .iiq-selector-bar-v2 input { background: rgba(0,0,0,0.4); color: #E9E8E1; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 0.4rem 0.65rem; font-size: 0.85rem; min-width: 200px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+            #intentIQView .iiq-selector-bar-v2 select:focus, #intentIQView .iiq-selector-bar-v2 input:focus { outline: 2px solid #3358FF; outline-offset: 2px; border-color: rgba(51,88,255,0.55); }
+            #intentIQView .iiq-selector-row { display: flex; gap: 1.1rem; align-items: end; flex-wrap: wrap; }
+            #intentIQView .iiq-selector-row-2 { display: flex; gap: 0.75rem; align-items: center; justify-content: space-between; flex-wrap: wrap; padding-top: 0.55rem; border-top: 1px solid rgba(59,61,56,0.55); }
+            #intentIQView .iiq-selector-row-2:empty { display: none; }
+            body[data-theme="light"] #intentIQView .iiq-selector-bar-v2 label { color: #666966; }
+            body[data-theme="light"] #intentIQView .iiq-selector-bar-v2 select, body[data-theme="light"] #intentIQView .iiq-selector-bar-v2 input { background: #FFFFFF; color: #0C1618; border-color: #C9C6BA; }
+
+            #intentIQView .iiq-fit-tag { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.65rem; font-weight: 700; color: #B7B3D8; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+            #intentIQView .iiq-fit-tag__dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex: 0 0 6px; }
+
+            body[data-theme="light"] #intentIQView .iiq-hero-card { background: #FFFFFF; border-color: #C9C6BA; border-left-color: #5E7E12; }
+            body[data-theme="light"] #intentIQView .iiq-hero-eyebrow { color: #5E7E12; }
+            body[data-theme="light"] #intentIQView .iiq-hero-eyebrow::before { background: #5E7E12; }
+            body[data-theme="light"] #intentIQView .iiq-hero-title { color: #0C1618; }
+            body[data-theme="light"] #intentIQView .iiq-hero-meta { color: #666966; }
+            body[data-theme="light"] #intentIQView .iiq-hero-intro { color: #5C6560; }
+            body[data-theme="light"] #intentIQView .iiq-hero-bullets li { color: #5C6560; }
+            body[data-theme="light"] #intentIQView .iiq-hero-bullets strong { color: #5E7E12; }
+            body[data-theme="light"] #intentIQView .iiq-support-card { background: #FFFFFF; border-color: #C9C6BA; }
+            body[data-theme="light"] #intentIQView .iiq-support-title { color: #0C1618; }
+            body[data-theme="light"] #intentIQView .iiq-support-intro { color: #5C6560; }
+            body[data-theme="light"] #intentIQView .iiq-support-eyebrow { color: #666966; }
+            body[data-theme="light"] #intentIQView .iiq-support-table thead th { color: #666966; border-bottom-color: #C9C6BA; }
+            body[data-theme="light"] #intentIQView .iiq-support-table tbody td { border-bottom-color: #E1DFD5; }
+            body[data-theme="light"] #intentIQView .iiq-show-all-btn { color: #5E7E12; border-color: #C9C6BA; }
+            body[data-theme="light"] #intentIQView .iiq-icon-btn { color: #0C1618; border-color: #C9C6BA; }
+            body[data-theme="light"] #intentIQView .iiq-selector-bar-v2 { background: #FFFFFF; border-color: #C9C6BA; }
         </style>
         <div id="intentIQView">
             <div class="iiq-header">
                 <h2 class="iiq-title">📈 Attribution IQ <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Title-scoped marketing-intent measurement</span></h2>
                 <p class="iiq-subtitle">Ingest a title's marketing-asset map and report on campaign-phase performance, audience-of-interest overlap, paid vs organic interplay, talent halo, trailer viewership, and audience shift over the campaign life.</p>
             </div>
-            <div class="iiq-selector-bar">
-                <div>
-                    <label for="iiqTitleSelect">Title</label>
-                    <select id="iiqTitleSelect" onchange="onIntentIQTitleChange()"><option value="">Loading...</option></select>
-                </div>
-                <div style="flex: 1; min-width: 0;">
-                    <label for="iiqAsOf">As-of date <span id="iiqAsOfChip" style="margin-left: 0.35rem; font-size: 0.65rem; font-weight: 500; color: #C7F23E; background: rgba(199,242,62,0.10); border: 1px solid rgba(199,242,62,0.35); padding: 0.05rem 0.4rem; border-radius: 10px; white-space: nowrap; display: none;"></span></label>
-                    <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
-                        <input type="date" id="iiqAsOf" oninput="if (typeof iiqOnAsOfChange === 'function') iiqOnAsOfChange();" style="min-width: 140px;" />
-                        <div id="iiqAsOfPresets" style="display: flex; gap: 0.25rem; flex-wrap: wrap;"></div>
+            <div class="iiq-selector-bar-v2">
+                <!-- Row 1: title dropdown + as-of picker + N-of-M chip + icon reload -->
+                <div class="iiq-selector-row">
+                    <div>
+                        <label for="iiqTitleSelect" style="font-size:0.68rem; font-weight:600; color:#797F81; text-transform:uppercase; letter-spacing:0.08em;">Title</label>
+                        <select id="iiqTitleSelect" onchange="onIntentIQTitleChange()"><option value="">Loading...</option></select>
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <label for="iiqAsOf" style="font-size:0.68rem; font-weight:600; color:#797F81; text-transform:uppercase; letter-spacing:0.08em;">As-of date <span id="iiqAsOfChip" style="margin-left: 0.4rem; font-size: 0.65rem; font-weight: 500; color: #C7F23E; background: rgba(199,242,62,0.10); border: 1px solid rgba(199,242,62,0.35); padding: 0.05rem 0.45rem; border-radius: 10px; white-space: nowrap; display: none; text-transform:none; letter-spacing:0;"></span></label>
+                        <input type="date" id="iiqAsOf" oninput="if (typeof iiqOnAsOfChange === 'function') iiqOnAsOfChange();" style="min-width: 160px;" />
+                    </div>
+                    <div style="flex: 1 1 0; min-width: 0; text-align: right; color: var(--text-secondary); font-size: 0.78rem;">
+                        <span id="iiqStatus">Pick a title to begin.</span>
+                    </div>
+                    <div style="flex: 0 0 auto;">
+                        <button type="button" class="iiq-icon-btn" onclick="reloadIntentIQ()" aria-label="Reload" title="Reload">&#8635;</button>
                     </div>
                 </div>
-                <div>
-                    <label>&nbsp;</label>
-                    <button type="button" class="blue-iq-apply-btn" onclick="reloadIntentIQ()">Reload</button>
-                </div>
-                <div style="flex: 1; text-align: right; color: var(--text-secondary); font-size: 0.78rem; min-width: 180px;">
-                    <span id="iiqStatus">Pick a title to begin.</span>
+                <!-- Row 2: T-minus preset row (hidden when empty for brand campaigns) -->
+                <div class="iiq-selector-row-2">
+                    <div id="iiqAsOfPresets" style="display: flex; gap: 0.3rem; flex-wrap: wrap;"></div>
                 </div>
             </div>
             <!-- ===== Weekly Summary card (film campaigns only) =====
@@ -28251,6 +28326,13 @@ https://www.instagram.com/p/..."></textarea>
                 var opening = ov.opening_date || '';
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
                 var rows = _iiqComputeAssetRows(asOf, opening);
+                // Progressive disclosure. Top 5 by default (already sorted
+                // by the active sort state which starts at Lift desc);
+                // click-to-expand surfaces the full set. Sort state is
+                // preserved across expand/collapse via window._iiqAssetTable.
+                var IIQ_ASSET_DEFAULT_ROWS = 5;
+                var showAllAsset = !!window._iiqAssetTable_showAll;
+                var displayAssetRows = showAllAsset ? rows : rows.slice(0, IIQ_ASSET_DEFAULT_ROWS);
                 var useInfo = _iiqPhaseUsesInfo(asOf, opening);
                 var primaryHeader = useInfo ? 'Info-seek %' : 'Ticketing %';
                 var primaryTip = 'Primary funnel metric shifts at T-14 (14 days pre-launch): info-seek pre, ticketing post. The other stage is available in the row expand.';
@@ -28269,7 +28351,7 @@ https://www.instagram.com/p/..."></textarea>
                 if (!rows.length) {
                     bodyHtml = '<tbody><tr><td colspan="6" style="padding: 1.4rem 1rem; text-align:center; color:#797F81; font-size:0.82rem;">No assets in view at this as-of date. Move the picker forward to see the first campaign moment.</td></tr></tbody>';
                 } else {
-                    bodyHtml = '<tbody>' + rows.map(function(r, idx) {
+                    bodyHtml = '<tbody>' + displayAssetRows.map(function(r, idx) {
                         var a = r.asset;
                         var label = a.action_label || a.asset_type || 'Untitled asset';
                         var trimmed = (label.length > 60) ? (label.slice(0, 57) + '…') : label;
@@ -28308,7 +28390,7 @@ https://www.instagram.com/p/..."></textarea>
                             var bucket = _iiqAssetLiftBucket(r.lift);
                             var chipBg, chipBorder, chipFg, chipLabel;
                             if (bucket === 'strong')      { chipBg = 'rgba(199,242,62,0.14)'; chipBorder = 'rgba(199,242,62,0.45)'; chipFg = '#C7F23E'; chipLabel = 'Strong'; }
-                            else if (bucket === 'onpace') { chipBg = 'rgba(183,179,216,0.14)'; chipBorder = 'rgba(183,179,216,0.45)'; chipFg = '#B7B3D8'; chipLabel = 'On-pace'; }
+                            else if (bucket === 'onpace') { chipBg = 'rgba(183,179,216,0.14)'; chipBorder = 'rgba(183,179,216,0.45)'; chipFg = '#B7B3D8'; chipLabel = 'On pace'; }
                             else                          { chipBg = 'rgba(248,113,113,0.14)'; chipBorder = 'rgba(248,113,113,0.45)'; chipFg = '#f87171'; chipLabel = 'Soft'; }
                             liftCell = '<span style="display:inline-block; background:' + chipBg + '; border:1px solid ' + chipBorder + '; color:' + chipFg + '; font-size:0.72rem; font-weight:700; padding:0.2rem 0.55rem; border-radius:999px; white-space:nowrap;">' + chipLabel + ' · ' + r.lift.toFixed(1) + 'x</span>';
                         }
@@ -28341,20 +28423,46 @@ https://www.instagram.com/p/..."></textarea>
                 var sortLabel = sortLabelMap[sortState.key] || sortState.key;
                 var dirLabel = sortState.dir === 'desc' ? 'highest first' : 'lowest first';
 
-                host.innerHTML = '<div style="display:flex; align-items:baseline; justify-content:space-between; margin: 0 0 0.55rem; gap: 0.75rem;">'
-                    + '<div>'
-                    +   '<div style="font-size:0.68rem; font-weight:600; color:#C7F23E; text-transform:uppercase; letter-spacing:0.08em;">Assets in view</div>'
-                    +   '<div style="font-size:0.72rem; color:#797F81; margin-top:0.15rem;">Ranked by ' + escapeHtml(sortLabel) + ', ' + escapeHtml(dirLabel) + '. Click any header to re-sort. Click a row to drill in.</div>'
+                var visibleCount = rows.length ? displayAssetRows.length : 0;
+                var toggleHtml = '';
+                if (rows.length > IIQ_ASSET_DEFAULT_ROWS) {
+                    toggleHtml = showAllAsset
+                        ? '<button type="button" class="iiq-show-all-btn" onclick="iiqToggleAssetShowAll()">Show top ' + IIQ_ASSET_DEFAULT_ROWS + '</button>'
+                        : '<button type="button" class="iiq-show-all-btn" onclick="iiqToggleAssetShowAll()">Show all ' + rows.length + ' assets</button>';
+                }
+
+                var subheadRight = visibleCount
+                    ? ('<div class="iiq-support-meta">' + visibleCount + ' of ' + rows.length + ' at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '</div>')
+                    : ('<div class="iiq-support-meta">0 at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '</div>');
+
+                host.className = 'iiq-support-card';
+                host.removeAttribute('style');
+                host.innerHTML = '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:0.85rem; flex-wrap:wrap;">'
+                    + '<div style="min-width:0;">'
+                    +   '<div class="iiq-support-eyebrow">Assets in view</div>'
+                    +   '<div class="iiq-support-title">Individual assets ranked by response to date.</div>'
+                    +   '<div class="iiq-support-intro">Ranked by ' + escapeHtml(sortLabel) + ', ' + escapeHtml(dirLabel) + '. Click any header to re-sort. Click a row to drill in.</div>'
                     + '</div>'
-                    + '<div style="font-size:0.7rem; color:#797F81;">' + rows.length + ' asset' + (rows.length === 1 ? '' : 's') + ' at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '</div>'
+                    + subheadRight
                     + '</div>'
-                    + '<div style="overflow-x:auto; border:1px solid #27393D; border-radius:10px; background:#0C1618;">'
-                    + '<table style="width:100%; border-collapse:collapse; font-family:\'Inter\', -apple-system, BlinkMacSystemFont, sans-serif;">'
+                    + '<div style="overflow-x:auto;">'
+                    + '<table class="iiq-support-table">'
                     + headerHtml + bodyHtml
                     + '</table>'
-                    + '</div>';
+                    + '</div>'
+                    + toggleHtml;
                 host.style.display = '';
             }
+
+            // Toggle handler for the asset table's "Show all" button.
+            // Flips window._iiqAssetTable_showAll and re-renders. Sort
+            // state on window._iiqAssetTable is preserved across the
+            // expand/collapse cycle. Wired to the button in the render
+            // function above.
+            window.iiqToggleAssetShowAll = function() {
+                window._iiqAssetTable_showAll = !window._iiqAssetTable_showAll;
+                try { _iiqRenderAssetTable(); } catch (_e) {}
+            };
             // ================================================================
             // === Attribution IQ audience-response table (Phase 3, film) =====
             // ================================================================
@@ -28678,10 +28786,17 @@ https://www.instagram.com/p/..."></textarea>
                 var opening = ov.opening_date || '';
                 var slug = (window.__intentIQ && window.__intentIQ.currentSlug) || 'default';
                 var rows = _iiqComputeAudienceRows(asOf, opening);
+                // Progressive disclosure - matches the asset table's pattern.
+                // Under-served cohorts still surface at the top because the
+                // default sort key is Fit desc, which puts under-served
+                // first per the sort logic in _iiqComputeAudienceRows.
+                var IIQ_AUD_DEFAULT_ROWS = 5;
+                var showAllAud = !!window._iiqAudienceTable_showAll;
+                var displayAudRows = showAllAud ? rows : rows.slice(0, IIQ_AUD_DEFAULT_ROWS);
                 var useInfo = _iiqPhaseUsesInfo(asOf, opening);
                 var responseHeader = useInfo ? 'Info-seek %' : 'Ticketing %';
                 var responseTip = 'Primary funnel metric shifts at T-14 (14 days pre-launch): info-seek pre, ticketing post. The other stage is available in the row expand.';
-                var indexTip = 'Cohort ' + (useInfo ? 'info-seek' : 'ticketing') + ' % divided by the campaign\'s weighted-mean rate. Over-indexes at or above 1.3x, On-pace 0.7 to 1.3x, Under-indexes below 0.7x.';
+                var indexTip = 'Cohort ' + (useInfo ? 'info-seek' : 'ticketing') + ' % divided by the campaign\'s weighted-mean rate. Strong at or above 1.3x, On-pace 0.7 to 1.3x, Soft below 0.7x.';
                 var fitTip = 'Sweet spot = high reach + high affinity. Under-served = high affinity but under-exposed (the responding-but-under-served bucket). Broad = reaching but not converting differentially. Off-target = neither.';
 
                 var headerHtml = '<thead><tr>'
@@ -28698,7 +28813,7 @@ https://www.instagram.com/p/..."></textarea>
                 } else if (rows[0].in_view_n <= 0) {
                     bodyHtml = '<tbody><tr><td colspan="5" style="padding: 1.4rem 1rem; text-align:center; color:#797F81; font-size:0.82rem;">Move the as-of picker forward to see audience response to the first campaign moment.</td></tr></tbody>';
                 } else {
-                    bodyHtml = '<tbody>' + rows.map(function(r, idx) {
+                    bodyHtml = '<tbody>' + displayAudRows.map(function(r, idx) {
                         var display = r.display || r.subject_key;
                         var trimmed = (display.length > 60) ? (display.slice(0, 57) + '\u2026') : display;
                         var glyph = _iiqAudienceGlyph(r.category);
@@ -28729,9 +28844,9 @@ https://www.instagram.com/p/..."></textarea>
                             indexCell = '<div style="color:#797F81; font-size:0.82rem;">\u2014</div>';
                         } else {
                             var iBg, iBorder, iFg, iLabel;
-                            if (r.index >= 1.30)      { iBg = 'rgba(199,242,62,0.14)'; iBorder = 'rgba(199,242,62,0.45)'; iFg = '#C7F23E'; iLabel = 'Over-indexes'; }
-                            else if (r.index >= 0.70) { iBg = 'rgba(183,179,216,0.14)'; iBorder = 'rgba(183,179,216,0.45)'; iFg = '#B7B3D8'; iLabel = 'On-pace'; }
-                            else                      { iBg = 'rgba(248,113,113,0.14)'; iBorder = 'rgba(248,113,113,0.45)'; iFg = '#f87171'; iLabel = 'Under-indexes'; }
+                            if (r.index >= 1.30)      { iBg = 'rgba(199,242,62,0.14)'; iBorder = 'rgba(199,242,62,0.45)'; iFg = '#C7F23E'; iLabel = 'Strong'; }
+                            else if (r.index >= 0.70) { iBg = 'rgba(183,179,216,0.14)'; iBorder = 'rgba(183,179,216,0.45)'; iFg = '#B7B3D8'; iLabel = 'On pace'; }
+                            else                      { iBg = 'rgba(59,61,56,0.35)'; iBorder = 'rgba(120,120,120,0.45)'; iFg = '#9AA09B'; iLabel = 'Soft'; }
                             indexCell = '<span style="display:inline-block; background:' + iBg + '; border:1px solid ' + iBorder + '; color:' + iFg + '; font-size:0.72rem; font-weight:700; padding:0.2rem 0.55rem; border-radius:999px; white-space:nowrap;">' + iLabel + ' \u00b7 ' + r.index.toFixed(1) + 'x</span>';
                         }
 
@@ -28739,12 +28854,16 @@ https://www.instagram.com/p/..."></textarea>
                         if (!r.fit) {
                             fitCell = '<div style="color:#797F81; font-size:0.82rem;">\u2014</div>';
                         } else {
-                            var fBg, fBorder, fFg, fLabel, fTitle;
-                            if (r.fit === 'sweet')             { fBg = 'rgba(199,242,62,0.14)'; fBorder = 'rgba(199,242,62,0.45)'; fFg = '#C7F23E'; fLabel = 'Sweet spot'; fTitle = 'High reach + high affinity. The cohort is both large in the exposed audience and responding above the campaign mean.'; }
-                            else if (r.fit === 'underserved')  { fBg = 'rgba(232,130,255,0.14)'; fBorder = 'rgba(232,130,255,0.55)'; fFg = '#E682FF'; fLabel = 'Under-served'; fTitle = 'The cohort is leaning in hard but the campaign has not reached them yet. Add exposure here.'; }
-                            else if (r.fit === 'broad')        { fBg = 'rgba(183,179,216,0.14)'; fBorder = 'rgba(183,179,216,0.45)'; fFg = '#B7B3D8'; fLabel = 'Broad'; fTitle = 'Reaching them but not converting differentially vs the campaign mean.'; }
-                            else                               { fBg = 'rgba(120,120,120,0.14)'; fBorder = 'rgba(120,120,120,0.35)'; fFg = '#9AA09B'; fLabel = 'Off-target'; fTitle = 'Neither reaching nor converting.'; }
-                            fitCell = '<span title="' + escapeHtml(fTitle) + '" style="display:inline-block; background:' + fBg + '; border:1px solid ' + fBorder + '; color:' + fFg + '; font-size:0.72rem; font-weight:700; padding:0.2rem 0.55rem; border-radius:999px; white-space:nowrap;">' + fLabel + '</span>';
+                            // Demoted to a quiet dot + label tag so the Fit
+                            // read stays visible as a secondary axis without
+                            // competing with the primary Strong/On pace/Soft
+                            // chip in the vs-Gen-Pop column.
+                            var fDot, fLabel, fTitle;
+                            if (r.fit === 'sweet')             { fDot = '#C7F23E'; fLabel = 'Sweet spot'; fTitle = 'High reach + high affinity. The cohort is both large in the exposed audience and responding above the campaign mean.'; }
+                            else if (r.fit === 'underserved')  { fDot = '#E682FF'; fLabel = 'Under-served'; fTitle = 'The cohort is leaning in hard but the campaign has not reached them yet. Add exposure here.'; }
+                            else if (r.fit === 'broad')        { fDot = '#B7B3D8'; fLabel = 'Broad'; fTitle = 'Reaching them but not converting differentially vs the campaign mean.'; }
+                            else                               { fDot = '#5C6466'; fLabel = 'Off-target'; fTitle = 'Neither reaching nor converting.'; }
+                            fitCell = '<span class="iiq-fit-tag" title="' + escapeHtml(fTitle) + '"><span class="iiq-fit-tag__dot" style="background:' + fDot + ';"></span>' + fLabel + '</span>';
                         }
 
                         return '<tr onclick="iiqAudienceTableRowClick(' + idx + ')" style="cursor:pointer; transition: background 0.12s ease;" onmouseover="this.style.background=\'rgba(199,242,62,0.04)\'" onmouseout="this.style.background=\'\'">'
@@ -28770,20 +28889,45 @@ https://www.instagram.com/p/..."></textarea>
                     dirLabel = sortState.dir === 'desc' ? 'highest first' : 'lowest first';
                 }
 
-                host.innerHTML = '<div style="display:flex; align-items:baseline; justify-content:space-between; margin: 0 0 0.55rem; gap: 0.75rem;">'
-                    + '<div>'
-                    +   '<div style="font-size:0.68rem; font-weight:600; color:#C7F23E; text-transform:uppercase; letter-spacing:0.08em;">Audience response</div>'
-                    +   '<div style="font-size:0.72rem; color:#797F81; margin-top:0.15rem;">Ranked by ' + escapeHtml(sortLabel) + ', ' + escapeHtml(dirLabel) + '. Click any header to re-sort. Click a row to see which assets drove this cohort\'s response.</div>'
+                var visibleCountAud = rows.length ? displayAudRows.length : 0;
+                var toggleHtmlAud = '';
+                if (rows.length > IIQ_AUD_DEFAULT_ROWS) {
+                    toggleHtmlAud = showAllAud
+                        ? '<button type="button" class="iiq-show-all-btn" onclick="iiqToggleAudienceShowAll()">Show top ' + IIQ_AUD_DEFAULT_ROWS + '</button>'
+                        : '<button type="button" class="iiq-show-all-btn" onclick="iiqToggleAudienceShowAll()">Show all ' + rows.length + ' cohorts</button>';
+                }
+
+                var subheadRightAud = visibleCountAud
+                    ? ('<div class="iiq-support-meta">' + visibleCountAud + ' of ' + rows.length + ' at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '</div>')
+                    : ('<div class="iiq-support-meta">0 at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '</div>');
+
+                host.className = 'iiq-support-card';
+                host.removeAttribute('style');
+                host.innerHTML = '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:0.85rem; flex-wrap:wrap;">'
+                    + '<div style="min-width:0;">'
+                    +   '<div class="iiq-support-eyebrow">Audience response</div>'
+                    +   '<div class="iiq-support-title">Cohorts responding, and cohorts responding but under-served.</div>'
+                    +   '<div class="iiq-support-intro">Ranked by ' + escapeHtml(sortLabel) + ', ' + escapeHtml(dirLabel) + '. Click any header to re-sort. Click a row to see which assets drove this cohort\'s response.</div>'
                     + '</div>'
-                    + '<div style="font-size:0.7rem; color:#797F81;">' + rows.length + ' cohort' + (rows.length === 1 ? '' : 's') + ' at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '</div>'
+                    + subheadRightAud
                     + '</div>'
-                    + '<div style="overflow-x:auto; border:1px solid #27393D; border-radius:10px; background:#0C1618;">'
-                    + '<table style="width:100%; border-collapse:collapse; font-family:\'Inter\', -apple-system, BlinkMacSystemFont, sans-serif;">'
+                    + '<div style="overflow-x:auto;">'
+                    + '<table class="iiq-support-table">'
                     + headerHtml + bodyHtml
                     + '</table>'
-                    + '</div>';
+                    + '</div>'
+                    + toggleHtmlAud;
                 host.style.display = '';
             }
+
+            // Toggle handler for the audience table's "Show all" button.
+            // Flips window._iiqAudienceTable_showAll and re-renders. The
+            // default Fit-desc sort keeps Under-served rows at the top
+            // whether or not the table is expanded.
+            window.iiqToggleAudienceShowAll = function() {
+                window._iiqAudienceTable_showAll = !window._iiqAudienceTable_showAll;
+                try { _iiqRenderAudienceTable(); } catch (_e) {}
+            };
             // ================================================================
             // === Attribution IQ trend module (Phase 4, film only)       =====
             // ================================================================
@@ -29204,7 +29348,7 @@ https://www.instagram.com/p/..."></textarea>
                 }
 
                 var assetPanel = '<div style="flex:1 1 50%; min-width: 280px;">'
-                    + '<div style="font-size:0.64rem; font-weight:600; color:#C7F23E; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.35rem;">Assets moving fastest this week</div>'
+                    + '<div style="font-size:0.6rem; font-weight:600; color:#9AA09B; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.45rem;">Assets moving fastest this week</div>'
                     + assetPanelHtml
                     + '</div>';
 
@@ -29252,7 +29396,7 @@ https://www.instagram.com/p/..."></textarea>
                 }
 
                 var audPanel = '<div style="flex:1 1 50%; min-width: 280px;">'
-                    + '<div style="font-size:0.64rem; font-weight:600; color:#E682FF; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.35rem;">Audiences leaning in (or out) this week</div>'
+                    + '<div style="font-size:0.6rem; font-weight:600; color:#9AA09B; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.45rem;">Audiences leaning in (or out) this week</div>'
                     + audPanelHtml
                     + '</div>';
 
@@ -29291,22 +29435,24 @@ https://www.instagram.com/p/..."></textarea>
                     + '</div>';
 
                 // ---- Header + full card assembly --------------------
-                var headerHtml = '<div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:0.6rem; gap:0.75rem;">'
-                    + '<div>'
-                    +   '<div style="font-size:0.68rem; font-weight:600; color:#C7F23E; text-transform:uppercase; letter-spacing:0.08em;">How signals are moving</div>'
-                    +   '<div style="font-size:0.72rem; color:#797F81; margin-top:0.15rem;">Week-over-week momentum: assets, audiences, and total exposure vs the trailing 4 weeks.</div>'
+                var headerHtml = '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:0.85rem; flex-wrap:wrap;">'
+                    + '<div style="min-width:0;">'
+                    +   '<div class="iiq-support-eyebrow">How signals are moving</div>'
+                    +   '<div class="iiq-support-title">Where week over week is accelerating or slowing.</div>'
+                    +   '<div class="iiq-support-intro">Assets, cohorts, and total exposure vs the trailing 4 weeks.</div>'
                     + '</div>'
-                    + '<div style="font-size:0.7rem; color:#797F81;">as of ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '</div>'
+                    + '<div class="iiq-support-meta">as of ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '</div>'
                     + '</div>';
 
-                var panelsHtml = '<div style="display:flex; gap:1.1rem; flex-wrap:wrap; align-items:flex-start;">'
+                var panelsHtml = '<div style="display:flex; gap:1.1rem; flex-wrap:wrap; align-items:flex-start; margin-top:0.75rem;">'
                     + assetPanel + audPanel
                     + '</div>';
 
+                host.className = 'iiq-support-card';
+                host.removeAttribute('style');
+                host.style.paddingBottom = '0.95rem';
+                host.innerHTML = headerHtml + panelsHtml + stripHtml;
                 host.style.display = '';
-                host.innerHTML = '<div style="background:#0C1618; border:1px solid #27393D; border-radius:10px; padding:0.9rem 1rem;">'
-                    + headerHtml + panelsHtml + stripHtml
-                    + '</div>';
             }
             // Populate the T-90 / T-60 / T-30 / T-14 / T-7 / T-0 / T+7 / T+30
             // preset button row inside the selector bar. Reads opening_date
@@ -29441,7 +29587,7 @@ https://www.instagram.com/p/..."></textarea>
                 // ===== WoW delta chip =====
                 var wowChipHtml;
                 if (priorWeekBeforeCampaign || totalPrev <= 0) {
-                    wowChipHtml = '<span style="font-size:0.72rem; font-weight:600; color:#B7B3D8; background: rgba(183,179,216,0.10); border: 1px solid rgba(183,179,216,0.35); padding: 0.22rem 0.55rem; border-radius: 999px; white-space: nowrap;">launch week</span>';
+                    wowChipHtml = '<span class="iiq-hero-wow-chip" style="color:#B7B3D8; background: rgba(183,179,216,0.10); border: 1px solid rgba(183,179,216,0.35);">Launch week</span>';
                 } else {
                     var deltaPct = (totalNow - totalPrev) / totalPrev * 100;
                     // Never ship a round zero; nudge by 0.1 in the direction
@@ -29459,7 +29605,7 @@ https://www.instagram.com/p/..."></textarea>
                     var chipBg = pos ? 'rgba(199,242,62,0.14)' : 'rgba(248,113,113,0.14)';
                     var chipBorder = pos ? 'rgba(199,242,62,0.45)' : 'rgba(248,113,113,0.45)';
                     var sign = pos ? '+' : '';
-                    wowChipHtml = '<span style="font-size:0.72rem; font-weight:700; color:' + chipColor + '; background: ' + chipBg + '; border: 1px solid ' + chipBorder + '; padding: 0.22rem 0.55rem; border-radius: 999px; white-space: nowrap;">' + sign + deltaPct.toFixed(1) + '% WoW exposure</span>';
+                    wowChipHtml = '<span class="iiq-hero-wow-chip" style="color:' + chipColor + '; background: ' + chipBg + '; border: 1px solid ' + chipBorder + ';">' + sign + deltaPct.toFixed(1) + '% WoW exposure</span>';
                 }
 
                 // ===== Bullet: biggest mover this week =====
@@ -29552,7 +29698,7 @@ https://www.instagram.com/p/..."></textarea>
                         var bLabel = bottom.asset.action_label || bottom.asset.asset_type || 'Untitled asset';
                         var bRate = useInfo ? bottom.info_pct : bottom.ticket_pct;
                         var metricNounB = useInfo ? 'info-seek' : 'ticketing';
-                        bulletSoft = '<strong style="color:#5E7E12;">Where signals are soft:</strong> <span style="color:#9AA09B;">' + escapeHtml(bLabel) + ' tends to under-index on ' + metricNounB + ' this week at ' + bRate.toFixed(1) + '%, one angle: platform-audience-content mismatch, worth watching.</span>';
+                        bulletSoft = '<strong class="iiq-soft-label">Where signals are soft:</strong> <span style="color:#9AA09B;">' + escapeHtml(bLabel) + ' tends to under-index on ' + metricNounB + ' this week at ' + bRate.toFixed(1) + '%, one angle: platform-audience-content mismatch, worth watching.</span>';
                     }
                 }
 
@@ -29568,34 +29714,40 @@ https://www.instagram.com/p/..."></textarea>
                     card.innerHTML = '';
                     return;
                 }
-                var bulletsHtml = '<ul style="list-style: disc; padding-left: 1.2rem; margin: 0; display: flex; flex-direction: column; gap: 0.35rem;">'
-                    + bulletsArr.map(function(b) { return '<li style="font-size: 0.82rem; line-height: 1.45; color: #9AA09B;">' + b + '</li>'; }).join('')
+                // Bullet labels use the Signal-Green medium-weight treatment
+                // so a reader can jump to whichever finding they care about.
+                // The "Where signals are soft" label rides the .iiq-soft-label
+                // class in Dusk so a soft finding never masquerades as an
+                // accent moment. See the class in the #intentIQView scoped
+                // CSS block above.
+                var bulletsHtml = '<ul class="iiq-hero-bullets">'
+                    + bulletsArr.map(function(b) { return '<li>' + b + '</li>'; }).join('')
                     + '</ul>';
 
                 var tMinus = _iiqTMinusLabel(asOf, opening);
                 var asOfPretty = _iiqFmtAsOfDate(asOf);
                 var posterHtml = poster
-                    ? '<div style="flex: 0 0 44px; width: 44px; height: 62px; border-radius: 4px; overflow: hidden; background: #15252A;"><img src="' + escapeHtml(poster) + '" alt="" style="width: 100%; height: 100%; object-fit: cover;" /></div>'
+                    ? '<div style="flex: 0 0 72px; width: 72px; height: 104px; border-radius: 6px; overflow: hidden; background: #15252A;"><img src="' + escapeHtml(poster) + '" alt="" style="width: 100%; height: 100%; object-fit: cover;" /></div>'
                     : '';
 
-                var headerHtml = '<div style="display: flex; align-items: center; gap: 0.85rem; flex-wrap: wrap; margin-bottom: 0.75rem;">'
-                    + '<div style="display: flex; align-items: center; gap: 0.65rem; flex: 1; min-width: 200px;">'
+                var subMeta = escapeHtml(asOfPretty) + (tMinus ? ' <span style="color:#5C6466;">&middot;</span> ' + escapeHtml(tMinus) : '');
+
+                var headerHtml = '<div style="display:flex; align-items:flex-start; gap:1.1rem; flex-wrap:wrap;">'
+                    + '<div style="display:flex; align-items:center; gap:0.95rem; flex:1 1 auto; min-width:220px;">'
                         + posterHtml
-                        + '<div>'
-                            + '<div style="font-size: 0.68rem; font-weight: 600; color: #C7F23E; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.1rem;">Weekly summary</div>'
-                            + '<div style="font-size: 1.05rem; font-weight: 700; color: #E9E8E1; line-height: 1.2;">' + escapeHtml(displayName) + '</div>'
+                        + '<div style="min-width:0;">'
+                            + '<div class="iiq-hero-eyebrow">Weekly summary</div>'
+                            + '<div class="iiq-hero-title">' + escapeHtml(displayName) + '</div>'
+                            + '<div class="iiq-hero-meta">' + subMeta + '</div>'
                         + '</div>'
                     + '</div>'
-                    + '<div style="text-align: center; min-width: 160px;">'
-                        + '<div style="font-size: 0.85rem; font-weight: 600; color: #E9E8E1;">' + escapeHtml(asOfPretty) + '</div>'
-                        + (tMinus ? '<div style="font-size: 0.72rem; color: #797F81; margin-top: 0.1rem;">' + escapeHtml(tMinus) + '</div>' : '')
-                    + '</div>'
-                    + '<div style="text-align: right; min-width: 140px;">' + wowChipHtml + '</div>'
-                + '</div>';
+                    + '<div class="iiq-hero-wow">' + wowChipHtml + '</div>'
+                + '</div>'
+                + '<div class="iiq-hero-intro">What changed this week.</div>';
 
-                var bodyHtml = '<div style="background: #15252A; border-radius: 8px; padding: 0.7rem 0.85rem;">' + bulletsHtml + '</div>';
-
-                card.innerHTML = headerHtml + bodyHtml;
+                card.className = 'iiq-hero-card';
+                card.removeAttribute('style');
+                card.innerHTML = headerHtml + bulletsHtml;
                 card.style.display = '';
             }
             // Handler wired to the date input's oninput. Any picker
