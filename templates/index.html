@@ -25106,6 +25106,10 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-panel { display: none; }
             #trendsIQView .tiq-panel.active { display: block; }
             #trendsIQView .tiq-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+            /* Exactly 3 cards per row (Music/Podcasts/Gaming all-platforms view). Collapses to 2, then 1, on narrower viewports. */
+            #trendsIQView .tiq-cards-grid.tiq-cards-3up { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            @media (max-width: 1100px) { #trendsIQView .tiq-cards-grid.tiq-cards-3up { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+            @media (max-width: 720px)  { #trendsIQView .tiq-cards-grid.tiq-cards-3up { grid-template-columns: 1fr; } }
             #trendsIQView .tiq-card { background: var(--bg-secondary, #1e1e2e); border: 1px solid var(--border-color, #2c2c3e); border-radius: 10px; padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: 0.55rem; }
             #trendsIQView .tiq-card h4 { margin: 0 0 0.15rem 0; font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; }
             #trendsIQView .tiq-card-sub { font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.35rem; }
@@ -25280,6 +25284,11 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-social-tab { padding: 0.35rem 0.75rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; font-size: 0.78rem; cursor: pointer; color: var(--text-secondary); user-select: none; }
             #trendsIQView .tiq-social-tab.active { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: #fff; border-color: transparent; }
             #trendsIQView .tiq-social-tab.unavailable { opacity: 0.5; cursor: not-allowed; }
+            /* Light mode: inactive tabs used translucent-white borders that disappeared on light backgrounds. Give them a visible outline. (Jessie 2026-09-02) */
+            body[data-theme="light"] #trendsIQView .tiq-tab:not(.active) { background: #ffffff; border-color: var(--border-color, #d1d9e6); }
+            body[data-theme="light"] #trendsIQView .tiq-tab:not(.active):hover { background: rgba(124,58,237,0.08); border-color: #7c3aed; }
+            body[data-theme="light"] #trendsIQView .tiq-social-tab:not(.active) { background: #ffffff; border-color: var(--border-color, #d1d9e6); }
+            body[data-theme="light"] #trendsIQView .tiq-social-tab:not(.active):hover { background: rgba(124,58,237,0.08); border-color: #7c3aed; }
             #trendsIQView .tiq-social-panel { display: none; }
             #trendsIQView .tiq-social-panel.active { display: block; }
             #trendsIQView .tiq-fast-kind { display: inline-block; font-size: 0.65rem; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 4px; margin-left: 0.35rem; vertical-align: middle; }
@@ -56248,43 +56257,28 @@ https://www.instagram.com/p/..."></textarea>
             var keys = order.filter(function(k) { return sources[k]; })
                 .concat(allKeys.filter(function(k) { return order.indexOf(k) === -1; }));
 
-            if (!window.__trendsIQ.activeMusic || !sources[window.__trendsIQ.activeMusic]) {
-                window.__trendsIQ.activeMusic = keys.find(function(k) {
-                    return (sources[k] || {}).available;
-                }) || keys[0];
-            }
-
-            var tabs = keys.map(function(k) {
-                var s = sources[k] || {};
-                var active = (k === window.__trendsIQ.activeMusic) ? ' active' : '';
-                var unavail = !s.available ? ' unavailable' : '';
-                return '<div class="tiq-social-tab' + active + unavail + '" onclick="setTrendsIQMusic(\'' + k + '\')">' + _tiqEsc(s.label || k) + '</div>';
-            }).join('');
-
-            var panels = keys.map(function(k) {
+            // 2026-09-02 (v2): Liz asked for all platforms on one page,
+            // each in its own card, 3 cards per row - keeping the sortable
+            // 3-column sheet (Title | Streams | Delta%).
+            var cards = keys.map(function(k) {
                 var s = sources[k] || {};
                 var items = s.items || [];
-                var active = (k === window.__trendsIQ.activeMusic) ? ' active' : '';
-                var body;
                 if (!s.available || !items.length) {
-                    body = '<div class="tiq-placeholder">' +
+                    return '<div class="tiq-card"><div class="tiq-placeholder">' +
                            '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
                            '<div>' + _tiqEsc(s.sub || 'Warming up.') + '</div>' +
-                           '</div>';
-                } else {
-                    body = _tiqSourceSheet({
-                        kind: 'music', source: k, label: s.label || k, rows: items,
-                        metricLabel: 'Streams', entity: 'Music', wide: true,
-                        keyOf: function(it) { return it.title + ' - ' + (it.artist || ''); },
-                        subOf: function(it) { return it.artist ? _tiqEsc(it.artist) : ''; },
-                        badgeOf: function(it) { return _tiqCrossPlatformBadge(it); }
-                    });
+                           '</div></div>';
                 }
-                return '<div class="tiq-social-panel' + active + '" data-tiq-music="' + k + '">' + body + '</div>';
+                return _tiqSourceSheet({
+                    kind: 'music', source: k, label: s.label || k, rows: items,
+                    metricLabel: 'Streams', entity: 'Music', wide: false,
+                    keyOf: function(it) { return it.title + ' - ' + (it.artist || ''); },
+                    subOf: function(it) { return it.artist ? _tiqEsc(it.artist) : ''; },
+                    badgeOf: function(it) { return _tiqCrossPlatformBadge(it); }
+                });
             }).join('');
 
-            return '<div class="tiq-social-tabs">' + tabs + '</div>' +
-                   '<div class="tiq-social-panels">' + panels + '</div>';
+            return '<div class="tiq-cards-grid tiq-cards-3up">' + cards + '</div>';
         }
         window.setTrendsIQMusic = function(key) {
             window.__trendsIQ.activeMusic = key;
@@ -56334,43 +56328,27 @@ https://www.instagram.com/p/..."></textarea>
             var keys = order.filter(function(k) { return sources[k]; })
                 .concat(allKeys.filter(function(k) { return order.indexOf(k) === -1; }));
 
-            if (!window.__trendsIQ.activePodcasts || !sources[window.__trendsIQ.activePodcasts]) {
-                window.__trendsIQ.activePodcasts = keys.find(function(k) {
-                    return (sources[k] || {}).available;
-                }) || keys[0];
-            }
-
-            var tabs = keys.map(function(k) {
-                var s = sources[k] || {};
-                var active = (k === window.__trendsIQ.activePodcasts) ? ' active' : '';
-                var unavail = !s.available ? ' unavailable' : '';
-                return '<div class="tiq-social-tab' + active + unavail + '" onclick="setTrendsIQPodcasts(\'' + k + '\')">' + _tiqEsc(s.label || k) + '</div>';
-            }).join('');
-
-            var panels = keys.map(function(k) {
+            // 2026-09-02 (v2): all platforms on one page, each its own card,
+            // 3 per row, keeping the sortable 3-column sheet.
+            var cards = keys.map(function(k) {
                 var s = sources[k] || {};
                 var items = s.items || [];
-                var active = (k === window.__trendsIQ.activePodcasts) ? ' active' : '';
-                var body;
                 if (!s.available || !items.length) {
-                    body = '<div class="tiq-placeholder">' +
+                    return '<div class="tiq-card"><div class="tiq-placeholder">' +
                            '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
                            '<div>' + _tiqEsc(s.sub || 'Warming up.') + '</div>' +
-                           '</div>';
-                } else {
-                    body = _tiqSourceSheet({
-                        kind: 'podcast', source: k, label: s.label || k, rows: items,
-                        metricLabel: 'Listeners', entity: 'Podcast', wide: true,
-                        keyOf: function(it) { return it.title + ' - ' + (it.artist || ''); },
-                        subOf: function(it) { return it.artist ? _tiqEsc(it.artist) : ''; },
-                        badgeOf: function(it) { return _tiqCrossPlatformBadge(it); }
-                    });
+                           '</div></div>';
                 }
-                return '<div class="tiq-social-panel' + active + '" data-tiq-podcasts="' + k + '">' + body + '</div>';
+                return _tiqSourceSheet({
+                    kind: 'podcast', source: k, label: s.label || k, rows: items,
+                    metricLabel: 'Listeners', entity: 'Podcast', wide: false,
+                    keyOf: function(it) { return it.title + ' - ' + (it.artist || ''); },
+                    subOf: function(it) { return it.artist ? _tiqEsc(it.artist) : ''; },
+                    badgeOf: function(it) { return _tiqCrossPlatformBadge(it); }
+                });
             }).join('');
 
-            return '<div class="tiq-social-tabs">' + tabs + '</div>' +
-                   '<div class="tiq-social-panels">' + panels + '</div>';
+            return '<div class="tiq-cards-grid tiq-cards-3up">' + cards + '</div>';
         }
         window.setTrendsIQPodcasts = function(key) {
             window.__trendsIQ.activePodcasts = key;
@@ -57667,19 +57645,6 @@ https://www.instagram.com/p/..."></textarea>
             var keys = order.filter(function(k) { return gaming[k]; })
                 .concat(allKeys.filter(function(k) { return order.indexOf(k) === -1; }));
 
-            if (!window.__trendsIQ.activeGaming ||
-                !gaming[window.__trendsIQ.activeGaming]) {
-                window.__trendsIQ.activeGaming = keys.find(function(k) {
-                    return (gaming[k] || {}).available;
-                }) || keys[0];
-            }
-
-            var tabs = keys.map(function(k) {
-                var s = gaming[k] || {};
-                var active = (k === window.__trendsIQ.activeGaming) ? ' active' : '';
-                var unavail = !s.available ? ' unavailable' : '';
-                return '<div class="tiq-social-tab' + active + unavail + '" onclick="setTrendsIQGaming(\'' + k + '\')">' + _tiqEsc(s.label || k) + '</div>';
-            }).join('');
 
             // 2026-09-02: converted to the FAST/Streaming sheet structure.
             // Each column (Xbox list, or Meta Quest Free/Paid, or Steam
@@ -57707,47 +57672,34 @@ https://www.instagram.com/p/..."></textarea>
                                 ['top_sellers', 'Top Sellers']]
             };
 
-            var panels = keys.map(function(k) {
+            // 2026-09-02 (v2): all platforms on one page, each source (and
+            // each grouped bucket) as its own card in a 3-up grid, keeping
+            // the sortable 3-column sheet (Title | Plays | Delta%).
+            var cards = [];
+            keys.forEach(function(k) {
                 var s = gaming[k] || {};
-                var active = (k === window.__trendsIQ.activeGaming) ? ' active' : '';
-                var body;
                 var buckets = groupedBuckets[k];
                 if (!s.available) {
-                    body = '<div class="tiq-placeholder">' +
-                           '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
-                           '<div>Loading.</div>' +
-                           '</div>';
+                    cards.push('<div class="tiq-card"><div class="tiq-placeholder">' +
+                        '<div class="tiq-placeholder-title">' + _tiqEsc(s.label || k) + '</div>' +
+                        '<div>Loading.</div></div></div>');
                 } else if (buckets && buckets.some(function(b) { return Array.isArray(s[b[0]]); })) {
-                    // Grouped panel: render each populated bucket as its own
-                    // side-by-side sheet; collapse to one column when only
-                    // one bucket has rows (same fallback FAST uses).
-                    var populated = buckets.filter(function(b) {
-                        return (s[b[0]] || []).length;
-                    });
+                    var populated = buckets.filter(function(b) { return (s[b[0]] || []).length; });
                     if (!populated.length) {
-                        body = '<div class="tiq-empty">No trending games right now.</div>';
+                        cards.push('<div class="tiq-card"><div class="tiq-empty">No trending games right now.</div></div>');
                     } else {
-                        var cols = populated.length === 1
-                            ? '1fr'
-                            : populated.map(function() { return '1fr'; }).join(' ');
-                        var gridInner = populated.map(function(b) {
-                            return gameCol((s.label ? s.label + ' \u00b7 ' : '') + b[1], s[b[0]]);
-                        }).join('');
-                        body = '<div class="tiq-cards-grid" style="grid-template-columns: ' + cols + ';">' +
-                               gridInner +
-                               '</div>';
+                        populated.forEach(function(b) {
+                            cards.push(gameCol((s.label ? s.label + ' \u00b7 ' : '') + b[1], s[b[0]]));
+                        });
                     }
                 } else if (!(s.items || []).length) {
-                    body = '<div class="tiq-empty">No trending games right now.</div>';
+                    cards.push('<div class="tiq-card"><div class="tiq-empty">No trending games right now.</div></div>');
                 } else {
-                    // Single-list panel (Xbox).
-                    body = gameCol(s.label || k, s.items, true);
+                    cards.push(gameCol(s.label || k, s.items));
                 }
-                return '<div class="tiq-social-panel' + active + '" data-tiq-gaming="' + k + '">' + body + '</div>';
-            }).join('');
+            });
 
-            return '<div class="tiq-social-tabs">' + tabs + '</div>' +
-                   '<div class="tiq-social-panels">' + panels + '</div>';
+            return '<div class="tiq-cards-grid tiq-cards-3up">' + cards.join('') + '</div>';
         }
         window.setTrendsIQGaming = function(key) {
             window.__trendsIQ.activeGaming = key;
