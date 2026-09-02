@@ -25354,15 +25354,18 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-sheet-row.tiq-year-hidden { display: none !important; }
             #trendsIQView .tiq-sheet-all td.tiq-sheet-td-num:last-child, #trendsIQView .tiq-sheet-all th.tiq-sheet-th-num:last-child { padding-left: 4rem; }
             #trendsIQView .tiq-sheet-cardhead { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.35rem; }
-            #trendsIQView .tiq-sheet-cardhead h4 { margin: 0; }
-            #trendsIQView .tiq-export { position: relative; }
-            #trendsIQView .tiq-export-btn { font-family: inherit; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 3px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem; }
+            #trendsIQView .tiq-sheet-cardhead h4 { margin: 0; white-space: nowrap; font-size: 0.82rem; }
+            #trendsIQView .tiq-export { position: relative; flex: 0 0 auto; }
+            #trendsIQView .tiq-export-btn { font-family: inherit; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; padding: 3px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
             #trendsIQView .tiq-export-btn:hover { color: var(--text-primary); border-color: #a78bfa; }
             #trendsIQView .tiq-export-caret { font-size: 0.6rem; }
             #trendsIQView .tiq-export-menu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 30; min-width: 8.5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.28); padding: 0.25rem; display: flex; flex-direction: column; gap: 1px; }
             #trendsIQView .tiq-export-menu[hidden] { display: none; }
             #trendsIQView .tiq-export-menu button { font-family: inherit; font-size: 0.72rem; font-weight: 600; text-align: left; color: var(--text-primary); background: transparent; border: none; border-radius: 5px; padding: 5px 9px; cursor: pointer; white-space: nowrap; }
             #trendsIQView .tiq-export-menu button:hover { background: rgba(148,163,184,0.16); }
+            /* Light mode: card search fields (inline-styled dark in JS) become white with a black outline + black text. (Jessie 2026-09-02) */
+            body[data-theme="light"] #trendsIQView .tiq-card-search { background: #ffffff !important; color: #000000 !important; border-color: #000000 !important; }
+            body[data-theme="light"] #trendsIQView .tiq-card-search::placeholder { color: #555555 !important; }
             #trendsIQView .tiq-retailer-tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
             #trendsIQView .tiq-retailer-tab { padding: 0.4rem 0.85rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; font-size: 0.8rem; cursor: pointer; color: var(--text-secondary); user-select: none; display: inline-flex; align-items: center; gap: 0.35rem; }
             #trendsIQView .tiq-retailer-tab.active { background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); color: #fff; border-color: transparent; }
