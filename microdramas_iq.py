@@ -1838,12 +1838,22 @@ def integrate_snapshot(snapshot: dict, *, source: str = 'peacock') -> dict:
                 entry['rail_names'].append(row['rail_name'])
 
         entry['last_observed_date'] = today
-        entry['observations'].append({
+        # Dedupe same-day observations. A second cron on the same day
+        # (or an ad-hoc reseed) must not inflate observations[] with a
+        # duplicate row: the last write wins for today, historical days
+        # are left alone. Without this, day-over-day rank movement math
+        # double-counts today's observation.
+        obs_list = entry.get('observations') or []
+        obs_list = [o for o in obs_list
+                    if not (o.get('observed_date') == today
+                            and (o.get('source') or 'peacock') == source)]
+        obs_list.append({
             'observed_date': today,
             'rank':          row.get('rank'),
             'surface':       row.get('surface'),
             'source':        source,
         })
+        entry['observations'] = obs_list
         # Track episode discovery as a series retention signal
         eps = row.get('episodes')
         if isinstance(eps, list):
