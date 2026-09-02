@@ -414,6 +414,162 @@ _LENSES: list[dict[str, Any]] = [
 
 
 # ---------------------------------------------------------------------------
+# JSON-authored personas (bg-webapp/data/personas/*.json)
+#
+# Some personas are rich enough that the operator wants to review the
+# brief as its own artifact, not just a Python string.  For those, the
+# JSON file is the source of truth: this loader reads the file and
+# builds the same shape of {id, label, emoji, description, persona}
+# entry the inline _LENSES dicts above use.  The persona prompt string
+# is composed section-by-section from the JSON (one_line +
+# demographics + psychographics + consumption_signals + themes +
+# filter_rules_for_agent) with headers Claude reads naturally.
+#
+# To add another JSON-authored persona: drop a new file in
+# data/personas/, add its stem to _JSON_PERSONA_FILES, and add
+# calibration anchors in the _ANCHORS dict below keyed by lens_id.
+# The frontend LENS dropdown picks the new entry up automatically
+# from the daily scraper's lens_scores.json.
+# ---------------------------------------------------------------------------
+_JSON_PERSONA_FILES: list[str] = [
+    'unlikely_collaborators_follower',
+]
+
+# Data dir sits at repo-root / bg-webapp / data / personas.  The
+# scraper runs from the bg-webapp root on both local dev and Hetzner,
+# so a path anchored to __file__ resolves in both.
+import pathlib as _pathlib  # noqa: E402
+_PERSONA_DIR = (_pathlib.Path(__file__).resolve().parent.parent.parent
+                / 'data' / 'personas')
+
+
+def _bullet_lines(prefix: str, items: list) -> list[str]:
+    """Render a list of strings as a fixed-width bullet block."""
+    out: list[str] = []
+    for it in (items or []):
+        s = str(it).strip()
+        if not s:
+            continue
+        out.append(f"{prefix}- {s}")
+    return out
+
+
+def _compose_persona_prompt(doc: dict) -> str:
+    """Turn a JSON persona doc into the persona-prompt string Claude
+    reads at scoring time.  Mirrors the shape of the inline
+    ms_now_reader / millennials prompts so the batch prompt template
+    stays consistent.  Every section that appears in the JSON gets a
+    labeled block; missing keys are simply omitted."""
+    demo   = doc.get('demographics')       or {}
+    psych  = doc.get('psychographics')     or {}
+    cons   = doc.get('consumption_signals') or {}
+    care   = doc.get('themes_they_care_about') or []
+    avoid  = doc.get('themes_they_avoid')      or []
+    rules  = doc.get('filter_rules_for_agent') or []
+
+    lines: list[str] = []
+    label = doc.get('display_name') or doc.get('lens_id') or 'AUDIENCE'
+    lines.append(f"{label}.")
+    if doc.get('one_line'):
+        lines.append(str(doc['one_line']))
+    lines.append('')
+
+    if demo:
+        lines.append('DEMOGRAPHIC:')
+        for k, v in demo.items():
+            if isinstance(v, list):
+                lines.append(f"  {k}: {', '.join(str(x) for x in v)}")
+            else:
+                lines.append(f"  {k}: {v}")
+        lines.append('')
+
+    if psych:
+        lines.append('IDENTITY / TASTE:')
+        if psych.get('values'):
+            lines += _bullet_lines('  values ', psych['values'])
+        if psych.get('aesthetics'):
+            lines += _bullet_lines('  aesthetics ', psych['aesthetics'])
+        if psych.get('tone_they_respond_to'):
+            lines.append(f"  tone they respond to: {psych['tone_they_respond_to']}")
+        if psych.get('tone_they_reject'):
+            lines.append(f"  tone they reject:     {psych['tone_they_reject']}")
+        lines.append('')
+
+    if cons:
+        lines.append('CONSUMPTION SIGNALS (observed in this profile):')
+        for section, val in cons.items():
+            if isinstance(val, dict):
+                lines.append(f"  {section}:")
+                for sk, sv in val.items():
+                    if isinstance(sv, list):
+                        lines.append(f"    {sk}: {', '.join(str(x) for x in sv[:20])}")
+                    else:
+                        lines.append(f"    {sk}: {sv}")
+            elif isinstance(val, list):
+                lines.append(f"  {section}: {', '.join(str(x) for x in val[:20])}")
+            else:
+                lines.append(f"  {section}: {val}")
+        lines.append('')
+
+    if care:
+        lines.append('THEMES THEY CARE ABOUT:')
+        lines += _bullet_lines('  ', care)
+        lines.append('')
+
+    if avoid:
+        lines.append('THEMES THEY AVOID:')
+        lines += _bullet_lines('  ', avoid)
+        lines.append('')
+
+    if rules:
+        lines.append('=========================================================')
+        lines.append('SCORING RULES (apply to every item in the batch)')
+        lines.append('=========================================================')
+        lines.append('Use the FULL 0-100 range. HIGH (75-95) for items that '
+                     'directly land on a KEEP rule below.  LOW (5-25) for '
+                     'items that land on a DROP rule.  MID (35-55) for items '
+                     'that are plausible but not core.')
+        lines.append('')
+        lines += _bullet_lines('  ', rules)
+
+    return '\n'.join(lines)
+
+
+def _load_json_lenses() -> list[dict[str, Any]]:
+    """Read every JSON persona file in _JSON_PERSONA_FILES and return
+    the shape _LENSES expects.  Missing files log a warning and the
+    lens is simply skipped so the scraper never crashes on a bad
+    disk state - the frontend's response to a missing lens id is to
+    hide the option, which is the correct degraded behavior."""
+    out: list[dict[str, Any]] = []
+    for stem in _JSON_PERSONA_FILES:
+        path = _PERSONA_DIR / f'{stem}.json'
+        try:
+            doc = json.loads(path.read_text(encoding='utf-8'))
+        except FileNotFoundError:
+            logger.warning("lens_relevance: persona doc missing %s", path)
+            continue
+        except Exception as e:
+            logger.warning("lens_relevance: persona doc %s: %s", path, e)
+            continue
+        lens_id = doc.get('lens_id') or stem
+        out.append({
+            'id':          lens_id,
+            'label':       doc.get('display_name') or lens_id,
+            'emoji':       doc.get('emoji') or '\U0001F9ED',
+            'description': (doc.get('one_line') or '')[:200],
+            'persona':     _compose_persona_prompt(doc),
+        })
+    return out
+
+
+# Append JSON-authored personas to the inline set.  Order matters
+# only for the LENS dropdown ordering on the frontend (which mirrors
+# the order lens_config lands in the payload).
+_LENSES.extend(_load_json_lenses())
+
+
+# ---------------------------------------------------------------------------
 # Anchor items - concrete calibration examples pinned at the top of
 # every batch prompt.  Claude scores these first (visible to itself as
 # already-decided) so it can peg the rest of the batch against a known
@@ -450,6 +606,59 @@ _ANCHORS: dict[str, list[dict[str, Any]]] = {
         {'kind': 'film',     'title': 'PBS Frontline: Ukraine',        'score': 18},
         {'kind': 'search',   'title': 'house of the dragon season 4',  'score': 92},
         {'kind': 'search',   'title': 'kamala harris',                 'score': 30},
+    ],
+    # Unlikely Collaborators Follower - young, queer-inclusive,
+    # wellness-and-consciousness-forward.  Anchors deliberately span
+    # the range: personal-growth podcasts and prestige indie score
+    # very high; hustle-culture and cable-news score very low; pop
+    # anchors (Taylor Swift, Sabrina Carpenter) sit high but not
+    # 100 because this follower's music taste is broader (Latin,
+    # hip-hop, audiophile) than a straight-Swift-core lens.
+    'unlikely_collaborators_follower': [
+        {'kind': 'podcast',  'title': 'On Purpose with Jay Shetty',            'score': 96},
+        {'kind': 'podcast',  'title': 'The Mel Robbins Podcast',               'score': 95},
+        {'kind': 'podcast',  'title': 'Armchair Expert with Dax Shepard',      'score': 92},
+        {'kind': 'podcast',  'title': 'Unlocking Us with Brene Brown',         'score': 94},
+        {'kind': 'podcast',  'title': 'We Can Do Hard Things',                 'score': 92},
+        {'kind': 'podcast',  'title': 'Ten Percent Happier',                   'score': 88},
+        {'kind': 'podcast',  'title': 'The Joe Rogan Experience',              'score': 12},
+        {'kind': 'podcast',  'title': 'The Tucker Carlson Show',               'score': 5},
+        {'kind': 'song',     'title': 'The Fate of Ophelia (Taylor Swift)',    'score': 88},
+        {'kind': 'song',     'title': 'Espresso (Sabrina Carpenter)',          'score': 86},
+        {'kind': 'song',     'title': 'Good Luck Babe! (Chappell Roan)',       'score': 92},
+        {'kind': 'song',     'title': 'BIRDS OF A FEATHER (Billie Eilish)',    'score': 88},
+        {'kind': 'song',     'title': 'Not Like Us (Kendrick Lamar)',          'score': 72},
+        {'kind': 'song',     'title': 'God\u2019s Country (Blake Shelton)',    'score': 22},
+        {'kind': 'book',     'title': 'All The Way To The River (Elizabeth Gilbert)', 'score': 98},
+        {'kind': 'book',     'title': 'Big Magic (Elizabeth Gilbert)',         'score': 96},
+        {'kind': 'book',     'title': 'Atlas of the Heart (Brene Brown)',      'score': 94},
+        {'kind': 'book',     'title': 'Fourth Wing (Rebecca Yarros)',          'score': 82},
+        {'kind': 'book',     'title': 'Atomic Habits (James Clear)',           'score': 68},
+        {'kind': 'book',     'title': 'Rich Dad Poor Dad',                     'score': 15},
+        {'kind': 'book',     'title': 'The Art of the Deal (Trump)',           'score': 5},
+        {'kind': 'film',     'title': 'The Bear',                              'score': 92},
+        {'kind': 'film',     'title': 'Past Lives',                            'score': 94},
+        {'kind': 'film',     'title': 'Everything Everywhere All At Once',     'score': 93},
+        {'kind': 'film',     'title': 'Barbie',                                'score': 92},
+        {'kind': 'film',     'title': 'Oppenheimer',                           'score': 85},
+        {'kind': 'film',     'title': 'Andor',                                 'score': 90},
+        {'kind': 'film',     'title': 'The Bachelorette',                      'score': 30},
+        {'kind': 'film',     'title': 'Fast & Furious 12',                     'score': 20},
+        {'kind': 'headline', 'title': 'Elizabeth Gilbert launches new Perception Box workshop', 'score': 96},
+        {'kind': 'headline', 'title': 'Supreme Court hears LGBTQ+ workplace case', 'score': 88},
+        {'kind': 'headline', 'title': 'Federal Reserve leaves rates unchanged', 'score': 25},
+        {'kind': 'headline', 'title': 'Nvidia earnings beat analyst estimates', 'score': 18},
+        {'kind': 'search',   'title': 'jay shetty new podcast',                'score': 92},
+        {'kind': 'search',   'title': 'headspace app free trial',              'score': 88},
+        {'kind': 'search',   'title': 'best pilates studios near me',          'score': 86},
+        {'kind': 'search',   'title': 'medicare supplement plans',             'score': 8},
+        {'kind': 'search',   'title': 'nfl draft 2026',                        'score': 30},
+        {'kind': 'person',   'title': 'Elizabeth Gilbert',                     'score': 98},
+        {'kind': 'person',   'title': 'Brene Brown',                           'score': 94},
+        {'kind': 'person',   'title': 'Jay Shetty',                            'score': 92},
+        {'kind': 'person',   'title': 'Cillian Murphy',                        'score': 82},
+        {'kind': 'person',   'title': 'Tucker Carlson',                        'score': 5},
+        {'kind': 'person',   'title': 'Andrew Tate',                           'score': 3},
     ],
 }
 
