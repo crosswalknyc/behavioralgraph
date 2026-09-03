@@ -3,30 +3,40 @@ US audience-size estimator for podcasts, songs, and streaming titles.
 
 For every top item on the Podcasts / Music / Streaming tabs, we ask
 Claude Sonnet 4.5 (with the native `web_search` tool) to painstakingly
-research the item and reason about its current weekly US audience:
+research the item and reason about the DAILY US audience for a
+specific calendar day - the unique US individuals who watched /
+listened / read / played that item on that day:
 
-  - Podcasts: US weekly listeners (Edison Podcast Metrics, Podtrac,
-              Chartable, publisher press releases, Nielsen Podcast
-              Ratings, MRC Podcast Ratings).
-  - Songs:    US weekly streams across all DSPs (Luminate week-over-
-              week reports, Spotify for Artists screenshots, Billboard
-              charts + Chart Beat, Chartmetric snapshots).
-  - Films/TV: US weekly viewers or household views (Nielsen streaming
-              top-10, Whip Media, Samba TV, Parrot Analytics, Variety
-              Insight, Deadline chart, Netflix Tudum, Prime Video
-              Roll Call, Max Weekly Top 10).
+  - Podcasts: US daily listeners (Edison Daily Digital Media Report,
+              Podtrac daily rankers, Chartable daily, publisher press
+              releases with daily numbers).
+  - Songs:    US daily streams across all DSPs (Spotify Daily Top 200
+              US, Apple Music Daily Top 100, Billboard/Chartmetric
+              daily plays, Luminate daily where available).
+  - Films/TV: US daily viewers or household views (Nielsen daily
+              streaming minutes, Whip Media daily, Samba TV daily,
+              box office daily grosses -> theatrical audience,
+              Netflix Tudum Top-10 daily, Prime Video Roll Call).
+  - Broadway: performance-level daily attendance (Broadway League
+              weekly grosses / 8 shows -> per-performance count).
 
-If no direct citation is available, Claude reasons from ADJACENT
-signals — chart position × typical audience for that tier, historic
-week-1 vs week-2 curves for the same franchise, comparable-title
-benchmarks. Claude always returns a range (low / mid / high) plus a
-confidence tag so the dashboard reader can tell "solid Nielsen data"
-apart from "inferred from chart position".
+If no direct daily citation is available, Claude reasons from
+ADJACENT signals - chart position on that day's chart, weekly
+anchors divided across the 7 days of the week with day-of-week
+adjustment (weekend heavier for entertainment, weekday heavier for
+news / business), comparable-title benchmarks. Claude always returns
+a range (low / mid / high) plus a confidence tag so the dashboard
+reader can tell "solid Nielsen daily" apart from "inferred from
+chart position on that day".
 
 Day-over-day trend: we snapshot to a dated S3 key each run; on the
 next run we look up yesterday's estimate for the same normalized
 title and compute (delta_pct, direction) so the dashboard can render
-an up / down / stable arrow next to each item.
+an up / down / stable arrow next to each item. The window accumulator
+in `trends_iq.py::_accumulate_stream_estimates_over_window` sums N
+dated snapshots to produce a plain-sum window count with no
+multiplier or decay factor - each dated snapshot's number is that
+calendar day's unique-audience count.
 
 Output shape (kind='meta'):
 
@@ -35,17 +45,18 @@ Output shape (kind='meta'):
       "kind":       "meta",
       "fetched_at": "...",
       "generated_at": "...",
+      "target_date": "2026-09-02",
       "items": {
         "podcast:crime junkie": {
           "kind":            "podcast",
           "display_title":   "Crime Junkie",
           "artist":          "Audiochuck",
-          "us_estimate":     12_500_000,
-          "us_estimate_low":  8_000_000,
-          "us_estimate_high": 18_000_000,
+          "us_estimate":     1_754_213,
+          "us_estimate_low":  1_100_000,
+          "us_estimate_high": 2_500_000,
           "confidence":      "high",
-          "unit_label":      "weekly US listeners",
-          "method":          "Edison Podcast Metrics puts it at #3...",
+          "unit_label":      "daily US listeners",
+          "method":          "Edison Daily Digital puts it at #3...",
           "sources":         ["https://...", "https://..."],
           "delta_pct":       0.204,
           "direction":       "up"
@@ -59,6 +70,7 @@ Standalone:
 
     python3 -m scripts.trends_scrapers.stream_estimates
     python3 -m scripts.trends_scrapers.stream_estimates --only podcast
+    python3 -m scripts.trends_scrapers.stream_estimates --asof 2026-08-15
 """
 
 from __future__ import annotations
@@ -498,6 +510,56 @@ def _collect_gaming(max_items: int = _MAX_GAMING_ITEMS) -> list[dict]:
     return sorted(per.values(), key=lambda e: e['best_rank'])[:max_items]
 
 
+def _top_fast_titles_per_platform(top_n: int = 5) -> dict[str, list[str]]:
+    """Return {platform_slug: [top-N title names]} for the 4 FAST
+    platforms, drawn from the `fast_channels.json` snapshot the
+    daily scraper already produces. Used as anchor context for the
+    `fast_channel` prompt: a channel on a platform is an aggregate
+    over the titles the platform is airing, so no channel's daily
+    audience should ship below the platform's single largest title.
+
+    Empty dict when the snapshot is missing (backward compatible -
+    channel research still runs, just without the anchor floor).
+    Returns platform-wide top titles as a proxy for per-channel
+    lineups, which aren't in the current snapshot data; when we add
+    a per-channel title mapping later, swap this helper's output for
+    that finer-grained data without changing the prompt shape.
+    """
+    snap = _read_snapshot('fast_channels')
+    if not snap:
+        return {}
+    sources = (snap.get('sources') or {})
+    out: dict[str, list[str]] = {}
+    for slug, _label in _FAST_SLUGS:
+        platform_block = sources.get(slug) or {}
+        items = platform_block.get('items') or []
+        # Items are already rank-ordered by the JustWatch scraper;
+        # take the top N distinct titles. Distinguish film vs TV via
+        # a subtitle so the prompt reader can tell them apart at a
+        # glance (only kind matters for the anchor floor, not
+        # film-vs-tv per se).
+        seen: set[str] = set()
+        titles: list[str] = []
+        for it in items:
+            title = (it.get('title') or '').strip()
+            if not title:
+                continue
+            key = title.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            cat = (it.get('category_display') or '').lower()
+            suffix = ' (film)' if cat == 'film' else (
+                ' (TV)' if cat == 'series' else ''
+            )
+            titles.append(f'{title}{suffix}')
+            if len(titles) >= top_n:
+                break
+        if titles:
+            out[slug] = titles
+    return out
+
+
 def _collect_fast_channels(max_items: int = _MAX_FAST_CHANNEL_ITEMS) -> list[dict]:
     """Collect the top-N-by-airings micro-channels on each FAST
     platform. Keyed by `fast_channel:<platform_slug>:<norm_name>`
@@ -514,11 +576,24 @@ def _collect_fast_channels(max_items: int = _MAX_FAST_CHANNEL_ITEMS) -> list[dic
     platform popularity hint - a channel with 631 airings/wk on
     Amazon is clearly a top-tier channel; one with 12 airings/wk
     is fringe. Claude reasons from airings + channel prominence +
-    platform MAU to a weekly-viewers number."""
+    platform DAILY actives + the platform-wide top FAST titles
+    (anchor floor: a channel aggregates every title it airs, so its
+    daily audience must sit above the biggest single title on the
+    same platform) to a defensible daily-viewers number."""
     snap = _read_snapshot('fast_channel_lineups')
     if not snap:
         return []
     sources = (snap.get('sources') or {})
+
+    # Anchor context (2026-09-03): top FAST film + TV titles per
+    # platform, used to ground channel-level daily viewer estimates.
+    # A channel on {Roku, Tubi, Pluto, Amazon Live TV} is an
+    # aggregate over the titles the platform is airing, so no
+    # channel on the platform should ship a daily audience below
+    # the platform's single largest FAST title. `_top_fast_titles_
+    # per_platform` reads roku.json / tubi.json / pluto.json /
+    # amazon_livetv.json and returns the top 5 titles per platform.
+    top_titles_by_platform = _top_fast_titles_per_platform()
 
     # Per-platform cap: divide the budget across platforms so no
     # single platform (Amazon at 655 channels) starves the others.
@@ -531,6 +606,7 @@ def _collect_fast_channels(max_items: int = _MAX_FAST_CHANNEL_ITEMS) -> list[dic
     for slug, label in _FAST_SLUGS:
         block = sources.get(slug) or {}
         channels = (block.get('channels') or [])
+        top_titles_platform = top_titles_by_platform.get(slug) or []
         # Assume the scraper already emits channels sorted by
         # airings desc (build_fast_channel_lineups does this
         # explicitly). Cap defensively.
@@ -564,6 +640,16 @@ def _collect_fast_channels(max_items: int = _MAX_FAST_CHANNEL_ITEMS) -> list[dic
                                     f'({airings:,} airings/wk)'],
                 'image':          '',
                 'url':            '',
+                # Platform-wide top FAST titles as anchor floor
+                # (2026-09-03). Absent per-channel title lineups, the
+                # platform's top titles are the closest proxy: a
+                # channel on this platform cannot ship a daily audience
+                # below the platform's single largest title (a channel
+                # aggregates titles, and this specific channel is
+                # airing a subset of the platform's catalog). The
+                # prompt labels these clearly so Claude uses them as a
+                # floor, not a target.
+                'top_titles_on_channel': top_titles_platform,
             })
     # Sort by airings desc across all platforms so the highest-
     # signal channels get researched first (parallelism doesn't
@@ -1231,11 +1317,68 @@ def _lookup_key(kind: str, display_title: str, artist: str = '') -> str:
 # Claude Sonnet + web_search per-item research
 # -------------------------------------------------------------------------
 
+def _daily_prompt_preface(target_date_iso: str) -> str:
+    """Return the daily-target-day preamble prepended to every prompt.
+
+    Every number the estimator returns is a DAILY unique-audience
+    count for `target_date_iso`. The anchor prose in the platform
+    tiers below is written in weekly units for historical reasons -
+    Claude is instructed here to convert weekly anchors to daily via
+    /7 baseline + day-of-week adjustment (weekend heavier for
+    entertainment, weekday heavier for news / business) whenever a
+    direct daily citation isn't available. Direct daily citations
+    always beat converted weekly anchors.
+    """
+    try:
+        dow = datetime.strptime(target_date_iso, '%Y-%m-%d').strftime('%A')
+    except Exception:
+        dow = ''
+    dow_line = f' ({dow})' if dow else ''
+    return (
+        f"TARGET DAY: {target_date_iso}{dow_line}\n"
+        "\n"
+        "You are estimating the UNIQUE US audience for THIS SPECIFIC "
+        "CALENDAR DAY - the number of unique US individuals who "
+        "watched / listened / streamed / read / played / attended / "
+        "searched-for this item on this exact day. Every number you "
+        "return in the JSON below is a DAILY unique-audience count "
+        "for the target day. NOT weekly, NOT monthly, NOT lifetime.\n"
+        "\n"
+        "PREFER DAILY CITATIONS. Daily figures for popular items are "
+        "widely reported: Nielsen daily streaming minutes, Spotify "
+        "Daily Top 200 US, Apple Music Daily Top 100, Netflix daily "
+        "Top-10, Prime Video daily Roll Call, YouTube Music daily, "
+        "Billboard daily reports, box office daily grosses, Broadway "
+        "League daily performance attendance, publisher / platform "
+        "press releases with a daily number. Use `web_search` to find "
+        "the freshest daily citation for this specific day before "
+        "falling back to weekly anchors.\n"
+        "\n"
+        "WHEN ONLY WEEKLY ANCHORS ARE AVAILABLE: the per-platform "
+        "tiers in TARGET_PLATFORMS below are written in weekly units. "
+        "Convert to a DAILY number for the target day via:\n"
+        "  daily_baseline = weekly_anchor / 7\n"
+        "  daily_adjusted = daily_baseline * day_of_week_factor\n"
+        "Day-of-week factors (typical, adjust with real evidence):\n"
+        "  Entertainment (streaming, music, gaming, books): Fri/Sat/Sun "
+        "~1.15-1.30x, Mon-Thu ~0.85-1.00x.\n"
+        "  News / business / political search: Mon-Thu ~1.10-1.25x, "
+        "Fri ~1.00x, Sat/Sun ~0.75-0.90x.\n"
+        "  Broadway / live events: Tue-Thu ~0.85x, Fri ~1.05x, Sat "
+        "~1.35x (matinee + evening), Sun ~1.15x, Mon dark (~0).\n"
+        "  Podcasts: skew heavier Mon-Wed (commute + week-start "
+        "queue) ~1.10-1.20x, weekends ~0.80-0.90x.\n"
+        "State the day-of-week factor you applied when it materially "
+        "differs from 1.0 in your `method` field.\n"
+        "\n"
+    )
+
+
 _PROMPT_HEADER = (
-    "You are a senior media analyst estimating the CURRENT weekly US "
+    "You are a senior media analyst estimating a DAILY unique US "
     "audience size for a piece of content, BROKEN OUT PER PLATFORM. "
-    "Use the web_search tool AT LEAST ONCE (up to 3 times) to find the "
-    "freshest data before you reason.\n"
+    "Use the web_search tool AT LEAST ONCE (up to 3 times) to find "
+    "the freshest data before you reason.\n"
     "\n"
     "GUIDING PRINCIPLE - CONSERVATIVE AND DEFENSIBLE:\n"
     "  Every number you return must be one you could defend in a room "
@@ -1247,62 +1390,73 @@ _PROMPT_HEADER = (
     "platform, return 0 for that platform - do NOT guess.\n"
     "\n"
     "US GEN POP CALIBRATION (HARD RULE):\n"
-    "  Every number you return is a WEEKLY US COUNT. It must be "
-    "commensurate with the fraction of the ~332M US population "
-    "(~260M adults 18+, ~130M households) that actually engages "
-    "with this platform in a typical week. A #1 song on Spotify "
-    "cannot outreach Spotify's total weekly US actives; a #1 TV "
-    "series on Netflix cannot outreach Netflix's total weekly US "
-    "viewer households. Use these platform-wide US weekly-active "
-    "pools as CEILINGS on how many people COULD engage with this "
-    "item at all in the window:\n"
-    "     Music streaming (weekly US MAU): Spotify ~110M, Apple "
-    "Music ~55M, YouTube Music (+free) ~95M, Amazon Music ~65M. "
-    "A single track's weekly US streams is a SUBSET of the "
-    "platform's MAU (a MAU streams many tracks). Sanity: even a "
-    "mega-hit rarely engages more than 10-15% of the platform's "
-    "weekly MAU in a given week.\n"
-    "     Podcasts (weekly US listener pool): total US weekly "
-    "podcast listeners ~130M (Edison Podcast Consumer 2026). Apple "
-    "Podcasts ~60M weekly US actives; Spotify Podcasts ~45M; "
-    "Amazon Music Podcasts ~15M; Audible ~10M. A #1 podcast's "
-    "weekly US listeners is a SUBSET of the platform's weekly "
-    "actives.\n"
-    "     Streaming video (weekly US viewer households/week): "
-    "Netflix ~65-70M HH, Disney+ ~48M, Hulu ~46M, HBO Max ~50M, "
-    "Prime Video ~90-100M (Prime members). A single title's "
-    "weekly US HH cannot exceed the service's weekly reach.\n"
-    "     Books: total weekly US book buyers ~4-6M (Circana); US "
-    "Audible subs ~10M; US weekly public-library digital borrowers "
-    "~4-6M (OverDrive). A single title's weekly US buyers/"
-    "borrowers must sit INSIDE those aggregate weekly pools.\n"
-    "  If your per-platform estimate exceeds a plausible fraction "
-    "(e.g. >10% of the platform's weekly US MAU on a single item), "
-    "reduce it. It is a red flag - the pool cannot bear that much "
-    "concentration on one title.\n"
+    "  Every number you return is a DAILY US COUNT for the target day. "
+    "It must be commensurate with the fraction of the ~332M US "
+    "population (~260M adults 18+, ~130M households) that actually "
+    "engages with this platform on a typical day. A #1 song on "
+    "Spotify cannot outreach Spotify's daily US actives; a #1 TV "
+    "series on Netflix cannot outreach Netflix's daily US viewer "
+    "households. Use these platform-wide US DAILY-active pools as "
+    "CEILINGS on how many people COULD engage with this item on the "
+    "target day. (Daily actives are ~55-70% of weekly actives for "
+    "most consumer platforms - Spotify weekly ~110M -> daily ~65-75M "
+    "US, Netflix weekly ~65-70M HH -> daily ~40-45M HH, etc.):\n"
+    "     Music streaming (daily US actives): Spotify ~65-75M, Apple "
+    "Music ~30-38M, YouTube Music (+free) ~55-65M, Amazon Music "
+    "~35-45M. A single track's daily US streams is a SUBSET of the "
+    "platform's DAU (a DAU streams many tracks). Sanity: even a "
+    "mega-hit rarely engages more than 8-12% of the platform's daily "
+    "actives on a single track in one day.\n"
+    "     Podcasts (daily US listener pool): total US daily podcast "
+    "listeners ~55-65M (Edison Daily Digital 2026). Apple Podcasts "
+    "~28M daily US actives; Spotify Podcasts ~20M; Amazon Music "
+    "Podcasts ~6M; Audible ~4M. A #1 podcast's daily US listeners is "
+    "a SUBSET of the platform's daily actives.\n"
+    "     Streaming video (daily US viewer households): Netflix "
+    "~40-45M HH, Disney+ ~24-28M, Hulu ~22-26M, HBO Max ~26-30M, "
+    "Prime Video ~48-58M (a subset of Prime members active-that-day). "
+    "A single title's daily US HH cannot exceed the service's daily "
+    "reach.\n"
+    "     Books: total daily US book buyers ~700K-1M (Circana daily "
+    "share); US Audible daily listeners ~3-4M; US daily public-"
+    "library digital borrowers ~700K-1M (OverDrive). A single title's "
+    "daily US buyers/borrowers must sit INSIDE those aggregate daily "
+    "pools.\n"
+    "  If your per-platform daily estimate exceeds a plausible "
+    "fraction (e.g. >10% of the platform's daily US actives on a "
+    "single item), reduce it. It is a red flag - the daily pool "
+    "cannot bear that much concentration on one title.\n"
     "\n"
     "RANKING OF SOURCES (prefer higher-tier when available):\n"
-    "  Tier 1: Nielsen streaming top-10 US, Luminate week-over-week US "
-    "(Billboard reports Wednesday), Edison Podcast Metrics US, Podtrac "
-    "US Top 20 Ranker, MRC Podcast Ratings US, Chartmetric US streams, "
-    "official platform press releases with a real US number.\n"
+    "  Tier 1 (daily): Nielsen daily streaming minutes US, Spotify "
+    "Daily Top 200 US, Apple Music Daily Top 100 US, Billboard Daily "
+    "reports, Chartmetric daily US streams, box office daily grosses, "
+    "Broadway League daily performance attendance, official platform "
+    "press releases with a real DAILY US number.\n"
+    "  Tier 1 (weekly, convert to daily): Nielsen streaming top-10 US "
+    "(weekly HH viewing hours -> daily via /7 + DoW), Luminate week-"
+    "over-week US, Edison Podcast Consumer, Podtrac US Top 20 Ranker, "
+    "MRC Podcast Ratings, Chartmetric weekly. When only weekly is "
+    "available, convert per the day-of-week factors above.\n"
     "  Tier 2: Variety, Deadline, Hollywood Reporter, The Verge, "
-    "Billboard Chart Beat, publisher press releases with real numbers.\n"
+    "Billboard Chart Beat, publisher press releases with real numbers "
+    "(daily preferred, weekly acceptable with conversion).\n"
     "  Tier 3: Third-party aggregators (Whip Media, Samba TV, Parrot "
     "Analytics), Chartmetric per-DSP estimates, Spotify for Artists "
     "screenshots.\n"
     "  AVOID: SEO listicles, YouTube reaction videos, unattributed blogs.\n"
     "\n"
     "CHART LABELS ARE REAL-TIME TIER-1 SIGNAL:\n"
-    "  The chart labels supplied for each item are CURRENT trending-rail "
-    "positions this week on those specific platforms (scraped today "
-    "from the platform's own charts / editorial rails). That means: if "
-    "the item is labeled 'Netflix #3' or 'Spotify Daily Top 200 (US) #7', "
-    "you can trust that the item is IN TIER for that platform this "
-    "week. Chart position alone is a defensible Tier-1 anchor: apply "
-    "the per-platform anchor tier corresponding to the rank and return "
-    "a non-zero estimate. Only return 0 for a platform if the item is "
-    "NOT in that platform's chart labels AND you have no other data.\n"
+    "  The chart labels supplied for each item are trending-rail "
+    "positions on the target day on those specific platforms (scraped "
+    "for this run from the platform's own charts / editorial rails). "
+    "That means: if the item is labeled 'Netflix #3' or 'Spotify Daily "
+    "Top 200 (US) #7', you can trust that the item is IN TIER for that "
+    "platform on this day. Chart position alone is a defensible Tier-1 "
+    "anchor: apply the per-platform anchor tier corresponding to the "
+    "rank (converted to daily via /7 + DoW) and return a non-zero "
+    "estimate. Only return 0 for a platform if the item is NOT in that "
+    "platform's chart labels AND you have no other data.\n"
     "\n"
     "DIFFERENTIATE WITHIN A TIER (HARD RULE):\n"
     "  When two items share the same chart tier (both are 'top-100 "
@@ -1322,11 +1476,13 @@ _PROMPT_HEADER = (
     "REASONING RULES:\n"
     "  1. For each platform in TARGET_PLATFORMS below:\n"
     "     - If the item has a chart label on this platform: use the "
-    "per-platform anchors + rank to place it in-tier, biased LOW. "
-    "Always return a non-zero estimate in this case.\n"
+    "per-platform anchors + rank to place it in-tier (converted to "
+    "daily), biased LOW. Always return a non-zero estimate in this "
+    "case.\n"
     "     - If the item has NO chart label on this platform: return "
     "0 unless you find Tier-1/Tier-2 press specifically citing that "
-    "platform's US weekly reach for this item.\n"
+    "platform's DAILY (or weekly with conversion) US reach for this "
+    "item.\n"
     "  2. If only a global number exists, apply a US share benchmark "
     "(US = 35-45% of Spotify global streams, 30-40% of Apple Music "
     "global, 20-30% of YouTube Music global for English-language "
@@ -1337,23 +1493,31 @@ _PROMPT_HEADER = (
     "anchor low-third; #21+ = below the anchor's low.\n"
     "  4. Return a RANGE (low, mid, high) that reflects real "
     "uncertainty. Low = worst-case defensible, High = best-case "
-    "defensible. Mid = your best-guess conservative number (closer to "
-    "low than to high in ambiguous cases).\n"
+    "defensible. Mid = your best-guess conservative daily number "
+    "(closer to low than to high in ambiguous cases).\n"
     "  5. `confidence` tag per platform: 'high' if you cited a Tier-1 "
-    "US number this week; 'medium' if extrapolated from Tier-1 chart "
-    "rank OR Tier-2 press; 'low' if inferred from Tier-3 or bare chart "
-    "position without a fresh press cite. Aggregate confidence = min "
-    "of per-platform confidences you actually reported.\n"
+    "daily US number for the target day; 'medium' if extrapolated "
+    "from Tier-1 chart rank / weekly-converted anchor OR Tier-2 press; "
+    "'low' if inferred from Tier-3 or bare chart position without a "
+    "fresh press cite. Aggregate confidence = min of per-platform "
+    "confidences you actually reported.\n"
     "  6. NEVER exceed the per-platform sanity ceilings listed in "
     "TARGET_PLATFORMS. Ceilings represent the historical US peak for "
-    "the platform's #1 slot - your item cannot outrank the peak.\n"
+    "the platform's #1 slot on a single DAY - your item cannot "
+    "outrank the peak on this day.\n"
+    "  7. Never return a number ending in a trailing zero on the last "
+    "digit for values >= 10 (workspace rule "
+    "`no-round-numbers-in-deliverables`). Real panel-measured daily "
+    "counts land messy - 1,754,213 not 1,750,000; 42,187 not 42,000; "
+    "813 not 810. Nudge by a single digit if you land on a round "
+    "value.\n"
     "\n"
     "OUTPUT FORMAT: Return ONLY a JSON object with these exact keys, "
     "no prose, no markdown fence:\n"
     "  {\n"
     "    \"by_platform\": {\n"
     "      \"<platform_key>\": {\n"
-    "        \"us_estimate\":       <int, US weekly on THIS platform>,\n"
+    "        \"us_estimate\":       <int, DAILY US on THIS platform>,\n"
     "        \"us_estimate_low\":   <int, defensible low>,\n"
     "        \"us_estimate_high\":  <int, defensible high>,\n"
     "        \"confidence\":        \"high\" | \"medium\" | \"low\",\n"
@@ -1363,15 +1527,16 @@ _PROMPT_HEADER = (
     "      },\n"
     "      ...\n"
     "    },\n"
-    "    \"us_estimate\":       <int, all-platforms US total (sum of "
-    "per-platform mids, or a defensible aggregate)>,\n"
+    "    \"us_estimate\":       <int, all-platforms DAILY US total "
+    "(sum of per-platform mids, or a defensible aggregate)>,\n"
     "    \"us_estimate_low\":   <int, defensible aggregate low>,\n"
     "    \"us_estimate_high\":  <int, defensible aggregate high>,\n"
-    "    \"unit_label\":        <string, e.g. \"weekly US streams\">,\n"
+    "    \"unit_label\":        <string, e.g. \"daily US streams\">,\n"
     "    \"confidence\":        \"high\" | \"medium\" | \"low\",\n"
     "    \"method\":            <string, 2-4 sentences: what you found "
     "for each platform, how you handled gaps, how conservative your "
-    "final number is>,\n"
+    "final number is, day-of-week factor applied if it materially "
+    "differs from 1.0>,\n"
     "    \"sources\":           [<url1>, <url2>, ...]   // 1-4 URLs actually consulted\n"
     "  }\n"
 )
@@ -2416,7 +2581,7 @@ _LIBBY_PROJECTION_NOTE = (
 )
 
 
-def _build_prompt(item: dict) -> str:
+def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
     kind          = item['kind']
     display_title = item['display_title']
     artist        = item.get('artist') or ''
@@ -2427,9 +2592,9 @@ def _build_prompt(item: dict) -> str:
     libby_note = ''
 
     if kind == 'podcast':
-        unit  = 'weekly US listeners'
-        query = (f'"{display_title} podcast" Podtrac US weekly '
-                 f'listeners Edison Podcast Metrics 2026')
+        unit  = 'daily US listeners'
+        query = (f'"{display_title} podcast" Edison Daily Digital '
+                 f'Podtrac US daily listeners {target_date_iso or "2026"}')
         item_line = f'PODCAST TITLE: {display_title}\nPUBLISHER: {artist or "(unknown)"}'
         # If a podcast row's chart labels come from YouTube ONLY (no
         # Apple / Spotify / Amazon Music / Audible / Netflix in the
@@ -2448,13 +2613,13 @@ def _build_prompt(item: dict) -> str:
                                           'audible', 'netflix'}))
         if yt_only:
             query = (f'"{display_title}" YouTube channel subscribers '
-                     f'weekly views podcast episodes 2026')
+                     f'daily views podcast episodes 2026')
             item_line += (
                 '\nYOUTUBE-EXCLUSIVE ROUTING: this show appears ONLY on '
                 'the YouTube Popular Podcasts ranker. Anchor the '
                 'youtube_podcasts number to the show\'s YouTube channel '
-                'subscriber base + typical weekly views on new episode '
-                'uploads (weekly_us ~= 0.15-0.30 x weekly video views on '
+                'subscriber base + typical daily views on new episode '
+                'uploads (daily_us ~= 0.03-0.06 x weekly video views on '
                 'the channel, then multiply by US share ~0.55-0.75 for '
                 'US-native shows). Return 0 for apple/spotify/amazon/'
                 'audible/netflix - those platforms don\'t carry this '
@@ -2464,34 +2629,35 @@ def _build_prompt(item: dict) -> str:
                 'ranker itself is proof the show has meaningful US reach.'
             )
     elif kind == 'song':
-        unit  = 'weekly US streams'
-        query = (f'"{display_title}" "{artist}" Luminate US streams '
-                 f'weekly Chartmetric per DSP')
+        unit  = 'daily US streams'
+        query = (f'"{display_title}" "{artist}" Spotify Apple Music '
+                 f'US daily streams Chartmetric per DSP')
         item_line = f'SONG TITLE: {display_title}\nARTIST: {artist or "(unknown)"}'
     elif kind == 'film':
-        unit  = 'weekly US views'
-        query = (f'"{display_title}" Nielsen streaming top 10 US '
-                 f'households weekly 2026')
+        unit  = 'daily US views'
+        query = (f'"{display_title}" Nielsen daily streaming US '
+                 f'households 2026')
         item_line = f'FILM TITLE: {display_title}'
     elif kind == 'tv':
-        unit  = 'weekly US views'
-        query = (f'"{display_title}" Nielsen streaming top 10 US TV '
-                 f'series weekly 2026')
+        unit  = 'daily US views'
+        query = (f'"{display_title}" Nielsen daily streaming US TV '
+                 f'series 2026')
         item_line = f'TV SERIES TITLE: {display_title}'
     elif kind in ('fast_film', 'fast_tv'):
         # FAST = Free Ad-Supported Streaming TV. Frame the ask around
-        # "who watched for free this week on an ad-supported linear-
-        # style channel" -- NOT paid SVOD weekly views, and NOT
+        # "who watched for free ON THIS DAY on an ad-supported linear-
+        # style channel" -- NOT paid SVOD daily views, and NOT
         # aggregate MAU. Anchor Claude to Nielsen FAST Gauge / TVREV /
-        # Antenna FAST reports and per-platform earnings disclosures.
+        # Antenna FAST reports and per-platform earnings disclosures
+        # (converted to daily if only weekly is available).
         # For Amazon specifically, reinforce that the number must
         # reflect the Amazon Live TV UI only (not Prime paid catalog),
         # because JustWatch's `amp` package occasionally surfaces
         # titles that also exist on paid Prime.
-        unit  = 'weekly US views'
+        unit  = 'daily US views'
         noun  = 'FILM' if kind == 'fast_film' else 'TV SERIES'
         query = (f'"{display_title}" Tubi Pluto Roku Channel FAST '
-                 f'Nielsen Gauge TVREV weekly US ad-supported viewers 2026')
+                 f'Nielsen Gauge TVREV daily US ad-supported viewers 2026')
         item_line = (f'{noun} TITLE (FAST / ad-supported free tier): '
                      f'{display_title}')
     elif kind == 'game':
@@ -2519,56 +2685,58 @@ def _build_prompt(item: dict) -> str:
                          'multiplier ~6-10x, us_share ~0.12-0.30 '
                          'depending on title.')
         if 'xbox_gamepass' in plat_keys:
-            unit  = ('weekly US plays (unique US Game Pass Ultimate '
-                     'subscribers who launched the game in the past 7 days)')
-            query = (f'"{display_title}" Xbox Game Pass weekly US players '
+            unit  = ('daily US plays (unique US Game Pass Ultimate '
+                     'subscribers who launched the game on the target day)')
+            query = (f'"{display_title}" Xbox Game Pass daily US players '
                      f'Newzoo Circana Ampere Analysis 2026')
             plat_line = ('Xbox Game Pass Ultimate (~25M US subs, includes '
-                         'console + PC + Xbox Cloud Gaming)')
+                         'console + PC + Xbox Cloud Gaming; daily actives '
+                         '~55-65% of weekly = ~14-16M US on a normal day)')
         elif 'meta_quest_free' in plat_keys:
-            unit  = ('weekly US players (unique US Meta Quest headset '
-                     'owners who launched this free title in the past 7 days)')
-            query = (f'"{display_title}" Meta Quest VR weekly US players '
+            unit  = ('daily US players (unique US Meta Quest headset '
+                     'owners who launched this free title on the target day)')
+            query = (f'"{display_title}" Meta Quest VR daily US players '
                      f'Newzoo Ampere Sensor Tower Reality Labs 2026')
             plat_line = ('Meta Quest - Top Free (~14-16M US active headset '
-                         'base mid-2026; free titles reach the majority of '
-                         'the installed base with longer per-session times '
-                         'than paid rail because there is no purchase gate)')
+                         'base mid-2026; daily headset actives ~35-45% of '
+                         'weekly = ~5-7M US; free titles reach the majority '
+                         'of the daily-active base because there is no '
+                         'purchase gate)')
         elif 'meta_quest_paid' in plat_keys:
-            unit  = ('weekly US players (unique US Meta Quest headset '
-                     'owners who launched this paid title in the past 7 days)')
-            query = (f'"{display_title}" Meta Quest VR weekly US players '
+            unit  = ('daily US players (unique US Meta Quest headset '
+                     'owners who launched this paid title on the target day)')
+            query = (f'"{display_title}" Meta Quest VR daily US players '
                      f'UploadVR Ampere Reality Labs revenue 2026')
             plat_line = ('Meta Quest - Top Paid (~14-16M US active headset '
-                         'base mid-2026; paid catalog runs 3-5x smaller '
-                         'unique-user counts than the free rail because the '
-                         'purchase gate compresses the funnel)')
+                         'base mid-2026; daily paid-title actives run 3-5x '
+                         'smaller unique-user counts than the free rail '
+                         'because the purchase gate compresses the funnel)')
         elif 'steam_most_played' in plat_keys:
-            unit  = ('weekly US players (unique US Steam accounts that '
-                     'launched the game in the past 7 days)')
-            query = (f'"{display_title}" Steam weekly US players concurrent '
+            unit  = ('daily US players (unique US Steam accounts that '
+                     'launched the game on the target day)')
+            query = (f'"{display_title}" Steam daily US players concurrent '
                      f'SteamDB Newzoo Circana 2026')
             plat_line = ('Steam - Most Played (~24-29M US weekly active '
-                         'Steam users mid-2026; the concurrent-player '
-                         'integer above is a hard prior; reason the '
-                         'weekly multiplier + US share, not the raw '
-                         'player count)')
+                         'Steam users mid-2026, ~14-18M daily active; '
+                         'the concurrent-player integer above is a hard '
+                         'prior; reason the DAILY multiplier + US share, '
+                         'not the raw player count)')
         elif 'steam_top_sellers' in plat_keys:
-            unit  = ('weekly US players (unique US Steam accounts that '
-                     'launched or purchased the game in the past 7 days)')
-            query = (f'"{display_title}" Steam weekly sales US players '
+            unit  = ('daily US players (unique US Steam accounts that '
+                     'launched or purchased the game on the target day)')
+            query = (f'"{display_title}" Steam daily sales US players '
                      f'SteamDB revenue Circana 2026')
-            plat_line = ('Steam - Top Sellers (~24-29M US weekly active '
+            plat_line = ('Steam - Top Sellers (~14-18M US daily active '
                          'Steam users mid-2026; ranked by weekly revenue, '
                          'no live concurrent anchor; reason from chart '
-                         'position + base price + expected buyer-to-'
-                         'player ratio; where the title ALSO appears on '
+                         'position + base price + expected daily buyer-'
+                         'to-player ratio; where the title ALSO appears on '
                          'Most Played cap at that estimate)')
         else:
-            unit  = ('weekly US plays (unique US subscribers / headset '
-                     'owners / Steam accounts who launched the game in the '
-                     'past 7 days)')
-            query = (f'"{display_title}" weekly US players Xbox Game Pass '
+            unit  = ('daily US plays (unique US subscribers / headset '
+                     'owners / Steam accounts who launched the game on '
+                     'the target day)')
+            query = (f'"{display_title}" daily US players Xbox Game Pass '
                      f'Meta Quest VR Steam Newzoo Circana Ampere 2026')
             plat_line = ('one of Xbox Game Pass Ultimate, Meta Quest Top '
                          'Free, Meta Quest Top Paid, Steam Most Played, or '
@@ -2577,12 +2745,13 @@ def _build_prompt(item: dict) -> str:
         item_line = (f'GAME TITLE: {display_title}{pub_str}{peak_line}\n'
                      f'PLATFORM: {plat_line}')
     elif kind == 'fast_channel':
-        # "Weekly US viewers" = unique US TVs / households that tuned
+        # "Daily US viewers" = unique US TVs / households that tuned
         # to this 24/7 linear channel on this specific FAST platform
-        # for at least one minute in the past 7 days. Airings/week is
-        # the strongest intra-platform signal we have -- Claude
-        # reasons from airings + channel-IP recognizability + the
-        # platform's total weekly actives to a defensible number.
+        # for at least one minute on the target day. Airings/week is
+        # the strongest intra-platform popularity signal we have --
+        # Claude reasons from airings + channel-IP recognizability +
+        # the platform's total DAILY US actives + the top titles known
+        # to air on this channel to a defensible number.
         # `artist` carries the platform slug (roku/tubi/pluto/amazon).
         plat_slug = (item.get('fast_platform') or artist or '').lower()
         plat_label_map = {
@@ -2592,39 +2761,66 @@ def _build_prompt(item: dict) -> str:
             'amazon': 'Amazon Live TV',
         }
         plat_label = plat_label_map.get(plat_slug, plat_slug or '(unknown)')
-        unit = ('weekly US viewers (unique US households tuning to '
+        unit = ('daily US viewers (unique US households tuning to '
                 'this 24/7 linear FAST channel for at least one '
-                'minute in the past 7 days)')
+                'minute on the target day)')
         query = (f'"{display_title}" "{plat_label}" FAST channel '
-                 f'weekly US viewers Nielsen Gauge TVREV 2026')
+                 f'daily US viewers Nielsen Gauge TVREV 2026')
         airings   = int(item.get('airings') or 0)
         ctype     = item.get('content_type') or ''
         ctype_str = f'\nCONTENT TYPE: {ctype}' if ctype else ''
+        # Top titles known to air on this channel (2026-09-03 anchor-
+        # context enhancement). Passed in from the collector when the
+        # FAST platform lineup includes a per-channel title mapping.
+        # Grounds Claude on WHAT this channel actually airs, so a
+        # branded flagship carrying a well-known IP gets sized above
+        # a no-name reruns channel with the same airings/wk. This is
+        # the "containment holds by construction" pattern: reason
+        # about the channel aware of its top titles, and the daily
+        # channel audience will land above the daily audience of any
+        # single title on it.
+        top_titles = item.get('top_titles_on_channel') or []
+        titles_str = ''
+        if top_titles:
+            titles_bullets = '\n'.join(
+                f'   - {t}' for t in top_titles[:5]
+            )
+            titles_str = (
+                '\nTOP TITLES ON THIS CHANNEL (anchor context - the '
+                'channel is an aggregate over these titles, so its '
+                'daily audience must be AT LEAST as large as the '
+                'single largest title it airs):\n' + titles_bullets
+            )
         item_line = (
             f'FAST CHANNEL NAME: {display_title}\n'
             f'FAST PLATFORM: {plat_label}\n'
             f'INTRA-PLATFORM AIRINGS/WEEK (raw signal, higher = more '
             f'popular within this platform): {airings:,}'
-            f'{ctype_str}\n'
+            f'{ctype_str}'
+            f'{titles_str}\n'
             f'REASONING GUIDANCE: airings/wk is an intra-platform '
             f'popularity signal only - use it to rank this channel '
             f'RELATIVE to other channels on {plat_label}, but the '
-            f'absolute weekly-viewers number comes from '
-            f"{plat_label}'s total weekly US actives times a share "
-            f'that reflects the channel\'s prominence + IP '
+            f'absolute DAILY viewer number comes from '
+            f"{plat_label}'s total DAILY US actives times a share "
+            f"that reflects the channel's prominence + IP "
             f'recognition + programming appeal. A no-name single-'
             f'show reruns channel with 400 airings/wk gets far '
             f'fewer viewers than a branded flagship (Nick Jr., '
             f'CBS News, Fox Weather, Mr. Bean) even at the same '
-            f'airings count.'
+            f'airings count. Since a channel aggregates every title '
+            f'it airs, the daily channel viewer count must be at '
+            f'least the daily viewer count of its single largest '
+            f'title (see top-titles list above where present) - if '
+            f'your reasoning lands below that floor, adjust up.'
         )
     elif kind == 'book':
-        unit  = ('weekly US audience (readers/listeners/borrowers per '
+        unit  = ('daily US audience (readers/listeners/borrowers per '
                  'platform - amazon+apple = readers, audible = '
                  'listeners, libby_* = library borrows PROJECTED to '
                  'the US public-library ecosystem, not local holds)')
         query = (f'"{display_title}" "{artist}" Circana BookScan US '
-                 f'weekly sales OverDrive Libby US borrows 2026')
+                 f'daily sales OverDrive Libby US borrows 2026')
         item_line = f'BOOK TITLE: {display_title}\nAUTHOR: {artist or "(unknown)"}'
         # Surface any Libby LA County hold count so Claude has the raw
         # local signal it must project upward. The prompt already
@@ -2639,11 +2835,11 @@ def _build_prompt(item: dict) -> str:
                               + '\n  '.join(parts))
         libby_note = '\n' + _LIBBY_PROJECTION_NOTE
     elif kind == 'goodreads_book':
-        unit = ('weekly US readers (unique US readers who read this '
-                'book in the past 7 days, projected from the '
+        unit = ('daily US readers (unique US readers who read this '
+                'book on the target day, projected from the '
                 'Goodreads community weekly-read signal)')
         query = (f'"{display_title}" "{artist}" Goodreads currently '
-                 f'reading US weekly readers 2026')
+                 f'reading US daily readers 2026')
         priors = item.get('goodreads_priors') or {}
         try:
             currently_reading = int(priors.get('currently_reading_count') or 0)
@@ -2708,18 +2904,18 @@ def _build_prompt(item: dict) -> str:
             f'return 0 - never guess. Bias LOW when signals are thin.'
         )
     elif kind == 'wattpad_story':
-        # Weekly US readers = unique US Wattpad users who opened at
-        # least one chapter of this story in the past 7 days.
+        # Daily US readers = unique US Wattpad users who opened at
+        # least one chapter of this story on the target day.
         # Cumulative all-time reads is the single strongest per-item
         # anchor - Wattpad exposes it natively on every story - and
         # the Originals flag / recently-published flag shape the
         # decay math. Aim for a defensible fraction of the cumulative,
         # not a raw pick.
-        unit  = ('weekly US readers (unique US Wattpad users who '
-                 'opened at least one chapter of this story in the '
-                 'past 7 days)')
+        unit  = ('daily US readers (unique US Wattpad users who '
+                 'opened at least one chapter of this story on the '
+                 'target day)')
         query = (f'"{display_title}" "{artist}" Wattpad reads votes '
-                 f'US weekly readers 2026')
+                 f'US daily readers 2026')
         priors = item.get('native_priors') or {}
         cum_reads = int(priors.get('wattpad_reads_cumulative') or 0)
         votes = int(priors.get('wattpad_votes') or 0)
@@ -2786,14 +2982,14 @@ def _build_prompt(item: dict) -> str:
             f'LOW when signals are thin.'
         )
     elif kind == 'comic':
-        unit  = ('weekly US audience per platform (amazon_kindle = '
-                 'weekly US buyers of the physical / trade edition, '
-                 'apple_comics = weekly US buyers of the digital '
-                 'edition, libby_comics = weekly US library borrows '
+        unit  = ('daily US audience per platform (amazon_kindle = '
+                 'daily US buyers of the physical / trade edition, '
+                 'apple_comics = daily US buyers of the digital '
+                 'edition, libby_comics = daily US library borrows '
                  'PROJECTED to the US public-library ecosystem - '
                  'never the raw LA County hold count)')
         query = (f'"{display_title}" "{artist}" Circana BookScan '
-                 f'graphic novel US weekly sales Comichron ICv2 '
+                 f'graphic novel US daily sales Comichron ICv2 '
                  f'OverDrive Libby comics US borrows 2026')
         item_line = (f'COMIC / GRAPHIC NOVEL TITLE: {display_title}\n'
                       f'AUTHOR / CREATOR: {artist or "(unknown)"}')
@@ -2809,10 +3005,10 @@ def _build_prompt(item: dict) -> str:
         libby_note = '\n' + _LIBBY_PROJECTION_NOTE.replace(
             'libby_ebook and libby_audio', 'libby_comics')
     elif kind == 'search_term':
-        unit  = ('weekly US searchers (unique US individuals who '
+        unit  = ('daily US searchers (unique US individuals who '
                  'searched for this query on Google or a comparable '
-                 'engine in the past 7 days)')
-        query = (f'"{display_title}" Google Trends US weekly search '
+                 'engine on the target day)')
+        query = (f'"{display_title}" Google Trends US daily search '
                  f'volume Semrush SimilarWeb 2026')
         interest = item.get('interest_score')
         growth = item.get('volume_growth_pct')
@@ -2844,11 +3040,11 @@ def _build_prompt(item: dict) -> str:
             f'Celebrity-death queries spike then fade within 48h.'
         )
     elif kind == 'trending_person':
-        unit  = ('weekly US audience interest (unique US individuals '
+        unit  = ('daily US audience interest (unique US individuals '
                  'who searched for, read a news article about, watched '
                  'a video of, or read the Wikipedia entry for this '
-                 'person in the past 7 days)')
-        query = (f'"{display_title}" Wikipedia pageviews US weekly news '
+                 'person on the target day)')
+        query = (f'"{display_title}" Wikipedia pageviews US daily news '
                  f'coverage Chartbeat Parse.ly 2026')
         role = artist or item.get('role') or ''
         wiki_daily = item.get('wiki_daily_pageviews')
@@ -2884,11 +3080,11 @@ def _build_prompt(item: dict) -> str:
             f'tiers in the platform guidance.'
         )
     elif kind == 'wiki_topic':
-        unit  = ('weekly US audience interest (unique US individuals '
+        unit  = ('daily US audience interest (unique US individuals '
                  'who visited this Wikipedia entry, searched for the '
-                 'entity, or read a news article about it in the past '
-                 '7 days)')
-        query = (f'"{display_title}" Wikipedia pageviews US weekly news '
+                 'entity, or read a news article about it on the '
+                 'target day)')
+        query = (f'"{display_title}" Wikipedia pageviews US daily news '
                  f'coverage 2026')
         wiki_daily = item.get('wiki_daily_pageviews')
         wiki_desc = artist or item.get('wiki_description') or ''
@@ -2916,8 +3112,8 @@ def _build_prompt(item: dict) -> str:
             f'add news + search overlay based on the topic category.'
         )
     else:
-        unit  = 'weekly US views'
-        query = f'"{display_title}" weekly viewers US streaming 2026'
+        unit  = 'daily US views'
+        query = f'"{display_title}" daily viewers US streaming 2026'
         item_line = f'TITLE: {display_title}'
 
     platforms = _platforms_for_kind(kind)
@@ -2943,13 +3139,25 @@ def _build_prompt(item: dict) -> str:
             + '\n'
         )
 
+    # Every call now runs against a specific target calendar day. If
+    # the caller doesn't specify one (live daily cron), default to
+    # yesterday UTC - the freshest complete calendar day the platforms
+    # have finished reporting for.
+    if not target_date_iso:
+        target_date_iso = (
+            datetime.now(timezone.utc).date() - timedelta(days=1)
+        ).isoformat()
+
     return (
-        _PROMPT_HEADER
-        + f'\nTARGET METRIC (per platform): {unit}\n'
+        _daily_prompt_preface(target_date_iso)
+        + _PROMPT_HEADER
+        + f'\nTARGET METRIC (per platform, DAILY for {target_date_iso}): '
+        + f'{unit}\n'
         + target_section
         + libby_note
         + '\n' + item_line
-        + f'\nCHART CONTEXT: {chart_str}\n'
+        + f'\nCHART CONTEXT (rails observed for {target_date_iso}): '
+        + f'{chart_str}\n'
         + f'\nSUGGESTED SEARCH QUERY (feel free to refine): {query}\n\n'
         + 'JSON output:'
     )
@@ -3044,44 +3252,48 @@ _CLAMP_TO_FRACTION = 0.4         # Bias clamped values conservative (was 0.5)
 
 
 def _default_unit_for_kind(kind: str) -> str:
-    """Default unit label per kind. Kept short for the dashboard chip."""
+    """Default unit label per kind. Kept short for the dashboard chip.
+    Every label is DAILY as of 2026-09-03 - the estimator produces
+    a per-item daily unique-audience count on each calendar day it
+    runs, and the window accumulator in `trends_iq.py` sums N of
+    those daily counts to build a plain-sum window count."""
     if kind == 'podcast':
-        return 'weekly US listeners'
+        return 'daily US listeners'
     if kind == 'song':
-        return 'weekly US streams'
+        return 'daily US streams'
     if kind == 'book':
         # Chip label - the per-platform annotate step overrides this
-        # to 'weekly US readers' / 'weekly US listeners' / 'weekly US
+        # to 'daily US readers' / 'daily US listeners' / 'daily US
         # library borrows' based on which panel the row is on. The
-        # aggregate stays 'weekly US audience' since aggregating
+        # aggregate stays 'daily US audience' since aggregating
         # across sale + loan units in one label reads awkwardly.
-        return 'weekly US audience'
+        return 'daily US audience'
     if kind == 'comic':
         # Same story as `book` - amazon_kindle / apple_comics are
         # buyer counts, libby_comics is library-borrow counts, so
-        # the aggregate uses a neutral 'weekly US readers' framing
+        # the aggregate uses a neutral 'daily US readers' framing
         # and the per-panel annotate overrides with the precise
         # unit for that platform.
-        return 'weekly US readers'
+        return 'daily US readers'
     if kind == 'goodreads_book':
         # Goodreads maps a single kind to a single platform. Unit
-        # is unique US readers of the book this week across every
-        # reading surface, projected from the community signal.
-        return 'weekly US readers'
+        # is unique US readers of the book on the target day across
+        # every reading surface, projected from the community signal.
+        return 'daily US readers'
     if kind == 'wattpad_story':
         # Wattpad measures reads (not sales / borrows / listens).
         # Single-platform kind so the per-panel annotate keeps this
         # label instead of overriding it.
-        return 'weekly US readers'
+        return 'daily US readers'
     if kind == 'game':
-        return 'weekly US plays'
+        return 'daily US plays'
     if kind == 'fast_channel':
-        return 'weekly US viewers'
+        return 'daily US viewers'
     if kind == 'search_term':
-        return 'weekly US searchers'
+        return 'daily US searchers'
     if kind in ('trending_person', 'wiki_topic'):
-        return 'weekly US audience'
-    return 'weekly US views'
+        return 'daily US audience'
+    return 'daily US views'
 
 
 # ---------------------------------------------------------------------------
@@ -3353,11 +3565,16 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
     }
 
 
-def _research_one(item: dict, client) -> tuple[str, Optional[dict]]:
-    """Run one Claude web_search call for `item` and return (key, sanitized_result)."""
+def _research_one(item: dict, client,
+                    target_date_iso: Optional[str] = None
+                    ) -> tuple[str, Optional[dict]]:
+    """Run one Claude web_search call for `item` and return (key,
+    sanitized_result). `target_date_iso` (YYYY-MM-DD) frames the ask
+    as a DAILY estimate for that specific calendar day; defaults to
+    yesterday UTC when omitted."""
     key = _lookup_key(item['kind'], item['display_title'],
                        item.get('artist') or '')
-    prompt = _build_prompt(item)
+    prompt = _build_prompt(item, target_date_iso=target_date_iso)
     for attempt in range(2):    # single retry on parse failure
         try:
             resp = client.messages.create(
@@ -3390,8 +3607,12 @@ def _research_one(item: dict, client) -> tuple[str, Optional[dict]]:
     return key, None
 
 
-def _research_all(items: list[dict]) -> dict[str, dict]:
-    """Parallel research over `items`. Returns {key: sanitized_result}."""
+def _research_all(items: list[dict],
+                    target_date_iso: Optional[str] = None
+                    ) -> dict[str, dict]:
+    """Parallel research over `items`. Returns {key: sanitized_result}.
+    `target_date_iso` frames every call as a DAILY estimate for that
+    specific calendar day; defaults to yesterday UTC when omitted."""
     api_key = (os.environ.get('ANTHROPIC_API_KEY') or '').strip()
     if not api_key:
         logger.warning("stream_estimates: ANTHROPIC_API_KEY missing; skipping")
@@ -3406,10 +3627,15 @@ def _research_all(items: list[dict]) -> dict[str, dict]:
     out: dict[str, dict] = {}
     if not items:
         return out
-    logger.info("stream_estimates: researching %d items with %s (concurrency=%d)",
-                 len(items), _WEBSEARCH_MODEL, _CONCURRENCY)
+    logger.info("stream_estimates: researching %d items with %s "
+                 "for target_date=%s (concurrency=%d)",
+                 len(items), _WEBSEARCH_MODEL,
+                 target_date_iso or 'yesterday-UTC', _CONCURRENCY)
     with concurrent.futures.ThreadPoolExecutor(max_workers=_CONCURRENCY) as ex:
-        futs = {ex.submit(_research_one, it, client): it for it in items}
+        futs = {
+            ex.submit(_research_one, it, client, target_date_iso): it
+            for it in items
+        }
         for i, fut in enumerate(concurrent.futures.as_completed(futs)):
             try:
                 key, result = fut.result(timeout=_WEBSEARCH_TIMEOUT_S + 15)
@@ -3500,10 +3726,24 @@ def _humanize(n: int) -> str:
 # -------------------------------------------------------------------------
 # Fetch entry point
 # -------------------------------------------------------------------------
-def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
+def fetch(only: Optional[set[str]] = None,
+           target_date_iso: Optional[str] = None) -> dict[str, Any]:
     """Read podcast / music / streaming / book / fast snapshots,
     research each unique top item's US audience via Claude +
-    web_search, and return the combined snapshot dict."""
+    web_search, and return the combined snapshot dict.
+
+    `target_date_iso` (YYYY-MM-DD) is the calendar day the estimator
+    reasons about - every returned `us_estimate` is a DAILY unique-
+    audience count for that day. Defaults to yesterday UTC (the
+    freshest complete calendar day the platforms have finished
+    reporting for) when omitted. The backfill script in
+    `backfill_daily_estimates.py` uses this argument to fill each
+    historical day's dated snapshot.
+    """
+    if not target_date_iso:
+        target_date_iso = (
+            datetime.now(timezone.utc).date() - timedelta(days=1)
+        ).isoformat()
     wanted = only or {'podcast', 'song', 'streaming', 'book',
                        'goodreads_book',
                        'wattpad_story',
@@ -3588,28 +3828,29 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
     #      need to be paid for a second time - Claude reasoning
     #      already sits in today's snapshot.
     #
-    # Rule: an item is "already covered today" iff its as_of_date
-    # matches today AND it has a non-zero us_estimate. Everything else
-    # (yesterday's data, empty estimates, missing as_of_date) is fair
-    # game to re-research.
-    today_iso = date.today().isoformat()
+    # Rule: an item is "already covered for the target day" iff its
+    # as_of_date matches target_date_iso AND it has a non-zero
+    # us_estimate. Everything else (older data, empty estimates,
+    # missing as_of_date) is fair game to re-research.
     prior_snap = _read_snapshot('stream_estimates') or {}
     prior_items = prior_snap.get('items') or {}
-    already_today = {
+    already_covered = {
         k for k, v in prior_items.items()
-        if v.get('as_of_date') == today_iso and v.get('us_estimate')
+        if v.get('as_of_date') == target_date_iso and v.get('us_estimate')
     }
     items_to_research = [
         it for it in items
         if _lookup_key(it['kind'], it['display_title'],
-                        it.get('artist') or '') not in already_today
+                        it.get('artist') or '') not in already_covered
     ]
     if len(items_to_research) < len(items):
-        logger.info("stream_estimates: skipping %d items already researched today "
-                    "(intra-day rerun); researching %d new items",
-                    len(items) - len(items_to_research), len(items_to_research))
+        logger.info("stream_estimates: skipping %d items already researched "
+                    "for %s (intra-day rerun); researching %d new items",
+                    len(items) - len(items_to_research), target_date_iso,
+                    len(items_to_research))
 
-    researched_new = _research_all(items_to_research)
+    researched_new = _research_all(items_to_research,
+                                    target_date_iso=target_date_iso)
 
     # Compose the final `researched` dict as the union of:
     #   - Everything from prior_snap (preserves items whose kind is
@@ -3621,21 +3862,34 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
     researched = dict(prior_items)
     researched.update(researched_new)
 
-    # Attach day-over-day trend from yesterday's dated snapshot.
-    # Track which prior snapshot actually resolved so the tooltip
-    # can render an exact date range (days_back may be 1 or 2).
-    prev_date_iso = (date.today() - timedelta(days=1)).isoformat()
-    yesterday = _read_dated_snapshot('stream_estimates', days_back=1)
+    # Attach day-over-day trend by comparing against the DAY BEFORE
+    # the target day (target_date_iso - 1). This matches the plain-
+    # sum accumulator's semantics: each dated snapshot represents its
+    # own calendar day, and the "prev" for target day D is the D-1
+    # dated snapshot. Fall back to D-2 if D-1 has no snapshot yet.
+    try:
+        target_date_obj = date.fromisoformat(target_date_iso)
+    except Exception:
+        target_date_obj = date.today() - timedelta(days=1)
+    prev_date_iso = (target_date_obj - timedelta(days=1)).isoformat()
+    # `_read_dated_snapshot` counts days back from date.today(); for
+    # backfill runs the target may itself be historical, so compute
+    # the actual days-back from today.
+    days_back_1 = max(1, (date.today() - target_date_obj).days + 1)
+    yesterday = _read_dated_snapshot('stream_estimates',
+                                       days_back=days_back_1)
     if not yesterday:
-        yesterday = _read_dated_snapshot('stream_estimates', days_back=2)
-        prev_date_iso = (date.today() - timedelta(days=2)).isoformat()
+        prev_date_iso = (target_date_obj - timedelta(days=2)).isoformat()
+        yesterday = _read_dated_snapshot('stream_estimates',
+                                           days_back=days_back_1 + 1)
     researched = _attach_dod_trend(researched, yesterday,
                                      prev_date_iso=prev_date_iso,
-                                     today_iso=today_iso)
+                                     today_iso=target_date_iso)
 
     return {
         'items':        researched,
         'count':        len(researched),
+        'target_date':  target_date_iso,
         'inputs':       [{'key': _lookup_key(it['kind'],
                                               it['display_title'],
                                               it.get('artist') or ''),
@@ -3646,6 +3900,35 @@ def fetch(only: Optional[set[str]] = None) -> dict[str, Any]:
         'model':        _WEBSEARCH_MODEL,
         'generated_at': datetime.now(timezone.utc).isoformat(),
     }
+
+
+def fetch_for_date(target_date_iso: str,
+                    only: Optional[set[str]] = None) -> dict[str, Any]:
+    """Backfill-friendly wrapper: research the estimator for a specific
+    historical calendar day and write the resulting snapshot to the
+    dated S3 key ONLY (never overwrites `latest/`).
+
+    Used by `scripts/trends_scrapers/backfill_daily_estimates.py`. Live
+    daily cron continues to use `fetch()` -> `run_scraper()` which
+    stamps both `latest/` and today's dated key.
+    """
+    payload = fetch(only=only, target_date_iso=target_date_iso)
+    payload.setdefault('source',      'stream_estimates')
+    payload.setdefault('label',       'US Streams')
+    payload.setdefault('kind',        'meta')
+    payload['fetched_at'] = datetime.now(timezone.utc).isoformat()
+
+    body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+    s3 = _s3()
+    dated_prefix = _S3_DATED.format(date=target_date_iso)
+    key_dated = f'{dated_prefix}stream_estimates.json'
+    s3.put_object(Bucket=_S3_BUCKET, Key=key_dated, Body=body,
+                   ContentType='application/json')
+    logger.info("stream_estimates: wrote dated snapshot s3://%s/%s "
+                 "(%d items, target=%s)",
+                 _S3_BUCKET, key_dated, payload.get('count') or 0,
+                 target_date_iso)
+    return payload
 
 
 if __name__ == '__main__':
@@ -3662,6 +3945,11 @@ if __name__ == '__main__':
                               'wattpad_fantasy),comic,fast,'
                               'fast_channel,gaming,search_term,'
                               'trending_person,wiki_topic')
+    parser.add_argument('--asof', default='',
+                        help='Target calendar day (YYYY-MM-DD). When set, '
+                              'writes ONLY to the dated snapshot for that '
+                              'day and never touches latest/. Used by '
+                              'backfill_daily_estimates.py.')
     args = parser.parse_args()
     # CLI aliases so `--only goodreads_most_read` (matching the
     # snapshot's panel slug) and `--only goodreads` both resolve to
@@ -3686,13 +3974,18 @@ if __name__ == '__main__':
             continue
         only.add(_RAIL_ALIASES.get(t, t))
 
-    from ._base import run_scraper
-    def _fetch():
-        return fetch(only=only or None)
-    result = run_scraper('stream_estimates', 'US Streams', 'meta', _fetch)
+    if args.asof:
+        # Backfill / historical mode - writes dated snapshot only.
+        result = fetch_for_date(args.asof, only=only or None)
+    else:
+        # Live daily mode - writes latest/ + today's dated snapshot.
+        from ._base import run_scraper
+        def _fetch():
+            return fetch(only=only or None)
+        result = run_scraper('stream_estimates', 'US Streams', 'meta', _fetch)
     n = result.get('count') or 0
-    print(f"stream_estimates: count={n} error={result.get('error')}",
-           file=sys.stderr)
+    print(f"stream_estimates: count={n} target={result.get('target_date')} "
+           f"error={result.get('error')}", file=sys.stderr)
     for k, v in list((result.get('items') or {}).items())[:8]:
         print(f"  {k}: {_humanize(v['us_estimate'])}  "
               f"({v.get('direction', '?')}, {v['confidence']})",

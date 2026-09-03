@@ -9,6 +9,7 @@
     "_playwright.py",
     "_proxy.py",
     "_streaming_common.py",
+    "backfill_daily_estimates.py",
     "backfill_history.py",
     "bestbuy.py",
     "book_charts.py",

@@ -675,14 +675,19 @@ def _read_snapshot(source: str, asof: Optional[str] = None) -> Optional[dict]:
 # ============================================================================
 # Window accumulator - cumulative reach across the last N daily snapshots
 # ============================================================================
-# The `stream_estimates.py` scraper produces a per-item weekly US audience
+# The `stream_estimates.py` scraper produces a per-item DAILY US audience
 # integer every day (`items[key].us_estimate`, `items[key].by_platform.
 # <slug>.us_estimate`). Each daily snapshot lives at
-# `trends_iq_snapshots/{YYYY-MM-DD}/stream_estimates.json`. The WINDOW
-# dropdown at the top of the Trends IQ view (Yesterday / Last 3 days /
-# Last 7 / Last 14 / Last 30) previously only relabelled the panel: the
-# audience integers on every ranker row were identical across every
-# window because compute_view always read the single `latest/` snapshot.
+# `trends_iq_snapshots/{YYYY-MM-DD}/stream_estimates.json` and represents
+# the unique US audience for that single calendar day (researched fresh
+# per item, per day - see the `stream_estimates.py` header for how the
+# daily research is grounded).
+#
+# The WINDOW dropdown at the top of the Trends IQ view (Yesterday /
+# Last 3 days / Last 7 / Last 14 / Last 30) once only relabelled the
+# panel: audience integers on every ranker row were identical across
+# every window because compute_view always read the single `latest/`
+# snapshot.
 #
 # This accumulator solves that by summing the per-item `us_estimate`
 # across the last N daily snapshots. Titles observed on every day of
@@ -690,16 +695,26 @@ def _read_snapshot(source: str, asof: Optional[str] = None) -> Optional[dict]:
 # last 30 days sums only those 3 days and its `window_days_covered`
 # field lets the frontend say so in the tooltip.
 #
+# No multiplier, no decay factor, no reach curve - a WINDOW's audience
+# count is a plain sum of DAILY audience counts, each of which was
+# researched with real domain awareness on its own calendar day. Same
+# treatment for every kind (title / fast_channel / song / podcast /
+# ...), so channel-title containment holds by construction: a channel's
+# daily audience is researched aware of the titles that air on it that
+# day, so the sum over N days preserves that ordering as long as
+# per-item coverage aligns.
+#
 # Downstream annotators (`_annotate_music_with_streams`,
 # `_annotate_streaming_with_streams`, `_annotate_fast_channels_with_views`,
 # ...) are unchanged - they read `items[key].us_estimate` and
 # `items[key].by_platform.<slug>.us_estimate` verbatim.
 #
 # Cadence noun in `unit_label` is rewritten to match the window:
-# "weekly US listeners" becomes "monthly US listeners" for N=30, etc.
+# "daily US listeners" becomes "monthly US listeners" for N=30, etc.
 #
 # lookback_days=1 short-circuits to `None` - the caller falls through
-# to the plain `latest/` read.
+# to the plain `latest/` read, which is the same day's dated snapshot
+# and therefore the same daily count.
 
 _WINDOW_ACCUMULATOR_MAX_WORKERS = int(
     os.environ.get('TRENDS_IQ_ACCUM_WORKERS', '8'))
@@ -769,6 +784,13 @@ def _accumulate_stream_estimates_over_window(
     or today. Reads dated snapshots via `_read_snapshot(source,
     asof=DATE)` in parallel; today's dated read falls back to `latest/`
     when the nightly cron hasn't stamped a dated copy yet.
+
+    Each daily snapshot's `us_estimate` is a DAILY unique-audience
+    count researched fresh for that calendar day (see
+    `stream_estimates.py` for how the daily research is grounded).
+    Summing N daily counts across the window produces the window's
+    unique-audience count as a plain sum with no multiplier and no
+    decay factor.
 
     Returns:
         A merged snapshot whose `items` dict inherits the latest day's
@@ -8269,15 +8291,19 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # snapshot -> rows just don't carry `us_streams` and the frontend
     # renders without the extra chip.
     #
-    # WINDOW accumulator (2026-09-03, Bug 2 fix): when the user picks
-    # a WINDOW other than "Yesterday" from the top dropdown, sum each
-    # item's per-day `us_estimate` across the last N dated snapshots
-    # (up to 30 days back). Persistent titles get materially larger
-    # numbers on longer windows; titles observed on only some of the
-    # last N days sum only those days (window_days_covered stamped on
-    # each row's `us_streams` block so the tooltip can be honest about
+    # WINDOW accumulator (2026-09-03): when the user picks a WINDOW
+    # other than "Yesterday" from the top dropdown, sum each item's
+    # per-day `us_estimate` across the last N dated snapshots (up to
+    # 30 days back). Each dated snapshot's us_estimate is a DAILY
+    # unique-audience count researched fresh that calendar day (see
+    # `stream_estimates.py`), so the window sum is unique-audience
+    # counted across the window with no multiplier and no decay
+    # factor. Persistent titles get materially larger numbers on
+    # longer windows; titles observed on only some of the last N
+    # days sum only those days (window_days_covered stamped on each
+    # row's `us_streams` block so the tooltip can be honest about
     # coverage). `unit_label` picks up the window cadence noun so a
-    # 30-day chip reads "monthly US listeners" instead of "weekly".
+    # 30-day chip reads "monthly US listeners" instead of "daily".
     # lookback_days=1 falls back to the single `latest/` read below.
     stream_estimates_snap = None
     if int(lookback_days or 1) > 1:
