@@ -1479,7 +1479,7 @@
         #talentSearchIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
         #talentTheaterIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
         #hedgeFundIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
-        #brandTrackingIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
+        #brandTrackingIQView { display: none; flex-direction: column; flex: 1 1 auto; min-height: 500px; overflow: auto; }
         #ticketSalesTrackerView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; }
         #roasIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
         #ecommerceIQView { display: none; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow: hidden; padding-top: 1.25rem; }
@@ -19210,7 +19210,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                             <option value="microdramasIQ" {% if not has_microdramas_iq_access %}disabled{% endif %}>📱 Micro-Series</option>
                             <option value="blueIQ" {% if not has_blue_iq_access %}disabled{% endif %}>🟦 Blue IQ</option>
                             <option value="hedgeFundIQ" {% if not has_hedge_fund_iq_access %}disabled{% endif %} {% if default_view_hedge_fund_iq %}selected{% endif %}>📈 Fin IQ</option>
-                            <option value="brandTrackingIQ" {% if not has_brand_tracking_iq_access %}disabled{% endif %}>📡 Brand Tracking</option>
+                            <option value="brandTrackingIQ" {% if not has_brand_tracking_iq_access and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>📡 Brand Tracking</option>
                             <option value="sfConversion" {% if not has_sf_conversion_access and 'sf_lf_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 SF Conversion</option>
                             <option value="intentIQ" {% if not has_intent_iq_access %}disabled{% endif %}>📈 Attribution IQ</option>
                             <option value="impactIQ" {% if not has_impact_iq_access %}disabled{% endif %}>🌊 Impact IQ</option>
@@ -42149,7 +42149,7 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
             </div>
         </div>
-        <script src="/static/brand-tracking/brand-tracking.js"></script>
+        <script src="/static/brand-tracking/brand-tracking.js?v=20260903c"></script>
 
         <script>
         // ============================================================

@@ -504,6 +504,15 @@
     }
 
     function hideOthers() {
+        var c = document.querySelector('.container');
+        if (c) {
+            for (var i = 0; i < c.children.length; i++) {
+                var k = c.children[i];
+                if (k.id !== 'brandTrackingIQView' && k.tagName !== 'HEADER') {
+                    k.style.display = 'none';
+                }
+            }
+        }
         var ids = [
             'dashboardView', 'subscriberIQView', 'sfConversionView', 'rankerIQView',
             'ticketSalesIQView', 'ticketSalesTrackerView', 'hedgeFundIQView',
@@ -711,15 +720,14 @@
     }
 
     window.showBrandTrackingIQ = function () {
-        var dd = document.getElementById('viewNavDropdown');
-        var opt = dd && dd.querySelector('option[value="brandTrackingIQ"]');
-        if (opt && opt.disabled) return;
         if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandTrackingIQ');
         hideOthers();
         var view = document.getElementById('brandTrackingIQView');
         if (view) {
-            view.style.display = 'flex';
-            view.style.visibility = 'visible';
+            view.setAttribute('style',
+                'display:flex;flex-direction:column;flex:1 1 auto;min-height:500px;' +
+                'height:calc(100vh - 80px);overflow:auto;visibility:visible;' +
+                'position:relative;z-index:50;');
         }
         renderAll();
     };

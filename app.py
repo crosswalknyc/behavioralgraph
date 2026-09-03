@@ -9107,7 +9107,7 @@ def compute_product_access_flags(user, role):
         'has_share_of_time_access': has_sot_view,
         'has_share_of_time_run_access': has_sot_run,
         'has_blue_iq_access': bool(u.get('has_blue_iq_access', False)),
-        'has_brand_tracking_iq_access': bool(u.get('has_brand_tracking_iq_access', False)),
+        'has_brand_tracking_iq_access': role == 'admin' or bool(u.get('has_brand_tracking_iq_access', False)),
         'has_intent_iq_access': bool(u.get('has_intent_iq_access', True)),
         'allowed_intent_iq_runs': list(u.get('allowed_intent_iq_runs', ['*']) or ['*']),
         'has_impact_iq_access': bool(u.get('has_impact_iq_access', True)),
