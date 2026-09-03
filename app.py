@@ -2511,8 +2511,10 @@ _PRODUCT_ACCESS_FIELDS = frozenset([
     'has_ticket_sales_tracker_access',
     'has_rankers_iq_access', 'rankers_iq_options',
     'has_talent_fit_access',
-    'has_sf_conversion_access', 'has_flywheel_conversion_access',
-    'has_brand_partnership_iq_access', 'has_sentiment_iq_access',
+    'has_sf_conversion_access', 'sf_conversion_journeys',
+    'has_flywheel_conversion_access',
+    'has_brand_partnership_iq_access', 'brand_partnership_iq_journeys',
+    'has_sentiment_iq_access',
     'has_journey_iq_access', 'allowed_journey_iq_runs',
     'has_intent_iq_access', 'allowed_intent_iq_runs',
     'has_share_of_time_access', 'has_share_of_time_run_access',
@@ -4933,8 +4935,10 @@ def create_user():
             'rankers_iq_options': req_data.get('rankers_iq_options', []),
             'has_talent_fit_access': req_data.get('has_talent_fit_access', cd.get('has_talent_fit_access', False) if cd else False),
             'has_sf_conversion_access': req_data.get('has_sf_conversion_access', cd.get('has_sf_conversion_access', False) if cd else False),
+            'sf_conversion_journeys': req_data.get('sf_conversion_journeys', cd.get('sf_conversion_journeys', None) if cd else None),
             'has_flywheel_conversion_access': req_data.get('has_flywheel_conversion_access', cd.get('has_flywheel_conversion_access', False) if cd else False),
             'has_brand_partnership_iq_access': req_data.get('has_brand_partnership_iq_access', cd.get('has_brand_partnership_iq_access', False) if cd else False),
+            'brand_partnership_iq_journeys': req_data.get('brand_partnership_iq_journeys', cd.get('brand_partnership_iq_journeys', None) if cd else None),
             'has_sentiment_iq_access': req_data.get('has_sentiment_iq_access', cd.get('has_sentiment_iq_access', False) if cd else False),
             'has_journey_iq_access': req_data.get('has_journey_iq_access', cd.get('has_journey_iq_access', False) if cd else False),
             'allowed_journey_iq_runs': req_data.get('allowed_journey_iq_runs', cd.get('allowed_journey_iq_runs', ['*']) if cd else ['*']),
@@ -5125,10 +5129,26 @@ def update_user(username):
             user['has_talent_fit_access'] = bool(req_data['has_talent_fit_access'])
         if 'has_sf_conversion_access' in req_data:
             user['has_sf_conversion_access'] = bool(req_data['has_sf_conversion_access'])
+        if 'sf_conversion_journeys' in req_data:
+            _cleaned, _err = _validate_journeys_payload(
+                req_data.get('sf_conversion_journeys'),
+                field_name='sf_conversion_journeys',
+            )
+            if _err:
+                return jsonify({'success': False, 'error': _err}), 400
+            user['sf_conversion_journeys'] = _cleaned
         if 'has_flywheel_conversion_access' in req_data:
             user['has_flywheel_conversion_access'] = bool(req_data['has_flywheel_conversion_access'])
         if 'has_brand_partnership_iq_access' in req_data:
             user['has_brand_partnership_iq_access'] = bool(req_data['has_brand_partnership_iq_access'])
+        if 'brand_partnership_iq_journeys' in req_data:
+            _cleaned, _err = _validate_journeys_payload(
+                req_data.get('brand_partnership_iq_journeys'),
+                field_name='brand_partnership_iq_journeys',
+            )
+            if _err:
+                return jsonify({'success': False, 'error': _err}), 400
+            user['brand_partnership_iq_journeys'] = _cleaned
         if 'has_sentiment_iq_access' in req_data:
             user['has_sentiment_iq_access'] = bool(req_data['has_sentiment_iq_access'])
         if 'has_journey_iq_access' in req_data:
@@ -6652,6 +6672,10 @@ def api_set_company_defaults(company_name):
             'has_talent_fit_access': req.get('has_talent_fit_access', False),
             'has_flywheel_conversion_access': req.get('has_flywheel_conversion_access', False),
             'has_brand_partnership_iq_access': req.get('has_brand_partnership_iq_access', False),
+            'brand_partnership_iq_journeys': _validate_journeys_payload(
+                req.get('brand_partnership_iq_journeys'),
+                field_name='brand_partnership_iq_journeys',
+            )[0],
             'has_sentiment_iq_access': req.get('has_sentiment_iq_access', False),
             'has_journey_iq_access': req.get('has_journey_iq_access', False),
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
@@ -8901,6 +8925,95 @@ _ANALYSIS_IQ_MODULES_FULL = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Granular per-journey access (2026-09-03)
+# ---------------------------------------------------------------------------
+# Two products (Brand Partnership IQ + SF Conversion) support per-journey
+# access grants. Admin can grant "all journeys" ('*'), an explicit list of
+# journey ids (['jid1', 'jid2']), or no access (None / []). Legacy users
+# with only `has_X_access: true` are treated as '*' for backward compat.
+
+_GRANULAR_JOURNEY_PRODUCTS = {
+    'brand_partnership_iq': {
+        'field': 'brand_partnership_iq_journeys',
+        'legacy_flag': 'has_brand_partnership_iq_access',
+    },
+    'sf_conversion': {
+        'field': 'sf_conversion_journeys',
+        'legacy_flag': 'has_sf_conversion_access',
+    },
+}
+
+
+def _journeys_access_of(user, product_key):
+    """Resolve a per-journey allow-list for a granular product.
+
+    Returns one of:
+      '*'   - all journeys accessible
+      list  - explicit allow-list of journey ids (already deduped, non-empty)
+      None  - no access
+
+    product_key is one of the keys in _GRANULAR_JOURNEY_PRODUCTS.
+    """
+    cfg = _GRANULAR_JOURNEY_PRODUCTS.get(product_key)
+    if not cfg:
+        return None
+    raw = (user or {}).get(cfg['field'])
+    if raw == '*':
+        return '*'
+    if isinstance(raw, list):
+        seen = []
+        for x in raw:
+            s = str(x).strip()
+            if s and s not in seen:
+                seen.append(s)
+        return seen or None
+    # Absent / None / unrecognized -> fall back to legacy boolean.
+    if bool((user or {}).get(cfg['legacy_flag'], False)):
+        return '*'
+    return None
+
+
+def _journey_access_effective(user, product_key, journey_id):
+    """True if user can open a specific journey under a granular product."""
+    resolved = _journeys_access_of(user, product_key)
+    if resolved == '*':
+        return True
+    if isinstance(resolved, list):
+        return str(journey_id).strip() in resolved
+    return False
+
+
+def _validate_journeys_payload(raw, field_name):
+    """Coerce + validate an incoming journeys payload from admin save.
+
+    Accepts:
+      '*'               -> passes through as '*'
+      None / '' / []    -> None (no access)
+      list[str]         -> deduped, stripped, non-empty strings only
+    Returns (cleaned_value, error_message). error_message is None on success.
+    """
+    if raw is None or raw == '' or raw == []:
+        return None, None
+    if raw == '*':
+        return '*', None
+    if isinstance(raw, list):
+        for item in raw:
+            if not isinstance(item, (str, int)):
+                return None, (
+                    f"Invalid {field_name}: list items must be journey id strings."
+                )
+        seen = []
+        for item in raw:
+            s = str(item).strip()
+            if s and s not in seen:
+                seen.append(s)
+        return (seen or None), None
+    return None, (
+        f"Invalid {field_name}: expected '*' (all), a list of journey ids, or null."
+    )
+
+
 def compute_product_access_flags(user, role):
     """Resolved module access for the main app (index + /api/me/product-access)."""
     if role == 'super_admin':
@@ -8908,6 +9021,7 @@ def compute_product_access_flags(user, role):
             'has_profile_iq_access': True,
             'has_subscriber_iq_access': True,
             'has_sf_conversion_access': True,
+            'sf_conversion_journeys': '*',
             'has_ecommerce_iq_access': True,
             'has_hedge_fund_iq_access': True,
             'hedge_fund_iq_tickers': ['*'],
@@ -8922,6 +9036,7 @@ def compute_product_access_flags(user, role):
             'has_talent_fit_access': True,
             'has_flywheel_conversion_access': True,
             'has_brand_partnership_iq_access': True,
+            'brand_partnership_iq_journeys': '*',
             'has_sentiment_iq_access': True,
             'has_journey_iq_access': True,
             'has_workspace_access': True,
@@ -8952,10 +9067,17 @@ def compute_product_access_flags(user, role):
     u = user or {}
     has_sot_view = bool(u.get('has_share_of_time_access', True))
     has_sot_run = bool(u.get('has_share_of_time_run_access', has_sot_view)) and has_sot_view
+    # 2026-09-03: Brand Partnership IQ + SF Conversion support per-journey
+    # access. Resolve each once; has_X_access is derived (True iff the
+    # user has any access at all), and the resolved journeys value ('*'
+    # or explicit list) is emitted so the frontend can render correctly.
+    _bp_journeys = _journeys_access_of(u, 'brand_partnership_iq')
+    _sf_journeys = _journeys_access_of(u, 'sf_conversion')
     return {
         'has_profile_iq_access': u.get('has_profile_iq_access', True),
         'has_subscriber_iq_access': bool(u.get('has_subscriber_iq_access', False)),
-        'has_sf_conversion_access': bool(u.get('has_sf_conversion_access', False)),
+        'has_sf_conversion_access': _sf_journeys is not None,
+        'sf_conversion_journeys': _sf_journeys,
         'has_ecommerce_iq_access': bool(u.get('has_ecommerce_iq_access', True)),
         'has_hedge_fund_iq_access': bool(u.get('has_hedge_fund_iq_access', False)),
         'hedge_fund_iq_tickers': u.get('hedge_fund_iq_tickers', ['*']) or ['*'],
@@ -8970,7 +9092,8 @@ def compute_product_access_flags(user, role):
         'has_ticket_sales_tracker_access': bool(u.get('has_ticket_sales_tracker_access', False)),
         'has_talent_fit_access': bool(u.get('has_talent_fit_access', False)),
         'has_flywheel_conversion_access': bool(u.get('has_flywheel_conversion_access', False)),
-        'has_brand_partnership_iq_access': bool(u.get('has_brand_partnership_iq_access', False)),
+        'has_brand_partnership_iq_access': _bp_journeys is not None,
+        'brand_partnership_iq_journeys': _bp_journeys,
         'has_sentiment_iq_access': bool(u.get('has_sentiment_iq_access', False)),
         'has_journey_iq_access': bool(u.get('has_journey_iq_access', False)),
         # has_workspace_access retained ONLY as legacy plumbing for
@@ -33435,7 +33558,15 @@ def list_sf_lf_conversion_results():
     try:
         if not s3_client:
             return jsonify({'success': False, 'error': 'S3 not available'}), 500
-        
+
+        # 2026-09-03: Per-journey access - filter the catalog to just
+        # the journeys this user was granted. Super admins and cloaked
+        # sessions resolve to '*' (see compute_product_access_flags),
+        # so the filter is a no-op for them.
+        _sf_journeys_grant = _journeys_access_of(get_current_user(), 'sf_conversion')
+        _sf_grant_all = (_sf_journeys_grant == '*')
+        _sf_grant_set = set(_sf_journeys_grant) if isinstance(_sf_journeys_grant, list) else set()
+
         results = []
         try:
             response = s3_client.list_objects_v2(Bucket=SF_LF_CONV_S3_BUCKET, Prefix='')
@@ -33443,7 +33574,13 @@ def list_sf_lf_conversion_results():
                 key = obj['Key']
                 if key.endswith('.csv'):
                     is_purgatory = key.startswith(S3_PURGATORY_PREFIX)
-                    name = key.replace(S3_PURGATORY_PREFIX, '').replace('.csv', '').replace('_', ' ')
+                    bare_key = key.replace(S3_PURGATORY_PREFIX, '')
+                    # Journey id = bare filename without the .csv suffix
+                    # (stable identifier, matches admin-side catalog).
+                    journey_id = bare_key.replace('.csv', '')
+                    if not _sf_grant_all and journey_id not in _sf_grant_set:
+                        continue
+                    name = journey_id.replace('_', ' ')
                     results.append({
                         's3_key': key,
                         'name': name,
@@ -33453,11 +33590,27 @@ def list_sf_lf_conversion_results():
                     })
         except Exception as e:
             print(f"[SF-LF] Error listing S3: {e}")
-        
+
         results.sort(key=lambda x: x['last_modified'], reverse=True)
         return jsonify({'success': True, 'results': results})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _sf_conversion_journey_id_from_key(s3_key):
+    """Bare filename (no purgatory prefix, no .csv suffix) = journey id."""
+    bare = (s3_key or '').replace(S3_PURGATORY_PREFIX, '')
+    if bare.endswith('.csv'):
+        bare = bare[:-4]
+    return bare
+
+
+def _require_sf_conversion_journey(s3_key):
+    """403 if the current user isn't granted this specific SF journey."""
+    journey_id = _sf_conversion_journey_id_from_key(s3_key)
+    if _journey_access_effective(get_current_user(), 'sf_conversion', journey_id):
+        return None
+    return jsonify({'error': 'Access denied for this journey.'}), 403
 
 
 @app.route('/api/sf-lf-conversion/download/<path:s3_key>')
@@ -33470,6 +33623,9 @@ def download_sf_lf_conversion(s3_key):
         module_label='SF Conversion')
     if not ok:
         return err
+    denied = _require_sf_conversion_journey(s3_key)
+    if denied is not None:
+        return denied
     try:
         if not s3_client:
             return jsonify({'error': 'S3 not configured'}), 500
@@ -33495,6 +33651,9 @@ def get_sf_lf_conversion_data(s3_key):
         module_label='SF Conversion')
     if not ok:
         return err
+    denied = _require_sf_conversion_journey(s3_key)
+    if denied is not None:
+        return denied
     try:
         if not s3_client:
             return jsonify({'error': 'S3 not configured'}), 500
@@ -38422,6 +38581,11 @@ def get_brand_partnership_iq_result(s3_key):
         # Never serve internal `_backups/` snapshots as browseable results.
         if _bpiq_is_backup_key(full_key) or _bpiq_is_backup_key(bare_key):
             return jsonify({'success': False, 'error': 'not found'}), 404
+        # 2026-09-03: Per-journey access gate. Journey id = bare filename
+        # without the .json suffix (matches list_brand_partnership_iq).
+        _bp_journey_id = bare_key[:-5] if bare_key.endswith('.json') else bare_key
+        if not _journey_access_effective(get_current_user(), 'brand_partnership_iq', _bp_journey_id):
+            return jsonify({'success': False, 'error': 'Access denied for this journey.'}), 403
         obj = s3_client.get_object(Bucket=S3_BUCKET, Key=full_key)
         data = json.loads(obj['Body'].read().decode('utf-8'))
         meta = (load_bpiq_metadata() or {}).get(bare_key, {}) or {}
@@ -38451,6 +38615,13 @@ def list_brand_partnership_iq():
         return err
     try:
         bpiq_metadata = load_bpiq_metadata()
+        # 2026-09-03: Per-journey access - filter the catalog to just
+        # the journeys this user was granted. Super admins and cloaked
+        # sessions resolve to '*' (see compute_product_access_flags),
+        # so the filter is a no-op for them.
+        _bp_journeys_grant = _journeys_access_of(get_current_user(), 'brand_partnership_iq')
+        _bp_grant_all = (_bp_journeys_grant == '*')
+        _bp_grant_set = set(_bp_journeys_grant) if isinstance(_bp_journeys_grant, list) else set()
         paginator = s3_client.get_paginator('list_objects_v2')
         files = []
         for page in paginator.paginate(Bucket=S3_BUCKET,
@@ -38466,6 +38637,10 @@ def list_brand_partnership_iq():
                     continue
                 bare_key = key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
                 name_part = bare_key.replace('.json', '')
+                # Per-journey access gate. Journey id = bare filename
+                # without the .json suffix (stable across metadata edits).
+                if not _bp_grant_all and name_part not in _bp_grant_set:
+                    continue
                 default_name = re.sub(r'_(\d{2}_\d{2}_\d{4}_\d{2}_\d{2})$',
                                       '', name_part).replace('_', ' ')
                 meta = bpiq_metadata.get(bare_key, {})

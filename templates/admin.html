@@ -3725,13 +3725,37 @@
                         </small>
                     </div>
 
-                    <!-- SF Conversion Access -->
+                    <!-- SF Conversion Access (granular per-journey, 2026-09-03).
+                         Mirrors the Digital Journey IQ pattern: master
+                         checkbox gates access; ALL toggle grants every
+                         journey; unchecking ALL lets admin cherry-pick
+                         specific journeys. -->
                     <div class="dashboard-access-item" data-access-group="conversion">
-                        <div class="dashboard-access-header">
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="hasSFConversionAccess">
+                        <div class="dashboard-access-header" onclick="toggleDashboardSection('sfConversionJourneyAccess')">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="hasSFConversionAccess" onchange="syncSFConversionJourneyAccessVisibility()">
                                 <span style="font-weight: 600;">🔄 SF CONVERSION</span>
                             </label>
+                            <span class="collapse-icon rotated" id="sfConversionJourneyAccessIcon">▼</span>
+                        </div>
+                        <div class="dashboard-access-content" id="sfConversionJourneyAccessContent" style="display:none;">
+                            <div style="padding:0.85rem 1rem;background:var(--bg-dark);border-radius:8px;margin-top:0.5rem;">
+                                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;flex-wrap:wrap;">
+                                    <label class="checkbox-group" style="margin:0;">
+                                        <input type="checkbox" id="allSFConversionJourneys" checked onchange="toggleAllSFConversionJourneys()">
+                                        <span>ALL SF CONVERSION JOURNEYS</span>
+                                    </label>
+                                    <button type="button" class="btn btn-small btn-secondary" onclick="restoreSFConversionJourneyDefaults()">Restore Defaults</button>
+                                    <small style="color:var(--text-secondary);font-size:0.68rem;">Pick which SF Conversion journeys this user can open. Uncheck "ALL" to gate.</small>
+                                </div>
+                                <div style="margin-bottom:0.5rem;">
+                                    <input type="text" id="sfConversionJourneysSearchInput" placeholder="Search journeys (name)..." oninput="filterSFConversionJourneysList()" style="width:100%;padding:0.35rem 0.6rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;">
+                                </div>
+                                <div id="sfConversionJourneysCheckboxes" style="margin-top:0.5rem;max-height:280px;overflow-y:auto;border:1px solid var(--border-color);border-radius:6px;padding:0.5rem;background:var(--bg-input);">
+                                    <p style="color:var(--text-secondary);font-size:0.75rem;margin:0;padding:0.5rem;">Loading journeys…</p>
+                                </div>
+                                <div id="sfConversionJourneysCount" style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.4rem;"></div>
+                            </div>
                         </div>
                     </div>
 
@@ -3749,13 +3773,37 @@
                         </div>
                     </div>
 
-                    <!-- Brand Partnership IQ Access -->
+                    <!-- Brand Partnership IQ Access (granular per-journey, 2026-09-03).
+                         Mirrors the Digital Journey IQ pattern: master
+                         checkbox gates access; ALL toggle grants every
+                         journey; unchecking ALL lets admin cherry-pick
+                         specific journeys. -->
                     <div class="dashboard-access-item" data-access-group="conversion">
-                        <div class="dashboard-access-header">
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="hasBrandPartnershipIQAccess">
+                        <div class="dashboard-access-header" onclick="toggleDashboardSection('bpJourneyAccess')">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="hasBrandPartnershipIQAccess" onchange="syncBrandPartnershipJourneyAccessVisibility()">
                                 <span style="font-weight: 600;">🤝 BRAND PARTNERSHIP IQ</span>
                             </label>
+                            <span class="collapse-icon rotated" id="bpJourneyAccessIcon">▼</span>
+                        </div>
+                        <div class="dashboard-access-content" id="bpJourneyAccessContent" style="display:none;">
+                            <div style="padding:0.85rem 1rem;background:var(--bg-dark);border-radius:8px;margin-top:0.5rem;">
+                                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;flex-wrap:wrap;">
+                                    <label class="checkbox-group" style="margin:0;">
+                                        <input type="checkbox" id="allBrandPartnershipJourneys" checked onchange="toggleAllBrandPartnershipJourneys()">
+                                        <span>ALL BRAND PARTNERSHIP JOURNEYS</span>
+                                    </label>
+                                    <button type="button" class="btn btn-small btn-secondary" onclick="restoreBrandPartnershipJourneyDefaults()">Restore Defaults</button>
+                                    <small style="color:var(--text-secondary);font-size:0.68rem;">Pick which Brand Partnership journeys this user can open. Uncheck "ALL" to gate.</small>
+                                </div>
+                                <div style="margin-bottom:0.5rem;">
+                                    <input type="text" id="brandPartnershipJourneysSearchInput" placeholder="Search journeys (name, category)..." oninput="filterBrandPartnershipJourneysList()" style="width:100%;padding:0.35rem 0.6rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;">
+                                </div>
+                                <div id="brandPartnershipJourneysCheckboxes" style="margin-top:0.5rem;max-height:280px;overflow-y:auto;border:1px solid var(--border-color);border-radius:6px;padding:0.5rem;background:var(--bg-input);">
+                                    <p style="color:var(--text-secondary);font-size:0.75rem;margin:0;padding:0.5rem;">Loading journeys…</p>
+                                </div>
+                                <div id="brandPartnershipJourneysCount" style="font-size:0.7rem;color:var(--text-secondary);margin-top:0.4rem;"></div>
+                            </div>
                         </div>
                     </div>
 
@@ -9873,9 +9921,15 @@
             document.getElementById('hasProfileIQAccess').checked = true;
             document.getElementById('hasSubscriberIQAccess').checked = false;
             document.getElementById('hasSFConversionAccess').checked = false;
+            // 2026-09-03: SF Conversion granular per-journey grants (reset).
+            populateSFConversionJourneysCheckboxes(null);
+            syncSFConversionJourneyAccessVisibility();
             document.getElementById('hasFlywheelConversionAccess').checked = false;
             var bpAccessReset = document.getElementById('hasBrandPartnershipIQAccess');
             if (bpAccessReset) bpAccessReset.checked = false;
+            // 2026-09-03: Brand Partnership IQ granular per-journey grants (reset).
+            populateBrandPartnershipJourneysCheckboxes(null);
+            syncBrandPartnershipJourneyAccessVisibility();
             var jiqAccessReset = document.getElementById('hasJourneyIQAccess');
             if (jiqAccessReset) jiqAccessReset.checked = false;
             // Reset per-user Journey IQ run gating to default-open (['*'])
@@ -10039,9 +10093,15 @@
             document.getElementById('hasSubscriberIQAccess').checked = user.has_subscriber_iq_access === true; // Default false
             document.getElementById('hasEcommerceIQAccess').checked = user.has_ecommerce_iq_access !== false; // Default true (matches backend)
             document.getElementById('hasSFConversionAccess').checked = user.has_sf_conversion_access === true; // Default false
+            // 2026-09-03: SF Conversion granular per-journey grants.
+            populateSFConversionJourneysCheckboxes(user.sf_conversion_journeys);
+            syncSFConversionJourneyAccessVisibility();
             document.getElementById('hasFlywheelConversionAccess').checked = user.has_flywheel_conversion_access === true; // Default false
             var bpAccess = document.getElementById('hasBrandPartnershipIQAccess');
             if (bpAccess) bpAccess.checked = user.has_brand_partnership_iq_access === true; // Default false
+            // 2026-09-03: Brand Partnership IQ granular per-journey grants.
+            populateBrandPartnershipJourneysCheckboxes(user.brand_partnership_iq_journeys);
+            syncBrandPartnershipJourneyAccessVisibility();
             var jiqAccess = document.getElementById('hasJourneyIQAccess');
             if (jiqAccess) jiqAccess.checked = user.has_journey_iq_access === true; // Default false
             // Per-user Journey IQ run gating: list of S3 keys, ['*']/missing = all
@@ -11533,6 +11593,8 @@
                 { section: 'shareOfTimeSection',         icon: 'shareOfTimeIcon' },
                 { section: 'journeyIqRunAccessContent',  icon: 'journeyIqRunAccessIcon' },
                 { section: 'intentIqRunAccessContent',   icon: 'intentIqRunAccessIcon' },
+                { section: 'bpJourneyAccessContent',     icon: 'bpJourneyAccessIcon' },
+                { section: 'sfConversionJourneyAccessContent', icon: 'sfConversionJourneyAccessIcon' },
                 { section: 'impactIQJourneysSection',    icon: 'impactIQJourneysIcon' },
                 { section: 'trendsGroupSection',         icon: 'trendsGroupIcon' },
             ];
@@ -11582,6 +11644,12 @@
                     changed += 1;
                 }
             });
+            // 2026-09-03: Also reset the granular per-journey pickers so
+            // the visual state matches the master checkboxes above.
+            try { populateBrandPartnershipJourneysCheckboxes(null); } catch (_) {}
+            try { syncBrandPartnershipJourneyAccessVisibility(); } catch (_) {}
+            try { populateSFConversionJourneysCheckboxes(null); } catch (_) {}
+            try { syncSFConversionJourneyAccessVisibility(); } catch (_) {}
             if (typeof showToast === 'function') {
                 showToast(`Reset ${changed} product${changed === 1 ? '' : 's'} to defaults`);
             }
@@ -12564,6 +12632,291 @@
         }
 
         // ──────────────────────────────────────────────────────────────────
+        // Brand Partnership IQ + SF Conversion - per-journey access
+        // ──────────────────────────────────────────────────────────────────
+        // Two nearly identical pickers, one per product. Payload shape
+        // matches the backend `_journeys_access_of`:
+        //   '*'    (string)  -> ALL journeys granted
+        //   [ids]  (list)    -> explicit allow-list (may be empty ->
+        //                       maps to None on server = NO access)
+        //   null   (absent)  -> NO access (via master checkbox unchecked)
+        // The master checkbox (`hasBrandPartnershipIQAccess` /
+        // `hasSFConversionAccess`) is retained as the backward-compat
+        // boolean; the payload sends both fields so a legacy reader
+        // still resolves the same access.
+
+        // --- Brand Partnership IQ ---
+        let _bpJourneySelected = new Set();
+        let _bpJourneyIsAll    = true;
+
+        async function loadBrandPartnershipJourneysForAdmin(force = false) {
+            if (window._bpAdminJourneys && !force) return window._bpAdminJourneys;
+            try {
+                const resp = await fetch('/api/brand-partnership-iq/list', { credentials: 'same-origin' });
+                const data = await resp.json();
+                window._bpAdminJourneys = (data.files || []);
+            } catch (e) {
+                window._bpAdminJourneys = [];
+            }
+            return window._bpAdminJourneys;
+        }
+
+        function syncBrandPartnershipJourneyAccessVisibility() {
+            const cb = document.getElementById('hasBrandPartnershipIQAccess');
+            const block = document.getElementById('bpJourneyAccessContent');
+            if (!cb || !block) return;
+            block.style.display = cb.checked ? 'block' : 'none';
+        }
+
+        function toggleAllBrandPartnershipJourneys() {
+            const allCb = document.getElementById('allBrandPartnershipJourneys');
+            if (!allCb) return;
+            _bpJourneyIsAll = !!allCb.checked;
+            if (_bpJourneyIsAll) {
+                _bpJourneySelected = new Set();
+            } else {
+                const items = window._bpAdminJourneys || [];
+                _bpJourneySelected = new Set(items.map(_bpJourneyIdOf).filter(Boolean));
+            }
+            _renderBrandPartnershipJourneysList();
+        }
+
+        function restoreBrandPartnershipJourneyDefaults() {
+            _bpJourneyIsAll = true;
+            _bpJourneySelected = new Set();
+            const allCb = document.getElementById('allBrandPartnershipJourneys');
+            if (allCb) allCb.checked = true;
+            _renderBrandPartnershipJourneysList();
+        }
+
+        function filterBrandPartnershipJourneysList() {
+            _renderBrandPartnershipJourneysList();
+        }
+
+        function _bpJourneyIdOf(item) {
+            // Journey id = bare filename without prefix and .json suffix.
+            // list_brand_partnership_iq returns `key` as full s3 key like
+            // 'brand-partnership-iq/<name>.json'.
+            const key = item.key || '';
+            const bare = key.replace(/^brand-partnership-iq\//, '');
+            return bare.replace(/\.json$/, '');
+        }
+
+        function _renderBrandPartnershipJourneysList() {
+            const container = document.getElementById('brandPartnershipJourneysCheckboxes');
+            const countEl   = document.getElementById('brandPartnershipJourneysCount');
+            if (!container) return;
+            const items = window._bpAdminJourneys || [];
+            if (items.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.75rem;margin:0;padding:0.5rem;">No Brand Partnership journeys found.</p>';
+                if (countEl) countEl.textContent = '';
+                return;
+            }
+            const search = ((document.getElementById('brandPartnershipJourneysSearchInput') || {}).value || '').trim().toLowerCase();
+            const filtered = !search ? items : items.filter(r => {
+                const hay = `${r.name || ''} ${r.category || ''} ${r.key || ''}`.toLowerCase();
+                return hay.includes(search);
+            });
+            const showDisabled = _bpJourneyIsAll;
+            container.innerHTML = filtered.map(r => {
+                const jid   = _bpJourneyIdOf(r);
+                const label = r.name || jid || '(unnamed)';
+                const sub   = r.category || '';
+                const checked = _bpJourneyIsAll || _bpJourneySelected.has(jid);
+                const safe  = jid.replace(/'/g, "\\'");
+                return `
+                    <label class="checkbox-group" style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;padding:0.25rem 0.4rem;border-bottom:1px solid var(--border-color);">
+                        <input type="checkbox" class="bp-journey-checkbox" value="${jid}" ${checked ? 'checked' : ''} ${showDisabled ? 'disabled' : ''} onchange="onBrandPartnershipJourneyCheckboxChange('${safe}', this.checked)">
+                        <span style="flex:1;min-width:0;">
+                            <span style="font-weight:600;">${label}</span>
+                            ${sub ? `<span style="color:var(--text-secondary);font-size:0.7rem;margin-left:0.4rem;">${sub}</span>` : ''}
+                        </span>
+                    </label>
+                `;
+            }).join('');
+            if (countEl) {
+                if (_bpJourneyIsAll) {
+                    countEl.textContent = `${items.length} journeys available. All granted (default).`;
+                } else {
+                    countEl.textContent = `${_bpJourneySelected.size} of ${items.length} journeys granted.`;
+                }
+            }
+        }
+
+        function onBrandPartnershipJourneyCheckboxChange(jid, checked) {
+            if (!jid) return;
+            if (checked) _bpJourneySelected.add(jid);
+            else         _bpJourneySelected.delete(jid);
+            const countEl = document.getElementById('brandPartnershipJourneysCount');
+            const total   = (window._bpAdminJourneys || []).length;
+            if (countEl) countEl.textContent = `${_bpJourneySelected.size} of ${total} journeys granted.`;
+        }
+
+        async function populateBrandPartnershipJourneysCheckboxes(allowed) {
+            // `allowed` = user.brand_partnership_iq_journeys:
+            //   '*' or ['*'] or null / missing -> ALL (default-open when
+            //     master checkbox is on; server derives has_X_access)
+            //   []                             -> explicit empty (no journeys)
+            //   ['jid', ...]                   -> explicit allow-list
+            await loadBrandPartnershipJourneysForAdmin();
+            const isAll = (allowed === '*')
+                || (Array.isArray(allowed) && allowed.some(v => String(v) === '*'))
+                || allowed === null
+                || allowed === undefined;
+            if (isAll) {
+                _bpJourneyIsAll = true;
+                _bpJourneySelected = new Set();
+            } else {
+                _bpJourneyIsAll = false;
+                _bpJourneySelected = new Set(Array.isArray(allowed) ? allowed.map(String) : []);
+            }
+            const allCb = document.getElementById('allBrandPartnershipJourneys');
+            if (allCb) allCb.checked = _bpJourneyIsAll;
+            _renderBrandPartnershipJourneysList();
+        }
+
+        function getBrandPartnershipJourneysAllowedPayload() {
+            // Master checkbox off  -> null (no access)
+            // ALL checked           -> '*'
+            // ALL unchecked         -> explicit list of jids (may be empty)
+            const master = document.getElementById('hasBrandPartnershipIQAccess');
+            if (!master || !master.checked) return null;
+            if (_bpJourneyIsAll) return '*';
+            return Array.from(_bpJourneySelected);
+        }
+
+        // --- SF Conversion ---
+        let _sfJourneySelected = new Set();
+        let _sfJourneyIsAll    = true;
+
+        async function loadSFConversionJourneysForAdmin(force = false) {
+            if (window._sfAdminJourneys && !force) return window._sfAdminJourneys;
+            try {
+                const resp = await fetch('/api/sf-lf-conversion/list', { credentials: 'same-origin' });
+                const data = await resp.json();
+                window._sfAdminJourneys = (data.results || []);
+            } catch (e) {
+                window._sfAdminJourneys = [];
+            }
+            return window._sfAdminJourneys;
+        }
+
+        function syncSFConversionJourneyAccessVisibility() {
+            const cb = document.getElementById('hasSFConversionAccess');
+            const block = document.getElementById('sfConversionJourneyAccessContent');
+            if (!cb || !block) return;
+            block.style.display = cb.checked ? 'block' : 'none';
+        }
+
+        function toggleAllSFConversionJourneys() {
+            const allCb = document.getElementById('allSFConversionJourneys');
+            if (!allCb) return;
+            _sfJourneyIsAll = !!allCb.checked;
+            if (_sfJourneyIsAll) {
+                _sfJourneySelected = new Set();
+            } else {
+                const items = window._sfAdminJourneys || [];
+                _sfJourneySelected = new Set(items.map(_sfJourneyIdOf).filter(Boolean));
+            }
+            _renderSFConversionJourneysList();
+        }
+
+        function restoreSFConversionJourneyDefaults() {
+            _sfJourneyIsAll = true;
+            _sfJourneySelected = new Set();
+            const allCb = document.getElementById('allSFConversionJourneys');
+            if (allCb) allCb.checked = true;
+            _renderSFConversionJourneysList();
+        }
+
+        function filterSFConversionJourneysList() {
+            _renderSFConversionJourneysList();
+        }
+
+        function _sfJourneyIdOf(item) {
+            // Journey id = s3_key with optional _purgatory_/ prefix stripped
+            // and .csv suffix removed.
+            const key = item.s3_key || '';
+            const bare = key.replace(/^_purgatory_\//, '');
+            return bare.replace(/\.csv$/, '');
+        }
+
+        function _renderSFConversionJourneysList() {
+            const container = document.getElementById('sfConversionJourneysCheckboxes');
+            const countEl   = document.getElementById('sfConversionJourneysCount');
+            if (!container) return;
+            const items = window._sfAdminJourneys || [];
+            if (items.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-secondary);font-size:0.75rem;margin:0;padding:0.5rem;">No SF Conversion journeys found.</p>';
+                if (countEl) countEl.textContent = '';
+                return;
+            }
+            const search = ((document.getElementById('sfConversionJourneysSearchInput') || {}).value || '').trim().toLowerCase();
+            const filtered = !search ? items : items.filter(r => {
+                const hay = `${r.name || ''} ${r.s3_key || ''}`.toLowerCase();
+                return hay.includes(search);
+            });
+            const showDisabled = _sfJourneyIsAll;
+            container.innerHTML = filtered.map(r => {
+                const jid   = _sfJourneyIdOf(r);
+                const label = r.name || jid || '(unnamed)';
+                const pending = (r.status === 'pending');
+                const checked = _sfJourneyIsAll || _sfJourneySelected.has(jid);
+                const safe  = jid.replace(/'/g, "\\'");
+                return `
+                    <label class="checkbox-group" style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;padding:0.25rem 0.4rem;border-bottom:1px solid var(--border-color);${pending ? 'opacity:0.7;' : ''}">
+                        <input type="checkbox" class="sf-journey-checkbox" value="${jid}" ${checked ? 'checked' : ''} ${showDisabled ? 'disabled' : ''} onchange="onSFConversionJourneyCheckboxChange('${safe}', this.checked)">
+                        <span style="flex:1;min-width:0;">
+                            <span style="font-weight:600;">${label}</span>
+                            ${pending ? '<span style="color:#fbbf24;font-size:0.65rem;margin-left:0.4rem;">(pending)</span>' : ''}
+                        </span>
+                    </label>
+                `;
+            }).join('');
+            if (countEl) {
+                if (_sfJourneyIsAll) {
+                    countEl.textContent = `${items.length} journeys available. All granted (default).`;
+                } else {
+                    countEl.textContent = `${_sfJourneySelected.size} of ${items.length} journeys granted.`;
+                }
+            }
+        }
+
+        function onSFConversionJourneyCheckboxChange(jid, checked) {
+            if (!jid) return;
+            if (checked) _sfJourneySelected.add(jid);
+            else         _sfJourneySelected.delete(jid);
+            const countEl = document.getElementById('sfConversionJourneysCount');
+            const total   = (window._sfAdminJourneys || []).length;
+            if (countEl) countEl.textContent = `${_sfJourneySelected.size} of ${total} journeys granted.`;
+        }
+
+        async function populateSFConversionJourneysCheckboxes(allowed) {
+            await loadSFConversionJourneysForAdmin();
+            const isAll = (allowed === '*')
+                || (Array.isArray(allowed) && allowed.some(v => String(v) === '*'))
+                || allowed === null
+                || allowed === undefined;
+            if (isAll) {
+                _sfJourneyIsAll = true;
+                _sfJourneySelected = new Set();
+            } else {
+                _sfJourneyIsAll = false;
+                _sfJourneySelected = new Set(Array.isArray(allowed) ? allowed.map(String) : []);
+            }
+            const allCb = document.getElementById('allSFConversionJourneys');
+            if (allCb) allCb.checked = _sfJourneyIsAll;
+            _renderSFConversionJourneysList();
+        }
+
+        function getSFConversionJourneysAllowedPayload() {
+            const master = document.getElementById('hasSFConversionAccess');
+            if (!master || !master.checked) return null;
+            if (_sfJourneyIsAll) return '*';
+            return Array.from(_sfJourneySelected);
+        }
+
+        // ──────────────────────────────────────────────────────────────────
         // Trends IQ - per-user LENS access (in user edit modal)
         // ──────────────────────────────────────────────────────────────────
         // Mirrors the Journey IQ / Attribution IQ patterns. When
@@ -13093,8 +13446,10 @@
                 has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
                 has_ecommerce_iq_access: document.getElementById('hasEcommerceIQAccess').checked,
                 has_sf_conversion_access: document.getElementById('hasSFConversionAccess').checked,
+                sf_conversion_journeys: getSFConversionJourneysAllowedPayload(),
                 has_flywheel_conversion_access: document.getElementById('hasFlywheelConversionAccess').checked,
                 has_brand_partnership_iq_access: !!(document.getElementById('hasBrandPartnershipIQAccess') && document.getElementById('hasBrandPartnershipIQAccess').checked),
+                brand_partnership_iq_journeys: getBrandPartnershipJourneysAllowedPayload(),
                 has_journey_iq_access: !!(document.getElementById('hasJourneyIQAccess') && document.getElementById('hasJourneyIQAccess').checked),
                 allowed_journey_iq_runs: getJourneyIqRunsAllowedPayload(),
                 has_intent_iq_access: !!(document.getElementById('hasIntentIQAccess') && document.getElementById('hasIntentIQAccess').checked),
