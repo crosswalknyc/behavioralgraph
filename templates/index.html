@@ -25550,7 +25550,7 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
             </div>
             <div class="tiq-meta">
-                <span id="trendsIQMeta">Loading trends...</span>
+                <span id="trendsIQMeta">Stand by ...</span>
                 <span class="tiq-meta-right">
                     <span id="trendsIQUpdatedAt"></span>
                     <button type="button" id="trendsIQExportAllBtn"
@@ -25573,7 +25573,7 @@ https://www.instagram.com/p/..."></textarea>
             </div>
             <div id="trendsIQLoading" class="tiq-loading-overlay" style="display: none;">
                 <div class="tiq-spinner"></div>
-                <div>Pulling trending searches, headlines, streaming, and gaming rankings...</div>
+                <div>Stand by ...</div>
             </div>
             <div id="trendsIQTabStrip" class="tiq-tabstrip" style="display: none;"></div>
             <div id="trendsIQPanels"></div>
@@ -52996,13 +52996,7 @@ https://www.instagram.com/p/..."></textarea>
             document.getElementById('trendsIQLoading').style.display = 'flex';
             document.getElementById('trendsIQTabStrip').style.display = 'none';
             document.getElementById('trendsIQPanels').innerHTML = '';
-            var _scopeLabel = (filters.geo_type === 'National' ? 'National' : filters.geo_value);
-            var _asOfLabel = filters.asof ? (' as of ' + filters.asof) : '';
-            document.getElementById('trendsIQMeta').textContent =
-                (forceRefresh ? 'Refreshing trends for ' : 'Fetching trends for ')
-                + _scopeLabel
-                + ' (last ' + filters.lookback_days + 'd'
-                + _asOfLabel + ')...';
+            document.getElementById('trendsIQMeta').textContent = 'Stand by ...';
             try {
                 if (window.__trendsIQ.inFlight) { try { window.__trendsIQ.inFlight.abort(); } catch (e) {} }
                 var ctrl = new AbortController();
