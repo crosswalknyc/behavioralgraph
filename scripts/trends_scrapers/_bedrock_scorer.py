@@ -35,9 +35,8 @@ Not wired into the daily scrape.
 Usage:
 
     # Score the four generational lenses via Anthropic direct,
-    # preserving the two lenses that were already fresh:
+    # preserving the lens that was already fresh:
     python3 -m scripts.trends_scrapers._bedrock_scorer \
-        --preserve ms_now_reader \
         --preserve unlikely_collaborators_follower \
         --score gen_z --score millennials \
         --score gen_x --score baby_boomers
@@ -214,13 +213,18 @@ def run(preserve: list[str], score: list[str], *,
     logger.info("collected %d items across all snapshots", len(items))
 
     # 2. Build the merged scoreboard skeleton, seeding from prior
-    #    scores for every lens in `preserve`.
+    #    scores for every lens in `preserve`.  Preserves also carry
+    #    forward `tilts` / `shares` (per-lens audience-rescaling
+    #    fields), so a preserved lens keeps its persona-scaled
+    #    numbers verbatim.
     combined: dict[str, dict] = {}
     for it in items:
         row: dict[str, Any] = {
             'kind':   it['kind'],
             'title':  it['title'],
             'scores': {},
+            'tilts':  {},
+            'shares': {},
             'why':    {},
         }
         if it.get('artist'):
@@ -228,10 +232,21 @@ def run(preserve: list[str], score: list[str], *,
         # Seed from prior for preserved lenses.
         prior_row = prior_items.get(it['key']) or {}
         prior_scores = prior_row.get('scores') or {}
-        prior_why = prior_row.get('why') or {}
+        prior_tilts  = prior_row.get('tilts')  or {}
+        prior_shares = prior_row.get('shares') or {}
+        prior_why    = prior_row.get('why')    or {}
         for pid in preserve:
             if pid in prior_scores:
                 row['scores'][pid] = int(prior_scores[pid])
+                if pid in prior_tilts:
+                    row['tilts'][pid] = float(prior_tilts[pid])
+                if pid in prior_shares:
+                    row['shares'][pid] = float(prior_shares[pid])
+                elif pid in prior_tilts:
+                    # Preserved data predates `shares` -> derive from
+                    # tilt so the frontend gets a persona-scaled number.
+                    row['shares'][pid] = round(
+                        lr._persona_share(pid, prior_tilts[pid]), 5)
                 if pid in prior_why:
                     row['why'][pid] = str(prior_why[pid])
         combined[it['key']] = row
@@ -270,15 +285,21 @@ def run(preserve: list[str], score: list[str], *,
             if not hit:
                 continue
             combined[it['key']]['scores'][lens_id] = int(hit['score'])
+            tilt = hit.get('tilt')
+            if tilt is not None:
+                combined[it['key']]['tilts'][lens_id]  = round(float(tilt), 3)
+                combined[it['key']]['shares'][lens_id] = round(
+                    lr._persona_share(lens_id, tilt), 5)
             if hit.get('why'):
                 combined[it['key']]['why'][lens_id] = str(hit['why'])
 
-    # 5. Drop rows with no scores across ANY lens, and drop empty why
-    #    sub-dicts.
+    # 5. Drop rows with no scores across ANY lens, and drop empty
+    #    tilts / shares / why sub-dicts (keeps the payload lean).
     final: dict[str, dict] = {}
     for k, row in combined.items():
-        if not row.get('why'):
-            row.pop('why', None)
+        for sub in ('tilts', 'shares', 'why'):
+            if not row.get(sub):
+                row.pop(sub, None)
         if row.get('scores'):
             final[k] = row
 

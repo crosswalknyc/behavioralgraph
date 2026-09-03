@@ -53119,15 +53119,60 @@ https://www.instagram.com/p/..."></textarea>
         // word 'estimated' / 'projected' / 'modeled' in the visible
         // chip. The number stands on its own as a first-party audience
         // metric. Tooltip carries the reasoning note.
+        // Persona-prefix noun swap for a lens-scoped audience chip.
+        // Turns "weekly US listeners" -> "weekly Gen Z listeners", etc.
+        // Uses the same noun list the payload emits ("readers", "viewers",
+        // "listeners", "players", "streams", "views", "ticket buyers",
+        // "individuals"). Falls back to prefixing the persona label when
+        // no known noun is found in the unit string.
+        //
+        // Copy rules (no-modeled-or-source-language, analysis-confidence-
+        // calibration): plain persona noun, no `est.` / `projected` /
+        // `panel-projected` prefix. Tier 1 count carried through from the
+        // scorer's persona-share math.
+        var _TIQ_LENS_LABEL = {
+            gen_z:                            'Gen Z',
+            millennials:                      'Millennial',
+            gen_x:                            'Gen X',
+            baby_boomers:                     'Boomer',
+            unlikely_collaborators_follower:  'Unlikely Collaborators'
+        };
+        function _tiqLensAudienceUnit(unitShort, lensId) {
+            var label = _TIQ_LENS_LABEL[lensId] || '';
+            if (!label) return unitShort;
+            // Replace "weekly US NOUN" / "US NOUN" / "daily US NOUN" with
+            // "weekly LABEL NOUN". Preserves the daily/weekly qualifier
+            // when present.
+            var re = /\b(weekly|daily|monthly)?\s*US\s+(.+)$/i;
+            var m = unitShort.match(re);
+            if (m) {
+                var cadence = m[1] ? (m[1] + ' ') : '';
+                return cadence + label + ' ' + m[2];
+            }
+            // No "US" anchor found - just prefix.
+            return label + ' ' + unitShort;
+        }
+
         function _tiqAudienceChip(us) {
             if (!us || !us.us_estimate || us.us_estimate <= 0) return '';
-            var num  = _tiqCompactNum(us.us_estimate);
+            // Per-lens rescaling (2026-09-03). When a lens is active AND
+            // the row carries a persona-scaled value in
+            // `us_estimate_by_lens[lensId]`, show THAT number and swap the
+            // noun to the persona ("Gen Z readers" not "US readers").
+            // No lens or no per-lens value -> global audience, unchanged.
+            var lensId = (window.__trendsIQ && window.__trendsIQ.activeLens) || '';
+            var byLens = us.us_estimate_by_lens || null;
+            var lensV  = (lensId && byLens && (byLens[lensId] || 0) > 0)
+                          ? Number(byLens[lensId]) : 0;
+            var val    = lensV || us.us_estimate;
+            var num  = _tiqCompactNum(val);
             var unit = us.unit_label || 'weekly US views';
             // The pill shows a concise unit; a long trailing parenthetical
             // (e.g. trending-people "weekly US individuals (searched, read
             // news, watched, ...)") is dropped from the visible chip so it
             // stays compact, but kept in full in the hover tooltip below.
             var unitShort = unit.replace(/\s*\([^)]*\)\s*$/, '');
+            if (lensV) unitShort = _tiqLensAudienceUnit(unitShort, lensId);
             var arrow = '';
             var deltaTip = '';
             // Rank-based deltas (Streaming / FAST film-tv / Books /
@@ -53169,14 +53214,164 @@ https://www.instagram.com/p/..."></textarea>
                             glyph + ' ' + pct + '%</span>';
                 }
             }
-            var tipParts = [num + ' ' + unit];
+            // When lensed, prefer the lens-scoped count in the tooltip's
+            // primary line so hovering reads "1.8M weekly Gen Z readers"
+            // rather than the global. Method / delta stay unchanged.
+            var tipParts = [num + ' ' + (lensV ? unitShort : unit)];
             if (deltaTip) tipParts.push(deltaTip);
             if (us.method)     tipParts.push(String(us.method));
             if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
             var tip = _tiqEsc(tipParts.join(' \u2014 '));
-            return '<span class="tiq-audience-chip" title="' + tip + '">' +
+            // Stash the minimum blob the applier needs to rewrite this
+            // chip when the user toggles the lens dropdown. Keeps the
+            // repaint client-side (no server round-trip).
+            var stash = {
+                g: us.us_estimate,
+                bl: byLens || null,
+                u: unit,
+                dk: us.delta_kind || null,
+                dp: (typeof us.delta_positions === 'number') ? us.delta_positions : null,
+                dc: (typeof us.delta_pct === 'number') ? us.delta_pct : null,
+                dr: us.direction || null,
+                pr: us.prev_rank || null,
+                m:  us.method || null,
+                a:  us.as_of_date || null
+            };
+            var stashJson = JSON.stringify(stash).replace(/"/g, '&quot;');
+            return '<span class="tiq-audience-chip" title="' + tip + '"' +
+                   ' data-audience-value="' + Number(val) + '"' +
+                   ' data-audience-us="' + stashJson + '">' +
                    '\uD83D\uDC65 ' + _tiqEsc(num) + ' ' + _tiqEsc(unitShort) +
                    arrow + '</span>';
+        }
+
+        // Rewrite every rendered audience chip's inner number / unit /
+        // arrow / tooltip to reflect the currently-active lens. Called on
+        // every lens dropdown change AND after every payload paint (in
+        // case the payload arrives with a lens already active from the
+        // previous session). Uses the `data-audience-us` blob stashed by
+        // _tiqAudienceChip so no per-tab re-render is needed.
+        function _tiqLensRewriteAudienceChips(root) {
+            root = root || document.getElementById('trendsIQPanels');
+            if (!root) return;
+            var chips = root.querySelectorAll('.tiq-audience-chip[data-audience-us]');
+            for (var i = 0; i < chips.length; i++) {
+                var chip = chips[i];
+                var raw = chip.getAttribute('data-audience-us');
+                if (!raw) continue;
+                var us;
+                try { us = JSON.parse(raw.replace(/&quot;/g, '"')); }
+                catch (e) { continue; }
+                if (!us) continue;
+                // Rehydrate an `us` shape _tiqAudienceChip can consume.
+                var rehydrated = {
+                    us_estimate:          us.g,
+                    us_estimate_by_lens:  us.bl,
+                    unit_label:           us.u,
+                    delta_kind:           us.dk,
+                    delta_positions:      us.dp,
+                    delta_pct:            us.dc,
+                    direction:            us.dr,
+                    prev_rank:            us.pr,
+                    method:               us.m,
+                    as_of_date:           us.a
+                };
+                var fresh = _tiqAudienceChip(rehydrated);
+                if (fresh) {
+                    // Replace in place (outer element) so any parent-level
+                    // event bindings survive.
+                    chip.outerHTML = fresh;
+                }
+            }
+        }
+
+        // Re-sort every ranked panel by the currently-active lens's
+        // audience value (or global when no lens). Reads
+        // `data-audience-value` off each row's inner audience chip.
+        // Rows with no chip / no value sink to the tail (preserves
+        // their relative payload order).
+        //
+        // A "ranked panel" here is any node with `data-tiq-panel` set
+        // AND its rows are either `.tiq-row` OR `.tiq-sheet-row tbody
+        // <tr>`. The two shapes have different sort containers - the
+        // helper detects and handles both.
+        function _tiqLensResortPanelsByAudience(root) {
+            root = root || document.getElementById('trendsIQPanels');
+            if (!root) return;
+            function valueOf(rowEl) {
+                var chip = rowEl.querySelector('.tiq-audience-chip[data-audience-value]');
+                if (!chip) return -1;
+                var v = Number(chip.getAttribute('data-audience-value'));
+                return isFinite(v) ? v : -1;
+            }
+            var panels = root.querySelectorAll('.tiq-panel[data-tiq-panel]');
+            for (var pi = 0; pi < panels.length; pi++) {
+                var panel = panels[pi];
+                // Sheet-row containers first (Rankers product tabs).
+                var tbodies = panel.querySelectorAll('.tiq-sheet tbody');
+                for (var ti = 0; ti < tbodies.length; ti++) {
+                    var tbody = tbodies[ti];
+                    var rows = Array.prototype.slice.call(
+                        tbody.querySelectorAll(':scope > tr.tiq-sheet-row'));
+                    if (rows.length < 2) continue;
+                    // Stable sort: attach original index, sort by (value
+                    // desc, index asc). Rows with -1 keep their order at
+                    // the tail.
+                    var enriched = rows.map(function(r, idx) {
+                        return { row: r, val: valueOf(r), idx: idx };
+                    });
+                    enriched.sort(function(a, b) {
+                        if (b.val !== a.val) return b.val - a.val;
+                        return a.idx - b.idx;
+                    });
+                    // Only reinsert if the order actually changed.
+                    var changed = false;
+                    for (var j = 0; j < enriched.length; j++) {
+                        if (enriched[j].idx !== j) { changed = true; break; }
+                    }
+                    if (changed) {
+                        var frag = document.createDocumentFragment();
+                        for (var k = 0; k < enriched.length; k++) {
+                            frag.appendChild(enriched[k].row);
+                        }
+                        tbody.appendChild(frag);
+                    }
+                }
+                // .tiq-row containers - look for a direct parent .tiq-panel-body
+                // OR the panel itself. Group siblings by parent so nested
+                // groups (e.g. movers.breakout / .rising) stay separate.
+                var rowNodes = panel.querySelectorAll('.tiq-row[data-tiq-panel-row], .tiq-row');
+                var byParent = new Map();
+                for (var r = 0; r < rowNodes.length; r++) {
+                    // Skip rows inside a `.tiq-sheet` (already handled above).
+                    if (rowNodes[r].closest('.tiq-sheet')) continue;
+                    var parent = rowNodes[r].parentElement;
+                    if (!parent) continue;
+                    if (!byParent.has(parent)) byParent.set(parent, []);
+                    byParent.get(parent).push(rowNodes[r]);
+                }
+                byParent.forEach(function(rows, parent) {
+                    if (rows.length < 2) return;
+                    var enriched2 = rows.map(function(r, idx) {
+                        return { row: r, val: valueOf(r), idx: idx };
+                    });
+                    enriched2.sort(function(a, b) {
+                        if (b.val !== a.val) return b.val - a.val;
+                        return a.idx - b.idx;
+                    });
+                    var changed2 = false;
+                    for (var m = 0; m < enriched2.length; m++) {
+                        if (enriched2[m].idx !== m) { changed2 = true; break; }
+                    }
+                    if (changed2) {
+                        var frag2 = document.createDocumentFragment();
+                        for (var n = 0; n < enriched2.length; n++) {
+                            frag2.appendChild(enriched2[n].row);
+                        }
+                        parent.appendChild(frag2);
+                    }
+                });
+            }
         }
 
         // Client-side numeric sort for a FAST sheet (Views / delta). Cycles
@@ -53568,7 +53763,7 @@ https://www.instagram.com/p/..."></textarea>
 
         // Store the lens_scores map on window.__trendsIQ.  Payload format:
         //   { "<kind>:<normalized title>": { "kind": "...", "title": "...",
-        //                                     "scores": { "ms_now_reader": 82,
+        //                                     "scores": { "gen_z": 82,
         //                                                 "millennials": 45 } } }
         // We collapse into a title-only lookup for client-side filtering
         // (row DOM only surfaces title text, not kind).  Duplicate titles
@@ -53618,10 +53813,10 @@ https://www.instagram.com/p/..."></textarea>
         // Store per-(lens, kind) cutoff table so the filter uses the
         // top-50% of each kind for the active persona instead of a
         // global score threshold.  Shape:
-        //   window.__trendsIQ.lensCutoffs = { ms_now_reader: { song: 45,
-        //                                                     podcast: 78,
-        //                                                     ... },
-        //                                    millennials:   {...} }
+        //   window.__trendsIQ.lensCutoffs = { gen_z:       { song: 45,
+        //                                                    podcast: 78,
+        //                                                    ... },
+        //                                    millennials:  {...} }
         function _tiqStoreLensCutoffs(cutoffs) {
             window.__trendsIQ.lensCutoffs = cutoffs || {};
         }
@@ -53846,6 +54041,12 @@ https://www.instagram.com/p/..."></textarea>
             }
 
             _tiqLensUpdateMetaBanner(sel, lensId);
+            // Per-lens audience rescaling (2026-09-03). Swap every
+            // audience chip's number + unit to the lens-scoped value
+            // when active, then re-sort visible rows so a Gen Z view
+            // puts Gen-Z-dominant items on top.
+            try { _tiqLensRewriteAudienceChips(panels); } catch (e) {}
+            try { _tiqLensResortPanelsByAudience(panels); } catch (e) {}
         };
 
         function _tiqLensUpdateMetaBanner(sel, lensId) {
@@ -54227,13 +54428,14 @@ https://www.instagram.com/p/..."></textarea>
         // string (e.g. "weekly US views", "weekly US plays", "weekly US
         // readers", "US library holds", "weekly US listeners").
         function _tiqExportAudience(it) {
-            if (!it || typeof it !== 'object') return { value: '', unit: '' };
+            if (!it || typeof it !== 'object') return { value: '', unit: '', by_lens: null };
             var s = it.us_streams;
             if (s && typeof s === 'object' &&
                 typeof s.us_estimate === 'number' && s.us_estimate > 0) {
                 return {
                     value: s.us_estimate,
-                    unit:  s.unit_label || 'weekly US views'
+                    unit:  s.unit_label || 'weekly US views',
+                    by_lens: s.us_estimate_by_lens || null
                 };
             }
             var r = it.us_readers;
@@ -54241,13 +54443,42 @@ https://www.instagram.com/p/..."></textarea>
                 typeof r.us_estimate === 'number' && r.us_estimate > 0) {
                 return {
                     value: r.us_estimate,
-                    unit:  r.unit_label || 'weekly US readers'
+                    unit:  r.unit_label || 'weekly US readers',
+                    by_lens: r.us_estimate_by_lens || null
                 };
             }
             if (typeof it.holds === 'number' && it.holds > 0) {
-                return { value: it.holds, unit: 'US library holds' };
+                return { value: it.holds, unit: 'US library holds', by_lens: null };
             }
-            return { value: '', unit: '' };
+            return { value: '', unit: '', by_lens: null };
+        }
+
+        // Companion to _tiqFilterRowsByLens: when a lens is active, swap
+        // every export row's `US Audience` value to that lens's persona-
+        // scaled count. Column name stays 'US Audience' (the filename
+        // slug already carries the lens tag via _tiqLensFilenameSlug).
+        // Also swaps the `Audience Unit` to the persona-noun form so a
+        // downstream analyst reading the CSV sees "weekly Gen Z readers"
+        // instead of "weekly US readers". Rows with no by-lens value or
+        // no active lens pass through unchanged.
+        function _tiqRescaleRowsByLens(rows) {
+            var lensId = (window.__trendsIQ && window.__trendsIQ.activeLens) || '';
+            if (!lensId || !rows || !rows.length) return rows || [];
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                if (!row) continue;
+                var m = row._auByLens;
+                if (!m) continue;
+                var v = Number(m[lensId]);
+                if (!(v > 0)) continue;
+                row['US Audience'] = v;
+                var u = String(row['Audience Unit'] || '').trim();
+                if (u) {
+                    // Reuse the chip renderer's unit swap.
+                    row['Audience Unit'] = _tiqLensAudienceUnit(u, lensId);
+                }
+            }
+            return rows;
         }
 
         // Fold a mover row's rank_change into a single Change string.
@@ -54294,6 +54525,7 @@ https://www.instagram.com/p/..."></textarea>
                         Subtitle: r.rank_prev ? ('was #' + r.rank_prev) : '',
                         Change: _tiqMoverChange(r),
                         'US Audience': aud.value,
+                        '_auByLens':   aud.by_lens,
                         'Audience Unit': aud.unit,
                         Why: r.why || ((r.related || [])[0] || ''),
                         URL: ''
@@ -54314,6 +54546,7 @@ https://www.instagram.com/p/..."></textarea>
                     Subtitle: r.seendate || '',
                     Change: '',
                     'US Audience': aud.value,
+                    '_auByLens':   aud.by_lens,
                     'Audience Unit': aud.unit,
                     Why: '', URL: r.url || ''
                 });
@@ -54328,6 +54561,7 @@ https://www.instagram.com/p/..."></textarea>
                         Subtitle: a.seendate || '',
                         Change: '',
                         'US Audience': aud.value,
+                        '_auByLens':   aud.by_lens,
                         'Audience Unit': aud.unit,
                         Why: '', URL: a.url || ''
                     });
@@ -54342,6 +54576,7 @@ https://www.instagram.com/p/..."></textarea>
                     Subtitle: r.published || '',
                     Change: '',
                     'US Audience': aud.value,
+                    '_auByLens':   aud.by_lens,
                     'Audience Unit': aud.unit,
                     Why: '', URL: r.url || ''
                 });
@@ -54355,6 +54590,7 @@ https://www.instagram.com/p/..."></textarea>
                     Subtitle: r.published || r.seendate || '',
                     Change: '',
                     'US Audience': aud.value,
+                    '_auByLens':   aud.by_lens,
                     'Audience Unit': aud.unit,
                     Why: '', URL: r.url || ''
                 });
@@ -54368,6 +54604,7 @@ https://www.instagram.com/p/..."></textarea>
                     Subtitle: r.published || r.seendate || '',
                     Change: '',
                     'US Audience': aud.value,
+                    '_auByLens':   aud.by_lens,
                     'Audience Unit': aud.unit,
                     Why: '', URL: r.url || ''
                 });
@@ -54390,6 +54627,7 @@ https://www.instagram.com/p/..."></textarea>
                                     ? (r.volume_growth_pct > 0 ? '+' : '') + Math.round(r.volume_growth_pct) + '%'
                                     : '',
                         'US Audience': aud.value,
+                        '_auByLens':   aud.by_lens,
                         'Audience Unit': aud.unit,
                         Why: r.why || '',
                         URL: ''
@@ -54415,6 +54653,7 @@ https://www.instagram.com/p/..."></textarea>
                     Subtitle: r.description || '',
                     Change: _tiqDirectionLabel(r),
                     'US Audience': aud.value,
+                    '_auByLens':   aud.by_lens,
                     'Audience Unit': aud.unit,
                     Why: r.why || '',
                     URL: r.url || ''
@@ -54429,6 +54668,7 @@ https://www.instagram.com/p/..."></textarea>
                     Subtitle: p.description || '',
                     Change: _tiqDirectionLabel(p),
                     'US Audience': aud.value,
+                    '_auByLens':   aud.by_lens,
                     'Audience Unit': aud.unit,
                     Why: p.why || '',
                     URL: p.url || ''
@@ -54481,6 +54721,7 @@ https://www.instagram.com/p/..."></textarea>
                         Subtitle: it.theatre || it.subtitle || '',
                         Change: change,
                         'US Audience': aud.value,
+                        '_auByLens':   aud.by_lens,
                         'Audience Unit': aud.unit,
                         Why: why,
                         URL: it.url || ''
@@ -54513,6 +54754,7 @@ https://www.instagram.com/p/..."></textarea>
                                     ? ('week ' + it.weeks_in_top10)
                                     : se.change,
                         'US Audience': aud.value,
+                        '_auByLens':   aud.by_lens,
                         'Audience Unit': aud.unit,
                         Why: it.why || '',
                         URL: it.url || ''
@@ -54550,6 +54792,7 @@ https://www.instagram.com/p/..."></textarea>
                                         ? ('week ' + it.weeks_in_top10)
                                         : se.change,
                             'US Audience': aud.value,
+                            '_auByLens':   aud.by_lens,
                             'Audience Unit': aud.unit,
                             Why: it.why || '',
                             URL: it.url || ''
@@ -54571,6 +54814,7 @@ https://www.instagram.com/p/..."></textarea>
                         Subtitle: ch.content_type || '',
                         Change: se.change,
                         'US Audience': aud.value,
+                        '_auByLens':   aud.by_lens,
                         'Audience Unit': aud.unit,
                         Why: '',
                         URL: ch.url || ''
@@ -54616,6 +54860,7 @@ https://www.instagram.com/p/..."></textarea>
                         Subtitle: it.publisher || it.subtitle || '',
                         Change: se.change,
                         'US Audience': aud.value,
+                        '_auByLens':   aud.by_lens,
                         'Audience Unit': aud.unit,
                         Why: it.why || '',
                         URL: it.url || ''
@@ -54651,6 +54896,7 @@ https://www.instagram.com/p/..."></textarea>
                     Subtitle: w.geo || '',
                     Change: '',
                     'US Audience': aud.value,
+                    '_auByLens':   aud.by_lens,
                     'Audience Unit': aud.unit,
                     Why: '', URL: ''
                 });
@@ -54783,6 +55029,7 @@ https://www.instagram.com/p/..."></textarea>
             var rows = _tiqBuildRowsForTab(tabKey, data.cards);
             var lensId = (window.__trendsIQ && window.__trendsIQ.activeLens) || '';
             if (lensId) rows = _tiqFilterRowsByLens(rows, tabKey);
+            if (lensId) rows = _tiqRescaleRowsByLens(rows);
             if (!rows.length) {
                 alert(lensId
                     ? 'No rows on this tab match the active lens. Clear the lens or try a different tab.'
@@ -54812,6 +55059,7 @@ https://www.instagram.com/p/..."></textarea>
             order.forEach(function(k) {
                 var built = _tiqBuildRowsForTab(k, data.cards);
                 if (lensId) built = _tiqFilterRowsByLens(built, k);
+                if (lensId) built = _tiqRescaleRowsByLens(built);
                 all = all.concat(built);
             });
             if (!all.length) {

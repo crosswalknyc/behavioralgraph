@@ -2364,10 +2364,6 @@
                         </div>
                         <div id="hiddenLensesGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.5rem;">
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" class="hidden-lens-checkbox" data-lens="ms_now_reader" onchange="updateHiddenLens('ms_now_reader', this.checked)">
-                                <span>📺 MS NOW Reader</span>
-                            </label>
-                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="hidden-lens-checkbox" data-lens="unlikely_collaborators_follower" onchange="updateHiddenLens('unlikely_collaborators_follower', this.checked)">
                                 <span>🧭 Unlikely Collaborators Follower</span>
                             </label>
@@ -4277,10 +4273,6 @@
                             <span style="font-weight: 600;">Grant access to all lenses (current and future)</span>
                         </label>
                         <div id="allowedLensesList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.4rem; margin-top: 0.5rem;">
-                            <label class="checkbox-group allowed-lens-row" style="padding: 0.5rem 0.6rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" class="allowed-lens-checkbox" data-lens="ms_now_reader">
-                                <span>📺 MS NOW Reader</span>
-                            </label>
                             <label class="checkbox-group allowed-lens-row" style="padding: 0.5rem 0.6rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="allowed-lens-checkbox" data-lens="unlikely_collaborators_follower">
                                 <span>🧭 Unlikely Collaborators Follower</span>
@@ -7832,7 +7824,6 @@
         // lock-step with DEFAULT_HIDDEN_LENSES in app.py and the six
         // canonical lens ids under scripts/trends_scrapers/lens_personas/.
         let hiddenLensesData = {
-            ms_now_reader:                    true,
             unlikely_collaborators_follower:  true,
             gen_z:                            false,
             millennials:                      false,

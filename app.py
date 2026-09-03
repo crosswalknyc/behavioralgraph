@@ -20861,7 +20861,6 @@ DEFAULT_LIVE_FEATURES = {
 # the persona docs under scripts/trends_scrapers/lens_personas/ AND the
 # hidden-lens grid in templates/admin.html.
 TRENDS_IQ_LENS_IDS = (
-    'ms_now_reader',
     'unlikely_collaborators_follower',
     'gen_z',
     'millennials',
@@ -20872,11 +20871,11 @@ TRENDS_IQ_LENS_IDS = (
 # Default global-hide state per lens (True = hidden from every non-super
 # admin unless the user has the lens id in their `allowed_lenses` list
 # or `allowed_lenses` is ['*']). Super admins always see all lenses.
-# Per Jenna 2026-09-02: MS NOW Reader and Unlikely Collaborators Follower
-# are hidden by default; the four generational lenses are visible by
-# default. Admins can flip either direction from Live Features.
+# Per Jenna 2026-09-02: Unlikely Collaborators Follower is hidden by
+# default; the four generational lenses are visible by default. Admins
+# can flip either direction from Live Features. (MS NOW Reader retired
+# 2026-09-03.)
 DEFAULT_HIDDEN_LENSES = {
-    'ms_now_reader':                    True,
     'unlikely_collaborators_follower':  True,
     'gen_z':                            False,
     'millennials':                      False,

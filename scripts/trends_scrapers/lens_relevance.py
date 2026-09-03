@@ -10,11 +10,8 @@ The dashboard user picks a lens from a dropdown and the frontend
 instantly filters every card to just the rows the persona would
 actually be interested in.
 
-Six lenses ship today:
+Five lenses ship today (MS NOW Reader retired 2026-09-03):
 
-  - ms_now_reader             : the MS NOW (formerly MSNBC) reader.
-                                College-educated, urban / inner-suburban,
-                                Democratic-leaning, skews 55+.
   - unlikely_collaborators_follower : the wellness / consciousness /
                                 Elizabeth Gilbert follower cohort.
                                 JSON-authored.
@@ -41,20 +38,22 @@ Output shape (kind='meta'):
       "fetched_at": "...",
       "generated_at": "...",
       "lenses": [
-        {"id": "ms_now_reader",
-         "label": "MS NOW Reader",
-         "emoji": "\U0001F4FA",
-         "description": "..."},
         {"id": "millennials",
          "label": "Millennials (Ages 27-42)",
          "emoji": "\u2615",
+         "description": "..."},
+        {"id": "gen_z",
+         "label": "Gen Z (Ages 18-28)",
+         "emoji": "\U0001F310",
          "description": "..."}
       ],
       "items": {
         "podcast:pod save america": {
           "kind":  "podcast",
           "title": "Pod Save America",
-          "scores": {"ms_now_reader": 92, "millennials": 68}
+          "scores": {"millennials": 68, "gen_x": 55, "baby_boomers": 62},
+          "tilts":  {"millennials": 1.4, "gen_x": 1.2, "baby_boomers": 1.6},
+          "shares": {"millennials": 0.302, "gen_x": 0.235, "baby_boomers": 0.338}
         },
         ...
       },
@@ -98,6 +97,65 @@ _TIMEOUT_S    = int(os.environ.get('LENS_RELEVANCE_TIMEOUT_S')   or '120')
 
 
 # ---------------------------------------------------------------------------
+# Per-lens US adult-population baseline share (approximate).
+# Sum of the four generational shares is ~0.768 of adults 18-79; the
+# remainder is teens (<18) + very-elderly (80+), out of scope for the
+# audience-rescaling math. The Unlikely Collaborators Follower share is
+# the profile's own reach fraction (Elizabeth Gilbert follower cohort).
+#
+# Used by the frontend chip renderer to swap `us_estimate` -> a persona-
+# scaled `us_estimate_by_lens[lens_id]`:
+#
+#     share  = clamp(_PERSONA_POP_SHARE[lens] * tilt, 0.001, 0.90)
+#     lens_v = round(us_estimate * share) then messy-jittered
+#
+# where `tilt` is the per-item multiplier Claude returns alongside
+# `score` in the batch prompt.  A tilt of 1.0 means "this persona
+# consumes this item at their baseline population share"; > 1 means
+# over-index, < 1 means under-index.
+# ---------------------------------------------------------------------------
+_PERSONA_POP_SHARE: dict[str, float] = {
+    'gen_z':                            0.145,   # 18-28
+    'millennials':                      0.216,   # 29-44
+    'gen_x':                            0.196,   # 45-60
+    'baby_boomers':                     0.211,   # 61-79
+    'unlikely_collaborators_follower':  0.041,   # cohort reach, per profile
+}
+
+
+_TILT_MIN = 0.10
+_TILT_MAX = 4.0
+_SHARE_MIN = 0.001
+_SHARE_MAX = 0.90
+
+
+def _clamp(v: float, lo: float, hi: float) -> float:
+    if v < lo:
+        return lo
+    if v > hi:
+        return hi
+    return v
+
+
+def _persona_share(lens_id: str, tilt: float) -> float:
+    """Compute the persona's share-of-item audience given the model's
+    per-item tilt.  Result is clamped to [_SHARE_MIN, _SHARE_MAX] so
+    no downstream math produces a nonsense value.  Falls back to the
+    lens's baseline share when the tilt is missing or out of range."""
+    base = _PERSONA_POP_SHARE.get(lens_id)
+    if base is None:
+        return 0.0
+    try:
+        t = float(tilt)
+    except (TypeError, ValueError):
+        t = 1.0
+    if not (t > 0):
+        t = 1.0
+    t = _clamp(t, _TILT_MIN, _TILT_MAX)
+    return _clamp(base * t, _SHARE_MIN, _SHARE_MAX)
+
+
+# ---------------------------------------------------------------------------
 # Text normalization - mirrors stream_estimates + trends_iq so a
 # `podcast:crime junkie` key here matches the same key the dashboard
 # builds when it renders a Crime Junkie row.
@@ -131,146 +189,6 @@ def _key(kind: str, title: str, artist: str = '') -> str:
 # for any of the ~500 items the dashboard surfaces.
 # ---------------------------------------------------------------------------
 _LENSES: list[dict[str, Any]] = [
-    {
-        'id':          'ms_now_reader',
-        'label':       'MS NOW Reader',
-        'emoji':       '\U0001F4FA',                       # 📺
-        'description': ('Politics-forward center-left audience; core '
-                         'MS NOW (formerly MSNBC) viewer.'),
-        # Persona text is written kind-by-kind so Claude has a clear
-        # per-surface rubric.  Every kind that shows up on the
-        # dashboard (headlines / podcasts / songs / books / films /
-        # search / social / person) has at least one HIGH, MID, and
-        # LOW named example so Claude never has to guess "what would
-        # this cohort listen to?" or "what film would they watch?".
-        'persona': (
-            "MS NOW (formerly MSNBC) reader / viewer.\n"
-            "DEMOGRAPHIC: US adults skewing 55+, college-educated, "
-            "urban / inner-suburban, ~85% Democratic-leaning, ~65% "
-            "female, higher-income (median ~$85K HHI), heavy news "
-            "consumers, NPR / PBS pledgers, Sunday NYT subscribers.\n"
-            "\n"
-            "IDENTITY: they view themselves as informed, empathetic, "
-            "and defenders of institutions.  Consumption is oriented "
-            "around news, ideas, and culturally-serious "
-            "entertainment.  They still watch cable + linear TV.\n"
-            "\n"
-            "===================================================\n"
-            "SCORING BY KIND (use the full 0-100 range)\n"
-            "===================================================\n"
-            "\n"
-            "HEADLINES\n"
-            "  HIGH (85-100): Trump-administration accountability, "
-            "DOJ/FBI, Congressional hearings, Supreme Court "
-            "decisions, foreign policy (Ukraine, Israel/Gaza, "
-            "China), climate policy, voting rights, DEI-erasure, "
-            "reproductive rights, Democratic strategy, big-tech "
-            "antitrust, philanthropy accountability.\n"
-            "  MID (50-70): business coverage IF politically-charged "
-            "(Musk, Zuckerberg, banking crisis, OPEC), health-policy "
-            "stories, culturally-political entertainment coverage.\n"
-            "  LOW (5-25): pure market moves, individual company "
-            "earnings without political angle, celebrity gossip, "
-            "sports scores, tech product reviews without policy hook.\n"
-            "\n"
-            "PODCASTS\n"
-            "  HIGH (85-100): The Rachel Maddow Show, Pod Save "
-            "America, The Bulwark Daily, The Ezra Klein Show, The "
-            "Daily (NYT), Up First (NPR), Deadline White House, "
-            "Amicus (Slate), Prosecuting Donald Trump, The New "
-            "Yorker Radio Hour, Fresh Air, The Weekly Show with Jon "
-            "Stewart, Democracy Now.\n"
-            "  MID (45-65): Radiolab, This American Life, Serial, "
-            "Reveal, 60 Minutes, prestige-narrative shows.\n"
-            "  LOW (5-20): Joe Rogan, Ben Shapiro, Tucker Carlson, "
-            "Charlie Kirk, Matt Walsh, Candace Owens, Fearless with "
-            "Jason Whitlock, most sports-talk (Bill Simmons, Pat "
-            "McAfee), most true-crime, most gaming / anime "
-            "podcasts.\n"
-            "\n"
-            "SONGS - MS NOW readers DO listen to music, so DO NOT "
-            "cap songs artificially low.  Their consumption skews "
-            "singer-songwriter / classic-rock canon / Americana / "
-            "'NPR Tiny Desk' territory.\n"
-            "  HIGH (75-95): Joni Mitchell, James Taylor, Carole "
-            "King, Paul Simon, Fleetwood Mac, Bruce Springsteen, "
-            "Bonnie Raitt, Bob Dylan, Van Morrison, Neil Young, "
-            "Norah Jones, Brandi Carlile, Alison Krauss, Chris "
-            "Stapleton, Adele, John Prine, Emmylou Harris, Bon Iver, "
-            "Sufjan Stevens, Sara Bareilles.\n"
-            "  MID (45-65): mainstream rock canon (Journey, Tears "
-            "for Fears, U2, Elton John, Billy Joel), Adele, "
-            "Kacey Musgraves.\n"
-            "  LOW (5-25): current pop/hip-hop chart hits (Post "
-            "Malone, Doja Cat, Bad Bunny), K-pop, viral TikTok "
-            "sounds, EDM/DJ mixes, Morgan Wallen (a bit lower - "
-            "some MS NOW readers do NOT like his politics), Latin-"
-            "language reggaeton, most Spanish-language chart music.\n"
-            "\n"
-            "BOOKS\n"
-            "  HIGH (85-100): Trump-era accountability journalism "
-            "(Maggie Haberman, Bob Woodward, Michael Wolff, "
-            "Ronan Farrow), Patrick Radden Keefe, prestige "
-            "literary fiction (Ann Patchett, Elizabeth Strout, "
-            "George Saunders, Colson Whitehead), New Yorker / "
-            "Atlantic / NYRB compendiums, biographies of "
-            "presidents / justices / activists, climate books.\n"
-            "  MID (45-65): general literary fiction, memoirs, "
-            "prestige nonfiction.\n"
-            "  LOW (5-20): BookTok romantasy (Sarah J. Maas, "
-            "Rebecca Yarros, Colleen Hoover), YA fantasy, cozy "
-            "mysteries, sports biographies, self-help / "
-            "productivity, evangelical / conservative-imprint "
-            "(Regnery, Dinesh D'Souza), niche fandom / gaming "
-            "novelizations.\n"
-            "\n"
-            "FILMS / TV\n"
-            "  HIGH (80-95): prestige drama (Succession, The "
-            "Diplomat, Slow Horses, The Morning Show, The Crown), "
-            "docs and biopics of political / artistic figures, "
-            "Oscar-bait indie, historical drama, PBS Frontline / "
-            "Ken Burns, Handmaid's Tale, All The Light We Cannot "
-            "See, Oppenheimer.\n"
-            "  MID (45-65): high-quality genre with cultural weight "
-            "(The Last of Us, Yellowjackets, House of Cards, mid "
-            "Christopher Nolan).\n"
-            "  LOW (5-25): superhero tentpoles, YA fantasy "
-            "adaptations, reality dating (Love Island / The "
-            "Bachelor / 90 Day Fiancé), horror franchises, "
-            "kids/family animation, most action franchises.\n"
-            "\n"
-            "SEARCHES\n"
-            "  HIGH (75-95): politicians (AOC, Bernie, Kamala, "
-            "Trump), justice/legal terms (indictment, subpoena, "
-            "opinion, precedent), foreign-policy hotspots, climate "
-            "events (heatwave, flood, wildfire, IPCC), Supreme "
-            "Court cases, election terms.\n"
-            "  MID (40-65): business-adjacent politics (Musk, "
-            "Zuckerberg), health-policy terms.\n"
-            "  LOW (5-25): pop-culture beefs, sports box scores, "
-            "streamer names, meme stocks, celebrity-couple gossip, "
-            "Spanish-language sports queries, WWE / UFC results, "
-            "K-pop groups.\n"
-            "\n"
-            "PEOPLE (trending)\n"
-            "  HIGH (80-95): Democratic politicians, progressive "
-            "activists, prestige journalists, SCOTUS justices, "
-            "senior admin officials, foreign leaders in the news, "
-            "Nobel laureates.\n"
-            "  MID (40-65): major cultural figures with political "
-            "weight (Bruce Springsteen, Meryl Streep, Bill Gates).\n"
-            "  LOW (5-25): TikTok influencers, sports stars, "
-            "reality-TV cast, K-pop idols, gaming streamers.\n"
-            "\n"
-            "SOCIAL (Reddit / TikTok / YouTube posts)\n"
-            "  HIGH (70-90): posts about politics, breaking news, "
-            "SCOTUS, elections, climate.\n"
-            "  MID (40-60): general 'interesting news' posts, "
-            "clever observational humor.\n"
-            "  LOW (5-25): fandom posts, gaming clips, K-pop, "
-            "fitness / diet / hustle content, MLM content."
-        ),
-    },
     # NOTE: the inline `millennials` block was retired 2026-09-02.
     # The full generational stack (gen_z / millennials / gen_x /
     # baby_boomers) is now authored in data/personas/*.json alongside
@@ -478,7 +396,7 @@ def _bullet_lines(prefix: str, items: list) -> list[str]:
 def _compose_persona_prompt(doc: dict) -> str:
     """Turn a JSON persona doc into the persona-prompt string Claude
     reads at scoring time.  Mirrors the shape of the inline
-    ms_now_reader / millennials prompts so the batch prompt template
+    (retired inline) millennials prompt so the batch prompt template
     stays consistent.  Every section that appears in the JSON gets a
     labeled block; missing keys are simply omitted."""
     demo   = doc.get('demographics')       or {}
@@ -592,9 +510,9 @@ _LENSES = [l for l in _LENSES if not str(l.get('id', '')).startswith('_retired_'
 
 # Append JSON-authored personas to the inline set.  Order matters
 # only for the LENS dropdown ordering on the frontend (which mirrors
-# the order lens_config lands in the payload).  Current order:
-# ms_now_reader, unlikely_collaborators_follower, gen_z, millennials,
-# gen_x, baby_boomers.
+# the order lens_config lands in the payload).  Current order (post
+# 2026-09-03 ms_now_reader retirement): unlikely_collaborators_follower,
+# gen_z, millennials, gen_x, baby_boomers.
 _LENSES.extend(_load_json_lenses())
 
 
@@ -607,30 +525,6 @@ _LENSES.extend(_load_json_lenses())
 # appears in the batch.
 # ---------------------------------------------------------------------------
 _ANCHORS: dict[str, list[dict[str, Any]]] = {
-    'ms_now_reader': [
-        {'kind': 'podcast',  'title': 'The Rachel Maddow Show',       'score': 98},
-        {'kind': 'podcast',  'title': 'Pod Save America',              'score': 92},
-        {'kind': 'headline', 'title': 'Trump DOJ moves to dismiss ...','score': 88},
-        {'kind': 'book',     'title': 'Regime Change (Haberman)',      'score': 95},
-        {'kind': 'song',     'title': 'The River (Bruce Springsteen)', 'score': 82},
-        {'kind': 'song',     'title': 'Landslide (Fleetwood Mac)',     'score': 78},
-        {'kind': 'song',     'title': 'Not Like Us (Kendrick Lamar)',  'score': 22},
-        {'kind': 'film',     'title': 'Oppenheimer',                   'score': 82},
-        {'kind': 'film',     'title': 'Fast & Furious 12',             'score': 12},
-        {'kind': 'search',   'title': 'kamala harris',                 'score': 92},
-        {'kind': 'search',   'title': 'aces vs liberty',               'score': 12},
-        {'kind': 'podcast',  'title': 'The Tucker Carlson Show',       'score': 5},
-        # Gaming anchors. This cohort barely engages with gaming as
-        # a category. Even the most demographically neutral titles
-        # (Flight Simulator, Age of Empires) rarely break 20 for a
-        # 55+ college-educated news-first audience. Youth-coded
-        # multiplayer + VR bottoms out near 5.
-        {'kind': 'game',     'title': 'Microsoft Flight Simulator',    'score': 18},
-        {'kind': 'game',     'title': 'Age of Empires IV',             'score': 14},
-        {'kind': 'game',     'title': 'Fortnite',                      'score': 6},
-        {'kind': 'game',     'title': 'Roblox',                        'score': 4},
-        {'kind': 'game',     'title': 'Gorilla Tag',                   'score': 4},
-    ],
     'millennials': [
         {'kind': 'podcast',  'title': 'SmartLess',                     'score': 95},
         {'kind': 'podcast',  'title': 'My Favorite Murder',            'score': 90},
@@ -1179,13 +1073,27 @@ def _batch_prompt(lens: dict, batch: list[dict]) -> str:
                 if a['kind'] in kinds_in_batch
                 or a['kind'] in ('podcast', 'song', 'book')]  # always keep music/podcast/book anchors as scale-anchors
 
+    pop_share = _PERSONA_POP_SHARE.get(lens['id'], 0.0)
+    pop_share_pct = round(pop_share * 100, 1)
     lines = [
         "You are an audience-strategist scoring items for a specific "
-        "persona.  For each item, output an integer 0-100 that answers: "
-        "'How likely is this exact persona to click on, stream, read, "
-        "watch, or otherwise engage with THIS specific item this week?'",
+        "persona.  For each item, output TWO numbers:",
+        "  1. `score` (0-100): how likely this exact persona is to click "
+        "on, stream, read, watch, or otherwise engage with THIS specific "
+        "item this week.  Use the FULL 0-100 range.",
+        "  2. `tilt` (0.10-4.0): how much this persona over- or under-"
+        "indexes on this item vs their share of US adults.  1.0 means "
+        "'this persona consumes this item at their baseline population "
+        "share'.  >1 means over-index (they punch above their weight - "
+        "e.g. Gen Z on Roblox is ~3.5), <1 means under-index (they "
+        "punch below - e.g. Boomers on Roblox is ~0.15).  This drives "
+        "the persona-scaled audience count downstream.",
         "",
-        "USE THE FULL 0-100 RANGE.  Do NOT compress everything into "
+        f"This persona is roughly {pop_share_pct}% of US adults 18-79 "
+        f"(baseline share).  A `tilt` of 2.0 means the persona is ~2x "
+        f"more concentrated in this item's audience than that baseline.",
+        "",
+        "USE THE FULL 0-100 SCORE RANGE.  Do NOT compress everything into "
         "the 30-55 band.  Items that are core-audience content for "
         "this persona SHOULD score 85-100.  Items the persona would "
         "actively avoid SHOULD score 5-20.  Items that are plausible "
@@ -1198,6 +1106,20 @@ def _batch_prompt(lens: dict, batch: list[dict]) -> str:
         "adjacent, or anti-aligned within that kind?  A generic search "
         "term with no context should score 40-55 (unknown intent), NOT "
         "the middle of the persona's average.",
+        "",
+        "Tilt calibration (independent of score - a broadly-consumed "
+        "item can be a 60 score for this persona AND still have tilt "
+        "1.0 if their engagement matches their population share):",
+        "  ~3.0-4.0  persona dominates this item (Gen Z on Chappell Roan, "
+        "Boomers on Viking River Cruise, Gen X on classic-rock)",
+        "  ~1.5-2.5  persona over-indexes clearly (Millennials on "
+        "SmartLess, Gen X on Slow Horses)",
+        "  ~0.8-1.3  broad audience, matches baseline (mainstream news "
+        "story, top-40 pop hit for a mid-age cohort)",
+        "  ~0.3-0.6  persona under-indexes (Gen Z on Medicare terms, "
+        "Boomers on BookTok romantasy)",
+        "  ~0.10-0.25 persona rarely touches this item (Boomers on "
+        "Gorilla Tag VR, Gen Z on Downton Abbey)",
         "",
         "=========================================================",
         "PERSONA: " + lens['label'],
@@ -1220,7 +1142,7 @@ def _batch_prompt(lens: dict, batch: list[dict]) -> str:
         "=========================================================",
         "Return a single JSON array with one object per input item, IN "
         "THE SAME ORDER.  Each object:",
-        '  { "id": <int>, "score": <int 0-100>, "why": "<8-14 word rationale specific to THIS item and THIS persona>" }',
+        '  { "id": <int>, "score": <int 0-100>, "tilt": <float 0.10-4.0>, "why": "<8-14 word rationale specific to THIS item and THIS persona>" }',
         "Return ONLY the JSON array, no prose before or after.",
         "",
         "=========================================================",
@@ -1272,7 +1194,24 @@ def _parse_batch(text: str, batch_len: int) -> list[Optional[dict]]:
             score = 0
         score = max(0, min(100, score))
         why = (row.get('why') or '').strip()[:200]
-        by_id[rid] = {'score': score, 'why': why}
+        # `tilt` is optional (older prompts didn't request it).  Missing
+        # tilt -> derive one from score so the downstream share math
+        # still lands somewhere reasonable: score 85+ -> 2.0, 60-84 ->
+        # 1.4, 40-59 -> 1.0, 20-39 -> 0.6, <20 -> 0.3.  Deterministic,
+        # never surprises the operator.
+        tilt_raw = row.get('tilt')
+        try:
+            tilt = float(tilt_raw)
+        except (TypeError, ValueError):
+            tilt = None
+        if tilt is None or not (tilt > 0):
+            if   score >= 85: tilt = 2.0
+            elif score >= 60: tilt = 1.4
+            elif score >= 40: tilt = 1.0
+            elif score >= 20: tilt = 0.6
+            else:             tilt = 0.3
+        tilt = max(_TILT_MIN, min(_TILT_MAX, tilt))
+        by_id[rid] = {'score': score, 'tilt': tilt, 'why': why}
     out: list[Optional[dict]] = []
     for i in range(batch_len):
         out.append(by_id.get(i))
@@ -1377,6 +1316,8 @@ def fetch(only_lens: Optional[str] = None, dry_run: bool = False) -> dict[str, A
             'kind':   it['kind'],
             'title':  it['title'],
             'scores': {},
+            'tilts':  {},   # {lens_id: 0.10-4.0}, tilt vs baseline pop share
+            'shares': {},   # {lens_id: 0.001-0.90}, share-of-item audience
             'why':    {},   # {lens_id: "8-14 word rationale"}
         }
         if it.get('artist'):
@@ -1385,11 +1326,17 @@ def fetch(only_lens: Optional[str] = None, dry_run: bool = False) -> dict[str, A
             hit = lens_out.get(it['key'])
             if hit:
                 row['scores'][lens_id] = hit['score']
+                tilt = hit.get('tilt')
+                if tilt is not None:
+                    row['tilts'][lens_id] = round(float(tilt), 3)
+                    row['shares'][lens_id] = round(
+                        _persona_share(lens_id, tilt), 5)
                 if hit.get('why'):
                     row['why'][lens_id] = hit['why']
-        # Drop the `why` sub-dict if nothing landed (keeps payload lean).
-        if not row['why']:
-            row.pop('why', None)
+        # Drop empty sub-dicts to keep the payload lean.
+        for k in ('why', 'tilts', 'shares'):
+            if not row.get(k):
+                row.pop(k, None)
         if row['scores']:
             combined[it['key']] = row
 

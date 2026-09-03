@@ -7391,6 +7391,198 @@ def get_filter_options() -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Per-lens audience rescaling (2026-09-03, Jenna directive)
+# ---------------------------------------------------------------------------
+# The lens dropdown was a visibility filter: rows off-persona dropped
+# out but the surviving rows still displayed the GLOBAL US-audience
+# number. Jenna's directive: the number itself has to change with the
+# persona. A book with 5.2M weekly readers should show ~1.8M under Gen
+# Z and ~0.6M under Boomers.
+#
+# Implementation (option 2 in the ticket): the scorer already emits a
+# per-item `shares` dict (persona's share of the item's US audience).
+# We stamp `us_estimate_by_lens = {lens_id: rescaled_count}` on every
+# row's `us_streams` / `us_readers` block so the frontend can swap the
+# chip number based on `window.__trendsIQ.activeLens` without a server
+# round-trip. Deterministic messy-integer jitter enforces the
+# no-round-numbers rule (never a trailing zero).
+
+import hashlib as _hashlib  # noqa: E402
+
+
+def _lens_audience_messy(subject: str, kpi: str, base: int) -> int:
+    """Deterministic messy-count jitter for a persona-scaled audience.
+    Never returns a value ending in 0. Idempotent for a given (subject,
+    kpi, base) triple. Per `no-round-numbers-in-deliverables.mdc`."""
+    if base is None:
+        return 0
+    try:
+        v = int(round(float(base)))
+    except (TypeError, ValueError):
+        return 0
+    if v <= 0:
+        return 0
+    if v % 10 != 0 and v not in (100, 1000, 10000, 100000, 1000000):
+        return v
+    seed = f"{subject}|{kpi}|{v}".encode('utf-8')
+    h = _hashlib.md5(seed).hexdigest()
+    span = max(9, int(abs(v) * 0.008))
+    off  = (int(h[:8], 16) % (2 * span + 1)) - span
+    out  = v + off
+    # last-digit floor: keep nudging until we exit the trailing-zero
+    # basin. Bounded loop, deterministic hash keeps it short.
+    guard = 0
+    while out % 10 == 0 and guard < 16:
+        out += 1 + (int(h[(8 + guard) % 32:(10 + guard) % 32] or '01', 16) % 9)
+        guard += 1
+    if out <= 0:
+        out = 1 + (int(h[:2], 16) % 9)
+    return int(out)
+
+
+def _build_title_shares_index(
+    lens_scores_map: dict,
+) -> dict:
+    """Fold the scorer's `<kind>:<norm(title)>` keyed dict into a
+    `norm(title) -> {shares, kind}` index the annotator can look up
+    by row title alone. Mirrors the frontend's `_tiqStoreLensScores`
+    collapse: on duplicate titles across kinds, the entry with the
+    highest max score wins (most-permissive, matches the frontend's
+    lens filter behavior)."""
+    by_title: dict[str, dict] = {}
+    for key, entry in (lens_scores_map or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        shares = entry.get('shares') or {}
+        if not shares:
+            continue
+        title = (entry.get('title') or '').strip()
+        if not title:
+            # Fallback: extract from the key.
+            if ':' in key:
+                title = key.split(':', 1)[1]
+        norm = _cp_normalize(title)
+        if not norm:
+            continue
+        scores = entry.get('scores') or {}
+        max_in = max((int(v) for v in scores.values() if isinstance(v, (int, float))),
+                     default=0)
+        cur = by_title.get(norm)
+        if cur is not None:
+            max_cur = max((int(v) for v in (cur.get('scores') or {}).values()
+                             if isinstance(v, (int, float))),
+                          default=0)
+            if max_in <= max_cur:
+                continue
+        by_title[norm] = {
+            'shares': {k: float(v) for k, v in shares.items()},
+            'kind':   entry.get('kind') or '',
+            'scores': scores,
+        }
+    return by_title
+
+
+_LENS_AUDIENCE_STAMPED_MARK = '__lens_audience_stamped__'
+
+
+def _stamp_audience_block(us_block: dict, title: str,
+                           shares_by_lens: dict) -> None:
+    """Stamp `us_estimate_by_lens` on a single `us_streams` /
+    `us_readers` block. No-op if the block has no estimate or no
+    shares came through for it. Messy-integer jitter per lens keeps
+    every scaled count off the trailing-zero basin.
+
+    `shares_by_lens` is `{lens_id: share_float}` for this row."""
+    if not isinstance(us_block, dict):
+        return
+    try:
+        base = int(round(float(us_block.get('us_estimate') or 0)))
+    except (TypeError, ValueError):
+        base = 0
+    if base <= 0 or not shares_by_lens:
+        return
+    out = {}
+    for lens_id, share in shares_by_lens.items():
+        try:
+            s = float(share)
+        except (TypeError, ValueError):
+            continue
+        if not (s > 0):
+            continue
+        scaled = _lens_audience_messy(
+            subject=title, kpi=f'lens_audience.{lens_id}',
+            base=int(round(base * s)))
+        if scaled > 0:
+            out[lens_id] = scaled
+    if out:
+        us_block['us_estimate_by_lens'] = out
+
+
+def _walk_and_stamp_lens_audiences(node, title_shares_index: dict,
+                                    depth: int = 0) -> None:
+    """Recursively walk the cards payload; stamp `us_estimate_by_lens`
+    on every `us_streams` / `us_readers` block whose row title matches
+    the shares index. Bounded depth so a pathological payload can't
+    blow the stack.
+
+    A row is any dict that carries at least one identity field
+    (`title`, `name`, `term`, `topic`) AND a `us_streams` or
+    `us_readers` sub-dict. That covers every ranked surface without
+    needing a per-kind branch."""
+    if depth > 10 or node is None:
+        return
+    if isinstance(node, list):
+        for it in node:
+            _walk_and_stamp_lens_audiences(it, title_shares_index, depth + 1)
+        return
+    if not isinstance(node, dict):
+        return
+    # Row-shape detection: does this dict itself carry a title + an
+    # audience block? If so, stamp it in place. Otherwise recurse.
+    us_streams = node.get('us_streams')
+    us_readers = node.get('us_readers')
+    if isinstance(us_streams, dict) or isinstance(us_readers, dict):
+        title = (node.get('title') or node.get('name')
+                 or node.get('term') or node.get('topic') or '')
+        norm = _cp_normalize(title) if title else ''
+        if norm:
+            hit = title_shares_index.get(norm)
+            if hit:
+                shares = hit.get('shares') or {}
+                if isinstance(us_streams, dict) and _LENS_AUDIENCE_STAMPED_MARK not in us_streams:
+                    _stamp_audience_block(us_streams, title, shares)
+                    us_streams[_LENS_AUDIENCE_STAMPED_MARK] = True
+                if isinstance(us_readers, dict) and _LENS_AUDIENCE_STAMPED_MARK not in us_readers:
+                    _stamp_audience_block(us_readers, title, shares)
+                    us_readers[_LENS_AUDIENCE_STAMPED_MARK] = True
+    # Recurse into every value so nested lists / dicts get covered.
+    for v in node.values():
+        if isinstance(v, (list, dict)):
+            _walk_and_stamp_lens_audiences(v, title_shares_index, depth + 1)
+
+
+def _clean_lens_audience_marks(node, depth: int = 0) -> None:
+    """Strip the internal `__lens_audience_stamped__` marker from every
+    `us_streams` / `us_readers` block before the payload ships. Keeps
+    the wire format lean."""
+    if depth > 10 or node is None:
+        return
+    if isinstance(node, list):
+        for it in node:
+            _clean_lens_audience_marks(it, depth + 1)
+        return
+    if not isinstance(node, dict):
+        return
+    for k in ('us_streams', 'us_readers'):
+        blk = node.get(k)
+        if isinstance(blk, dict):
+            blk.pop(_LENS_AUDIENCE_STAMPED_MARK, None)
+    for v in node.values():
+        if isinstance(v, (list, dict)):
+            _clean_lens_audience_marks(v, depth + 1)
+
+
 def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     """Build the full Trends payload for the requested filters.
 
@@ -8049,6 +8241,21 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             fused, stream_estimates_snap)
     except Exception as e:
         logger.warning("fused-trending audience annotate failed: %s", e)
+
+    # Per-lens audience rescaling (2026-09-03). Fold `shares` per
+    # (item, lens) from `lens_scores.json` into every row's
+    # `us_streams` / `us_readers` block as `us_estimate_by_lens`
+    # so the frontend chip renderer can swap in the persona-scaled
+    # count when a lens is active. Best-effort: any failure logs
+    # + moves on with the global-only audience payload.
+    try:
+        _title_shares = _build_title_shares_index(lens_scores_map)
+        if _title_shares:
+            _walk_and_stamp_lens_audiences(payload.get('cards') or {},
+                                            _title_shares)
+        _clean_lens_audience_marks(payload.get('cards') or {})
+    except Exception as e:
+        logger.warning("lens-audience stamp failed: %s", e)
 
     _cache_put(filters, payload)
     _write_history_snapshots(headlines, trending_people)
