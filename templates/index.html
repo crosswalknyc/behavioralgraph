@@ -69683,6 +69683,36 @@ https://www.instagram.com/p/..."></textarea>
 
         // Push an agent question with its clickable options attached.
         function _synthChatPushQuestion(text, step, draft) {
+            // 2026-09-02 (Jenna): the Cut Strategist "Optional: tell me
+            // what this is for (a pitch, media planning, content
+            // strategy, competitive research...)" prompt is suppressed
+            // on the frontend. The backend may still emit step='goal';
+            // we auto-answer 'skip' silently so the user never sees it
+            // and the flow keeps moving. The matching backend cleanup
+            // bundles into a later interpret pass on app.py.
+            if (String(step || '').toLowerCase() === 'goal') {
+                try {
+                    if (synthChatBatchClarify &&
+                        synthChatBatchClarify.phase === 'goal') {
+                        _synthChatBatchClarifyAnswer('skip');
+                        return;
+                    }
+                    if (synthChatClarify) {
+                        var _st = synthChatClarify;
+                        if (_st.steps) {
+                            var _gi = _st.steps.indexOf('goal');
+                            if (_gi < 0) {
+                                _st.steps.splice(_st.idx + 1, 0, 'goal');
+                                _gi = _st.idx + 1;
+                            }
+                            _st.idx = _gi;
+                        }
+                        _synthChatClarifyAnswer('skip');
+                        return;
+                    }
+                } catch (_) {}
+                return;
+            }
             var opts = null;
             try { opts = _synthChatClarifyOptions(step, draft); } catch (_) {}
             if (opts && opts.length) {
@@ -70088,34 +70118,15 @@ https://www.instagram.com/p/..."></textarea>
         }
 
 
-        // Batch scoping (2026-08-20 Jenna: batches "should be asking
-        // me my use case (or I can skip) and suggesting cuts"). One
-        // goal question for the whole batch; the strategist runs on
-        // the first fresh draft; picked cuts clone to every draft at
-        // 3 credits per cut per profile.
+        // Batch scoping (2026-08-20 Jenna): originally asked
+        // "Optional: tell me what these are for..." for the whole
+        // batch, then ran the strategist. 2026-09-02 (Jenna): the
+        // strategist prompt is suppressed on the frontend, so this
+        // scoping step is a no-op. The backend batch clarify handler
+        // stays intact for the later app.py cleanup pass; wiring it
+        // back on requires only restoring this function body.
         function _synthChatMaybeStartBatchScoping() {
-            var drafts = synthChatBatchDrafts || [];
-            if (!drafts.length) return;
-            var fresh = drafts.filter(function(d) {
-                var dec = String((d && d.decision) || 'new_build').toLowerCase();
-                return dec === 'new_build' || dec === 'time_shifted_refresh' ||
-                       dec === 'cut_needs_parent';
-            });
-            if (!fresh.length) return;
-            synthChatBatchClarify = {
-                phase: 'goal',
-                draft0: JSON.parse(JSON.stringify(fresh[0])),
-                bases: drafts.map(function(d) {
-                    return (d && typeof d.estimated_credits === 'number')
-                        ? d.estimated_credits : 5;
-                })
-            };
-            _synthChatPushQuestion(
-                'Optional: tell me what these are for (a pitch, media ' +
-                'planning, content strategy...) and I will recommend ' +
-                'the right cuts for all ' + drafts.length + '. One ' +
-                'line is plenty, or say skip.',
-                'goal', null);
+            return;
         }
 
         async function _synthChatBatchClarifyAnswer(answerText) {
