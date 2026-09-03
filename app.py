@@ -56478,6 +56478,12 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     except Exception:
         traceback.print_exc()
     verdict, verify_revised = None, False
+    # 2026-09-03 (Jenna, no-rebuild-level-correction.mdc): silent
+    # verify auto-correct. Set True below when a second corrective
+    # pass turns a would-be HELD read into a shippable one; drives
+    # stages['verify_outcome'] = 4 and _pm_ask_hint outcome='corrected'
+    # at the ship point.
+    _pm_auto_corrected = False
     if pmv is not None:
         try:
             _v_lookup = pmv.load_base_lookup(
@@ -56526,18 +56532,90 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
         except Exception:
             traceback.print_exc()
         if not revised_ok:
+            # Auto-correct pass (2026-09-03, Jenna standing rule from
+            # no-rebuild-level-correction.mdc: "an agent should fix
+            # everything and never need rebuild"). The self-revision
+            # above failed. Give the model ONE more attempt with the
+            # strongest corrective framing available: the verify
+            # findings already name the measured figure the reply got
+            # wrong ("The reply cites Netflix at 71.3% but the base
+            # file measures 99.4578%. Use the measured figure or drop
+            # the claim."). Feed those findings back with explicit
+            # instruction to obey and re-verify. Cap: ONE retry per
+            # read, never a loop. If this attempt raises, log
+            # server-side and fall through to the HELD path with the
+            # original findings only. The retry call routes through
+            # _pm_claude_json so per-user attribution + cost
+            # accounting flow unchanged.
+            _retry_findings = []
+            try:
+                _findings_now = (verdict or {}).get('findings') or []
+                corrective_block = (
+                    'AUTO-CORRECT PASS - USE MEASURED FIGURES ONLY\n'
+                    '=============================================\n'
+                    'Your prior reply had these verify findings:\n'
+                    + '\n'.join(f'- {f}'
+                                 for f in _findings_now[:8])
+                    + '\n\nRewrite the reply using the MEASURED '
+                    'figures from the base file above. If a '
+                    "claim's measured value contradicts your prior "
+                    'claim, either use the measured value or drop '
+                    'the claim entirely. Do not introduce any new '
+                    'claims that were not in the prior reply. '
+                    'Keep every claim that was already correct.'
+                )
+                rev_prompt2 = user_prompt + '\n\n' + corrective_block
+                result3 = _pm_claude_json(
+                    pma.REASONED_METRICS_SYSTEM_PROMPT, rev_prompt2,
+                    max_tokens=11000, temperature=0.1,
+                    usage_extras=pm_ppu, tools=[pma.WEB_SEARCH_TOOL])
+                if result3.get('success'):
+                    data3 = result3.get('data') or {}
+                    if isinstance(data3, list):
+                        data3 = next((d for d in data3
+                                      if isinstance(d, dict)), {})
+                    if str(data3.get('action') or '').strip().lower() \
+                            != 'decline':
+                        res3 = pma.enforce_metrics_coherence(data3)
+                        reply3 = pma.format_generated_metrics_reply(
+                            res3)
+                        fam3 = ('strategy' if is_strategy
+                                else res3.get('metric_family'))
+                        verdict3 = pmv.verify_read(
+                            reply=reply3, res=res3, family=fam3,
+                            base_lookup=_v_lookup,
+                            prior_entries=_pm_verify_prior_entries(
+                                res3, fam3, led))
+                        if verdict3.get('ok'):
+                            data, res, reply = data3, res3, reply3
+                            fam0, verdict = fam3, verdict3
+                            verify_revised = True
+                            revised_ok = _pm_auto_corrected = True
+                        else:
+                            _retry_findings = (
+                                verdict3.get('findings') or [])
+            except Exception:
+                traceback.print_exc()
+        if not revised_ok:
             stages['verify'] = int(
                 (time.monotonic() - _t_verify) * 1000)
             stages['verify_outcome'] = 2   # held
             _findings = (verdict or {}).get('findings') or []
+            _findings_text = (
+                ' | '.join(str(f) for f in _findings)
+                or 'no findings recorded')
+            if _retry_findings:
+                _findings_text += (
+                    ' || auto-correct retry findings: '
+                    + ' | '.join(str(f) for f in _retry_findings))
             _chatbot_error_email(
                 'brief-chat/verify',
                 'generated read HELD after failed verification '
                 '(not banked, not delivered): '
-                + (' | '.join(str(f) for f in _findings)[:1200]
-                   or 'no findings recorded'),
+                + _findings_text[:1600],
                 user_email=pm_user,
-                payload={'question': text[:300],
+                payload={'prompt': text[:300],
+                         'question': text[:300],
                          'subject': res.get('subject'),
                          'base': base.get('s3_key')})
             _pm_ask_hint(outcome='held')
@@ -56551,9 +56629,13 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
                 '_stages_ms': stages}
     stages['verify'] = int((time.monotonic() - _t_verify) * 1000)
     # 0 = clean pass, 1 = passed after one revision, 2 = held (above),
-    # 3 = pass unavailable (verification infrastructure trouble).
+    # 3 = pass unavailable (verification infrastructure trouble),
+    # 4 = auto-corrected then shipped (2026-09-03, silent in-place
+    #     correction per no-rebuild-level-correction.mdc).
     stages['verify_outcome'] = (3 if verdict is None
                                 else (1 if verify_revised else 0))
+    if _pm_auto_corrected:
+        stages['verify_outcome'] = 4
     _verify_stamp = None
     if pmv is not None and verdict is not None:
         try:
@@ -56607,7 +56689,9 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     stages['persist'] = int((time.monotonic() - _t_stage) * 1000)
     _pm_remember_ask(pm_user, text, subject=res.get('subject'),
                      cohort=res.get('cohort'), route='generated')
-    _pm_ask_hint(outcome='answered', subject=res.get('subject'))
+    _pm_ask_hint(
+        outcome=('corrected' if _pm_auto_corrected else 'answered'),
+        subject=res.get('subject'))
     if pm_user and pm_ppu is None:
         _pm_charge_async(
             pm_user,
