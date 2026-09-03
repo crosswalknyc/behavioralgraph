@@ -4166,19 +4166,63 @@
                          has_microdramas_iq_access flags all default False in
                          app.py, so nothing is granted implicitly. -->
                     <div class="dashboard-access-item" data-access-group="trends">
-                        <div class="dashboard-access-header" style="cursor: default;">
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="hasTrendsIQAccess">
+                        <div class="dashboard-access-header" onclick="toggleDashboardSection('trendsIQTabs')">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="hasTrendsIQAccess" onchange="syncTrendsTabAccessVisibility(); if (typeof syncTrendsGroupMaster === 'function') syncTrendsGroupMaster();">
                                 <span style="font-weight: 600;">📈 Trends</span>
                             </label>
+                            <span class="collapse-icon rotated" id="trendsIQTabsIcon">▼</span>
+                        </div>
+                        <div id="trendsIQTabsSection" class="dashboard-access-content" style="display: none;">
+                            <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
+                                <h4 style="margin: 0 0 0.4rem 0; text-align: left; font-size: 0.85rem;">Tab Access</h4>
+                                <p style="color: var(--text-secondary); font-size: 0.75rem; margin: 0 0 0.6rem 0; text-align: left;">
+                                    Which Trends tabs this user can open. Unchecked tabs are hidden from the strip and stripped from the API. Default is all tabs.
+                                </p>
+                                <label class="checkbox-group" style="justify-content: flex-start; margin-bottom: 0.5rem;">
+                                    <input type="checkbox" id="allowAllTrendsTabs" onchange="onAllowAllTrendsTabsChanged()">
+                                    <span style="font-weight: 600;">All Trends tabs (current and future)</span>
+                                </label>
+                                <div id="allowedTrendsTabsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.35rem;">
+                                    <label class="checkbox-group allowed-trends-tab-row" style="padding: 0.45rem 0.55rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);"><input type="checkbox" class="allowed-trends-tab-checkbox" data-tab="searches"><span>🔎 Trending</span></label>
+                                    <label class="checkbox-group allowed-trends-tab-row" style="padding: 0.45rem 0.55rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);"><input type="checkbox" class="allowed-trends-tab-checkbox" data-tab="movers"><span>🚀 Movers</span></label>
+                                    <label class="checkbox-group allowed-trends-tab-row" style="padding: 0.45rem 0.55rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);"><input type="checkbox" class="allowed-trends-tab-checkbox" data-tab="headlines"><span>📰 Headlines</span></label>
+                                    <label class="checkbox-group allowed-trends-tab-row" style="padding: 0.45rem 0.55rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);"><input type="checkbox" class="allowed-trends-tab-checkbox" data-tab="people"><span>👤 Trending people</span></label>
+                                    <label class="checkbox-group allowed-trends-tab-row" style="padding: 0.45rem 0.55rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);"><input type="checkbox" class="allowed-trends-tab-checkbox" data-tab="books"><span>📚 Books</span></label>
+                                    <label class="checkbox-group allowed-trends-tab-row" style="padding: 0.45rem 0.55rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);"><input type="checkbox" class="allowed-trends-tab-checkbox" data-tab="comics"><span>📖 Comics</span></label>
+                                    <label class="checkbox-group allowed-trends-tab-row" style="padding: 0.45rem 0.55rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);"><input type="checkbox" class="allowed-trends-tab-checkbox" data-tab="broadway"><span>🎭 Broadway</span></label>
+                                    <label class="checkbox-group allowed-trends-tab-row" style="padding: 0.45rem 0.55rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);"><input type="checkbox" class="allowed-trends-tab-checkbox" data-tab="films"><span>🎬 Films</span></label>
+                                    <label class="checkbox-group allowed-trends-tab-row" style="padding: 0.45rem 0.55rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);"><input type="checkbox" class="allowed-trends-tab-checkbox" data-tab="watchlist"><span>★ Watchlist</span></label>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="dashboard-access-item" data-access-group="trends">
-                        <div class="dashboard-access-header" style="cursor: default;">
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="hasRankersIQAccess">
+                        <div class="dashboard-access-header" onclick="toggleDashboardSection('rankersIQTabs')">
+                            <label class="checkbox-group" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="hasRankersIQAccess" onchange="syncRankersTabAccessVisibility(); if (typeof syncTrendsGroupMaster === 'function') syncTrendsGroupMaster();">
                                 <span style="font-weight: 600;">📊 Rankers</span>
                             </label>
+                            <span class="collapse-icon rotated" id="rankersIQTabsIcon">▼</span>
+                        </div>
+                        <div id="rankersIQTabsSection" class="dashboard-access-content" style="display: none;">
+                            <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
+                                <h4 style="margin: 0 0 0.4rem 0; text-align: left; font-size: 0.85rem;">Tab Access</h4>
+                                <p style="color: var(--text-secondary); font-size: 0.75rem; margin: 0 0 0.6rem 0; text-align: left;">
+                                    Which Rankers tabs this user can open. Unchecked tabs are hidden from the strip and stripped from the API. Default is all tabs.
+                                </p>
+                                <label class="checkbox-group" style="justify-content: flex-start; margin-bottom: 0.5rem;">
+                                    <input type="checkbox" id="allowAllRankersTabs" onchange="onAllowAllRankersTabsChanged()">
+                                    <span style="font-weight: 600;">All Rankers tabs (current and future)</span>
+                                </label>
+                                <div id="allowedRankersTabsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.35rem;">
+                                    <label class="checkbox-group allowed-rankers-tab-row" style="padding: 0.45rem 0.55rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);"><input type="checkbox" class="allowed-rankers-tab-checkbox" data-tab="fast"><span>📡 FAST</span></label>
+                                    <label class="checkbox-group allowed-rankers-tab-row" style="padding: 0.45rem 0.55rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);"><input type="checkbox" class="allowed-rankers-tab-checkbox" data-tab="music"><span>🎵 Music</span></label>
+                                    <label class="checkbox-group allowed-rankers-tab-row" style="padding: 0.45rem 0.55rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);"><input type="checkbox" class="allowed-rankers-tab-checkbox" data-tab="podcasts"><span>🎙️ Podcasts</span></label>
+                                    <label class="checkbox-group allowed-rankers-tab-row" style="padding: 0.45rem 0.55rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);"><input type="checkbox" class="allowed-rankers-tab-checkbox" data-tab="streaming"><span>📺 Streaming</span></label>
+                                    <label class="checkbox-group allowed-rankers-tab-row" style="padding: 0.45rem 0.55rem; background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-color);"><input type="checkbox" class="allowed-rankers-tab-checkbox" data-tab="gaming"><span>🎮 Gaming</span></label>
+                                </div>
+                            </div>
                         </div>
                         <!-- Vestigial legacy Talent Ranker sub-inputs kept in
                              DOM (permanently hidden) so createUser / editUser
@@ -4898,6 +4942,7 @@
             'has_impact_iq_access','impact_iq_journeys',
             'has_trends_iq_access','has_microdramas_iq_access',
             'allowed_lenses',
+            'allowed_trends_tabs','allowed_rankers_tabs',
             'has_chatbot_profile_iq_access',
             'prometheus_access',
             'auto_access_new'
@@ -4934,6 +4979,20 @@
                     el.disabled = !isSuper;
                     el.title = isSuper ? '' : disableTitle;
                 }
+            });
+            const trendsAllOn = !!(document.getElementById('allowAllTrendsTabs') && document.getElementById('allowAllTrendsTabs').checked);
+            const rankersAllOn = !!(document.getElementById('allowAllRankersTabs') && document.getElementById('allowAllRankersTabs').checked);
+            ['allowAllTrendsTabs', 'allowAllRankersTabs'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) { el.disabled = !isSuper; el.title = isSuper ? '' : disableTitle; }
+            });
+            document.querySelectorAll('.allowed-trends-tab-checkbox').forEach(el => {
+                el.disabled = !isSuper || trendsAllOn;
+                el.title = isSuper ? '' : disableTitle;
+            });
+            document.querySelectorAll('.allowed-rankers-tab-checkbox').forEach(el => {
+                el.disabled = !isSuper || rankersAllOn;
+                el.title = isSuper ? '' : disableTitle;
             });
             const notice = document.getElementById('userModalSuperAdminNotice');
             if (notice) notice.style.display = isSuper ? 'none' : 'block';
@@ -9949,6 +10008,10 @@
             // Reset per-user Trends IQ LENS access to "defaults apply"
             // (no wildcard, no explicit grants -> Live Features defaults).
             populateAllowedLensesCheckboxes([]);
+            populateAllowedTrendsTabsCheckboxes(['*']);
+            populateAllowedRankersTabsCheckboxes(['*']);
+            syncTrendsTabAccessVisibility();
+            syncRankersTabAccessVisibility();
             document.getElementById('hasTalentFitAccess').checked = false;
             // Prometheus mode (2026-09-03, Jenna): new users default to
             // 'both' (full access) - the same backward-compat default
@@ -10126,6 +10189,9 @@
             // empty list falls back to Live Features defaults; ['*'] means
             // "grant everything".
             populateAllowedLensesCheckboxes(user.allowed_lenses);
+            populateAllowedTrendsTabsCheckboxes(user.allowed_trends_tabs);
+            populateAllowedRankersTabsCheckboxes(user.allowed_rankers_tabs);
+            syncTrendsTabAccessVisibility();
             var cbpiqAccess = document.getElementById('hasChatbotProfileIQAccess');
             if (cbpiqAccess) cbpiqAccess.checked = user.has_chatbot_profile_iq_access === true; // Default false
             // Prometheus access tier (2026-08-26): anything that is not
@@ -10189,6 +10255,8 @@
             // Set Rankers IQ access and options
             setRankersIQAccess(user);
             toggleRankersIQSection();
+            populateAllowedRankersTabsCheckboxes(user.allowed_rankers_tabs);
+            syncRankersTabAccessVisibility();
 
             // Access to New Releases
             const aan = user.auto_access_new || {};
@@ -11755,14 +11823,14 @@
             const icon = document.getElementById('rankersIQIcon');
             
             if (checkbox.checked) {
-                section.style.display = 'block';
-                icon.classList.remove('rotated');
+                if (section) section.style.display = 'none';
+                if (icon) icon.classList.remove('rotated');
             } else {
-                section.style.display = 'none';
-                icon.classList.add('rotated');
-                // Uncheck all ranker option checkboxes
+                if (section) section.style.display = 'none';
+                if (icon) icon.classList.add('rotated');
                 document.querySelectorAll('.ranker-option-checkbox').forEach(cb => cb.checked = false);
             }
+            if (typeof syncRankersTabAccessVisibility === 'function') syncRankersTabAccessVisibility();
         }
         
         // Fin IQ Tab Toggle
@@ -12958,6 +13026,77 @@
             });
         }
 
+
+        function _populateTabGrantCheckboxes(allowed, allId, rowSel) {
+            const allCb = document.getElementById(allId);
+            const rows = document.querySelectorAll(rowSel);
+            const isAll = !Array.isArray(allowed) || allowed.some(v => String(v) === '*');
+            if (allCb) allCb.checked = isAll;
+            const explicit = new Set(
+                Array.isArray(allowed)
+                    ? allowed.map(v => String(v)).filter(v => v !== '*')
+                    : []
+            );
+            rows.forEach(cb => {
+                const tab = cb.dataset.tab;
+                cb.checked = isAll ? true : explicit.has(tab);
+                cb.disabled = isAll;
+            });
+            document.querySelectorAll(rowSel.replace('-checkbox', '-row')).forEach(row => {
+                row.style.opacity = isAll ? '0.55' : '1';
+            });
+        }
+        function populateAllowedTrendsTabsCheckboxes(allowed) {
+            _populateTabGrantCheckboxes(allowed, 'allowAllTrendsTabs', '.allowed-trends-tab-checkbox');
+        }
+        function populateAllowedRankersTabsCheckboxes(allowed) {
+            _populateTabGrantCheckboxes(allowed, 'allowAllRankersTabs', '.allowed-rankers-tab-checkbox');
+        }
+        function onAllowAllTrendsTabsChanged() {
+            const isAll = !!(document.getElementById('allowAllTrendsTabs') && document.getElementById('allowAllTrendsTabs').checked);
+            document.querySelectorAll('.allowed-trends-tab-checkbox').forEach(cb => {
+                cb.disabled = isAll;
+                if (isAll) cb.checked = true;
+            });
+            document.querySelectorAll('.allowed-trends-tab-row').forEach(row => { row.style.opacity = isAll ? '0.55' : '1'; });
+        }
+        function onAllowAllRankersTabsChanged() {
+            const isAll = !!(document.getElementById('allowAllRankersTabs') && document.getElementById('allowAllRankersTabs').checked);
+            document.querySelectorAll('.allowed-rankers-tab-checkbox').forEach(cb => {
+                cb.disabled = isAll;
+                if (isAll) cb.checked = true;
+            });
+            document.querySelectorAll('.allowed-rankers-tab-row').forEach(row => { row.style.opacity = isAll ? '0.55' : '1'; });
+        }
+        function getAllowedTrendsTabsPayload() {
+            const allCb = document.getElementById('allowAllTrendsTabs');
+            if (allCb && allCb.checked) return ['*'];
+            const out = [];
+            document.querySelectorAll('.allowed-trends-tab-checkbox').forEach(cb => {
+                if (cb.checked && cb.dataset.tab) out.push(cb.dataset.tab);
+            });
+            return out;
+        }
+        function getAllowedRankersTabsPayload() {
+            const allCb = document.getElementById('allowAllRankersTabs');
+            if (allCb && allCb.checked) return ['*'];
+            const out = [];
+            document.querySelectorAll('.allowed-rankers-tab-checkbox').forEach(cb => {
+                if (cb.checked && cb.dataset.tab) out.push(cb.dataset.tab);
+            });
+            return out;
+        }
+        function syncTrendsTabAccessVisibility() {
+            const on = !!(document.getElementById('hasTrendsIQAccess') && document.getElementById('hasTrendsIQAccess').checked);
+            const section = document.getElementById('trendsIQTabsSection');
+            if (section) section.style.display = on ? 'block' : 'none';
+        }
+        function syncRankersTabAccessVisibility() {
+            const on = !!(document.getElementById('hasRankersIQAccess') && document.getElementById('hasRankersIQAccess').checked);
+            const section = document.getElementById('rankersIQTabsSection');
+            if (section) section.style.display = on ? 'block' : 'none';
+        }
+
         function getAllowedLensesPayload() {
             // What gets sent to /api/admin/users on save.
             //   wildcard checked  -> ['*']
@@ -13465,6 +13604,8 @@
                 has_trends_iq_access: !!(document.getElementById('hasTrendsIQAccess') && document.getElementById('hasTrendsIQAccess').checked),
                 has_microdramas_iq_access: !!(document.getElementById('hasMicrodramasIQAccess') && document.getElementById('hasMicrodramasIQAccess').checked),
                 allowed_lenses: getAllowedLensesPayload(),
+                allowed_trends_tabs: getAllowedTrendsTabsPayload(),
+                allowed_rankers_tabs: getAllowedRankersTabsPayload(),
                 has_chatbot_profile_iq_access: !!(document.getElementById('hasChatbotProfileIQAccess') && document.getElementById('hasChatbotProfileIQAccess').checked),
                 prometheus_access: (document.getElementById('prometheusAccessPullsOnly') && document.getElementById('prometheusAccessPullsOnly').checked) ? 'pulls_only' : 'full',
                 // Prometheus mode (2026-09-03, Jenna): analysis / pull / both.
