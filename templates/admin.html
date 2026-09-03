@@ -4097,7 +4097,7 @@
                     <div class="dashboard-access-item" data-access-group="finance">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group" onclick="event.stopPropagation()">
-                                <input type="checkbox" id="hasChatbotProfileIQAccess">
+                                <input type="checkbox" id="hasChatbotProfileIQAccess" onchange="_pmModeReflectMasterSwitch()">
                                 <span style="font-weight: 600;">💬 CHATBOT PROFILE IQ</span>
                             </label>
                             <span style="margin-left: auto; font-size: 0.72rem; color: var(--text-secondary);">Analysis IQ · natural-language brief</span>
@@ -4128,6 +4128,37 @@
                                 </label>
                                 <div id="payPerUseIndicator" style="display: none; margin-top: 0.55rem; padding: 0.4rem 0.6rem; border-radius: 6px; background: rgba(199,242,62,0.12); color: var(--text-primary); font-size: 0.75rem;">
                                     💵 Pay as you go active<span id="payPerUseStartedAt" style="color: var(--text-secondary);"></span>
+                                </div>
+                                <!-- Prometheus MODE (2026-09-03, Jenna): a
+                                     three-way per-user split so some accounts
+                                     can be given analysis-only or pull-only
+                                     Prometheus access. Sits ON TOP of the
+                                     master switch above and orthogonal to the
+                                     access tier / pay-as-you-go plumbing.
+                                     Legal values: analysis / pull / both. -->
+                                <div id="prometheusModeContainer" style="margin-top: 0.85rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+                                    <div style="font-weight: 600; margin-bottom: 0.55rem; color: var(--text-secondary); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.04em;">Prometheus mode</div>
+                                    <label class="prometheus-tier-row" onclick="event.stopPropagation()">
+                                        <input type="radio" name="prometheusMode" id="prometheusModeBoth" value="both">
+                                        <span class="prometheus-tier-copy">
+                                            <span class="prometheus-tier-title">Analysis + Pull (full access)</span>
+                                            <span class="prometheus-tier-desc">The default. User can run reads and kick off new profile pulls.</span>
+                                        </span>
+                                    </label>
+                                    <label class="prometheus-tier-row" onclick="event.stopPropagation()">
+                                        <input type="radio" name="prometheusMode" id="prometheusModeAnalysis" value="analysis">
+                                        <span class="prometheus-tier-copy">
+                                            <span class="prometheus-tier-title">Analysis only</span>
+                                            <span class="prometheus-tier-desc">Reads and decks against existing profiles. Cannot kick off new profile pulls.</span>
+                                        </span>
+                                    </label>
+                                    <label class="prometheus-tier-row" onclick="event.stopPropagation()">
+                                        <input type="radio" name="prometheusMode" id="prometheusModePull" value="pull">
+                                        <span class="prometheus-tier-copy">
+                                            <span class="prometheus-tier-title">Pull only</span>
+                                            <span class="prometheus-tier-desc">New profile pulls only. Cannot run reads or decks against existing profiles.</span>
+                                        </span>
+                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -4968,7 +4999,10 @@
             });
             const extras = [
                 'getsHedgeFundIQEmails','hedgeFundIQDataCutoff','allHedgeFundTickers',
-                'prometheusAccessFull','prometheusAccessPullsOnly'
+                'prometheusAccessFull','prometheusAccessPullsOnly',
+                // Prometheus mode (2026-09-03): three-way per-user split.
+                // Only super admins can grant / revoke.
+                'prometheusModeBoth','prometheusModeAnalysis','prometheusModePull'
             ];
             extras.forEach(id => {
                 const el = document.getElementById(id);
@@ -9998,6 +10032,16 @@
             // (no wildcard, no explicit grants -> Live Features defaults).
             populateAllowedLensesCheckboxes([]);
             document.getElementById('hasTalentFitAccess').checked = false;
+            // Prometheus mode (2026-09-03, Jenna): new users default to
+            // 'both' (full access) - the same backward-compat default
+            // that existing user records without the field resolve to.
+            var _pmModeBothReset = document.getElementById('prometheusModeBoth');
+            var _pmModeAnalysisReset = document.getElementById('prometheusModeAnalysis');
+            var _pmModePullReset = document.getElementById('prometheusModePull');
+            if (_pmModeBothReset) _pmModeBothReset.checked = true;
+            if (_pmModeAnalysisReset) _pmModeAnalysisReset.checked = false;
+            if (_pmModePullReset) _pmModePullReset.checked = false;
+            _pmModeReflectMasterSwitch();
             document.getElementById('hasShareOfTimeAccess').checked = true;
             document.getElementById('hasShareOfTimeRunAccess').checked = true;
             document.getElementById('hasTicketSalesTrackerView').checked = false;
@@ -10179,6 +10223,22 @@
             var pmIsPullsOnly = String(user.prometheus_access || '').toLowerCase() === 'pulls_only';
             if (pmTierPulls) pmTierPulls.checked = pmIsPullsOnly;
             if (pmTierFull) pmTierFull.checked = !pmIsPullsOnly;
+            // Prometheus mode (2026-09-03, Jenna): 'analysis' / 'pull' /
+            // 'both'. Missing or unknown value resolves to 'both' - the
+            // safe default that keeps existing user behavior intact.
+            var pmModeRaw = String(user.prometheus_mode || '').toLowerCase();
+            var pmModeVal = (pmModeRaw === 'analysis' || pmModeRaw === 'pull')
+                ? pmModeRaw : 'both';
+            var pmModeBoth = document.getElementById('prometheusModeBoth');
+            var pmModeAnalysis = document.getElementById('prometheusModeAnalysis');
+            var pmModePull = document.getElementById('prometheusModePull');
+            if (pmModeBoth) pmModeBoth.checked = (pmModeVal === 'both');
+            if (pmModeAnalysis) pmModeAnalysis.checked = (pmModeVal === 'analysis');
+            if (pmModePull) pmModePull.checked = (pmModeVal === 'pull');
+            // Gate the mode radios on the top-level Chatbot Profile IQ
+            // access flag: with the master switch off, mode is
+            // meaningless, so gray out the whole block and drop a hint.
+            _pmModeReflectMasterSwitch();
             // Read-only pay-as-you-go indicator: set by the user's own
             // opt-in, cleared automatically when an admin changes the tier.
             var ppuInd = document.getElementById('payPerUseIndicator');
@@ -11868,6 +11928,34 @@
             return ['*'];
         }
 
+        // Prometheus mode (2026-09-03, Jenna): gray out and hint the
+        // three-way mode radios when the top-level Chatbot Profile IQ
+        // switch is off - the mode is meaningless without master access.
+        // Never disables when the current admin is not a super admin
+        // (in that case the higher-priority guard already disabled them
+        // with its own tooltip; do not stomp that message).
+        function _pmModeReflectMasterSwitch() {
+            try {
+                var master = document.getElementById('hasChatbotProfileIQAccess');
+                var container = document.getElementById('prometheusModeContainer');
+                if (!container) return;
+                var masterOn = !!(master && master.checked);
+                var isSuper = (typeof currentUserRole !== 'undefined' &&
+                               currentUserRole === 'super_admin');
+                container.style.opacity = masterOn ? '1' : '0.45';
+                container.title = masterOn ? '' :
+                    'Enable Chatbot Profile IQ above to grant a mode.';
+                var ids = ['prometheusModeBoth','prometheusModeAnalysis','prometheusModePull'];
+                ids.forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (!el) return;
+                    // Preserve the super-admin lock: non-super admins
+                    // stay disabled regardless of master switch state.
+                    el.disabled = !masterOn || !isSuper;
+                });
+            } catch (_) {}
+        }
+
         // Idempotent no-op stubs (in case any straggler onclick / event
         // wiring survives; safe to remove once we're sure nothing calls
         // them). None currently reference these — grep-verified 2026-07-30.
@@ -13284,6 +13372,14 @@
                 allowed_lenses: getAllowedLensesPayload(),
                 has_chatbot_profile_iq_access: !!(document.getElementById('hasChatbotProfileIQAccess') && document.getElementById('hasChatbotProfileIQAccess').checked),
                 prometheus_access: (document.getElementById('prometheusAccessPullsOnly') && document.getElementById('prometheusAccessPullsOnly').checked) ? 'pulls_only' : 'full',
+                // Prometheus mode (2026-09-03, Jenna): analysis / pull / both.
+                // Falls back to 'both' if none of the three radios is checked
+                // (defense against a corrupted DOM state).
+                prometheus_mode: (
+                    (document.getElementById('prometheusModeAnalysis') && document.getElementById('prometheusModeAnalysis').checked) ? 'analysis' :
+                    (document.getElementById('prometheusModePull') && document.getElementById('prometheusModePull').checked) ? 'pull' :
+                    'both'
+                ),
                 has_impact_iq_access: !!(document.getElementById('hasImpactIQAccess') && document.getElementById('hasImpactIQAccess').checked),
                 impact_iq_journeys: getImpactIQJourneys(),
                 has_talent_fit_access: document.getElementById('hasTalentFitAccess').checked,

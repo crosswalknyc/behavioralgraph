@@ -2523,6 +2523,15 @@ _PRODUCT_ACCESS_FIELDS = frozenset([
     'allowed_lenses',
     'has_chatbot_profile_iq_access',
     'prometheus_access',
+    # Prometheus mode (2026-09-03, Jenna): three-way per-user split so
+    # some accounts can be given analysis-only or pull-only Prometheus
+    # access. Sits ON TOP of has_chatbot_profile_iq_access (the master
+    # switch) and orthogonal to prometheus_access (the pay-per-use
+    # tier for analysis). Legal values: 'analysis', 'pull', 'both'.
+    # Missing / unknown resolves to 'both' at read time so every
+    # existing user record keeps today's behavior with no migration
+    # write.
+    'prometheus_mode',
     'auto_access_new',
 ])
 # 'role' drives the SA / A / U badge - the "user status" in the UI.
@@ -4962,6 +4971,15 @@ def create_user():
                 'pulls_only'
                 if str(req_data.get('prometheus_access') or '').strip().lower()
                 == 'pulls_only' else 'full'),
+            # Prometheus mode (2026-09-03, Jenna): three-way per-user
+            # split (analysis / pull / both). Anything unrecognized
+            # resolves to 'both' - the safe default that preserves
+            # today's behavior for every existing account.
+            'prometheus_mode': (
+                str(req_data.get('prometheus_mode') or '').strip().lower()
+                if str(req_data.get('prometheus_mode') or '').strip().lower()
+                in ('analysis', 'pull', 'both')
+                else 'both'),
             'pay_per_use_enabled': False,
             'collab_team': req_data.get('collab_team', []),
             'has_purgatory_approval': False,
@@ -5196,6 +5214,21 @@ def update_user(username):
                 # 'pulls_only' means the user must opt in themselves.
                 user['pay_per_use_enabled'] = False
                 user.pop('pay_per_use_started_at', None)
+        if 'prometheus_mode' in req_data:
+            # Prometheus mode (2026-09-03, Jenna): 'analysis' (reads
+            # only), 'pull' (new profile builds only), or 'both' (full
+            # access, the backward-compat default). An unknown value
+            # is rejected outright so the users file cannot pick up a
+            # garbage state from a bad admin PATCH.
+            _pm_mode_raw = req_data.get('prometheus_mode')
+            _pm_mode = str(_pm_mode_raw or '').strip().lower()
+            if _pm_mode not in ('analysis', 'pull', 'both'):
+                return jsonify({
+                    'success': False,
+                    'error': ('Invalid Prometheus mode. Choose one of: '
+                              'analysis, pull, both.'),
+                }), 400
+            user['prometheus_mode'] = _pm_mode
         if 'has_impact_iq_access' in req_data:
             user['has_impact_iq_access'] = bool(req_data['has_impact_iq_access'])
         if 'impact_iq_journeys' in req_data:
@@ -8932,6 +8965,11 @@ def compute_product_access_flags(user, role):
             'allowed_lenses': ['*'],
             'has_chatbot_profile_iq_access': True,
             'prometheus_access': 'full',
+            # Prometheus mode (2026-09-03): super admins always
+            # resolve to 'both' - the three-way gate is bypassed
+            # anywhere `role == 'super_admin'`, but returning the
+            # value keeps admin surfaces consistent.
+            'prometheus_mode': 'both',
             'pay_per_use_enabled': False,
         }
     u = user or {}
@@ -8989,6 +9027,18 @@ def compute_product_access_flags(user, role):
             'pulls_only'
             if str(u.get('prometheus_access') or '').strip().lower()
             == 'pulls_only' else 'full'
+        ),
+        # Prometheus mode (2026-09-03, Jenna): 'analysis' / 'pull' /
+        # 'both'. Missing / unknown resolves to 'both' so every
+        # existing user record keeps today's behavior with no
+        # migration write. Super admins bypass the gate entirely.
+        'prometheus_mode': (
+            'both' if role == 'super_admin' else (
+                str(u.get('prometheus_mode') or '').strip().lower()
+                if str(u.get('prometheus_mode') or '').strip().lower()
+                in ('analysis', 'pull', 'both')
+                else 'both'
+            )
         ),
         'pay_per_use_enabled': bool(u.get('pay_per_use_enabled', False)),
     }
@@ -52542,6 +52592,13 @@ def api_synth_chat_interpret():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
+    # Prometheus mode gate (2026-09-03, Jenna): the interpret step is
+    # the entry point for a new profile pull, so an 'analysis'-only
+    # user is blocked here. The router deflection to a read pass
+    # never fires for such a user because the frontend hides the
+    # build-oriented chips and the backend refuses the pull entry.
+    if not _pm_gate_pull(user):
+        return _pm_gate_refusal('pull')
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
@@ -54546,6 +54603,11 @@ def api_synth_chat_approve():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
+    # Prometheus mode gate (2026-09-03, Jenna): the approve step
+    # confirms and queues a new profile build. 'analysis'-only users
+    # cannot queue a build.
+    if not _pm_gate_pull(user):
+        return _pm_gate_refusal('pull')
     if not SYNTH_QUEUE_SECRET or not SYNTH_QUEUE_URL:
         _chatbot_error_email('brief-chat/approve',
                              'profile engine not configured '
@@ -55461,6 +55523,96 @@ def _pm_ask_stage(key, t0=None, ms=None, count=None):
             stages[str(key)[:40]] = int((time.monotonic() - t0) * 1000)
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# Prometheus per-user mode gate (2026-09-03, Jenna).
+#
+# `prometheus_mode` is a three-way per-user field:
+#   'analysis' -> reads / analyze / deck OK; new profile pulls blocked
+#   'pull'     -> new profile pulls OK; reads / analyze / deck blocked
+#   'both'     -> full access (backward-compat default)
+#
+# The field sits ON TOP of the `has_chatbot_profile_iq_access` master
+# switch. When the master switch is off, `_synth_chat_gate` rejects
+# before either of these helpers runs. When the caller is a super
+# admin, both helpers return True unconditionally.
+#
+# Missing / unknown values resolve to 'both' at read time so existing
+# user records keep today's behavior with no migration write. New user
+# records default to 'both' at create time.
+#
+# `_pm_gate_analyze` and `_pm_gate_pull` return True when the caller
+# may proceed. When they return False, the callers below build a
+# partner-safe 403 payload via `_pm_gate_refusal` so the frontend
+# renders the friendly bubble.
+# ---------------------------------------------------------------------------
+
+_PROMETHEUS_MODE_VALID = ('analysis', 'pull', 'both')
+
+
+def _prometheus_mode_of(user):
+    """Return the caller's Prometheus mode string.
+
+    Accepts a user dict (from `get_current_user` or `_synth_chat_gate`).
+    Returns one of 'analysis' / 'pull' / 'both'. Anything missing,
+    unknown, or non-string resolves to 'both' so a stale record on
+    users.json cannot lock a legitimate caller out of the product."""
+    if not isinstance(user, dict):
+        return 'both'
+    mode = str(user.get('prometheus_mode') or '').strip().lower()
+    if mode not in _PROMETHEUS_MODE_VALID:
+        return 'both'
+    return mode
+
+
+def _pm_gate_analyze(user):
+    """True when the user may hit an analysis / read / deck route.
+
+    Super admins bypass. Everyone else must resolve to 'analysis' or
+    'both'. Callers hitting the master switch off never reach this
+    helper because `_synth_chat_gate` rejects first."""
+    if not isinstance(user, dict):
+        return False
+    if str(user.get('role') or '').strip().lower() == 'super_admin':
+        return True
+    return _prometheus_mode_of(user) in ('analysis', 'both')
+
+
+def _pm_gate_pull(user):
+    """True when the user may hit a new-profile-pull route.
+
+    Super admins bypass. Everyone else must resolve to 'pull' or
+    'both'. Callers hitting the master switch off never reach this
+    helper because `_synth_chat_gate` rejects first."""
+    if not isinstance(user, dict):
+        return False
+    if str(user.get('role') or '').strip().lower() == 'super_admin':
+        return True
+    return _prometheus_mode_of(user) in ('pull', 'both')
+
+
+def _pm_gate_refusal(kind):
+    """Build a partner-safe 403 for a mode-blocked chatbot request.
+
+    `kind` is 'analyze' when the caller tried to reach a read / deck
+    surface but their mode is 'pull'; 'pull' when they tried to reach
+    a new-build surface but their mode is 'analysis'. The reply carries
+    `guidance=True` so the widget renders it as a plain agent bubble
+    (see the `data.guidance && data.error` branch in the analyze /
+    approve / interpret handlers). No internal vocabulary."""
+    if kind == 'analyze':
+        msg = ('Your access covers new profile pulls only. Ask your '
+               'admin to enable analysis access if you need to run '
+               'reads against existing profiles.')
+    else:
+        msg = ('Your access covers analysis only. Ask your admin to '
+               'enable pull access if you need to build new profiles.')
+    return jsonify({
+        'success': False,
+        'guidance': True,
+        'error': msg,
+    }), 403
 
 
 def _pm_access_gate(user):
@@ -57042,6 +57194,13 @@ def api_synth_chat_notify_when_done():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
+    # Prometheus mode gate (2026-09-03, Jenna): notify-when-done is
+    # only ever wired to a read / deck job the user already kicked
+    # off, both of which are analysis-tier surfaces. Pull-only users
+    # never see the offer chip on the frontend; this is defense in
+    # depth.
+    if not _pm_gate_analyze(user):
+        return _pm_gate_refusal('analyze')
     try:
         body = request.get_json(force=True) or {}
     except Exception:
@@ -57105,6 +57264,12 @@ def api_synth_chat_analyze():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
+    # Prometheus mode gate (2026-09-03, Jenna): analyze is the primary
+    # read surface; 'pull'-only users are blocked here. Runs before
+    # the JSON body parse so an empty pull-only request also gets the
+    # friendly refusal instead of the calm-fallback line.
+    if not _pm_gate_analyze(user):
+        return _pm_gate_refusal('analyze')
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
@@ -57919,6 +58084,10 @@ def api_synth_chat_deck():
     user, err = _synth_chat_gate(allow_api_key=False)
     if err:
         return err
+    # Prometheus mode gate (2026-09-03, Jenna): decks are analysis
+    # outputs. Pull-only users cannot kick off a deck build.
+    if not _pm_gate_analyze(user):
+        return _pm_gate_refusal('analyze')
     try:
         body = request.get_json(force=True) or {}
     except Exception as e:
