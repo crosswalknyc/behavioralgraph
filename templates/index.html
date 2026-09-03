@@ -44446,6 +44446,15 @@ https://www.instagram.com/p/..."></textarea>
         // Rankers IQ access control
         const hasRankersIQAccess = {{ 'true' if has_rankers_iq_access else 'false' }};
         const rankersIQOptions = {{ rankers_iq_options | tojson | safe }};
+        // Per-tab grants for Trends / Rankers. ['*'] or missing = every tab.
+        window.__allowedTrendsTabs = {{ allowed_trends_tabs | default(['*'], true) | tojson | safe }};
+        window.__allowedRankersTabs = {{ allowed_rankers_tabs | default(['*'], true) | tojson | safe }};
+        function _tiqTabAllowed(key, product) {
+            if (isSuperAdmin) return true;
+            var list = (product === 'rankers') ? window.__allowedRankersTabs : window.__allowedTrendsTabs;
+            if (!Array.isArray(list) || list.indexOf('*') !== -1) return true;
+            return list.indexOf(key) !== -1;
+        }
         const hasAllRankerOptions = rankersIQOptions.includes('*');
         window.hasShareOfTimeRunAccess = {{ 'true' if has_share_of_time_run_access else 'false' }};
         let liveFeatures = {
@@ -45049,6 +45058,8 @@ https://www.instagram.com/p/..."></textarea>
                         if (opt) opt.disabled = !pv[1];
                     });
                     window.hasShareOfTimeRunAccess = !!d.has_share_of_time_run_access && (d.has_share_of_time_access !== false);
+                    if (Array.isArray(d.allowed_trends_tabs)) window.__allowedTrendsTabs = d.allowed_trends_tabs;
+                    if (Array.isArray(d.allowed_rankers_tabs)) window.__allowedRankersTabs = d.allowed_rankers_tabs;
                     if (typeof sotApplyRunAccessVisibility === 'function') sotApplyRunAccessVisibility();
                     // Store Fin IQ data cutoff date for filtering
                     window.hedgeFundIQDataCutoff = d.hedge_fund_iq_data_cutoff || null;
@@ -54322,15 +54333,24 @@ https://www.instagram.com/p/..."></textarea>
             var _rankersOrder = ['fast', 'music', 'podcasts', 'streaming', 'gaming'];
             var _rankersSet = { talentranker: 1, music: 1, podcasts: 1, streaming: 1, fast: 1, gaming: 1 };
             if (_tiqProduct === 'rankers') {
-                if (!_rankersSet[window.__trendsIQ.activeTab]) window.__trendsIQ.activeTab = 'fast';
                 var _byKey = {}; tabs.forEach(function(t) { _byKey[t.key] = t; });
                 tabs = _rankersOrder.map(function(k) { return _byKey[k]; }).filter(Boolean);
+                tabs = tabs.filter(function(t) { return _tiqTabAllowed(t.key, 'rankers'); });
+                if (!_rankersSet[window.__trendsIQ.activeTab] || !_tiqTabAllowed(window.__trendsIQ.activeTab, 'rankers')) {
+                    window.__trendsIQ.activeTab = (tabs[0] && tabs[0].key) || 'fast';
+                }
             } else {
-                if (_rankersSet[window.__trendsIQ.activeTab]) window.__trendsIQ.activeTab = 'searches';
                 tabs = tabs.filter(function(t) { return !_rankersSet[t.key]; });
+                tabs = tabs.filter(function(t) { return _tiqTabAllowed(t.key, 'trends'); });
+                if (_rankersSet[window.__trendsIQ.activeTab] || !_tiqTabAllowed(window.__trendsIQ.activeTab, 'trends')) {
+                    window.__trendsIQ.activeTab = (tabs[0] && tabs[0].key) || 'searches';
+                }
             }
             var strip = document.getElementById('trendsIQTabStrip');
             strip.style.display = 'flex';
+            if (!tabs.length) {
+                strip.innerHTML = '<div class="tiq-empty" style="padding:0.75rem 0;">No tabs granted for this product.</div>';
+            } else {
             strip.innerHTML = tabs.map(function(t) {
                 var active = (t.key === (window.__trendsIQ.activeTab || 'movers')) ? ' active' : '';
                 var badgeId = (t.key === 'watchlist') ? ' id="trendsIQWatchBadge"' : '';
@@ -54340,6 +54360,7 @@ https://www.instagram.com/p/..."></textarea>
                        (t.count ? '<span class="tiq-tab-count"' + badgeId + '>' + t.count + '</span>' : (t.key === 'watchlist' ? '<span class="tiq-tab-count"' + badgeId + ' style="display:none;"></span>' : '')) +
                        '</div>';
             }).join('');
+            }
 
             var panels = document.getElementById('trendsIQPanels');
             // Preserve the Talent Ranker leaderboard node across the
@@ -55697,6 +55718,8 @@ https://www.instagram.com/p/..."></textarea>
         }
 
         window.setTrendsIQTab = function(key) {
+            var _prod = (window.__trendsIQ.product === 'rankers') ? 'rankers' : 'trends';
+            if (typeof _tiqTabAllowed === 'function' && !_tiqTabAllowed(key, _prod)) return;
             window.__trendsIQ.activeTab = key;
             document.querySelectorAll('#trendsIQTabStrip .tiq-tab').forEach(function(el) {
                 el.classList.toggle('active', el.getAttribute('data-tiq-tab') === key);

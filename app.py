@@ -2523,6 +2523,7 @@ _PRODUCT_ACCESS_FIELDS = frozenset([
     'has_impact_iq_access', 'impact_iq_journeys',
     'has_trends_iq_access', 'has_microdramas_iq_access',
     'allowed_lenses',
+    'allowed_trends_tabs', 'allowed_rankers_tabs',
     'has_chatbot_profile_iq_access',
     'prometheus_access',
     # Prometheus mode (2026-09-03, Jenna): three-way per-user split so
@@ -4952,6 +4953,17 @@ def create_user():
             'impact_iq_journeys': req_data.get('impact_iq_journeys', cd.get('impact_iq_journeys', ['*']) if cd else ['*']) or ['*'],
             'has_trends_iq_access': req_data.get('has_trends_iq_access', cd.get('has_trends_iq_access', False) if cd else False),
             'has_microdramas_iq_access': req_data.get('has_microdramas_iq_access', cd.get('has_microdramas_iq_access', False) if cd else False),
+            # Per-tab grants for Trends / Rankers (2026-09-03). ['*'] =
+            # every current and future tab. Missing defaults to ['*'] so
+            # existing product users keep seeing the full strip.
+            'allowed_trends_tabs': _store_tiq_tab_grant(
+                req_data['allowed_trends_tabs'] if isinstance(req_data.get('allowed_trends_tabs'), list)
+                else (cd.get('allowed_trends_tabs') if cd else None),
+                _TIQ_TRENDS_TAB_KEYS),
+            'allowed_rankers_tabs': _store_tiq_tab_grant(
+                req_data['allowed_rankers_tabs'] if isinstance(req_data.get('allowed_rankers_tabs'), list)
+                else (cd.get('allowed_rankers_tabs') if cd else None),
+                _TIQ_RANKERS_TAB_KEYS),
             # Trends IQ per-user lens grant (2026-09-02). List of lens
             # id strings or ['*'] for all. Missing / None means "defaults
             # apply" - the user sees whichever lenses are default-visible
@@ -5186,6 +5198,12 @@ def update_user(username):
             user['has_trends_iq_access'] = bool(req_data['has_trends_iq_access'])
         if 'has_microdramas_iq_access' in req_data:
             user['has_microdramas_iq_access'] = bool(req_data['has_microdramas_iq_access'])
+        if 'allowed_trends_tabs' in req_data:
+            user['allowed_trends_tabs'] = _store_tiq_tab_grant(
+                req_data['allowed_trends_tabs'], _TIQ_TRENDS_TAB_KEYS)
+        if 'allowed_rankers_tabs' in req_data:
+            user['allowed_rankers_tabs'] = _store_tiq_tab_grant(
+                req_data['allowed_rankers_tabs'], _TIQ_RANKERS_TAB_KEYS)
         if 'allowed_lenses' in req_data:
             # Per-user gate for Trends IQ LENS dropdown (2026-09-02).
             # ['*'] = all lenses regardless of Live Features hides.
@@ -5802,6 +5820,8 @@ def restore_defaults_all_users():
             user['impact_iq_journeys'] = ['*']
             user['has_trends_iq_access'] = False
             user['has_microdramas_iq_access'] = False
+            user['allowed_trends_tabs'] = ['*']
+            user['allowed_rankers_tabs'] = ['*']
             count += 1
         save_users(data)
         return jsonify({'success': True, 'message': f'Restored defaults for {count} user(s)', 'count': count})
@@ -9051,6 +9071,8 @@ def compute_product_access_flags(user, role):
             'has_helm_iq_access': True,
             'has_trends_iq_access': True,
             'has_microdramas_iq_access': True,
+            'allowed_trends_tabs': ['*'],
+            'allowed_rankers_tabs': ['*'],
             # Super admins bypass the lens-access gate entirely (they
             # always see every lens); ['*'] communicates that to any
             # caller that inspects the resolved access dict.
@@ -9115,6 +9137,8 @@ def compute_product_access_flags(user, role):
         'has_helm_iq_access': role == 'super_admin',
         'has_trends_iq_access': bool(u.get('has_trends_iq_access', False)),
         'has_microdramas_iq_access': bool(u.get('has_microdramas_iq_access', False)),
+        'allowed_trends_tabs': _emit_tiq_tab_grant(u.get('allowed_trends_tabs')),
+        'allowed_rankers_tabs': _emit_tiq_tab_grant(u.get('allowed_rankers_tabs')),
         # Trends IQ per-user lens grant (2026-09-02). Preserve None so
         # the resolver can distinguish "defaults apply" from an explicit
         # empty list. Missing / non-list value falls through to None.
@@ -9308,6 +9332,8 @@ def index():
                            has_helm_iq_access=has_helm_iq,
                            has_trends_iq_access=has_trends_iq,
                            has_microdramas_iq_access=has_microdramas_iq,
+                           allowed_trends_tabs=_acc.get('allowed_trends_tabs', ['*']),
+                           allowed_rankers_tabs=_acc.get('allowed_rankers_tabs', ['*']),
                            has_chatbot_profile_iq_access=bool(user.get('has_chatbot_profile_iq_access', False)) or role == 'super_admin',
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
                            has_purgatory_access=has_purgatory_access,
@@ -16490,6 +16516,102 @@ _TIQ_TRENDS_CARD_KEYS = ('movers', 'trending_headlines', 'articles_by_source',
 _TIQ_TRENDS_COUNT_KEYS = ('searches', 'movers', 'headlines', 'people',
                           'books', 'comics', 'broadway', 'films')
 
+_TIQ_TRENDS_TAB_KEYS = (
+    'searches', 'movers', 'headlines', 'people',
+    'books', 'comics', 'broadway', 'films', 'watchlist',
+)
+_TIQ_RANKERS_TAB_KEYS = ('fast', 'music', 'podcasts', 'streaming', 'gaming')
+_TIQ_TAB_CARD_KEYS = {
+    'searches':  ('trending_searches', 'trending_searches_by_category'),
+    'movers':    ('movers',),
+    'headlines': ('trending_headlines', 'articles_by_source',
+                  'philanthropy_news', 'business_news', 'wall_street_news'),
+    'people':    ('trending_people', 'wikipedia_trending'),
+    'books':     ('books_trending', 'libby_trending'),
+    'comics':    ('comics_trending',),
+    'broadway':  ('broadway_trending', 'broadway_week_ending'),
+    'films':     ('films_ticketing',),
+    'music':     ('music_trending',),
+    'podcasts':  ('podcasts_trending',),
+    'streaming': ('streaming_trending',),
+    'fast':      ('fast_trending',),
+    'gaming':    ('gaming_trending',),
+}
+_TIQ_TAB_COUNT_KEYS = {
+    'searches': ('searches',), 'movers': ('movers',),
+    'headlines': ('headlines',), 'people': ('people',),
+    'books': ('books',), 'comics': ('comics',),
+    'broadway': ('broadway',), 'films': ('films',),
+    'music': ('music',), 'podcasts': ('podcasts',),
+    'streaming': ('streaming',), 'fast': ('fast',),
+    'gaming': ('gaming',),
+}
+
+
+def _store_tiq_tab_grant(raw, catalog):
+    """Normalize a tab-grant payload for users.json.
+
+    ['*'] = every current and future tab. Explicit list is intersected
+    with the catalog. Missing / non-list defaults to ['*'] so existing
+    users are not locked out. An explicit empty list is stored as []
+    (product on, no tabs).
+    """
+    catalog = set(catalog)
+    if not isinstance(raw, list):
+        return ['*']
+    if any(str(v) == '*' for v in raw):
+        return ['*']
+    return [str(v) for v in raw if str(v) in catalog]
+
+
+def _emit_tiq_tab_grant(raw):
+    """Resolved grant for compute_product_access_flags / the frontend.
+
+    Missing or non-list -> ['*'] (backward compatible). Empty explicit
+    list is preserved so an admin can grant the product with zero tabs.
+    """
+    if not isinstance(raw, list):
+        return ['*']
+    if any(str(v) == '*' for v in raw):
+        return ['*']
+    return [str(v) for v in raw]
+
+
+def _trends_iq_filter_tabs(payload, trends_tabs, rankers_tabs):
+    """Strip card groups for tabs the user is not granted.
+
+    `trends_tabs` / `rankers_tabs` are either ['*'] or an explicit list
+    of tab keys. Copies cards/counts so the shared compute_view cache
+    is never mutated.
+    """
+    if not isinstance(payload, dict):
+        return payload
+    t_all = (not isinstance(trends_tabs, list)) or any(str(v) == '*' for v in (trends_tabs or []))
+    r_all = (not isinstance(rankers_tabs, list)) or any(str(v) == '*' for v in (rankers_tabs or []))
+    if t_all and r_all:
+        return payload
+    t_set = set() if t_all else {str(v) for v in trends_tabs}
+    r_set = set() if r_all else {str(v) for v in rankers_tabs}
+    denied = []
+    if not t_all:
+        denied.extend(k for k in _TIQ_TRENDS_TAB_KEYS if k not in t_set)
+    if not r_all:
+        denied.extend(k for k in _TIQ_RANKERS_TAB_KEYS if k not in r_set)
+    if not denied:
+        return payload
+    out = dict(payload)
+    cards = dict(out.get('cards') or {})
+    counts = dict(out.get('counts') or {})
+    for tab in denied:
+        for ck in _TIQ_TAB_CARD_KEYS.get(tab, ()):
+            cards.pop(ck, None)
+        for ck in _TIQ_TAB_COUNT_KEYS.get(tab, ()):
+            if ck in counts:
+                counts[ck] = 0
+    out['cards'] = cards
+    out['counts'] = counts
+    return out
+
 
 def _trends_iq_entitlements():
     """Return (has_trends, has_rankers) for the current user, honoring cloak."""
@@ -16647,17 +16769,24 @@ def api_trends_iq_data():
         force = bool(req.get('force_refresh'))
         payload = _trends_iq.compute_view(filters, force_refresh=force)
         # Return only the card groups this user is entitled to (Trends vs
-        # Rankers). Filtered on a copy so the shared cache stays intact.
-        _tiq_has_trends, _tiq_has_rankers = _trends_iq_entitlements()
-        payload = _trends_iq_filter_payload(payload, _tiq_has_trends, _tiq_has_rankers)
-        # 2026-09-02: per-user Trends IQ lens access. Filter lens_config /
-        # lens_scores / lens_cutoffs down to the lenses this user is
-        # allowed to see (super admins get everything). Payload copies are
-        # taken inside the helper so compute_view's shared cache stays intact.
+        # Rankers, then per-tab grants). Filtered on a copy so the shared
+        # cache stays intact.
         _tiq_user = get_current_user() or {}
         _tiq_role = _normalize_role(_tiq_user.get('role', 'user'))
         _tiq_access = apply_cloak_product_access_overrides(
             compute_product_access_flags(_tiq_user, _tiq_role))
+        _tiq_has_trends = bool(_tiq_access.get('has_trends_iq_access'))
+        _tiq_has_rankers = bool(_tiq_access.get('has_rankers_iq_access'))
+        payload = _trends_iq_filter_payload(payload, _tiq_has_trends, _tiq_has_rankers)
+        payload = _trends_iq_filter_tabs(
+            payload,
+            _tiq_access.get('allowed_trends_tabs', ['*']),
+            _tiq_access.get('allowed_rankers_tabs', ['*']),
+        )
+        # 2026-09-02: per-user Trends IQ lens access. Filter lens_config /
+        # lens_scores / lens_cutoffs down to the lenses this user is
+        # allowed to see (super admins get everything). Payload copies are
+        # taken inside the helper so compute_view's shared cache stays intact.
         if _tiq_role == 'super_admin':
             _tiq_allowed_lens_ids = set(TRENDS_IQ_LENS_IDS)
         else:
