@@ -503,6 +503,36 @@
         return b.monthly[b.monthly.length - 1];
     }
 
+    function ensureViewInContainer() {
+        // Brand Tracking HTML currently sits AFTER Journey IQ closes .container
+        // (same premature-close pattern as Impact / Helm). .container is
+        // height:100vh; overflow:hidden, so a sibling below the fold looks
+        // like a blank pane. Always mount inside .container so flex layout
+        // shows the view when other children are hidden.
+        var view = document.getElementById('brandTrackingIQView');
+        var c = document.querySelector('.container');
+        if (!view) {
+            view = document.createElement('div');
+            view.id = 'brandTrackingIQView';
+            view.innerHTML =
+                '<div class="btiq-header">'
+                + '<h2 class="btiq-title">Brand Tracking <span>CNBC Pro competitive set</span></h2>'
+                + '<p class="btiq-subtitle">Paid accounts, audience mix, CNBC overlap, and retention across charting, research, news, and terminal products. CNBC Pro is the DTC comparison. Window: Jan 1 2026 to Sep 2 2026. Month-end series from January through August.</p>'
+                + '</div>'
+                + '<div class="btiq-layout">'
+                + '<aside class="btiq-rail" id="btiqBrandList"></aside>'
+                + '<div class="btiq-main">'
+                + '<div id="btiqHero"></div><div id="btiqTrend"></div>'
+                + '<div id="btiqOverlaps"></div><div id="btiqDemos"></div>'
+                + '<div id="btiqTable"></div>'
+                + '</div></div>';
+        }
+        if (c && view.parentElement !== c) {
+            c.appendChild(view);
+        }
+        return view;
+    }
+
     function hideOthers() {
         var c = document.querySelector('.container');
         if (c) {
@@ -721,13 +751,13 @@
 
     window.showBrandTrackingIQ = function () {
         if (typeof setViewNavDropdown === 'function') setViewNavDropdown('brandTrackingIQ');
+        var view = ensureViewInContainer();
         hideOthers();
-        var view = document.getElementById('brandTrackingIQView');
         if (view) {
             view.setAttribute('style',
-                'display:flex;flex-direction:column;flex:1 1 auto;min-height:500px;' +
-                'height:calc(100vh - 80px);overflow:auto;visibility:visible;' +
-                'position:relative;z-index:50;');
+                'display:flex !important;flex-direction:column;flex:1 1 auto;' +
+                'min-height:500px;height:calc(100vh - 80px);overflow:auto;' +
+                'visibility:visible !important;position:relative;z-index:50;');
         }
         renderAll();
     };
