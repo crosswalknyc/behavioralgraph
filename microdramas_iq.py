@@ -2795,20 +2795,26 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
                 'views':  [spark_reads.get(d) for d in _dates_7d],
             }
 
-            # 2026-09-03: per-title window-scoped Unique Viewers.
-            # reads_by_date now carries EPISODE-PLAYS (not unique
-            # viewers), so we translate:
-            #   plays_sum / plays_per_viewer_per_day = unique daily
-            #                                          viewer sum
-            #   unique_daily_sum / cross_day_dedup   = window uniques
-            # Uses the same top-N dedup curve as the rollup (which
-            # for a single title reads as "how many days does this
-            # viewer come back for THIS title", ~1.35-2.5 for 7-90d
-            # windows) so the per-card Unique Viewers chip reconciles
-            # arithmetically with the All Platforms rollup.
+            # 2026-09-03: per-title window-scoped Views + Unique Viewers.
+            # reads_by_date carries EPISODE-PLAYS (not unique people).
+            # Card "Views" must use the same look-back as Unique Viewers
+            # (Jenna 2026-09-03: everything on the card shares the filter
+            # window except the trailing-7-day sparkline). Lifetime
+            # read_count stays on the payload for audit/export.
+            #
+            #   view_window_estimate = sum of daily episode-plays
+            #   unique_daily_sum     = plays_sum / plays_per_viewer_per_day
+            #   unique_viewers_window = unique_daily_sum / cross_day_dedup
             _plays_sum = sum(int(x) for x in (t.get('reads_by_date') or {}).values()
                               if isinstance(x, (int, float)))
             if _plays_sum > 0:
+                t['view_window_estimate'] = int(_plays_sum)
+                # Card "Views" is duplicated episode-plays over the
+                # active look-back, not lifetime. Stash the rank-curve
+                # lifetime number so audit/export can still see it.
+                if t.get('read_count') and t.get('lifetime_views_estimate') is None:
+                    t['lifetime_views_estimate'] = t['read_count']
+                t['read_count'] = int(_plays_sum)
                 _ppd = _plays_per_viewer_per_day(source)
                 _dedup_t = _top_n_dedup_factor(source, window_days)
                 if _ppd > 0 and _dedup_t > 0:
@@ -2938,12 +2944,11 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
 # so the operator sees "what's the most-viewed thing in vertical drama
 # right now" without having to click through five separate tabs.
 #
-# Uniform sort key = estimated views over the active window:
-#   * Peacock title:   view_window_estimate (falls back to view_28d_estimate)
-#   * Competitor title: read_count (lifetime cumulative counter for
-#                       ReelShort/DramaBox/GoodShort, rank-derived
-#                       estimate for NetShort - both already unified
-#                       in compute_competitors_view)
+# Uniform sort key = duplicated episode-plays over the active window:
+#   * Peacock title:    view_window_estimate
+#   * Competitor title: view_window_estimate (sum of daily plays;
+#                       read_count is overwritten to the same window
+#                       sum so leftover consumers stay aligned)
 #
 # Cache-keyed identically to the underlying platform views so any
 # pre-warm of compute_view + compute_competitors_view fills this
@@ -3029,9 +3034,9 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
                      if isinstance(x, (int, float)))
             if s > 0:
                 return s
-        # Last-resort fallback: use whatever read_count is on the
-        # title. Rank-derived and lifetime-ish, but at least
-        # non-zero so this title still contributes to the rollup.
+        # Last-resort: read_count is now the window play sum (see
+        # compute_competitors_view). Lifetime lives on
+        # lifetime_views_estimate and must not be used here.
         rc = t.get('read_count')
         if isinstance(rc, (int, float)) and rc > 0:
             return int(rc)
