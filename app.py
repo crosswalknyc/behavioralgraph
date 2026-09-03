@@ -2502,22 +2502,22 @@ def requires_super_admin(f):
 # disabling these controls for non-super callers.
 _PRODUCT_ACCESS_FIELDS = frozenset([
     'has_profile_iq_access', 'has_subscriber_iq_access',
-    'has_roas_iq_access', 'has_ecommerce_iq_access',
+    'has_ecommerce_iq_access',
     'has_ticket_sales_iq_access',
     'has_hedge_fund_iq_access', 'gets_hedge_fund_iq_emails',
     'hedge_fund_iq_tabs', 'hedge_fund_iq_tickers',
     'hedge_fund_iq_data_cutoff',
-    'has_analysis_iq_access', 'analysis_iq_modules',
+    'analysis_iq_modules',
     'has_ticket_sales_tracker_access',
     'has_rankers_iq_access', 'rankers_iq_options',
-    'has_llmo_iq_access', 'has_talent_fit_access',
+    'has_talent_fit_access',
     'has_sf_conversion_access', 'has_flywheel_conversion_access',
     'has_brand_partnership_iq_access', 'has_sentiment_iq_access',
     'has_journey_iq_access', 'allowed_journey_iq_runs',
     'has_intent_iq_access', 'allowed_intent_iq_runs',
-    'has_workspace_access',
     'has_share_of_time_access', 'has_share_of_time_run_access',
     'has_blue_iq_access',
+    'has_brand_tracking_iq_access',
     'has_impact_iq_access', 'impact_iq_journeys',
     'has_trends_iq_access', 'has_microdramas_iq_access',
     'allowed_lenses',
@@ -4920,7 +4920,6 @@ def create_user():
             'allowed_behavioral_categories': req_data.get('allowed_behavioral_categories', cd.get('allowed_behavioral_categories', ['*']) if cd else ['*']),
             'has_profile_iq_access': req_data.get('has_profile_iq_access', cd.get('has_profile_iq_access', True) if cd else True),
             'has_subscriber_iq_access': req_data.get('has_subscriber_iq_access', cd.get('has_subscriber_iq_access', False) if cd else False),
-            'has_roas_iq_access': req_data.get('has_roas_iq_access', cd.get('has_roas_iq_access', True) if cd else True),
             'has_ecommerce_iq_access': req_data.get('has_ecommerce_iq_access', cd.get('has_ecommerce_iq_access', True) if cd else True),
             'has_ticket_sales_iq_access': req_data.get('has_ticket_sales_iq_access', cd.get('has_ticket_sales_iq_access', True) if cd else True),
             'has_hedge_fund_iq_access': req_data.get('has_hedge_fund_iq_access', cd.get('has_hedge_fund_iq_access', False) if cd else False),
@@ -4928,12 +4927,10 @@ def create_user():
             'hedge_fund_iq_tabs': req_data.get('hedge_fund_iq_tabs', []),
             'hedge_fund_iq_tickers': req_data.get('hedge_fund_iq_tickers', []),
             'hedge_fund_iq_data_cutoff': req_data.get('hedge_fund_iq_data_cutoff', None),
-            'has_analysis_iq_access': req_data.get('has_analysis_iq_access', cd.get('has_analysis_iq_access', False) if cd else False),
             'analysis_iq_modules': req_data.get('analysis_iq_modules', []),
             'has_ticket_sales_tracker_access': req_data.get('has_ticket_sales_tracker_access', cd.get('has_ticket_sales_tracker_access', False) if cd else False),
             'has_rankers_iq_access': req_data.get('has_rankers_iq_access', cd.get('has_rankers_iq_access', False) if cd else False),
             'rankers_iq_options': req_data.get('rankers_iq_options', []),
-            'has_llmo_iq_access': req_data.get('has_llmo_iq_access', cd.get('has_llmo_iq_access', False) if cd else False),
             'has_talent_fit_access': req_data.get('has_talent_fit_access', cd.get('has_talent_fit_access', False) if cd else False),
             'has_sf_conversion_access': req_data.get('has_sf_conversion_access', cd.get('has_sf_conversion_access', False) if cd else False),
             'has_flywheel_conversion_access': req_data.get('has_flywheel_conversion_access', cd.get('has_flywheel_conversion_access', False) if cd else False),
@@ -4943,10 +4940,10 @@ def create_user():
             'allowed_journey_iq_runs': req_data.get('allowed_journey_iq_runs', cd.get('allowed_journey_iq_runs', ['*']) if cd else ['*']),
             'has_intent_iq_access': req_data.get('has_intent_iq_access', cd.get('has_intent_iq_access', True) if cd else True),
             'allowed_intent_iq_runs': req_data.get('allowed_intent_iq_runs', cd.get('allowed_intent_iq_runs', ['*']) if cd else ['*']),
-            'has_workspace_access': req_data.get('has_workspace_access', cd.get('has_workspace_access', True) if cd else True),
             'has_share_of_time_access': req_data.get('has_share_of_time_access', cd.get('has_share_of_time_access', True) if cd else True),
             'has_share_of_time_run_access': req_data.get('has_share_of_time_run_access', cd.get('has_share_of_time_run_access', True) if cd else True),
             'has_blue_iq_access': req_data.get('has_blue_iq_access', cd.get('has_blue_iq_access', False) if cd else False),
+            'has_brand_tracking_iq_access': req_data.get('has_brand_tracking_iq_access', cd.get('has_brand_tracking_iq_access', False) if cd else False),
             'has_impact_iq_access': req_data.get('has_impact_iq_access', cd.get('has_impact_iq_access', True) if cd else True),
             'impact_iq_journeys': req_data.get('impact_iq_journeys', cd.get('impact_iq_journeys', ['*']) if cd else ['*']) or ['*'],
             'has_trends_iq_access': req_data.get('has_trends_iq_access', cd.get('has_trends_iq_access', False) if cd else False),
@@ -5101,8 +5098,6 @@ def update_user(username):
             user['has_profile_iq_access'] = req_data['has_profile_iq_access']
         if 'has_subscriber_iq_access' in req_data:
             user['has_subscriber_iq_access'] = req_data['has_subscriber_iq_access']
-        if 'has_roas_iq_access' in req_data:
-            user['has_roas_iq_access'] = req_data['has_roas_iq_access']
         if 'has_ecommerce_iq_access' in req_data:
             user['has_ecommerce_iq_access'] = req_data['has_ecommerce_iq_access']
         if 'has_ticket_sales_iq_access' in req_data:
@@ -5117,8 +5112,6 @@ def update_user(username):
             user['hedge_fund_iq_tickers'] = req_data['hedge_fund_iq_tickers']
         if 'hedge_fund_iq_data_cutoff' in req_data:
             user['hedge_fund_iq_data_cutoff'] = req_data['hedge_fund_iq_data_cutoff'] or None
-        if 'has_analysis_iq_access' in req_data:
-            user['has_analysis_iq_access'] = bool(req_data['has_analysis_iq_access'])
         if 'analysis_iq_modules' in req_data:
             raw = req_data['analysis_iq_modules']
             user['analysis_iq_modules'] = list(raw) if isinstance(raw, list) else []
@@ -5128,8 +5121,6 @@ def update_user(username):
             user['has_rankers_iq_access'] = req_data['has_rankers_iq_access']
         if 'rankers_iq_options' in req_data:
             user['rankers_iq_options'] = req_data['rankers_iq_options']
-        if 'has_llmo_iq_access' in req_data:
-            user['has_llmo_iq_access'] = bool(req_data['has_llmo_iq_access'])
         if 'has_talent_fit_access' in req_data:
             user['has_talent_fit_access'] = bool(req_data['has_talent_fit_access'])
         if 'has_sf_conversion_access' in req_data:
@@ -5163,14 +5154,14 @@ def update_user(username):
                 user['allowed_intent_iq_runs'] = list(raw)
             else:
                 user['allowed_intent_iq_runs'] = ['*']
-        if 'has_workspace_access' in req_data:
-            user['has_workspace_access'] = bool(req_data['has_workspace_access'])
         if 'has_share_of_time_access' in req_data:
             user['has_share_of_time_access'] = bool(req_data['has_share_of_time_access'])
         if 'has_share_of_time_run_access' in req_data:
             user['has_share_of_time_run_access'] = bool(req_data['has_share_of_time_run_access'])
         if 'has_blue_iq_access' in req_data:
             user['has_blue_iq_access'] = bool(req_data['has_blue_iq_access'])
+        if 'has_brand_tracking_iq_access' in req_data:
+            user['has_brand_tracking_iq_access'] = bool(req_data['has_brand_tracking_iq_access'])
         if 'has_trends_iq_access' in req_data:
             user['has_trends_iq_access'] = bool(req_data['has_trends_iq_access'])
         if 'has_microdramas_iq_access' in req_data:
@@ -5774,22 +5765,19 @@ def restore_defaults_all_users():
             user['allowed_behavioral_categories'] = list(allowed_behavioral_categories) if isinstance(allowed_behavioral_categories, list) else ['*']
             user['has_profile_iq_access'] = True
             user['has_subscriber_iq_access'] = False
-            user['has_roas_iq_access'] = True
             user['has_ecommerce_iq_access'] = True
             user['has_ticket_sales_iq_access'] = True
             user['has_hedge_fund_iq_access'] = False
             user['gets_hedge_fund_iq_emails'] = False
             user['hedge_fund_iq_tabs'] = user.get('hedge_fund_iq_tabs', [])
             user['hedge_fund_iq_tickers'] = user.get('hedge_fund_iq_tickers', [])
-            user['has_analysis_iq_access'] = False
             user['analysis_iq_modules'] = user.get('analysis_iq_modules', [])
             user['has_rankers_iq_access'] = False
             user['rankers_iq_options'] = user.get('rankers_iq_options', [])
-            user['has_llmo_iq_access'] = False
-            user['has_workspace_access'] = True
             user['has_share_of_time_access'] = True
             user['has_share_of_time_run_access'] = True
             user['has_blue_iq_access'] = False
+            user['has_brand_tracking_iq_access'] = False
             user['has_impact_iq_access'] = True
             user['impact_iq_journeys'] = ['*']
             user['has_trends_iq_access'] = False
@@ -6655,24 +6643,21 @@ def api_set_company_defaults(company_name):
             'allowed_behavioral_categories': req.get('allowed_behavioral_categories', ['*']),
             'has_profile_iq_access': req.get('has_profile_iq_access', True),
             'has_subscriber_iq_access': req.get('has_subscriber_iq_access', False),
-            'has_roas_iq_access': req.get('has_roas_iq_access', True),
             'has_ecommerce_iq_access': req.get('has_ecommerce_iq_access', True),
             'has_ticket_sales_iq_access': req.get('has_ticket_sales_iq_access', True),
             'has_hedge_fund_iq_access': req.get('has_hedge_fund_iq_access', False),
             'gets_hedge_fund_iq_emails': req.get('gets_hedge_fund_iq_emails', False),
-            'has_analysis_iq_access': req.get('has_analysis_iq_access', False),
             'has_rankers_iq_access': req.get('has_rankers_iq_access', False),
             'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
-            'has_llmo_iq_access': req.get('has_llmo_iq_access', False),
             'has_talent_fit_access': req.get('has_talent_fit_access', False),
             'has_flywheel_conversion_access': req.get('has_flywheel_conversion_access', False),
             'has_brand_partnership_iq_access': req.get('has_brand_partnership_iq_access', False),
             'has_sentiment_iq_access': req.get('has_sentiment_iq_access', False),
             'has_journey_iq_access': req.get('has_journey_iq_access', False),
-            'has_workspace_access': req.get('has_workspace_access', True),
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
             'has_blue_iq_access': req.get('has_blue_iq_access', False),
+            'has_brand_tracking_iq_access': req.get('has_brand_tracking_iq_access', False),
             'has_impact_iq_access': req.get('has_impact_iq_access', True),
             'impact_iq_journeys': req.get('impact_iq_journeys', ['*']) or ['*'],
             'has_trends_iq_access': req.get('has_trends_iq_access', False),
@@ -6727,24 +6712,21 @@ def api_reset_company_users(company_name):
                 user['allowed_behavioral_categories'] = list(cd.get('allowed_behavioral_categories', ['*']))
                 user['has_profile_iq_access'] = cd.get('has_profile_iq_access', True)
                 user['has_subscriber_iq_access'] = cd.get('has_subscriber_iq_access', False)
-                user['has_roas_iq_access'] = cd.get('has_roas_iq_access', True)
                 user['has_ecommerce_iq_access'] = cd.get('has_ecommerce_iq_access', True)
                 user['has_ticket_sales_iq_access'] = cd.get('has_ticket_sales_iq_access', True)
                 user['has_hedge_fund_iq_access'] = cd.get('has_hedge_fund_iq_access', False)
                 user['gets_hedge_fund_iq_emails'] = cd.get('gets_hedge_fund_iq_emails', False)
-                user['has_analysis_iq_access'] = cd.get('has_analysis_iq_access', False)
                 user['has_rankers_iq_access'] = cd.get('has_rankers_iq_access', False)
                 user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
-                user['has_llmo_iq_access'] = cd.get('has_llmo_iq_access', False)
                 user['has_talent_fit_access'] = cd.get('has_talent_fit_access', False)
                 user['has_flywheel_conversion_access'] = cd.get('has_flywheel_conversion_access', False)
                 user['has_brand_partnership_iq_access'] = cd.get('has_brand_partnership_iq_access', False)
                 user['has_sentiment_iq_access'] = cd.get('has_sentiment_iq_access', False)
                 user['has_journey_iq_access'] = cd.get('has_journey_iq_access', False)
-                user['has_workspace_access'] = cd.get('has_workspace_access', True)
                 user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
                 user['has_blue_iq_access'] = cd.get('has_blue_iq_access', False)
+                user['has_brand_tracking_iq_access'] = cd.get('has_brand_tracking_iq_access', False)
                 user['has_impact_iq_access'] = cd.get('has_impact_iq_access', True)
                 user['impact_iq_journeys'] = list(cd.get('impact_iq_journeys', ['*']) or ['*'])
                 user['has_trends_iq_access'] = cd.get('has_trends_iq_access', False)
@@ -6757,24 +6739,21 @@ def api_reset_company_users(company_name):
                 user['allowed_behavioral_categories'] = list(global_behavioral) if isinstance(global_behavioral, list) else ['*']
                 user['has_profile_iq_access'] = True
                 user['has_subscriber_iq_access'] = False
-                user['has_roas_iq_access'] = True
                 user['has_ecommerce_iq_access'] = True
                 user['has_ticket_sales_iq_access'] = True
                 user['has_hedge_fund_iq_access'] = False
                 user['gets_hedge_fund_iq_emails'] = False
-                user['has_analysis_iq_access'] = False
                 user['has_rankers_iq_access'] = False
                 user['has_ticket_sales_tracker_access'] = False
-                user['has_llmo_iq_access'] = False
                 user['has_talent_fit_access'] = False
                 user['has_flywheel_conversion_access'] = False
                 user['has_brand_partnership_iq_access'] = False
                 user['has_sentiment_iq_access'] = False
                 user['has_journey_iq_access'] = False
-                user['has_workspace_access'] = True
                 user['has_share_of_time_access'] = True
                 user['has_share_of_time_run_access'] = True
                 user['has_blue_iq_access'] = False
+                user['has_brand_tracking_iq_access'] = False
                 user['has_impact_iq_access'] = True
                 user['impact_iq_journeys'] = ['*']
                 user['has_trends_iq_access'] = False
@@ -8929,11 +8908,9 @@ def compute_product_access_flags(user, role):
             'has_profile_iq_access': True,
             'has_subscriber_iq_access': True,
             'has_sf_conversion_access': True,
-            'has_roas_iq_access': True,
             'has_ecommerce_iq_access': True,
             'has_hedge_fund_iq_access': True,
             'hedge_fund_iq_tickers': ['*'],
-            'has_analysis_iq_access': True,
             'analysis_iq_modules': list(_ANALYSIS_IQ_MODULES_FULL),
             'allowed_behavioral_categories': ['*'],
             'allowed_categories': ['*'],
@@ -8942,7 +8919,6 @@ def compute_product_access_flags(user, role):
             'rankers_iq_options': ['*'],
             'has_ticket_sales_iq_access': True,
             'has_ticket_sales_tracker_access': True,
-            'has_llmo_iq_access': True,
             'has_talent_fit_access': True,
             'has_flywheel_conversion_access': True,
             'has_brand_partnership_iq_access': True,
@@ -8952,6 +8928,7 @@ def compute_product_access_flags(user, role):
             'has_share_of_time_access': True,
             'has_share_of_time_run_access': True,
             'has_blue_iq_access': True,
+            'has_brand_tracking_iq_access': True,
             'has_intent_iq_access': True,
             'allowed_intent_iq_runs': ['*'],
             'has_impact_iq_access': True,
@@ -8979,12 +8956,10 @@ def compute_product_access_flags(user, role):
         'has_profile_iq_access': u.get('has_profile_iq_access', True),
         'has_subscriber_iq_access': bool(u.get('has_subscriber_iq_access', False)),
         'has_sf_conversion_access': bool(u.get('has_sf_conversion_access', False)),
-        'has_roas_iq_access': bool(u.get('has_roas_iq_access', True)),
         'has_ecommerce_iq_access': bool(u.get('has_ecommerce_iq_access', True)),
         'has_hedge_fund_iq_access': bool(u.get('has_hedge_fund_iq_access', False)),
         'hedge_fund_iq_tickers': u.get('hedge_fund_iq_tickers', ['*']) or ['*'],
         'hedge_fund_iq_data_cutoff': u.get('hedge_fund_iq_data_cutoff', None),
-        'has_analysis_iq_access': bool(u.get('has_analysis_iq_access', False)),
         'analysis_iq_modules': list(u.get('analysis_iq_modules', []) or []),
         'allowed_behavioral_categories': u.get('allowed_behavioral_categories', ['*']) or ['*'],
         'allowed_categories': u.get('allowed_categories', ['*']) or ['*'],
@@ -8993,16 +8968,23 @@ def compute_product_access_flags(user, role):
         'rankers_iq_options': u.get('rankers_iq_options', []) or [],
         'has_ticket_sales_iq_access': u.get('has_ticket_sales_iq_access', True) is not False,
         'has_ticket_sales_tracker_access': bool(u.get('has_ticket_sales_tracker_access', False)),
-        'has_llmo_iq_access': bool(u.get('has_llmo_iq_access', False)),
         'has_talent_fit_access': bool(u.get('has_talent_fit_access', False)),
         'has_flywheel_conversion_access': bool(u.get('has_flywheel_conversion_access', False)),
         'has_brand_partnership_iq_access': bool(u.get('has_brand_partnership_iq_access', False)),
         'has_sentiment_iq_access': bool(u.get('has_sentiment_iq_access', False)),
         'has_journey_iq_access': bool(u.get('has_journey_iq_access', False)),
-        'has_workspace_access': bool(u.get('has_workspace_access', True)),
+        # has_workspace_access retained ONLY as legacy plumbing for
+        # /api/collab/* deck-collab routes (2026-09-03 Workspace product
+        # retired from admin UI + dashboard). Hardcoded True: the flag no
+        # longer flows from users.json (removed from _PRODUCT_ACCESS_FIELDS
+        # + create_user + update_user etc.), so admin can no longer toggle
+        # it. Deck Builder Live Feature toggle handles collab availability
+        # globally.
+        'has_workspace_access': True,
         'has_share_of_time_access': has_sot_view,
         'has_share_of_time_run_access': has_sot_run,
         'has_blue_iq_access': bool(u.get('has_blue_iq_access', False)),
+        'has_brand_tracking_iq_access': bool(u.get('has_brand_tracking_iq_access', False)),
         'has_intent_iq_access': bool(u.get('has_intent_iq_access', True)),
         'allowed_intent_iq_runs': list(u.get('allowed_intent_iq_runs', ['*']) or ['*']),
         'has_impact_iq_access': bool(u.get('has_impact_iq_access', True)),
@@ -9045,10 +9027,17 @@ def compute_product_access_flags(user, role):
 
 
 def apply_cloak_product_access_overrides(access):
-    """Mutate access dict when admin is cloaked (Analysis IQ always on)."""
+    """Mutate access dict when admin is cloaked.
+
+    Analysis IQ was retired 2026-09-03 as a top-level flag, but the
+    sub-module list (analysis_iq_modules) still gates SF Conversion,
+    Flywheel Conversion, Journey IQ, Brand Partnership, and Intent
+    Ingest via compound checks. Cloak preserves full sub-module
+    visibility so a cloaked super_admin sees exactly what the end
+    user would with all modules granted.
+    """
     if session.get('cloaked_from'):
         access = dict(access)
-        access['has_analysis_iq_access'] = True
         access['analysis_iq_modules'] = list(_ANALYSIS_IQ_MODULES_FULL)
     return access
 
@@ -9071,12 +9060,10 @@ def api_me_product_access():
 
 
 def _current_user_has_llmo_iq_access():
-    user = get_current_user()
-    if not user:
-        return False
-    role = _normalize_role(user.get('role', 'user'))
-    acc = apply_cloak_product_access_overrides(compute_product_access_flags(user, role))
-    return bool(acc.get('has_llmo_iq_access'))
+    """LLMO IQ retired 2026-09-03. Retained as a permanently-False
+    stub so existing /api/llmo-iq/* routes return 403 without needing
+    to delete the routes themselves."""
+    return False
 
 
 def _current_user_share_of_time_access():
@@ -9112,11 +9099,9 @@ def index():
     has_profile_iq = _acc['has_profile_iq_access']
     has_subscriber_iq = _acc['has_subscriber_iq_access']
     has_sf_conversion = _acc['has_sf_conversion_access']
-    has_roas_iq = _acc['has_roas_iq_access']
     has_ecommerce_iq = _acc['has_ecommerce_iq_access']
     has_hedge_fund_iq = _acc['has_hedge_fund_iq_access']
     hedge_fund_iq_tickers = _acc['hedge_fund_iq_tickers']
-    has_analysis_iq = _acc['has_analysis_iq_access']
     analysis_iq_modules = _acc['analysis_iq_modules']
     allowed_behavioral_categories = _acc['allowed_behavioral_categories']
     allowed_categories = _acc['allowed_categories']
@@ -9125,16 +9110,15 @@ def index():
     rankers_iq_options = _acc['rankers_iq_options']
     has_ticket_sales_iq = _acc['has_ticket_sales_iq_access']
     has_ticket_sales_tracker = _acc['has_ticket_sales_tracker_access']
-    has_llmo_iq = _acc['has_llmo_iq_access']
     has_talent_fit = _acc.get('has_talent_fit_access', False)
     has_flywheel_conversion = _acc.get('has_flywheel_conversion_access', False)
     has_brand_partnership_iq = _acc.get('has_brand_partnership_iq_access', False)
     has_sentiment_iq = _acc.get('has_sentiment_iq_access', False)
     has_journey_iq = _acc.get('has_journey_iq_access', False)
-    has_workspace = _acc.get('has_workspace_access', True)
     has_share_of_time = _acc.get('has_share_of_time_access', True)
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
     has_blue_iq = _acc.get('has_blue_iq_access', False)
+    has_brand_tracking_iq = _acc.get('has_brand_tracking_iq_access', False)
     has_intent_iq = _acc.get('has_intent_iq_access', True)
     has_impact_iq = _acc.get('has_impact_iq_access', True)
     impact_iq_journeys = _acc.get('impact_iq_journeys', ['*']) or ['*']
@@ -9175,11 +9159,9 @@ def index():
                            has_profile_iq_access=has_profile_iq,
                            has_subscriber_iq_access=has_subscriber_iq,
                            has_sf_conversion_access=has_sf_conversion,
-                           has_roas_iq_access=has_roas_iq,
                            has_ecommerce_iq_access=has_ecommerce_iq,
                            has_hedge_fund_iq_access=has_hedge_fund_iq,
                            hedge_fund_iq_tickers=hedge_fund_iq_tickers,
-                           has_analysis_iq_access=has_analysis_iq,
                            analysis_iq_modules=analysis_iq_modules,
                            allowed_behavioral_categories=allowed_behavioral_categories,
                            allowed_runs=allowed_runs,
@@ -9188,16 +9170,15 @@ def index():
                            rankers_iq_options=rankers_iq_options,
                            has_ticket_sales_iq_access=has_ticket_sales_iq,
                            has_ticket_sales_tracker_access=has_ticket_sales_tracker,
-                           has_llmo_iq_access=has_llmo_iq,
                            has_talent_fit_access=has_talent_fit,
                            has_flywheel_conversion_access=has_flywheel_conversion,
                            has_brand_partnership_iq_access=has_brand_partnership_iq,
                            has_sentiment_iq_access=has_sentiment_iq,
                            has_journey_iq_access=has_journey_iq,
-                           has_workspace_access=has_workspace,
                            has_share_of_time_access=has_share_of_time,
                            has_share_of_time_run_access=has_share_of_time_run,
                            has_blue_iq_access=has_blue_iq,
+                           has_brand_tracking_iq_access=has_brand_tracking_iq,
                            has_intent_iq_access=has_intent_iq,
                            has_impact_iq_access=has_impact_iq,
                            impact_iq_journeys=impact_iq_journeys,
@@ -21011,19 +20992,16 @@ DEFAULT_HIDDEN_PRODUCTS = {
     'trendsIQ': False,
     'blueIQ': False,
     'hedgeFundIQ': False,
-    'llmoIQ': False,
     'sfConversion': False,
     'intentIQ': False,
     'impactIQ': False,          # 2026-07-22 sync-gap fix (was in dropdown/admin, missing here)
-    'roasIQ': False,
     'brandPartnershipIQ': False,
     'flywheelConversion': False,
-    'customAnalysis': False,
     'shareOfTimeIQ': False,
-    'workspace': True,
     'helmIQ': False,
     'microdramasIQ': False,     # 2026-07-22 added with <option value="microdramasIQ">
     'chatbotProfileIQ': False,  # 2026-08-17 Chatbot Profile IQ - Analysis IQ sub-tab
+    'brandTrackingIQ': False,   # 2026-09-03 added with <option value="brandTrackingIQ">
 }
 
 

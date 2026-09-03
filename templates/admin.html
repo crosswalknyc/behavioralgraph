@@ -2282,10 +2282,6 @@
                                 <span>📈 Fin IQ</span>
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" class="hidden-product-checkbox" data-product="llmoIQ" onchange="updateHiddenProduct('llmoIQ', this.checked)">
-                                <span>🤖 LLMO IQ</span>
-                            </label>
-                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="sfConversion" onchange="updateHiddenProduct('sfConversion', this.checked)">
                                 <span>🔄 SF Conversion</span>
                             </label>
@@ -2298,10 +2294,6 @@
                                 <span>🌊 Impact IQ</span>
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" class="hidden-product-checkbox" data-product="roasIQ" onchange="updateHiddenProduct('roasIQ', this.checked)">
-                                <span>💰 ROAS IQ</span>
-                            </label>
-                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="brandPartnershipIQ" onchange="updateHiddenProduct('brandPartnershipIQ', this.checked)">
                                 <span>🤝 Brand Partnership</span>
                             </label>
@@ -2310,16 +2302,8 @@
                                 <span>🔄 Flywheel Conversion</span>
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" class="hidden-product-checkbox" data-product="customAnalysis" onchange="updateHiddenProduct('customAnalysis', this.checked)">
-                                <span>🔧 Analysis IQ</span>
-                            </label>
-                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="shareOfTimeIQ" onchange="updateHiddenProduct('shareOfTimeIQ', this.checked)">
                                 <span>⏱️ Share of Time</span>
-                            </label>
-                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" class="hidden-product-checkbox" data-product="workspace" onchange="updateHiddenProduct('workspace', this.checked)">
-                                <span>🗂️ Workspace</span>
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="helmIQ" onchange="updateHiddenProduct('helmIQ', this.checked)">
@@ -2327,11 +2311,15 @@
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="microdramasIQ" onchange="updateHiddenProduct('microdramasIQ', this.checked)">
-                                <span>📱 Microdramas</span>
+                                <span>📱 Microseries</span>
                             </label>
                             <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" class="hidden-product-checkbox" data-product="chatbotProfileIQ" onchange="updateHiddenProduct('chatbotProfileIQ', this.checked)">
                                 <span>💬 Chatbot Profile IQ</span>
+                            </label>
+                            <label class="checkbox-group" style="padding: 0.6rem 0.75rem; background: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" class="hidden-product-checkbox" data-product="brandTrackingIQ" onchange="updateHiddenProduct('brandTrackingIQ', this.checked)">
+                                <span>📡 Brand Tracking</span>
                             </label>
                         </div>
                         <div style="margin-top: 0.75rem; padding: 0.6rem 0.75rem; background: rgba(124, 58, 237, 0.08); border-radius: 6px; border: 1px solid rgba(124, 58, 237, 0.25);">
@@ -2822,9 +2810,6 @@
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdSubscriberIQ"> Subscriber IQ
                                     </label>
-                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                        <input type="checkbox" id="cdROASIQ" checked> ROAS IQ
-                                    </label>
                                     <label style="display: none; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <!-- E-Commerce IQ removed from the dashboard; checkbox kept (hidden) so JS handlers that read cdEcommerceIQ.checked don't null-deref. -->
                                         <input type="checkbox" id="cdEcommerceIQ" checked> E-Commerce IQ
@@ -2842,19 +2827,10 @@
                                         <input type="checkbox" id="cdHedgeFundIQ"> Fin IQ
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                        <input type="checkbox" id="cdAnalysisIQ"> Analysis IQ
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                        <input type="checkbox" id="cdWorkspace" checked> Workspace
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdRankersIQ"> 📊 Rankers
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdTicketTracker"> Ticket Sales Tracker
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
-                                        <input type="checkbox" id="cdLLMOIQ"> LLMO IQ
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdTalentFit"> Talent Fit Assessment
@@ -2870,6 +2846,9 @@
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdBlueIQ"> Blue IQ
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
+                                        <input type="checkbox" id="cdBrandTrackingIQ"> Brand Tracking
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; cursor: pointer;">
                                         <input type="checkbox" id="cdImpactIQNew"> Impact IQ
@@ -2895,13 +2874,7 @@
                                         <input type="checkbox" id="cdAanEcommerceIQ" checked> E-Commerce IQ
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
-                                        <input type="checkbox" id="cdAanLLMOIQ" checked> LLMO IQ
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
                                         <input type="checkbox" id="cdAanHedgeFundIQ" checked> Fin IQ
-                                    </label>
-                                    <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
-                                        <input type="checkbox" id="cdAanAnalysisIQ" checked> Analysis IQ
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; cursor: pointer;">
                                         <input type="checkbox" id="cdAanRankersIQ" checked> Rankers IQ
@@ -3592,9 +3565,7 @@
                             <label class="aan-pill"><input type="checkbox" id="aanProfileIQ" checked><span>🎯 Profile IQ</span></label>
                             <label class="aan-pill"><input type="checkbox" id="aanSubscriberIQ" checked><span>📊 Subscriber IQ</span></label>
                             <label class="aan-pill"><input type="checkbox" id="aanImpactIQ" checked><span>🌊 Impact IQ</span></label>
-                            <label class="aan-pill"><input type="checkbox" id="aanLLMOIQ" checked><span>🤖 LLMO IQ</span></label>
                             <label class="aan-pill"><input type="checkbox" id="aanHedgeFundIQ" checked><span>📈 Fin IQ</span></label>
-                            <label class="aan-pill"><input type="checkbox" id="aanAnalysisIQ" checked><span>📊 Analysis IQ</span></label>
                             <label class="aan-pill"><input type="checkbox" id="aanRankersIQ" checked><span>📊 Rankers</span></label>
                             <!-- Retired features - inputs kept for JS back-compat, pill hidden. -->
                             <label class="aan-pill" style="display: none;"><input type="checkbox" id="aanEcommerceIQ" checked><span>🛒 E-Commerce IQ</span></label>
@@ -3737,20 +3708,6 @@
                         </div>
                     </div>
 
-                    <!-- 💰 ROAS IQ Access - restored 2026-07-30 per Jenna
-                         ("make sure all features have toggle on/offs for
-                         each user"). ROAS IQ is a live product in the
-                         SELECT PRODUCT dropdown (index.html:18285); admins
-                         need a per-user grant toggle for it. -->
-                    <div class="dashboard-access-item" data-access-group="conversion" title="Grants this user access to the ROAS IQ view in the SELECT PRODUCT dropdown.">
-                        <div class="dashboard-access-header">
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="hasROASIQAccess">
-                                <span style="font-weight: 600;">💰 ROAS IQ</span>
-                            </label>
-                        </div>
-                    </div>
-
                     <!-- E-Commerce IQ Access - section hidden (E-Commerce IQ
                          was fully removed from the dashboard). The
                          hasEcommerceIQAccess checkbox is kept (hidden) so
@@ -3766,16 +3723,6 @@
                         <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; padding: 0 0.5rem 0.5rem 1.75rem;">
                             Gates the E-Commerce IQ option in the Analysis IQ dropdown and access to released E-Commerce IQ reports.
                         </small>
-                    </div>
-
-                    <!-- Workspace Access -->
-                    <div class="dashboard-access-item" data-access-group="core">
-                        <div class="dashboard-access-header">
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="hasWorkspaceAccess" checked>
-                                <span style="font-weight: 600;">🗂️ WORKSPACE</span>
-                            </label>
-                        </div>
                     </div>
 
                     <!-- SF Conversion Access -->
@@ -3872,22 +3819,22 @@
                         </div>
                     </div>
 
-                    <!-- LLMO IQ Access -->
-                    <div class="dashboard-access-item" data-access-group="finance">
-                        <div class="dashboard-access-header">
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="hasLLMOIQAccess">
-                                <span style="font-weight: 600;">🤖 LLMO IQ</span>
-                            </label>
-                        </div>
-                    </div>
-
                     <!-- Blue IQ Access -->
                     <div class="dashboard-access-item" data-access-group="trends">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasBlueIQAccess">
                                 <span style="font-weight: 600;">🗳️ BLUE IQ</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Brand Tracking Access -->
+                    <div class="dashboard-access-item" data-access-group="finance">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasBrandTrackingIQAccess">
+                                <span style="font-weight: 600;">📡 BRAND TRACKING</span>
                             </label>
                         </div>
                     </div>
@@ -4017,77 +3964,6 @@
                         </div>
                     </div>
                     
-                    <!-- Analysis IQ Access -->
-                    <div class="dashboard-access-item" data-access-group="finance">
-                        <div class="dashboard-access-header" onclick="toggleDashboardSection('analysisIQ')">
-                            <label class="checkbox-group" onclick="event.stopPropagation()">
-                                <input type="checkbox" id="hasAnalysisIQAccess" onchange="toggleAnalysisIQSection()">
-                                <span style="font-weight: 600;">📊 ANALYSIS IQ</span>
-                            </label>
-                            <span class="collapse-icon rotated" id="analysisIQIcon">▼</span>
-                        </div>
-                        <div id="analysisIQSection" class="dashboard-access-content" style="display: none;">
-                            <div style="padding: 1rem; background: var(--bg-dark); border-radius: 8px; margin-top: 0.5rem;">
-                                <h5 style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--accent-cyan);">📑 Module Access</h5>
-                                <label class="checkbox-group" style="margin-bottom: 0.75rem;">
-                                    <input type="checkbox" id="allAnalysisModules" onchange="toggleAllAnalysisModules()">
-                                    <span>All Modules</span>
-                                </label>
-                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleProfileAnalysis" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
-                                        <span>🎯 Profile Analysis</span>
-                                    </label>
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleTalentSearch" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
-                                        <span>🔍 Talent Search</span>
-                                    </label>
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleTalentTheater" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
-                                        <span>🎭 Ticket Sales</span>
-                                    </label>
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleSVOD" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
-                                        <span>📺 SVOD</span>
-                                    </label>
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleCampaign" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
-                                        <span>📈 Campaign</span>
-                                    </label>
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleCrossShow" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
-                                        <span>🔄 Cross Show</span>
-                                    </label>
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleWatchTime" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
-                                        <span>⏱️ Watch Time</span>
-                                    </label>
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleTicketSalesTracker" class="analysis-module-checkbox" onchange="syncTSTRunWithModule(); updateAllAnalysisModulesCheckbox()">
-                                        <span>🎬 Ticket Sales Tracker</span>
-                                    </label>
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleSFLFConversion" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
-                                        <span>🔄 SF-LF Conversion</span>
-                                    </label>
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleFlywheelConversion" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
-                                        <span>🔄 Flywheel Conversion</span>
-                                    </label>
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleBrandPartnership" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
-                                        <span>🤝 Brand Partnership Valuation</span>
-                                    </label>
-                                    <label class="checkbox-group">
-                                        <input type="checkbox" id="moduleIntentIngest" class="analysis-module-checkbox" onchange="updateAllAnalysisModulesCheckbox()">
-                                        <span>🎯 Build Attribution IQ Campaign</span>
-                                    </label>
-                                </div>
-                                <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">Credits can be used on any selected module</small>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Chatbot Profile IQ Access (2026-08-17) - sub-tab in Analysis IQ.
                          Runs a natural-language chat that produces an approvable brief,
                          then kicks off a row-by-row synthesis on Hetzner. Kept as its
@@ -4222,7 +4098,7 @@
                                         <span>View TST Dashboard</span>
                                     </label>
                                     <label class="checkbox-group">
-                                        <input type="checkbox" id="hasTicketSalesTrackerRun" class="analysis-module-checkbox" onchange="syncTSTRunWithModule(); updateAllAnalysisModulesCheckbox();">
+                                        <input type="checkbox" id="hasTicketSalesTrackerRun" onchange="syncTSTRunWithModule();">
                                         <span>Run TST via Analysis IQ</span>
                                     </label>
                                 </div>
@@ -4280,7 +4156,7 @@
                         <div class="dashboard-access-header" style="cursor: default;">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasMicrodramasIQAccess">
-                                <span style="font-weight: 600;">📱 Microdramas</span>
+                                <span style="font-weight: 600;">📱 Microseries</span>
                             </label>
                         </div>
                     </div>
@@ -4955,22 +4831,22 @@
         const SUPER_ADMIN_ONLY_USER_FIELDS = [
             'role',
             'has_profile_iq_access','has_subscriber_iq_access',
-            'has_roas_iq_access','has_ecommerce_iq_access',
+            'has_ecommerce_iq_access',
             'has_ticket_sales_iq_access',
             'has_hedge_fund_iq_access','gets_hedge_fund_iq_emails',
             'hedge_fund_iq_tabs','hedge_fund_iq_tickers',
             'hedge_fund_iq_data_cutoff',
-            'has_analysis_iq_access','analysis_iq_modules',
+            'analysis_iq_modules',
             'has_ticket_sales_tracker_access',
             'has_rankers_iq_access','rankers_iq_options',
-            'has_llmo_iq_access','has_talent_fit_access',
+            'has_talent_fit_access',
             'has_sf_conversion_access','has_flywheel_conversion_access',
             'has_brand_partnership_iq_access','has_sentiment_iq_access',
             'has_journey_iq_access','allowed_journey_iq_runs',
             'has_intent_iq_access','allowed_intent_iq_runs',
-            'has_workspace_access',
             'has_share_of_time_access','has_share_of_time_run_access',
             'has_blue_iq_access',
+            'has_brand_tracking_iq_access',
             'has_impact_iq_access','impact_iq_journeys',
             'has_trends_iq_access','has_microdramas_iq_access',
             'allowed_lenses',
@@ -5652,16 +5528,12 @@
                 if (d) {
                     document.getElementById('cdProfileIQ').checked = d.has_profile_iq_access !== false;
                     document.getElementById('cdSubscriberIQ').checked = !!d.has_subscriber_iq_access;
-                    document.getElementById('cdROASIQ').checked = d.has_roas_iq_access !== false; // Default true (matches backend)
                     document.getElementById('cdEcommerceIQ').checked = d.has_ecommerce_iq_access !== false; // Default true (matches backend)
                     document.getElementById('cdImpactIQ').checked = d.has_ticket_sales_iq_access !== false;
                     document.getElementById('cdShareOfTimeView').checked = d.has_share_of_time_access !== false;
                     document.getElementById('cdShareOfTimeRun').checked = d.has_share_of_time_run_access !== false;
-                    document.getElementById('cdWorkspace').checked = d.has_workspace_access !== false;
                     document.getElementById('cdHedgeFundIQ').checked = !!d.has_hedge_fund_iq_access;
-                    document.getElementById('cdAnalysisIQ').checked = !!d.has_analysis_iq_access;
                     document.getElementById('cdRankersIQ').checked = !!d.has_rankers_iq_access;
-                    document.getElementById('cdLLMOIQ').checked = !!d.has_llmo_iq_access;
                     document.getElementById('cdTalentFit').checked = !!d.has_talent_fit_access;
                     document.getElementById('cdTicketTracker').checked = !!d.has_ticket_sales_tracker_access;
                     var cdBp = document.getElementById('cdBrandPartnership');
@@ -5672,6 +5544,8 @@
                     if (cdIntent) cdIntent.checked = d.has_intent_iq_access !== false;
                     var cdBiq = document.getElementById('cdBlueIQ');
                     if (cdBiq) cdBiq.checked = !!d.has_blue_iq_access;
+                    var cdBt = document.getElementById('cdBrandTrackingIQ');
+                    if (cdBt) cdBt.checked = !!d.has_brand_tracking_iq_access;
                     var cdIiq = document.getElementById('cdImpactIQNew');
                     if (cdIiq) cdIiq.checked = d.has_impact_iq_access !== false; // Default true (opt-out)
                     syncCompanyDefaultsShareOfTime();
@@ -5682,9 +5556,7 @@
                     document.getElementById('cdAanSubscriberIQ').checked = cdAan.subscriber_iq !== false;
                     document.getElementById('cdAanImpactIQ').checked = cdAan.roas_iq !== false;
                     document.getElementById('cdAanEcommerceIQ').checked = cdAan.ecommerce_iq !== false;
-                    document.getElementById('cdAanLLMOIQ').checked = cdAan.llmo_iq !== false;
                     document.getElementById('cdAanHedgeFundIQ').checked = cdAan.hedge_fund_iq !== false;
-                    document.getElementById('cdAanAnalysisIQ').checked = cdAan.analysis_iq !== false;
                     document.getElementById('cdAanRankersIQ').checked = cdAan.rankers_iq !== false;
                     document.getElementById('cdAanTicketSalesTracker').checked = cdAan.ticket_sales_tracker !== false;
                     document.getElementById('cdAanTicketSalesIQ').checked = cdAan.ticket_sales_iq !== false;
@@ -5721,22 +5593,19 @@
                 allowed_behavioral_categories: behs,
                 has_profile_iq_access: document.getElementById('cdProfileIQ').checked,
                 has_subscriber_iq_access: document.getElementById('cdSubscriberIQ').checked,
-                has_roas_iq_access: document.getElementById('cdROASIQ').checked,
                 has_ecommerce_iq_access: document.getElementById('cdEcommerceIQ').checked,
                 has_ticket_sales_iq_access: document.getElementById('cdImpactIQ').checked,
                 has_share_of_time_access: document.getElementById('cdShareOfTimeView').checked,
                 has_share_of_time_run_access: document.getElementById('cdShareOfTimeRun').checked && document.getElementById('cdShareOfTimeView').checked,
-                has_workspace_access: document.getElementById('cdWorkspace').checked,
                 has_hedge_fund_iq_access: document.getElementById('cdHedgeFundIQ').checked,
-                has_analysis_iq_access: document.getElementById('cdAnalysisIQ').checked,
                 has_rankers_iq_access: document.getElementById('cdRankersIQ').checked,
-                has_llmo_iq_access: document.getElementById('cdLLMOIQ').checked,
                 has_talent_fit_access: document.getElementById('cdTalentFit').checked,
                 has_ticket_sales_tracker_access: document.getElementById('cdTicketTracker').checked,
                 has_brand_partnership_iq_access: !!(document.getElementById('cdBrandPartnership') && document.getElementById('cdBrandPartnership').checked),
                 has_journey_iq_access: !!(document.getElementById('cdJourneyIQ') && document.getElementById('cdJourneyIQ').checked),
                 has_intent_iq_access: !!(document.getElementById('cdIntentIQ') && document.getElementById('cdIntentIQ').checked),
                 has_blue_iq_access: !!(document.getElementById('cdBlueIQ') && document.getElementById('cdBlueIQ').checked),
+                has_brand_tracking_iq_access: !!(document.getElementById('cdBrandTrackingIQ') && document.getElementById('cdBrandTrackingIQ').checked),
                 has_impact_iq_access: !!(document.getElementById('cdImpactIQNew') && document.getElementById('cdImpactIQNew').checked),
                 credits: parseInt(document.getElementById('cdDefaultCredits').value) || 5,
                 auto_access_new: {
@@ -5744,9 +5613,7 @@
                     subscriber_iq: document.getElementById('cdAanSubscriberIQ').checked,
                     roas_iq: document.getElementById('cdAanImpactIQ').checked,
                     ecommerce_iq: document.getElementById('cdAanEcommerceIQ').checked,
-                    llmo_iq: document.getElementById('cdAanLLMOIQ').checked,
                     hedge_fund_iq: document.getElementById('cdAanHedgeFundIQ').checked,
-                    analysis_iq: document.getElementById('cdAanAnalysisIQ').checked,
                     rankers_iq: document.getElementById('cdAanRankersIQ').checked,
                     ticket_sales_tracker: document.getElementById('cdAanTicketSalesTracker').checked,
                     ticket_sales_iq: document.getElementById('cdAanTicketSalesIQ').checked,
@@ -5802,9 +5669,7 @@
                 subscriber_iq: document.getElementById('cdAanSubscriberIQ').checked,
                 roas_iq: document.getElementById('cdAanImpactIQ').checked,
                 ecommerce_iq: document.getElementById('cdAanEcommerceIQ').checked,
-                llmo_iq: document.getElementById('cdAanLLMOIQ').checked,
                 hedge_fund_iq: document.getElementById('cdAanHedgeFundIQ').checked,
-                analysis_iq: document.getElementById('cdAanAnalysisIQ').checked,
                 rankers_iq: document.getElementById('cdAanRankersIQ').checked,
                 ticket_sales_tracker: document.getElementById('cdAanTicketSalesTracker').checked,
                 ticket_sales_iq: document.getElementById('cdAanTicketSalesIQ').checked,
@@ -6848,7 +6713,6 @@
             'brand_partnership_iq': { label: 'Brand Partnership Valuation', icon: '🤝' },
             'journey_iq': { label: 'Digital Journey', icon: '🗺️' },
             'intent_ingest': { label: 'Intent Ingest', icon: '🎯' },
-            'roas_iq': { label: 'ROAS IQ', icon: '💹' },
             'ecommerce_iq': { label: 'Ecommerce IQ', icon: '🛒' }
         };
         
@@ -7846,11 +7710,12 @@
         let hiddenProductsData = {
             profileIQ: false, subscriberIQ: false, journeyIQ: false,
             cultureRankerIQ: false, trendsIQ: false, blueIQ: false, hedgeFundIQ: false,
-            llmoIQ: false, sfConversion: false, intentIQ: false,
+            sfConversion: false, intentIQ: false,
             impactIQ: false,
-            roasIQ: false, brandPartnershipIQ: false, flywheelConversion: false,
-            customAnalysis: false, shareOfTimeIQ: false, workspace: false,
-            helmIQ: false, microdramasIQ: false, chatbotProfileIQ: false
+            brandPartnershipIQ: false, flywheelConversion: false,
+            shareOfTimeIQ: false,
+            helmIQ: false, microdramasIQ: false, chatbotProfileIQ: false,
+            brandTrackingIQ: false
         };
 
         // 2026-09-02 (Jenna): global default-hide state for Trends IQ
@@ -10007,7 +9872,6 @@
             document.getElementById('allBehavioralCategories').checked = true;
             document.getElementById('hasProfileIQAccess').checked = true;
             document.getElementById('hasSubscriberIQAccess').checked = false;
-            document.getElementById('hasWorkspaceAccess').checked = true;
             document.getElementById('hasSFConversionAccess').checked = false;
             document.getElementById('hasFlywheelConversionAccess').checked = false;
             var bpAccessReset = document.getElementById('hasBrandPartnershipIQAccess');
@@ -10021,10 +9885,10 @@
             document.getElementById('hasHedgeFundIQAccess').checked = false;
             document.getElementById('getsHedgeFundIQEmails').checked = false;
             document.getElementById('hedgeFundIQDataCutoff').value = '';
-            document.getElementById('hasAnalysisIQAccess').checked = false;
-            document.getElementById('hasLLMOIQAccess').checked = false;
             var biqAccessReset = document.getElementById('hasBlueIQAccess');
             if (biqAccessReset) biqAccessReset.checked = false;
+            var btAccessReset = document.getElementById('hasBrandTrackingIQAccess');
+            if (btAccessReset) btAccessReset.checked = false;
             var iiqAccessReset = document.getElementById('hasImpactIQAccess');
             if (iiqAccessReset) iiqAccessReset.checked = false;
             setImpactIQJourneys(['*']);
@@ -10055,13 +9919,6 @@
             document.querySelectorAll('.hedge-fund-ticker-checkbox').forEach(cb => cb.checked = false);
             document.getElementById('allHedgeFundTabs').checked = false;
             document.getElementById('allHedgeFundTickers').checked = false;
-            
-            // Reset Analysis IQ section
-            document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
-            const allModEl = document.getElementById('allAnalysisModules');
-            if (allModEl) { allModEl.checked = false; allModEl.indeterminate = false; }
-            document.getElementById('analysisIQSection').style.display = 'none';
-            document.getElementById('analysisIQIcon').classList.add('rotated');
             
             // 2026-07-30: Collaboration Team reset removed (section deleted;
             // everyone collaborates with everyone).
@@ -10119,9 +9976,7 @@
             document.getElementById('aanSubscriberIQ').checked = true;
             document.getElementById('aanImpactIQ').checked = true;
             document.getElementById('aanEcommerceIQ').checked = true;
-            document.getElementById('aanLLMOIQ').checked = true;
             document.getElementById('aanHedgeFundIQ').checked = true;
-            document.getElementById('aanAnalysisIQ').checked = true;
             document.getElementById('aanRankersIQ').checked = true;
             document.getElementById('aanTicketSalesTracker').checked = true;
             document.getElementById('aanTicketSalesIQ').checked = true;
@@ -10182,9 +10037,7 @@
             document.getElementById('allBehavioralCategories').checked = user.allowed_behavioral_categories?.includes('*') ?? true; // Default true
             document.getElementById('hasProfileIQAccess').checked = user.has_profile_iq_access !== false; // Default true
             document.getElementById('hasSubscriberIQAccess').checked = user.has_subscriber_iq_access === true; // Default false
-            document.getElementById('hasROASIQAccess').checked = user.has_roas_iq_access !== false; // Default true (matches backend)
             document.getElementById('hasEcommerceIQAccess').checked = user.has_ecommerce_iq_access !== false; // Default true (matches backend)
-            document.getElementById('hasWorkspaceAccess').checked = user.has_workspace_access !== false; // Default true
             document.getElementById('hasSFConversionAccess').checked = user.has_sf_conversion_access === true; // Default false
             document.getElementById('hasFlywheelConversionAccess').checked = user.has_flywheel_conversion_access === true; // Default false
             var bpAccess = document.getElementById('hasBrandPartnershipIQAccess');
@@ -10201,10 +10054,10 @@
             document.getElementById('hasTicketSalesIQAccess').checked = user.has_ticket_sales_iq_access !== false; // Default true
             document.getElementById('hasHedgeFundIQAccess').checked = user.has_hedge_fund_iq_access === true; // Default false
             document.getElementById('getsHedgeFundIQEmails').checked = user.gets_hedge_fund_iq_emails === true; // Default false
-            document.getElementById('hasAnalysisIQAccess').checked = user.has_analysis_iq_access === true; // Default false
-            document.getElementById('hasLLMOIQAccess').checked = user.has_llmo_iq_access === true; // Default false
             var biqAccess = document.getElementById('hasBlueIQAccess');
             if (biqAccess) biqAccess.checked = user.has_blue_iq_access === true; // Default false
+            var btAccess = document.getElementById('hasBrandTrackingIQAccess');
+            if (btAccess) btAccess.checked = user.has_brand_tracking_iq_access === true; // Default false
             var tiqAccess = document.getElementById('hasTrendsIQAccess');
             if (tiqAccess) tiqAccess.checked = user.has_trends_iq_access === true; // Default false
             var mdAccess = document.getElementById('hasMicrodramasIQAccess');
@@ -10273,10 +10126,6 @@
             // Set Fin IQ access (tabs and tickers)
             setHedgeFundIQAccess(user);
             
-            // Set Analysis IQ modules and show/hide section
-            setAnalysisIQModules(user.analysis_iq_modules || []);
-            toggleAnalysisIQSection();
-            
             // Set Rankers IQ access and options
             setRankersIQAccess(user);
             toggleRankersIQSection();
@@ -10287,9 +10136,7 @@
             document.getElementById('aanSubscriberIQ').checked = aan.subscriber_iq !== false;
             document.getElementById('aanImpactIQ').checked = aan.roas_iq !== false;
             document.getElementById('aanEcommerceIQ').checked = aan.ecommerce_iq !== false;
-            document.getElementById('aanLLMOIQ').checked = aan.llmo_iq !== false;
             document.getElementById('aanHedgeFundIQ').checked = aan.hedge_fund_iq !== false;
-            document.getElementById('aanAnalysisIQ').checked = aan.analysis_iq !== false;
             document.getElementById('aanRankersIQ').checked = aan.rankers_iq !== false;
             document.getElementById('aanTicketSalesTracker').checked = aan.ticket_sales_tracker !== false;
             document.getElementById('aanTicketSalesIQ').checked = aan.ticket_sales_iq !== false;
@@ -11682,7 +11529,6 @@
             const drawers = [
                 { section: 'profileIQSection',           icon: 'profileIQIcon' },
                 { section: 'hedgeFundIQSection',         icon: 'hedgeFundIQIcon' },
-                { section: 'analysisIQSection',          icon: 'analysisIQIcon' },
                 { section: 'rankersIQSection',           icon: 'rankersIQIcon' },
                 { section: 'shareOfTimeSection',         icon: 'shareOfTimeIcon' },
                 { section: 'journeyIqRunAccessContent',  icon: 'journeyIqRunAccessIcon' },
@@ -11712,20 +11558,17 @@
             const defaults = {
                 hasProfileIQAccess: true,
                 hasSubscriberIQAccess: false,
-                hasWorkspaceAccess: true,
                 hasSFConversionAccess: false,
                 hasFlywheelConversionAccess: false,
                 hasBrandPartnershipIQAccess: false,
                 hasJourneyIQAccess: false,
                 hasIntentIQAccess: true,
                 hasImpactIQAccess: true,
-                hasROASIQAccess: false,
                 hasTrendsIQAccess: false,
                 hasMicrodramasIQAccess: false,
                 hasBlueIQAccess: false,
-                hasLLMOIQAccess: false,
+                hasBrandTrackingIQAccess: false,
                 hasHedgeFundIQAccess: false,
-                hasAnalysisIQAccess: false,
                 hasRankersIQAccess: false,
                 hasShareOfTimeAccess: true,
                 hasShareOfTimeRunAccess: true,
@@ -11835,44 +11678,6 @@
                 document.querySelectorAll('.hedge-fund-tab-checkbox').forEach(cb => cb.checked = false);
                 document.querySelectorAll('.hedge-fund-ticker-checkbox').forEach(cb => cb.checked = false);
             }
-        }
-        
-        function toggleAnalysisIQSection() {
-            const checkbox = document.getElementById('hasAnalysisIQAccess');
-            const section = document.getElementById('analysisIQSection');
-            const icon = document.getElementById('analysisIQIcon');
-            
-            if (checkbox.checked) {
-                section.style.display = 'block';
-                icon.classList.remove('rotated');
-            } else {
-                section.style.display = 'none';
-                icon.classList.add('rotated');
-                // Uncheck all module checkboxes
-                document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
-                const allMod = document.getElementById('allAnalysisModules');
-                if (allMod) allMod.checked = false;
-            }
-        }
-        
-        function toggleAllAnalysisModules() {
-            const allMod = document.getElementById('allAnalysisModules');
-            const checkboxes = document.querySelectorAll('.analysis-module-checkbox');
-            checkboxes.forEach(cb => cb.checked = allMod.checked);
-        }
-        
-        function updateAllAnalysisModulesCheckbox() {
-            const allMod = document.getElementById('allAnalysisModules');
-            if (!allMod) return;
-            const checkboxes = document.querySelectorAll('.analysis-module-checkbox');
-            const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
-            allMod.checked = checked === checkboxes.length;
-            allMod.indeterminate = checked > 0 && checked < checkboxes.length;
-        }
-        
-        // Keep old function for backward compatibility
-        function toggleAnalysisIQModules() {
-            toggleAnalysisIQSection();
         }
         
         // Rankers IQ Section Toggle
@@ -12075,77 +11880,16 @@
             }
         }
 
-        function getAnalysisIQModules() {
-            const modules = [];
-            if (document.getElementById('moduleProfileAnalysis').checked) modules.push('profile_analysis');
-            if (document.getElementById('moduleTalentSearch').checked) modules.push('talent_search');
-            if (document.getElementById('moduleTalentTheater').checked) modules.push('talent_theater');
-            if (document.getElementById('moduleSVOD').checked) modules.push('svod');
-            if (document.getElementById('moduleCampaign').checked) modules.push('campaign');
-            if (document.getElementById('moduleCrossShow').checked) modules.push('cross_show');
-            if (document.getElementById('moduleWatchTime').checked) modules.push('watch_time');
-            if (document.getElementById('moduleTicketSalesTracker')?.checked || document.getElementById('hasTicketSalesTrackerRun')?.checked) modules.push('ticket_sales_tracker');
-            if (document.getElementById('moduleSFLFConversion')?.checked) modules.push('sf_lf_conversion');
-            if (document.getElementById('moduleFlywheelConversion')?.checked) modules.push('flywheel_conversion');
-            if (document.getElementById('moduleBrandPartnership')?.checked) modules.push('brand_partnership_iq');
-            if (document.getElementById('moduleIntentIngest')?.checked) modules.push('intent_ingest');
-            return modules;
-        }
-
-        function syncTSTRunWithModule() {
-            const run = document.getElementById('hasTicketSalesTrackerRun');
-            const mod = document.getElementById('moduleTicketSalesTracker');
-            if (run && mod) {
-                const checked = run.checked || mod.checked;
-                run.checked = checked;
-                mod.checked = checked;
-            }
-        }
+        // syncTSTRunWithModule is a no-op after the Analysis IQ drawer
+        // retirement (2026-09-03). Kept as a stub so inline onchange="..."
+        // handlers on hasTicketSalesTrackerRun / hasTicketSalesTrackerView
+        // don't throw. Removing the handler references is a separate cleanup.
+        function syncTSTRunWithModule() { /* Analysis IQ drawer retired */ }
         
-        function setAnalysisIQModules(modules) {
-            // Reset all checkboxes first
-            document.querySelectorAll('.analysis-module-checkbox').forEach(cb => cb.checked = false);
-            
-            if (!modules || modules.length === 0) {
-                updateAllAnalysisModulesCheckbox();
-                return;
-            }
-            
-            modules.forEach(mod => {
-                switch(mod) {
-                    case 'profile_analysis': document.getElementById('moduleProfileAnalysis').checked = true; break;
-                    case 'talent_search': document.getElementById('moduleTalentSearch').checked = true; break;
-                    case 'talent_theater': document.getElementById('moduleTalentTheater').checked = true; break;
-                    case 'svod': document.getElementById('moduleSVOD').checked = true; break;
-                    case 'campaign': document.getElementById('moduleCampaign').checked = true; break;
-                    case 'cross_show': document.getElementById('moduleCrossShow').checked = true; break;
-                    case 'watch_time': document.getElementById('moduleWatchTime').checked = true; break;
-                    case 'ticket_sales_tracker':
-                        const m = document.getElementById('moduleTicketSalesTracker');
-                        const r = document.getElementById('hasTicketSalesTrackerRun');
-                        if (m) m.checked = true;
-                        if (r) r.checked = true;
-                        break;
-                    case 'sf_lf_conversion':
-                        const sflf = document.getElementById('moduleSFLFConversion');
-                        if (sflf) sflf.checked = true;
-                        break;
-                    case 'flywheel_conversion':
-                        const fw = document.getElementById('moduleFlywheelConversion');
-                        if (fw) fw.checked = true;
-                        break;
-                    case 'brand_partnership_iq':
-                        const bp = document.getElementById('moduleBrandPartnership');
-                        if (bp) bp.checked = true;
-                        break;
-                    case 'intent_ingest':
-                        const ii = document.getElementById('moduleIntentIngest');
-                        if (ii) ii.checked = true;
-                        break;
-                }
-            });
-            updateAllAnalysisModulesCheckbox();
-        }
+        // setAnalysisIQModules is a no-op stub after the Analysis IQ
+        // drawer retirement (2026-09-03). No caller left; kept in case
+        // a stale bookmark or third-party clone still invokes it.
+        function setAnalysisIQModules(_modules) { /* Analysis IQ drawer retired */ }
         
         // Rankers IQ Functions
         function getRankersIQOptions() {
@@ -13347,9 +13091,7 @@
                     Array.from(document.querySelectorAll('#behavioralCategoryCheckboxes input:checked')).map(cb => cb.value),
                 has_profile_iq_access: document.getElementById('hasProfileIQAccess').checked,
                 has_subscriber_iq_access: document.getElementById('hasSubscriberIQAccess').checked,
-                has_roas_iq_access: document.getElementById('hasROASIQAccess').checked,
                 has_ecommerce_iq_access: document.getElementById('hasEcommerceIQAccess').checked,
-                has_workspace_access: document.getElementById('hasWorkspaceAccess').checked,
                 has_sf_conversion_access: document.getElementById('hasSFConversionAccess').checked,
                 has_flywheel_conversion_access: document.getElementById('hasFlywheelConversionAccess').checked,
                 has_brand_partnership_iq_access: !!(document.getElementById('hasBrandPartnershipIQAccess') && document.getElementById('hasBrandPartnershipIQAccess').checked),
@@ -13363,10 +13105,8 @@
                 hedge_fund_iq_data_cutoff: document.getElementById('hedgeFundIQDataCutoff').value || null,
                 hedge_fund_iq_tabs: getHedgeFundIQTabs(),
                 hedge_fund_iq_tickers: document.getElementById('allHedgeFundTickers').checked ? ['*'] : getHedgeFundIQTickers(),
-                has_analysis_iq_access: !!document.getElementById('hasAnalysisIQAccess').checked,
-                analysis_iq_modules: getAnalysisIQModules() || [],
-                has_llmo_iq_access: document.getElementById('hasLLMOIQAccess').checked,
                 has_blue_iq_access: !!(document.getElementById('hasBlueIQAccess') && document.getElementById('hasBlueIQAccess').checked),
+                has_brand_tracking_iq_access: !!(document.getElementById('hasBrandTrackingIQAccess') && document.getElementById('hasBrandTrackingIQAccess').checked),
                 has_trends_iq_access: !!(document.getElementById('hasTrendsIQAccess') && document.getElementById('hasTrendsIQAccess').checked),
                 has_microdramas_iq_access: !!(document.getElementById('hasMicrodramasIQAccess') && document.getElementById('hasMicrodramasIQAccess').checked),
                 allowed_lenses: getAllowedLensesPayload(),
@@ -13398,9 +13138,7 @@
                     subscriber_iq: document.getElementById('aanSubscriberIQ').checked,
                     roas_iq: document.getElementById('aanImpactIQ').checked,
                     ecommerce_iq: document.getElementById('aanEcommerceIQ').checked,
-                    llmo_iq: document.getElementById('aanLLMOIQ').checked,
                     hedge_fund_iq: document.getElementById('aanHedgeFundIQ').checked,
-                    analysis_iq: document.getElementById('aanAnalysisIQ').checked,
                     rankers_iq: document.getElementById('aanRankersIQ').checked,
                     ticket_sales_tracker: document.getElementById('aanTicketSalesTracker').checked,
                     ticket_sales_iq: document.getElementById('aanTicketSalesIQ').checked,
