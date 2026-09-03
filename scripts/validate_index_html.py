@@ -149,6 +149,12 @@ REQUIRED_ANCHORS: list[tuple[str, str]] = [
      "SPE Cross-Window story-mode case card (Journey IQ)"),
     ('id="jiqAmcCaseCard"',
      "AMC story-mode case card (Journey IQ)"),
+    ('id="brandTrackingIQView"',
+     "Brand Tracking product view (CNBC Pro competitive set)"),
+    ('showBrandTrackingIQ',
+     "Brand Tracking showBrandTrackingIQ() entry point"),
+    ('value="brandTrackingIQ"',
+     "Brand Tracking SELECT PRODUCT dropdown option"),
 ]
 
 # Anchors we DO NOT want in the file (false negatives). Left empty for

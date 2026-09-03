@@ -1,0 +1,302 @@
+/* Brand Tracking - CNBC Pro competitive set */
+#brandTrackingIQView {
+    display: none;
+    flex-direction: column;
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow: hidden;
+    padding: 1.25rem 1.5rem 1.75rem;
+    color: var(--text-primary);
+}
+#brandTrackingIQView .btiq-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 1rem;
+    flex-shrink: 0;
+}
+#brandTrackingIQView .btiq-title {
+    font-size: 1.45rem;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+#brandTrackingIQView .btiq-title span {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    margin-left: 0.45rem;
+}
+#brandTrackingIQView .btiq-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0;
+    max-width: 58rem;
+    line-height: 1.45;
+}
+#brandTrackingIQView .btiq-layout {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 1rem;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+}
+#brandTrackingIQView .btiq-rail {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 0.7rem 0.55rem;
+    overflow-y: auto;
+    min-height: 0;
+}
+#brandTrackingIQView .btiq-rail-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    font-weight: 700;
+    padding: 0.15rem 0.55rem 0.55rem;
+}
+#brandTrackingIQView .btiq-brand-btn {
+    display: flex;
+    flex-direction: column;
+    gap: 0.12rem;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 0.55rem 0.65rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    margin-bottom: 0.2rem;
+}
+#brandTrackingIQView .btiq-brand-btn:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--border-color);
+}
+#brandTrackingIQView .btiq-brand-btn.active {
+    background: rgba(199, 242, 62, 0.08);
+    border-color: rgba(199, 242, 62, 0.35);
+}
+#brandTrackingIQView .btiq-brand-btn .nm {
+    font-size: 0.86rem;
+    font-weight: 600;
+}
+#brandTrackingIQView .btiq-brand-btn .meta {
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+}
+#brandTrackingIQView .btiq-brand-btn.anchor .nm::after {
+    content: " DTC";
+    font-weight: 500;
+    color: #C7F23E;
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    margin-left: 0.35rem;
+}
+#brandTrackingIQView .btiq-main {
+    overflow-y: auto;
+    min-height: 0;
+    padding-right: 0.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+#brandTrackingIQView .btiq-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem 1.15rem 1.1rem;
+}
+#brandTrackingIQView .btiq-card h3 {
+    margin: 0 0 0.25rem;
+    font-size: 0.95rem;
+    font-weight: 650;
+}
+#brandTrackingIQView .btiq-note {
+    margin: 0 0 0.85rem;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+#brandTrackingIQView .btiq-kpis {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+#brandTrackingIQView .btiq-kpi {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0.8rem 0.9rem;
+}
+#brandTrackingIQView .btiq-kpi .lbl {
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+#brandTrackingIQView .btiq-kpi .val {
+    font-size: 1.45rem;
+    font-weight: 700;
+    margin-top: 0.2rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+#brandTrackingIQView .btiq-kpi .sub {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    margin-top: 0.2rem;
+    line-height: 1.35;
+}
+#brandTrackingIQView .btiq-kpi.accent .val { color: #C7F23E; }
+#brandTrackingIQView .btiq-bars { display: flex; flex-direction: column; gap: 0.7rem; }
+#brandTrackingIQView .btiq-bar-row { display: grid; grid-template-columns: 160px minmax(0, 1fr) 64px; gap: 0.7rem; align-items: center; }
+#brandTrackingIQView .btiq-bar-row .nm { font-size: 0.8rem; color: var(--text-secondary); }
+#brandTrackingIQView .btiq-track {
+    height: 10px;
+    background: #3B3D38;
+    border-radius: 99px;
+    overflow: hidden;
+}
+#brandTrackingIQView .btiq-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: #C7F23E;
+}
+#brandTrackingIQView .btiq-fill.orchid { background: #E682FF; }
+#brandTrackingIQView .btiq-fill.cobalt { background: #3358FF; }
+#brandTrackingIQView .btiq-bar-row .pct {
+    font-size: 0.82rem;
+    font-weight: 650;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+#brandTrackingIQView .btiq-demo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+#brandTrackingIQView .btiq-demo h4 {
+    margin: 0 0 0.55rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+#brandTrackingIQView .btiq-demo-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 0.45rem;
+    font-size: 0.75rem;
+    padding: 0.22rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-variant-numeric: tabular-nums;
+}
+#brandTrackingIQView .btiq-demo-row span:nth-child(2) { color: var(--text-primary); font-weight: 600; }
+#brandTrackingIQView .btiq-demo-row span:nth-child(3) { color: var(--text-secondary); min-width: 3.2rem; text-align: right; }
+#brandTrackingIQView .btiq-table-wrap { overflow-x: auto; }
+#brandTrackingIQView table.btiq-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+}
+#brandTrackingIQView table.btiq-table th {
+    text-align: left;
+    font-size: 0.66rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    font-weight: 700;
+    padding: 0.45rem 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+#brandTrackingIQView table.btiq-table td {
+    padding: 0.48rem 0.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    white-space: nowrap;
+}
+#brandTrackingIQView table.btiq-table td.num { text-align: right; }
+#brandTrackingIQView table.btiq-table tr.clickable { cursor: pointer; }
+#brandTrackingIQView table.btiq-table tr.clickable:hover td { background: rgba(255,255,255,0.03); }
+#brandTrackingIQView table.btiq-table tr.active td { background: rgba(199, 242, 62, 0.08); }
+#brandTrackingIQView table.btiq-table tr.anchor td:first-child { color: #C7F23E; font-weight: 650; }
+#brandTrackingIQView .btiq-read {
+    font-size: 0.86rem;
+    line-height: 1.45;
+    margin: 0;
+}
+#brandTrackingIQView .btiq-months {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 0.35rem;
+    align-items: end;
+    overflow-x: auto;
+}
+#brandTrackingIQView .btiq-month {
+    text-align: center;
+    min-width: 0;
+}
+#brandTrackingIQView .btiq-spark {
+    height: 76px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+#brandTrackingIQView .btiq-spark i {
+    display: block;
+    width: 70%;
+    max-width: 28px;
+    background: #C7F23E;
+    border-radius: 4px 4px 0 0;
+}
+#brandTrackingIQView .btiq-month .mo {
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin-top: 0.35rem;
+}
+#brandTrackingIQView .btiq-month .pv {
+    font-size: 0.64rem;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    margin-top: 0.12rem;
+    white-space: nowrap;
+}
+#brandTrackingIQView .btiq-month .ch {
+    font-size: 0.62rem;
+    color: var(--text-secondary);
+    margin-top: 0.08rem;
+}
+body[data-theme="light"] #brandTrackingIQView .btiq-spark i { background: #5E7E12; }
+@media (max-width: 1100px) {
+    #brandTrackingIQView .btiq-months { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+body[data-theme="light"] #brandTrackingIQView .btiq-brand-btn.active {
+    background: rgba(94, 126, 18, 0.1);
+    border-color: rgba(94, 126, 18, 0.35);
+}
+body[data-theme="light"] #brandTrackingIQView .btiq-kpi.accent .val,
+body[data-theme="light"] #brandTrackingIQView table.btiq-table tr.anchor td:first-child,
+body[data-theme="light"] #brandTrackingIQView .btiq-brand-btn.anchor .nm::after {
+    color: #5E7E12;
+}
+body[data-theme="light"] #brandTrackingIQView .btiq-fill { background: #5E7E12; }
+body[data-theme="light"] #brandTrackingIQView .btiq-fill.orchid { background: #8E3FA8; }
+body[data-theme="light"] #brandTrackingIQView .btiq-track { background: #C9C6BA; }
+body[data-theme="light"] #brandTrackingIQView table.btiq-table tr.active td {
+    background: rgba(94, 126, 18, 0.1);
+}
+@media (max-width: 1100px) {
+    #brandTrackingIQView .btiq-layout { grid-template-columns: 1fr; }
+    #brandTrackingIQView .btiq-rail { max-height: 220px; }
+    #brandTrackingIQView .btiq-kpis,
+    #brandTrackingIQView .btiq-demo-grid { grid-template-columns: 1fr; }
+}
