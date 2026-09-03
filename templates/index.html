@@ -53310,10 +53310,24 @@ https://www.instagram.com/p/..."></textarea>
             root = root || document.getElementById('trendsIQPanels');
             if (!root) return;
             function valueOf(rowEl) {
+                // Prefer the chip's data-audience-value when the row
+                // renders an audience chip (music, podcasts, books,
+                // etc.). Streaming + FAST film/tv sheet rows don't
+                // use the chip; they carry the same integer on the
+                // row-level data-views attribute (set by renderCol
+                // above). Fallback keeps the resort helper
+                // effective for those sheets and stays correct if a
+                // future per-lens / per-window ship starts writing
+                // lens-scoped values on data-views.
                 var chip = rowEl.querySelector('.tiq-audience-chip[data-audience-value]');
-                if (!chip) return -1;
-                var v = Number(chip.getAttribute('data-audience-value'));
-                return isFinite(v) ? v : -1;
+                if (chip) {
+                    var v = Number(chip.getAttribute('data-audience-value'));
+                    return isFinite(v) ? v : -1;
+                }
+                var dv = rowEl.getAttribute && rowEl.getAttribute('data-views');
+                if (dv === null || dv === '') return -1;
+                var n = Number(dv);
+                return isFinite(n) ? n : -1;
             }
             var panels = root.querySelectorAll('.tiq-panel[data-tiq-panel]');
             for (var pi = 0; pi < panels.length; pi++) {
@@ -57610,6 +57624,27 @@ https://www.instagram.com/p/..."></textarea>
                     var renderCol = function(label, rows, forceIndexRank) {
                         var genreOpts = _tiqGenreOptions(rows);
                         var yearOpts = _tiqYearOptions(rows);
+                        // Rank + views must move together. Sort by the
+                        // audience integer this row actually displays
+                        // (us_streams.us_estimate today; if a future
+                        // per-lens / per-window ship changes what the
+                        // Views cell renders, update this key in
+                        // lockstep). Rows without a positive estimate
+                        // sink to the tail, keeping their arrival order
+                        // via the original bucket_rank as tiebreaker.
+                        rows = (rows || []).slice().sort(function(a, b) {
+                            var au = (a && a.us_streams) || {};
+                            var bu = (b && b.us_streams) || {};
+                            var av = Number(au.us_estimate);
+                            var bv = Number(bu.us_estimate);
+                            var ah = isFinite(av) && av > 0;
+                            var bh = isFinite(bv) && bv > 0;
+                            if (ah !== bh) return ah ? -1 : 1;
+                            if (ah && bh && bv !== av) return bv - av;
+                            var ar = Number(a && a.bucket_rank) || 1e9;
+                            var br = Number(b && b.bucket_rank) || 1e9;
+                            return ar - br;
+                        });
                         var rowsHtml = (rows || []).map(function(it, i) {
                             var us = it.us_streams || {};
                             var estimate = Number(us.us_estimate);
@@ -57653,7 +57688,13 @@ https://www.instagram.com/p/..."></textarea>
                             var genres = (it.genres && it.genres.length)
                                 ? '<div class="tiq-fast-genres">' + _tiqEsc(it.genres.slice(0, 3).join(' · ')) + '</div>'
                                 : '';
-                            var rk = forceIndexRank ? (i + 1) : (it.bucket_rank || (i + 1));
+                            // Rows array is sorted by displayed views
+                            // desc above, so array index binds rank to
+                            // views as a single invariant. bucket_rank
+                            // (backend scraper-order fallback) is not
+                            // read here to keep the sort key = displayed
+                            // value contract.
+                            var rk = (i + 1);
                             var sortTitle = _tiqEsc(String(it.title || '').toLowerCase());
                             var dispName = _tiqEsc(String(it.title || ''));
                             var dataYear = it.year ? _tiqEsc(String(it.year)) : '';
@@ -57945,6 +57986,27 @@ https://www.instagram.com/p/..."></textarea>
                     var renderCol = function(label, rows, forceIndexRank) {
                         var genreOpts = _tiqGenreOptions(rows);
                         var yearOpts = _tiqYearOptions(rows);
+                        // Rank + views must move together. Sort by the
+                        // audience integer this row actually displays
+                        // (us_streams.us_estimate today; if a future
+                        // per-lens / per-window ship changes what the
+                        // Views cell renders, update this key in
+                        // lockstep). Rows without a positive estimate
+                        // sink to the tail, keeping their arrival order
+                        // via the original bucket_rank as tiebreaker.
+                        rows = (rows || []).slice().sort(function(a, b) {
+                            var au = (a && a.us_streams) || {};
+                            var bu = (b && b.us_streams) || {};
+                            var av = Number(au.us_estimate);
+                            var bv = Number(bu.us_estimate);
+                            var ah = isFinite(av) && av > 0;
+                            var bh = isFinite(bv) && bv > 0;
+                            if (ah !== bh) return ah ? -1 : 1;
+                            if (ah && bh && bv !== av) return bv - av;
+                            var ar = Number(a && a.bucket_rank) || 1e9;
+                            var br = Number(b && b.bucket_rank) || 1e9;
+                            return ar - br;
+                        });
                         var rowsHtml = (rows || []).map(function(it, i) {
                             var us = it.us_streams || {};
                             var estimate = Number(us.us_estimate);
@@ -57988,7 +58050,13 @@ https://www.instagram.com/p/..."></textarea>
                             var genres = (it.genres && it.genres.length)
                                 ? '<div class="tiq-fast-genres">' + _tiqEsc(it.genres.slice(0, 3).join(' · ')) + '</div>'
                                 : '';
-                            var rk = forceIndexRank ? (i + 1) : (it.bucket_rank || (i + 1));
+                            // Rows array is sorted by displayed views
+                            // desc above, so array index binds rank to
+                            // views as a single invariant. bucket_rank
+                            // (backend scraper-order fallback) is not
+                            // read here to keep the sort key = displayed
+                            // value contract.
+                            var rk = (i + 1);
                             var sortTitle = _tiqEsc(String(it.title || '').toLowerCase());
                             var dispName = _tiqEsc(String(it.title || ''));
                             var dataYear = it.year ? _tiqEsc(String(it.year)) : '';
