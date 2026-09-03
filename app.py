@@ -18250,6 +18250,82 @@ def get_ticket_sales_tracker_data(s3_key):
 
 
 # ============================================================================
+# BRAND TRACKING (CNBC Pro competitive set) - current + historic months
+# ============================================================================
+
+BRAND_TRACKING_S3_PREFIX = 'brand-tracking/'
+BRAND_TRACKING_CURRENT_KEY = 'brand-tracking/cnbc_pro_current.json'
+BRAND_TRACKING_INDEX_KEY = 'brand-tracking/index.json'
+_BRAND_TRACKING_LOCAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'brand-tracking')
+
+
+def _user_can_brand_tracking(user):
+    if not user:
+        return False
+    role = (user.get('role') or '').strip()
+    if role in ('super_admin', 'admin'):
+        return True
+    return bool(user.get('has_brand_tracking_iq_access'))
+
+
+def _brand_tracking_load_json(key: str):
+    """Prefer S3; fall back to the repo data tree shipped with the app."""
+    if s3_client:
+        try:
+            body = s3_client.get_object(Bucket=S3_BUCKET, Key=key)['Body'].read()
+            return json.loads(body or b'{}')
+        except Exception as e:
+            print(f"[brand-tracking] S3 miss {key}: {e}")
+    # Local fallback: brand-tracking/cnbc_pro_current.json or history/YYYY-MM.json
+    rel = key[len(BRAND_TRACKING_S3_PREFIX):] if key.startswith(BRAND_TRACKING_S3_PREFIX) else key
+    local = os.path.join(_BRAND_TRACKING_LOCAL, rel)
+    if os.path.isfile(local):
+        with open(local, encoding='utf-8') as _bf:
+            return json.loads(_bf.read())
+    return None
+
+
+@app.route('/api/brand-tracking/index')
+@requires_auth
+def api_brand_tracking_index():
+    user = get_current_user()
+    if not _user_can_brand_tracking(user):
+        return jsonify({'success': False, 'error': 'Brand Tracking access required'}), 403
+    idx = _brand_tracking_load_json(BRAND_TRACKING_INDEX_KEY)
+    if not idx:
+        return jsonify({'success': False, 'error': 'Brand Tracking index unavailable'}), 404
+    return jsonify({'success': True, 'index': idx})
+
+
+@app.route('/api/brand-tracking/current')
+@requires_auth
+def api_brand_tracking_current():
+    user = get_current_user()
+    if not _user_can_brand_tracking(user):
+        return jsonify({'success': False, 'error': 'Brand Tracking access required'}), 403
+    payload = _brand_tracking_load_json(BRAND_TRACKING_CURRENT_KEY)
+    if not payload:
+        return jsonify({'success': False, 'error': 'Brand Tracking payload unavailable'}), 404
+    return jsonify({'success': True, 'payload': payload})
+
+
+@app.route('/api/brand-tracking/history/<ym>')
+@requires_auth
+def api_brand_tracking_history(ym):
+    """Return an immutable monthly close. ym = YYYY-MM."""
+    user = get_current_user()
+    if not _user_can_brand_tracking(user):
+        return jsonify({'success': False, 'error': 'Brand Tracking access required'}), 403
+    if not re.fullmatch(r'\d{4}-\d{2}', ym or ''):
+        return jsonify({'success': False, 'error': 'ym must be YYYY-MM'}), 400
+    key = f'brand-tracking/history/{ym}.json'
+    payload = _brand_tracking_load_json(key)
+    if not payload:
+        return jsonify({'success': False, 'error': f'No historic close for {ym}'}), 404
+    return jsonify({'success': True, 'payload': payload, 'ym': ym})
+
+
+# ============================================================================
 # HEDGE FUND IQ DAILY CACHE (shared across all users, refreshed each day)
 # ============================================================================
 

@@ -1,0 +1,13 @@
+{
+  "competitive_set": "CNBC Pro",
+  "current_as_of": "2026-08",
+  "current_key": "brand-tracking/cnbc_pro_current.json",
+  "history": [
+    {
+      "ym": "2026-08",
+      "label": "August 2026",
+      "key": "brand-tracking/history/2026-08.json",
+      "window_end": "2026-09-02"
+    }
+  ]
+}
