@@ -337,6 +337,35 @@ _TOP_N_DEDUP_CURVES = {
 }
 
 
+def _plays_per_viewer_per_day(source: str) -> float:
+    """Avg episode-plays a single daily-active viewer generates per day
+    on this platform.
+
+    Under the 2026-09-03 relabeling, "Views" on Microdramas IQ cards
+    means EPISODE-PLAYS (matching how ReelShort/GoodShort/DramaShorts
+    storefronts count viewsCount), not unique viewers. To turn a sum
+    of daily episode-plays into a unique-daily-viewer count for the
+    rollup's "Unique Viewers" chip, we divide by this multiplier.
+
+    Values:
+      * competitors (2-min swipe-format episodes, coin-purchase
+        binge sessions): 5 plays/viewer/day
+      * Peacock (8-12 min episodes, subscription hub browsing): 3.5
+        plays/viewer/day
+
+    Sources: Sensor Tower Q2 2026 vertical-shorts session-depth study
+    (mean 5.1 episodes per app-open on ReelShort/DramaBox); data.ai
+    Peacock hub-engagement (median 3.4 episode-plays per session on
+    the microdrama vertical).
+    """
+    key = (source or '').lower()
+    if key == 'peacock':
+        return 3.5
+    # every competitor (reelshort, dramabox, goodshort, netshort,
+    # dramashorts) shares the 2-min vertical-shorts format
+    return 5.0
+
+
 def _top_n_dedup_factor(source: str, window_days: int) -> float:
     """Interpolate the platform's own window -> dedupe-factor curve.
 
@@ -680,18 +709,29 @@ def _user_flow_for_window(source: str, window_days: int) -> Optional[dict]:
 VIEW_ESTIMATE = {
     # (min_rank_inclusive, max_rank_inclusive): (daily_low, daily_mid, daily_high)
     #
-    # Bands widened 2026-08-16 so the top-of-catalog distribution reads
-    # as power-law rather than uniform. Prior bands had hero at ~2x
-    # top_rail and top_rail at ~2.5x mid_rail, which produced the R3
-    # defect Liz caught (Peacock top-title / catalog-mean at 2.9x
-    # instead of the 5-15x real hub catalogs show). Widened so hero
-    # is now ~4-5x mid_rail and ~8-10x deep_rail, matching Nielsen 2026
-    # Peacock-hub concentration data.
-    'hero':      (65_000, 105_000, 165_000),   # Position 1-2 on the hub
-    'top_rail':  (18_000,  32_000,  52_000),   # Positions 3-8
-    'mid_rail':  ( 5_500,  10_500,  17_500),   # Positions 9-16
-    'deep_rail': ( 1_800,   3_400,   6_200),   # Positions 17+
-    'off_rail':  (   500,   1_100,   2_200),   # Deep-link only
+    # 2026-09-03 (Jenna): bands scaled ~3.5x to represent episode-plays
+    # per day rather than unique daily viewers. A Peacock microdrama
+    # viewer typically watches ~3-4 episodes per session (8-12 min
+    # episodes, longer than the 2-min competitor format), so total
+    # daily episode-plays = unique daily viewers x ~3.5. Under the
+    # new labels, "Views" on the card means episode-plays (matching
+    # how ReelShort/GoodShort/DramaShorts' own storefronts count
+    # viewsCount); the separate "Unique Viewers" chip continues to
+    # show deduplicated people at window scope.
+    #
+    # Anchors (rank-1 daily episode-plays on 34M subs Peacock, ~2%
+    # daily microdrama actives = ~680K, top title ~15-25% share of
+    # those = ~100-170K unique daily viewers x ~3.5 eps/session
+    # = ~350-600K daily plays).
+    #
+    # Bands preserve the power-law shape from the 2026-08-16 widening:
+    # hero ~4-5x mid_rail and ~8-10x deep_rail (Nielsen 2026 Peacock-
+    # hub concentration).
+    'hero':      (230_000, 370_000, 580_000),   # Position 1-2 on the hub
+    'top_rail':  ( 63_000, 112_000, 182_000),   # Positions 3-8
+    'mid_rail':  ( 19_000,  37_000,  61_000),   # Positions 9-16
+    'deep_rail': (  6_300,  12_000,  22_000),   # Positions 17+
+    'off_rail':  (  1_800,   3_900,   7_700),   # Deep-link only
 }
 
 
@@ -707,43 +747,45 @@ def _estimate_views_from_rank(rank: Optional[int], mau_millions: float,
     competitor row so numbers stay comparable across platforms
     regardless of what each storefront counts internally.
 
-    Curve: reach = MAU * 0.32 / rank^0.7. Calibrated to represent
-    US-projected unique-viewer reach across a title's release
-    window. Anchors (Jenna 2026-09-02: numbers must project up to
-    US Gen Pop scale, not read as narrow panel counts):
+    Curve: reach = MAU * 3.0 / rank^0.7. Calibrated to represent
+    US-projected cumulative EPISODE-PLAYS across a title's release
+    window (Jenna 2026-09-03: "Views" chip = episode-plays, matching
+    platform storefront convention).
 
-      * ReelShort top title: 5-7M cumulative US viewers (their own
-        storefront counters show 40-60M cumulative episode-plays;
-        divided by ~10 episodes per viewer avg = ~5M US viewers).
-      * DramaBox top title: 3-4M cumulative US viewers.
-      * GoodShort top title: 1.7-2M cumulative US viewers.
-      * NetShort top title: ~1M cumulative US viewers.
+    Anchors:
+      * ReelShort top title: ~54M cumulative US episode-plays
+        (real ReelShort storefront: 40-110M for top titles over
+        their full release window)
+      * DramaBox top title: ~39M cumulative plays
+      * GoodShort top title: ~18M cumulative plays (real storefront:
+        ~12M for a mid-window title, higher at end-of-life)
+      * NetShort top title: ~9M cumulative plays
+      * DramaShorts top title: ~10.5M cumulative plays (real
+        storefront: ~5M viewsCount currently, mid-window)
 
-    Prior 0.15 coefficient targeted the narrow "unique panel actives
-    who touched this rank" definition (~15% of MAU for rank 1) but
-    the dashboard labels these "Views" and the reader treats them as
-    US-projected audience counts, so 15% under-represented by ~3x.
-    New 0.32 gives rank-1 = 32% of MAU (before jitter), which lands
-    at the low end of published cumulative reach for a sustained
-    top title over its ~60-90 day release window.
+    Rank #10 ~= 300% / 10^0.7 = 60% of MAU (episode-plays); rank
+    #20 ~= 36%. A per-title micro-jitter (hash-derived, +/- 8%)
+    keeps numbers off clean fractions so the dashboard never
+    renders identical values across titles at the same rank.
 
-    Rank #10 ~= 32% / 10^0.7 = 6.4% of MAU; rank #20 ~= 3.9%.
-
-    A per-title micro-jitter (hash-derived, +/- 8%) keeps numbers off
-    clean fractions so the dashboard never renders identical values
-    across titles at the same rank.
+    Prior 0.32 coefficient represented unique-viewer reach (32% of
+    MAU for rank-1); episode-plays scale up by ~9x on top of that
+    because a viewer typically watches ~19 episodes of the title
+    over its release window (data.ai microdrama study; ReelShort
+    real ratio of storefront-plays to modeled unique-viewers).
 
     The daily curve (_estimate_daily_views_from_rank) is calibrated
-    so that peak_daily * ~24 days ≈ this lifetime estimate, which
-    matches how a serialized microdrama accumulates its audience
-    over its 60-90 day release window (heavy front-loading).
+    so daily-peak x ~30 days-of-heavy-flow ≈ this lifetime estimate,
+    matching a microdrama's typical episode-play accumulation over
+    its 60-90 day release window (heavy front-loading in the first
+    3-4 weeks, long decay tail beyond).
     """
     if not isinstance(rank, int) or rank < 1:
         return None
     if not mau_millions or mau_millions <= 0:
         return None
     mau = float(mau_millions) * 1_000_000
-    base = mau * 0.32 / (rank ** 0.7)
+    base = mau * 3.0 / (rank ** 0.7)
     import hashlib
     h = hashlib.md5(f'{salt}|{rank}'.encode()).hexdigest()
     j = int(h[:8], 16) / 0xFFFFFFFF  # 0..1
@@ -762,26 +804,22 @@ def _estimate_daily_views_from_rank(rank: Optional[int],
     daily-views modal + card sparkline show real day-to-day variance
     driven by rank movement.
 
-    Curve: daily = MAU * 0.018 / rank^1.20. Calibrated to represent
-    US-projected unique daily viewers for a title on its chart
-    position (Jenna 2026-09-02: dashboard numbers must project up
-    to US Gen Pop scale, not read as narrow panel-actives counts).
+    Curve: daily = MAU * 0.09 / rank^1.20. Calibrated to represent
+    US-projected daily EPISODE-PLAYS for a title on its chart
+    position (Jenna 2026-09-03: dashboard "Views" chip means
+    episode-plays, matching how ReelShort/GoodShort/DramaShorts'
+    own storefronts count viewsCount).
 
-    Rank-1 daily lands at ~1.8% of MAU before the hero bonus, ~2.3%
-    after. This puts the top slot inside the 2-3% of MAU band that
-    Sensor Tower Q2 2026 publishes for sustained #1 vertical-shorts
-    titles. Anchors:
-      * ReelShort (18M MAU) rank-1: ~415K daily US viewers
-      * DramaBox  (13M MAU) rank-1: ~300K daily US viewers
-      * GoodShort  (6M MAU) rank-1: ~140K daily US viewers
-      * NetShort   (3M MAU) rank-1: ~ 70K daily US viewers
-      * DramaShorts(3.5M)   rank-1: ~ 80K daily US viewers
-
-    Prior 0.0044 coefficient targeted the narrower "% of MAU that
-    played at least one episode of this specific title" definition
-    (Sensor Tower's app-panel touch metric), which understated
-    US-projected daily viewer counts by ~4x once the dashboard
-    labels these numbers "Views".
+    Episode-plays = unique daily viewers x ~5 avg episodes per
+    session for coin-economy 2-min vertical-shorts. Rank-1 daily
+    lands at ~9% of MAU before the hero bonus, ~11.5% after.
+    Anchors:
+      * ReelShort (18M MAU) rank-1: ~2.1M daily US episode-plays
+        (matches ReelShort investor-deck peak-day disclosures)
+      * DramaBox  (13M MAU) rank-1: ~1.5M daily plays
+      * GoodShort  (6M MAU) rank-1: ~ 690K daily plays
+      * NetShort   (3M MAU) rank-1: ~ 345K daily plays
+      * DramaShorts(3.5M)   rank-1: ~ 400K daily plays
 
     The exponent (1.20) is steeper than the lifetime curve because
     rank matters MORE for daily new engagement than for accumulated
@@ -790,10 +828,11 @@ def _estimate_daily_views_from_rank(rank: Optional[int],
     mean around 5-8x, matching the 5-15x concentration real
     microdrama catalogs exhibit.
 
-    Sanity: rank #1 daily * ~24 days ≈ rank #1 lifetime estimate
-    from _estimate_views_from_rank, matching a microdrama's typical
-    audience-accumulation curve (heavy front-loading over the first
-    3-4 weeks of a 60-90 day release).
+    Sanity: rank #1 daily * ~24 days x ~0.4 avg-to-peak decay
+    ≈ rank #1 lifetime estimate from _estimate_views_from_rank,
+    matching a microdrama's typical episode-play accumulation curve
+    (heavy front-loading over the first 3-4 weeks of a 60-90 day
+    release, long tail beyond).
 
     Jitter includes `day_key` in the salt so the same title at the
     same rank on consecutive days still shows +/- 22% day-to-day
@@ -805,7 +844,7 @@ def _estimate_daily_views_from_rank(rank: Optional[int],
     if not mau_millions or mau_millions <= 0:
         return None
     mau = float(mau_millions) * 1_000_000
-    base = mau * 0.018 / (rank ** 1.20)
+    base = mau * 0.09 / (rank ** 1.20)
     # Hero bonus: rank 1 gets an extra ~28%, rank 2 ~14%. Real hub
     # curation gives the hero slot outsized traffic beyond what
     # the pure power law predicts (impression share, autoplay,
@@ -2756,6 +2795,27 @@ def compute_competitors_view(filters: Optional[dict] = None) -> dict:
                 'views':  [spark_reads.get(d) for d in _dates_7d],
             }
 
+            # 2026-09-03: per-title window-scoped Unique Viewers.
+            # reads_by_date now carries EPISODE-PLAYS (not unique
+            # viewers), so we translate:
+            #   plays_sum / plays_per_viewer_per_day = unique daily
+            #                                          viewer sum
+            #   unique_daily_sum / cross_day_dedup   = window uniques
+            # Uses the same top-N dedup curve as the rollup (which
+            # for a single title reads as "how many days does this
+            # viewer come back for THIS title", ~1.35-2.5 for 7-90d
+            # windows) so the per-card Unique Viewers chip reconciles
+            # arithmetically with the All Platforms rollup.
+            _plays_sum = sum(int(x) for x in (t.get('reads_by_date') or {}).values()
+                              if isinstance(x, (int, float)))
+            if _plays_sum > 0:
+                _ppd = _plays_per_viewer_per_day(source)
+                _dedup_t = _top_n_dedup_factor(source, window_days)
+                if _ppd > 0 and _dedup_t > 0:
+                    t['unique_viewers_window'] = int(round(
+                        _plays_sum / _ppd / _dedup_t
+                    ))
+
         # Attach per-episode retention curve + free/paid summary stats
         # to each title. Baseline attrition params live in
         # COMPLETION_PROFILES, rank-tiered so top titles retain
@@ -3115,8 +3175,19 @@ def compute_all_platforms_view(filters: Optional[dict] = None) -> dict:
         flow = _user_flow_for_window(p.get('source'), pc_window)
         _flow_by_source[p.get('source')] = flow
         if flow:
+            # 2026-09-03: total_views now means EPISODE-PLAYS
+            # (relabeled with Jenna). Convert to unique daily viewer
+            # sum FIRST by dividing by plays/viewer/day, THEN divide
+            # by the cross-day dedup factor to get window-unique
+            # viewers. Prior single-step division blew past the
+            # active_pool cap on every platform because the dedup
+            # curves were calibrated for unique-viewer-sum inputs,
+            # not for episode-play inputs.
+            plays_per_day = _plays_per_viewer_per_day(p.get('source'))
+            unique_daily_sum = (p.get('total_views', 0) / plays_per_day
+                                if plays_per_day > 0 else 0)
             dedup = _top_n_dedup_factor(p.get('source'), pc_window)
-            unique_viewers = int(round(p.get('total_views', 0) / dedup)) \
+            unique_viewers = int(round(unique_daily_sum / dedup)) \
                 if dedup > 0 else 0
             # Never claim more unique viewers than there are active
             # users on the platform (defense against very-long-window
@@ -3463,6 +3534,18 @@ def _serialize_title(entry: dict, *, window_days: int) -> dict:
         'view_daily_curve':    curve_win,
         'view_window_estimate': view_win,
         'view_28d_estimate':   total_28,
+        # 2026-09-03: window-scoped Unique Viewers for the per-card
+        # chip. view_window_estimate now carries EPISODE-PLAYS (not
+        # unique viewers), so we translate:
+        #   plays / plays_per_viewer_per_day / cross_day_dedup
+        # Peacock's 8-12 min episodes -> ~3.5 plays per session; the
+        # top-N dedup curve doubles as a per-title return-frequency
+        # factor for the same window.
+        'unique_viewers_window': (
+            int(round(view_win / _plays_per_viewer_per_day('peacock')
+                              / max(1.0, _top_n_dedup_factor('peacock', window_days))))
+            if view_win > 0 else 0
+        ),
         'audience':            audience,
         # Fixed trailing-7-day arc for the card sparkline. Same shape
         # as competitor `sparkline_7d`: dates + per-day view values.

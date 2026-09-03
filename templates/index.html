@@ -21807,12 +21807,12 @@ https://www.instagram.com/p/..."></textarea>
 
                             <div style="display:flex; flex-direction: column; gap: 0.4rem;">
                                 <div id="synthChatStarterChips" style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
-                                    <button type="button" onclick="synthChatChipSend('Analyze this data')" style="background: rgba(199,242,62,0.10); border: 1px solid rgba(199,242,62,0.40); color: var(--text-primary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Analyze the open profile</button>
-                                    <button type="button" onclick="synthChatChipFill('Pitching [brand] - help me figure out the right audience to profile')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Prep a pitch</button>
-                                    <button type="button" onclick="synthChatChipFill('Run a profile for [brand or talent]')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Build a profile</button>
-                                    <button type="button" onclick="synthChatChipFill('Sample size for [audience], past 12 months')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Size an audience first</button>
-                                    <button type="button" onclick="synthChatChipFill('Cut [existing profile] by [female, Gen Z, or a market]')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Cut a profile I own</button>
-                                    <button type="button" onclick="synthChatChipFill('Refresh [existing profile] for the latest 12 months')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Refresh a profile</button>
+                                    <button type="button" data-pm-mode="analyze" onclick="synthChatChipSend('Analyze this data')" style="background: rgba(199,242,62,0.10); border: 1px solid rgba(199,242,62,0.40); color: var(--text-primary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Analyze the open profile</button>
+                                    <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Pitching [brand] - help me figure out the right audience to profile')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Prep a pitch</button>
+                                    <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Run a profile for [brand or talent]')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Build a profile</button>
+                                    <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Sample size for [audience], past 12 months')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Size an audience first</button>
+                                    <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Cut [existing profile] by [female, Gen Z, or a market]')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Cut a profile I own</button>
+                                    <button type="button" data-pm-mode="pull" onclick="synthChatChipFill('Refresh [existing profile] for the latest 12 months')" style="background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;">Refresh a profile</button>
                                 </div>
                                 <textarea id="synthChatInput" placeholder="What profile do you want? (audience, cohort, brand, talent, or segment)" rows="3" style="width: 100%; box-sizing: border-box; padding: 0.65rem 0.8rem; background: var(--bg-input); border: 1px solid #3B3D38; border-radius: 8px; color: var(--text-primary); font-size: 0.9rem; resize: vertical; min-height: 72px; font-family: inherit; outline: none; transition: border-color 120ms ease-out, box-shadow 120ms ease-out;" onfocus="this.style.borderColor='#3358FF';this.style.boxShadow='0 0 0 2px rgba(51,88,255,0.28)';" onblur="this.style.borderColor='#3B3D38';this.style.boxShadow='none';" onkeydown="if(event.key==='Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); synthChatSubmit(); }"></textarea>
                                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-width: 0;">
@@ -44960,6 +44960,18 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 function applyProductAccessPayload(d) {
                     if (!d || !d.success) return;
+                    // Prometheus mode (2026-09-03, Jenna): 'analysis' /
+                    // 'pull' / 'both'. Backend resolves missing values
+                    // to 'both' so this stash always reads a legal
+                    // string; frontend uses it to hide starter chips
+                    // that do not belong to the caller's mode.
+                    try {
+                        var _pmModeRaw = String(d.prometheus_mode || '').toLowerCase();
+                        window.prometheusMode = (_pmModeRaw === 'analysis' || _pmModeRaw === 'pull') ? _pmModeRaw : 'both';
+                        if (typeof _pmApplyModeToStarterChips === 'function') {
+                            _pmApplyModeToStarterChips();
+                        }
+                    } catch (_) {}
                     // 2026-07-09: previously omitted sfConversion,
                     // flywheelConversion, brandPartnershipIQ, journeyIQ,
                     // impactIQ, and talentFitIQ — so after an admin
@@ -50940,15 +50952,21 @@ https://www.instagram.com/p/..."></textarea>
         // single series-completion chip.
         // Mirror of microdramas_iq.py::_title_window_views. Returns
         // cumulative unique-viewer estimate for a title over the
-        // ACTIVE look-back window (7 / 14 / 28 / custom), in the same
-        // units the All Platforms rollup uses:
-        //   Peacock:     view_window_estimate -> view_28d_estimate
-        //   Competitors: sum(reads_by_date)   -> read_count
-        // Backend already prunes reads_by_date + view_window_estimate
-        // to the requested window, so summing what's on the title
-        // record is correct without any client-side date filtering.
+        // ACTIVE look-back window (7 / 14 / 28 / custom).
+        //
+        // Prefers the backend-computed `unique_viewers_window` field
+        // (added 2026-09-03 when "Views" was relabeled to mean
+        // episode-plays). That field carries plays translated through
+        // plays-per-viewer-per-day and cross-day dedup so the chip
+        // reads real US-scale unique viewers, not raw play events.
+        //
+        // Falls back to the legacy sum-of-reads path for older
+        // payloads still in transit through the response cache.
         function _miqWindowViewers(t, source) {
             if (!t) return null;
+            if (typeof t.unique_viewers_window === 'number' && t.unique_viewers_window > 0) {
+                return t.unique_viewers_window;
+            }
             if (source === 'peacock') {
                 if (typeof t.view_window_estimate === 'number' && t.view_window_estimate > 0) {
                     return t.view_window_estimate;
@@ -67986,6 +68004,35 @@ https://www.instagram.com/p/..."></textarea>
         // Starter-chip refresh on view switch: the strip under the input
         // leads with view-aware chips when a data-bearing view is open.
         var _pmDefaultStarterChipsHtml = null;
+
+        // Prometheus mode filter (2026-09-03, Jenna): hide starter chips
+        // whose data-pm-mode does not match the caller's access. Runs
+        // after every strip rebuild so the filter applies to the
+        // view-aware chips as well as the defaults. Modes:
+        //   'analysis' -> hide chips tagged data-pm-mode="pull"
+        //   'pull'     -> hide chips tagged data-pm-mode="analyze"
+        //   'both'     -> show everything
+        // window.prometheusMode is stashed by applyProductAccessPayload
+        // from /api/me/product-access; a missing value falls back to
+        // 'both' so nothing hides accidentally on first paint.
+        function _pmApplyModeToStarterChips() {
+            try {
+                var host = document.getElementById('synthChatStarterChips');
+                if (!host) return;
+                var mode = String(window.prometheusMode || 'both').toLowerCase();
+                if (mode !== 'analysis' && mode !== 'pull') mode = 'both';
+                var kids = host.querySelectorAll('[data-pm-mode]');
+                for (var i = 0; i < kids.length; i++) {
+                    var el = kids[i];
+                    var chipMode = (el.getAttribute('data-pm-mode') || '').toLowerCase();
+                    var hide = false;
+                    if (mode === 'analysis' && chipMode === 'pull') hide = true;
+                    if (mode === 'pull' && chipMode === 'analyze') hide = true;
+                    el.style.display = hide ? 'none' : '';
+                }
+            } catch (_) {}
+        }
+
         function _pmRefreshStarterChips() {
             try {
                 var host = document.getElementById('synthChatStarterChips');
@@ -67996,12 +68043,14 @@ https://www.instagram.com/p/..."></textarea>
                 var vc = _pmCollectViewContext();
                 if (!vc) {
                     host.innerHTML = _pmDefaultStarterChipsHtml;
+                    _pmApplyModeToStarterChips();
                     return;
                 }
                 var pillHot = 'background: rgba(199,242,62,0.10); border: 1px solid rgba(199,242,62,0.40); color: var(--text-primary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;';
                 var pill = 'background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-secondary); border-radius: 999px; padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; white-space: nowrap;';
                 host.innerHTML = _pmViewChipsHtml(vc, pillHot, pill) +
                     _pmDefaultStarterChipsHtml;
+                _pmApplyModeToStarterChips();
             } catch (_) {}
         }
 
