@@ -32,6 +32,7 @@ import concurrent.futures
 import json
 import logging
 import os
+import socket
 import sys
 import time
 from datetime import datetime, timezone
@@ -132,6 +133,94 @@ SCRAPERS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Manifest check.
+#
+# `_manifest.json` (git-tracked, in this same directory) lists every Python
+# file that should be present under scripts/trends_scrapers/. `_check_manifest`
+# runs at the top of main() BEFORE any scraper fans out, walks the manifest,
+# and verifies every listed file resolves on disk. Missing files log a WARN
+# and best-effort trigger a once-per-day SES email to jenna@ + liz@ via
+# cookie_gap_notify.notify_scraper_manifest_drift.
+#
+# This is the guardrail that catches the class of gap where a scraper lands
+# on origin/main but never gets rsync'd to Hetzner (Hetzner is populated by
+# rsync, not `git pull`, so a commit-and-push without rsync silently 404s at
+# cron time; comics_charts.py on 2026-08-31 is the case that motivated this).
+#
+# Non-blocking: cron continues to run every scraper it can find. The scrapers
+# in the manifest but missing from disk will simply fail to import inside
+# `_run_one` (which already catches and logs); the email is the ops signal.
+# The manifest just lists filenames, not MD5s, so committing to a scraper
+# does not require re-committing the manifest.
+# ---------------------------------------------------------------------------
+def _check_manifest(scrapers_dir: str) -> list[str]:
+    """Return the list of filenames in _manifest.json that are missing
+    on disk. Best-effort: if the manifest itself can't be read, log a
+    WARN and return []."""
+    manifest_path = os.path.join(scrapers_dir, '_manifest.json')
+    try:
+        with open(manifest_path, 'r', encoding='utf-8') as f:
+            doc = json.load(f)
+    except FileNotFoundError:
+        logging.warning(
+            "run_all: manifest %s not found; skipping drift check",
+            manifest_path,
+        )
+        return []
+    except Exception as e:
+        logging.warning(
+            "run_all: manifest %s could not be parsed: %s; skipping drift check",
+            manifest_path, e,
+        )
+        return []
+
+    expected = doc.get('files') or []
+    if not isinstance(expected, list) or not expected:
+        logging.warning(
+            "run_all: manifest %s has no files list; skipping drift check",
+            manifest_path,
+        )
+        return []
+
+    missing = [
+        name for name in expected
+        if not os.path.isfile(os.path.join(scrapers_dir, name))
+    ]
+    return missing
+
+
+def _fire_manifest_drift_notice(missing: list[str], scrapers_dir: str) -> None:
+    """Best-effort SES email + WARN log for missing scrapers. Never raises."""
+    if not missing:
+        return
+    logging.warning(
+        "run_all: scraper directory drift detected; %d file(s) missing: %s",
+        len(missing), ', '.join(sorted(missing)),
+    )
+    try:
+        from scripts.trends_scrapers.cookie_gap_notify import (
+            notify_scraper_manifest_drift,
+        )
+    except Exception as e:
+        logging.warning(
+            "run_all: could not import notify_scraper_manifest_drift: %s", e,
+        )
+        return
+    try:
+        host = socket.gethostname() or 'unknown'
+    except Exception:
+        host = 'unknown'
+    try:
+        notify_scraper_manifest_drift(
+            missing,
+            host=host,
+            scrapers_dir=scrapers_dir,
+        )
+    except Exception as e:
+        logging.warning("run_all: manifest drift notify failed: %s", e)
+
+
 def _run_one(source: str, module_path: str, label: str, kind: str) -> dict:
     started = time.time()
     try:
@@ -197,6 +286,16 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format='%(asctime)s %(levelname)s %(name)s %(message)s',
     )
+
+    # Manifest drift check runs first, before any scraper fans out.
+    # See `_check_manifest` doc block above. Never blocks the run.
+    try:
+        scrapers_dir = os.path.dirname(os.path.abspath(__file__))
+        missing = _check_manifest(scrapers_dir)
+        if missing:
+            _fire_manifest_drift_notice(missing, scrapers_dir)
+    except Exception as e:
+        logging.warning("run_all: manifest drift check crashed: %s", e)
 
     only = {s.strip() for s in args.only.split(',') if s.strip()}
     skip = {s.strip() for s in args.skip.split(',') if s.strip()}

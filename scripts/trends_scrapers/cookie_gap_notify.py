@@ -265,6 +265,179 @@ def notify_cookie_gap(source: str, domain: str,
         return False
 
 
+# ---------------------------------------------------------------------------
+# Scraper directory drift notifier.
+#
+# When run_all boots and its manifest check finds an expected scraper file
+# missing on disk (typical failure: local git commit pushed to origin/main
+# but never rsync'd to Hetzner, silently 404s at cron time), this fires a
+# once-per-day SES email so the gap surfaces automatically instead of
+# manifesting as an "X not loading" ticket a day later.
+#
+# Deduped one email per UTC day (all missing files roll up into a single
+# message; adding another file same day gets suppressed). Recipients are
+# jenna@ + liz@, distinct from the cookie-gap recipients (jenna@ + jessie@)
+# because scraper directory drift is an infrastructure signal, not a
+# credentials-donation ask.
+# ---------------------------------------------------------------------------
+_DRIFT_RECIPIENTS = [
+    "jenna@crosswalknyc.com",
+    "liz@crosswalknyc.com",
+]
+
+
+def _drift_stamp_key(host: str) -> str:
+    safe_host = (host or "unknown").replace("/", "_").replace(":", "_")
+    return f"trends_iq_scraper_manifest_drift/{_today_iso()}/{safe_host}.stamp"
+
+
+def _drift_already_notified_today(host: str) -> bool:
+    try:
+        import boto3
+        s3 = boto3.client("s3")
+        s3.head_object(Bucket=_STAMP_BUCKET, Key=_drift_stamp_key(host))
+        return True
+    except Exception:
+        return False
+
+
+def _drift_mark_notified_today(host: str) -> None:
+    try:
+        import boto3
+        s3 = boto3.client("s3")
+        s3.put_object(
+            Bucket=_STAMP_BUCKET,
+            Key=_drift_stamp_key(host),
+            Body=str(int(time.time())).encode(),
+            ContentType="text/plain",
+        )
+    except Exception as e:
+        logger.info("cookie_gap_notify: drift stamp write failed: %s", e)
+
+
+def notify_scraper_manifest_drift(missing: list[str],
+                                   *,
+                                   host: str = "",
+                                   scrapers_dir: str = "",
+                                   force: bool = False,
+                                   recipients: Optional[list[str]] = None) -> bool:
+    """Notify operators that one or more scraper files listed in the
+    trends_scrapers manifest are missing on disk. Deduped once per UTC
+    day per host. Never raises.
+
+    `missing`: filenames from _manifest.json that are absent on disk.
+    `host`: hostname or environment label ("hetzner", "local", ...);
+            included in the stamp key so a Hetzner-only gap and a
+            local-only gap don't dedupe each other into silence.
+    `scrapers_dir`: absolute path to scripts/trends_scrapers/ (for the
+            email body's operator context).
+    """
+    if not missing:
+        return False
+    host = (host or "unknown").strip().lower() or "unknown"
+
+    if not force and _drift_already_notified_today(host):
+        logger.info(
+            "cookie_gap_notify: manifest drift already notified for %s today",
+            host,
+        )
+        return True
+
+    to = list(recipients) if recipients else list(_DRIFT_RECIPIENTS)
+    missing_sorted = sorted(set(missing))
+
+    subject = (
+        f"Trends scraper directory drift on {host}: "
+        f"{len(missing_sorted)} file(s) missing"
+    )
+
+    body_text = (
+        f"Trends IQ scraper run_all detected {len(missing_sorted)} file(s) "
+        f"listed in scripts/trends_scrapers/_manifest.json but missing on "
+        f"disk at {scrapers_dir or 'scripts/trends_scrapers/'} on host "
+        f"'{host}'.\n\n"
+        f"Missing files:\n"
+    )
+    for name in missing_sorted:
+        body_text += f"  - {name}\n"
+    body_text += (
+        f"\nMost likely cause: the file was committed to origin/main but "
+        f"never rsync'd to this host. Hetzner is populated by rsync, not "
+        f"git pull, so a commit-and-push without rsync silently 404s at "
+        f"cron time.\n\n"
+        f"To reconcile from a local checkout:\n"
+        f"  rsync -avz bg-webapp/scripts/trends_scrapers/<file>.py \\\n"
+        f"    root@168.119.215.48:/root/finished_codes/bg-webapp/scripts/"
+        f"trends_scrapers/\n\n"
+        f"run_all continues in a degraded state (missing scrapers are "
+        f"skipped, others run). Notification is deduped one per host per "
+        f"UTC day."
+    )
+
+    body_html_rows = "".join(
+        f"<li style='margin:2px 0;'><code>{name}</code></li>"
+        for name in missing_sorted
+    )
+    body_html = f"""\
+<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;
+             font-size:14px;line-height:1.55;color:#111;">
+  <p>Trends IQ <code>run_all</code> detected
+     <b>{len(missing_sorted)} file(s)</b> listed in
+     <code>scripts/trends_scrapers/_manifest.json</code> but missing on
+     disk on host <b>{host}</b>.</p>
+
+  <p style="margin:16px 0 6px;font-weight:600;">Missing files</p>
+  <ul style="margin:0 0 14px;padding-left:22px;">
+    {body_html_rows}
+  </ul>
+
+  <p>Most likely cause: the file was committed to <code>origin/main</code>
+     but never rsync'd to this host. Hetzner is populated by rsync, not
+     <code>git pull</code>, so a commit-and-push without rsync silently
+     404s at cron time.</p>
+
+  <p style="margin:16px 0 4px;font-weight:600;">Reconcile from a local
+     checkout</p>
+  <pre style="background:#f4f4f5;border:1px solid #e4e4e7;
+              border-radius:6px;padding:10px 12px;font-size:12.5px;
+              overflow-x:auto;user-select:all;margin:0 0 14px;"
+><code>rsync -avz bg-webapp/scripts/trends_scrapers/&lt;file&gt;.py \\
+  root@168.119.215.48:/root/finished_codes/bg-webapp/scripts/trends_scrapers/</code></pre>
+
+  <p style="color:#888;font-size:11px;margin-top:22px;">
+    run_all continues in a degraded state (missing scrapers are skipped,
+    others run). Notification is deduped one per host per UTC day.
+  </p>
+</div>"""
+
+    try:
+        import boto3
+        ses = boto3.client("ses", region_name=AWS_REGION)
+        ses.send_email(
+            Source=SOURCE_ADDR,
+            Destination={"ToAddresses": to},
+            Message={
+                "Subject": {"Data": subject},
+                "Body": {
+                    "Text": {"Data": body_text},
+                    "Html": {"Data": body_html},
+                },
+            },
+        )
+        logger.info(
+            "cookie_gap_notify: manifest drift email sent %r to %s "
+            "(host=%s, %d file(s))",
+            subject, to, host, len(missing_sorted),
+        )
+        _drift_mark_notified_today(host)
+        return True
+    except Exception as e:
+        logger.warning(
+            "cookie_gap_notify: manifest drift SES send failed: %s", e,
+        )
+        return False
+
+
 if __name__ == "__main__":
     import sys
     logging.basicConfig(level=logging.INFO,
