@@ -10623,7 +10623,8 @@
         .iqr-toolbar input[type="search"]:focus,
         .iqr-toolbar input[type="date"]:focus,
         .iqr-toolbar select:focus { border-color: var(--accent-blue); }
-        .iqr-toolbar .iqr-search { flex: 1; min-width: 200px; }
+        /* cap search input to a normal width so it doesn't stretch across the toolbar */
+        .iqr-toolbar .iqr-search { flex: 0 1 320px; min-width: 180px; max-width: 360px; }
         /* Window-comparison badge: shows the active period + the equal-length
            prior period that deltas are computed against. Two visually distinct
            sub-pills so the user can tell "what they're looking at" from
