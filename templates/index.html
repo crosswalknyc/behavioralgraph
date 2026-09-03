@@ -54209,7 +54209,7 @@ https://www.instagram.com/p/..."></textarea>
             // "Trends" shows search/news/retail tabs; "Rankers" shows the
             // Talent Ranker leaderboard + Music/Podcasts/Streaming/FAST/Gaming.
             var _tiqProduct = (window.__trendsIQ.product === 'rankers') ? 'rankers' : 'trends';
-            var _rankersOrder = ['fast', 'music', 'podcasts', 'streaming', 'gaming', 'talentranker'];
+            var _rankersOrder = ['fast', 'music', 'podcasts', 'streaming', 'gaming'];
             var _rankersSet = { talentranker: 1, music: 1, podcasts: 1, streaming: 1, fast: 1, gaming: 1 };
             if (_tiqProduct === 'rankers') {
                 if (!_rankersSet[window.__trendsIQ.activeTab]) window.__trendsIQ.activeTab = 'fast';
@@ -59950,15 +59950,15 @@ https://www.instagram.com/p/..."></textarea>
             // styling + state. The Talent Ranker leaderboard rides along
             // as the first tab.
             window.__trendsIQ.product = 'rankers';
-            var _rOnly = ['talentranker', 'music', 'podcasts', 'streaming', 'fast', 'gaming'];
+            var _rOnly = ['music', 'podcasts', 'streaming', 'fast', 'gaming'];
             if (_rOnly.indexOf(window.__trendsIQ.activeTab) < 0) window.__trendsIQ.activeTab = 'fast';
             if (typeof _trendsIQHideAllOtherViews === 'function') _trendsIQHideAllOtherViews();
             var view = document.getElementById('trendsIQView');
             if (view) { view.style.display = 'flex'; view.style.visibility = 'visible'; }
             var _rTitle = document.getElementById('trendsIQTitle');
-            if (_rTitle) _rTitle.innerHTML = '\uD83D\uDCCA Rankers <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Rankings + culture trends</span>';
+            if (_rTitle) _rTitle.innerHTML = '\uD83D\uDCCA Rankers';
             var _rSub = document.querySelector('#trendsIQView .tiq-subtitle');
-            if (_rSub) _rSub.textContent = 'Talent, brand & sport rankings, plus trending music, podcasts, streaming, FAST, and gaming.';
+            if (_rSub) _rSub.textContent = 'Ranking trending music, podcasts, streaming, FAST, and gaming';
             try {
                 var hoverOn = localStorage.getItem('bg_hover_enabled') !== 'false';
                 var l = document.getElementById('trendsIQHoverToggleLabel');
