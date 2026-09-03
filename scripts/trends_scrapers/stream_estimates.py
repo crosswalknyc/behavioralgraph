@@ -82,6 +82,7 @@ import logging
 import os
 import re
 import sys
+import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -169,10 +170,114 @@ _MAX_FAST_CHANNEL_ITEMS = 400
 _WEBSEARCH_MODEL      = (os.environ.get('STREAM_ESTIMATES_MODEL')
                           or 'claude-sonnet-4-5')
 _WEBSEARCH_MAX_TOKENS = 1200
-_WEBSEARCH_MAX_USES   = 3        # per-item web_search calls (some tier-1
-                                  # research warrants 2-3 queries)
+_WEBSEARCH_MAX_USES   = 1        # per-item web_search calls. Capped at 1
+                                  # so a single search call is the max any
+                                  # long-tail item ever spends (rule set
+                                  # 2026-09-03: web_search was ~$4,400 of
+                                  # one day's $4K burn - hard cap forever).
 _WEBSEARCH_TIMEOUT_S  = 60
 _CONCURRENCY          = 6
+
+# --------------------------------------------------------------------
+# Model tiering (added 2026-09-03).
+# The catalog-wide items research pass uses TWO tiers of Claude:
+#   tier='hi'  ->  Sonnet 4.5, for high-signal items (rank <= 20 within
+#                  the item's own kind). These are the ~200 items per
+#                  date that drive the vast majority of the reader's
+#                  attention on the Trends IQ dashboard, and Sonnet's
+#                  extra reasoning depth is worth the ~3x price bump.
+#   tier='lo'  ->  Haiku 4.5, for long-tail items (rank > 20 within
+#                  their kind). Same daily-research prompt, same per-kind
+#                  anchor tiers - Haiku 4.5 handles the estimation task
+#                  well when the anchors are supplied in-prompt.
+# The two tier constants below are always resolved from env-var overrides
+# first so an operator can pin exact snapshots for a run.
+# --------------------------------------------------------------------
+_MODEL_HI = (os.environ.get('STREAM_ESTIMATES_MODEL_HI')
+              or _WEBSEARCH_MODEL
+              or 'claude-sonnet-4-5')
+_MODEL_LO = (os.environ.get('STREAM_ESTIMATES_MODEL_LO')
+              or 'claude-haiku-4-5')
+
+# Threshold below which an item is 'hi' (top of its kind) vs 'lo'
+# (long-tail). best_rank is the item's best chart position in its
+# kind (podcast rank on Apple / Spotify / etc; song rank on Spotify /
+# Apple / YouTube; game rank on Xbox Game Pass / Meta Quest / Steam).
+_TIER_HI_RANK_THRESHOLD = 20
+
+# Kinds with a canonical daily anchor solid enough that even long-tail
+# rows don't need a web_search call. Rank-1 through rank-20 rows are
+# always well-anchored by their chart labels; the kinds here also carry
+# solid tier-1 daily anchors DEEP into the long tail (Nielsen streaming
+# top-100, Spotify Daily Top 200, Podtrac / Edison, Circana bookscan,
+# JustWatch FAST channel weekly). Items in one of these kinds never
+# spend a web_search call in the long tail.
+_WELL_ANCHORED_KINDS = frozenset({
+    # Streaming: film/tv/title
+    'film', 'tv', 'title',
+    'song',
+    'game',
+    'podcast',
+    'book',
+    'broadway_show',   # future - not currently collected
+    # FAST platforms + channels: JustWatch weekly + fast_channels
+    # lineup snapshot are strong per-item priors.
+    'fast_channel',
+    'fast_film', 'fast_tv',
+})
+
+# Web-search default: OFF. A per-item `search_needed` flag flips it
+# back on for exactly the rows that benefit from a fresh citation.
+_USE_WEB_SEARCH_DEFAULT = False
+
+
+def _tier_for_item(item: dict) -> str:
+    """Return 'hi' (Sonnet 4.5) or 'lo' (Haiku 4.5) based on the
+    item's best_rank within its kind. Rank <= 20 in any kind is
+    considered a top-signal row and gets the Sonnet tier."""
+    try:
+        rank = int(item.get('best_rank') or 0)
+    except (TypeError, ValueError):
+        rank = 0
+    if rank and rank <= _TIER_HI_RANK_THRESHOLD:
+        return 'hi'
+    return 'lo'
+
+
+def _search_needed_for_item(item: dict) -> bool:
+    """Per-item flag: True iff the item is in the long-tail AND its
+    kind is NOT one of the well-anchored kinds. Well-anchored kinds
+    carry solid daily priors deep into their long tails; other kinds
+    (goodreads_book long-tail, wattpad_story tail, comics tail,
+    search_term / trending_person / wiki_topic long-tail) actually
+    benefit from a single fresh web_search call to find a defensible
+    anchor. Rank <= 20 rows on any kind get 0 searches - their chart
+    labels ARE tier-1 signal per the prompt."""
+    try:
+        rank = int(item.get('best_rank') or 0)
+    except (TypeError, ValueError):
+        rank = 0
+    if rank and rank <= _TIER_HI_RANK_THRESHOLD:
+        return False
+    kind = (item.get('kind') or '').strip().lower()
+    return kind not in _WELL_ANCHORED_KINDS
+
+
+def _model_for_tier(tier: str) -> str:
+    return _MODEL_HI if tier == 'hi' else _MODEL_LO
+
+
+# --------------------------------------------------------------------
+# Per-item checkpointing (added 2026-09-03).
+# The serial research path flushes in-progress results to a WIP S3
+# key every _CHECKPOINT_INTERVAL items so a mid-run kill or crash
+# preserves work. On restart, the runner reads the WIP file, skips
+# items already researched, and continues. Once the day's full run
+# completes and writes the canonical dated key, the WIP file is
+# deleted.
+# --------------------------------------------------------------------
+_S3_WIP = 'trends_iq_snapshots/_wip/{date}/stream_estimates.wip.json'
+_CHECKPOINT_INTERVAL = 25
 
 
 # MUST stay in lock-step with `trends_iq._CP_STOPWORDS` - the app
@@ -3565,37 +3670,157 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
     }
 
 
+# -------------------------------------------------------------------------
+# Per-item checkpoint helpers (Lever 4).
+# -------------------------------------------------------------------------
+def _write_wip_checkpoint(target_date_iso: str,
+                           kept_prior: dict[str, dict],
+                           researched: dict[str, dict]) -> None:
+    """Flush current-progress items to a WIP S3 key so a mid-run kill
+    can resume without losing work. Deliberately a small JSON blob
+    (just the item map + target date + timestamp)."""
+    key = _S3_WIP.format(date=target_date_iso)
+    payload = {
+        'target_date':  target_date_iso,
+        'flushed_at':   datetime.now(timezone.utc).isoformat(),
+        'kept_prior':   kept_prior or {},
+        'researched':   researched or {},
+    }
+    body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+    _s3().put_object(Bucket=_S3_BUCKET, Key=key, Body=body,
+                      ContentType='application/json')
+
+
+def _read_wip_checkpoint(target_date_iso: str) -> Optional[dict]:
+    """Return a WIP checkpoint (union of prior + already-researched)
+    for `target_date_iso` if one exists, else None."""
+    key = _S3_WIP.format(date=target_date_iso)
+    try:
+        obj = _s3().get_object(Bucket=_S3_BUCKET, Key=key)
+        return json.loads(obj['Body'].read().decode('utf-8'))
+    except Exception:
+        return None
+
+
+def _delete_wip_checkpoint(target_date_iso: str) -> None:
+    """Remove the WIP checkpoint after the canonical dated snapshot
+    has been written."""
+    key = _S3_WIP.format(date=target_date_iso)
+    try:
+        _s3().delete_object(Bucket=_S3_BUCKET, Key=key)
+    except Exception:
+        pass
+
+
+def _build_message_params(item: dict, target_date_iso: Optional[str] = None,
+                            tier: Optional[str] = None,
+                            search_needed: Optional[bool] = None) -> dict:
+    """Return the `client.messages.create(**kwargs)` param dict for one
+    item. Shared between the serial and batch code paths so the two
+    paths are guaranteed to send identical shapes to Anthropic (only
+    difference is create vs batch submission and pricing).
+
+    - tier: 'hi' -> Sonnet 4.5, 'lo' -> Haiku 4.5. Defaults to
+      `_tier_for_item(item)`.
+    - search_needed: True -> attach the web_search tool with
+      max_uses=1; False -> no tools at all. Defaults to
+      `_search_needed_for_item(item)`.
+    """
+    if tier is None:
+        tier = _tier_for_item(item)
+    if search_needed is None:
+        search_needed = _search_needed_for_item(item)
+    model = _model_for_tier(tier)
+    prompt = _build_prompt(item, target_date_iso=target_date_iso)
+    params: dict = {
+        'model':      model,
+        'max_tokens': _WEBSEARCH_MAX_TOKENS,
+        'messages':   [{'role': 'user', 'content': prompt}],
+    }
+    if search_needed:
+        params['tools'] = [{
+            'type':     'web_search_20250305',
+            'name':     'web_search',
+            'max_uses': _WEBSEARCH_MAX_USES,
+        }]
+    return params
+
+
+def _extract_response_text(resp) -> str:
+    """Pull the concatenated `type='text'` blocks off a completed
+    Anthropic response. Same shape for both serial (Message object)
+    and batch (MessageBatchIndividualResponse.result.message) content
+    lists."""
+    text = ''
+    content = getattr(resp, 'content', None)
+    if content is None and isinstance(resp, dict):
+        content = resp.get('content') or []
+    for block in (content or []):
+        btype = getattr(block, 'type', None) or (
+            block.get('type') if isinstance(block, dict) else None)
+        if btype == 'text':
+            text += (getattr(block, 'text', None)
+                       or (block.get('text') if isinstance(block, dict)
+                            else '')
+                       or '')
+    return text
+
+
 def _research_one(item: dict, client,
-                    target_date_iso: Optional[str] = None
+                    target_date_iso: Optional[str] = None,
+                    spend_monitor: Optional[Any] = None,
+                    tier: Optional[str] = None,
+                    search_needed: Optional[bool] = None
                     ) -> tuple[str, Optional[dict]]:
-    """Run one Claude web_search call for `item` and return (key,
+    """Run one Claude call for `item` and return (key,
     sanitized_result). `target_date_iso` (YYYY-MM-DD) frames the ask
     as a DAILY estimate for that specific calendar day; defaults to
-    yesterday UTC when omitted."""
+    yesterday UTC when omitted.
+
+    `tier` and `search_needed` default to `_tier_for_item` and
+    `_search_needed_for_item`. Pass them explicitly when a caller
+    already computed them (avoids re-computing).
+
+    `spend_monitor`, when supplied, meters every completed response
+    (input + output tokens + web_search uses) against a running USD
+    cap. If the monitor trips mid-loop, this function returns (key,
+    None) and the caller should stop submitting new work."""
     key = _lookup_key(item['kind'], item['display_title'],
                        item.get('artist') or '')
-    prompt = _build_prompt(item, target_date_iso=target_date_iso)
+    if tier is None:
+        tier = _tier_for_item(item)
+    if search_needed is None:
+        search_needed = _search_needed_for_item(item)
+    model = _model_for_tier(tier)
+    params = _build_message_params(item, target_date_iso=target_date_iso,
+                                     tier=tier, search_needed=search_needed)
     for attempt in range(2):    # single retry on parse failure
+        if spend_monitor is not None and spend_monitor.tripped():
+            return key, None
         try:
-            resp = client.messages.create(
-                model=_WEBSEARCH_MODEL,
-                max_tokens=_WEBSEARCH_MAX_TOKENS,
-                tools=[{
-                    'type':     'web_search_20250305',
-                    'name':     'web_search',
-                    'max_uses': _WEBSEARCH_MAX_USES,
-                }],
-                messages=[{'role': 'user', 'content': prompt}],
-                timeout=_WEBSEARCH_TIMEOUT_S,
-            )
+            resp = client.messages.create(timeout=_WEBSEARCH_TIMEOUT_S,
+                                           **params)
         except Exception as e:
             logger.info("stream_estimates %r attempt %d: %s",
                          item['display_title'], attempt + 1, e)
             continue
-        text = ''
-        for block in resp.content or []:
-            if getattr(block, 'type', '') == 'text':
-                text += getattr(block, 'text', '') or ''
+        # Meter this response against the cap BEFORE parsing so a
+        # cost we accrued is always accounted for (even on parse
+        # failure).
+        if spend_monitor is not None:
+            usage = getattr(resp, 'usage', None)
+            try:
+                spend_monitor.record_response(usage, model=model,
+                                                batch=False)
+            except Exception:
+                pass
+            if spend_monitor.tripped():
+                logger.error("stream_estimates: SpendMonitor tripped "
+                              "mid-loop at $%.2f (cap $%.2f). Halting.",
+                              spend_monitor.total(),
+                              spend_monitor.cap_usd)
+                return key, None
+        text = _extract_response_text(resp)
         parsed = _extract_json_blob(text)
         if not parsed:
             logger.info("stream_estimates %r: unparseable output",
@@ -3608,11 +3833,29 @@ def _research_one(item: dict, client,
 
 
 def _research_all(items: list[dict],
-                    target_date_iso: Optional[str] = None
+                    target_date_iso: Optional[str] = None,
+                    spend_monitor: Optional[Any] = None,
+                    checkpoint_state: Optional[dict] = None,
                     ) -> dict[str, dict]:
     """Parallel research over `items`. Returns {key: sanitized_result}.
     `target_date_iso` frames every call as a DAILY estimate for that
-    specific calendar day; defaults to yesterday UTC when omitted."""
+    specific calendar day; defaults to yesterday UTC when omitted.
+
+    `spend_monitor`, when set, meters cost per response; on trip the
+    thread pool drains gracefully and this function returns what it
+    has so far.
+
+    `checkpoint_state`, when set, is a dict passed by the serial caller
+    for per-25-item WIP flushes:
+
+        {'target_date_iso': '2026-06-01',
+          'kept_prior':     {<key>: <sanitized_result>, ...},
+          'in_progress':    {<key>: <sanitized_result>, ...},  # mutated in place
+          'flushed_at':     <count_at_last_flush>}
+
+    A snapshot is flushed to
+    `s3://dashboard-inputs/trends_iq_snapshots/_wip/{day}/stream_estimates.wip.json`
+    every _CHECKPOINT_INTERVAL (25) successful items."""
     api_key = (os.environ.get('ANTHROPIC_API_KEY') or '').strip()
     if not api_key:
         logger.warning("stream_estimates: ANTHROPIC_API_KEY missing; skipping")
@@ -3627,13 +3870,22 @@ def _research_all(items: list[dict],
     out: dict[str, dict] = {}
     if not items:
         return out
-    logger.info("stream_estimates: researching %d items with %s "
-                 "for target_date=%s (concurrency=%d)",
-                 len(items), _WEBSEARCH_MODEL,
-                 target_date_iso or 'yesterday-UTC', _CONCURRENCY)
+    # Per-tier / per-search counts so the log line shows what changed.
+    n_hi = sum(1 for it in items if _tier_for_item(it) == 'hi')
+    n_lo = len(items) - n_hi
+    n_search = sum(1 for it in items if _search_needed_for_item(it))
+    logger.info("stream_estimates: researching %d items for "
+                 "target_date=%s (hi=%d Sonnet, lo=%d Haiku, "
+                 "search_needed=%d @ max_uses=%d, concurrency=%d)",
+                 len(items), target_date_iso or 'yesterday-UTC',
+                 n_hi, n_lo, n_search, _WEBSEARCH_MAX_USES,
+                 _CONCURRENCY)
     with concurrent.futures.ThreadPoolExecutor(max_workers=_CONCURRENCY) as ex:
         futs = {
-            ex.submit(_research_one, it, client, target_date_iso): it
+            ex.submit(_research_one, it, client, target_date_iso,
+                       spend_monitor,
+                       _tier_for_item(it),
+                       _search_needed_for_item(it)): it
             for it in items
         }
         for i, fut in enumerate(concurrent.futures.as_completed(futs)):
@@ -3644,11 +3896,308 @@ def _research_all(items: list[dict],
                 continue
             if key and result:
                 out[key] = result
+                if checkpoint_state is not None:
+                    checkpoint_state.setdefault('in_progress', {})[key] = result
+                    total_done = len(checkpoint_state['in_progress'])
+                    last = int(checkpoint_state.get('flushed_at') or 0)
+                    if total_done - last >= _CHECKPOINT_INTERVAL:
+                        try:
+                            _write_wip_checkpoint(
+                                target_date_iso=checkpoint_state['target_date_iso'],
+                                kept_prior=checkpoint_state.get('kept_prior') or {},
+                                researched=checkpoint_state['in_progress'],
+                            )
+                            checkpoint_state['flushed_at'] = total_done
+                            if spend_monitor is not None:
+                                logger.info("  [checkpoint] flushed %d items @ "
+                                             "spend $%.2f / $%.2f",
+                                             total_done,
+                                             spend_monitor.total(),
+                                             spend_monitor.cap_usd)
+                            else:
+                                logger.info("  [checkpoint] flushed %d items",
+                                             total_done)
+                        except Exception as e:
+                            logger.warning("stream_estimates: WIP flush "
+                                            "failed (non-fatal): %s", e)
                 logger.info("  [%2d/%d] %-40s -> %s ~ %s",
                              i + 1, len(items),
                              result['display_title'][:40],
                              _humanize(result['us_estimate']),
                              result['confidence'])
+    return out
+
+
+# -------------------------------------------------------------------------
+# Batch mode (Lever 3): Anthropic Message Batches API path.
+#
+# Submits every item as one request in a single batch, polls until the
+# batch's processing_status reaches 'ended', then streams results back
+# by custom_id. Costs 50% of the standard API rate; also uses a
+# separate async rate ceiling so the 10M input-tokens/min bucket that
+# saturated the parallel serial pool doesn't apply.
+#
+# All requests inside the batch use the same tier logic as the serial
+# path (`_tier_for_item` + `_search_needed_for_item`), so cost and
+# behavior are identical up to the batch discount and the poll wait.
+# -------------------------------------------------------------------------
+_BATCH_MAX_REQUESTS = 100_000   # Anthropic hard limit per batch (v2026-08)
+_BATCH_POLL_SECONDS = 30
+_BATCH_MAX_MINUTES  = 60        # safety timeout; batch expiry is 24h
+
+
+def _custom_id_for(key: str) -> str:
+    """Build a batch `custom_id` from a lookup key. Anthropic requires
+    `^[a-zA-Z0-9_-]{1,64}$`, but our keys can be up to ~90 chars with
+    spaces and colons ('podcast:crime junkie', 'song:tell your world
+    lena raine'). Hash to a stable 40-char hex digest so the reverse
+    lookup is deterministic on the sender side."""
+    import hashlib
+    h = hashlib.sha1(key.encode('utf-8')).hexdigest()[:40]
+    return f'se_{h}'
+
+
+def _research_all_batch(items: list[dict],
+                          target_date_iso: Optional[str] = None,
+                          spend_monitor: Optional[Any] = None,
+                          ) -> dict[str, dict]:
+    """Submit `items` as a single Message Batch, poll until ended,
+    fetch results, parse per-item. Returns {key: sanitized_result}.
+
+    Preflight: estimates the batch's cost against the SpendMonitor's
+    remaining budget. If the estimate exceeds the remaining cap, does
+    NOT submit (aborts with a `preflight_over_cap` marker in the log).
+    Preflight uses ~3K input + ~500 output tokens per message per the
+    workspace rule set (2026-09-03 rebuild plan).
+
+    Trip: if `spend_monitor.tripped()` becomes True at any point (e.g.
+    because a prior batch already pushed the total over), this
+    function cancels any pending batch it submitted, then returns the
+    parsed results it managed to fetch before the trip."""
+    api_key = (os.environ.get('ANTHROPIC_API_KEY') or '').strip()
+    if not api_key:
+        logger.warning("stream_estimates: ANTHROPIC_API_KEY missing; skipping batch")
+        return {}
+    try:
+        import anthropic  # type: ignore
+        from anthropic.types.messages.batch_create_params import Request
+        from anthropic.types.message_create_params import (
+            MessageCreateParamsNonStreaming,
+        )
+    except ImportError as e:
+        logger.warning("stream_estimates: anthropic SDK missing / too old: %s", e)
+        return {}
+    client = anthropic.Anthropic(api_key=api_key)
+
+    out: dict[str, dict] = {}
+    if not items:
+        return out
+    if len(items) > _BATCH_MAX_REQUESTS:
+        logger.warning("stream_estimates: batch size %d exceeds Anthropic "
+                        "hard limit %d; truncating.",
+                        len(items), _BATCH_MAX_REQUESTS)
+        items = items[:_BATCH_MAX_REQUESTS]
+
+    # ------------------------------------------------------------------
+    # Preflight cost estimate. Bail before submission if the estimate
+    # would blow the remaining budget - do NOT submit and then cancel
+    # (canceling a submitted batch may still cost partial work).
+    # ------------------------------------------------------------------
+    if spend_monitor is not None:
+        n_hi = sum(1 for it in items if _tier_for_item(it) == 'hi')
+        n_lo = len(items) - n_hi
+        n_search = sum(1 for it in items if _search_needed_for_item(it))
+        est_hi = spend_monitor.preflight_estimate(
+            n_hi, tokens_in_per_msg=3000, tokens_out_per_msg=500,
+            model=_MODEL_HI, batch=True,
+            searches_per_msg=0,
+        )
+        est_lo = spend_monitor.preflight_estimate(
+            n_lo, tokens_in_per_msg=3000, tokens_out_per_msg=500,
+            model=_MODEL_LO, batch=True,
+            searches_per_msg=0,
+        )
+        # Web-search cost is NOT batch-discounted; add it separately.
+        # Every search_needed item spends AT MOST 1 web_search call.
+        from ._spend_monitor import WEB_SEARCH_USD_PER_CALL
+        est_search = n_search * WEB_SEARCH_USD_PER_CALL
+        est_total  = est_hi + est_lo + est_search
+        remaining  = spend_monitor.remaining()
+        logger.info("stream_estimates BATCH preflight: items=%d "
+                     "(hi=%d Sonnet, lo=%d Haiku, search=%d) "
+                     "est=$%.4f (Sonnet=$%.4f + Haiku=$%.4f + "
+                     "web_search=$%.4f) remaining=$%.4f",
+                     len(items), n_hi, n_lo, n_search,
+                     est_total, est_hi, est_lo, est_search, remaining)
+        if est_total >= remaining:
+            logger.error("stream_estimates BATCH preflight OVER CAP: "
+                          "est $%.4f >= remaining $%.4f. NOT submitting.",
+                          est_total, remaining)
+            # Trip the monitor so the caller stops the whole run.
+            spend_monitor.record(0.0,
+                                  note=f'preflight_over_cap: batch of '
+                                       f'{len(items)} would cost '
+                                       f'~${est_total:.2f}')
+            return out
+
+    # ------------------------------------------------------------------
+    # Build one Request per item. custom_id is a stable hash of the
+    # item's lookup key so we can join results back.
+    # ------------------------------------------------------------------
+    key_by_cid: dict[str, tuple[str, dict]] = {}
+    requests: list = []
+    for it in items:
+        key = _lookup_key(it['kind'], it['display_title'],
+                            it.get('artist') or '')
+        cid = _custom_id_for(key)
+        # If two items collide on cid (~2^-80 prob for 40-char SHA1
+        # slice), skip the second. Preserves batch validity.
+        if cid in key_by_cid:
+            continue
+        key_by_cid[cid] = (key, it)
+        params = _build_message_params(it, target_date_iso=target_date_iso)
+        try:
+            requests.append(Request(
+                custom_id=cid,
+                params=MessageCreateParamsNonStreaming(**params),
+            ))
+        except Exception as e:
+            logger.info("stream_estimates BATCH: skipping item %r "
+                         "(build_params failed: %s)",
+                         it.get('display_title'), e)
+    if not requests:
+        return out
+
+    # ------------------------------------------------------------------
+    # Submit the batch.
+    # ------------------------------------------------------------------
+    n_hi = sum(1 for k, (_kk, it) in key_by_cid.items()
+                if _tier_for_item(it) == 'hi')
+    n_lo = len(requests) - n_hi
+    n_search = sum(1 for k, (_kk, it) in key_by_cid.items()
+                    if _search_needed_for_item(it))
+    logger.info("stream_estimates BATCH: submitting %d requests "
+                 "(hi=%d Sonnet, lo=%d Haiku, search=%d @ max_uses=%d) "
+                 "for target_date=%s",
+                 len(requests), n_hi, n_lo, n_search,
+                 _WEBSEARCH_MAX_USES, target_date_iso or 'yesterday-UTC')
+    try:
+        batch = client.messages.batches.create(requests=requests)
+    except Exception as e:
+        logger.warning("stream_estimates BATCH: submission failed: %s", e)
+        return out
+    batch_id = batch.id
+    logger.info("stream_estimates BATCH: submitted id=%s status=%s",
+                 batch_id, getattr(batch, 'processing_status', '?'))
+
+    # ------------------------------------------------------------------
+    # Poll until ended (or timeout / trip).
+    # ------------------------------------------------------------------
+    t0 = time.time()
+    poll_i = 0
+    while True:
+        if spend_monitor is not None and spend_monitor.tripped():
+            # Someone else tripped the cap; cancel this batch to stop
+            # any further billed work.
+            try:
+                client.messages.batches.cancel(batch_id)
+                logger.error("stream_estimates BATCH: SpendMonitor "
+                              "tripped; cancelled batch %s", batch_id)
+            except Exception as e:
+                logger.warning("stream_estimates BATCH: cancel failed: %s", e)
+            return out
+        elapsed_min = (time.time() - t0) / 60.0
+        if elapsed_min > _BATCH_MAX_MINUTES:
+            logger.error("stream_estimates BATCH: batch %s exceeded "
+                          "%d min wait cap; cancelling.",
+                          batch_id, _BATCH_MAX_MINUTES)
+            try:
+                client.messages.batches.cancel(batch_id)
+            except Exception:
+                pass
+            return out
+        try:
+            batch = client.messages.batches.retrieve(batch_id)
+        except Exception as e:
+            logger.info("stream_estimates BATCH: retrieve %s: %s",
+                         batch_id, e)
+            time.sleep(_BATCH_POLL_SECONDS)
+            continue
+        status = getattr(batch, 'processing_status', '') or ''
+        counts = getattr(batch, 'request_counts', None)
+        if poll_i % 4 == 0:
+            logger.info("stream_estimates BATCH: %s status=%s "
+                         "counts=%s elapsed=%.1fm",
+                         batch_id, status,
+                         getattr(counts, 'to_dict', lambda: counts)()
+                            if counts else '{}',
+                         elapsed_min)
+        poll_i += 1
+        if status in ('ended', 'canceled', 'expired', 'failed'):
+            break
+        time.sleep(_BATCH_POLL_SECONDS)
+
+    if getattr(batch, 'processing_status', '') != 'ended':
+        logger.error("stream_estimates BATCH: batch %s finished with "
+                      "status=%s; no results",
+                      batch_id, getattr(batch, 'processing_status', '?'))
+        return out
+
+    # ------------------------------------------------------------------
+    # Stream results back by custom_id.
+    # ------------------------------------------------------------------
+    n_ok = 0
+    n_err = 0
+    n_expired = 0
+    try:
+        results_iter = client.messages.batches.results(batch_id)
+    except Exception as e:
+        logger.error("stream_estimates BATCH: results() failed: %s", e)
+        return out
+    for r in results_iter:
+        cid    = getattr(r, 'custom_id', None)
+        result = getattr(r, 'result', None)
+        rtype  = getattr(result, 'type', None) if result else None
+        if not cid or cid not in key_by_cid:
+            continue
+        key, it = key_by_cid[cid]
+        tier = _tier_for_item(it)
+        model = _model_for_tier(tier)
+        if rtype == 'succeeded':
+            msg = getattr(result, 'message', None)
+            if spend_monitor is not None and msg is not None:
+                usage = getattr(msg, 'usage', None)
+                try:
+                    spend_monitor.record_response(usage, model=model,
+                                                    batch=True)
+                except Exception:
+                    pass
+            text   = _extract_response_text(msg) if msg else ''
+            parsed = _extract_json_blob(text)
+            if not parsed:
+                n_err += 1
+                continue
+            sanitized = _sanitize_result(it, parsed)
+            if not sanitized:
+                n_err += 1
+                continue
+            out[key] = sanitized
+            n_ok += 1
+        elif rtype == 'errored':
+            err = getattr(result, 'error', None)
+            logger.info("stream_estimates BATCH result errored: cid=%s "
+                         "key=%s err=%r", cid, key, err)
+            n_err += 1
+        elif rtype == 'expired':
+            n_expired += 1
+        else:
+            n_err += 1
+    logger.info("stream_estimates BATCH: parsed results ok=%d err=%d "
+                 "expired=%d (of %d submitted)",
+                 n_ok, n_err, n_expired, len(requests))
+    if spend_monitor is not None:
+        logger.info("stream_estimates BATCH: running spend $%.4f / $%.2f",
+                     spend_monitor.total(), spend_monitor.cap_usd)
     return out
 
 
@@ -3727,10 +4276,14 @@ def _humanize(n: int) -> str:
 # Fetch entry point
 # -------------------------------------------------------------------------
 def fetch(only: Optional[set[str]] = None,
-           target_date_iso: Optional[str] = None) -> dict[str, Any]:
+           target_date_iso: Optional[str] = None,
+           spend_monitor: Optional[Any] = None,
+           batch_mode: bool = False,
+           top_only: Optional[int] = None,
+           resume_from_wip: bool = True) -> dict[str, Any]:
     """Read podcast / music / streaming / book / fast snapshots,
-    research each unique top item's US audience via Claude +
-    web_search, and return the combined snapshot dict.
+    research each unique top item's US audience via Claude, and return
+    the combined snapshot dict.
 
     `target_date_iso` (YYYY-MM-DD) is the calendar day the estimator
     reasons about - every returned `us_estimate` is a DAILY unique-
@@ -3739,6 +4292,21 @@ def fetch(only: Optional[set[str]] = None,
     reporting for) when omitted. The backfill script in
     `backfill_daily_estimates.py` uses this argument to fill each
     historical day's dated snapshot.
+
+    `spend_monitor` (SpendMonitor): hard USD cap. Metered on every
+    Claude response. Trip halts the run and returns what's been
+    researched so far.
+
+    `batch_mode` (bool): when True, submit items via the Anthropic
+    Message Batches API (50% off, separate async rate ceiling). When
+    False, run the serial ThreadPool path with per-25-item WIP
+    checkpoints.
+
+    `top_only` (int): cap the item set at this many rows (sorted by
+    best_rank ascending across all kinds). None = no cap.
+
+    `resume_from_wip` (bool): when True, load the WIP checkpoint for
+    the target date (if any) and skip items already researched.
     """
     if not target_date_iso:
         target_date_iso = (
@@ -3814,6 +4382,23 @@ def fetch(only: Optional[set[str]] = None,
                 sum(1 for it in items if it['kind'] == 'trending_person'),
                 sum(1 for it in items if it['kind'] == 'wiki_topic'))
 
+    # -----------------------------------------------------------------
+    # Per-date item cap (added 2026-09-03 for the sparse historical
+    # backfill). Sort by best_rank ASC across all kinds and keep the
+    # top-N; None = no cap (live daily cron default).
+    # -----------------------------------------------------------------
+    if top_only is not None and top_only > 0 and len(items) > top_only:
+        # best_rank is per-kind, but sorting by (best_rank, kind) is
+        # stable enough that "top 500" spreads proportionally across
+        # kinds by their per-kind depth. Items without a best_rank
+        # (rare) sink to the end.
+        items.sort(key=lambda it: (int(it.get('best_rank') or 10_000),
+                                     it.get('kind', '')))
+        logger.info("stream_estimates: capping items %d -> top_only=%d "
+                     "(sorted by best_rank ASC across kinds)",
+                     len(items), top_only)
+        items = items[:top_only]
+
     # Incremental behavior (two goals):
     #
     #   1. Preserve items from OTHER kinds when running with --only.
@@ -3838,19 +4423,57 @@ def fetch(only: Optional[set[str]] = None,
         k for k, v in prior_items.items()
         if v.get('as_of_date') == target_date_iso and v.get('us_estimate')
     }
+    # -----------------------------------------------------------------
+    # WIP checkpoint resume (Lever 4). On restart, skip items already
+    # researched in the WIP snapshot for the target day. Serial path
+    # only - batch runs are atomic.
+    # -----------------------------------------------------------------
+    wip_researched: dict[str, dict] = {}
+    if resume_from_wip and not batch_mode:
+        wip = _read_wip_checkpoint(target_date_iso)
+        if wip:
+            wip_researched = wip.get('researched') or {}
+            if wip_researched:
+                logger.info("stream_estimates: resuming from WIP for %s "
+                             "(%d items already researched)",
+                             target_date_iso, len(wip_researched))
+
+    already_done_keys = set(already_covered) | set(wip_researched.keys())
     items_to_research = [
         it for it in items
         if _lookup_key(it['kind'], it['display_title'],
-                        it.get('artist') or '') not in already_covered
+                        it.get('artist') or '') not in already_done_keys
     ]
     if len(items_to_research) < len(items):
         logger.info("stream_estimates: skipping %d items already researched "
-                    "for %s (intra-day rerun); researching %d new items",
+                    "for %s (intra-day + WIP); researching %d new items",
                     len(items) - len(items_to_research), target_date_iso,
                     len(items_to_research))
 
-    researched_new = _research_all(items_to_research,
-                                    target_date_iso=target_date_iso)
+    if batch_mode:
+        researched_new = _research_all_batch(
+            items_to_research,
+            target_date_iso=target_date_iso,
+            spend_monitor=spend_monitor,
+        )
+    else:
+        # Serial path with per-25-item WIP flushes.
+        checkpoint_state = {
+            'target_date_iso': target_date_iso,
+            'kept_prior':      dict(prior_items),
+            'in_progress':     dict(wip_researched),
+            'flushed_at':      len(wip_researched),
+        }
+        researched_new = _research_all(
+            items_to_research,
+            target_date_iso=target_date_iso,
+            spend_monitor=spend_monitor,
+            checkpoint_state=checkpoint_state,
+        )
+        # Union WIP resume + new research so downstream sees everything.
+        merged = dict(wip_researched)
+        merged.update(researched_new)
+        researched_new = merged
 
     # Compose the final `researched` dict as the union of:
     #   - Everything from prior_snap (preserves items whose kind is
@@ -3903,7 +4526,11 @@ def fetch(only: Optional[set[str]] = None,
 
 
 def fetch_for_date(target_date_iso: str,
-                    only: Optional[set[str]] = None) -> dict[str, Any]:
+                    only: Optional[set[str]] = None,
+                    spend_monitor: Optional[Any] = None,
+                    batch_mode: bool = False,
+                    top_only: Optional[int] = None,
+                    resume_from_wip: bool = True) -> dict[str, Any]:
     """Backfill-friendly wrapper: research the estimator for a specific
     historical calendar day and write the resulting snapshot to the
     dated S3 key ONLY (never overwrites `latest/`).
@@ -3911,12 +4538,36 @@ def fetch_for_date(target_date_iso: str,
     Used by `scripts/trends_scrapers/backfill_daily_estimates.py`. Live
     daily cron continues to use `fetch()` -> `run_scraper()` which
     stamps both `latest/` and today's dated key.
+
+    Extended arguments (2026-09-03 rebuild):
+
+      spend_monitor    - hard USD cap; trip halts the run.
+      batch_mode       - use Anthropic Message Batches API (50% off).
+      top_only         - cap items to top-N by best_rank across kinds.
+      resume_from_wip  - honor a _wip/ checkpoint from a prior crash.
     """
-    payload = fetch(only=only, target_date_iso=target_date_iso)
+    payload = fetch(
+        only=only,
+        target_date_iso=target_date_iso,
+        spend_monitor=spend_monitor,
+        batch_mode=batch_mode,
+        top_only=top_only,
+        resume_from_wip=resume_from_wip,
+    )
     payload.setdefault('source',      'stream_estimates')
     payload.setdefault('label',       'US Streams')
     payload.setdefault('kind',        'meta')
     payload['fetched_at'] = datetime.now(timezone.utc).isoformat()
+
+    # Bail without an S3 write if the SpendMonitor tripped mid-run.
+    # `_wip/` is preserved so the next run can resume once the cap
+    # is raised.
+    if spend_monitor is not None and spend_monitor.tripped():
+        payload['spend_tripped'] = True
+        logger.error("stream_estimates: SpendMonitor tripped mid-run "
+                      "for %s; NOT writing dated snapshot (WIP kept "
+                      "for future resume).", target_date_iso)
+        return payload
 
     body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
     s3 = _s3()
@@ -3928,6 +4579,8 @@ def fetch_for_date(target_date_iso: str,
                  "(%d items, target=%s)",
                  _S3_BUCKET, key_dated, payload.get('count') or 0,
                  target_date_iso)
+    # Full-day success: remove the WIP checkpoint if one was in play.
+    _delete_wip_checkpoint(target_date_iso)
     return payload
 
 

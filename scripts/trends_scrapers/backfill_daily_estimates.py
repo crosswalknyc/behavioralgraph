@@ -101,7 +101,7 @@ import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import boto3
 from botocore.exceptions import ClientError
@@ -273,11 +273,15 @@ def _worker_run_dates(
     only_list: Optional[list[str]],
     force_refresh: bool,
     sleep_between_days_s: float,
+    top_only: Optional[int] = None,
 ) -> list[dict]:
     """Worker task: process a contiguous range of ISO dates one at a
     time in this worker's process. Each date writes its own atomic
     dated snapshot via `stream_estimates.fetch_for_date`. Returns a
-    list of per-date result dicts."""
+    list of per-date result dicts.
+
+    (Serial per-date path only - batch mode runs in the parent
+    process, not through this worker.)"""
     # Configure logging in this worker: the spawn mp_context starts
     # a fresh interpreter, so the parent's basicConfig is NOT
     # inherited. Without this, every logger.info(...) inside
@@ -309,7 +313,8 @@ def _worker_run_dates(
             continue
         t0 = time.time()
         try:
-            result = se.fetch_for_date(d_iso, only=only or None)
+            result = se.fetch_for_date(d_iso, only=only or None,
+                                         top_only=top_only)
             n = int(result.get('count') or 0)
             results.append({
                 'date':      d_iso,
@@ -334,7 +339,7 @@ def _worker_run_dates(
 
 
 def backfill_range(
-    since_iso: str,
+    since_iso: Optional[str] = None,
     until_iso: Optional[str] = None,
     only: Optional[set[str]] = None,
     dry_run: bool = False,
@@ -343,15 +348,27 @@ def backfill_range(
     workers: int = 0,
     dates_per_worker: int = 1,
     pool_path: Optional[str] = None,
+    dates: Optional[list[str]] = None,
+    top_only: Optional[int] = None,
+    batch_mode: bool = False,
+    spend_cap_usd: Optional[float] = None,
 ) -> dict:
-    """Backfill dated snapshots from `since_iso` through `until_iso`
-    (default today - 1).
+    """Backfill dated snapshots.
 
-    Parallelism: `workers` process-level workers, each pinned to a
-    distinct Anthropic key from `.env.avid_skins` (or the file at
-    `pool_path`). `dates_per_worker` sets the task granularity: how
-    many contiguous ISO dates a single worker owns per submitted
-    task. Workers pick the next task off the pool when they finish.
+    Two ways to name the dates to backfill:
+      - `dates=['2026-06-01', '2026-06-08', ...]`: sparse list of ISO
+        dates (used by the weekly-checkpoint sparse backfill).
+      - `since_iso=..., until_iso=...`: contiguous range inclusive.
+
+    New knobs (2026-09-03 rebuild):
+      - `top_only`: cap items per date (top-N by best_rank ASC).
+      - `batch_mode`: use Anthropic Message Batches API. Runs SERIAL
+        in the parent process (no worker pool), one batch per date.
+      - `spend_cap_usd`: hard USD cap. Trip halts the run.
+
+    Parallelism (serial mode only, ignored in batch mode): `workers`
+    process-level workers, each pinned to a distinct Anthropic key
+    from `.env.avid_skins` (or the file at `pool_path`).
 
     Returns a summary dict:
 
@@ -362,23 +379,39 @@ def backfill_range(
           'wrote':      [<iso>, ...],   # days researched + written
           'skipped':    [<iso>, ...],   # days already covered
           'failed':     [(<iso>, <reason>), ...],
+          'spend_usd':  33.87,
+          'spend_cap':  100.00,
+          'tripped':    False,
         }
     """
-    if not until_iso:
-        # Default to yesterday - today's snapshot is what the live
-        # daily cron writes; the backfill doesn't stomp on it.
-        until_iso = (
-            datetime.now(timezone.utc).date() - timedelta(days=1)
-        ).isoformat()
+    # -----------------------------------------------------------------
+    # Assemble the list of dates.
+    # -----------------------------------------------------------------
+    if dates:
+        # Preserve caller-supplied order but process newest first so a
+        # mid-run kill still leaves the freshest coverage intact.
+        days = sorted({d for d in dates}, reverse=True)
+        since_iso = min(days) if days else (since_iso or '')
+        until_iso = max(days) if days else (until_iso or '')
+    else:
+        if not since_iso:
+            raise ValueError("backfill_range: pass `dates=` or `since_iso=`.")
+        if not until_iso:
+            # Default to yesterday - today's snapshot is what the live
+            # daily cron writes; the backfill doesn't stomp on it.
+            until_iso = (
+                datetime.now(timezone.utc).date() - timedelta(days=1)
+            ).isoformat()
+        days = list(_iter_dates(since_iso, until_iso))
 
-    days = list(_iter_dates(since_iso, until_iso))
     only_list = sorted(only) if only else None
 
     logger.info("backfill_daily_estimates: since=%s until=%s -> %d days "
-                 "(dry_run=%s, force_refresh=%s, only=%s)",
+                 "(dry_run=%s, force_refresh=%s, only=%s, top_only=%s, "
+                 "batch_mode=%s, spend_cap=%s)",
                  since_iso, until_iso, len(days), dry_run, force_refresh,
-                 only_list or 'all')
-    logger.info("Cost estimate: %s", _estimate_cost_note(len(days)))
+                 only_list or 'all', top_only, batch_mode, spend_cap_usd)
+    logger.info("Cost estimate (rough): %s", _estimate_cost_note(len(days)))
 
     wrote: list[str] = []
     skipped: list[str] = []
@@ -403,6 +436,91 @@ def backfill_range(
             'failed':     failed,
             'dry_run':    True,
         }
+
+    # -----------------------------------------------------------------
+    # SpendMonitor (shared across every date in the run).
+    # -----------------------------------------------------------------
+    spend_monitor = None
+    if spend_cap_usd is not None and spend_cap_usd > 0:
+        from ._spend_monitor import SpendMonitor
+        spend_monitor = SpendMonitor(cap_usd=float(spend_cap_usd),
+                                       prefix='backfill')
+        logger.info("[SpendMonitor] hard cap $%.2f - run halts on trip",
+                     spend_monitor.cap_usd)
+
+    # -----------------------------------------------------------------
+    # BATCH MODE: run serially in the parent process. One batch per
+    # date. No worker pool. Skips days already daily-era.
+    # -----------------------------------------------------------------
+    if batch_mode:
+        from scripts.trends_scrapers import stream_estimates as se
+        t_start = time.time()
+        total_items_written = 0
+        for i, d_iso in enumerate(days, 1):
+            if spend_monitor is not None and spend_monitor.tripped():
+                logger.error("[SpendMonitor] tripped at $%.2f / $%.2f - "
+                              "aborting remaining %d days.",
+                              spend_monitor.total(), spend_monitor.cap_usd,
+                              len(days) - (i - 1))
+                for d in days[i - 1:]:
+                    failed.append((d, 'spend_cap_tripped'))
+                break
+            already = (not force_refresh) and _existing_snapshot_is_daily(d_iso)
+            if already:
+                logger.info("[%d/%d] %s: SKIP (already daily-era)",
+                             i, len(days), d_iso)
+                skipped.append(d_iso)
+                continue
+            t0 = time.time()
+            try:
+                result = se.fetch_for_date(d_iso, only=only or None,
+                                             spend_monitor=spend_monitor,
+                                             batch_mode=True,
+                                             top_only=top_only,
+                                             resume_from_wip=False)
+                if result.get('spend_tripped'):
+                    logger.error("[%d/%d] %s: HALT (spend cap tripped "
+                                  "mid-day)", i, len(days), d_iso)
+                    failed.append((d_iso, 'spend_cap_tripped'))
+                    break
+                n = int(result.get('count') or 0)
+                total_items_written += n
+                wrote.append(d_iso)
+                elapsed_s = time.time() - t0
+                spend_line = ''
+                if spend_monitor is not None:
+                    spend_line = (f' [spend $%.2f / $%.2f]' %
+                                    (spend_monitor.total(), spend_monitor.cap_usd))
+                logger.info("[%d/%d] %s: WROTE %d items (%.1fs)%s",
+                             i, len(days), d_iso, n, elapsed_s, spend_line)
+            except Exception as e:
+                logger.exception("[%d/%d] %s: FAILED %s",
+                                  i, len(days), d_iso, e)
+                failed.append((d_iso, f'{type(e).__name__}: {e}'))
+        elapsed_min = (time.time() - t_start) / 60.0
+        summary = {
+            'since':                since_iso,
+            'until':                until_iso,
+            'total_days':           len(days),
+            'wrote':                wrote,
+            'skipped':              skipped,
+            'failed':               failed,
+            'dry_run':              False,
+            'elapsed_min':          round(elapsed_min, 1),
+            'total_items_written':  total_items_written,
+            'batch_mode':           True,
+        }
+        if spend_monitor is not None:
+            summary.update({
+                'spend_usd':  round(spend_monitor.total(), 4),
+                'spend_cap':  round(spend_monitor.cap_usd, 2),
+                'tripped':    spend_monitor.tripped(),
+            })
+        logger.info("backfill_daily_estimates BATCH: complete in %.1fm. "
+                     "wrote=%d skipped=%d failed=%d (of %d total)",
+                     elapsed_min, len(wrote), len(skipped),
+                     len(failed), len(days))
+        return summary
 
     # -----------------------------------------------------------------
     # Resolve worker count and pin one Anthropic key per worker.
@@ -465,6 +583,7 @@ def backfill_range(
                 only_list,
                 force_refresh,
                 sleep_between_days_s,
+                top_only,
             ): task
             for task in tasks
         }
@@ -568,22 +687,59 @@ def _parse_only(raw: str) -> set[str]:
     return out
 
 
+def _parse_dates_list(raw: str) -> list[str]:
+    """Parse --dates comma-separated list; validate each token is a
+    YYYY-MM-DD ISO date. Empty tokens are skipped."""
+    out: list[str] = []
+    for tok in (raw or '').split(','):
+        t = tok.strip()
+        if not t:
+            continue
+        # Fast validation via date.fromisoformat
+        try:
+            date.fromisoformat(t)
+        except Exception as e:
+            raise ValueError(f'--dates: {t!r} is not a valid ISO date: {e}')
+        out.append(t)
+    return out
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         description=('Backfill dated stream_estimates.json snapshots '
                      'so the trends_iq window accumulator has real '
-                     'daily coverage back to `--since`.'))
-    parser.add_argument('--since', required=True,
-                        help='Start date (YYYY-MM-DD). Backfill '
-                              'includes this day.')
+                     'daily coverage back to `--since` (or across the '
+                     'sparse date list given by --dates).'))
+    parser.add_argument('--since', default='',
+                        help='Start date (YYYY-MM-DD). Required unless '
+                              '--dates is given. Backfill includes '
+                              'this day.')
     parser.add_argument('--until', default='',
                         help='End date (YYYY-MM-DD). Defaults to '
-                              'yesterday UTC.')
+                              'yesterday UTC. Ignored with --dates.')
+    parser.add_argument('--dates', default='',
+                        help='Comma-separated ISO dates. Alternative '
+                              'to --since / --until - only these '
+                              'specific dates are backfilled '
+                              '(sparse checkpoint mode).')
     parser.add_argument('--only', default='',
                         help='Comma-separated kinds to research on '
                               'each day (e.g. song,fast_channel). '
                               'Default = all kinds. Same aliases as '
                               'stream_estimates.py CLI.')
+    parser.add_argument('--top-only', type=int, default=0,
+                        help='Cap items per date at top-N by best_rank '
+                              'ASC across all kinds. 0 (default) = no '
+                              'cap. Use e.g. 500 for a sparse weekly '
+                              'checkpoint backfill.')
+    parser.add_argument('--batch', action='store_true',
+                        help='Use the Anthropic Message Batches API '
+                              '(50%% off, separate async rate ceiling). '
+                              'Runs SERIAL in the parent process; '
+                              'ignores --workers / --pool-path.')
+    parser.add_argument('--spend-cap-usd', type=float, default=0.0,
+                        help='Hard USD cap. Trip halts the run and '
+                              'exits non-zero. 0 (default) = no cap.')
     parser.add_argument('--dry-run', action='store_true',
                         help='Report gaps + cost estimate without '
                               'touching AI or S3.')
@@ -598,7 +754,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                               'one worker per Anthropic key in the pool '
                               'MINUS ONE (floor 1), so a single key stays '
                               'free for the live daily cron. Each worker '
-                              'pins a distinct ANTHROPIC_API_KEY.')
+                              'pins a distinct ANTHROPIC_API_KEY. '
+                              'Ignored in --batch mode.')
     parser.add_argument('--dates-per-worker', type=int, default=1,
                         help='Task granularity: how many contiguous ISO '
                               'dates a worker owns per submitted task. '
@@ -617,9 +774,18 @@ def main(argv: Optional[list[str]] = None) -> int:
         format='%(asctime)s %(levelname)s %(name)s %(message)s',
     )
 
+    dates_list = _parse_dates_list(args.dates)
+    if not dates_list and not args.since:
+        parser.error('one of --since or --dates is required')
+
     only = _parse_only(args.only)
+    top_only = args.top_only if args.top_only and args.top_only > 0 else None
+    spend_cap = (args.spend_cap_usd
+                  if args.spend_cap_usd and args.spend_cap_usd > 0
+                  else None)
+
     summary = backfill_range(
-        since_iso=args.since,
+        since_iso=args.since or None,
         until_iso=args.until or None,
         only=only or None,
         dry_run=args.dry_run,
@@ -628,11 +794,28 @@ def main(argv: Optional[list[str]] = None) -> int:
         workers=args.workers,
         dates_per_worker=args.dates_per_worker,
         pool_path=args.pool_path or None,
+        dates=dates_list or None,
+        top_only=top_only,
+        batch_mode=args.batch,
+        spend_cap_usd=spend_cap,
     )
-    # Exit non-zero if the run hit a failure but not everything
-    # failed (partial success). Zero on clean success or clean skip.
-    if summary['failed']:
-        return 2 if summary['wrote'] or summary['skipped'] else 3
+    logger.info("summary: wrote=%d skipped=%d failed=%d "
+                 "spend=$%s / cap=$%s tripped=%s",
+                 len(summary.get('wrote') or []),
+                 len(summary.get('skipped') or []),
+                 len(summary.get('failed') or []),
+                 summary.get('spend_usd'),
+                 summary.get('spend_cap'),
+                 summary.get('tripped'))
+    # Exit codes:
+    #   0 - clean success (or clean skip / dry-run)
+    #   2 - partial: some wrote/skipped and some failed
+    #   3 - all failed
+    #   4 - SpendMonitor tripped (halt for review)
+    if summary.get('tripped'):
+        return 4
+    if summary.get('failed'):
+        return 2 if (summary.get('wrote') or summary.get('skipped')) else 3
     return 0
 
 
