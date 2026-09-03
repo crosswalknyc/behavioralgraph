@@ -50884,8 +50884,12 @@ https://www.instagram.com/p/..."></textarea>
             // primaryMetric = { label, value } - defaults vary per platform
             var pm = primaryMetric || {
                 label: 'Views',
-                value: t.read_count_display || _miqFormatNumber(t.read_count) || '-',
+                value: (function() {
+                    var p = _miqWindowPlays(t);
+                    return p != null ? _miqFormatNumber(p) : '-';
+                })(),
             };
+            var pmTip = pm.tip ? (' title="' + _miqEscape(pm.tip) + '"') : '';
             // Series/rail descriptor line intentionally removed - the
             // card leads directly with the title. Rail context (TOP,
             // Trending Now, FEATURED HERO, etc.) added noise more than
@@ -50931,7 +50935,7 @@ https://www.instagram.com/p/..."></textarea>
             var chips = _miqCompletionChips(t);
             return '<div class="miq-title-row">' + _miqEscape(t.title || '') + '</div>' +
                 '<div class="miq-title-metrics">' +
-                    '<div><div class="miq-metric-label">' + pm.label + '</div><div class="miq-metric-value">' + pm.value + '</div></div>' +
+                    '<div' + pmTip + '><div class="miq-metric-label">' + pm.label + '</div><div class="miq-metric-value">' + pm.value + '</div></div>' +
                     '<div><div class="miq-metric-label">' + secondaryMetric.label + '</div><div class="miq-metric-value">' + secondaryMetric.value + '</div></div>' +
                     '<div><div class="miq-metric-label">Current rank</div><div class="miq-metric-value">' + _miqCurrentRank(t) + '</div></div>' +
                 '</div>' +
@@ -50953,22 +50957,28 @@ https://www.instagram.com/p/..."></textarea>
         // episode-plays). That field carries plays translated through
         // plays-per-viewer-per-day and cross-day dedup so the chip
         // reads real US-scale unique viewers, not raw play events.
-        //
-        // Falls back to the legacy sum-of-reads path for older
-        // payloads still in transit through the response cache.
         function _miqWindowViewers(t, source) {
             if (!t) return null;
+            // Unique people over the active look-back. Do NOT fall back
+            // to view_window_estimate / reads_by_date / read_count —
+            // those are duplicated episode-plays (Views), not uniques.
             if (typeof t.unique_viewers_window === 'number' && t.unique_viewers_window > 0) {
                 return t.unique_viewers_window;
             }
-            if (source === 'peacock') {
-                if (typeof t.view_window_estimate === 'number' && t.view_window_estimate > 0) {
-                    return t.view_window_estimate;
-                }
-                if (typeof t.view_28d_estimate === 'number' && t.view_28d_estimate > 0) {
-                    return t.view_28d_estimate;
-                }
-                return null;
+            return null;
+        }
+
+        // Window-scoped episode-plays (duplicated views) for the card
+        // "Views" chip. Same look-back as Unique Viewers / Payers.
+        // Lifetime counters are intentionally not a fallback.
+        // Sparkline stays on sparkline_7d, independent of this helper.
+        function _miqWindowPlays(t) {
+            if (!t) return null;
+            if (typeof t.view_window_estimate === 'number' && t.view_window_estimate > 0) {
+                return t.view_window_estimate;
+            }
+            if (typeof t.sort_views === 'number' && t.sort_views > 0) {
+                return t.sort_views;
             }
             var rbd = t.reads_by_date;
             if (rbd && typeof rbd === 'object') {
@@ -50979,9 +50989,6 @@ https://www.instagram.com/p/..."></textarea>
                     if (typeof v === 'number' && v > 0) sum += v;
                 }
                 if (sum > 0) return Math.round(sum);
-            }
-            if (typeof t.read_count === 'number' && t.read_count > 0) {
-                return t.read_count;
             }
             return null;
         }
@@ -51024,7 +51031,8 @@ https://www.instagram.com/p/..."></textarea>
                 var uvWindow = _miqActiveWindowLabel();
                 var uvPlatformName = t.platform_label || (c.source === 'peacock' ? 'Peacock' : 'this platform');
                 var uvTip = 'Estimated unique viewers on ' + uvPlatformName + ' over ' + uvWindow + '. '
-                          + 'Changes with the look-back filter above the grid.';
+                          + 'Same window as Views. Changes with the look-back filter above the grid. '
+                          + 'The trend chart below is always the last 7 days.';
                 parts.push('<span class="miq-comp-chip miq-chip-completion" title="' + _miqEscape(uvTip) + '">'
                          +   '<span class="miq-comp-chip-label">Unique Viewers</span>'
                          +   '<span class="miq-comp-chip-value">' + _miqFormatNumber(uniqueViewers) + '</span>'
@@ -51476,13 +51484,11 @@ https://www.instagram.com/p/..."></textarea>
                 // window.
                 t.__observedDates = t.observed_dates || [];
                 var spark = _miqViewSparkline(t);
-                var wd = window.__microdramasIQ.currentWindowDays || 28;
-                var viewsVal = (wd === 28)
-                    ? t.view_28d_estimate
-                    : (t.view_window_estimate != null ? t.view_window_estimate : t.view_28d_estimate);
+                var viewsVal = _miqWindowPlays(t);
                 var primary = {
                     label: 'Views',
-                    value: _miqFormatNumber(viewsVal),
+                    value: viewsVal != null ? _miqFormatNumber(viewsVal) : '-',
+                    tip: 'Estimated episode-plays over ' + _miqActiveWindowLabel() + '. Same window as Unique Viewers. The trend chart below is always the last 7 days.',
                 };
                 card.innerHTML = _miqCardHTML(t, 'Peacock', spark, primary);
                 card.addEventListener('click', function(evt) {
@@ -51538,24 +51544,15 @@ https://www.instagram.com/p/..."></textarea>
                 // because its per-day view estimate is a static
                 // rank-derived number, not a daily observed count).
                 var spark = _miqReadsSparkline(t, platform.observed_dates);
-                // Primary metric: every tab now shows "Views". NetShort's
-                // storefront doesn't publish a raw view counter, so the
-                // backend backfills read_count from a rank->views curve
-                // anchored to platform MAU (see _estimate_views_from_rank
-                // in microdramas_iq.py). That makes the tab grammar
-                // identical across every platform.
-                var primary;
-                if (t.read_count == null) {
-                    primary = {
-                        label: 'Views',
-                        value: '-',
-                    };
-                } else {
-                    primary = {
-                        label: 'Views',
-                        value: t.read_count_display || _miqFormatNumber(t.read_count),
-                    };
-                }
+                // Primary metric: window-scoped duplicated episode-plays.
+                // Same look-back as Unique Viewers / Payers on every
+                // competitor tab. Sparkline stays trailing-7-day.
+                var windowPlays = _miqWindowPlays(t);
+                var primary = {
+                    label: 'Views',
+                    value: windowPlays != null ? _miqFormatNumber(windowPlays) : '-',
+                    tip: 'Estimated episode-plays over ' + _miqActiveWindowLabel() + '. Same window as Unique Viewers. The trend chart below is always the last 7 days.',
+                };
                 card.innerHTML = _miqCardHTML(t, platform.label, spark, primary);
                 card.addEventListener('click', function(evt) {
                     // Sparkline area opens the daily-views breakdown;
@@ -52024,8 +52021,7 @@ https://www.instagram.com/p/..."></textarea>
                         t.current_rank != null ? t.current_rank : '',
                         t.title || t.series || '',
                         t.genre || '',
-                        t.sort_views || t.view_window_estimate
-                              || t.view_28d_estimate || t.read_count || 0,
+                        t.sort_views || t.view_window_estimate || 0,
                         t.best_rank != null ? t.best_rank : '',
                         (t.completion && t.completion.total_episodes) || t.episodes_count || '',
                     ]);
@@ -52061,12 +52057,8 @@ https://www.instagram.com/p/..."></textarea>
                 if (plat) {
                     (plat.titles || []).forEach(function(t) {
                         var comp = t.completion || {};
-                        var rbd = t.reads_by_date || {};
-                        var winViews = 0;
-                        Object.keys(rbd).forEach(function(k) {
-                            var v = Number(rbd[k]);
-                            if (isFinite(v)) winViews += v;
-                        });
+                        var winViews = _miqWindowPlays(t);
+                        if (winViews == null) winViews = 0;
                         rows.push([
                             t.current_rank != null ? t.current_rank : '',
                             t.previous_rank != null ? t.previous_rank : '',
@@ -52335,9 +52327,13 @@ https://www.instagram.com/p/..."></textarea>
                     spark = _miqReadsSparkline(t, t.observed_dates || []);
                 }
 
-                var viewsRaw = (t.sort_views != null) ? t.sort_views : t.read_count;
+                var viewsRaw = _miqWindowPlays(t);
                 var viewsStr = (viewsRaw != null) ? _miqFormatNumber(viewsRaw) : '-';
-                var primary = { label: 'Views', value: viewsStr };
+                var primary = {
+                    label: 'Views',
+                    value: viewsStr,
+                    tip: 'Estimated episode-plays over ' + _miqActiveWindowLabel() + '. Same window as Unique Viewers. The trend chart below is always the last 7 days.',
+                };
 
                 // Aggregated rank pill prepended to the title row.
                 var rankPill = '<span class="miq-agg-rank">#' + (idx + 1) + '</span>';
@@ -52493,7 +52489,8 @@ https://www.instagram.com/p/..."></textarea>
                     // context, but the "-" marker makes it clear the
                     // number is a rank-derived estimate, not an observed
                     // daily count.
-                    var est = Number(t.read_count) || 0;
+                    var _winPlays = _miqWindowPlays(t);
+                    var est = (_winPlays != null) ? Number(_winPlays) : 0;
                     var perDay = dates.length ? Math.round(est / dates.length) : est;
                     rows = dates.map(function(d) {
                         return {
