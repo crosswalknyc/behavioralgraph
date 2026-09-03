@@ -53120,6 +53120,38 @@ https://www.instagram.com/p/..."></textarea>
             return Math.round(v).toLocaleString('en-US');
         }
 
+        // Cadence noun for the WINDOW dropdown. Twin of
+        // `_window_noun_for_days` in bg-webapp/trends_iq.py (kept in
+        // lockstep so a chip's `unit_label` cadence matches the sub-
+        // label cadence on every rerender).
+        //
+        //   1  -> "today's"   (single-day view)
+        //   3  -> "3-day"
+        //   7  -> "weekly"    (matches the underlying scraper cadence)
+        //   14 -> "2-week"
+        //   30 -> "monthly"
+        //
+        // Non-ladder values round to the nearest rung.
+        function _tiqWindowNoun(days) {
+            var n = parseInt(days, 10);
+            if (!isFinite(n) || n <= 1) return "today's";
+            if (n <= 3)  return '3-day';
+            if (n <= 7)  return 'weekly';
+            if (n <= 14) return '2-week';
+            return 'monthly';
+        }
+
+        // Read the WINDOW dropdown's current numeric value. Falls
+        // back to 1 (Yesterday) when the element is missing or the
+        // value can't be parsed. Every sub-label renderer that shows
+        // a window noun should read this once per render so the copy
+        // stays in sync with the dropdown after every user change.
+        function _tiqGetLookback() {
+            var el = document.getElementById('trendsIQLookback');
+            var n = el ? parseInt(el.value || '1', 10) : 1;
+            return isFinite(n) && n > 0 ? n : 1;
+        }
+
         // Render the projected-views chip for a row. Reads
         // `row.us_streams` populated by the backend annotator (see
         // trends_iq._annotate_fast_with_streams). Returns '' when the
@@ -53230,6 +53262,20 @@ https://www.instagram.com/p/..."></textarea>
             // rather than the global. Method / delta stay unchanged.
             var tipParts = [num + ' ' + (lensV ? unitShort : unit)];
             if (deltaTip) tipParts.push(deltaTip);
+            // Window coverage line (2026-09-03). When the backend
+            // window accumulator has run (lookback_days > 1), stamp
+            // an honest coverage note: "Observed on 3 of last 30
+            // days." for a title that appeared in only 3 of the 30
+            // dated snapshots the accumulator read. Titles observed
+            // on every day in the window omit the line (no signal).
+            // Tier 1 per analysis-confidence-calibration.mdc: we
+            // describe the raw coverage, never hedge the count itself.
+            var wc = Number(us.window_days_covered);
+            var wt = Number(us.window_days_total);
+            if (isFinite(wc) && wc > 0 && isFinite(wt) && wt > 1 && wc < wt) {
+                var dayNoun = (wc === 1) ? 'day' : 'days';
+                tipParts.push('Observed on ' + wc + ' of last ' + wt + ' ' + dayNoun + '.');
+            }
             if (us.method)     tipParts.push(String(us.method));
             if (us.as_of_date) tipParts.push('As of ' + us.as_of_date);
             var tip = _tiqEsc(tipParts.join(' \u2014 '));
@@ -53246,7 +53292,13 @@ https://www.instagram.com/p/..."></textarea>
                 dr: us.direction || null,
                 pr: us.prev_rank || null,
                 m:  us.method || null,
-                a:  us.as_of_date || null
+                a:  us.as_of_date || null,
+                // Window accumulator provenance (2026-09-03): let the
+                // lens-rewrite path preserve the "Observed on X of
+                // last N days." tooltip line when a user toggles the
+                // lens dropdown.
+                wc: (typeof us.window_days_covered === 'number') ? us.window_days_covered : null,
+                wt: (typeof us.window_days_total === 'number') ? us.window_days_total : null
             };
             var stashJson = JSON.stringify(stash).replace(/"/g, '&quot;');
             return '<span class="tiq-audience-chip" title="' + tip + '"' +
@@ -53285,7 +53337,9 @@ https://www.instagram.com/p/..."></textarea>
                     direction:            us.dr,
                     prev_rank:            us.pr,
                     method:               us.m,
-                    as_of_date:           us.a
+                    as_of_date:           us.a,
+                    window_days_covered:  us.wc,
+                    window_days_total:    us.wt
                 };
                 var fresh = _tiqAudienceChip(rehydrated);
                 if (fresh) {
@@ -57611,7 +57665,15 @@ https://www.instagram.com/p/..."></textarea>
                     // add signal in the subtitle; for the other platforms
                     // the value was misleading anyway (we scrape daily,
                     // not weekly) - so no date stamp anywhere.
-                    var subtitle = 'Top titles on ' + _tiqEsc(s.label || k) + '. Tap Views or Δ% to sort.';
+                    // 2026-09-03: mirror the WINDOW dropdown noun so
+                    // the sub-label reads consistently with the chip's
+                    // accumulator-stamped unit_label. "Yesterday" =
+                    // "today's US views", "Last 30 days" = "monthly
+                    // US views".
+                    var _strmNoun = _tiqWindowNoun(_tiqGetLookback());
+                    var subtitle = 'Top titles on ' + _tiqEsc(s.label || k) +
+                                    ' by ' + _strmNoun + ' US views' +
+                                    '. Tap Views or \u0394% to sort.';
                     // Row meta is intentionally suppressed for streaming
                     // cards. The `weeks_in_top10` pill was removed because
                     // non-Netflix platforms are derived from our own snapshot
@@ -57980,9 +58042,15 @@ https://www.instagram.com/p/..."></textarea>
                         });
                     }
                     var totalCount = (filmRows.length + tvRows.length) || (s.items || []).length;
+                    // FAST title sub-label mirrors the WINDOW dropdown
+                    // (Bug 1 fix, 2026-09-03) so a 30-day view reads
+                    // "monthly US views" instead of the previously
+                    // hardcoded weekly popularity note.
+                    var _fastNoun = _tiqWindowNoun(_tiqGetLookback());
                     var titlesSubtitle = 'Top ' + totalCount + ' titles on ' +
                                     _tiqEsc(s.label || k) +
-                                    ' (US popularity, ad-supported tier). Tap Views or Δ% to sort.';
+                                    ' by ' + _fastNoun + ' US views' +
+                                    ' (ad-supported tier). Tap Views or \u0394% to sort.';
                     var renderCol = function(label, rows, forceIndexRank) {
                         var genreOpts = _tiqGenreOptions(rows);
                         var yearOpts = _tiqYearOptions(rows);
@@ -58176,10 +58244,18 @@ https://www.instagram.com/p/..."></textarea>
                                    '<td class="tiq-sheet-td-spacer"></td>' +
                                    '</tr>';
                         }).join('');
+                        // Sub-label mirrors the WINDOW dropdown (Bug 1
+                        // fix, 2026-09-03). Cadence noun matches the
+                        // us_streams.unit_label the backend accumulator
+                        // stamps on each channel row, so "monthly" on
+                        // the 30-day view reads consistently with the
+                        // chip's "monthly US viewers" tooltip.
+                        var _chanNoun = _tiqWindowNoun(_tiqGetLookback());
                         channelsHtml =
                             '<div class="tiq-card-sub" style="margin-bottom:12px;">' +
                               'Ranking the ' + channels.length + ' most-watched channels on ' +
-                              _tiqEsc(s.label || k) + ' by weekly US viewers. Tap Views or Δ% to sort.' +
+                              _tiqEsc(s.label || k) + ' by ' + _chanNoun +
+                              ' US viewers. Tap Views or \u0394% to sort.' +
                             '</div>' +
                             '<div class="tiq-card">' + _tiqSheetCardHead('Channels') +
                               '<table class="tiq-sheet tiq-sheet-chan" data-entity="Channel" data-export="' + _tiqEsc(String(k) + '-channels') + '">' +

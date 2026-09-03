@@ -672,6 +672,258 @@ def _read_snapshot(source: str, asof: Optional[str] = None) -> Optional[dict]:
     return data
 
 
+# ============================================================================
+# Window accumulator - cumulative reach across the last N daily snapshots
+# ============================================================================
+# The `stream_estimates.py` scraper produces a per-item weekly US audience
+# integer every day (`items[key].us_estimate`, `items[key].by_platform.
+# <slug>.us_estimate`). Each daily snapshot lives at
+# `trends_iq_snapshots/{YYYY-MM-DD}/stream_estimates.json`. The WINDOW
+# dropdown at the top of the Trends IQ view (Yesterday / Last 3 days /
+# Last 7 / Last 14 / Last 30) previously only relabelled the panel: the
+# audience integers on every ranker row were identical across every
+# window because compute_view always read the single `latest/` snapshot.
+#
+# This accumulator solves that by summing the per-item `us_estimate`
+# across the last N daily snapshots. Titles observed on every day of
+# the window sum all N days; a title that only appeared on 3 of the
+# last 30 days sums only those 3 days and its `window_days_covered`
+# field lets the frontend say so in the tooltip.
+#
+# Downstream annotators (`_annotate_music_with_streams`,
+# `_annotate_streaming_with_streams`, `_annotate_fast_channels_with_views`,
+# ...) are unchanged - they read `items[key].us_estimate` and
+# `items[key].by_platform.<slug>.us_estimate` verbatim.
+#
+# Cadence noun in `unit_label` is rewritten to match the window:
+# "weekly US listeners" becomes "monthly US listeners" for N=30, etc.
+#
+# lookback_days=1 short-circuits to `None` - the caller falls through
+# to the plain `latest/` read.
+
+_WINDOW_ACCUMULATOR_MAX_WORKERS = int(
+    os.environ.get('TRENDS_IQ_ACCUM_WORKERS', '8'))
+_WINDOW_ACCUMULATOR_TIMEOUT_S   = int(
+    os.environ.get('TRENDS_IQ_ACCUM_TIMEOUT_S', '90'))
+
+
+def _window_noun_for_days(lookback_days: int) -> str:
+    """Cadence noun that matches the WINDOW dropdown value.
+
+    1  -> "today's"       (single-day view)
+    3  -> "3-day"
+    7  -> "weekly"        (matches the underlying scraper cadence)
+    14 -> "2-week"
+    30 -> "monthly"
+
+    Values in between round to the nearest ladder rung. See
+    _tiqWindowNoun in bg-webapp/templates/index.html for the frontend
+    twin (kept in lockstep so a chip's cadence noun matches the sub-
+    label's cadence noun on every rerender).
+    """
+    n = int(lookback_days or 1)
+    if n <= 1:
+        return "today's"
+    if n <= 3:
+        return "3-day"
+    if n <= 7:
+        return "weekly"
+    if n <= 14:
+        return "2-week"
+    return "monthly"
+
+
+_UNIT_LABEL_CADENCE_PREFIXES = (
+    'weekly', 'daily', 'monthly', 'yearly', 'annual',
+)
+
+
+def _rewrite_unit_label(label: Optional[str], noun: str) -> str:
+    """Swap the leading cadence word in a unit_label ("weekly US
+    listeners" -> "<noun> US listeners"). Preserves the tail of the
+    label verbatim.
+
+    Never returns an empty string - if the label was empty or non-str,
+    falls back to `<noun> US audience` so the chip still renders.
+    """
+    if not label or not isinstance(label, str):
+        return f'{noun} US audience'
+    stripped = label.strip()
+    lower = stripped.lower()
+    for cad in _UNIT_LABEL_CADENCE_PREFIXES:
+        if lower.startswith(cad):
+            return noun + stripped[len(cad):]
+    # No cadence prefix (unusual - the scraper always emits one).
+    # Prepend so the chip carries the window noun regardless.
+    return f'{noun} {stripped}'
+
+
+def _accumulate_stream_estimates_over_window(
+        lookback_days: int,
+        asof: Optional[str] = None
+        ) -> Optional[dict]:
+    """Sum per-item `us_estimate` across the last N daily
+    `stream_estimates` snapshots and return a merged snapshot.
+
+    N = min(lookback_days, 30). The reference day is `asof` (when set)
+    or today. Reads dated snapshots via `_read_snapshot(source,
+    asof=DATE)` in parallel; today's dated read falls back to `latest/`
+    when the nightly cron hasn't stamped a dated copy yet.
+
+    Returns:
+        A merged snapshot whose `items` dict inherits the latest day's
+        entry shape (direction, delta_pct, methods, sources), but whose
+        `us_estimate` and `by_platform.<slug>.us_estimate` are the sum
+        across the days that carried this item. Each merged entry also
+        picks up `window_days_covered` (int, days that contributed)
+        and `window_days_total` (int, N).  `unit_label` is rewritten
+        to swap the cadence prefix so the chip shows the window noun.
+
+        None when lookback_days <= 1 (caller uses the plain `latest/`
+        read) OR when no dated snapshot was reachable.
+
+    Rules the caller can rely on:
+      - Non-persistent titles sum only the days they appeared.
+      - Persistent titles get materially larger numbers than their
+        single-day estimate.
+      - Zero external dependencies beyond the existing S3 layer.
+      - Never raises: partial failures degrade to whatever fetched.
+    """
+    try:
+        n = int(lookback_days or 1)
+    except Exception:
+        n = 1
+    if n <= 1:
+        return None
+    # Safety cap: never fetch more than 30 dated snapshots per request.
+    # Larger windows are aliased to 30-day accumulation.
+    n = min(n, 30)
+
+    # Reference date: asof when provided, otherwise today (UTC).
+    ref_iso = asof or _today_iso()
+    try:
+        ref_date = date.fromisoformat(ref_iso)
+    except Exception:
+        return None
+
+    dated_isos = [(ref_date - timedelta(days=i)).isoformat()
+                  for i in range(n)]
+
+    def _fetch_one(d_iso: str) -> tuple[str, Optional[dict]]:
+        # Live view: for today's date the dated snapshot may not exist
+        # until the nightly cron runs, so fall back to `latest/` so we
+        # never lose today's day of data on an accumulated read.
+        snap = _read_snapshot('stream_estimates', asof=d_iso)
+        if snap is None and d_iso == _today_iso():
+            snap = _read_snapshot('stream_estimates')
+        return d_iso, snap
+
+    fetched: list[tuple[str, dict]] = []
+    try:
+        with ThreadPoolExecutor(
+                max_workers=_WINDOW_ACCUMULATOR_MAX_WORKERS,
+                thread_name_prefix='tiq-accum') as ex:
+            futures = [ex.submit(_fetch_one, d) for d in dated_isos]
+            for fut in as_completed(
+                    futures, timeout=_WINDOW_ACCUMULATOR_TIMEOUT_S):
+                try:
+                    d_iso, snap = fut.result(
+                        timeout=_WINDOW_ACCUMULATOR_TIMEOUT_S)
+                except Exception:
+                    continue
+                if snap and isinstance(snap, dict):
+                    fetched.append((d_iso, snap))
+    except Exception as e:
+        logger.debug("trends_iq accumulator fetch failed: %s", e)
+        return None
+
+    if not fetched:
+        return None
+
+    # Sort newest first so the "base" snapshot (whose non-us_estimate
+    # fields survive into the merged output) is the freshest day.
+    fetched.sort(key=lambda t: t[0], reverse=True)
+
+    # Deep-copy the latest snapshot as the shape template. We keep its
+    # direction / delta_pct / method / sources / prev_estimate / prev_
+    # date verbatim - those are day-over-day signals that describe the
+    # LATEST day, not the window. Overwriting us_estimate below with
+    # the accumulated sum is the only mutation.
+    try:
+        merged = json.loads(json.dumps(fetched[0][1]))
+    except Exception:
+        merged = dict(fetched[0][1])
+    merged_items = merged.get('items')
+    if not isinstance(merged_items, dict):
+        return None
+
+    # Per-item accumulator across every fetched day.
+    #   accum[key] = {'us_estimate': int, 'days_covered': int,
+    #                 'by_platform': {slug: int}}
+    accum: dict[str, dict] = {}
+    for _d_iso, snap in fetched:
+        items = snap.get('items') or {}
+        if not isinstance(items, dict):
+            continue
+        for key, entry in items.items():
+            if not isinstance(entry, dict):
+                continue
+            v = entry.get('us_estimate')
+            if not isinstance(v, (int, float)) or v <= 0:
+                continue
+            a = accum.setdefault(key, {
+                'us_estimate': 0,
+                'days_covered': 0,
+                'by_platform': {},
+            })
+            a['us_estimate']  += int(v)
+            a['days_covered'] += 1
+            by_plat = entry.get('by_platform') or {}
+            if isinstance(by_plat, dict):
+                for slug, per in by_plat.items():
+                    if not isinstance(per, dict):
+                        continue
+                    pv = per.get('us_estimate')
+                    if isinstance(pv, (int, float)) and pv > 0:
+                        a['by_platform'][slug] = (
+                            a['by_platform'].get(slug, 0) + int(pv))
+
+    # Merge the accumulated values back into the base snapshot's items.
+    # Only items present in the base snapshot are surfaced downstream
+    # (annotators walk today's charts and match by key); items that
+    # appeared only on older days but not the latest are naturally
+    # dropped, which is correct - a title that's off every current
+    # chart shouldn't render.
+    noun = _window_noun_for_days(n)
+    for key, a in accum.items():
+        entry = merged_items.get(key)
+        if not isinstance(entry, dict):
+            continue
+        entry['us_estimate']         = a['us_estimate']
+        entry['window_days_covered'] = a['days_covered']
+        entry['window_days_total']   = n
+        by_plat = entry.get('by_platform') or {}
+        if isinstance(by_plat, dict):
+            for slug, s in a['by_platform'].items():
+                per = by_plat.get(slug)
+                if isinstance(per, dict):
+                    per['us_estimate']         = s
+                    per['window_days_covered'] = a['days_covered']
+                    per['window_days_total']   = n
+        entry['unit_label'] = _rewrite_unit_label(
+            entry.get('unit_label'), noun)
+
+    # Stamp the whole snapshot so log messages and cache lookups can
+    # tell an accumulated read apart from a single-day read.
+    merged['window_lookback_days'] = n
+    merged['window_days_fetched']  = len(fetched)
+    logger.info(
+        "trends_iq stream_estimates accumulator: window=%dd, "
+        "fetched=%d/%d dated snapshots, unique_items=%d",
+        n, len(fetched), n, len(accum))
+    return merged
+
+
 def _snapshot_items_for_geo(snap: dict, state: Optional[str],
                               keywords: Optional[list[str]] = None) -> list[dict]:
     """Pick the right slice out of a snapshot: state-scoped when the
@@ -2928,6 +3180,14 @@ _STREAM_FIELDS = (
     'unit_label', 'confidence', 'method', 'sources',
     'delta_pct', 'direction', 'prev_estimate',
     'prev_date', 'as_of_date',
+    # Window-accumulator provenance (2026-09-03). Set only when
+    # `_accumulate_stream_estimates_over_window` has stamped a summed
+    # us_estimate: `window_days_covered` = days the item actually
+    # contributed to the sum; `window_days_total` = N (matches the
+    # WINDOW dropdown). Frontend tooltips can surface the coverage
+    # honestly ("Observed on 3 of last 30 days.") without hedging the
+    # number itself. Rows with lookback_days=1 leave both unset.
+    'window_days_covered', 'window_days_total',
 )
 
 
@@ -3041,12 +3301,28 @@ def _stamp_stream_estimate(row: dict, entry: dict,
 
     if per and (per.get('us_estimate') or 0) > 0:
         # Per-platform source of truth.
-        unit_label = (
-            _PLATFORM_UNIT_LABEL.get((kind_hint, platform_key))
-            or _DEFAULT_UNIT_BY_KIND.get(kind_hint)
-            or entry.get('unit_label')
-            or 'weekly US audience'
-        )
+        # When the window accumulator has run, `entry.unit_label`
+        # already carries the window-cadence noun ("monthly US views")
+        # AND the per-platform block has been summed. Prefer the
+        # accumulator-rewritten label over the (weekly-default)
+        # per-platform-vocab table, so a Netflix row on a 30-day
+        # window reads "monthly US views" instead of the default
+        # weekly noun. Rows without the accumulator (lookback_days=1)
+        # fall back to the vocab table as before.
+        if entry.get('window_days_total'):
+            unit_label = (
+                entry.get('unit_label')
+                or _PLATFORM_UNIT_LABEL.get((kind_hint, platform_key))
+                or _DEFAULT_UNIT_BY_KIND.get(kind_hint)
+                or 'weekly US audience'
+            )
+        else:
+            unit_label = (
+                _PLATFORM_UNIT_LABEL.get((kind_hint, platform_key))
+                or _DEFAULT_UNIT_BY_KIND.get(kind_hint)
+                or entry.get('unit_label')
+                or 'weekly US audience'
+            )
         out = {
             'us_estimate':      per.get('us_estimate'),
             'us_estimate_low':  per.get('us_estimate_low'),
@@ -3064,6 +3340,13 @@ def _stamp_stream_estimate(row: dict, entry: dict,
             'sources':          entry.get('sources'),
             'unit_label':       unit_label,
             'platform':         platform_key,
+            # Window accumulator provenance (2026-09-03). Per-platform
+            # block picks up its own `window_days_covered` (days the
+            # per-platform value contributed) and inherits the
+            # entry-level `window_days_total` (N).
+            'window_days_covered': per.get('window_days_covered'),
+            'window_days_total':   per.get('window_days_total')
+                                     or entry.get('window_days_total'),
         }
     else:
         # Fallback to aggregate. This still preserves old-snapshot
@@ -7985,7 +8268,23 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # pass (see scripts/trends_scrapers/stream_estimates.py). Missing
     # snapshot -> rows just don't carry `us_streams` and the frontend
     # renders without the extra chip.
-    stream_estimates_snap = results.get('stream_estimates') or {}
+    #
+    # WINDOW accumulator (2026-09-03, Bug 2 fix): when the user picks
+    # a WINDOW other than "Yesterday" from the top dropdown, sum each
+    # item's per-day `us_estimate` across the last N dated snapshots
+    # (up to 30 days back). Persistent titles get materially larger
+    # numbers on longer windows; titles observed on only some of the
+    # last N days sum only those days (window_days_covered stamped on
+    # each row's `us_streams` block so the tooltip can be honest about
+    # coverage). `unit_label` picks up the window cadence noun so a
+    # 30-day chip reads "monthly US listeners" instead of "weekly".
+    # lookback_days=1 falls back to the single `latest/` read below.
+    stream_estimates_snap = None
+    if int(lookback_days or 1) > 1:
+        stream_estimates_snap = _accumulate_stream_estimates_over_window(
+            int(lookback_days), asof=asof)
+    if not stream_estimates_snap:
+        stream_estimates_snap = results.get('stream_estimates') or {}
     _annotate_music_with_streams(music_charts,       stream_estimates_snap)
     _annotate_podcasts_with_streams(podcast_charts,  stream_estimates_snap)
     _annotate_streaming_with_streams(streaming_trending, stream_estimates_snap)
