@@ -278,6 +278,17 @@ def _worker_run_dates(
     time in this worker's process. Each date writes its own atomic
     dated snapshot via `stream_estimates.fetch_for_date`. Returns a
     list of per-date result dicts."""
+    # Configure logging in this worker: the spawn mp_context starts
+    # a fresh interpreter, so the parent's basicConfig is NOT
+    # inherited. Without this, every logger.info(...) inside
+    # stream_estimates is silently dropped (default WARNING level),
+    # and the operator loses per-item progress visibility.
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s %(levelname)s %(name)s [pid=%(process)d] '
+                   '%(message)s',
+        )
     only = set(only_list) if only_list else None
     # Lazy import so the parent doesn't drag anthropic into memory,
     # and so this worker's pinned ANTHROPIC_API_KEY is what
