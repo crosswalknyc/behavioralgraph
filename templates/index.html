@@ -69966,16 +69966,46 @@ https://www.instagram.com/p/..."></textarea>
         // reaches ops by email (server-side, or via the beacon below
         // when the backend never saw the failure).
         var SYNTH_CHAT_CALM_MSG = "Working on it. This one needs a closer look and will come back to you shortly.";
-        function _synthChatReportClientError(route, err) {
+        function _synthChatReportClientError(route, err, jobId) {
             // Backend-unreachable / unparseable-reply beacon: fires
             // the same ops email as a server-side failure. Dropped
             // silently when the beacon itself cannot get through.
+            // Attaches the user's current ask (last user turn in
+            // synthChatHistory) plus the working subject (from
+            // synthChatCurrentDraft) so the operator email's top
+            // Query: slot renders instead of falling back to
+            // '(unavailable)'. Every lookup is guarded; a lookup
+            // miss just drops that field and the beacon still fires.
             try {
                 var msg = String((err && err.message) || err || '').slice(0, 900);
+                var question = '';
+                try {
+                    if (Array.isArray(synthChatHistory)) {
+                        for (var _i = synthChatHistory.length - 1; _i >= 0; _i--) {
+                            var _t = synthChatHistory[_i];
+                            if (_t && _t.role === 'user' && _t.text) {
+                                question = String(_t.text).slice(0, 300);
+                                break;
+                            }
+                        }
+                    }
+                } catch (_) {}
+                var subject = '';
+                try {
+                    var _d = (typeof synthChatCurrentDraft === 'object'
+                              && synthChatCurrentDraft) || null;
+                    if (_d) {
+                        subject = String(_d.subject || _d.name || '').slice(0, 200);
+                    }
+                } catch (_) {}
+                var payload = { route: route, message: msg };
+                if (question) payload.question = question;
+                if (subject) payload.subject = subject;
+                if (jobId) payload.job_id = String(jobId).slice(0, 120);
                 fetch('/api/chatbot-client-error', {
                     method: 'POST', credentials: 'same-origin',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ route: route, message: msg })
+                    body: JSON.stringify(payload)
                 }).catch(function(){});
             } catch (_) {}
         }

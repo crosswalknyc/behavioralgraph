@@ -51133,15 +51133,54 @@ def api_chatbot_client_error():
     never saw (network drop mid-request, unparseable reply). Fires the
     same ops email as a server-side failure, with the same dedupe.
     Always answers 200 so the beacon itself can never surface anything;
-    the frontend also drops beacon failures silently."""
+    the frontend also drops beacon failures silently.
+
+    2026-09-03 (Jenna): forward the user's current ask + subject
+    context from the beacon body so the operator email's top Query:
+    slot renders instead of falling back to '(unavailable)'. The
+    frontend attaches `question` (last user turn), `subject`
+    (current draft), and optionally `job_id` when the failure happened
+    while polling a specific run. Any missing field is fine; the
+    email extractor reads `prompt` first so we mirror the beacon's
+    question into `prompt` for the top-slot render."""
     try:
         body = request.get_json(silent=True) or {}
         route = str(body.get('route') or 'client')[:120]
         message = str(body.get('message') or '')[:1000]
+        # Priority: explicit `question`, then `prompt` (fallback name
+        # some older widgets may use). Cap at 300 chars, matching the
+        # brief-chat/verify site convention (see 3581e51e).
+        question = (str(body.get('question') or '').strip()
+                    or str(body.get('prompt') or '').strip())[:300]
+        subject = str(body.get('subject') or '').strip()[:200]
+        job_id = (str(body.get('job_id') or '').strip()
+                  or str(body.get('run_id') or '').strip())[:120]
+        # Build the payload the email helper renders. `prompt` drives
+        # the top Query: slot; `question`/`subject`/`job_id` ride the
+        # payload dump below so the trail is complete.
+        payload = {'route': route, 'message': message}
+        if question:
+            payload['prompt'] = question
+            payload['question'] = question
+        if subject:
+            payload['subject'] = subject
+        if job_id:
+            payload['job_id'] = job_id
+        # 502s from the browser almost always mean the request was
+        # drained by a Render redeploy or hit its per-request timeout.
+        # A one-line hint saves the ops reader a round-trip.
+        tb_text = ('(client-side beacon; the failure happened in the '
+                   'browser before a backend response landed)')
+        if 'status 502' in message.lower() or '(502)' in message:
+            tb_text += (
+                '\n\nHint: 502 typically means a Render redeploy '
+                'drained the request mid-flight or the request hit '
+                'its timeout. Ask user to retry; if repeated, check '
+                'Render deploy activity.')
         _chatbot_error_email(
             f'client:{route}', message,
-            tb='(client-side beacon; the failure happened in the '
-               'browser before a backend response landed)')
+            payload=payload,
+            tb=tb_text)
     except Exception:
         traceback.print_exc()
     return jsonify({'success': True})
