@@ -710,7 +710,7 @@ _WINDOW_ACCUMULATOR_TIMEOUT_S   = int(
 def _window_noun_for_days(lookback_days: int) -> str:
     """Cadence noun that matches the WINDOW dropdown value.
 
-    1  -> "today's"       (single-day view)
+    1  -> "yesterday's"   (WINDOW dropdown "Yesterday" option, value=1)
     3  -> "3-day"
     7  -> "weekly"        (matches the underlying scraper cadence)
     14 -> "2-week"
@@ -723,7 +723,7 @@ def _window_noun_for_days(lookback_days: int) -> str:
     """
     n = int(lookback_days or 1)
     if n <= 1:
-        return "today's"
+        return "yesterday's"
     if n <= 3:
         return "3-day"
     if n <= 7:
