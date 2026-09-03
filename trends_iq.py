@@ -6383,26 +6383,33 @@ def _annotate_streaming_weeks(slug: str, items: list[dict]) -> None:
 # None of the six streaming scrapers capture thumbnails (Netflix's HTML
 # has box art but it's user-personalized; the others' Playwright DOM
 # extractors focus on titles). Rather than teach each scraper to grab a
-# poster, we look them up centrally via Wikipedia:
+# poster, we look them up centrally at render time via a three-source
+# chain (retuned 2026-09-03 after Netflix streaming top-10 shipped
+# with mostly-empty posters + one cross-item mismap of Outer Banks to a
+# Beachfront Bargain Hunt episode):
 #
-#   1. OpenSearch to resolve fuzzy title -> exact page slug
-#      (adds " TV series" / " film" as a suffix hint for disambiguation)
-#   2. REST summary API to grab the infobox thumbnail
-#   3. MediaWiki pageimages action as a fallback (finds title-card art
-#      on pages where the summary API's thumbnail was stripped)
-#
-# iTunes Search was tried first and hit ~0% for streaming exclusives
-# (Netflix/Disney+/Prime originals aren't sold on iTunes), so this
-# ended up being the right lookup path. Wikipedia hits ~80% on the
-# common Top-10 titles; the ~20% that miss (mostly ESPN+ studio shows,
-# brand-new series without a settled Wikipedia article) fall back to
-# the film-strip SVG placeholder in the frontend.
+#   1. TVMaze  (TV only). Free public API, no key. Best coverage for
+#      current streaming-exclusive series that Wikipedia strips (non-
+#      free-use copyright policy) and iTunes doesn't sell.
+#   2. Wikipedia. OpenSearch -> REST summary -> pageimages, but we only
+#      accept candidates explicitly disambiguated to our want-kind
+#      (`(TV series)` or `(film)`). Bare candidates get DROPPED - they
+#      resolve to concept articles like "Blood sacrifice" (Roman ritual)
+#      that lift completely unrelated images.
+#   3. iTunes Search API. Apple's catalog covers films + older TV. For
+#      TV we substring-match on `collectionName` (show name) ONLY - the
+#      per-episode `trackName` field lets an episode like "Outer Banks
+#      Overhaul" of Beachfront Bargain Hunt leak the SHOW's poster into
+#      an unrelated "Outer Banks" TV-show query.
 #
 # Substring guard on match: we normalize both the queried title and
-# the candidate page title (strip punctuation + lowercase) and require
-# the query to be a substring of the candidate. This prevents wrong
-# matches like Landman -> "Lawman (TV series)" that fuzzy OpenSearch
-# hits would otherwise return.
+# the candidate name (strip punctuation + lowercase) and require the
+# query to be a substring of the candidate. This prevents wrong matches
+# like Landman -> "Lawman (TV series)" that fuzzy search would otherwise
+# return. Titles that shrink to a <4-char normalized string after date-
+# suffix stripping ("Raw", "SNL") skip the lookup entirely - the frontend
+# placeholder is safer than fabricating a match against ambiguous single-
+# word queries.
 #
 # Cached at module scope so lookups are ~one-time per unique title
 # across the life of the Flask worker.
@@ -6440,6 +6447,19 @@ def _norm_title_for_poster(title: str) -> str:
     t = re.sub(r'[:\s]*\(?s\d+\)?$', '', t, flags=re.IGNORECASE)
     # "(2026)" year tag
     t = re.sub(r'\s*\(\d{4}\)\s*$', '', t)
+    # Netflix TSV episode-dated titles: "Raw: August 17, 2026",
+    # "SNL: October 5, 2024". The show ("WWE Raw", "Saturday Night
+    # Live") is what carries a poster, not the episode. Strip the
+    # trailing ": <Month> <Day>, <Year>".
+    t = re.sub(
+        r'[:\s]+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|'
+        r'jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|'
+        r'nov(?:ember)?|dec(?:ember)?)\s+\d{1,2},?\s*\d{4}\s*$',
+        '', t, flags=re.IGNORECASE)
+    # Any lingering trailing ": <numeric-heavy tail>" (episode codes
+    # like ": 08x17", ": 2026.08.17") should be dropped too - they
+    # never carry poster signal.
+    t = re.sub(r':\s*[\d\.\-/x]{6,}\s*$', '', t)
     return t.strip(' :-')
 
 
@@ -6547,6 +6567,78 @@ def _wiki_pageimages_thumb(title: str) -> str:
 _ITUNES_SEARCH_URL = 'https://itunes.apple.com/search'
 
 
+# ---------------------------------------------------------------------------
+# TVMaze poster lookup (TV only)
+#
+# Wikipedia's REST summary and pageimages endpoints strip non-free-use
+# poster images from TV series articles (copyright policy), so almost
+# every current streaming series returns an empty thumbnail from the
+# Wikipedia path. iTunes covers what Apple sells but misses most Netflix
+# / Disney+ / Prime originals.
+#
+# TVMaze fills that gap: free public API, no key, comprehensive TV
+# coverage including current Netflix originals, and each show carries
+# a proper poster URL at `image.original`. Covers the exact set of
+# shows the streaming Top-10 surfaces day to day.
+#
+# Films are not on TVMaze. This lookup is TV-only.
+#
+# Match strategy: same normalized-substring guard used everywhere else.
+# The `singlesearch` endpoint returns TVMaze's best match, but its
+# scorer is fuzzier than we want (searches "Blood Sacrifice" -> "The
+# Celts: Blood, Iron and Sacrifice ..."). We enforce that the returned
+# show name contain the normalized query as a substring; short queries
+# (<4 normalized chars, e.g. "Raw", "SNL") skip the lookup entirely.
+# ---------------------------------------------------------------------------
+
+_TVMAZE_SEARCH_URL = 'https://api.tvmaze.com/singlesearch/shows'
+
+
+def _tvmaze_poster_lookup(title: str, kind: str) -> str:
+    """TVMaze poster lookup. TV only; returns '' for films.
+
+    Substring guard on returned show name plus a short-query guard
+    (<4 normalized chars) so ambiguous single-word titles don't
+    fabricate a match.
+    """
+    is_film = str(kind or '').strip().lower() in ('film', 'films', 'movie', 'movies')
+    if is_film:
+        return ''
+    q = _norm_title_for_poster(title)
+    if not q:
+        return ''
+    tn = _norm_for_match(q)
+    if len(tn) < 4:
+        return ''
+    try:
+        r = requests.get(
+            _TVMAZE_SEARCH_URL,
+            params={'q': q},
+            headers={'User-Agent': _WIKI_POSTER_UA},
+            timeout=6,
+        )
+        if r.status_code == 404:
+            return ''
+        if not r.ok:
+            return ''
+        d = r.json() or {}
+    except Exception as e:
+        logger.debug("tvmaze search failed for %r: %s", title, e)
+        return ''
+    name = str(d.get('name') or '').strip()
+    if not name:
+        return ''
+    # Substring guard: reject fuzzy misses like "Ms. Rachel" ->
+    # "My Cousin Rachel" or "Conversations with a Killer" ->
+    # "Conversations with a Serial Killer".
+    if tn not in _norm_for_match(name):
+        return ''
+    img = d.get('image') or {}
+    if not isinstance(img, dict):
+        return ''
+    return str(img.get('original') or img.get('medium') or '')
+
+
 def _itunes_poster_lookup(title: str, kind: str) -> str:
     """iTunes Search API poster lookup. Returns hi-res artwork URL or ''.
 
@@ -6558,13 +6650,29 @@ def _itunes_poster_lookup(title: str, kind: str) -> str:
     `collectionName` = the show name, which is what we want here.
 
     Match strategy: normalized-substring guard against the candidate's
-    `collectionName`. For movies we additionally accept `trackName` as
-    a fallback since Apple sometimes ships a movie only as a trackName.
+    show name.
+      - For movies: check trackName (Apple ships films with the movie
+        title in trackName) with collectionName as fallback.
+      - For TV: check collectionName ONLY. trackName on a tv-episode
+        row is the individual EPISODE title, not the show. Matching
+        against trackName lets an episode called "Outer Banks Overhaul"
+        of "Beachfront Bargain Hunt" leak the SHOW's poster into an
+        "Outer Banks" TV-show query - which is exactly the bug this
+        rule was written for (2026-09-03).
+
+    Short-query guard: a normalized query below 4 chars ("Raw", "SNL")
+    is too permissive for substring matching against Apple's catalog
+    and returns wildly unrelated content. Skip the lookup entirely and
+    let the frontend placeholder ship.
+
     kind mismatch is rejected outright (a tv-episode row for a movie
     query, or a feature-movie row for a TV query).
     """
     q = _norm_title_for_poster(title)
     if not q:
+        return ''
+    tn = _norm_for_match(q)
+    if len(tn) < 4:
         return ''
     is_film = str(kind or '').strip().lower() in ('film', 'films', 'movie', 'movies')
     media   = 'movie' if is_film else 'tvShow'
@@ -6582,7 +6690,6 @@ def _itunes_poster_lookup(title: str, kind: str) -> str:
     except Exception as e:
         logger.debug("itunes search failed for %r: %s", title, e)
         return ''
-    tn = _norm_for_match(q)
     for it in results:
         # Kind guard: skip wrong-kind (audiobook, music, etc.) and
         # cross-kind results.
@@ -6594,7 +6701,10 @@ def _itunes_poster_lookup(title: str, kind: str) -> str:
         if is_film:
             candidates = [it.get('trackName') or '', it.get('collectionName') or '']
         else:
-            candidates = [it.get('collectionName') or '', it.get('trackName') or '']
+            # TV: show-name field only. See docstring - matching against
+            # trackName here is what mismapped Outer Banks -> Beachfront
+            # Bargain Hunt on 2026-09-03.
+            candidates = [it.get('collectionName') or '']
         if not any(tn and tn in _norm_for_match(c) for c in candidates):
             continue
         art = (it.get('artworkUrl100')
@@ -6651,23 +6761,34 @@ def _candidate_kind_hint(candidate: str) -> str:
 
 
 def _wiki_poster_lookup(title: str, kind: str) -> str:
-    """Two-layer poster lookup: Wikipedia first, iTunes Search fallback.
+    """Multi-source poster lookup. Name is legacy - the chain is now:
 
-    Wikipedia's infobox art has the best resolution when it exists but
-    misses on streaming exclusives and shows whose infobox carries a
-    logo instead of a real poster (House of the Dragon, Rick and Morty).
-    iTunes Search catches those - Apple's catalog covers ~90% of
-    theatrical films and most digital-distribution TV series.
+      1. TVMaze  (TV only; free API, no key, best coverage for current
+         streaming series with real poster art)
+      2. Wikipedia  (want-kind disambiguation ONLY - no bare fallback,
+         since bare candidates match general-concept articles like
+         "Blood sacrifice" and lift completely unrelated images)
+      3. iTunes Search  (Apple's catalog; catches films + older TV that
+         Wikipedia and TVMaze missed)
 
-    kind: 'Film' or 'TV' - biases the OpenSearch disambiguation.
-    Returns '' on miss. Cached in module scope.
+    kind: 'Film' or 'TV' - biases source order and OpenSearch
+    disambiguation. Returns '' on miss. Cached in module scope.
 
-    Wikipedia filter policy per candidate:
+    Short-query guard: normalized query length must be >= 4 chars.
+    Titles that shrink to a 3-char string after Netflix date-suffix
+    stripping ("Raw", "SNL") are ambiguous enough to fabricate a match
+    against any of the three sources - better to ship the frontend
+    placeholder.
+
+    Wikipedia filter policy per candidate (2026-09-03 tightened):
       - Substring guard: normalized query must be a substring of
         normalized candidate (rejects "Landman" -> "Lawman").
       - Kind guard: rejects novel/song/album/game/etc disambiguations
         outright. Allows the exact-kind disambiguation (film for films,
-        tv for TV) and bare candidates (no disambiguator).
+        tv for TV) ONLY. Bare candidates (no disambiguator) are DROPPED
+        - they resolve to concept articles like "Blood sacrifice" (a
+        Roman ritual, not the Netflix documentary) that lift totally
+        wrong images.
       - Logo reject: Wikipedia often has a logo PNG in the infobox for
         long-running series (House of the Dragon logo, Rick and Morty
         anime logo). Those are downgraded below the iTunes result.
@@ -6680,6 +6801,20 @@ def _wiki_poster_lookup(title: str, kind: str) -> str:
     cache_key = (q.lower(), want_kind)
     if cache_key in _WIKI_POSTER_CACHE:
         return _WIKI_POSTER_CACHE[cache_key]
+    tn = _norm_for_match(q)
+    if len(tn) < 4:
+        _WIKI_POSTER_CACHE[cache_key] = ''
+        return ''
+
+    # ── Source 1: TVMaze (TV only). Real posters for current Netflix,
+    # Prime, Disney+ originals that Wikipedia strips and iTunes doesn't
+    # sell.
+    art = _tvmaze_poster_lookup(title, kind)
+    if art:
+        _WIKI_POSTER_CACHE[cache_key] = art
+        return art
+
+    # ── Source 2: Wikipedia (want-kind disambiguation only).
     suffix = ' film' if is_film else ' TV series'
     # Try suffixed query first (disambiguates "Fallout" -> TV vs game),
     # then raw as fallback, then union the two so we score across a
@@ -6692,39 +6827,29 @@ def _wiki_poster_lookup(title: str, kind: str) -> str:
         if c not in seen:
             candidates.append(c)
             seen.add(c)
-    tn = _norm_for_match(q)
 
-    # Bucket candidates by kind so we can enforce strict fallback rules
-    # instead of just ranking. Order of preference:
-    #   1. want-kind (film for films, tv for TV) - safest match
-    #   2. bare (no disambiguator) - only if NO want-kind candidate
-    #      showed up in OpenSearch at all; guards against Wednesday
-    #      resolving to the day of the week / Odin painting.
-    # Reject-kinds (novel, song, album, video game, etc.) are dropped
-    # unconditionally.
+    # Only try candidates explicitly disambiguated to our want-kind.
+    # Bare candidates (no disambiguator) are DROPPED: they resolve to
+    # concept articles like "Blood sacrifice" (Roman ritual) or "Raw"
+    # (the 2016 horror film) that lift unrelated images. If Wikipedia
+    # doesn't have a dedicated `(TV series)` or `(film)` article, we'd
+    # rather miss and show the frontend placeholder.
     want_bucket: list[str] = []
-    bare_bucket: list[str] = []
     for c in candidates:
         k = _candidate_kind_hint(c)
-        if k == 'reject':
-            continue
         if k == want_kind:
             want_bucket.append(c)
-        elif k == '':
-            bare_bucket.append(c)
-        # 'other' and wrong-kind are ignored - too risky to lift a
-        # poster from "The Diplomat" -> "Dipset (hip hop group)" or
-        # "Reacher" -> some obscure town.
-
-    # If any want-kind candidate exists, we ONLY try those. This makes
-    # Wednesday MISS (better than showing an Odin painting) rather than
-    # fall through to the bare "Wednesday" article.
-    try_order = want_bucket if want_bucket else bare_bucket
 
     art = ''
-    for cand in try_order[:5]:
-        # Substring guard against fuzzy mismatches.
-        if tn not in _norm_for_match(cand):
+    wiki_logo_fallback = ''
+    for cand in want_bucket[:5]:
+        # Exact-base guard: strip the parenthetical disambiguator (e.g.
+        # " (TV series)", " (2009 film)") and require the remaining
+        # base name to normalize-equal our query. Substring alone lets
+        # "The Last House" match "The Last House on the Left (2009
+        # film)"; exact-base rejects that.
+        base = re.sub(r'\s*\([^)]*\)\s*$', '', cand)
+        if _norm_for_match(base) != tn:
             continue
         art = _wiki_summary_thumb(cand) or _wiki_pageimages_thumb(cand)
         if art:
@@ -6737,17 +6862,17 @@ def _wiki_poster_lookup(title: str, kind: str) -> str:
                 break
             wiki_logo_fallback = art
             art = ''
-    # Fallback: iTunes Search API. Catches shows with no Wikipedia
-    # article, articles missing infobox art, and articles that only
-    # have a logo. Streaming-exclusive originals that never sold on
-    # iTunes still miss here (correctly) - those fall through to the
-    # frontend film-strip placeholder.
+
+    # ── Source 3: iTunes Search API (films + older TV). Streaming-
+    # exclusive originals that never sold on iTunes still miss here
+    # (correctly) - those fall through to the frontend film-strip
+    # placeholder.
     if not art:
         art = _itunes_poster_lookup(title, kind)
     # If iTunes also misses AND Wikipedia had a logo, use the logo -
     # a text-only show logo is better than the film-strip placeholder.
     if not art:
-        art = locals().get('wiki_logo_fallback', '') or ''
+        art = wiki_logo_fallback or ''
     _WIKI_POSTER_CACHE[cache_key] = art
     return art
 
