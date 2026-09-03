@@ -25483,7 +25483,7 @@ https://www.instagram.com/p/..."></textarea>
         <div id="trendsIQView">
             <div class="tiq-header" style="position: relative;">
                 <h2 class="tiq-title" id="trendsIQTitle">📈 Trends <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Culture Trends tracker</span></h2>
-                <p class="tiq-subtitle">Who and what is trending across media search, news, and retail right now.</p>
+                <p class="tiq-subtitle">Who and what are trending across media search, news, and retail right now.</p>
                 <!--
                     Trends IQ ships its own HOVER ON/OFF toggle in the top-
                     right of the header. Wires to the same global
@@ -25514,7 +25514,7 @@ https://www.instagram.com/p/..."></textarea>
                 <div>
                     <label for="trendsIQLookback">Window</label>
                     <select id="trendsIQLookback">
-                        <option value="1" selected>Today</option>
+                        <option value="1" selected>Yesterday</option>
                         <option value="3">Last 3 days</option>
                         <option value="7">Last 7 days</option>
                         <option value="14">Last 14 days</option>
@@ -50597,7 +50597,7 @@ https://www.instagram.com/p/..."></textarea>
             var _tTitle = document.getElementById('trendsIQTitle');
             if (_tTitle) _tTitle.innerHTML = '\uD83D\uDCC8 Trends <span style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; margin-left: 0.5rem;">Culture Trends tracker</span>';
             var _tSub = document.querySelector('#trendsIQView .tiq-subtitle');
-            if (_tSub) _tSub.textContent = 'Who and what is trending across media search, news, and retail right now.';
+            if (_tSub) _tSub.textContent = 'Who and what are trending across media search, news, and retail right now.';
             // Sync the in-header HOVER toggle to the persisted state so
             // "OFF" from a previous session doesn't reset to "ON" just
             // because the element got a fresh DOM. Idempotent - safe
