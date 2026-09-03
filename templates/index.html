@@ -25550,7 +25550,7 @@ https://www.instagram.com/p/..."></textarea>
                 </div>
             </div>
             <div class="tiq-meta">
-                <span id="trendsIQMeta">Stand by ...</span>
+                <span id="trendsIQMeta">Fetching ...</span>
                 <span class="tiq-meta-right">
                     <span id="trendsIQUpdatedAt"></span>
                     <button type="button" id="trendsIQExportAllBtn"
@@ -52996,7 +52996,7 @@ https://www.instagram.com/p/..."></textarea>
             document.getElementById('trendsIQLoading').style.display = 'flex';
             document.getElementById('trendsIQTabStrip').style.display = 'none';
             document.getElementById('trendsIQPanels').innerHTML = '';
-            document.getElementById('trendsIQMeta').textContent = 'Stand by ...';
+            document.getElementById('trendsIQMeta').textContent = 'Fetching ...';
             try {
                 if (window.__trendsIQ.inFlight) { try { window.__trendsIQ.inFlight.abort(); } catch (e) {} }
                 var ctrl = new AbortController();
