@@ -7300,7 +7300,7 @@
            Name column uses minmax(100px, 1fr) so long names (e.g. team names) always have room to wrap. */
         .behavioral-table {
             display: grid;
-            grid-template-columns: 28px minmax(100px, 1fr) 78px 78px 64px;
+            grid-template-columns: 28px minmax(100px, 1fr) 78px 78px 80px;
             gap: 0.4rem;
             align-items: start;
             padding: 0 0.15rem 0 0;
@@ -7362,6 +7362,45 @@
         }
         .behavioral-table .behavioral-header-row span.index-col {
             padding-right: 0.35rem;
+            white-space: normal !important;
+            overflow: visible;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            max-width: 100%;
+        }
+        /* Index (AV vs GP) must stack inside the last column instead of
+           clipping at the card edge. inline-flex + nowrap on the suffix
+           was laying INDEX and (AV vs GP) on one line in a 56-64px track. */
+        .behavioral-header-row .behavioral-sortable.index-col,
+        .interest-header-row .interest-sortable.index-col,
+        .location-row.header .index-col,
+        .location-row.header .cw-gp-col {
+            display: flex !important;
+            flex-direction: column;
+            align-items: flex-end;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+        }
+        .index-src-suffix {
+            display: block;
+            font-size: 0.6rem;
+            font-weight: 600;
+            opacity: 0.85;
+            line-height: 1.2;
+            letter-spacing: 0.3px;
+            white-space: normal !important;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            max-width: 100%;
+        }
+        .index-src-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            max-width: 100%;
         }
         /* Cohort header cells injected by compare-mode (cmp-col-cell) also
            right-align so headers line up with the numbers below them.
@@ -7390,7 +7429,7 @@
         }
         /* Hide GP column when in projection mode */
         .behavioral-card.hide-gp .behavioral-table {
-            grid-template-columns: 28px minmax(100px, 1fr) 78px 64px;
+            grid-template-columns: 28px minmax(100px, 1fr) 78px 80px;
         }
         .behavioral-card.hide-gp .genpop-col {
             display: none !important;
@@ -8613,7 +8652,7 @@
         body.foreign-profile .demo-summary-header,
         body.foreign-profile .insight-row-genpop { grid-template-columns: minmax(0,1fr) 72px !important; }
         /* Behavioral cards + demographic table-mode tables (checkbox | name | Profile | Index) */
-        body.foreign-profile .behavioral-table { grid-template-columns: 28px minmax(100px, 1fr) 78px 64px; }
+        body.foreign-profile .behavioral-table { grid-template-columns: 28px minmax(100px, 1fr) 78px 80px; }
         /* Interests list (icon | name | Profile | Index) */
         body.foreign-profile .interest-header-row,
         body.foreign-profile .interest-item { grid-template-columns: 40px minmax(150px, 1fr) 105px 90px; }
@@ -122260,10 +122299,9 @@ https://www.instagram.com/p/..."></textarea>
         // default Total Universe ÷ Gen Pop for Avid-heavy profiles).
 
         // 2026-06-24: Short cohort code used in column headers like
-        // "Index (TU÷GP)" or "Index (AV÷GP)". Always returns 2 chars so
-        // the suffix stays narrow enough to fit in the 56px-wide
-        // demographics-table Index column without wrapping into a
-        // multi-line block.
+        // "Index (TU vs GP)" or "Index (AV vs GP)". Always returns 2
+        // chars. The suffix wraps onto its own line in the Index
+        // column so it is not clipped at the card edge.
         //
         // Mapping:
         //   profile -> TU (Total Universe)
@@ -122349,13 +122387,17 @@ https://www.instagram.com/p/..."></textarea>
                     h._cmpHasArrow = !!arrow;
                 }
                 const arrowHtml = h._cmpHasArrow ? '<span class="sort-arrow">↓</span>' : '';
+                const suffixHtml = '<span class="index-src-suffix">' + headerSuffix.replace(/</g,'&lt;') + '</span>';
+                h.style.display = 'flex';
+                h.style.flexDirection = 'column';
+                h.style.alignItems = 'flex-end';
+                h.style.width = '100%';
+                h.style.minWidth = '0';
+                h.style.gridTemplateColumns = '';
                 if (h._cmpHasArrow) {
-                    h.style.display = 'inline-grid';
-                    h.style.gridTemplateColumns = 'auto 1fr';
-                    h.style.alignItems = 'start';
-                    h.innerHTML = arrowHtml + '<span style="grid-column:2;">' + h._cmpOrigLabel.replace(/</g,'&lt;') + '<br><span style="font-size:0.6rem;opacity:0.8;white-space:nowrap;">' + headerSuffix.replace(/</g,'&lt;') + '</span></span>';
+                    h.innerHTML = '<span class="index-src-label">' + arrowHtml + h._cmpOrigLabel.replace(/</g,'&lt;') + '</span>' + suffixHtml;
                 } else {
-                    h.innerHTML = h._cmpOrigLabel.replace(/</g,'&lt;') + '<br><span style="font-size:0.6rem;opacity:0.8;white-space:nowrap;">' + headerSuffix.replace(/</g,'&lt;') + '</span>';
+                    h.innerHTML = h._cmpOrigLabel.replace(/</g,'&lt;') + suffixHtml;
                 }
             });
 
@@ -124406,7 +124448,7 @@ https://www.instagram.com/p/..."></textarea>
                 const cmpCols = series.map(s => _cmpCohortColWidth(s.label || '')).join(' ');
                 const profileCol = hideCF ? '' : '70px ';
                 const gpCol = hideGP ? '' : ' 70px';
-                table.style.gridTemplateColumns = '28px minmax(80px,1fr) ' + profileCol + cmpCols + gpCol + ' 56px';
+                table.style.gridTemplateColumns = '28px minmax(80px,1fr) ' + profileCol + cmpCols + gpCol + ' 80px';
 
                 // Header row injection. Cohort header cells double as
                 // click-to-sort triggers (key = "cmp:<runKey>") so they
@@ -128955,7 +128997,7 @@ https://www.instagram.com/p/..."></textarea>
                 const _profileColTpl = _cmpHideCF ? '' : '70px ';
                 const _gpColTpl      = _cmpHideGP ? '' : ' 70px';
                 const _gridTpl       = (_cmpLookups.length > 0)
-                    ? ('28px minmax(80px,1fr) ' + _profileColTpl + _cmpCols + _gpColTpl + ' 56px')
+                    ? ('28px minmax(80px,1fr) ' + _profileColTpl + _cmpCols + _gpColTpl + ' 80px')
                     : '';
                 const _hideClasses = (_cmpHideCF ? ' cmp-hide-profile' : '') + (_cmpHideGP ? ' cmp-hide-genpop' : '');
                 const _gridStyleAttr = _gridTpl ? (' style="grid-template-columns:' + _gridTpl + ';"') : '';
