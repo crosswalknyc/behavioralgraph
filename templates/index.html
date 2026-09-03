@@ -53721,7 +53721,12 @@ https://www.instagram.com/p/..."></textarea>
             }
         };
 
-        // Export a FAST sheet card's rows (in current sort order) to CSV.
+        // Export a sheet card's rows to CSV.
+        // Top 10 / 25 / 50 always mean the N largest by the displayed
+        // metric (Views / Listeners / Streams / Plays), Rank 1..N in
+        // that order — not payload/chart order, and not whatever
+        // A–Z / Δ% click the user left on screen. Full list keeps
+        // current DOM order so a custom sort still round-trips.
         // limit > 0 caps the row count; 0 exports the full list.
         window.tiqExportFastCsv = function(el, limit) {
             var card = el.closest ? el.closest('.tiq-card') : null;
@@ -53732,6 +53737,17 @@ https://www.instagram.com/p/..."></textarea>
             var fileLabel = table.getAttribute('data-export') || 'fast';
             var isTitle = (entity === 'Title');
             var allRows = Array.prototype.slice.call(table.querySelectorAll('tbody tr.tiq-sheet-row')).filter(function(r) { return !r.classList.contains('tiq-genre-hidden') && !r.classList.contains('tiq-year-hidden'); });
+            if (limit && limit > 0) {
+                allRows.sort(function(a, b) {
+                    var av = parseFloat(a.getAttribute('data-views'));
+                    var bv = parseFloat(b.getAttribute('data-views'));
+                    var aMiss = isNaN(av) || av <= 0;
+                    var bMiss = isNaN(bv) || bv <= 0;
+                    if (aMiss !== bMiss) return aMiss ? 1 : -1;
+                    if (!aMiss && !bMiss && bv !== av) return bv - av;
+                    return 0;
+                });
+            }
             var rows = (limit && limit > 0) ? allRows.slice(0, limit) : allRows;
             var metricLabel = table.getAttribute('data-metric') || 'Views';
             var header;
@@ -53747,7 +53763,9 @@ https://www.instagram.com/p/..."></textarea>
             var lines = [header.map(q).join(',')];
             rows.forEach(function(r, idx) {
                 var rankEl = r.querySelector('.tiq-sheet-rank');
-                var rank = rankEl ? (rankEl.textContent || '').trim() : String(idx + 1);
+                var rank = (limit && limit > 0)
+                    ? String(idx + 1)
+                    : (rankEl ? (rankEl.textContent || '').trim() : String(idx + 1));
                 var name = r.getAttribute('data-name') || '';
                 var views = r.getAttribute('data-views') || '';
                 var delta = r.getAttribute('data-delta');
@@ -54530,6 +54548,27 @@ https://www.instagram.com/p/..."></textarea>
             return { value: '', unit: '', by_lens: null };
         }
 
+        // Rank binds to the number the eye reads. Sort by the same
+        // audience integer the sheet / CSV displays (us_streams.us_estimate
+        // today, then us_readers / holds). Rows without a positive
+        // estimate sink to the tail; original chart rank is only a
+        // tiebreaker. Music / Podcasts / Gaming charts often disagree
+        // with our modeled US audience, so payload order is not metric
+        // desc — callers must sort before binding Rank 1..N.
+        function _tiqSortByDisplayedEstimate(rows) {
+            return (rows || []).slice().sort(function(a, b) {
+                var av = Number((_tiqExportAudience(a) || {}).value);
+                var bv = Number((_tiqExportAudience(b) || {}).value);
+                var ah = isFinite(av) && av > 0;
+                var bh = isFinite(bv) && bv > 0;
+                if (ah !== bh) return ah ? -1 : 1;
+                if (ah && bh && bv !== av) return bv - av;
+                var ar = Number(a && (a.bucket_rank || a.rank)) || 1e9;
+                var br = Number(b && (b.bucket_rank || b.rank)) || 1e9;
+                return ar - br;
+            });
+        }
+
         // Companion to _tiqFilterRowsByLens: when a lens is active, swap
         // every export row's `US Audience` value to that lens's persona-
         // scaled count. Column name stays 'US Audience' (the filename
@@ -54817,13 +54856,13 @@ https://www.instagram.com/p/..."></textarea>
             Object.keys(dict || {}).forEach(function(slug) {
                 var panel = dict[slug] || {};
                 var label = panel.label || slug;
-                (panel.items || []).forEach(function(it, i) {
+                _tiqSortByDisplayedEstimate(panel.items || []).forEach(function(it, i) {
                     var se = _tiqExtractStreamValue(it);
                     var aud = _tiqExportAudience(it);
                     out.push({
                         Tab: tabLabel,
                         Section: (sectionPrefix ? (sectionPrefix + ' - ') : '') + label,
-                        Rank: it.rank || (i + 1),
+                        Rank: i + 1,
                         Title: it.title || '',
                         Subtitle: it.artist || it.author || it.publisher ||
                                   it.subtitle || '',
@@ -54856,13 +54895,13 @@ https://www.instagram.com/p/..."></textarea>
                 var panel = dict[slug] || {};
                 var label = panel.label || slug;
                 var pushList = function(kind, rows) {
-                    (rows || []).forEach(function(it, i) {
+                    _tiqSortByDisplayedEstimate(rows).forEach(function(it, i) {
                         var se = _tiqExtractStreamValue(it);
                         var aud = _tiqExportAudience(it);
                         out.push({
                             Tab: tabLabel,
                             Section: label + ' - ' + kind,
-                            Rank: it.rank || (i + 1),
+                            Rank: i + 1,
                             Title: it.title || '',
                             Subtitle: '',
                             Change: it.weeks_in_top10
@@ -54880,7 +54919,7 @@ https://www.instagram.com/p/..."></textarea>
                 pushList('TV',   panel.tv);
                 // FAST panels also carry a channels list. Emit it as
                 // its own section so the ranker view is exportable too.
-                (panel.channels || []).forEach(function(ch, i) {
+                _tiqSortByDisplayedEstimate(panel.channels || []).forEach(function(ch, i) {
                     var se = _tiqExtractStreamValue(ch);
                     var aud = _tiqExportAudience(ch);
                     out.push({
@@ -54932,7 +54971,7 @@ https://www.instagram.com/p/..."></textarea>
                         Section: sectionSuffix
                                     ? (label + ' - ' + sectionSuffix)
                                     : label,
-                        Rank: it.bucket_rank || it.rank || (i + 1),
+                        Rank: i + 1,
                         Title: it.title || '',
                         Subtitle: it.publisher || it.subtitle || '',
                         Change: se.change,
@@ -54948,13 +54987,13 @@ https://www.instagram.com/p/..."></textarea>
                 });
                 if (populatedBucketKeys.length) {
                     populatedBucketKeys.forEach(function(bk) {
-                        (panel[bk] || []).forEach(function(it, i) {
+                        _tiqSortByDisplayedEstimate(panel[bk] || []).forEach(function(it, i) {
                             pushRow(bucketSuffix[bk], it, i);
                         });
                     });
                     return;
                 }
-                (panel.items || []).forEach(function(it, i) {
+                _tiqSortByDisplayedEstimate(panel.items || []).forEach(function(it, i) {
                     pushRow('', it, i);
                 });
             });
@@ -56812,6 +56851,13 @@ https://www.instagram.com/p/..."></textarea>
             var subOf   = (typeof opts.subOf   === 'function') ? opts.subOf   : function() { return ''; };
             var badgeOf = (typeof opts.badgeOf === 'function') ? opts.badgeOf : function() { return ''; };
             var keyOf   = (typeof opts.keyOf   === 'function') ? opts.keyOf   : function(it) { return it.title; };
+            // Rank + metric must move together. Sort by the audience
+            // integer this row actually displays (parity with FAST /
+            // Streaming renderCol). Chart rank from Spotify / Apple /
+            // Xbox is not the sort key — our US estimate often
+            // disagrees, which used to ship CSVs whose Listeners /
+            // Streams / Plays column was not descending.
+            rows = _tiqSortByDisplayedEstimate(rows);
             var rowsHtml = rows.map(function(it, i) {
                 var us = it.us_streams || {};
                 var estimate = Number(us.us_estimate);
@@ -56846,7 +56892,7 @@ https://www.instagram.com/p/..."></textarea>
                 var wkey = keyOf(it);
                 var sub = subOf(it) || '';
                 var newBadge = it.recently_added ? ' <span class="tiq-gaming-new">NEW</span>' : '';
-                var rk = it.bucket_rank || it.rank || (i + 1);
+                var rk = (i + 1);
                 var sortTitle = _tiqEsc(String(it.title || '').toLowerCase());
                 var dispName = _tiqEsc(String(it.title || ''));
                 var artistAttr = _tiqEsc(String(it.artist || it.publisher || ''));
