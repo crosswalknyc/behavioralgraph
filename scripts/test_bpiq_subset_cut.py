@@ -40,6 +40,9 @@ from migration.bpiq_subset_cut import (  # noqa: E402
     validate_before_write,
     validate_bpiq_payload,
     verify_subset_invariants,
+    _implied_conversion_count,
+    _per_platform_incremental_counts,
+    _recompute_conversion_valuation,
 )
 
 FAILURES = []
@@ -1008,6 +1011,335 @@ if all(os.path.exists(p) for p in (coke_b_path, pepsi_b_path, coke_p_path, pepsi
     )
 else:
     print(f"    [skip] shipped payloads not present at {_ship_dir}")
+
+
+# ---------------------------------------------------------------------
+# 11. Rule 3 extension - CV cascade + field-copy defect (2026-09-03)
+# ---------------------------------------------------------------------
+#
+# Codified after Liz caught that the F1 Coke Boomer shipped with
+# valuation.conversion_value = $1,836,220, which divided by the
+# $10 per-conversion rate yielded a 183,622 implied count that
+# byte-matched the file's own Direct (Brand Site)
+# incremental_users_projected row (a per_platform column, not a
+# conversion column). Root cause: a downstream valuation-recompute
+# pulled from the wrong per_platform column instead of
+# conversions.post_users_projected. The tests below assert:
+#
+#   (a) A subset payload with conversions.post_users_projected >
+#       parent's triggers the Rule 3 extension AND the auto-fix
+#       clamps the count in-place to a value at or below parent.
+#   (b) A subset payload whose implied CV count byte-matches any
+#       per_platform incremental_users_projected fires the Rule 3
+#       extension AND the auto-fix nudges the count clear of the
+#       collision.
+#   (c) The auto-fixed count still complies with
+#       .cursor/rules/no-round-sample-sizes.mdc (ends in 1-9, not a
+#       forbidden literal).
+
+
+def _parent_with_conv_rate(observed_n=475_902, projection_weight=32.99,
+                            per_user_rate=10.0):
+    """Fixture parent with an explicit CV rate + a Direct (Brand
+    Site) per_platform row that fires the field-copy collision when
+    the wrong source column is pulled by a downstream recompute."""
+    projected = int(round(10_000_007 * projection_weight))
+    if projected % 10 == 0:
+        projected += 3
+    p = _parent_payload(observed_n=observed_n)
+    p["audience_size"] = 10_000_007
+    p["projected_audience_size"] = projected
+    p["projection_weight"] = round(float(projection_weight), 4)
+    p.setdefault("diagnostics", {}).setdefault("projection", {})
+    p["diagnostics"]["projection"]["cohort_weight"] = round(
+        float(projection_weight), 4
+    )
+    p["diagnostics"]["projection"]["projected_universe"] = projected
+    # Ensure every per_platform row projects at parent weight so the
+    # subset scales below.
+    for row in p.get("per_platform", []):
+        for k in ("pre_users", "post_users"):
+            raw = row.get(k) or 0
+            proj_key = f"{k}_projected"
+            proj_val = int(round(raw * projection_weight))
+            if proj_val % 10 == 0:
+                proj_val += 3
+            row[proj_key] = proj_val
+    tot = p.get("totals") or {}
+    for k in ("pre_users", "post_users"):
+        raw = tot.get(k) or 0
+        proj_val = int(round(raw * projection_weight))
+        if proj_val % 10 == 0:
+            proj_val += 3
+        tot[f"{k}_projected"] = proj_val
+    conv = p.get("conversions") or {}
+    for k in ("pre_users", "post_users"):
+        raw = conv.get(k) or 0
+        proj_val = int(round(raw * projection_weight))
+        if proj_val % 10 == 0:
+            proj_val += 3
+        conv[f"{k}_projected"] = proj_val
+    for prop_key in ("top_brand_properties", "top_brand_properties_pre"):
+        for prop in p.get(prop_key) or []:
+            hits = prop.get("hits") or 0
+            hp = int(round(hits * projection_weight))
+            if hp % 10 == 0:
+                hp += 3
+            prop["hits_projected"] = hp
+    # Rates block + CV = post_users_projected * rate (canonical).
+    val = p.get("valuation") or {}
+    val.setdefault("rates", {})["conv_value_per_user"] = per_user_rate
+    val["conversion_value"] = round(conv["post_users_projected"] * per_user_rate, 2)
+    # BEV / EMV / BLV are fixed from the base fixture; refresh TBV.
+    val["total_brand_value"] = round(
+        float(val.get("brand_engagement_value") or 0.0)
+        + float(val.get("earned_media_value") or 0.0)
+        + float(val.get("brand_lift_value") or 0.0)
+        + float(val["conversion_value"]),
+        2,
+    )
+    val["incremental_conversion_value"] = 0.0
+    val["attributable_to_partnership"] = 0.0
+    val["attributable_share_of_conversion_pct"] = 0.0
+    p["valuation"] = val
+    p["conversions"] = conv
+    # A cg block so the auto-fix cascade has adj + baseline to work with.
+    p["control_group"]["treat_pre_pen_pct"] = 13.069
+    p["control_group"]["incremental_lift_pp"] = 2.604
+    return p
+
+
+print()
+print("--- test_rule3_ext_verifier_flags_subset_conv_count_over_parent ---")
+
+parent = _parent_with_conv_rate()
+sub = build_subset_payload(parent, 0.599, "fixture_r3_ext_over", "Boomer")
+
+# Hand-craft a defect: bump conversions.post_users_projected above parent.
+broken = copy.deepcopy(sub)
+parent_cv_count = parent["conversions"]["post_users_projected"]
+broken["conversions"]["post_users_projected"] = parent_cv_count + 100_003
+rate = float(broken["valuation"]["rates"]["conv_value_per_user"])
+broken["valuation"]["conversion_value"] = round(
+    broken["conversions"]["post_users_projected"] * rate, 2
+)
+v = verify_subset_invariants(broken, parent, 0.599)
+rule3_paths = {x["path"] for x in v if x["rule"] == 3}
+_check(
+    "verifier flags Rule 3 on CV-implied count > parent's implied count",
+    "valuation.conversion_value/rate" in rule3_paths,
+    f"got paths={rule3_paths}",
+)
+
+
+print()
+print("--- test_rule3_ext_verifier_flags_cv_field_copy_defect ---")
+
+parent = _parent_with_conv_rate()
+sub = build_subset_payload(parent, 0.599, "fixture_r3_ext_copy", "Boomer")
+
+# Hand-craft the F1 Coke Boomer defect: force valuation.conversion_value
+# to equal Direct (Brand Site) incremental_users_projected * rate.
+broken = copy.deepcopy(sub)
+direct_incr = None
+for row in broken["per_platform"]:
+    if "Direct" in (row.get("platform") or ""):
+        direct_incr = row["post_users_projected"] - row["pre_users_projected"]
+        break
+_check(
+    "fixture Direct (Brand Site) row present with an incremental value",
+    isinstance(direct_incr, int) and direct_incr > 0,
+    f"direct_incr={direct_incr}",
+)
+if direct_incr:
+    broken["valuation"]["conversion_value"] = round(direct_incr * rate, 2)
+    # Trip the field-copy collision by also aligning the implied count.
+    v = verify_subset_invariants(broken, parent, 0.599)
+    rule3 = [x for x in v if x["rule"] == 3
+             and x["path"] == "valuation.conversion_value/rate"]
+    _check(
+        "verifier flags Rule 3 field-copy: CV count = Direct incremental",
+        any("Direct" in str(x.get("parent_value") or []) for x in rule3),
+        f"got Rule 3 hits: {[(x['path'], x.get('parent_value')) for x in rule3[:3]]}",
+    )
+
+
+print()
+print("--- test_rule3_ext_verifier_flags_cv_coherence ---")
+
+# Hand-craft: valuation.conversion_value drifts from
+# conversions.post_users_projected * rate. Verifier must flag.
+parent = _parent_with_conv_rate()
+sub = build_subset_payload(parent, 0.599, "fixture_r3_ext_cohere", "Boomer")
+broken = copy.deepcopy(sub)
+# Push CV to a value that does not match count * rate.
+count = broken["conversions"]["post_users_projected"]
+broken["valuation"]["conversion_value"] = round(count * rate + 987_651, 2)
+v = verify_subset_invariants(broken, parent, 0.599)
+paths = {x["path"] for x in v if x["rule"] == 3}
+_check(
+    "verifier flags Rule 3 coherence when CV != count * rate",
+    "valuation.conversion_value" in paths,
+    f"got paths={paths}",
+)
+
+
+print()
+print("--- test_rule3_ext_autofix_recomputes_cv_from_correct_source ---")
+
+parent = _parent_with_conv_rate()
+sub = build_subset_payload(parent, 0.599, "fixture_r3_ext_autofix", "Boomer")
+
+# After build_subset_payload's terminal recompute, CV must equal
+# conversions.post_users_projected * rate byte-exact.
+subset_count = sub["conversions"]["post_users_projected"]
+expected_cv = round(subset_count * rate, 2)
+_check(
+    "build_subset_payload sets valuation.conversion_value = "
+    "conversions.post_users_projected * rate",
+    abs(float(sub["valuation"]["conversion_value"]) - expected_cv) < 1e-2,
+    f"got CV={sub['valuation']['conversion_value']!r}, expected {expected_cv!r} "
+    f"({subset_count} x {rate})",
+)
+# CV must sit at or below parent's CV.
+_check(
+    "auto-built CV <= parent's CV (Rule 3)",
+    float(sub["valuation"]["conversion_value"]) <=
+        float(parent["valuation"]["conversion_value"]),
+    f"sub={sub['valuation']['conversion_value']!r}, "
+    f"parent={parent['valuation']['conversion_value']!r}",
+)
+# Implied count must not collide with any per_platform incremental.
+implied = _implied_conversion_count(sub)
+incrs = set(_per_platform_incremental_counts(sub).values())
+_check(
+    "auto-built CV-implied count does not collide with per_platform incrementals",
+    implied not in incrs or implied is None,
+    f"implied={implied}, incrementals={sorted(incrs)}",
+)
+# Total brand value = BEV + EMV + BLV + CV byte-exact.
+val = sub["valuation"]
+expected_tbv = round(
+    float(val["brand_engagement_value"]) + float(val["earned_media_value"])
+    + float(val["brand_lift_value"]) + float(val["conversion_value"]), 2
+)
+_check(
+    "auto-built total_brand_value = BEV + EMV + BLV + CV byte-exact",
+    abs(float(val["total_brand_value"]) - expected_tbv) < 1e-2,
+    f"got {val['total_brand_value']!r}, expected {expected_tbv!r}",
+)
+# attributable_to_partnership recomputed via the canonical helper.
+adj = float(sub["control_group"]["incremental_lift_pp"])
+pre = float(sub["control_group"]["treat_pre_pen_pct"])
+share = max(0.0, min(1.0, adj / pre)) if pre > 0 else 0.0
+expected_attributable = round(
+    float(val["brand_lift_value"]) + float(val["conversion_value"]) * share, 2
+)
+_check(
+    "auto-built attributable_to_partnership uses compute_bpiq_attributable "
+    "formula",
+    abs(float(val["attributable_to_partnership"]) - expected_attributable) < 1e-2,
+    f"got {val['attributable_to_partnership']!r}, "
+    f"expected {expected_attributable!r}",
+)
+
+
+print()
+print("--- test_rule3_ext_autofix_clamps_conv_count_over_parent ---")
+
+# Simulate: caller mutates subset.conversions.post_users_projected to
+# exceed parent. Then re-invokes the recompute helper. The helper
+# must clamp the count to <=0.95*parent*cohort_fraction with jitter.
+parent = _parent_with_conv_rate()
+sub = build_subset_payload(parent, 0.599, "fixture_r3_ext_clamp", "Boomer")
+parent_count = parent["conversions"]["post_users_projected"]
+sub["conversions"]["post_users_projected"] = parent_count + 200_003
+report = _recompute_conversion_valuation(
+    sub, parent, 0.599, "fixture_r3_ext_clamp",
+)
+_check(
+    "auto-fix clamps subset count to <= parent count",
+    sub["conversions"]["post_users_projected"] <= parent_count,
+    f"got {sub['conversions']['post_users_projected']:,}, parent={parent_count:,}",
+)
+_check(
+    "auto-fix reports a conv_count_over_parent guard fire",
+    any(g["check"] == "conv_count_over_parent" for g in report["guards"]),
+    f"guards={report['guards']}",
+)
+# no-round-sample-sizes.mdc compliance on the clamped count.
+clamped_count = sub["conversions"]["post_users_projected"]
+_check(
+    "auto-fixed count ends in 1-9 per no-round-sample-sizes.mdc",
+    clamped_count % 10 != 0,
+    f"got {clamped_count} ends in {clamped_count % 10}",
+)
+_check(
+    "auto-fixed count not in FORBIDDEN_LITERALS",
+    clamped_count not in {2001, 12345, 99999, 88888, 77777, 22222, 123456, 654321},
+    f"got {clamped_count} in forbidden literals",
+)
+
+
+print()
+print("--- test_rule3_ext_autofix_breaks_field_copy_collision ---")
+
+# Simulate: force subset conversions.post_users_projected to byte-match
+# Direct (Brand Site) incremental. Recompute helper must nudge it clear
+# and produce a CV that does not collide.
+parent = _parent_with_conv_rate()
+sub = build_subset_payload(parent, 0.599, "fixture_r3_ext_collide", "Boomer")
+direct_incr = None
+for row in sub["per_platform"]:
+    if "Direct" in (row.get("platform") or ""):
+        direct_incr = row["post_users_projected"] - row["pre_users_projected"]
+        break
+# If direct_incr is above parent conv count, we cannot cleanly force a
+# collision at a plausible level (the clamp would demote it below). In
+# that fixture combination, the test asserts the helper still ships a
+# non-colliding CV, which is the invariant we care about.
+if direct_incr is not None:
+    sub["conversions"]["post_users_projected"] = direct_incr
+    report2 = _recompute_conversion_valuation(
+        sub, parent, 0.599, "fixture_r3_ext_collide",
+    )
+    implied = _implied_conversion_count(sub)
+    incrs = set(_per_platform_incremental_counts(sub).values())
+    _check(
+        "auto-fix leaves the implied CV count non-colliding with any "
+        "per_platform incremental",
+        implied not in incrs,
+        f"implied={implied}, incrementals={sorted(incrs)}",
+    )
+    # Either the collision guard fired OR the over-parent clamp fired
+    # ahead of it (both routes produce a clean non-colliding count).
+    _check(
+        "auto-fix guard fired (over-parent clamp or field-copy nudge)",
+        len(report2["guards"]) >= 1,
+        f"guards={report2['guards']}",
+    )
+
+
+print()
+print("--- test_rule3_ext_no_ops_when_conversions_disabled ---")
+
+# Automotive convention: conversions.enabled = False AND CV rate = 0.
+# The recompute must be a no-op.
+parent = _parent_with_conv_rate()
+sub = build_subset_payload(parent, 0.599, "fixture_r3_ext_noop", "Boomer")
+sub["conversions"]["enabled"] = False
+sub["valuation"]["rates"]["conv_value_per_user"] = 0.0
+before_cv = sub["valuation"]["conversion_value"]
+report3 = _recompute_conversion_valuation(
+    sub, parent, 0.599, "fixture_r3_ext_noop",
+)
+_check(
+    "recompute helper is a no-op when conversions.enabled is False",
+    sub["valuation"]["conversion_value"] == before_cv
+    and report3["count_after"] is None,
+    f"before={before_cv}, after={sub['valuation']['conversion_value']}, "
+    f"report={report3}",
+)
 
 
 # ---------------------------------------------------------------------

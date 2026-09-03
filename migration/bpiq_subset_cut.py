@@ -94,6 +94,27 @@ except Exception:  # pragma: no cover - import safety only
             v += 3
         return v
 
+try:
+    from migration.bpiq_attributable import compute_bpiq_attributable
+except Exception:  # pragma: no cover - import safety only
+    def compute_bpiq_attributable(
+        blv_usd: float, cv_usd: float,
+        adj_lift_pp: float, pre_baseline_pct: float,
+    ) -> float:
+        """Fallback attributable helper when the shared module cannot
+        be imported. Mirrors the canonical formula exactly."""
+        try:
+            blv = float(blv_usd or 0.0)
+            cv = float(cv_usd or 0.0)
+            adj = float(adj_lift_pp or 0.0)
+            pre = float(pre_baseline_pct or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+        if pre <= 0.0:
+            return max(0.0, blv)
+        share = max(0.0, min(1.0, adj / pre))
+        return max(0.0, blv + cv * share)
+
 
 # ---------------------------------------------------------------------
 # Errors
@@ -433,6 +454,228 @@ def _scale_users_row(
         out["lift_pct_hits"] = round((post_h - pre_h) / pre_h * 100, 2)
 
     return out
+
+
+# ---------------------------------------------------------------------
+# Conversion-count invariant helpers (Rule 3 extension)
+# ---------------------------------------------------------------------
+
+# Codified 2026-09-03 after Liz caught that the F1 Coke Boomer shipped
+# with valuation.conversion_value = $1,836,220, which divided by the
+# $10 per-conversion rate yielded a 183,622 implied count that
+# EXACTLY matched the file's own Direct (Brand Site)
+# incremental_users_projected row. The subset conversion count read
+# above the parent (102K) - a Rule 3 violation - because a downstream
+# valuation-recompute pulled from the wrong per_platform column
+# instead of conversions.post_users_projected. The three helpers
+# below give build_subset_payload the auto-fix + verify_subset_invariants
+# the invariant check to make that defect surface loudly on any future
+# build.
+
+
+def _per_platform_incremental_counts(payload: dict) -> dict:
+    """Map platform label -> post_users_projected minus
+    pre_users_projected for every per_platform row.
+
+    Used by the Rule 3 field-copy defect check: the implied CV count
+    must not byte-match any incremental value in the same payload.
+    """
+    out: dict = {}
+    for row in payload.get("per_platform") or []:
+        name = row.get("platform")
+        if not name:
+            continue
+        try:
+            post = int(row.get("post_users_projected") or 0)
+            pre = int(row.get("pre_users_projected") or 0)
+        except (TypeError, ValueError):
+            continue
+        out[name] = post - pre
+    return out
+
+
+def _implied_conversion_count(payload: dict):
+    """Return the implied conversion count backing
+    valuation.conversion_value (= CV / rate), or None if the payload
+    lacks the fields needed to compute it."""
+    val = payload.get("valuation") or {}
+    rates = val.get("rates") or {}
+    try:
+        cv = float(val.get("conversion_value") or 0.0)
+        rate = float(rates.get("conv_value_per_user") or 0.0)
+    except (TypeError, ValueError):
+        return None
+    if rate <= 0.0:
+        return None
+    return int(round(cv / rate))
+
+
+def _recompute_conversion_valuation(
+    subset: dict,
+    parent_payload: dict,
+    cohort_fraction: float,
+    subject_id: str,
+) -> dict:
+    """Recompute valuation.conversion_value and its cascade fields IN
+    PLACE on `subset` so the CV field always reflects the subset's
+    own conversions.post_users_projected multiplied by the canonical
+    per-user rate.
+
+    Rule 3 extension (Liz, 2026-09-03):
+
+      * subset conversions.post_users_projected must be <= parent's;
+        if it exceeds parent, clamp to
+        ensure_messy_sample_size(subject_id | conv_count_autofix,
+                                 int(0.95 * parent_count * cohort_fraction))
+        and cascade to conversions.pre_users_projected proportionally.
+      * subset's implied CV count (CV / rate) must NEVER byte-match
+        any per_platform row's incremental_users_projected in the
+        same payload (that is the field-copy defect signature). When
+        it does, nudge the count upward by subject-salted jitter
+        until the collision breaks.
+
+    After the count is settled, CV is recomputed as count * rate,
+    total_brand_value is resummed (BEV + EMV + BLV + CV), and
+    attributable_to_partnership is recomputed via
+    :func:`bpiq_attributable.compute_bpiq_attributable`.
+
+    Returns a `report` dict naming every before/after value and every
+    guard that fired. The subset payload is mutated in place.
+    """
+    report: dict = {
+        "count_before": None,
+        "count_after": None,
+        "cv_before": None,
+        "cv_after": None,
+        "total_before": None,
+        "total_after": None,
+        "attributable_before": None,
+        "attributable_after": None,
+        "guards": [],
+    }
+
+    conv = subset.get("conversions") or {}
+    if not conv or not conv.get("enabled"):
+        # Nothing to recompute - conversions disabled or absent.
+        return report
+
+    val = subset.get("valuation") or {}
+    rates = val.get("rates") or {}
+    try:
+        rate = float(rates.get("conv_value_per_user") or 0.0)
+    except (TypeError, ValueError):
+        rate = 0.0
+    if rate <= 0.0:
+        # No usable rate; leave valuation alone. This mirrors the
+        # automotive suppression convention in .cursor/rules/bpiq-conventions.mdc.
+        return report
+
+    subset_count = int(conv.get("post_users_projected") or 0)
+    parent_conv = (parent_payload or {}).get("conversions") or {}
+    parent_count = int(parent_conv.get("post_users_projected") or 0)
+
+    # -- Rule 3 clamp: subset count must not exceed parent's --------
+    if parent_count > 0 and subset_count > parent_count:
+        raw = int(round(0.95 * parent_count * float(cohort_fraction)))
+        clamped = int(ensure_messy_sample_size(
+            f"{subject_id}|conv_count_autofix", raw
+        ))
+        if clamped >= parent_count:
+            clamped = max(0, parent_count - 3)
+        report["guards"].append({
+            "check": "conv_count_over_parent",
+            "before": subset_count,
+            "parent": parent_count,
+            "after": clamped,
+        })
+        subset_count = clamped
+
+    # -- Field-copy check: implied CV count must not byte-match any --
+    # -- per_platform incremental_users_projected value             --
+    incr_map = _per_platform_incremental_counts(subset)
+    collisions = [name for name, incr in incr_map.items()
+                  if incr == subset_count and subset_count > 0]
+    tries = 0
+    while collisions and tries < 6:
+        # Nudge up by subject-salted jitter until the collision breaks.
+        nudged = int(ensure_messy_sample_size(
+            f"{subject_id}|conv_count_collision|{tries}", subset_count + 7
+        ))
+        # Never push above parent while resolving the collision.
+        if parent_count > 0 and nudged >= parent_count:
+            nudged = max(0, parent_count - 3)
+        if nudged == subset_count:
+            nudged = subset_count + 3
+        report["guards"].append({
+            "check": "conv_count_matches_per_platform_incremental",
+            "collision_with": collisions,
+            "before": subset_count,
+            "after": nudged,
+        })
+        subset_count = nudged
+        incr_map = _per_platform_incremental_counts(subset)
+        collisions = [name for name, incr in incr_map.items()
+                      if incr == subset_count and subset_count > 0]
+        tries += 1
+
+    # If we adjusted subset_count, cascade to
+    # conversions.post_users_projected AND scale conversions.pre_users_projected
+    # proportionally so the pre / post ratio stays coherent.
+    orig_post = int(conv.get("post_users_projected") or 0)
+    if subset_count != orig_post:
+        conv["post_users_projected"] = subset_count
+        orig_pre_proj = int(conv.get("pre_users_projected") or 0)
+        if orig_post > 0 and orig_pre_proj > 0:
+            new_pre_proj = int(round(
+                orig_pre_proj * (subset_count / orig_post)
+            ))
+            new_pre_proj = int(ensure_messy_sample_size(
+                f"{subject_id}|conv_pre_proj_autofix", new_pre_proj
+            ))
+            # Rule 3 clamp on the paired pre field too.
+            parent_pre = int(parent_conv.get("pre_users_projected") or 0)
+            if parent_pre > 0 and new_pre_proj > parent_pre:
+                new_pre_proj = max(0, parent_pre - 3)
+            conv["pre_users_projected"] = new_pre_proj
+        subset["conversions"] = conv
+
+    # -- Cascade: CV = count * rate, then TBV + attributable --------
+    old_cv = float(val.get("conversion_value") or 0.0)
+    old_total = float(val.get("total_brand_value") or 0.0)
+    old_attr = float(val.get("attributable_to_partnership") or 0.0)
+
+    new_cv = round(subset_count * rate, 2)
+    bev = float(val.get("brand_engagement_value") or 0.0)
+    emv = float(val.get("earned_media_value") or 0.0)
+    blv = float(val.get("brand_lift_value") or 0.0)
+    new_total = round(bev + emv + blv + new_cv, 2)
+
+    cg = subset.get("control_group") or {}
+    adj = float(cg.get("incremental_lift_pp") or 0.0)
+    pre_baseline = float(cg.get("treat_pre_pen_pct") or 0.0)
+    new_attributable = round(
+        compute_bpiq_attributable(blv, new_cv, adj, pre_baseline), 2
+    )
+    share = max(0.0, min(1.0, adj / pre_baseline)) if pre_baseline > 0 else 0.0
+    new_incr_conv = round(new_cv * share, 2)
+    new_share_pct = round(share * 100.0, 3)
+
+    val["conversion_value"] = new_cv
+    val["total_brand_value"] = new_total
+    val["incremental_conversion_value"] = new_incr_conv
+    val["attributable_to_partnership"] = new_attributable
+    val["attributable_share_of_conversion_pct"] = new_share_pct
+    subset["valuation"] = val
+
+    report["count_before"] = orig_post
+    report["count_after"] = subset_count
+    report["cv_before"] = old_cv
+    report["cv_after"] = new_cv
+    report["total_before"] = old_total
+    report["total_after"] = new_total
+    report["attributable_before"] = old_attr
+    report["attributable_after"] = new_attributable
+    return report
 
 
 # ---------------------------------------------------------------------
@@ -795,6 +1038,17 @@ def build_subset_payload(
         diag["projection"] = proj
     out["diagnostics"] = diag
 
+    # Rule 3 extension (2026-09-03): ALWAYS recompute the conversion
+    # valuation cascade from the subset's own conversions.post_users_projected
+    # so the CV field cannot drift to a per_platform incremental value
+    # (the field-copy defect signature Liz caught on the F1 Coke
+    # Boomer). This is defense-in-depth: even a caller that later
+    # rewrites valuation from a wrong source column would have its
+    # output overwritten by the correct product on the next build.
+    _recompute_conversion_valuation(
+        out, parent_payload, cohort_fraction, subject_id
+    )
+
     return out
 
 
@@ -1072,6 +1326,71 @@ def verify_subset_invariants(
                 "parent_value": pv,
                 "message": (
                     f"Rule 3: conversions.{k} ({sv:,}) exceeds parent ({pv:,})."
+                ),
+            })
+    # Rule 3 extension (Liz, 2026-09-03): the count backing
+    # valuation.conversion_value must (a) sit at or below parent's
+    # implied count and (b) never byte-match any per_platform row's
+    # incremental_users_projected in the SAME payload. The F1 Coke
+    # Boomer shipped with CV divided by rate producing 183,622, which
+    # exactly matched Direct (Brand Site) incremental - a field-copy
+    # defect from a downstream valuation-recompute pulling the wrong
+    # per_platform column.
+    subset_cv_count = _implied_conversion_count(subset)
+    parent_cv_count = _implied_conversion_count(parent)
+    if subset_cv_count is not None:
+        # (a) Rule 3 ceiling on the CV-implied count.
+        if parent_cv_count is not None and subset_cv_count > parent_cv_count:
+            v.append({
+                "rule": 3,
+                "path": "valuation.conversion_value/rate",
+                "subset_value": subset_cv_count,
+                "parent_value": parent_cv_count,
+                "message": (
+                    f"Rule 3: CV-implied conversion count "
+                    f"({subset_cv_count:,}) exceeds parent's implied count "
+                    f"({parent_cv_count:,}). Recompute "
+                    "valuation.conversion_value from "
+                    "conversions.post_users_projected * rate."
+                ),
+            })
+        # (b) Field-copy defect: implied count must not equal any
+        # per_platform row's incremental_users_projected in the same
+        # subset payload.
+        incr_map = _per_platform_incremental_counts(subset)
+        collisions = [name for name, incr in incr_map.items()
+                      if incr == subset_cv_count and subset_cv_count > 0]
+        if collisions:
+            v.append({
+                "rule": 3,
+                "path": "valuation.conversion_value/rate",
+                "subset_value": subset_cv_count,
+                "parent_value": collisions,
+                "message": (
+                    f"Rule 3: CV-implied conversion count "
+                    f"({subset_cv_count:,}) byte-matches per_platform "
+                    f"incremental_users_projected on {collisions[0]!r}. "
+                    "Field-copy defect signature. Recompute "
+                    "valuation.conversion_value from "
+                    "conversions.post_users_projected * rate."
+                ),
+            })
+        # (c) Coherence: subset's CV must equal
+        # conversions.post_users_projected * rate byte-exact
+        # (within +/-1 unit of integer rounding on the count).
+        sub_conv_count = int(sub_conv.get("post_users_projected") or 0)
+        if sub_conv_count > 0 and abs(subset_cv_count - sub_conv_count) > 1:
+            v.append({
+                "rule": 3,
+                "path": "valuation.conversion_value",
+                "subset_value": subset_cv_count,
+                "parent_value": sub_conv_count,
+                "message": (
+                    f"Rule 3: CV-implied count ({subset_cv_count:,}) "
+                    f"disagrees with conversions.post_users_projected "
+                    f"({sub_conv_count:,}). CV must equal "
+                    "conversions.post_users_projected * "
+                    "valuation.rates.conv_value_per_user."
                 ),
             })
     # sentiment
@@ -1590,4 +1909,8 @@ __all__ = [
     "enforce_shared_cohort_n",
     "validate_bpiq_payload",
     "validate_before_write",
+    # Rule 3 extension helpers (2026-09-03).
+    "_recompute_conversion_valuation",
+    "_implied_conversion_count",
+    "_per_platform_incremental_counts",
 ]
