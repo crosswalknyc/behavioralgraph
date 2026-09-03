@@ -55755,12 +55755,13 @@ def _pm_gate_refusal(kind):
     (see the `data.guidance && data.error` branch in the analyze /
     approve / interpret handlers). No internal vocabulary."""
     if kind == 'analyze':
-        msg = ('Your access covers new profile pulls only. Ask your '
-               'admin to enable analysis access if you need to run '
-               'reads against existing profiles.')
+        msg = ('This account covers new profile pulls only. To '
+               'unlock analysis of existing profiles, please '
+               'contact your account manager.')
     else:
-        msg = ('Your access covers analysis only. Ask your admin to '
-               'enable pull access if you need to build new profiles.')
+        msg = ('This account covers analysis only. To unlock the '
+               'ability to pull new profiles, please contact your '
+               'account manager.')
     return jsonify({
         'success': False,
         'guidance': True,
