@@ -52178,6 +52178,14 @@ def api_synth_chat_clarify():
         # "Is this a cut of X data we already have?" (2026-08-20).
         # Candidates were stashed on the draft by the interpret step.
         cands = draft.get('parent_link_candidates') or []
+        # Defense-in-depth: filter any stashed candidate whose entity
+        # shares no real identity token with the ask, so a stale draft
+        # from a prior turn can't re-offer a mismatched parent
+        # (2026-09-02, companion to the _maybe_ask_parent_link gate).
+        _ask_subject_rp = draft.get('subject') or ''
+        cands = [c for c in cands
+                 if not _subject_identity_mismatch(
+                     prompt, _ask_subject_rp, c.get('display_name'))]
         low = answer.lower().strip()
         declined = bool(_re.match(
             r'^(no|none|neither|nope|fresh|new|not a cut|'
@@ -52211,6 +52219,17 @@ def api_synth_chat_clarify():
                         best, best_ov = c, ov
                 if best is not None and best_ov > 0:
                     picked = best
+        # Identity gate on the picked candidate (2026-09-02,
+        # defense-in-depth): if the picked candidate shares no real
+        # identity token with the ask, drop the link and route to the
+        # build-fresh branch below instead of committing derive_cut.
+        # Catches stale drafts whose candidates were stashed before
+        # the identity gate landed.
+        if picked is not None and _subject_identity_mismatch(
+                prompt, draft.get('subject') or '',
+                picked.get('display_name')):
+            picked = None
+            declined = True
         if picked is None and not declined:
             opts = "\n".join(
                 f"  {i}. {c.get('display_name')}"
@@ -59643,6 +59662,18 @@ def _maybe_ask_parent_link(draft, prompt, catalog):
                                                 min_score=0.30)
         cut_label = str(draft.get('cut_label')
                         or draft.get('subject') or '').strip()
+    # Subject-identity gate (parity with _apply_universe_qualifier_gate,
+    # which only guards existing_match/derive_cut and never this path):
+    # drop any candidate that shares no real identity token with the ask
+    # so a generic behavioral/demographic persona is never offered as a
+    # "cut" of an unrelated audience (Heavy Social Users -> Trex Deck
+    # Build Planners defect, Jenna 2026-09-02). Prefer build-fresh over
+    # a wrong link. Legitimate "{Subject} Female"-style cuts survive
+    # because they share the real subject token.
+    _ask_subject = draft.get('subject') or cut_label or ''
+    cands = [c for c in cands
+             if not _subject_identity_mismatch(
+                 prompt, _ask_subject, c.get('display_name'))]
     if not cands:
         return draft
     draft['parent_link_candidates'] = [
