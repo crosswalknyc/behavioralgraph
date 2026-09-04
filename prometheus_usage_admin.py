@@ -178,6 +178,22 @@ def _norm_label(rec: dict) -> str:
     return str(lbl).strip().lower()
 
 
+def _is_admin_prometheus_record(rec: dict) -> bool:
+    """Origin filter for the admin rollup surfaces.
+
+    Only `origin=chatbot` records count on admin surfaces. Partner
+    API records (`origin=partner_api`) are excluded by design - no
+    admin user sits behind those requests.
+
+    Applied as defense in depth on every public entry point. `_load_day`
+    already drops non-chatbot rows during the S3 scan, but the cache
+    boundary is at `_load_window`; this check locks the invariant no
+    matter how a future caller (test, backfill script, ad-hoc rerun)
+    injects records into the cache. See partner-api-shared-catalog.mdc
+    for the intent."""
+    return str(rec.get('origin') or '') == 'chatbot'
+
+
 def _norm_email_set(emails: Optional[Iterable[str]]) -> Set[str]:
     if not emails:
         return set()
@@ -328,6 +344,8 @@ def _build_by_day(records: Iterable[dict],
     """
     per_day_raw: Dict[str, Dict[str, Any]] = {}
     for rec in records:
+        if not _is_admin_prometheus_record(rec):
+            continue
         if labels and _norm_label(rec) not in labels:
             continue
         day = _extract_day_key(rec)
@@ -392,6 +410,8 @@ def fetch_user_usage(user_emails: Iterable[str],
     surface_acc = _empty_surface_map()
     recent: List[dict] = []
     for rec in records:
+        if not _is_admin_prometheus_record(rec):
+            continue
         if _norm_label(rec) not in labels:
             continue
         _bump_surface(surface_acc, rec)
@@ -473,6 +493,8 @@ def fetch_company_usage(user_map: Dict[str, List[str]],
     company_labels = set(label_to_user.keys())
 
     for rec in records:
+        if not _is_admin_prometheus_record(rec):
+            continue
         lbl = _norm_label(rec)
         if lbl not in company_labels:
             continue
@@ -524,6 +546,8 @@ def fetch_all_users_counts(
         records = []
     counts: Dict[str, int] = defaultdict(int)
     for rec in records:
+        if not _is_admin_prometheus_record(rec):
+            continue
         lbl = _norm_label(rec)
         if not lbl:
             continue
@@ -551,6 +575,8 @@ def fetch_all_users_summary(
     per_user_raw: Dict[str, Dict[str, float]] = defaultdict(
         lambda: {'actions': 0, 'raw': 0.0})
     for rec in records:
+        if not _is_admin_prometheus_record(rec):
+            continue
         lbl = _norm_label(rec)
         if not lbl:
             continue
