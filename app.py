@@ -16866,8 +16866,17 @@ def api_trends_iq_data():
         payload = _trends_iq_apply_lens_access(payload, _tiq_allowed_lens_ids)
         return jsonify(payload)
     except Exception as e:
+        # Never surface operator-facing error text in the dashboard: the
+        # frontend shows its neutral loading state and quietly retries.
+        # The detail goes to ops by email (jenna@ + jessie@, deduped to
+        # one send per day) so the failure is still actionable.
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        try:
+            if _trends_iq is not None:
+                _trends_iq.notify_compute_failure(f'{type(e).__name__}: {e}')
+        except Exception:
+            pass
+        return jsonify({'success': False, 'loading': True}), 200
 
 
 @app.route('/api/trends-iq/available-dates', methods=['GET'])

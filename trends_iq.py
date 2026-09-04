@@ -52,6 +52,7 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import wait as futures_wait
 from datetime import date, datetime, timedelta, timezone
 from typing import Iterable, Optional
 
@@ -104,6 +105,16 @@ S3_CACHE_BUCKET    = os.environ.get('TRENDS_IQ_CACHE_BUCKET', 'dashboard-inputs'
 S3_CACHE_PREFIX    = os.environ.get('TRENDS_IQ_CACHE_PREFIX', 'trends_iq/cache/')
 CACHE_TTL_S        = int(os.environ.get('TRENDS_IQ_CACHE_TTL', '86400'))      # 24h - matches the daily-cron cadence of the underlying trends_iq_snapshots/latest/ writes. There is no reason to invalidate the aggregated dashboard payload before the next scraper cron produces new upstream snapshots.
 DEFAULT_LOOKBACK_DAYS = int(os.environ.get('TRENDS_IQ_LOOKBACK_DAYS', '1'))
+# compute_view section fan-out budget. A cold recompute right after a
+# cache purge legitimately needs more than the old 45s, so the budget is
+# 90s AND the fan-out is fail-safe (futures_wait never raises): sections
+# that miss the deadline are salvaged as loading placeholders instead of
+# killing the whole view with "N (of M) futures unfinished".
+SECTION_BUDGET_S   = int(os.environ.get('TRENDS_IQ_SECTION_BUDGET_S', '90'))
+# A live payload that shipped with pending sections goes stale after 10
+# minutes instead of the full 24h TTL so the missing panels self-heal on
+# the next recompute once the slow feed recovers.
+PARTIAL_RETRY_TTL_S = int(os.environ.get('TRENDS_IQ_PARTIAL_RETRY_TTL', '600'))
 _HTTP_TIMEOUT_S    = 8
 _UA                = "CrosswalkTrendsIQ/1.0 (+contact: jenna@crosswalknyc.com)"
 
@@ -480,6 +491,65 @@ def _today_iso() -> str:
     return datetime.now(timezone.utc).date().isoformat()
 
 
+# ---------------------------------------------------------------------------
+# Ops alerting. On any section timeout or view-level failure the UI shows
+# a neutral loading state; the detail goes to ops by email instead. Jenna
+# and Jessie only (standing rule for failure / system alerts), deduped to
+# one send per alert kind per UTC day via an S3 day stamp.
+# ---------------------------------------------------------------------------
+_OPS_ALERT_EMAILS = ['jenna@crosswalknyc.com', 'jessie@crosswalknyc.com']
+_OPS_ALERT_STAMP_PREFIX = 'trends_iq/state/ops_alert_'
+
+
+def _send_ops_alert(kind: str, subject: str, body: str) -> None:
+    """Best-effort ops email. Never raises, never blocks the view."""
+    try:
+        s3 = _s3_client()
+        stamp_key = f"{_OPS_ALERT_STAMP_PREFIX}{kind}_{_today_iso()}.json"
+        if s3 is not None:
+            try:
+                s3.head_object(Bucket=S3_CACHE_BUCKET, Key=stamp_key)
+                return  # already alerted today for this kind
+            except Exception:
+                pass
+        import boto3  # type: ignore
+        ses = boto3.client('ses', region_name='us-east-2')
+        ses.send_email(
+            Source='BehavioralGraph <jenna@crosswalknyc.com>',
+            Destination={'ToAddresses': list(_OPS_ALERT_EMAILS)},
+            Message={
+                'Subject': {'Data': subject},
+                'Body': {'Text': {'Data': body}},
+            },
+        )
+        if s3 is not None:
+            try:
+                s3.put_object(
+                    Bucket=S3_CACHE_BUCKET, Key=stamp_key,
+                    Body=json.dumps({
+                        'sent_at': datetime.now(timezone.utc).isoformat(),
+                        'subject': subject,
+                    }).encode('utf-8'),
+                    ContentType='application/json')
+            except Exception:
+                pass
+        logger.warning("trends_iq ops alert sent (%s): %s", kind, subject)
+    except Exception as e:
+        logger.debug("trends_iq ops alert failed (%s): %s", kind, e)
+
+
+def notify_compute_failure(detail: str) -> None:
+    """Called by app.py when the Trends IQ data route hits an unexpected
+    exception. The user sees a neutral loading state; ops get the detail."""
+    _send_ops_alert(
+        'compute_failure',
+        'Trends IQ view failed to compute',
+        ('The Trends IQ view hit an unexpected error while computing. '
+         'Users see a loading state and the view retries automatically.\n\n'
+         f'Detail: {detail}\n'
+         f'UTC: {datetime.now(timezone.utc).isoformat()}\n'))
+
+
 def _cache_key(filters: dict) -> str:
     """Build the S3 cache key for the given filter tuple.
 
@@ -840,24 +910,37 @@ def _accumulate_stream_estimates_over_window(
             snap = _read_snapshot('stream_estimates')
         return d_iso, snap
 
+    # Fail-safe fetch: futures_wait never raises, so days that landed
+    # inside the budget are kept even when a straggler read runs long
+    # (the old as_completed(timeout=...) path threw the whole window
+    # away on one slow day AND blocked on executor exit). The executor
+    # is shut down without waiting; straggler threads finish in the
+    # background and are discarded.
     fetched: list[tuple[str, dict]] = []
+    ex = ThreadPoolExecutor(
+        max_workers=_WINDOW_ACCUMULATOR_MAX_WORKERS,
+        thread_name_prefix='tiq-accum')
     try:
-        with ThreadPoolExecutor(
-                max_workers=_WINDOW_ACCUMULATOR_MAX_WORKERS,
-                thread_name_prefix='tiq-accum') as ex:
-            futures = [ex.submit(_fetch_one, d) for d in dated_isos]
-            for fut in as_completed(
-                    futures, timeout=_WINDOW_ACCUMULATOR_TIMEOUT_S):
-                try:
-                    d_iso, snap = fut.result(
-                        timeout=_WINDOW_ACCUMULATOR_TIMEOUT_S)
-                except Exception:
-                    continue
-                if snap and isinstance(snap, dict):
-                    fetched.append((d_iso, snap))
+        futures = [ex.submit(_fetch_one, d) for d in dated_isos]
+        done, not_done = futures_wait(
+            futures, timeout=_WINDOW_ACCUMULATOR_TIMEOUT_S)
+        for fut in done:
+            try:
+                d_iso, snap = fut.result()
+            except Exception:
+                continue
+            if snap and isinstance(snap, dict):
+                fetched.append((d_iso, snap))
+        if not_done:
+            logger.warning(
+                "trends_iq accumulator: %d of %d dated reads missed the "
+                "%ss budget; summing the days that landed",
+                len(not_done), len(futures), _WINDOW_ACCUMULATOR_TIMEOUT_S)
     except Exception as e:
         logger.debug("trends_iq accumulator fetch failed: %s", e)
         return None
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
 
     if not fetched:
         return None
@@ -5732,15 +5815,30 @@ def _fetch_one_feed(feed_tuple: tuple) -> list[dict]:
 
 
 def _fetch_all_news_feeds() -> list[list[dict]]:
-    """Fan out to every configured news feed in parallel; keep failures silent."""
+    """Fan out to every configured news feed in parallel; keep failures silent.
+
+    futures_wait never raises, so one hung feed can't take down the
+    whole headlines section: feeds that answered inside the budget are
+    kept, stragglers are dropped, and the executor is released without
+    waiting on them.
+    """
     out: list[list[dict]] = []
-    with ThreadPoolExecutor(max_workers=8, thread_name_prefix='trends-news') as ex:
+    ex = ThreadPoolExecutor(max_workers=8, thread_name_prefix='trends-news')
+    try:
         futures = {ex.submit(_fetch_one_feed, ft): ft for ft in NEWS_FEEDS}
-        for fut in as_completed(futures, timeout=25):
+        done, not_done = futures_wait(futures, timeout=25)
+        for fut in done:
             try:
-                out.append(fut.result(timeout=8) or [])
+                out.append(fut.result() or [])
             except Exception:
                 out.append([])
+        if not_done:
+            logger.warning(
+                "trends_iq news feeds: %d of %d feeds missed the 25s "
+                "budget and were dropped this pass",
+                len(not_done), len(futures))
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
     return out
 
 
@@ -8108,16 +8206,50 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'lens_scores':         lambda: _read_snapshot('lens_scores'),
         }
 
+    # Fail-safe fan-out. The old as_completed(timeout=45) raised
+    # TimeoutError ("N (of M) futures unfinished") out of the loop the
+    # moment one section ran long (a cold recompute after a cache purge
+    # can do exactly that), killing the whole payload. futures_wait()
+    # never raises: every section that finished inside the budget is
+    # salvaged and rendered; stragglers render as loading placeholders
+    # and are named in the log + ops email so the slow feed is
+    # identifiable. The executor is shut down without waiting so a hung
+    # fetcher can't block the response; its thread finishes in the
+    # background and is discarded.
     results: dict = {}
-    with ThreadPoolExecutor(max_workers=len(tasks), thread_name_prefix='trends-iq') as ex:
+    pending_sections: list = []
+    ex = ThreadPoolExecutor(max_workers=len(tasks), thread_name_prefix='trends-iq')
+    try:
         futures = {ex.submit(fn): key for key, fn in tasks.items()}
-        for fut in as_completed(futures, timeout=45):
+        done, not_done = futures_wait(futures, timeout=SECTION_BUDGET_S)
+        for fut in done:
             key = futures[fut]
             try:
-                results[key] = fut.result(timeout=45)
+                results[key] = fut.result()
             except Exception as e:
-                logger.debug("trends_iq task %s failed: %s", key, e)
+                logger.warning("trends_iq section %s failed: %s", key, e)
                 results[key] = None
+        pending_sections = sorted(futures[f] for f in not_done)
+    finally:
+        ex.shutdown(wait=False, cancel_futures=True)
+    if pending_sections:
+        logger.warning(
+            "trends_iq sections missed the %ss budget and render as "
+            "loading: %s", SECTION_BUDGET_S, ', '.join(pending_sections))
+        _send_ops_alert(
+            'section_timeout',
+            'Trends IQ sections slow to load',
+            ('These Trends IQ sections did not finish inside the '
+             f'{SECTION_BUDGET_S}s compute budget and rendered as '
+             'loading placeholders (the rest of the view shipped '
+             'normally):\n\n  ' + '\n  '.join(pending_sections) +
+             '\n\nFilters: '
+             f"geo_type={filters.get('geo_type') or 'National'}, "
+             f"geo_value={filters.get('geo_value') or ''}, "
+             f"lookback_days={lookback_days}, asof={asof or 'live'}\n"
+             'The view retries automatically within '
+             f'{PARTIAL_RETRY_TTL_S // 60} minutes.\n'
+             f'UTC: {datetime.now(timezone.utc).isoformat()}\n'))
 
     trending_searches = results.get('trending_searches') or []
     headlines, articles_by_source = results.get('headlines_pack') or ([], [])
@@ -8546,7 +8678,16 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'historic':      historic,
         },
         'generated_at': now.isoformat(),
-        'stale_until':  (now + timedelta(seconds=CACHE_TTL_S)).isoformat(),
+        # Partial payloads (sections still pending) go stale fast so the
+        # next request after PARTIAL_RETRY_TTL_S recomputes and fills in
+        # the missing panels. Complete payloads keep the full TTL.
+        'stale_until':  (now + timedelta(
+            seconds=(PARTIAL_RETRY_TTL_S if pending_sections
+                     else CACHE_TTL_S))).isoformat(),
+        # Section keys that missed the compute budget this pass. Their
+        # panels render the neutral warming-up state; the frontend can
+        # also use this list to schedule a quiet re-fetch.
+        'pending_sections': pending_sections,
         'cards': {
             'trending_searches':              trending_searches,
             'trending_searches_by_category':  searches_by_category,
@@ -8707,7 +8848,13 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     except Exception as e:
         logger.warning("lens-audience stamp failed: %s", e)
 
-    _cache_put(filters, payload)
+    # Historic cache entries are permanent snapshots of a past day, so a
+    # partial reconstruction must never be frozen forever - skip the
+    # write and let the next request retry the missing reads. Live
+    # partials DO cache (with the short stale_until above) so concurrent
+    # users get an instant view while the slow feed recovers.
+    if not (pending_sections and historic):
+        _cache_put(filters, payload)
     _write_history_snapshots(headlines, trending_people)
     payload['from_cache'] = False
     return payload

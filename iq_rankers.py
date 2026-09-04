@@ -729,6 +729,16 @@ def _build_covered_single_names(jobs: list[dict]) -> set[str]:
     Profile IQ CSV, and any historical metrics rows for these subjects
     are left intact -- only the Ranker's view filter / nightly cron is
     affected.
+
+    A derived cut NEVER covers its own base profile (fixed 2026-09-04).
+    Cut files follow the "{Subject} - {Cut}" naming convention
+    ("Paramount+ - Avid Fan", "Peacock - Female"), so only the subject
+    part before the first " - " decides whether a name is a genuine
+    multi-word entity. Before this fix, "Paramount+ - Avid Fan" cleaned
+    to "Paramount Avid Fan" (multi-word, first word "paramount") and
+    wrongly covered the single-word "Paramount+" profile it was cut
+    from, which silently dropped Paramount+, Peacock, and every other
+    single-word brand with an Avid cut out of the nightly ranker.
     """
     multiword_first_words: set[str] = set()
     singles_by_word: dict[str, list[str]] = {}
@@ -738,7 +748,10 @@ def _build_covered_single_names(jobs: list[dict]) -> set[str]:
         subj = j.get("profile_subject") or ""
         if not pn or not subj:
             continue
-        clean = re.sub(r"[^a-zA-Z0-9 ]+", " ", pn).strip()
+        # Judge single vs multi-word on the subject part only, so a
+        # "{Subject} - {Cut}" sibling can't cover its own parent.
+        base = pn.split(" - ", 1)[0].strip() or pn
+        clean = re.sub(r"[^a-zA-Z0-9 ]+", " ", base).strip()
         words = [w for w in clean.split() if w]
         if len(words) >= 2:
             multiword_first_words.add(words[0].lower())

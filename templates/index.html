@@ -53192,13 +53192,31 @@ https://www.instagram.com/p/..."></textarea>
                     signal: ctrl.signal,
                 });
                 var data = await resp.json();
-                if (!data || !data.success) throw new Error(data && data.error ? data.error : 'Trends fetch failed');
+                if (!data || !data.success) throw new Error('trends fetch retry');
                 window.__trendsIQ.lastData = data;
                 renderTrendsIQ(data);
+                // Cold recomputes can ship with a section still pending
+                // (its panel shows the warming-up state). Schedule one
+                // quiet re-fetch after the backend's short retry window
+                // so those panels fill in without user action.
+                if ((data.pending_sections || []).length && !opts._pendingRefetch) {
+                    setTimeout(function () {
+                        applyTrendsIQFilters({ _pendingRefetch: true });
+                    }, 11 * 60 * 1000);
+                }
             } catch (e) {
                 if (e.name === 'AbortError') return;
                 console.error('Trends IQ apply error:', e);
-                document.getElementById('trendsIQMeta').textContent = 'Error: ' + (e.message || e);
+                // Neutral copy only - internal error text never reaches
+                // the user (ops are emailed by the backend). One guarded
+                // auto-retry per apply, then wait for the next manual
+                // apply.
+                document.getElementById('trendsIQMeta').textContent = 'Loading trends. This view refreshes automatically in a moment.';
+                if (!opts._retried) {
+                    setTimeout(function () {
+                        applyTrendsIQFilters({ _retried: true });
+                    }, 15000);
+                }
             } finally {
                 document.getElementById('trendsIQLoading').style.display = 'none';
                 window.__trendsIQ.inFlight = null;
