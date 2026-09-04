@@ -28393,16 +28393,25 @@ https://www.instagram.com/p/..."></textarea>
                 var displayAssetRows = showAllAsset ? rows : rows.slice(0, IIQ_ASSET_DEFAULT_ROWS);
                 var useInfo = _iiqPhaseUsesInfo(asOf, opening);
                 var primaryHeader = useInfo ? 'Info-seek %' : 'Ticketing %';
-                var primaryTip = 'Primary funnel metric shifts at T-14 (14 days pre-launch): info-seek pre, ticketing post. The other stage is available in the row expand.';
-                var liftTip = 'Lift index = asset ' + (useInfo ? 'info-seek' : 'ticketing') + ' % divided by the median across assets in view at this cursor. Strong at or above 1.3x, On-pace 0.7 to 1.3x, Soft below 0.7x.';
+                // Column tooltips mirror the plain-English paragraphs in
+                // the 'How to read this.' collapsible directly below the
+                // intro line, so a hover surfaces the same explanation
+                // without opening the reference panel. Sentence-case
+                // copy, no em dashes.
+                var assetTip = 'The individual campaign asset. Channel glyph + title + posted date. Click any row to open the detail view with the daily curve.';
+                var exposureTip = 'How many viewers have seen the asset so far, filtered by the as-of date. Never exceeds the platform\'s real view count.';
+                var primaryTip = 'Of the viewers exposed to this asset, what share took the downstream action within the 7-day attribution window. The label switches at T-14, 14 days pre-launch: info-seek before, ticketing after.';
+                var liftTip = 'How this asset\'s response rate compares to the campaign median. Strong is 1.3x or higher, on pace lands near median, soft under-indexes. Nudged off the exact bucket edge so ties don\'t cluster.';
+                var sampleTip = 'Raw count of viewers who could have taken the action. Bigger sample = more confidence the response rate is real, not noise.';
+                var confTip = 'Simplified read of sample size. High is 100K or more, Medium is 25K to 100K, Low is under 25K. A Strong lift chip on a Low confidence asset is worth watching but not banking on.';
 
                 var headerHtml = '<thead><tr>'
-                    + _iiqAssetTh('Asset',              'asset',    'left')
-                    + _iiqAssetTh('Exposure',           'exposure', 'right')
+                    + _iiqAssetTh('Asset',              'asset',    'left',  assetTip)
+                    + _iiqAssetTh('Exposure',           'exposure', 'right', exposureTip)
                     + _iiqAssetTh(primaryHeader,        'primary',  'right', primaryTip)
                     + _iiqAssetTh('Lift vs benchmark',  'lift',     'right', liftTip)
-                    + _iiqAssetTh('Sample size',        'sample',   'right')
-                    + _iiqAssetTh('Confidence',         'conf',     'right', 'Based on exposed sample size and response variance.')
+                    + _iiqAssetTh('Sample size',        'sample',   'right', sampleTip)
+                    + _iiqAssetTh('Confidence',         'conf',     'right', confTip)
                     + '</tr></thead>';
 
                 var bodyHtml;
@@ -28493,6 +28502,19 @@ https://www.instagram.com/p/..."></textarea>
                     ? ('<div class="iiq-support-meta">' + visibleCount + ' of ' + rows.length + ' at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '</div>')
                     : ('<div class="iiq-support-meta">0 at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '</div>');
 
+                // All-soft nudge: if every asset in the visible top-N is
+                // in the Soft lift bucket AND there is a tail to inspect,
+                // surface a single-line hint below the table pointing at
+                // Show all. Silent otherwise. Mirrors the Audience table's
+                // no-under-served nudge.
+                var allSoftInVisible = displayAssetRows.length > 0 && displayAssetRows.every(function(r) {
+                    return r && r.lift != null && _iiqAssetLiftBucket(r.lift) === 'soft';
+                });
+                var hasAssetTailToInspect = !showAllAsset && rows.length > IIQ_ASSET_DEFAULT_ROWS;
+                var emptyStateNudgeAsset = (allSoftInVisible && hasAssetTailToInspect)
+                    ? '<div class="iiq-help-empty-note">Top ' + IIQ_ASSET_DEFAULT_ROWS + ' by lift are all soft this week. Click Show all to inspect stronger assets further down the sort.</div>'
+                    : '';
+
                 host.className = 'iiq-support-card';
                 host.removeAttribute('style');
                 host.innerHTML = '<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:0.85rem; flex-wrap:wrap;">'
@@ -28500,6 +28522,24 @@ https://www.instagram.com/p/..."></textarea>
                     +   '<div class="iiq-support-eyebrow">Assets in view</div>'
                     +   '<div class="iiq-support-title">Individual assets ranked by response to date.</div>'
                     +   '<div class="iiq-support-intro">Ranked by ' + escapeHtml(sortLabel) + ', ' + escapeHtml(dirLabel) + '. Click any header to re-sort. Click a row to drill in.</div>'
+                    // Inline 'How to read this.' reference. Closed by
+                    // default. Signal Green eyebrow-style summary with a
+                    // rotating chevron; body on Slate Teal panel with one
+                    // paragraph per column and the closing sort-hint.
+                    // Reuses the .iiq-help-details CSS block scoped to
+                    // #intentIQView. Sentence-case copy, no em dashes.
+                    +   '<details class="iiq-help-details">'
+                    +     '<summary><span>How to read this.</span></summary>'
+                    +     '<div class="iiq-help-body">'
+                    +       '<p><b>Asset.</b> The individual campaign asset. Channel glyph + title + posted date. Click any row to open the detail view with the daily curve.</p>'
+                    +       '<p><b>Exposure.</b> How many viewers have seen the asset so far, filtered by the as-of date. Never exceeds the platform\'s real view count.</p>'
+                    +       '<p><b>Response %</b> (Info-seek before T-14, Ticketing after). Of the viewers exposed to this asset, what share took the downstream action within the 7-day attribution window. The label switches at T-14, 14 days pre-launch: info-seek before, ticketing after.</p>'
+                    +       '<p><b>Lift vs benchmark.</b> How this asset\'s response rate compares to the campaign median. Strong is 1.3x or higher, on pace lands near median, soft under-indexes. Nudged off the exact bucket edge so ties don\'t cluster.</p>'
+                    +       '<p><b>Sample size.</b> Raw count of viewers who could have taken the action. Bigger sample = more confidence the response rate is real, not noise.</p>'
+                    +       '<p><b>Confidence.</b> Simplified read of sample size. High is 100K or more, Medium is 25K to 100K, Low is under 25K. A Strong lift chip on a Low confidence asset is worth watching but not banking on.</p>'
+                    +       '<div class="iiq-help-close">Default sort is Lift vs benchmark, high to low. Click any header to re-sort. Click Show all to see every asset in the campaign.</div>'
+                    +     '</div>'
+                    +   '</details>'
                     + '</div>'
                     + subheadRight
                     + '</div>'
@@ -28508,6 +28548,7 @@ https://www.instagram.com/p/..."></textarea>
                     + headerHtml + bodyHtml
                     + '</table>'
                     + '</div>'
+                    + emptyStateNudgeAsset
                     + toggleHtml;
                 host.style.display = '';
             }
@@ -29828,6 +29869,29 @@ https://www.instagram.com/p/..."></textarea>
 
                 var subMeta = escapeHtml(asOfPretty) + (tMinus ? ' <span style="color:#5C6466;">&middot;</span> ' + escapeHtml(tMinus) : '');
 
+                // Inline 'How to read this.' reference. Closed by
+                // default. Signal Green eyebrow-style summary with a
+                // rotating chevron; body on Slate Teal panel with one
+                // paragraph per bullet and the closing sort-hint.
+                // Anchored in the header block, directly under the WoW
+                // chip / title block and above the bullet list, so it
+                // never floats over the bullets. Reuses the
+                // .iiq-help-details CSS block scoped to #intentIQView.
+                // Sentence-case copy, no em dashes.
+                var helpHtml = ''
+                    + '<details class="iiq-help-details">'
+                    +   '<summary><span>How to read this.</span></summary>'
+                    +   '<div class="iiq-help-body">'
+                    +     '<p><b>The as-of date and T-minus label.</b> Every number on this card and the three cards below is filtered to what would have been known on this date. Change it with the picker above or the T-90 through T+30 preset row.</p>'
+                    +     '<p><b>WoW exposure chip (top-right).</b> Total campaign exposure this week compared to the previous 7 days. A launch-week pill appears when the prior week falls before the campaign started.</p>'
+                    +     '<p><b>Biggest mover this week.</b> The asset with the largest week-over-week change in exposure, in either direction.</p>'
+                    +     '<p><b>Strongest signal at this point.</b> The asset with the highest response rate for the current phase (info-seek before T-14, ticketing after).</p>'
+                    +     '<p><b>Most meaningful audience finding.</b> The cohort with the highest overlap-weighted response for the current phase. When an under-served cohort ranks high, it surfaces here.</p>'
+                    +     '<p><b>Where signals are soft.</b> The lowest-performing bullet for the current phase. Shown in Dusk so a soft signal never masquerades as an accent moment.</p>'
+                    +     '<div class="iiq-help-close">Every bullet ladders to a row on the three cards below. The as-of date drives all of them.</div>'
+                    +   '</div>'
+                    + '</details>';
+
                 var headerHtml = '<div style="display:flex; align-items:flex-start; gap:1.1rem; flex-wrap:wrap;">'
                     + '<div style="display:flex; align-items:center; gap:0.95rem; flex:1 1 auto; min-width:220px;">'
                         + posterHtml
@@ -29839,7 +29903,8 @@ https://www.instagram.com/p/..."></textarea>
                     + '</div>'
                     + '<div class="iiq-hero-wow">' + wowChipHtml + '</div>'
                 + '</div>'
-                + '<div class="iiq-hero-intro">What changed this week.</div>';
+                + '<div class="iiq-hero-intro">What changed this week.</div>'
+                + helpHtml;
 
                 card.className = 'iiq-hero-card';
                 card.removeAttribute('style');
