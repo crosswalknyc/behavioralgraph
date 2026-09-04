@@ -1,89 +1,74 @@
 """
-Apply formula-based per-day variation to historical dated
-stream_estimates snapshots. Backfill-only helper (Jenna 2026-09-04:
-"ensure each thing has different numbers per day. you can apply a
-formula for backfill").
+Render organic per-day variation onto historical dated
+stream_estimates snapshots. Backfill-only (Jenna 2026-09-04: "ensure
+each thing has different numbers per day. you can apply a formula for
+backfill" + "it has to be imperceptible that equations are being used
+and must feel organic. literally" + "each item's curve should be
+based on logic for that item too and like everyday maybe there is
+something new added").
 
-Why this exists
----------------
-The historical dated snapshots at
-`s3://dashboard-inputs/trends_iq_snapshots/{YYYY-MM-DD}/stream_estimates.json`
-were produced before the day-specific prompt intervention landed on
-2026-09-04. Most non-weekly-checkpoint dates were written by the
-5 AM cron's `write_snapshot` path, which stamps whatever items are
-in `latest/stream_estimates.json` at run time into the dated key.
-That means Sept 1 through Sept 4 all carry the SAME us_estimate for
-each item (5 days in a row identical), and users see "why are
-today's numbers the same as yesterday's" on the dashboard's day-
-over-day chips.
+Two layers
+----------
+Layer 1 (`rhythm_profiles.py`): one Claude reasoning pass produces a
+per-item behavioral profile - weekly consumption shape from the
+item's OWN logic (episode drop days, weekend movie viewing, Broadway
+dark Mondays, comic new-issue Wednesdays), a volatility class, a
+trend direction, and real dated in-window events (finales, album
+drops, holiday alignment). Stored at
+`trends_iq_snapshots/system/rhythm_profiles.json`.
 
-The LIVE 5 AM cron path is already fixed (day-specific prompt in
-`stream_estimates.py` produces genuinely differentiated numbers via
-per-item Claude research). This script fixes the HISTORIC snapshots
-only, so the dashboard's WINDOW dropdown (Last 3 days, Last 7,
-Last 14, Last 30) has meaningful daily variation across every
-covered date.
-
-The formula (deterministic, reproducible)
-------------------------------------------
-For each item on each date, the new `us_estimate` is:
+Layer 2 (this file): a deterministic, zero-cost renderer that
+composes each (item, date) daily value:
 
     new_est = base_est
-              * kind_specific_dow_factor(date, kind)
-              * per_item_date_jitter(item_key, kind, date)
+              x weekly(item)      reasoned shape + per-item personality
+                                   scaling, so two same-shape items
+                                   never move in lockstep
+              x drift(item, t)    climbing / cooling / flat trend arc
+                                   across the window
+              x events(item, d)   reasoned real events with forward
+                                   decay, plus 3-5 hash-picked micro-
+                                   event days per item (the one-off
+                                   spikes real panel series carry)
+              x noise(item, d)    daily noise sized by the item's
+                                   volatility class
 
-where:
-  base_est = the snapshot's existing us_estimate for that (item, date)
-             pair -- we preserve whatever daily base was researched
-             (or inherited from latest/) at that point in time.
-  kind_specific_dow_factor: a small day-of-week multiplier
-             (0.85-1.15 band) tuned per kind:
-               * fast_* / streaming (film/tv/title) / game: Fri-Sun peak
-               * podcast: Tue-Wed peak
-               * song: Fri new-release lift
-               * broadway_show: Mon dark, Wed matinee, Sat 2-shows, Sun matinee
-               * others: near-flat.
-  per_item_date_jitter: deterministic +/-8% band from
-             MD5(item_key | kind | date_iso). Same input always
-             yields the same output.
+`base_est` is the ORIGINAL anchor for that (item, date): the v1
+pre-mutation backup at `_backups/{date}/stream_estimates.
+pre_daily_variation.json` when present (the permanent original),
+else the current dated file. Re-runs therefore never compound.
 
-`by_platform.us_estimate` values are scaled proportionally so the
-per-platform sums still match the new aggregate. `us_estimate_low`
-and `us_estimate_high` scale the same way.
+Why v1 was retired: v1 applied one day-of-week table per KIND, so
+every streaming item shared the same weekend curve - a recoverable
+fingerprint ("every Saturday +8%"). v2 has no kind-level table at
+all. Every item's weekly rhythm comes from its own reasoned profile
+(or its own hash personality when Claude missed it), phases and
+amplitudes differ per item, and irregular event days break
+periodicity. Aggregating across items recovers nothing.
 
-`_ensure_non_zero_last_digit` from stream_estimates is applied to
-the final aggregate and every per-platform value so no output ships
-on a trailing zero (workspace rule `no-round-numbers-in-deliverables`).
-
-Guardrails
-----------
-* Idempotent: rerunning against a snapshot that already carries
-  `meta._daily_variation_formula_applied` skips it unless --force.
-* Pre-mutation backup to `_backups/{date}/stream_estimates.pre_daily_variation.json`
-  (workspace rule: always back up before mutation).
-* Never writes to `latest/stream_estimates.json` -- only dated
-  historical snapshots. Live daily cron writes to latest/.
-* Preserves everything else on each item (by_platform.confidence,
-  method, sources, chart_labels, image, url, best_rank).
-* --dry-run reports what would change without touching S3.
-* --dates or --since/--until scope the run. Both accept ISO dates.
+Guardrails (unchanged from v1)
+------------------------------
+* Idempotent via `meta._daily_variation_formula_applied` sentinel
+  (version-aware: a v1-stamped snapshot re-renders under v2).
+* Pre-mutation backup created ONLY IF ABSENT - the v1 backup is the
+  permanent original and is never overwritten.
+* by_platform values scale proportionally; low <= mid <= high holds.
+* `_ensure_non_zero_last_digit` on every integer (workspace rule
+  no-round-numbers-in-deliverables).
+* Never touches `latest/` - the live daily cron owns that (fully
+  reasoned per day, see stream_estimates.py).
+* --dry-run reports without writing.
 
 CLI
 ---
     python3 -m scripts.trends_scrapers.apply_daily_variation_backfill \
         --since 2026-06-01 --until 2026-09-03
 
-Or a specific date list (sparse rerun after a partial run):
+    # sparse rerun:
+    ... --dates 2026-08-30,2026-08-31
 
-    python3 -m scripts.trends_scrapers.apply_daily_variation_backfill \
-        --dates 2026-08-30,2026-08-31,2026-09-01
-
-Or dry-run first to confirm scope:
-
-    python3 -m scripts.trends_scrapers.apply_daily_variation_backfill \
-        --since 2026-06-01 --dry-run
-
-Costs $0. No Claude, no web search. Pure S3 read/write.
+Costs $0 (no Claude, no web search - Layer 1 already paid the
+reasoning cost once).
 """
 from __future__ import annotations
 
@@ -91,6 +76,7 @@ import argparse
 import hashlib
 import json
 import logging
+import math
 import re
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -98,104 +84,162 @@ from typing import Any, Optional
 
 import boto3
 
-# Reuse the shared trailing-zero guard from stream_estimates so
-# formula-derived values honor the workspace rule
-# `no-round-numbers-in-deliverables`.
+# Shared trailing-zero guard - formula-derived values must honor the
+# workspace rule `no-round-numbers-in-deliverables`.
 try:
     from .stream_estimates import _ensure_non_zero_last_digit  # type: ignore
 except ImportError:
-    # Fallback when invoked via a direct path (not -m).
     import sys as _sys
     import os as _os
-    _sys.path.insert(
-        0, _os.path.dirname(_os.path.abspath(__file__)))
+    _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
     from stream_estimates import _ensure_non_zero_last_digit  # type: ignore
 
 logger = logging.getLogger('apply_daily_variation_backfill')
 
-_S3_BUCKET = 'dashboard-inputs'
-_S3_DATED = 'trends_iq_snapshots/{date}/stream_estimates.json'
-_S3_BACKUP = ('trends_iq_snapshots/_backups/'
-              '{date}/stream_estimates.pre_daily_variation.json')
+_S3_BUCKET   = 'dashboard-inputs'
+_S3_DATED    = 'trends_iq_snapshots/{date}/stream_estimates.json'
+_S3_BACKUP   = ('trends_iq_snapshots/_backups/'
+                '{date}/stream_estimates.pre_daily_variation.json')
+_S3_PROFILES = 'trends_iq_snapshots/system/rhythm_profiles.json'
 
-# Version tag stamped into each mutated snapshot so a re-run can
-# detect + skip already-applied snapshots. Bump when the formula
-# changes.
-_FORMULA_VERSION = 'v1.2026-09-04'
+# Version tag stamped into each mutated snapshot. A snapshot stamped
+# with a DIFFERENT version re-renders (that is how v1 -> v2 upgrades
+# roll through without --force).
+_FORMULA_VERSION = 'v2.2026-09-04-organic'
+
+# Trend drift is centered on this fixed window (the backfill span).
+# Keeping it a module constant means sparse re-runs of single dates
+# reproduce the exact same values as the full sweep.
+_WINDOW_START = date(2026, 6, 1)
+_WINDOW_END   = date(2026, 9, 3)
+_WINDOW_LEN   = max(1, (_WINDOW_END - _WINDOW_START).days)
+
+_VOL_BAND = {'low': 0.045, 'medium': 0.085, 'high': 0.145}
+
 
 # ---------------------------------------------------------------------------
-# Day-of-week factors, keyed by content kind. dow index: 0=Mon .. 6=Sun.
-# Values are multiplicative; product of all 7 values ~ 1.0 so the
-# weekly sum stays roughly conserved.
+# Deterministic hash helpers
 # ---------------------------------------------------------------------------
-_DOW_STREAMING = {  # weekend-consumption peak
-    0: 0.94, 1: 0.96, 2: 0.98, 3: 1.02, 4: 1.06, 5: 1.08, 6: 1.05,
-}
-_DOW_PODCAST = {    # midweek commute peak
-    0: 1.05, 1: 1.08, 2: 1.06, 3: 1.02, 4: 0.98, 5: 0.94, 6: 0.92,
-}
-_DOW_SONG = {       # Friday release lift + steady weekend
-    0: 0.98, 1: 0.98, 2: 0.98, 3: 1.02, 4: 1.08, 5: 1.04, 6: 0.98,
-}
-_DOW_BOOK = {       # near-flat; slight weekend lift for pleasure reading
-    0: 0.98, 1: 0.98, 2: 0.99, 3: 1.00, 4: 1.02, 5: 1.05, 6: 1.03,
-}
-_DOW_COMIC = {      # Wed release day for comics traditionally
-    0: 0.94, 1: 0.98, 2: 1.10, 3: 1.06, 4: 1.02, 5: 1.00, 6: 0.96,
-}
-_DOW_BROADWAY = {   # Mon dark, Wed matinee, Sat 2-shows, Sun matinee
-    0: 0.50, 1: 0.95, 2: 1.15, 3: 0.95, 4: 1.05, 5: 1.25, 6: 1.10,
-}
-_DOW_FLAT = {i: 1.0 for i in range(7)}   # default for kinds we don't
-                                          # have a signal for
-
-_DOW_BY_KIND: dict[str, dict[int, float]] = {
-    'fast_channel':   _DOW_STREAMING,
-    'fast_film':      _DOW_STREAMING,
-    'fast_tv':        _DOW_STREAMING,
-    'film':           _DOW_STREAMING,
-    'tv':             _DOW_STREAMING,
-    'title':          _DOW_STREAMING,
-    'game':           _DOW_STREAMING,
-    'podcast':        _DOW_PODCAST,
-    'song':           _DOW_SONG,
-    'book':           _DOW_BOOK,
-    'wattpad_story':  _DOW_BOOK,
-    'goodreads_book': _DOW_BOOK,
-    'comic':          _DOW_COMIC,
-    'broadway_show':  _DOW_BROADWAY,
-    'search_term':    _DOW_FLAT,
-    'trending_person': _DOW_FLAT,
-    'wiki_topic':     _DOW_FLAT,
-}
-
-
-def _dow_factor(target_date: date, kind: str) -> float:
-    table = _DOW_BY_KIND.get(kind, _DOW_FLAT)
-    return table[target_date.weekday()]
-
-
-def _jitter_factor(item_key: str, kind: str, date_iso: str,
-                    band_pct: float = 8.0) -> float:
-    """Deterministic per-(item, kind, date) jitter in [-band_pct, +band_pct]."""
-    seed = f'{item_key}|{kind}|{date_iso}'
+def _h01(seed: str) -> float:
+    """Deterministic uniform [0, 1) from a string seed."""
     h = hashlib.md5(seed.encode('utf-8')).hexdigest()
-    # Map 8 hex chars to [0, 1)
-    n = int(h[:8], 16) / 0xFFFFFFFF
-    return 1.0 + ((n - 0.5) * 2.0 * band_pct / 100.0)
+    return int(h[:8], 16) / 0xFFFFFFFF
 
 
-def _compute_factor(item_key: str, kind: str, target_date: date) -> float:
-    """Return the composite multiplier for one (item, date). Clamps
-    the output factor into [0.75, 1.30] as an outer sanity guard."""
-    dow = _dow_factor(target_date, kind)
-    jit = _jitter_factor(item_key, kind, target_date.isoformat())
-    f = dow * jit
-    if f < 0.75:
-        f = 0.75
-    if f > 1.30:
-        f = 1.30
-    return f
+# ---------------------------------------------------------------------------
+# The organic factor
+# ---------------------------------------------------------------------------
+def _organic_factor(item_key: str, target_date: date,
+                     profile: Optional[dict]) -> float:
+    """Composite multiplier for one (item, date).
+
+    `item_key` is the stream_estimates lookup key (kind:normtitle) -
+    stable across dates, so per-item personality traits derived from
+    it hold steady across the window while per-(item, date) seeds
+    move daily.
+    """
+    iso = target_date.isoformat()
+    dow = target_date.weekday()           # 0=Mon .. 6=Sun
+    progress = (target_date - _WINDOW_START).days / _WINDOW_LEN
+
+    # ---- 1. weekly component -------------------------------------------
+    if profile and isinstance(profile.get('weekly_shape'), list) \
+            and len(profile['weekly_shape']) == 7:
+        shape = [float(x) for x in profile['weekly_shape']]
+        # Per-item fractional PHASE shift (+-0.8 day, interpolated):
+        # one weekend-peak channel builds Thursday night, another peaks
+        # Saturday, another leans Sunday. Same reasoned logic, different
+        # realized curve - this is what breaks lockstep between items
+        # that Claude handed the same shape.
+        phase_off = (_h01(f'{item_key}|phase') - 0.5) * 1.6
+        pos = (dow - phase_off) % 7.0
+        lo = int(pos) % 7
+        hi = (lo + 1) % 7
+        frac = pos - int(pos)
+        shape_v = shape[lo] * (1.0 - frac) + shape[hi] * frac
+        # Static per-item per-day perturbation (+-5%): each item's
+        # version of the shape is its own, week after week.
+        shape_v *= 1.0 + (_h01(f'{item_key}|shapepert|{dow}') - 0.5) * 0.10
+        # Per-item amplitude personality: scale the deviation from 1.0
+        # by 0.70-1.30.
+        amp_scale = 0.70 + _h01(f'{item_key}|ampscale') * 0.60
+        weekly = 1.0 + (shape_v - 1.0) * amp_scale
+    else:
+        # Hash-personality fallback (item Claude missed): the item gets
+        # its own cosine rhythm - own amplitude (3-12%), own peak day.
+        amp   = 0.03 + _h01(f'{item_key}|fb_amp') * 0.09
+        phase = _h01(f'{item_key}|fb_phase') * 7.0
+        weekly = 1.0 + amp * math.cos(2.0 * math.pi * (dow - phase) / 7.0)
+
+    # ---- 2. trend drift --------------------------------------------------
+    trend = (profile or {}).get('trend') or 'flat'
+    if trend == 'climbing':
+        direction = 1.0
+    elif trend == 'cooling':
+        direction = -1.0
+    else:
+        # Flat items still breathe: tiny per-item drift either way.
+        direction = (_h01(f'{item_key}|flatdir') - 0.5) * 0.6
+    max_drift = 0.04 + _h01(f'{item_key}|driftmag') * 0.08   # 4-12%
+    drift = 1.0 + direction * max_drift * (progress - 0.5)
+
+    # ---- 3. events -------------------------------------------------------
+    event_mult = 1.0
+    # 3a. Reasoned real events (from the rhythm profile), forward decay:
+    #     day 0 full lift, day +1 keeps 55% of the excess, day +2 25%.
+    for ev in (profile or {}).get('events') or []:
+        try:
+            ev_d = date.fromisoformat(str(ev.get('date')))
+            lift = float(ev.get('lift'))
+        except (TypeError, ValueError):
+            continue
+        delta_days = (target_date - ev_d).days
+        if delta_days == 0:
+            event_mult *= lift
+        elif delta_days == 1:
+            event_mult *= 1.0 + (lift - 1.0) * 0.55
+        elif delta_days == 2:
+            event_mult *= 1.0 + (lift - 1.0) * 0.25
+
+    # 3b. Micro-events: 3-5 hash-picked one-off days per item across the
+    #     window (a playlist add, a news mention, a carousel placement -
+    #     the unexplained texture real series carry). Up-spikes dominate
+    #     (62/38) because real audience one-offs skew positive. Adjacent
+    #     days carry a 45% shoulder so a spike decays instead of
+    #     teleporting.
+    n_micro = 3 + int(_h01(f'{item_key}|n_micro') * 3)        # 3..5
+    for j in range(n_micro):
+        off = int(_h01(f'{item_key}|micro|{j}') * (_WINDOW_LEN + 1))
+        micro_d = _WINDOW_START + timedelta(days=off)
+        gap = (target_date - micro_d).days
+        if gap not in (-1, 0, 1):
+            continue
+        sign = 1.0 if _h01(f'{item_key}|microsign|{j}') < 0.62 else -1.0
+        mag  = 0.04 + _h01(f'{item_key}|micromag|{j}') * 0.10  # 4-14%
+        lift = 1.0 + sign * mag
+        if gap == 0:
+            event_mult *= lift
+        else:
+            event_mult *= 1.0 + (lift - 1.0) * 0.45
+
+    # ---- 4. daily noise --------------------------------------------------
+    vol = (profile or {}).get('volatility') or ''
+    band = _VOL_BAND.get(vol)
+    if band is None:
+        band = 0.05 + _h01(f'{item_key}|fb_band') * 0.07       # 5-12%
+    # Per-item band personality (0.8-1.2x) then per-date draw.
+    band *= 0.80 + _h01(f'{item_key}|bandscale') * 0.40
+    noise = 1.0 + (_h01(f'{item_key}|{iso}|noise') * 2.0 - 1.0) * band
+
+    factor = weekly * drift * event_mult * noise
+    # Soft clamp band wide enough that legitimate extremes (Broadway
+    # dark Monday x cooling trend) don't pile up on the boundary -
+    # boundary pile-up is itself a detectable artifact.
+    if factor < 0.42:
+        factor = 0.42 + _h01(f'{item_key}|{iso}|clampjit') * 0.05
+    elif factor > 1.62:
+        factor = 1.62 - _h01(f'{item_key}|{iso}|clampjit') * 0.07
+    return factor
 
 
 # ---------------------------------------------------------------------------
@@ -215,51 +259,36 @@ def _scaled(v: Optional[int], scale: float,
     return _ensure_non_zero_last_digit(new, seed_key, seed_ctx)
 
 
-def _apply_variation_to_item(item: dict, target_date: date) -> tuple[dict, float]:
-    """Return a new item dict with formula-derived us_estimate + a
-    proportionally scaled by_platform block. `factor` is what the
-    scaling multiplier was for auditing purposes."""
-    kind = str(item.get('kind') or '').strip().lower()
-    display = (item.get('display_title') or '').strip()
-    artist  = (item.get('artist') or '').strip()
-
+def _apply_variation_to_item(item: dict, target_date: date,
+                              profile: Optional[dict]) -> tuple[dict, float]:
+    """Return (new item dict, factor). Base anchor is the item's
+    existing us_estimate; everything downstream scales by the same
+    effective ratio."""
     base = int(item.get('us_estimate') or 0)
     if base <= 0:
-        # Nothing to scale (item is unpriced). Still stamp
-        # `as_of_date` so downstream readers see the correct day.
-        return ({**item,
-                 'as_of_date': target_date.isoformat()},
-                1.0)
+        return ({**item, 'as_of_date': target_date.isoformat()}, 1.0)
 
-    # A stable per-item key that captures the identity of THIS item so
-    # jitter is stable across reruns of the same date.
+    kind    = str(item.get('kind') or '').strip().lower()
+    display = (item.get('display_title') or '').strip()
+    artist  = (item.get('artist') or '').strip()
     item_key = f'{kind}|{display}|{artist}'
-    factor = _compute_factor(item_key, kind, target_date)
 
-    # New aggregate
+    factor = _organic_factor(item_key, target_date, profile)
+
     new_mid = max(1, int(round(base * factor)))
     new_mid = _ensure_non_zero_last_digit(
         new_mid, item_key, target_date.isoformat())
-
-    # Effective scale from base -> new_mid (may drift slightly from
-    # `factor` because of the trailing-digit guard).
     scale = new_mid / base if base else 1.0
 
-    # Low + high scale proportionally.
     new_low  = _scaled(item.get('us_estimate_low'),  scale,
                         item_key, f'{target_date.isoformat()}|low')
     new_high = _scaled(item.get('us_estimate_high'), scale,
                         item_key, f'{target_date.isoformat()}|high')
-
-    # Order guard: low <= mid <= high
-    if new_low is not None and new_mid is not None and new_low > new_mid:
+    if new_low is not None and new_low > new_mid:
         new_low = new_mid
-    if new_high is not None and new_mid is not None and new_high < new_mid:
+    if new_high is not None and new_high < new_mid:
         new_high = new_mid
 
-    # by_platform: scale each platform's us_estimate + low/high by
-    # the same factor. Keep confidence, note, and any other keys
-    # untouched.
     old_by_platform = item.get('by_platform') or {}
     new_by_platform: dict[str, dict] = {}
     if isinstance(old_by_platform, dict):
@@ -277,16 +306,13 @@ def _apply_variation_to_item(item: dict, target_date: date) -> tuple[dict, float
             p_new['us_estimate_high'] = _scaled(
                 pblock.get('us_estimate_high'), scale, item_key,
                 f'{target_date.isoformat()}|plat|{pkey}|high')
-            # low <= mid <= high guard per platform
-            _pmid = p_new.get('us_estimate')
-            _plow = p_new.get('us_estimate_low')
-            _phigh = p_new.get('us_estimate_high')
-            if (_plow is not None and _pmid is not None
-                    and _plow > _pmid):
-                p_new['us_estimate_low'] = _pmid
-            if (_phigh is not None and _pmid is not None
-                    and _phigh < _pmid):
-                p_new['us_estimate_high'] = _pmid
+            _pm, _pl, _ph = (p_new.get('us_estimate'),
+                              p_new.get('us_estimate_low'),
+                              p_new.get('us_estimate_high'))
+            if _pl is not None and _pm is not None and _pl > _pm:
+                p_new['us_estimate_low'] = _pm
+            if _ph is not None and _pm is not None and _ph < _pm:
+                p_new['us_estimate_high'] = _pm
             new_by_platform[pkey] = p_new
 
     out = {
@@ -313,128 +339,142 @@ def _s3():
     return _S3
 
 
-def _read_snapshot(target_date_iso: str) -> Optional[dict]:
-    key = _S3_DATED.format(date=target_date_iso)
+def _read_key(key: str) -> Optional[dict]:
     try:
         obj = _s3().get_object(Bucket=_S3_BUCKET, Key=key)
         return json.loads(obj['Body'].read().decode('utf-8'))
-    except _s3().exceptions.NoSuchKey:
-        return None
-    except Exception as e:
-        logger.warning("read %s failed: %s", key, e)
+    except Exception:
         return None
 
 
-def _write_snapshot(target_date_iso: str, payload: dict) -> None:
-    key = _S3_DATED.format(date=target_date_iso)
-    body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
-    _s3().put_object(
-        Bucket=_S3_BUCKET, Key=key, Body=body,
-        ContentType='application/json',
-    )
+def _key_exists(key: str) -> bool:
+    try:
+        _s3().head_object(Bucket=_S3_BUCKET, Key=key)
+        return True
+    except Exception:
+        return False
 
 
-def _backup_snapshot(target_date_iso: str, payload: dict) -> None:
-    key = _S3_BACKUP.format(date=target_date_iso)
-    body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+def _write_key(key: str, payload: dict) -> None:
     _s3().put_object(
-        Bucket=_S3_BUCKET, Key=key, Body=body,
-        ContentType='application/json',
-    )
+        Bucket=_S3_BUCKET, Key=key,
+        Body=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+        ContentType='application/json')
+
+
+def load_profiles() -> dict[str, dict]:
+    """Load the reasoned rhythm profiles keyed exactly like the
+    stream_estimates items dict (kind:normtitle). Missing file is not
+    fatal - every item falls back to its hash personality - but the
+    run logs loudly because the reasoned layer is the point."""
+    snap = _read_key(_S3_PROFILES)
+    items = (snap or {}).get('items') or {}
+    if not items:
+        logger.warning("rhythm profiles missing/empty at s3://%s/%s - "
+                        "ALL items will use hash-personality fallback. "
+                        "Run scripts.trends_scrapers.rhythm_profiles "
+                        "first for the reasoned layer.",
+                        _S3_BUCKET, _S3_PROFILES)
+    else:
+        logger.info("loaded %d rhythm profiles (model=%s, generated %s)",
+                     len(items), (snap or {}).get('model'),
+                     (snap or {}).get('generated_at'))
+    return {k: v for k, v in items.items() if isinstance(v, dict)}
 
 
 # ---------------------------------------------------------------------------
 # Per-date driver
 # ---------------------------------------------------------------------------
-def _process_date(target_date_iso: str, *,
+def _process_date(target_date_iso: str, profiles: dict[str, dict], *,
                    dry_run: bool = False,
                    force: bool = False) -> dict[str, Any]:
-    """Apply variation to one dated snapshot. Return a summary dict."""
-    snap = _read_snapshot(target_date_iso)
-    if snap is None:
+    """Render one dated snapshot from its ORIGINAL anchors."""
+    dated_key  = _S3_DATED.format(date=target_date_iso)
+    backup_key = _S3_BACKUP.format(date=target_date_iso)
+
+    current = _read_key(dated_key)
+    if current is None:
         return {'date': target_date_iso, 'status': 'missing', 'items': 0}
 
-    meta = snap.get('meta') or {}
+    meta = current.get('meta') or {}
     if not force and meta.get('_daily_variation_formula_applied') == _FORMULA_VERSION:
         return {'date': target_date_iso, 'status': 'already-applied',
-                'items': len(snap.get('items') or {}),
-                'formula_version': meta.get('_daily_variation_formula_applied')}
+                'items': len(current.get('items') or {})}
 
-    items_in = snap.get('items') or {}
+    # Anchor source: the permanent pre-mutation original when present.
+    original = _read_key(backup_key)
+    src = original if original is not None else current
+    src_label = 'backup' if original is not None else 'current'
+
+    items_in = src.get('items') or {}
     if not isinstance(items_in, dict) or not items_in:
         return {'date': target_date_iso, 'status': 'no-items', 'items': 0}
 
     try:
         tgt = date.fromisoformat(target_date_iso)
-    except Exception as e:
+    except ValueError as e:
         return {'date': target_date_iso, 'status': f'bad-date: {e}',
                 'items': len(items_in)}
 
     items_out: dict[str, dict] = {}
-    n_mutated = 0
-    n_unpriced = 0
-    factor_min = 1.0
-    factor_max = 1.0
-    factor_sum = 0.0
+    n_mutated = n_unpriced = n_profiled = 0
+    factor_min, factor_max, factor_sum = 1.0, 1.0, 0.0
     for key, item in items_in.items():
         if not isinstance(item, dict):
             items_out[key] = item
             continue
-        new_item, factor = _apply_variation_to_item(item, tgt)
+        prof = profiles.get(key)
+        new_item, factor = _apply_variation_to_item(item, tgt, prof)
         items_out[key] = new_item
         if int(item.get('us_estimate') or 0) <= 0:
             n_unpriced += 1
         else:
             n_mutated += 1
+            if prof is not None:
+                n_profiled += 1
             factor_min = min(factor_min, factor)
             factor_max = max(factor_max, factor)
             factor_sum += factor
-
     factor_avg = (factor_sum / n_mutated) if n_mutated else 1.0
 
+    summary = {
+        'date': target_date_iso, 'items': len(items_in),
+        'mutated': n_mutated, 'unpriced': n_unpriced,
+        'profiled': n_profiled, 'source': src_label,
+        'factor_min': round(factor_min, 4),
+        'factor_max': round(factor_max, 4),
+        'factor_avg': round(factor_avg, 4),
+    }
     if dry_run:
-        return {
-            'date': target_date_iso, 'status': 'dry-run',
-            'items': len(items_in),
-            'mutated': n_mutated, 'unpriced': n_unpriced,
-            'factor_min': round(factor_min, 4),
-            'factor_max': round(factor_max, 4),
-            'factor_avg': round(factor_avg, 4),
-        }
+        return {**summary, 'status': 'dry-run'}
 
-    # Backup pre-mutation copy
-    try:
-        _backup_snapshot(target_date_iso, snap)
-    except Exception as e:
-        logger.warning("backup for %s failed (still writing): %s",
-                        target_date_iso, e)
+    # Backup only if absent: the first-ever mutation of this date wrote
+    # the permanent original; v2+ must never clobber it.
+    if original is None and not _key_exists(backup_key):
+        try:
+            _write_key(backup_key, current)
+        except Exception as e:
+            logger.warning("backup for %s failed (still writing): %s",
+                            target_date_iso, e)
 
-    # Compose the new payload. Preserve everything at the top level
-    # except items, target_date (stamped), and meta._daily_variation_*.
-    out = dict(snap)
+    out = dict(src)
     out['items'] = items_out
     out['target_date'] = target_date_iso
-    new_meta = dict(meta)
+    new_meta = dict(src.get('meta') or {})
     new_meta['_daily_variation_formula_applied'] = _FORMULA_VERSION
     new_meta['_daily_variation_applied_at'] = datetime.now(
         timezone.utc).isoformat()
     new_meta['_daily_variation_factor_min'] = round(factor_min, 4)
     new_meta['_daily_variation_factor_max'] = round(factor_max, 4)
     new_meta['_daily_variation_factor_avg'] = round(factor_avg, 4)
-    new_meta['_daily_variation_mutated'] = n_mutated
+    new_meta['_daily_variation_mutated']  = n_mutated
+    new_meta['_daily_variation_profiled'] = n_profiled
     new_meta['_daily_variation_unpriced'] = n_unpriced
+    new_meta['_daily_variation_anchor_source'] = src_label
     out['meta'] = new_meta
 
-    _write_snapshot(target_date_iso, out)
-
-    return {
-        'date': target_date_iso, 'status': 'wrote',
-        'items': len(items_out),
-        'mutated': n_mutated, 'unpriced': n_unpriced,
-        'factor_min': round(factor_min, 4),
-        'factor_max': round(factor_max, 4),
-        'factor_avg': round(factor_avg, 4),
-    }
+    _write_key(dated_key, out)
+    return {**summary, 'status': 'wrote'}
 
 
 # ---------------------------------------------------------------------------
@@ -446,13 +486,10 @@ _DATE_RE = re.compile(r'\d{4}-\d{2}-\d{2}')
 def _daterange(since_iso: str, until_iso: str) -> list[str]:
     d0 = date.fromisoformat(since_iso)
     d1 = date.fromisoformat(until_iso)
-    if d1 < d0:
-        return []
-    out = []
-    cur = d0
+    out, cur = [], d0
     while cur <= d1:
         out.append(cur.isoformat())
-        cur = cur + timedelta(days=1)
+        cur += timedelta(days=1)
     return out
 
 
@@ -464,7 +501,6 @@ def _parse_dates_arg(dates_arg: str) -> list[str]:
             continue
         if not _DATE_RE.fullmatch(t):
             raise ValueError(f'--dates: {t!r} is not YYYY-MM-DD')
-        # Validate parses cleanly
         _ = date.fromisoformat(t)
         out.append(t)
     return out
@@ -475,26 +511,21 @@ def _parse_dates_arg(dates_arg: str) -> list[str]:
 # ---------------------------------------------------------------------------
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description=('Apply formula-based per-day variation to '
-                      'historical dated stream_estimates snapshots. '
-                      'Backfill helper for the '
-                      '"same-day-over-day" defect. Costs $0.'))
+        description=('Render organic per-day variation onto historic '
+                      'dated stream_estimates snapshots from reasoned '
+                      'rhythm profiles. Costs $0.'))
     parser.add_argument('--since', default='',
-                        help='Start date (YYYY-MM-DD, inclusive). '
-                              'Required unless --dates is given.')
+                        help='Start date (YYYY-MM-DD, inclusive).')
     parser.add_argument('--until', default='',
                         help='End date (YYYY-MM-DD, inclusive). '
                               'Defaults to yesterday UTC.')
     parser.add_argument('--dates', default='',
-                        help='Comma-separated ISO dates. Alternative '
-                              'to --since / --until.')
-    parser.add_argument('--dry-run', action='store_true',
-                        help='Report what would change without any '
-                              'S3 write.')
+                        help='Comma-separated ISO dates (alternative '
+                              'to --since/--until).')
+    parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--force', action='store_true',
-                        help='Re-apply the formula even where the '
-                              'sentinel already marks the snapshot '
-                              'as processed.')
+                        help='Re-render even when the sentinel already '
+                              'matches the current formula version.')
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -515,39 +546,41 @@ def main(argv: Optional[list[str]] = None) -> int:
         logger.warning("no dates to process")
         return 0
 
-    logger.info("processing %d date(s): %s .. %s (dry_run=%s, force=%s)",
-                 len(dates), dates[0], dates[-1], args.dry_run, args.force)
+    profiles = load_profiles()
+
+    logger.info("processing %d date(s): %s .. %s (formula=%s, "
+                 "dry_run=%s, force=%s)",
+                 len(dates), dates[0], dates[-1], _FORMULA_VERSION,
+                 args.dry_run, args.force)
 
     summaries: list[dict] = []
     for d in dates:
         try:
-            s = _process_date(d, dry_run=args.dry_run, force=args.force)
+            s = _process_date(d, profiles, dry_run=args.dry_run,
+                               force=args.force)
         except Exception as e:
             logger.exception("failed for %s", d)
             s = {'date': d, 'status': f'ERROR: {type(e).__name__}: {e}'}
         summaries.append(s)
-        logger.info("  %s -> %s (items=%d, mutated=%d, "
-                     "factor_min=%s, factor_max=%s, avg=%s)",
+        logger.info("  %s -> %s (items=%d, mutated=%d, profiled=%d, "
+                     "src=%s, factor min/avg/max=%s/%s/%s)",
                      s.get('date'), s.get('status'),
                      s.get('items', 0), s.get('mutated', 0),
-                     s.get('factor_min'), s.get('factor_max'),
-                     s.get('factor_avg'))
+                     s.get('profiled', 0), s.get('source', '-'),
+                     s.get('factor_min'), s.get('factor_avg'),
+                     s.get('factor_max'))
 
-    # Terminal summary counts
-    wrote     = sum(1 for s in summaries if s.get('status') == 'wrote')
-    already   = sum(1 for s in summaries if s.get('status') == 'already-applied')
-    missing   = sum(1 for s in summaries if s.get('status') == 'missing')
-    no_items  = sum(1 for s in summaries if s.get('status') == 'no-items')
-    dry_runs  = sum(1 for s in summaries if s.get('status') == 'dry-run')
-    errored   = sum(1 for s in summaries
-                    if s.get('status', '').startswith('ERROR'))
+    wrote    = sum(1 for s in summaries if s.get('status') == 'wrote')
+    already  = sum(1 for s in summaries if s.get('status') == 'already-applied')
+    missing  = sum(1 for s in summaries if s.get('status') == 'missing')
+    no_items = sum(1 for s in summaries if s.get('status') == 'no-items')
+    dry      = sum(1 for s in summaries if s.get('status') == 'dry-run')
+    errored  = sum(1 for s in summaries
+                   if str(s.get('status', '')).startswith('ERROR'))
     print(f"\nsummary: wrote={wrote} already-applied={already} "
-          f"missing={missing} no-items={no_items} dry-run={dry_runs} "
+          f"missing={missing} no-items={no_items} dry-run={dry} "
           f"errors={errored} total={len(summaries)}")
-
-    if errored:
-        return 2
-    return 0
+    return 2 if errored else 0
 
 
 if __name__ == '__main__':
