@@ -88,6 +88,8 @@ from typing import Any, Optional
 
 import boto3
 
+from scripts.trends_scrapers import _usage_tap  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
@@ -3736,6 +3738,11 @@ def _build_message_params(item: dict, target_date_iso: Optional[str] = None,
         'model':      model,
         'max_tokens': _WEBSEARCH_MAX_TOKENS,
         'messages':   [{'role': 'user', 'content': prompt}],
+        # metadata.user_id attributes this request to the Trends /
+        # Ranker line in the daily spend email. Rides along on both
+        # the serial messages.create path and the batch path
+        # (_submit_batch below reuses this same param dict).
+        'metadata':   _usage_tap.metadata_dict(),
     }
     if search_needed:
         params['tools'] = [{
@@ -3819,7 +3826,11 @@ def _research_one(item: dict, client,
                               "mid-loop at $%.2f (cap $%.2f). Halting.",
                               spend_monitor.total(),
                               spend_monitor.cap_usd)
+                # Tap even on trip so the accrued cost is on record.
+                _usage_tap.record_call(model, resp)
                 return key, None
+        # Trends / Ranker attribution tap for the daily spend email.
+        _usage_tap.record_call(model, resp)
         text = _extract_response_text(resp)
         parsed = _extract_json_blob(text)
         if not parsed:
@@ -4165,13 +4176,18 @@ def _research_all_batch(items: list[dict],
         model = _model_for_tier(tier)
         if rtype == 'succeeded':
             msg = getattr(result, 'message', None)
-            if spend_monitor is not None and msg is not None:
+            if msg is not None:
                 usage = getattr(msg, 'usage', None)
-                try:
-                    spend_monitor.record_response(usage, model=model,
-                                                    batch=True)
-                except Exception:
-                    pass
+                if spend_monitor is not None:
+                    try:
+                        spend_monitor.record_response(usage, model=model,
+                                                        batch=True)
+                    except Exception:
+                        pass
+                # Trends / Ranker attribution tap for the daily spend
+                # email (batch path prices at Anthropic's 50% batch
+                # discount, forwarded via batch=True in _usage_tap).
+                _usage_tap.record_batch_result(model, usage)
             text   = _extract_response_text(msg) if msg else ''
             parsed = _extract_json_blob(text)
             if not parsed:

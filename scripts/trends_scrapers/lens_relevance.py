@@ -81,6 +81,8 @@ from typing import Any, Optional
 
 import boto3
 
+from scripts.trends_scrapers import _usage_tap  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
@@ -1223,16 +1225,24 @@ def _score_batch(client, lens: dict, batch: list[dict]) -> list[Optional[dict]]:
     try:
         # 4096 tokens gives Claude room to write a real why-string per
         # item (was 2048 which sometimes truncated mid-JSON).
+        # metadata.user_id + client-side _usage_tap.record_call together
+        # attribute this call to the Trends / Ranker line in the daily
+        # spend email (2026-09-03). The _bedrock_scorer shim client
+        # accepts and ignores the metadata kwarg (AWS bills the
+        # invocation, not Anthropic), and its response has no `usage`
+        # attribute so the tap becomes a no-op there.
         resp = client.messages.create(
             model=_CLAUDE_MODEL,
             max_tokens=4096,
             messages=[{'role': 'user', 'content': prompt}],
+            metadata=_usage_tap.metadata_dict(),
             timeout=_TIMEOUT_S,
         )
     except Exception as e:
         logger.info("lens_relevance %s batch (n=%d): %s",
                      lens['id'], len(batch), e)
         return [None] * len(batch)
+    _usage_tap.record_call(_CLAUDE_MODEL, resp)
     text = ''.join(getattr(b, 'text', '') for b in (resp.content or []))
     return _parse_batch(text, len(batch))
 

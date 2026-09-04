@@ -69,6 +69,8 @@ from typing import Any, Optional
 import boto3
 import requests
 
+from scripts.trends_scrapers import _usage_tap  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
@@ -1105,10 +1107,13 @@ def _ask_claude(items: list[dict]) -> dict[str, str]:
             model=_CLAUDE_MODEL,
             max_tokens=_MAX_TOKENS,
             messages=[{'role': 'user', 'content': prompt}],
+            metadata=_usage_tap.metadata_dict(),
         )
     except Exception as e:
         logger.warning("why_trending: anthropic call failed: %s", e)
         return {}
+    # Trends / Ranker attribution tap for the daily spend email.
+    _usage_tap.record_call(_CLAUDE_MODEL, resp)
 
     text = ''
     for block in resp.content or []:
@@ -1246,12 +1251,15 @@ def _websearch_one(name: str, source: str, context: str,
                     'max_uses': _WEBSEARCH_MAX_USES,
                 }],
                 messages=[{'role': 'user', 'content': prompt}],
+                metadata=_usage_tap.metadata_dict(),
                 timeout=_WEBSEARCH_TIMEOUT_S,
             )
         except Exception as e:
             logger.info("why_trending web_search %r attempt %d: %s",
                          name, attempt + 1, e)
             continue
+        # Trends / Ranker attribution tap for the daily spend email.
+        _usage_tap.record_call(_WEBSEARCH_MODEL, resp)
         caption = _extract_websearch_caption(resp.content or [])
         if caption:
             return name, caption

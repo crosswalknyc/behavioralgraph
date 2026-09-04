@@ -105,7 +105,13 @@ class _BedrockMessages:
 
     def create(self, *, model: str, max_tokens: int,
                 messages: list[dict], timeout: int = 120,
-                temperature: float = 0.0) -> _BedrockResponse:
+                temperature: float = 0.0,
+                **_unused: Any) -> _BedrockResponse:
+        # `**_unused` swallows kwargs like `metadata=...` that the
+        # Anthropic client accepts but Bedrock does not use. The
+        # trends_scrapers stack sets metadata.user_id on every request
+        # for the daily spend attribution; Bedrock ignores it (AWS
+        # bills the invocation directly).
         # Coerce Anthropic messages into Bedrock's
         # anthropic_version=bedrock-2023-05-31 shape.  For our
         # use case every message is a plain string user turn.

@@ -76,6 +76,8 @@ from typing import Any, Optional
 
 import boto3
 
+from scripts.trends_scrapers import _usage_tap  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
@@ -492,12 +494,15 @@ def _research_one(item: dict, client) -> tuple[str, Optional[dict]]:
                     'max_uses': _WEBSEARCH_MAX_USES,
                 }],
                 messages=[{'role': 'user', 'content': prompt}],
+                metadata=_usage_tap.metadata_dict(),
                 timeout=_WEBSEARCH_TIMEOUT_S,
             )
         except Exception as e:
             logger.info("headline_estimates %r attempt %d: %s",
                          item['display_title'][:60], attempt + 1, e)
             continue
+        # Trends / Ranker attribution tap for the daily spend email.
+        _usage_tap.record_call(_WEBSEARCH_MODEL, resp)
         text = ''
         for block in resp.content or []:
             if getattr(block, 'type', '') == 'text':
