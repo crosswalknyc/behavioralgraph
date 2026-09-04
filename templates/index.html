@@ -26125,6 +26125,34 @@ https://www.instagram.com/p/..."></textarea>
             #intentIQView .iiq-support-table tbody tr { transition: background 0.12s ease-out; cursor: pointer; }
             #intentIQView .iiq-support-table tbody tr:hover { background: rgba(199,242,62,0.04); }
 
+            /* Inline 'How to read this.' reference for the Audience Response card. */
+            #intentIQView .iiq-help-details { background: #15252A; border: 1px solid #27393D; border-radius: 8px; margin-top: 0.55rem; margin-bottom: 0.1rem; overflow: hidden; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+            #intentIQView .iiq-help-details > summary { list-style: none; cursor: pointer; padding: 0.55rem 0.85rem; font-size: 0.64rem; font-weight: 500; color: #C7F23E; text-transform: uppercase; letter-spacing: 0.1em; display: flex; align-items: center; gap: 0.5rem; user-select: none; transition: background 0.12s ease-out; }
+            #intentIQView .iiq-help-details > summary::-webkit-details-marker { display: none; }
+            #intentIQView .iiq-help-details > summary::before { content: '\25B8'; color: #C7F23E; font-size: 0.7rem; display: inline-block; line-height: 1; transform-origin: 50% 50%; transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1); }
+            #intentIQView .iiq-help-details[open] > summary::before { transform: rotate(90deg); }
+            #intentIQView .iiq-help-details > summary:hover { background: rgba(199,242,62,0.04); }
+            #intentIQView .iiq-help-details > summary:focus { outline: 2px solid #3358FF; outline-offset: -2px; }
+            #intentIQView .iiq-help-body { padding: 0.15rem 0.95rem 0.8rem; border-top: 1px solid rgba(39,57,61,0.6); }
+            #intentIQView .iiq-help-body p { font-size: 0.78rem; color: #9AA09B; line-height: 1.5; margin: 0.6rem 0 0; max-width: 68ch; font-weight: 400; }
+            #intentIQView .iiq-help-body p b { color: #E9E8E1; font-weight: 500; }
+            #intentIQView .iiq-help-body ul { margin: 0.35rem 0 0.1rem; padding-left: 1.15rem; list-style: disc; }
+            #intentIQView .iiq-help-body ul li { font-size: 0.78rem; color: #9AA09B; line-height: 1.5; margin: 0.22rem 0; font-weight: 400; max-width: 66ch; }
+            #intentIQView .iiq-help-body ul li b { color: #E9E8E1; font-weight: 500; }
+            #intentIQView .iiq-help-close { font-size: 0.74rem; color: #797F81; margin-top: 0.75rem; padding-top: 0.6rem; border-top: 1px solid rgba(39,57,61,0.6); font-weight: 400; line-height: 1.5; }
+            #intentIQView .iiq-help-empty-note { font-size: 0.72rem; color: #797F81; font-weight: 400; margin-top: 0.5rem; padding: 0 0.1rem; font-style: italic; line-height: 1.4; }
+            body[data-theme="light"] #intentIQView .iiq-help-details { background: #F3F1E7; border-color: #C9C6BA; }
+            body[data-theme="light"] #intentIQView .iiq-help-details > summary { color: #5E7E12; }
+            body[data-theme="light"] #intentIQView .iiq-help-details > summary::before { color: #5E7E12; }
+            body[data-theme="light"] #intentIQView .iiq-help-details > summary:hover { background: rgba(94,126,18,0.06); }
+            body[data-theme="light"] #intentIQView .iiq-help-body { border-top-color: rgba(201,198,186,0.7); }
+            body[data-theme="light"] #intentIQView .iiq-help-body p { color: #5C6560; }
+            body[data-theme="light"] #intentIQView .iiq-help-body p b { color: #0C1618; }
+            body[data-theme="light"] #intentIQView .iiq-help-body ul li { color: #5C6560; }
+            body[data-theme="light"] #intentIQView .iiq-help-body ul li b { color: #0C1618; }
+            body[data-theme="light"] #intentIQView .iiq-help-close { color: #666966; border-top-color: rgba(201,198,186,0.7); }
+            body[data-theme="light"] #intentIQView .iiq-help-empty-note { color: #666966; }
+
             #intentIQView .iiq-show-all-btn { display: block; width: 100%; margin-top: 0.55rem; padding: 0.65rem 0.9rem; background: transparent; border: 1px solid rgba(59,61,56,0.55); border-radius: 8px; color: #C7F23E; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; transition: background 0.12s ease-out; }
             #intentIQView .iiq-show-all-btn:hover { background: rgba(199,242,62,0.06); }
             #intentIQView .iiq-show-all-btn:focus { outline: 2px solid #3358FF; outline-offset: 2px; }
@@ -28825,13 +28853,18 @@ https://www.instagram.com/p/..."></textarea>
                 var displayAudRows = showAllAud ? rows : rows.slice(0, IIQ_AUD_DEFAULT_ROWS);
                 var useInfo = _iiqPhaseUsesInfo(asOf, opening);
                 var responseHeader = useInfo ? 'Info-seek %' : 'Ticketing %';
-                var responseTip = 'Primary funnel metric shifts at T-14 (14 days pre-launch): info-seek pre, ticketing post. The other stage is available in the row expand.';
-                var indexTip = 'Cohort ' + (useInfo ? 'info-seek' : 'ticketing') + ' % divided by the campaign\'s weighted-mean rate. Strong at or above 1.3x, On-pace 0.7 to 1.3x, Soft below 0.7x.';
-                var fitTip = 'Sweet spot = high reach + high affinity. Under-served = high affinity but under-exposed (the responding-but-under-served bucket). Broad = reaching but not converting differentially. Off-target = neither.';
+                // Column tooltips mirror the plain-English paragraphs in the
+                // 'How to read this.' collapsible directly below the intro line,
+                // so a hover surfaces the same explanation without opening the
+                // reference panel.
+                var overlapTip = 'Share of this cohort exposed to the campaign so far. The ~N reached line under the percent shows the raw person count.';
+                var responseTip = 'Of the exposed viewers in this cohort, share who took the downstream action. Label switches at T-14, 14 days pre-launch: info-seek before, ticketing after.';
+                var indexTip = 'How much stronger this cohort\'s ' + (useInfo ? 'info-seek' : 'ticketing') + ' rate is than a random slice of Gen Pop. Strong sits at 1.3x or higher, On pace 0.7 to 1.3x, Soft below 0.7x.';
+                var fitTip = 'Sweet spot: high reach and high affinity, already hitting and converting. Under-served: high affinity but low reach, respond well when reached, shift spend here. Broad: high reach and on-pace affinity, converting at baseline. Off-target: low reach and low affinity, skip.';
 
                 var headerHtml = '<thead><tr>'
                     + _iiqAudTh('Audience',           'audience', 'left')
-                    + _iiqAudTh('Overlap %',          'overlap',  'right')
+                    + _iiqAudTh('Overlap %',          'overlap',  'right', overlapTip)
                     + _iiqAudTh(responseHeader,       'response', 'right', responseTip)
                     + _iiqAudTh('vs Gen Pop index',   'index',    'right', indexTip)
                     + _iiqAudTh('Fit',                'fit',      'right', fitTip)
@@ -28927,6 +28960,17 @@ https://www.instagram.com/p/..."></textarea>
                         : '<button type="button" class="iiq-show-all-btn" onclick="iiqToggleAudienceShowAll()">Show all ' + rows.length + ' cohorts</button>';
                 }
 
+                // Under-served nudge: if the visible top-N holds no
+                // Under-served cohort and there IS a tail to inspect
+                // (progressive-disclosure state, more rows than shown),
+                // surface a single-line hint below the table pointing at
+                // Response % / Show all. Silent otherwise.
+                var noUnderservedInVisible = displayAudRows.every(function(r) { return r && r.fit !== 'underserved'; });
+                var hasTailToInspect = !showAllAud && rows.length > IIQ_AUD_DEFAULT_ROWS;
+                var emptyStateNudgeAud = (rows.length > 0 && noUnderservedInVisible && hasTailToInspect)
+                    ? '<div class="iiq-help-empty-note">No under-served cohorts in the top ' + IIQ_AUD_DEFAULT_ROWS + '. Sort by Response % or click Show all to inspect the tail.</div>'
+                    : '';
+
                 var subheadRightAud = visibleCountAud
                     ? ('<div class="iiq-support-meta">' + visibleCountAud + ' of ' + rows.length + ' at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '</div>')
                     : ('<div class="iiq-support-meta">0 at ' + escapeHtml(_iiqFmtAsOfDate(asOf)) + '</div>');
@@ -28938,6 +28982,27 @@ https://www.instagram.com/p/..."></textarea>
                     +   '<div class="iiq-support-eyebrow">Audience response</div>'
                     +   '<div class="iiq-support-title">Cohorts responding, and cohorts responding but under-served.</div>'
                     +   '<div class="iiq-support-intro">Ranked by ' + escapeHtml(sortLabel) + ', ' + escapeHtml(dirLabel) + '. Click any header to re-sort. Click a row to see which assets drove this cohort\'s response.</div>'
+                    // Inline 'How to read this.' reference. Closed by
+                    // default. Signal Green eyebrow-style summary with a
+                    // rotating chevron; body on Slate Teal panel with one
+                    // paragraph per column and the four Fit bucket
+                    // definitions. Sentence-case copy, no em dashes.
+                    +   '<details class="iiq-help-details">'
+                    +     '<summary><span>How to read this.</span></summary>'
+                    +     '<div class="iiq-help-body">'
+                    +       '<p><b>Overlap %.</b> What share of this cohort has been exposed to the campaign so far. The ~N reached line under the percent shows the raw person count.</p>'
+                    +       '<p><b>Response %.</b> Of the exposed viewers in the cohort, what share took the downstream action. The label switches at T-14, 14 days pre-launch: info-seek before, ticketing after.</p>'
+                    +       '<p><b>Vs Gen Pop index.</b> How much stronger this cohort\'s response is than a random slice of Gen Pop. Strong sits at 1.3x or higher, on pace lands near baseline (0.7 to 1.3x), soft under-indexes below 0.7x.</p>'
+                    +       '<p><b>Fit.</b> The strategic label. Combines reach and affinity into one of four buckets:</p>'
+                    +       '<ul>'
+                    +         '<li><b>Sweet spot.</b> High reach and high affinity. Already hitting them, already responding.</li>'
+                    +         '<li><b>Under-served.</b> High affinity but low reach. They respond when they see the content, but not enough of them are being reached. This is where to shift spend.</li>'
+                    +         '<li><b>Broad.</b> High reach and on-pace affinity. Reaching them, converting at baseline.</li>'
+                    +         '<li><b>Off-target.</b> Low reach and low affinity. Skip.</li>'
+                    +       '</ul>'
+                    +       '<div class="iiq-help-close">Sort by Fit (default) to surface Under-served cohorts first, or sort by Response % to see raw conversion strength.</div>'
+                    +     '</div>'
+                    +   '</details>'
                     + '</div>'
                     + subheadRightAud
                     + '</div>'
@@ -28946,6 +29011,7 @@ https://www.instagram.com/p/..."></textarea>
                     + headerHtml + bodyHtml
                     + '</table>'
                     + '</div>'
+                    + emptyStateNudgeAud
                     + toggleHtmlAud;
                 host.style.display = '';
             }
