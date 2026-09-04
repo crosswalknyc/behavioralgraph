@@ -20086,7 +20086,7 @@ def _send_missing_hostmap_email(subject_name: str, missing: list[dict]) -> None:
         _SRC_LABELS = {
             'affiliations': '🎬 Persona-affiliation brands',
             'gate_kept_not_in_hostmap': '✅ Kept in profile (not in hostmap yet - mapping proposed in attached CSV)',
-            'gate_not_in_hostmap': '🛡 Hostmap-gate drops (purchase category - excluded until mapping lands)',
+            'gate_not_in_hostmap': '🛡 Hostmap-gate drops (row missing a category label; held for next run)',
             'gate_wrong_category_dup': '🛡 Hostmap-gate drops (wrong category, canonical already filled)',
             'audit_taxonomy_gap': '🗂 Auditor-flagged taxonomy gaps (brand never appeared - please add to hostmap)',
             '': '📋 Other',
@@ -31115,8 +31115,15 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
     # 2026-08-27 (Jenna): gap brands are no longer dropped. The gap email
     # now carries a proposed-mapping CSV, so a not-in-hostmap brand KEEPS
     # its reasoned BP in the profile (and is inserted into Gen Pop at the
-    # end of the run). Exception: MOST PURCHASED BRANDS and its purchase
-    # mirrors stay strictly hostmap-gated per rule 0b.
+    # end of the run).
+    # 2026-09-03 amendment (Jenna, verbatim: "but they are all good
+    # suggestions and should ship and be added to the profile and the
+    # genpop file if the agent thinks it belongs in the profile"): the
+    # purchase family (MPB + rule 3b mirrors) joins the keep + propose
+    # flow. keep_allowed_for_column now returns True for every non-empty
+    # column, so a gap brand the reasoning agent scored anywhere ships
+    # at its reasoned BP; rule 3b same-value mirror coherence is
+    # preserved by the Gen Pop insert (mirror-aware).
     try:
         from migration.hostmap_gap_mapping import (
             already_mapped as _gap_already_mapped,
@@ -31239,9 +31246,11 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
                     silent_drops.append(dict(entry, value=_covered))
                     continue
             else:
-                # 2026-08-27: KEEP the row at its reasoned BP when the
-                # column is outside the purchase family. Casing is
-                # canonicalized to match the proposed mapping CSV row.
+                # 2026-08-27: KEEP the row at its reasoned BP under the
+                # keep + propose flow. 2026-09-03 (Jenna): the purchase
+                # family is now included, so every non-empty column
+                # goes down this path. Casing is canonicalized to match
+                # the proposed mapping CSV row.
                 if (_gap_keep_allowed is not None
                         and _gap_keep_allowed(cat)):
                     try:
@@ -31266,7 +31275,10 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
                         except Exception:
                             pass
                     continue
-                # Purchase family (rule 0b): still strictly gated - drop.
+                # Empty column string or gap-keep unavailable: fall back
+                # to the pre-2026-08-27 drop. This branch is rare (only
+                # when the row has a blank Column) and preserved as a
+                # safety net so a malformed frame never crashes the gate.
                 drop_idx.append(idx)
                 drop_log.append(entry)
                 continue
@@ -31327,7 +31339,7 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
     n_kept = len(keep_log)
     silent_label = f", {n_silent} silent (merged/deprecated)" if n_silent else ""
     print(f"   🛡  hostmap gate: dropped {len(drop_idx)} rows "
-          f"({n_a} not-in-hostmap purchase-family, {n_b} wrong-category dups{silent_label}), "
+          f"({n_a} not-in-hostmap blank-column, {n_b} wrong-category dups{silent_label}), "
           f"moved {n_moved} wrong-category rows to canonical category, "
           f"kept {n_kept} gap brand(s) at reasoned BP (mapping proposed)")
     if keep_log:
@@ -31371,7 +31383,8 @@ def _enforce_hostmap_category_gating(df, *, project_name: str = '',
                         'value': d['value'],
                         'type': 'agent_inserted_unmapped_brand',
                         'evidence': f'agent placed in {d["category"]} at BP {d["bp"]:.2f}; '
-                                    f'not in reference.host_mapping; purchase category stays excluded until mapping lands',
+                                    f'not in reference.host_mapping; held for the next run because '
+                                    f'the row is missing a category label',
                         'source': 'gate_not_in_hostmap',
                     })
                 else:
