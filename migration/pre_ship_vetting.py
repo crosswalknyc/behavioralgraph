@@ -584,9 +584,18 @@ def _youth_share(demo_summary):
     return 0.0
 
 
-def _deterministic_prescan(df, subject, s3_key, genpop_map, verbose=True):
+def _deterministic_prescan(df, subject, s3_key, genpop_map, verbose=True,
+                           s3_client=None):
     """All-local scan. Returns the facts dict fed to the reasoner and
-    the ledger. Never raises; partial results carry an 'errors' list."""
+    the ledger. Never raises; partial results carry an 'errors' list.
+
+    2026-09-04 (test-mock leak fix): threads `s3_client` through to
+    `scan_frame_for_constants` so a FakeS3() mock in the test harness
+    is honored instead of the scanner silently falling back to a live
+    boto3 client and pulling real ledger rows (which downgraded PASS
+    verdicts to BORDERLINE in the test suite). Production is unchanged:
+    callers still pass the real `s3c` resolved in `run_pre_ship_vetting`.
+    """
     facts = {
         "benchmark_candidates": [],
         "genpop_gaps": {"n_brand_rows": 0, "n_missing": 0, "examples": []},
@@ -749,7 +758,7 @@ def _deterministic_prescan(df, subject, s3_key, genpop_map, verbose=True):
                 scan_frame_for_constants,
             )
         facts["cross_file_constants"] = scan_frame_for_constants(
-            df, subject, s3_key, cols, genpop_map)
+            df, subject, s3_key, cols, genpop_map, s3_client=s3_client)
     except Exception as e:
         facts["errors"].append(f"cross-file constant scan: {e}")
 
@@ -2112,7 +2121,7 @@ def run_pre_ship_vetting(df, subject, s3_key, *, category=None,
                                              verbose=verbose)
 
         facts = _deterministic_prescan(df, subject, key, gp_map,
-                                       verbose=verbose)
+                                       verbose=verbose, s3_client=s3c)
         report["prescan"] = {
             "benchmark_candidates": len(facts["benchmark_candidates"]),
             "genpop_missing": facts["genpop_gaps"]["n_missing"],
