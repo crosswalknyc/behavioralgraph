@@ -10112,8 +10112,13 @@ def strip_reddit_from_social_media(df, subject, verbose=True):
             break
 
     df = df.drop(index=sm_idx).reset_index(drop=True)
-    df = _renormalize_category(df, "SOCIAL MEDIA", bp_col, cs_col,
-                               raw_col, proj_col, sample_size)
+    # SOCIAL MEDIA is NOT a demographic (rule #3) so we don't renormalize
+    # its BP total to 100. But dropping a row DOES change the category
+    # denominator, so sibling Category Share values are now stale. The
+    # StringDtype-safe helper _recompute_cs_for_cat recomputes CS ONLY.
+    # Raw + Projection on the survivors are BP*sample_size/100 and
+    # don't change - no need to touch them.
+    df = _recompute_cs_for_cat(df, "SOCIAL MEDIA", bp_col, cs_col)
 
     moved = False
     if not ap_exists and app_col_spelling and best_bp > 0:
@@ -10132,12 +10137,11 @@ def strip_reddit_from_social_media(df, subject, verbose=True):
                 ignore_index=True,
             )
             new_idx = int(df.index[-1])
-            # _set_bp recomputes BP/CS/Raw/Proj coherently.
+            # _set_bp writes BP/Raw/Proj and internally recomputes CS
+            # for the whole APP/PLATFORM category via the StringDtype-
+            # safe _recompute_cs_for_cat helper. No second pass needed.
             df = _set_bp(df, new_idx, best_bp, bp_col, cs_col,
                          raw_col, proj_col, sample_size)
-            df = _renormalize_category(df, app_col_spelling, bp_col,
-                                       cs_col, raw_col, proj_col,
-                                       sample_size)
             moved = True
         else:
             if verbose:
