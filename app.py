@@ -39748,9 +39748,10 @@ def list_journey_iq():
       * Other users with Digital Journey IQ access (via role, the standalone
         ``has_journey_iq_access`` flag, or Analysis IQ + ``journey_iq``
         module) see runs filtered by their per-user
-        ``allowed_journey_iq_runs`` list. ``['*']``, missing, or empty
+        ``allowed_journey_iq_runs`` list. ``['*']`` or missing
         defaults to "see everything" so existing users keep access until
-        an admin explicitly gates them.
+        an admin explicitly gates them. An explicit list (including
+        empty ``[]``) is the allow-list.
       * Users without the feature are blocked at the door.
 
     Archived runs (under ``journey-iq/archive/``) are hidden by default.
@@ -39771,8 +39772,7 @@ def list_journey_iq():
 
         # Optional admin-only archive include
         include_archive = (request.args.get('include_archive') or '').lower() in ('1', 'true', 'yes')
-        role = (user or {}).get('role')
-        is_admin = role in ('admin', 'super_admin')
+        is_admin, allow_all, _allowed = _user_jiq_run_access(user)
         archived_runs = []
         if include_archive and is_admin:
             archived_runs = _jiq.list_archived_runs(s3_client, limit=200)
@@ -39787,6 +39787,9 @@ def list_journey_iq():
             'archived_runs': archived_runs,
             'archive_visible': bool(archived_runs) or (include_archive and is_admin),
             'is_admin':      is_admin,
+            # Frontend uses this to hide baked-in demo cards when the
+            # user has an explicit allow-list (cloak included).
+            'allow_all':     bool(is_admin or allow_all),
         })
     except Exception as e:
         return jsonify({'success': True, 'runs': [], 'archived_runs': [], 'error': str(e)})

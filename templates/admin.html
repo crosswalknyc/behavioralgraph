@@ -3831,7 +3831,7 @@
                                         <span>ALL JOURNEY IQ RUNS</span>
                                     </label>
                                     <button type="button" class="btn btn-small btn-secondary" onclick="restoreJourneyIqRunDefaults()">Restore Defaults</button>
-                                    <small style="color:var(--text-secondary);font-size:0.68rem;">Pick which journeys this user can open. Uncheck "ALL" to gate.</small>
+                                        <small style="color:var(--text-secondary);font-size:0.68rem;">Uncheck ALL, then check only the journeys they can open.</small>
                                 </div>
                                 <div style="margin-bottom:0.5rem;">
                                     <input type="text" id="journeyIqRunsSearchInput" placeholder="Search journeys (project, target)..." oninput="filterJourneyIqRunsList()" style="width:100%;padding:0.35rem 0.6rem;background:var(--bg-input);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);font-size:0.8rem;">
@@ -12824,14 +12824,13 @@
             if (!allCb) return;
             _jiqRunIsAll = !!allCb.checked;
             if (_jiqRunIsAll) {
-                // ALL selected → drop the explicit list; user sees every run.
                 _jiqRunSelected = new Set();
             } else {
-                // Switching from ALL → explicit. Pre-populate with everything
-                // currently visible so unchecking ALL doesn't immediately
-                // revoke access. Admin then unchecks the ones they want gated.
-                const runs = window._jiqAdminRuns || [];
-                _jiqRunSelected = new Set(runs.map(r => r.key).filter(Boolean));
+                // Match Profile IQ Run Access: uncheck ALL → start empty,
+                // then check the journeys to grant. Pre-selecting every
+                // run made "I picked Landman and Fandango" still save
+                // the whole catalog.
+                _jiqRunSelected = new Set();
             }
             _renderJourneyIqRunsList();
         }
@@ -12906,10 +12905,11 @@
 
         async function populateJourneyIqRunsCheckboxes(allowed) {
             // `allowed` = user.allowed_journey_iq_runs:
-            //   undefined / null / ['*'] / []  →  default-open (ALL)
-            //   array of keys                  →  explicit allow-list
+            //   undefined / null / ['*']  →  default-open (ALL)
+            //   []                        →  explicit zero (product on, no journeys)
+            //   array of keys             →  explicit allow-list
             await loadJourneyIqRunsForAdmin();
-            if (!Array.isArray(allowed) || allowed.length === 0 || allowed.includes('*')) {
+            if (!Array.isArray(allowed) || allowed.includes('*')) {
                 _jiqRunIsAll = true;
                 _jiqRunSelected = new Set();
             } else {

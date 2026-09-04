@@ -73206,6 +73206,7 @@ https://www.instagram.com/p/..."></textarea>
                 .then(function(data) {
                     var runs     = (data && data.runs) || [];
                     var archived = (data && data.archived_runs) || [];
+                    window.__jiqAllowAll = !!(data && (data.is_admin || data.allow_all));
 
                     var opts = ['<option value="">- pick a past run -</option>'];
 
@@ -73321,7 +73322,11 @@ https://www.instagram.com/p/..."></textarea>
                     }
 
                     CATEGORIES.forEach(function(cat) {
-                        var demos = DEMO_CARDS[cat.id] || [];
+                        // Demo cards are pitch payloads baked into the page.
+                        // Only users with default-open / admin access see them;
+                        // an explicit allow-list (e.g. Landman + Fandango) must
+                        // not still list Netflix, UFC, neurotrophic demos, etc.
+                        var demos = window.__jiqAllowAll ? (DEMO_CARDS[cat.id] || []) : [];
                         var s3    = byCategory[cat.id] || [];
                         if (!demos.length && !s3.length) return;
                         opts.push('<optgroup label="' + cat.label + '">');
@@ -73370,6 +73375,7 @@ https://www.instagram.com/p/..."></textarea>
         // for any of the always-available pitch-demo keys, or null when
         // the key is a normal backend run that should fetch as usual.
         function _jiqMaybeHydrateDemoRun(key) {
+            if (!window.__jiqAllowAll) return null;
             // Neurotrophic Drinks (CPG brand category) — 8 consumer
             // segment digital journeys, each rendered by the same
             // renderJourneyIqNeuroSegment renderer against the
