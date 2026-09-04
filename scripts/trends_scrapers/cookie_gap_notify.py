@@ -276,13 +276,15 @@ def notify_cookie_gap(source: str, domain: str,
 #
 # Deduped one email per UTC day (all missing files roll up into a single
 # message; adding another file same day gets suppressed). Recipients are
-# jenna@ + liz@, distinct from the cookie-gap recipients (jenna@ + jessie@)
-# because scraper directory drift is an infrastructure signal, not a
-# credentials-donation ask.
+# jenna@ + jessie@. Scraper directory drift is an infrastructure signal,
+# not a credentials-donation ask; the recipient list matches the other
+# failure / system alerts (2026-09-03 Jenna: failure/system emails go
+# to jenna + jessie only; no liz).
 # ---------------------------------------------------------------------------
+# 2026-09-03 (Jenna): failure/system emails go to jenna + jessie only; no liz
 _DRIFT_RECIPIENTS = [
     "jenna@crosswalknyc.com",
-    "liz@crosswalknyc.com",
+    "jessie@crosswalknyc.com",
 ]
 
 
