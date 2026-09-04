@@ -35,7 +35,7 @@ import os
 import socket
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 SCRAPERS = [
@@ -273,6 +273,95 @@ def _write_index(results: list[dict]) -> None:
         logging.warning("run_all: failed to write _index.json: %s", e)
 
 
+# ---------------------------------------------------------------------------
+# Freshness verify + alert.
+#
+# The whole Trends IQ dashboard reads `latest/stream_estimates.json` for
+# every daily audience chip. If today's cron runs but produces zero fresh
+# research (Anthropic credit exhausted, transient rate-limit, etc.), the
+# in-scraper safety net preserves the prior snapshot rather than clobbering
+# with an empty file, and the summary column shows a plausible-looking
+# elapsed time. That's the right thing to do for the data, but it means
+# the dashboard silently sits on yesterday's numbers with no operator
+# signal until a user complains ("today's numbers are the same as
+# yesterday"). This verify runs at the end of every cron and pages
+# jenna@ + jessie@ if `target_date` on `latest/` isn't yesterday UTC.
+# System alert, never Liz - matches `profile-iq-pipeline-rules.mdc` #6
+# ("Failure / system alerts -> jenna@, jessie@ ONLY").
+# ---------------------------------------------------------------------------
+
+def _verify_stream_estimates_freshness() -> str | None:
+    """Return None if `latest/stream_estimates.json` `target_date` equals
+    yesterday UTC, else a short operator string describing the drift."""
+    yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
+    try:
+        import boto3  # imported lazily so unit tests don't need it
+        s3 = boto3.client('s3')
+        obj = s3.get_object(
+            Bucket=S3_BUCKET,
+            Key='trends_iq_snapshots/latest/stream_estimates.json',
+        )
+        data = json.loads(obj['Body'].read())
+        td = data.get('target_date')
+        item_count = len(data.get('items') or {})
+        last_mod = obj.get('LastModified')
+        if td != yesterday:
+            return (
+                f"target_date={td!r} (expected {yesterday!r}, yesterday UTC). "
+                f"items={item_count}. lastMod={last_mod!s}. "
+                "Dashboard will keep serving whatever is on latest/ until "
+                "the next successful cron. Investigate: /var/log/trends_scrapers.log"
+            )
+        return None
+    except Exception as e:  # pragma: no cover - best-effort verify
+        return f"freshness check crashed: {type(e).__name__}: {e}"
+
+
+def _send_freshness_alert(msg: str) -> None:
+    """Send a system alert to jenna@ + jessie@ on freshness drift.
+
+    Never Liz (workspace rule: system alerts go to jenna+jessie only).
+    Best-effort - SES failures log and never raise so a bad SES config
+    can't cascade the cron exit.
+    """
+    try:
+        import boto3
+        ses = boto3.client('ses', region_name='us-east-2')
+        subject = "Trends: stream_estimates target_date drift"
+        body_text = (
+            "The daily Trends IQ cron completed but the latest "
+            "stream_estimates snapshot on S3 does not reflect yesterday UTC.\n"
+            "\n"
+            f"Detail: {msg}\n"
+            "\n"
+            "What this means for users: every FAST / streaming / podcast / "
+            "book audience chip on the dashboard is still reading whatever "
+            "target_date lives on latest/. If that target_date is the same "
+            "one served yesterday, users see today's numbers as identical "
+            "to yesterday's numbers for the same window.\n"
+            "\n"
+            "Log: /var/log/trends_scrapers.log on Hetzner (168.119.215.48).\n"
+            "Manual re-run:\n"
+            "  cd /root/finished_codes/bg-webapp && \\\n"
+            "  set -a && . /root/finished_codes/.env.trends_scrapers && \\\n"
+            "  set +a && python3 -m scripts.trends_scrapers.stream_estimates"
+        )
+        ses.send_email(
+            Source='BehavioralGraph <jenna@crosswalknyc.com>',
+            Destination={'ToAddresses': [
+                'jenna@crosswalknyc.com',
+                'jessie@crosswalknyc.com',
+            ]},
+            Message={
+                'Subject': {'Data': subject},
+                'Body': {'Text': {'Data': body_text}},
+            },
+        )
+        logging.info("run_all: freshness drift alert sent to jenna+jessie")
+    except Exception as e:
+        logging.warning("run_all: freshness alert SES send failed: %s", e)
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description='Trends IQ daily scraper orchestrator')
     p.add_argument('--only',   default='', help='comma-separated source keys to run')
@@ -431,6 +520,28 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:
         logging.warning("run_all: dashboard cache warm failed: %s", e)
 
+    # Verify the dashboard is actually pointed at fresh research for the
+    # completed day. If not, page jenna+jessie (system alert). Runs on
+    # every cron invocation, not just the daily 12:00 UTC one - a manual
+    # rerun that leaves latest/ pointed at the wrong day is also worth
+    # paging on. Gated on `--only stream_estimates` NOT being set OR
+    # stream_estimates being in the run: if the caller intentionally
+    # skipped stream_estimates (--skip stream_estimates), don't alert.
+    only_arg = set(_s.strip() for _s in (args.only or '').split(',') if _s.strip())
+    skip_arg = set(_s.strip() for _s in (args.skip or '').split(',') if _s.strip())
+    stream_est_ran = (not only_arg or 'stream_estimates' in only_arg) and \
+                     'stream_estimates' not in skip_arg
+    if stream_est_ran:
+        try:
+            fresh_msg = _verify_stream_estimates_freshness()
+            if fresh_msg:
+                print(f"FRESHNESS DRIFT: {fresh_msg}")
+                _send_freshness_alert(fresh_msg)
+            else:
+                print("freshness: latest/stream_estimates.json target_date = yesterday UTC")
+        except Exception:
+            logging.exception("run_all: freshness verify crashed")
+
     total_elapsed = time.time() - started
     print(f"\ntrends scrapers complete in {total_elapsed:.1f}s")
     print(f"{'source':<12} {'kind':<9} {'count':>6}  {'elapsed':>8}  error")
@@ -441,7 +552,14 @@ def main(argv: list[str] | None = None) -> int:
         err = r.get('error') or ''
         if err:
             fail_count += 1
-        count = len(r.get('national') or [])
+        # Non-meta scrapers put their items in `national`. Meta scrapers
+        # (stream_estimates, headline_estimates, why_trending) return
+        # `items` (a dict) and expose the row count as `count` while
+        # leaving `national` empty. Read `count` first so the summary
+        # column reflects what was actually written to S3; without this
+        # a 7,132-item meta write shows as "0" in the log and looks
+        # indistinguishable from a total failure.
+        count = int(r.get('count') or 0) or len(r.get('national') or [])
         kind = r.get('kind') or ''
         # Retailers/streaming with 0 items are always cookie-donation
         # candidates. Social sources (including the old TikTok CC

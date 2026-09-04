@@ -1478,6 +1478,34 @@ def _daily_prompt_preface(target_date_iso: str) -> str:
         "State the day-of-week factor you applied when it materially "
         "differs from 1.0 in your `method` field.\n"
         "\n"
+        "DAY-SPECIFIC DIFFERENTIATION (HARD RULE):\n"
+        "Public daily audience data does not exist for every item - "
+        "for long-tail FAST channels, mid-tier podcasts, non-charting "
+        "songs, and stable book / comic entries you will rarely find "
+        "a direct daily citation for the target day. That is expected. "
+        "It does NOT license returning yesterday's number verbatim. "
+        "Two adjacent days are almost never truly identical when you "
+        "account for: (a) the day-of-week factor above, (b) the "
+        "target day's specific programming rotation (linear FAST "
+        "channels run 7-14 day loops; SVOD releases stack on Fri; new "
+        "podcast episodes drop Mon-Wed for most rails; live sports / "
+        "news events shift tune-in), (c) known events / holidays / "
+        "breaking-news beats on the target day itself, (d) week-over-"
+        "week trend the item is riding (climbing, cooling, flat "
+        "consolidating), (e) US audience seasonal pattern (back-to-"
+        "school in early Sep, holiday drop, mid-summer travel dip). "
+        "If a PREVIOUS-DAY REFERENCE block is provided below, treat it "
+        "as the anchor you are moving off of. Reason about what makes "
+        "the target day different, then produce a number that reflects "
+        "that reasoning. Only return a value equal to the previous "
+        "day's when you can name the SPECIFIC programming reason "
+        "(e.g., 'this FAST channel's public rotation ran identical "
+        "Mon/Tue blocks per its published lineup'; 'holiday observed "
+        "the same way both days'). Absent such a reason, produce a "
+        "distinct estimate that reflects genuine day-specific factors. "
+        "State the differentiating factors used in the `day_specificity` "
+        "field of the JSON output.\n"
+        "\n"
     )
 
 
@@ -1644,6 +1672,14 @@ _PROMPT_HEADER = (
     "for each platform, how you handled gaps, how conservative your "
     "final number is, day-of-week factor applied if it materially "
     "differs from 1.0>,\n"
+    "    \"day_specificity\":   <string, 1-2 sentences: what makes "
+    "the target day different from the previous day for this item - "
+    "day-of-week programming shift, rotation-cycle position, known "
+    "event / holiday / news beat, week-over-week trend, seasonal "
+    "pattern. If you concluded the two days would land at exactly "
+    "the same audience size, state the SPECIFIC programming reason "
+    "here (e.g., 'FAST rotation ran identical Mon/Tue blocks per "
+    "published lineup'). Never leave empty.>,\n"
     "    \"sources\":           [<url1>, <url2>, ...]   // 1-4 URLs actually consulted\n"
     "  }\n"
 )
@@ -3255,6 +3291,32 @@ def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
             datetime.now(timezone.utc).date() - timedelta(days=1)
         ).isoformat()
 
+    # PREVIOUS-DAY REFERENCE block. Stamped onto the item upstream
+    # in `fetch()` by reading the dated snapshot for {target_date_iso -
+    # 1 day}. When present, this is what Claude anchors day-specific
+    # reasoning off of - it must produce a differentiated number
+    # unless it can name the specific programming reason two adjacent
+    # days would land at the same audience size (see the DAY-SPECIFIC
+    # DIFFERENTIATION hard rule in `_daily_prompt_preface`).
+    prev_ref = ''
+    prev_est = item.get('_prev_day_estimate')
+    prev_date = item.get('_prev_day_date') or ''
+    if prev_est and prev_date:
+        prev_ref = (
+            f'\nPREVIOUS-DAY REFERENCE (anchor for day-specific reasoning):\n'
+            f'  Date: {prev_date}\n'
+            f'  This item\'s total US audience on {prev_date}: '
+            f'{int(prev_est):,}\n'
+            f'Your task: reason about what makes {target_date_iso} '
+            f'different from {prev_date} for THIS item, then produce a '
+            f'number that reflects that reasoning. Two adjacent days are '
+            f'almost never truly identical; return the previous number '
+            f'verbatim ONLY when a specific programming reason justifies '
+            f'it (state that reason in `day_specificity`). Otherwise '
+            f'produce a distinct estimate that reflects the differentiating '
+            f'factors.\n'
+        )
+
     return (
         _daily_prompt_preface(target_date_iso)
         + _PROMPT_HEADER
@@ -3265,6 +3327,7 @@ def _build_prompt(item: dict, target_date_iso: Optional[str] = None) -> str:
         + '\n' + item_line
         + f'\nCHART CONTEXT (rails observed for {target_date_iso}): '
         + f'{chart_str}\n'
+        + prev_ref
         + f'\nSUGGESTED SEARCH QUERY (feel free to refine): {query}\n\n'
         + 'JSON output:'
     )
@@ -3651,6 +3714,26 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
         method = (method + ' [clamped: raw aggregate exceeded per-kind '
                             'sanity ceiling]').strip()
 
+    # day_specificity: mandatory audit field describing what makes the
+    # target day different from the previous day for this item. When
+    # a PREVIOUS-DAY REFERENCE was stamped on the item and the returned
+    # us_estimate exactly matches the previous day's value, log an
+    # audit warning so we can see whether Claude is ignoring the
+    # differentiation directive. NO python-side jitter is applied -
+    # the number Claude returned is the number that ships. This is
+    # a diagnostic, not an enforcement.
+    day_specificity = (parsed.get('day_specificity') or '').strip()
+    prev_day_est = item.get('_prev_day_estimate')
+    prev_day_date = item.get('_prev_day_date') or ''
+    if prev_day_est and int(agg_mid) == int(prev_day_est):
+        logger.info(
+            "stream_estimates day-specificity: %r (kind=%s) returned "
+            "us_estimate=%d matching previous-day (%s) verbatim. "
+            "Claude reason: %r",
+            item.get('display_title'), kind, agg_mid,
+            prev_day_date, day_specificity or '(none supplied)',
+        )
+
     return {
         'kind':             kind,
         'display_title':    item['display_title'],
@@ -3666,6 +3749,9 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
                               or _default_unit_for_kind(kind),
         'confidence':       conf,
         'method':           method,
+        'day_specificity':  day_specificity,
+        'prev_day_estimate': int(prev_day_est) if prev_day_est else None,
+        'prev_day_date':    prev_day_date or None,
         'sources':          [s for s in (parsed.get('sources') or [])
                               if isinstance(s, str)][:4],
         'by_platform':      by_platform,
@@ -4465,6 +4551,63 @@ def fetch(only: Optional[set[str]] = None,
                     "for %s (intra-day + WIP); researching %d new items",
                     len(items) - len(items_to_research), target_date_iso,
                     len(items_to_research))
+
+    # -----------------------------------------------------------------
+    # PREVIOUS-DAY REFERENCE STAMPING (added 2026-09-04 per Jenna
+    # directive: "the agent needs to be smart enough to reason what
+    # they would be based on historic trends, etc and then infer what
+    # it should be so that it is never the same day over day").
+    #
+    # For every item about to be researched, look up its `us_estimate`
+    # on the day BEFORE the target day, and stamp it onto the item as
+    # `_prev_day_estimate` + `_prev_day_date`. `_build_prompt` emits a
+    # "PREVIOUS-DAY REFERENCE" block that Claude must reason against;
+    # `_daily_prompt_preface` carries the hard rule that today's number
+    # must reflect day-specific factors and MUST NOT equal yesterday's
+    # unless a specific programming reason is stated in the mandatory
+    # `day_specificity` JSON field.
+    #
+    # This is prompt-engineering, not python-side variance - if the
+    # research call fails or the prev-day snapshot is missing, items
+    # ship without the reference block and the daily prompt still fires
+    # the differentiation directive without a numeric anchor. Best-
+    # effort throughout.
+    # -----------------------------------------------------------------
+    try:
+        _tgt = date.fromisoformat(target_date_iso)
+    except Exception:
+        _tgt = date.today() - timedelta(days=1)
+    _prev_iso = (_tgt - timedelta(days=1)).isoformat()
+    _prev_days_back = max(1, (date.today() - _tgt).days + 1)
+    _prev_snap = _read_dated_snapshot('stream_estimates',
+                                        days_back=_prev_days_back)
+    if not _prev_snap:
+        # Try D-2 as a fallback (matches the dod-trend fallback lower
+        # in this function - it's fine if today is the first day
+        # after a scraper outage).
+        _prev_iso = (_tgt - timedelta(days=2)).isoformat()
+        _prev_snap = _read_dated_snapshot('stream_estimates',
+                                            days_back=_prev_days_back + 1)
+    _prev_items_ix = (_prev_snap or {}).get('items') or {}
+    _stamped = 0
+    for _it in items_to_research:
+        _k = _lookup_key(_it['kind'], _it['display_title'],
+                          _it.get('artist') or '')
+        _prev = _prev_items_ix.get(_k) or {}
+        _prev_est = _prev.get('us_estimate')
+        if _prev_est:
+            _it['_prev_day_estimate'] = int(_prev_est)
+            _it['_prev_day_date'] = _prev_iso
+            _stamped += 1
+    if _stamped:
+        logger.info("stream_estimates: stamped previous-day reference "
+                     "(%s) on %d/%d items to research",
+                     _prev_iso, _stamped, len(items_to_research))
+    elif items_to_research:
+        logger.info("stream_estimates: no prior-day snapshot found for "
+                     "reference (target=%s); items will research without "
+                     "a numeric anchor but still receive the day-specific "
+                     "differentiation directive.", target_date_iso)
 
     if batch_mode:
         researched_new = _research_all_batch(
