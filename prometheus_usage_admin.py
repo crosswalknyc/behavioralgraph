@@ -24,9 +24,16 @@ polling doesn't hammer S3. Cache is per-process (fine for the admin
 surface: even worst case each gunicorn worker only pays the scan once
 per window per 5 min).
 
+The API surface exposes a single cost field `cost_display` on every
+returned dict. Per the 2026-09-04 pricing directive (Jenna), the number
+that ships to the browser is our internal per-call cost multiplied by
+`PROMETHEUS_MARKUP_MULTIPLIER` and rounded to cents. The raw internal
+cost is never included in the returned payload - the browser only ever
+sees the marked-up figure.
+
 Copy in the returned dicts stays in the standing vocabulary: "Prometheus",
-"actions", "reads", "analyses", "deck builds", "compute cost". No mention
-of models, providers, queues, or workers ever crosses the wire to admin.
+"actions", "reads", "analyses", "deck builds". No mention of models,
+providers, queues, or workers ever crosses the wire to admin.
 """
 from __future__ import annotations
 
@@ -77,6 +84,13 @@ MAX_DAYS = 90
 
 # Per-user recent-actions cap (avoid unbounded payloads for heavy users).
 MAX_RECENT_ACTIONS_PER_USER = 50
+
+# Displayed Prometheus cost = raw per-call cost x this multiplier, rounded
+# to cents. Per Jenna 2026-09-04 pricing directive. The raw cost is
+# retained inside this module for internal logging + reconciliation but
+# is NEVER included in the returned payload; only the marked-up
+# `cost_display` value crosses the wire.
+PROMETHEUS_MARKUP_MULTIPLIER = 2.1
 
 # In-process cache: (days, today_key) -> (fetched_at_epoch, raw_records).
 # 5 minute TTL is plenty for an admin surface.
@@ -170,9 +184,26 @@ def _norm_email_set(emails: Optional[Iterable[str]]) -> Set[str]:
     return {str(e).strip().lower() for e in emails if e}
 
 
+def _cost_display(raw_cost: float) -> float:
+    """Return the browser-visible Prometheus cost: raw x markup, cents.
+
+    Internal-only helper. Never expose the raw value or the multiplier
+    itself to any caller of this module; every returned dict carries
+    only the display figure.
+    """
+    try:
+        return round(float(raw_cost or 0.0) * PROMETHEUS_MARKUP_MULTIPLIER, 2)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _empty_surface_map() -> Dict[str, dict]:
-    """Return a fresh per-surface accumulator dict."""
-    return {s: {'actions': 0, 'cost_usd': 0.0, 'duration_s': 0.0,
+    """Return a fresh per-surface accumulator dict.
+
+    `cost_usd_raw` is internal-only and stripped before the map is
+    returned to callers. `duration_s` and `actions` are the only other
+    accumulators."""
+    return {s: {'actions': 0, 'cost_usd_raw': 0.0, 'duration_s': 0.0,
                 'last_at': None}
             for s in PROMETHEUS_SURFACES + ('other',)}
 
@@ -190,7 +221,7 @@ def _bump_surface(acc: Dict[str, dict], rec: dict) -> None:
     slot = acc[key]
     slot['actions'] += 1
     try:
-        slot['cost_usd'] += float(rec.get('cost_usd') or 0.0)
+        slot['cost_usd_raw'] += float(rec.get('cost_usd') or 0.0)
     except (TypeError, ValueError):
         pass
     try:
@@ -205,11 +236,14 @@ def _bump_surface(acc: Dict[str, dict], rec: dict) -> None:
 
 
 def _round_surface_map(m: Dict[str, dict]) -> Dict[str, dict]:
+    """Convert the internal accumulator map into the payload shape.
+
+    Strips `cost_usd_raw`; emits only `cost_display` (marked-up)."""
     out: Dict[str, dict] = {}
     for k, v in m.items():
         out[k] = {
             'actions': int(v['actions']),
-            'cost_usd': round(float(v['cost_usd']), 4),
+            'cost_display': _cost_display(v['cost_usd_raw']),
             'duration_s': round(float(v['duration_s']), 2),
             'last_at': v['last_at'],
             'label': SURFACE_LABELS.get(k, k.title()),
@@ -218,29 +252,38 @@ def _round_surface_map(m: Dict[str, dict]) -> Dict[str, dict]:
 
 
 def _sum_totals(m: Dict[str, dict]) -> Dict[str, Any]:
+    """Roll up the accumulator map into a single totals dict.
+
+    Emits only `cost_display` (marked-up). Raw cost stays internal."""
     actions = 0
-    cost = 0.0
+    raw_cost = 0.0
     duration = 0.0
     last = None
     for v in m.values():
         actions += int(v['actions'])
-        cost += float(v['cost_usd'])
+        raw_cost += float(v['cost_usd_raw'])
         duration += float(v['duration_s'])
         if v['last_at'] and (last is None or v['last_at'] > last):
             last = v['last_at']
     return {'actions': actions,
-            'cost_usd': round(cost, 4),
+            'cost_display': _cost_display(raw_cost),
             'duration_s': round(duration, 2),
             'last_at': last}
 
 
 def _record_row(rec: dict) -> dict:
-    """One trimmed row for the recent-actions list. Vocabulary-safe."""
+    """One trimmed row for the recent-actions list. Vocabulary-safe.
+
+    Per-call `cost_display` = per-call raw x markup, so a caller
+    summing every recent_action's cost_display reconciles with the
+    totals dict (rounding is per-call rather than per-sum, so the
+    sum may drift by a few cents on very large windows - that is
+    expected and preferred over exposing raw cost)."""
     surface = _classify_surface(rec.get('surface'))
     try:
-        cost = round(float(rec.get('cost_usd') or 0.0), 4)
+        cost_display = _cost_display(rec.get('cost_usd') or 0.0)
     except (TypeError, ValueError):
-        cost = 0.0
+        cost_display = 0.0
     try:
         duration = rec.get('duration_s')
         duration = round(float(duration), 2) if duration is not None else None
@@ -250,10 +293,61 @@ def _record_row(rec: dict) -> dict:
         'ts': str(rec.get('ts') or ''),
         'surface': surface,
         'surface_label': SURFACE_LABELS.get(surface, surface.title()),
-        'cost_usd': cost,
+        'cost_display': cost_display,
         'duration_s': duration,
         'user_email': (rec.get('user_email') or rec.get('user') or ''),
     }
+
+
+def _extract_day_key(rec: dict) -> str:
+    """Return the YYYY-MM-DD day this record belongs to (UTC).
+
+    Falls back to '' if the ts is missing / unparseable."""
+    ts = str(rec.get('ts') or '')
+    if not ts:
+        return ''
+    # ts is typically ISO-8601 with a Z or offset suffix. Take the first
+    # 10 chars if they parse as a date; otherwise try full parse.
+    head = ts[:10]
+    if len(head) == 10 and head[4] == '-' and head[7] == '-':
+        return head
+    try:
+        dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+        return dt.astimezone(timezone.utc).date().isoformat()
+    except Exception:
+        return ''
+
+
+def _build_by_day(records: Iterable[dict],
+                  labels: Set[str]) -> List[dict]:
+    """Return the per-day cost + call breakdown for the given user labels.
+
+    Only days with at least one call are included; empty days are
+    dropped so the daily log stays compact. Sorted most-recent-first.
+    Each entry is `{date, cost_display, calls}`.
+    """
+    per_day_raw: Dict[str, Dict[str, Any]] = {}
+    for rec in records:
+        if labels and _norm_label(rec) not in labels:
+            continue
+        day = _extract_day_key(rec)
+        if not day:
+            continue
+        slot = per_day_raw.setdefault(day, {'raw': 0.0, 'calls': 0})
+        try:
+            slot['raw'] += float(rec.get('cost_usd') or 0.0)
+        except (TypeError, ValueError):
+            pass
+        slot['calls'] += 1
+    out: List[dict] = []
+    for day, slot in per_day_raw.items():
+        out.append({
+            'date': day,
+            'cost_display': _cost_display(slot['raw']),
+            'calls': int(slot['calls']),
+        })
+    out.sort(key=lambda r: r['date'], reverse=True)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -272,13 +366,20 @@ def fetch_user_usage(user_emails: Iterable[str],
           'days': int,
           'from': ISO date,
           'to':   ISO date,
-          'totals': {actions, cost_usd, duration_s, last_at},
-          'by_surface': {surface: {actions, cost_usd, duration_s,
-                                    last_at, label}},
-          'recent_actions': [{ts, surface, surface_label, cost_usd,
+          'totals':      {actions, cost_display, duration_s, last_at},
+          'by_surface':  {surface: {actions, cost_display, duration_s,
+                                     last_at, label}},
+          'by_day':      [{date, cost_display, calls}, ...],
+                          # most-recent-first, empty days dropped
+          'active_days': int,   # len(by_day)
+          'recent_actions': [{ts, surface, surface_label, cost_display,
                                duration_s, user_email}, ...],
           'surface_descriptions': {surface: str},
         }
+
+    Every cost field is `cost_display` (marked-up per
+    PROMETHEUS_MARKUP_MULTIPLIER, 2dp). The raw per-call cost is not
+    returned.
 
     Never raises."""
     labels = _norm_email_set(user_emails)
@@ -301,6 +402,8 @@ def fetch_user_usage(user_emails: Iterable[str],
     if len(recent) > MAX_RECENT_ACTIONS_PER_USER:
         recent = recent[:MAX_RECENT_ACTIONS_PER_USER]
 
+    by_day = _build_by_day(records, labels)
+
     today = datetime.now(timezone.utc).date()
     return {
         'days': days,
@@ -308,6 +411,8 @@ def fetch_user_usage(user_emails: Iterable[str],
         'to': today.isoformat(),
         'totals': _sum_totals(surface_acc),
         'by_surface': _round_surface_map(surface_acc),
+        'by_day': by_day,
+        'active_days': len(by_day),
         'recent_actions': recent,
         'surface_descriptions': dict(SURFACE_DESCRIPTIONS),
     }
@@ -325,15 +430,18 @@ def fetch_company_usage(user_map: Dict[str, List[str]],
 
         {
           'days': int, 'from': str, 'to': str,
-          'totals': {actions, cost_usd, duration_s, last_at},
+          'totals': {actions, cost_display, duration_s, last_at},
           'by_surface': {...},
           'by_user': [
               {'username': str, 'totals': {...}, 'by_surface': {...}},
-              ...   # one row per known user, sorted by actions desc
+              ...   # one row per known user, sorted by cost desc
           ],
-          'unattributed': {actions, cost_usd, duration_s, last_at},
+          'unattributed': {actions, cost_display, duration_s, last_at},
               # Company-matching records with no attributed user label.
         }
+
+    Every cost field is `cost_display` (marked-up, 2dp). Raw internal
+    cost is never included.
 
     "unattributed" is always {actions:0, ...} in normal operation
     (every Prometheus call carries user attribution since 2026-09-02).
@@ -383,7 +491,8 @@ def fetch_company_usage(user_map: Dict[str, List[str]],
             'totals': totals,
             'by_surface': _round_surface_map(acc),
         })
-    by_user.sort(key=lambda r: (-r['totals']['actions'],
+    # Sort by cost desc (biggest spenders first), tiebreak by username.
+    by_user.sort(key=lambda r: (-float(r['totals']['cost_display']),
                                 r['username'].lower()))
 
     today = datetime.now(timezone.utc).date()
@@ -424,6 +533,41 @@ def fetch_all_users_counts(
     return dict(counts)
 
 
+def fetch_all_users_summary(
+        label_index: Dict[str, str],
+        days: int = DEFAULT_DAYS) -> Dict[str, Dict[str, Any]]:
+    """Return `{username: {actions, cost_display}}` for every user with any
+    Prometheus activity in the window.
+
+    Same one-pass shape as `fetch_all_users_counts` but also carries
+    the marked-up cost so a company rollup can display a dollar total
+    without a second S3 scan. Raw cost is never exposed - only
+    `cost_display`. Never raises."""
+    days = max(1, min(int(days or DEFAULT_DAYS), MAX_DAYS))
+    try:
+        records = _load_window(days)
+    except Exception:
+        records = []
+    per_user_raw: Dict[str, Dict[str, float]] = defaultdict(
+        lambda: {'actions': 0, 'raw': 0.0})
+    for rec in records:
+        lbl = _norm_label(rec)
+        if not lbl:
+            continue
+        username = label_index.get(lbl)
+        if not username:
+            continue
+        slot = per_user_raw[username]
+        slot['actions'] += 1
+        try:
+            slot['raw'] += float(rec.get('cost_usd') or 0.0)
+        except (TypeError, ValueError):
+            pass
+    return {u: {'actions': int(v['actions']),
+                'cost_display': _cost_display(v['raw'])}
+            for u, v in per_user_raw.items()}
+
+
 def clear_cache() -> None:
     """Test hook: drop the in-process cache so unit tests see fresh data."""
     with _cache_lock:
@@ -432,6 +576,7 @@ def clear_cache() -> None:
 
 __all__ = [
     'PROMETHEUS_SURFACES',
+    'PROMETHEUS_MARKUP_MULTIPLIER',
     'SURFACE_LABELS',
     'SURFACE_DESCRIPTIONS',
     'DEFAULT_DAYS',
@@ -440,5 +585,6 @@ __all__ = [
     'fetch_user_usage',
     'fetch_company_usage',
     'fetch_all_users_counts',
+    'fetch_all_users_summary',
     'clear_cache',
 ]

@@ -5910,15 +5910,16 @@ def api_list_companies():
             if ll and (c['last_active'] is None or ll > c['last_active']):
                 c['last_active'] = ll
 
-        # 30-day Prometheus action count per company. Read once, fold
-        # per user -> company. Never raises: a fetch failure just leaves
-        # every company at 0 for this window (the render_calls prefix is
-        # cache-backed so this is cheap on the second poll).
+        # 30-day Prometheus rollup per company: action count + marked-up
+        # display cost. One read, fold per user -> company. Never raises:
+        # a fetch failure leaves every company at 0 for this window (the
+        # render_calls prefix is cache-backed so this is cheap on the
+        # second poll).
         try:
             import prometheus_usage_admin as pua
             label_idx = _prometheus_usage_label_index(users)
-            per_user = pua.fetch_all_users_counts(label_idx,
-                                                  days=pua.DEFAULT_DAYS)
+            per_user_summary = pua.fetch_all_users_summary(
+                label_idx, days=pua.DEFAULT_DAYS)
             username_to_company = {}
             for username, user in users.items():
                 co = (user.get('company') or '').strip()
@@ -5926,15 +5927,25 @@ def api_list_companies():
                     username_to_company[username] = co
             for co in companies:
                 companies[co]['prometheus_actions_30d'] = 0
-            for username, count in per_user.items():
+                companies[co]['prometheus_cost_30d'] = 0.0
+            for username, summary in per_user_summary.items():
                 co = username_to_company.get(username)
                 if co and co in companies:
-                    companies[co]['prometheus_actions_30d'] += int(count)
+                    companies[co]['prometheus_actions_30d'] += int(
+                        summary.get('actions') or 0)
+                    companies[co]['prometheus_cost_30d'] += float(
+                        summary.get('cost_display') or 0.0)
+            # Re-round the per-company cost so we don't ship 8dp float
+            # arithmetic drift to the browser.
+            for co in companies:
+                companies[co]['prometheus_cost_30d'] = round(
+                    float(companies[co]['prometheus_cost_30d']), 2)
         except Exception:
             import traceback
             traceback.print_exc()
             for co in companies:
                 companies[co].setdefault('prometheus_actions_30d', 0)
+                companies[co].setdefault('prometheus_cost_30d', 0.0)
 
         return jsonify({'success': True, 'companies': sorted(companies.values(), key=lambda x: x['name'].lower())})
     except Exception as e:

@@ -2596,7 +2596,7 @@
                             <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('credit_pool')">Credit Pool</th>
                             <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('credits_used')">Credits Used</th>
                             <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('total_sessions')">Sessions</th>
-                            <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('prometheus_actions_30d')" title="Prometheus actions in the last 30 days: interpret, analysis, deck, and route calls made on the dashboard by anyone in this company.">Prometheus <span style="font-size:0.65rem; color:var(--text-secondary); font-weight:400;">(30d)</span></th>
+                            <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('prometheus_cost_30d')" title="Prometheus usage in the last 30 days across every user in this company. Open the company for the daily breakdown per user.">Prometheus <span style="font-size:0.65rem; color:var(--text-secondary); font-weight:400;">(30d)</span></th>
                             <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('last_active')">Last Active</th>
                             <th style="text-align: center;">Defaults</th>
                         </tr>
@@ -2648,10 +2648,10 @@
                         <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Sessions</div>
                         <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);" id="cdTotalSessions">0</div>
                     </div>
-                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem 1rem;" title="Prometheus actions across all users in this company, last 30 days: interpret, analysis, deck, and route calls. Compute cost is what the actions cost to run.">
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem 1rem;" title="Prometheus usage across every user in this company in the last 30 days. Open a user row for the daily breakdown.">
                         <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Prometheus <span style="font-size:0.55rem; font-weight:400; color:var(--text-secondary);">(30d)</span></div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: #58a6ff;" id="cdPrometheusActions">--</div>
-                        <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.1rem;" id="cdPrometheusCost">Compute cost pending</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #58a6ff;" id="cdPrometheusCost">--</div>
+                        <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.1rem;" id="cdPrometheusActions">0 actions</div>
                     </div>
                 </div>
 
@@ -5130,13 +5130,15 @@
                     else poolCell = `<span>${(c.credit_pool_remaining ?? 0).toLocaleString()} / ${c.credit_pool.toLocaleString()}</span>`;
                 }
                 const promActions = (c.prometheus_actions_30d != null) ? c.prometheus_actions_30d : 0;
+                const promCost = (c.prometheus_cost_30d != null) ? Number(c.prometheus_cost_30d) : 0;
+                const promCellTitle = `${promActions.toLocaleString()} action${promActions === 1 ? '' : 's'} in the last 30 days`;
                 return `<tr style="cursor:pointer;" onclick="openCompanyDetail('${c.name.replace(/'/g, "\\'")}')">
                     <td style="font-weight:600;">${c.name}</td>
                     <td style="text-align:center;">${c.user_count}</td>
                     <td style="text-align:center;">${poolCell}</td>
                     <td style="text-align:center;">${c.credits_used.toLocaleString()}</td>
                     <td style="text-align:center;">${c.total_sessions.toLocaleString()}</td>
-                    <td style="text-align:center;">${promActions.toLocaleString()}</td>
+                    <td style="text-align:center;" title="${promCellTitle}">${formatPrometheusCost(promCost)}</td>
                     <td style="text-align:center;">${la}</td>
                     <td style="text-align:center;">${badge}</td>
                 </tr>`;
@@ -5263,44 +5265,52 @@
         }
 
         async function _cdRefreshPrometheusUsage(companyName) {
-            // Company Prometheus rollup: total actions + compute cost in the
-            // trailing 30 days, plus per-user actions to paint the employee
-            // table's Prometheus column. Fire-and-forget; a fetch failure
-            // leaves the tile at `--` and the employee cells at `--`.
-            const tileEl = document.getElementById('cdPrometheusActions');
+            // Company Prometheus rollup: 30d marked-up cost + action
+            // count total, plus per-user cost so the employee table
+            // shows each person's $ contribution. Fire-and-forget: a
+            // fetch failure leaves the tile at `--`.
             const costEl = document.getElementById('cdPrometheusCost');
-            if (!tileEl) return;
+            const actionsEl = document.getElementById('cdPrometheusActions');
+            if (!costEl) return;
             try {
                 const resp = await fetch(`/api/admin/companies/${encodeURIComponent(companyName)}/prometheus-usage?days=30`, { credentials: 'same-origin' });
                 const data = await resp.json();
                 if (!data || !data.success) {
-                    tileEl.textContent = '--';
-                    if (costEl) costEl.textContent = 'Compute cost unavailable';
+                    costEl.textContent = '--';
+                    if (actionsEl) actionsEl.textContent = 'Usage unavailable';
                     return;
                 }
                 const usage = data.usage || {};
-                const totals = usage.totals || { actions: 0, cost_usd: 0 };
-                tileEl.textContent = (totals.actions || 0).toLocaleString();
-                if (costEl) costEl.textContent = `$${(totals.cost_usd || 0).toFixed(2)} compute cost`;
+                const totals = usage.totals || { actions: 0, cost_display: 0 };
+                costEl.textContent = formatPrometheusCost(totals.cost_display);
+                if (actionsEl) {
+                    const a = totals.actions || 0;
+                    actionsEl.textContent = `${a.toLocaleString()} action${a === 1 ? '' : 's'}`;
+                }
                 (usage.by_user || []).forEach(row => {
                     const id = `cdEmpProm_${(row.username || '').replace(/[^A-Za-z0-9_]/g, '_')}`;
                     const cell = document.getElementById(id);
                     if (cell) {
-                        const n = (row.totals && row.totals.actions) || 0;
-                        cell.innerHTML = n > 0
-                            ? `<span style="font-weight:600;color:#58a6ff;">${n.toLocaleString()}</span>`
-                            : '<span style="color:var(--text-secondary);">0</span>';
+                        const c = (row.totals && row.totals.cost_display) || 0;
+                        const a = (row.totals && row.totals.actions) || 0;
+                        const tip = `${a.toLocaleString()} action${a === 1 ? '' : 's'} in the last 30 days. Click for the daily breakdown.`;
+                        if (c > 0 || a > 0) {
+                            const safeUser = String(row.username || '').replace(/'/g, "\\'");
+                            cell.innerHTML = `<a href="#" onclick="event.preventDefault(); event.stopPropagation(); showUserDetails('${safeUser}'); setTimeout(function(){ var btn = document.querySelector('[data-user-detail-tab-key=\'prometheus\']'); if (btn) showUserDetailTab('prometheus', btn); }, 300);" title="${tip}" style="font-weight:600;color:#58a6ff;text-decoration:none;">${formatPrometheusCost(c)}</a>`;
+                        } else {
+                            cell.innerHTML = `<span style="color:var(--text-secondary);" title="No Prometheus usage in the last 30 days.">${formatPrometheusCost(0)}</span>`;
+                        }
                     }
                 });
-                // Any employee row not covered by usage.by_user gets 0.
+                // Any employee row not covered by usage.by_user gets $0.00.
                 document.querySelectorAll('[id^="cdEmpProm_"]').forEach(cell => {
                     if (cell.textContent.trim() === '--') {
-                        cell.innerHTML = '<span style="color:var(--text-secondary);">0</span>';
+                        cell.innerHTML = `<span style="color:var(--text-secondary);">${formatPrometheusCost(0)}</span>`;
                     }
                 });
             } catch (e) {
-                tileEl.textContent = '--';
-                if (costEl) costEl.textContent = 'Compute cost unavailable';
+                costEl.textContent = '--';
+                if (actionsEl) actionsEl.textContent = 'Usage unavailable';
             }
         }
 
@@ -10641,9 +10651,9 @@
                         <div class="stat-value">${totalActions}</div>
                         <div class="stat-label">Total Actions</div>
                     </div>
-                    <div class="user-stat-card" style="cursor:pointer;" onclick="showUserDetailTab('prometheus', document.querySelector('[data-user-detail-tab-key=\'prometheus\']'))" title="Open Prometheus usage detail">
+                    <div class="user-stat-card" style="cursor:pointer;" onclick="showUserDetailTab('prometheus', document.querySelector('[data-user-detail-tab-key=\'prometheus\']'))" title="Open Prometheus usage detail with daily breakdown">
                         <div class="stat-value" id="userPrometheusActionsTile">--</div>
-                        <div class="stat-label">Prometheus Actions<br><span style="font-size:0.7rem;opacity:0.75;">last 30 days</span></div>
+                        <div class="stat-label">Prometheus Usage<br><span style="font-size:0.7rem;opacity:0.75;">last 30 days</span></div>
                     </div>
                 </div>
 
@@ -10867,8 +10877,8 @@
         function renderUserPrometheusUsage(username, usage) {
             const tile = document.getElementById('userPrometheusActionsTile');
             const pane = document.getElementById('userPrometheusContent');
-            const totals = usage.totals || { actions: 0, cost_usd: 0, duration_s: 0, last_at: null };
-            if (tile) tile.textContent = String(totals.actions || 0);
+            const totals = usage.totals || { actions: 0, cost_display: 0, duration_s: 0, last_at: null };
+            if (tile) tile.textContent = formatPrometheusCost(totals.cost_display);
             if (!pane) return;
             const bySurface = usage.by_surface || {};
             const descs = usage.surface_descriptions || {};
@@ -10880,7 +10890,7 @@
                 ? surfaceRows.map(([k, v]) => `
                     <div class="feature-item" style="margin-bottom: 0.4rem;">
                         <span title="${(descs[k] || '').replace(/"/g, '&quot;')}">${v.label || k}</span>
-                        <span class="count">${v.actions} action${v.actions === 1 ? '' : 's'} · $${(v.cost_usd || 0).toFixed(4)}${v.duration_s ? ' · ' + (v.duration_s/60).toFixed(1) + ' min' : ''}</span>
+                        <span class="count">${v.actions} action${v.actions === 1 ? '' : 's'} · ${formatPrometheusCost(v.cost_display || 0)}${v.duration_s ? ' · ' + (v.duration_s/60).toFixed(1) + ' min' : ''}</span>
                     </div>`).join('')
                 : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.75rem 0;">No Prometheus activity in this window.</div>';
             const recent = usage.recent_actions || [];
@@ -10888,24 +10898,54 @@
                 ? recent.slice(0, 50).map(r => {
                     const when = r.ts ? formatDateTimePST(r.ts) : '';
                     const dur = (r.duration_s != null) ? ` · ${r.duration_s.toFixed ? r.duration_s.toFixed(1) : r.duration_s}s` : '';
-                    return `<div class="activity-item"><span>${r.surface_label || r.surface} · $${(r.cost_usd || 0).toFixed(4)}${dur}</span><span class="time">${when}</span></div>`;
+                    return `<div class="activity-item"><span>${r.surface_label || r.surface} · ${formatPrometheusCost(r.cost_display || 0)}${dur}</span><span class="time">${when}</span></div>`;
                 }).join('')
                 : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.75rem; text-align: center;">No recent actions</div>';
+            const byDay = usage.by_day || [];
+            const dailyHtml = byDay.length > 0
+                ? `<div style="border:1px solid var(--border-color); border-radius:8px; overflow:hidden; margin-bottom:0.5rem;">
+                     <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                       <thead>
+                         <tr style="background:var(--bg-input);">
+                           <th style="text-align:left; padding:0.5rem 0.75rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.5px;">Date</th>
+                           <th style="text-align:right; padding:0.5rem 0.75rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.5px;">Prometheus Usage</th>
+                           <th style="text-align:right; padding:0.5rem 0.75rem; color:var(--text-secondary); font-weight:600; text-transform:uppercase; font-size:0.7rem; letter-spacing:0.5px;">Actions</th>
+                         </tr>
+                       </thead>
+                       <tbody>
+                         ${byDay.map(d => `
+                           <tr style="border-top:1px solid var(--border-color);">
+                             <td style="padding:0.45rem 0.75rem;">${d.date || ''}</td>
+                             <td style="padding:0.45rem 0.75rem; text-align:right; font-weight:600; color:#58a6ff;">${formatPrometheusCost(d.cost_display || 0)}</td>
+                             <td style="padding:0.45rem 0.75rem; text-align:right; color:var(--text-secondary);">${(d.calls || 0).toLocaleString()}</td>
+                           </tr>`).join('')}
+                       </tbody>
+                     </table>
+                   </div>`
+                : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.75rem; text-align: center;">No Prometheus activity in this window.</div>';
             const summaryTotalMin = (totals.duration_s || 0) / 60;
+            const startOpen = (byDay.length > 0) && (byDay.length <= 14);
             pane.innerHTML = `
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
-                    <div class="stat-card" style="padding: 0.75rem;">
-                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Actions</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);">${totals.actions || 0}</div>
+                <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+                    <div class="stat-card" style="padding: 0.75rem; cursor:pointer;" id="userPromUsageCard" title="Click to toggle the daily breakdown">
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; display:flex; align-items:center; gap:0.35rem;">
+                            <span>Prometheus Usage</span>
+                            <span id="userPromDailyChevron" style="font-size:0.7rem; color:var(--text-secondary);">${startOpen ? '\u25be' : '\u25b8'}</span>
+                        </div>
+                        <div style="font-size: 1.7rem; font-weight: 700; color: #58a6ff;">${formatPrometheusCost(totals.cost_display || 0)}</div>
                     </div>
                     <div class="stat-card" style="padding: 0.75rem;">
-                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Compute cost</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: #e67e22;">$${(totals.cost_usd || 0).toFixed(2)}</div>
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Actions</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);">${(totals.actions || 0).toLocaleString()}</div>
                     </div>
                     <div class="stat-card" style="padding: 0.75rem;">
                         <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Active time</div>
                         <div style="font-size: 1.5rem; font-weight: 700; color: #2ecc71;">${summaryTotalMin.toFixed(1)}m</div>
                     </div>
+                </div>
+                <div id="userPromDailySection" style="display:${startOpen ? 'block' : 'none'}; margin-bottom:1rem;">
+                    <h5 style="margin: 0.25rem 0 0.4rem; font-size: 0.85rem; color: var(--text-secondary);">Daily breakdown <span style="font-size:0.7rem; color:var(--text-secondary); font-weight:400;">(${byDay.length} active day${byDay.length === 1 ? '' : 's'})</span></h5>
+                    ${dailyHtml}
                 </div>
                 <h5 style="margin: 0.75rem 0 0.4rem; font-size: 0.85rem; color: var(--text-secondary);">By action type</h5>
                 <div class="feature-usage-grid" style="display: block; margin-bottom: 1rem;">
@@ -10916,6 +10956,16 @@
                     ${recentHtml}
                 </div>
             `;
+            const card = document.getElementById('userPromUsageCard');
+            const section = document.getElementById('userPromDailySection');
+            const chev = document.getElementById('userPromDailyChevron');
+            if (card && section && chev) {
+                card.addEventListener('click', () => {
+                    const open = section.style.display !== 'none';
+                    section.style.display = open ? 'none' : 'block';
+                    chev.textContent = open ? '\u25b8' : '\u25be';
+                });
+            }
         }
 
         function exportUserActivityAllToCSV() {
@@ -11634,6 +11684,20 @@
 
         function formatActionName(action) {
             return formatFeatureName(action);
+        }
+
+        // Format a Prometheus cost value ($X,XXX.XX). The number that
+        // reaches here has already been marked up server-side; this
+        // helper only handles locale-formatted display. Never do
+        // client-side markup math - the wire always carries the
+        // display-ready value.
+        function formatPrometheusCost(value) {
+            const n = Number(value || 0);
+            if (!isFinite(n)) return '$0.00';
+            return '$' + n.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            });
         }
 
         function toggleUnlimited() {
