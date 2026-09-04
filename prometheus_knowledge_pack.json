@@ -1,16 +1,16 @@
 {
  "version": 1,
  "content_hash": "2dcbc39043ab2f475863ccfd93899160fd97aee290ac0c9bfe9ec53544273c70",
- "examples_hash": "ad03580af136bc4b83dd8c7b70b36265fe80dc0709f5556012efe0126a9d209e",
+ "examples_hash": "70e1a09cd4d2d2a1f13e64cb394c442d9afa076bb94738c5ac8032090861ada3",
  "source_hashes": {
   ".cursor/rules/analysis-confidence-calibration.mdc": "497c83083fffb1ad104edbfa032b8100bd1628944f549cf9a0444fac5593896d",
   ".cursor/rules/avid-and-cut-skin-rules.mdc": "ed52d5de55b1ca4039c0cbd9e809290bccf94ddb84461d27856bcbd07c8b439b",
-  ".cursor/rules/canonical-brand-category.mdc": "4e8e1a0cbaf42f79305449d7c9aa1f3d7b15c41899c9c6cb3696754bf692b3aa",
+  ".cursor/rules/canonical-brand-category.mdc": "9489d976342fda339a1c821a7ad9b43a8cdfad01bd327f3e91d456403c6c3768",
   ".cursor/rules/crosswalk-audience-vetting-framework.mdc": "2cc05b465e981135b41bae87fcedfff83ff82289ed97ad3e403574bced7a9ba0",
-  ".cursor/rules/crosswalk-brand-standards.mdc": "79134eae318526b3d199c87d6b898e25a79c4df6cfd2adde92dc19c4981d0f0e",
+  ".cursor/rules/crosswalk-brand-standards.mdc": "1b88a914cd420a0abc690795eb861c38f4fce6d437d2d962856dcd7d40baa670",
   ".cursor/rules/default-date-range.mdc": "308dd09d6fe975b129092a2107d833375b3fd8ed241ded3b3599ba9d7d4b66c5",
   ".cursor/rules/in-place-corrections.mdc": "e08bf4274b45dd991fec142789918289f13b136f31ed9c56ba7150f2acf5faad",
-  ".cursor/rules/individual-level-language.mdc": "800e9474680e826623ce4893d738e7dd66552526110ad983e6e3ef7eebe70873",
+  ".cursor/rules/individual-level-language.mdc": "e36c375ca8def4264dd9f826db8ee60d0166f278ebbdb517a53300fcf467692b",
   ".cursor/rules/no-em-dashes.mdc": "1ae6da8a97e7a094889cd9e32270afec82a5ac8088982e1ed8c42fe2b241399d",
   ".cursor/rules/no-modeled-or-source-language.mdc": "43b4eecfae0589958d4b56626f9ae866b92dc598bf15e76e32cd44fbf4dd72e6",
   ".cursor/rules/no-operator-hints-in-dashboard.mdc": "11cf4f4e4941733d2f53abf4cff647d07c3992752792ace9eaf77dd7a7324334",
@@ -20,7 +20,7 @@
   ".cursor/rules/reasoned-answers-clickstream-boundary.mdc": "d0ce9e8945f21eedb7e3265804ca8b4a0635b43a3e2495ca33c3436676b93ca0",
   ".cursor/rules/reasoning-wins-when-fact-rooted.mdc": "09c11ea03c239a3d23485e547df55cc319471ec14ecb83905236902e8d8b15f3",
   ".cursor/rules/viewer-carriage-constraint.mdc": "cbfd739c4772424aee369da86b3dbfc769b9bed6c15d2c838f36bb3867cea734",
-  ".cursor/skills/crosswalk-brand-standards/SKILL.md": "7a08f77bb3932d0b45aed38c5362f7fdd8bce26abe736b03c490b6bd81254337",
+  ".cursor/skills/crosswalk-brand-standards/SKILL.md": "f137cbf7e392a5f4791a6f23b87cc28af5d9d0fc8c9799a96282fc8a47496fa6",
   ".cursor/skills/crosswalk-brand-standards/references/deck-system.md": "bed407234e1674478c50044ade88d7e456f86233946afadf640850208a4c69e2"
  },
  "canon": [
@@ -111,6 +111,12 @@
    "title": "Paw Patrol Series | Parents of Kids 4-6 | Jul 1 2025 to Jun 30 2026",
    "q": "what toy categories are parents of kids 4-6 buying of paw patrol viewer parents",
    "text": "Action Figures and Playsets lead toy purchasing among parents of 4-to-6-year-old Paw Patrol viewers at 22.3% of category signals, with Preschool Toys close behind at 19.8%.\n\nShare of audience, parents of kids 4-6: 34.1%, Projected US people, parents of kids 4-6: 5,476,469, Toy purchase signal penetration: 83.7%.\n\nToy category mix, Jul 1 2025 to Jun 30 2026 (Share of the cohort's toy purchase signals)\n- Action Figures & Playsets: 22.3% share, 64.1% penetration. Spin Master Paw Patrol vehicles and figures dominate, followed by Hasbro Transformers and Mattel Jurassic World\n- Preschool Toys: 19.8% share, 57.3% ..."
+  },
+  "competitive_overlap": {
+   "subject": "Shark Tank",
+   "title": "Shark Tank",
+   "q": "Compare the selected cuts against the base profile",
+   "text": "The file is two nearly equal generational halves plus a small commerce tail. Millennials are 19.4M (39.2% of the 49.5M file) and Gen X is 18.3M (36.9%). Together 37.7M, 76.1% of the audience. Gen Z is 3.8M (7.7%). The remaining 16.2% sits older; a Shark Tank Boomers profile already exists in the library to cover it.\n\nWHAT THEY SHARE\n- LinkedIn is the spine. Millennials 58.9 vs 28.5 parent (+30.4pp), Gen X 52.8 (+24.3pp). Both halves read as a professional and founder-minded identity, not a general reality-TV audience. That is the plannable definition: business-identity adults, 37.7M, reachable on LinkedIn at ..."
   },
   "sponsorship_fit": {
    "subject": "Shark Tank",
