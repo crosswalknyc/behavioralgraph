@@ -7646,22 +7646,25 @@ def _reset_non_hostmap_to_floor_for_categories(df, subject, categories, verbose=
 
     # 2026-08-27 (Jenna): gap brands KEPT in the profile under the
     # proposed-mapping flow keep their reasoned BP - do not floor them.
-    # The purchase family (rule 0b) is excluded from the keep flow, so
-    # rows there still floor even if the brand was kept elsewhere.
+    # 2026-09-03 (Jenna, verbatim: "but they are all good suggestions
+    # and should ship and be added to the profile and the genpop file
+    # if the agent thinks it belongs in the profile"): the purchase
+    # family (MPB + rule 3b mirrors) now joins the keep flow too, so
+    # the floor-reset skip is universal for kept brands. The
+    # MPB_STRICT_CATEGORIES import is preserved as an empty-frozenset
+    # fallback so the skip logic reads uniformly across callers, but
+    # the branch that once excluded MPB is retired.
     try:
         from migration.hostmap_gap_mapping import (
             is_kept_gap_brand as _is_kept_gap,
-            MPB_STRICT_CATEGORIES as _GAP_MPB_STRICT,
         )
     except ImportError:
         try:
             from hostmap_gap_mapping import (  # type: ignore
                 is_kept_gap_brand as _is_kept_gap,
-                MPB_STRICT_CATEGORIES as _GAP_MPB_STRICT,
             )
         except ImportError:
             _is_kept_gap = None  # type: ignore[assignment]
-            _GAP_MPB_STRICT = frozenset()
 
     cats_u = {str(c).upper().strip() for c in categories}
     fixed = 0
@@ -7677,8 +7680,7 @@ def _reset_non_hostmap_to_floor_for_categories(df, subject, categories, verbose=
             continue
         if _is_in_hostmap(val_raw):
             continue
-        if (_is_kept_gap is not None and cat not in _GAP_MPB_STRICT
-                and _is_kept_gap(val_raw)):
+        if _is_kept_gap is not None and _is_kept_gap(val_raw):
             kept_gap_skips += 1
             continue
         old_bp = _bp(r.get(bp_col, 0))
