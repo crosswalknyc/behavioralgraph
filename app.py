@@ -44078,6 +44078,11 @@ _UNIVERSE_QUALIFIER_TOKENS = {
     'players', 'player', 'gamers', 'gamer',
     'streamers', 'streamer', 'moviegoers', 'moviegoer',
     'bingers', 'binger',
+    # follower / audience scopes (2026-09-04, Jenna perceptionbox
+    # rerun: 'youtube followers of X' matched an aggregate all-platform
+    # 'X Followers' file because 'followers' wasn't a qualifier token,
+    # so both signatures collapsed to plain-universe empty sets).
+    'followers', 'follower',
     # membership / ownership / relationship scopes
     'members', 'member', 'membership', 'owners', 'owner',
     'holders', 'holder', 'cardholders', 'cardholder',
@@ -44097,6 +44102,245 @@ _UNIVERSE_WINDOW_RE = re.compile(
     r'\b(?:past|last|trailing)\s+(\d+)\s+(day|week|month|year)s?\b')
 
 
+# ── Platform scope (2026-09-04, Jenna perceptionbox rerun) ───────────
+# A follower / audience universe scoped to a SPECIFIC platform (YouTube
+# followers, TikTok subscribers, Instagram audience) is a different
+# universe from the same subject's aggregate cross-platform audience.
+# Detection is deterministic - explicit URLs + word-boundary keyword
+# matches. Never asks Claude to guess. The interpret system prompt
+# reinforces the field, but code is authoritative when both are present.
+#
+# Canonical platform vocabulary lives in migration/creator_follower_sizing
+# ._PLATFORM_TOKENS; we mirror the same keys here so display-name
+# inference and prompt detection agree.
+_PLATFORM_URL_RE = re.compile(
+    r'\b(?:https?://|www\.)?'
+    r'(?P<host>youtube\.com|youtu\.be|tiktok\.com|instagram\.com|'
+    r'facebook\.com|fb\.com|twitter\.com|x\.com|linkedin\.com|'
+    r'twitch\.tv|snapchat\.com|threads\.net|substack\.com|patreon\.com|'
+    r'kick\.com|rumble\.com|pinterest\.com|bsky\.app|bluesky\.social)'
+    r'\b',
+    re.IGNORECASE,
+)
+_PLATFORM_HOST_TO_KEY = {
+    'youtube.com': 'youtube', 'youtu.be': 'youtube',
+    'tiktok.com': 'tiktok',
+    'instagram.com': 'instagram',
+    'facebook.com': 'facebook', 'fb.com': 'facebook',
+    'twitter.com': 'x', 'x.com': 'x',
+    'linkedin.com': 'linkedin',
+    'twitch.tv': 'twitch',
+    'snapchat.com': 'snapchat',
+    'threads.net': 'threads',
+    'substack.com': 'substack',
+    'patreon.com': 'patreon',
+    'kick.com': 'kick',
+    'rumble.com': 'rumble',
+    'pinterest.com': 'pinterest',
+    'bsky.app': 'bluesky', 'bluesky.social': 'bluesky',
+}
+# Prose keyword patterns. Word-boundary + case-insensitive so 'YouTube
+# followers', 'youtube subs', 'yt audience', 'IG followers' all trip.
+# Bare 'X' is intentionally excluded (too many false positives); the
+# 'twitter' spelling and the x.com URL cover the platform.
+_PLATFORM_PROSE_PATTERNS = (
+    ('youtube', re.compile(
+        r'\b(?:youtube|you\s*tube|yt)\b\s*'
+        r'(?:followers?|subscribers?|subs?|audience|viewers?|'
+        r'channel|channels|fans?|watchers?|users?)',
+        re.IGNORECASE)),
+    ('tiktok', re.compile(
+        r'\b(?:tiktok|tik\s*tok|tt)\b\s*'
+        r'(?:followers?|subscribers?|subs?|audience|viewers?|'
+        r'fans?|watchers?|users?)',
+        re.IGNORECASE)),
+    ('instagram', re.compile(
+        r'\b(?:instagram|insta|ig)\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('facebook', re.compile(
+        r'\b(?:facebook|fb)\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('x', re.compile(
+        r'\b(?:twitter)\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('linkedin', re.compile(
+        r'\blinkedin\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('twitch', re.compile(
+        r'\btwitch\b\s*'
+        r'(?:followers?|subscribers?|subs?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('snapchat', re.compile(
+        r'\b(?:snapchat|snap)\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('threads', re.compile(
+        r'\bthreads\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('substack', re.compile(
+        r'\bsubstack\b\s*'
+        r'(?:followers?|subscribers?|subs?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('patreon', re.compile(
+        r'\bpatreon\b\s*'
+        r'(?:followers?|subscribers?|subs?|audience|viewers?|fans?|users?|'
+        r'members?|patrons?)',
+        re.IGNORECASE)),
+    ('kick', re.compile(
+        r'\bkick\b\s*'
+        r'(?:followers?|subscribers?|subs?|audience|viewers?|fans?)',
+        re.IGNORECASE)),
+    ('rumble', re.compile(
+        r'\brumble\b\s*'
+        r'(?:followers?|subscribers?|subs?|audience|viewers?|fans?)',
+        re.IGNORECASE)),
+    ('pinterest', re.compile(
+        r'\bpinterest\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+    ('bluesky', re.compile(
+        r'\bbluesky\b\s*'
+        r'(?:followers?|subscribers?|audience|viewers?|fans?|users?)',
+        re.IGNORECASE)),
+)
+
+
+def _detect_platform_scope_from_text(text):
+    """Deterministic platform detection from prompt text + URLs.
+
+    Returns None (aggregate / no platform pin) or a sorted list of
+    canonical platform keys ('youtube', 'tiktok', 'instagram', ...).
+    Never guesses; only pins on explicit URLs or word-boundary
+    platform-scoped follower/audience keywords.
+
+    Never mistakes a universe-defining behavioral qualifier ('Vizio
+    TV Owners', 'Amazon Prime Members') for a platform scope - those
+    define WHO is in the panel, not a platform pin on top of an
+    existing subject. Handled at the interpret step above this
+    (SUBJECT NAMING + EMBEDDED CUTS keeps them whole)."""
+    s = str(text or '')
+    if not s:
+        return None
+    keys = set()
+    # URLs are strong signal.
+    for m in _PLATFORM_URL_RE.finditer(s):
+        host = (m.group('host') or '').lower()
+        k = _PLATFORM_HOST_TO_KEY.get(host)
+        if k:
+            keys.add(k)
+    # Prose keyword pass, strict adjacency (platform + scope noun
+    # within whitespace, e.g. 'youtube followers').
+    for key, pat in _PLATFORM_PROSE_PATTERNS:
+        if pat.search(s):
+            keys.add(key)
+    # Loose pass (2026-09-04): if the text carries ANY scope noun
+    # anywhere (followers / subscribers / audience / subs / fans /
+    # watchers / users / channel / listeners / readers / members /
+    # patrons), then any word-boundary platform token match adds
+    # that platform. Catches multi-platform phrasings where the
+    # scope noun only appears after the last platform, e.g.
+    # 'TikTok AND YouTube followers of Charli' - strict adjacency
+    # only matches 'youtube followers' and misses 'tiktok'.
+    # Safe because it still requires the scope-noun context to fire;
+    # a title like 'The YouTube Effect' with no scope noun anywhere
+    # never triggers.
+    _SCOPE_NOUN_RE = re.compile(
+        r'\b(?:followers?|subscribers?|subs?|audience|viewers?|listeners?|'
+        r'readers?|fans?|watchers?|users?|channel|channels|members?|'
+        r'patrons?)\b',
+        re.IGNORECASE)
+    if _SCOPE_NOUN_RE.search(s):
+        _BARE_PLATFORM_PATTERNS = (
+            ('youtube', re.compile(r'\b(?:youtube|you\s*tube|yt)\b',
+                                    re.IGNORECASE)),
+            ('tiktok', re.compile(r'\b(?:tiktok|tik\s*tok|tt)\b',
+                                   re.IGNORECASE)),
+            ('instagram', re.compile(r'\b(?:instagram|insta|ig)\b',
+                                      re.IGNORECASE)),
+            ('facebook', re.compile(r'\b(?:facebook|fb)\b', re.IGNORECASE)),
+            # 'twitter' spelling ok; bare 'x' still excluded (too many
+            # false positives - Xbox, X-Men, Malcolm X, etc.).
+            ('x', re.compile(r'\b(?:twitter)\b', re.IGNORECASE)),
+            ('linkedin', re.compile(r'\blinkedin\b', re.IGNORECASE)),
+            ('twitch', re.compile(r'\btwitch\b', re.IGNORECASE)),
+            ('snapchat', re.compile(r'\b(?:snapchat|snap)\b', re.IGNORECASE)),
+            ('threads', re.compile(r'\bthreads\b', re.IGNORECASE)),
+            ('substack', re.compile(r'\bsubstack\b', re.IGNORECASE)),
+            ('patreon', re.compile(r'\bpatreon\b', re.IGNORECASE)),
+            ('kick', re.compile(r'\bkick\b', re.IGNORECASE)),
+            ('rumble', re.compile(r'\brumble\b', re.IGNORECASE)),
+            ('pinterest', re.compile(r'\bpinterest\b', re.IGNORECASE)),
+            ('bluesky', re.compile(r'\bbluesky\b', re.IGNORECASE)),
+        )
+        for key, pat in _BARE_PLATFORM_PATTERNS:
+            if pat.search(s):
+                keys.add(key)
+    if not keys:
+        return None
+    return sorted(keys)
+
+
+def _infer_platform_scope_from_display_name(display_name):
+    """Existing files that predate the platform_scope field don't
+    carry it explicitly. Infer from their DISPLAY_NAME by looking
+    for platform words as scope suffix/word (case-insensitive,
+    word-boundary). Absence = None (aggregate / overall).
+
+    Reuses migration/creator_follower_sizing._PLATFORM_TOKENS style
+    matching (same vocabulary as the sizing guard); returns a sorted
+    list of canonical keys for compatibility with the request-side
+    detector, or None."""
+    s = str(display_name or '')
+    if not s:
+        return None
+    # Strip any ' - <cut>' suffix so 'X YouTube Followers - Avid Fan'
+    # reads as 'X YouTube Followers' for scope purposes.
+    stem = s.split(' - ', 1)[0]
+    keys = set()
+    # Same prose keywords used for prompt detection but without the
+    # requirement of a following 'followers/audience' word - the
+    # display_name itself IS the scoped universe label, so any
+    # platform token in it means the file is scoped to that platform.
+    _NAME_PLATFORM_PATTERNS = (
+        ('youtube', r'\b(?:youtube|you\s*tube)\b'),
+        ('tiktok', r'\b(?:tiktok|tik\s*tok)\b'),
+        ('instagram', r'\b(?:instagram)\b'),
+        ('facebook', r'\b(?:facebook)\b'),
+        ('x', r'\b(?:twitter|x/twitter)\b'),
+        ('linkedin', r'\b(?:linkedin)\b'),
+        ('twitch', r'\b(?:twitch)\b'),
+        ('snapchat', r'\b(?:snapchat)\b'),
+        ('threads', r'\b(?:threads)\b'),
+        ('substack', r'\b(?:substack)\b'),
+        ('patreon', r'\b(?:patreon)\b'),
+        ('kick', r'\b(?:kick)\b'),
+        ('rumble', r'\b(?:rumble)\b'),
+        ('pinterest', r'\b(?:pinterest)\b'),
+        ('bluesky', r'\b(?:bluesky)\b'),
+    )
+    for key, pat in _NAME_PLATFORM_PATTERNS:
+        if re.search(pat, stem, re.IGNORECASE):
+            keys.add(key)
+    if not keys:
+        return None
+    return sorted(keys)
+
+
+def _platform_scopes_compatible(request_text, candidate_display_name):
+    """True when the request and the candidate describe the same
+    platform scope: BOTH None (aggregate on both sides) OR both carry
+    the same sorted list of platform keys. A YouTube-scoped ask never
+    matches an aggregate (all-platform) file, and vice versa."""
+    return (_detect_platform_scope_from_text(request_text)
+            == _infer_platform_scope_from_display_name(
+                candidate_display_name))
+
+
 def _universe_qualifier_signature(name):
     """Set of universe-defining qualifier tokens in a name/prompt.
     Empty set = plain brand/person/title universe. Window phrases
@@ -44113,12 +44357,20 @@ def _universe_qualifier_signature(name):
 def _universe_qualifiers_compatible(request_text, candidate_name):
     """True when the request and the candidate describe the same
     universe scope: their qualifier signatures are identical (both
-    empty, or both carry the same qualifier set). The candidate's cut
-    suffix after ' - ' is ignored - cut compatibility is handled by
-    the existing suffix machinery."""
+    empty, or both carry the same qualifier set) AND their platform
+    scopes match. The candidate's cut suffix after ' - ' is ignored -
+    cut compatibility is handled by the existing suffix machinery.
+
+    Platform scope (2026-09-04): a 'YouTube followers of X' ask never
+    matches an aggregate 'X Followers' file even when both signatures
+    are otherwise identical - the platform scope carves them apart."""
     cand_entity = str(candidate_name or '').split(' - ', 1)[0]
-    return (_universe_qualifier_signature(request_text)
-            == _universe_qualifier_signature(cand_entity))
+    if _universe_qualifier_signature(request_text) \
+            != _universe_qualifier_signature(cand_entity):
+        return False
+    if not _platform_scopes_compatible(request_text, candidate_name):
+        return False
+    return True
 
 
 # ── Subject-identity compatibility (2026-09-02) ──────────────────────
@@ -44241,11 +44493,26 @@ def _apply_universe_qualifier_gate(draft, prompt, allow_ask=False):
             draft['subject'] = cleaned
             draft['name'] = cleaned
             draft.pop('file_stem', None)
+    # Platform-scope mismatch (2026-09-04, Jenna perceptionbox rerun):
+    # differentiate the note when the qualifier signatures match but
+    # the platform scopes differ ('youtube followers' vs aggregate
+    # 'X Followers'). Same demotion outcome, clearer trace.
+    req_plat = _detect_platform_scope_from_text(prompt)
+    cand_plat = _infer_platform_scope_from_display_name(disp)
+    _plat_mismatch = (not _identity_mismatch
+                      and req_sig == cand_sig
+                      and req_plat != cand_plat)
     if _identity_mismatch:
         note = (f"Subject-identity gate: ask subject "
                 f"{str(draft.get('subject') or '')!r} shares no identity "
                 f"with candidate {disp!r} - unrelated audience; "
                 f"demoted to new_build.")
+    elif _plat_mismatch:
+        note = (f"Platform-scope gate: ask platform_scope="
+                f"{req_plat or '(aggregate)'} vs candidate {disp!r} "
+                f"platform_scope={cand_plat or '(aggregate)'} - not the "
+                f"same audience; "
+                f"{'asking' if allow_ask else 'demoted to new_build'}.")
     else:
         note = (f"Universe-qualifier gate: ask "
                 f"{sorted(req_sig) or '(plain universe)'} vs candidate "
@@ -46008,6 +46275,37 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "follower_ceiling and follower_platforms as null - the cap "
         "does not apply.\n\n"
 
+        "PLATFORM SCOPE (2026-09-04 - identifies the platform the "
+        "audience is scoped to; part of the universe definition):\n"
+        "  * When the user names a specific platform for the audience "
+        "('YouTube followers of X', 'TikTok audience for Y', 'X's "
+        "Instagram subscribers') or supplies youtube.com/@channel, "
+        "tiktok.com/@handle, instagram.com/, or similar per-platform "
+        "channel URLs, the platform is PART of the universe definition. "
+        "Set `platform_scope` to a sorted list of canonical platform "
+        "keys in lowercase - one of: 'youtube', 'tiktok', 'instagram', "
+        "'facebook', 'x', 'linkedin', 'twitch', 'snapchat', 'threads', "
+        "'substack', 'patreon', 'kick', 'rumble', 'pinterest', "
+        "'bluesky'. Multiple platforms in ONE ask ('TikTok and YouTube "
+        "followers of X') = list of platforms, e.g. ['tiktok', "
+        "'youtube'].\n"
+        "  * An 'overall followers' / 'aggregate' / 'combined' ask, or "
+        "any request WITHOUT an explicit platform pin, has "
+        "`platform_scope: null`. That's the aggregate cross-platform "
+        "universe.\n"
+        "  * Two profiles describe the SAME universe only when their "
+        "`platform_scope` values match exactly. A YouTube-scoped ask "
+        "NEVER matches an aggregate 'X Followers' file, and vice "
+        "versa. Prefer new_build over reusing an aggregate file when "
+        "the ask is platform-scoped.\n"
+        "  * A universe-defining behavioral qualifier ('Vizio TV "
+        "Owners', 'Amazon Prime Members', 'EST Buyers', 'TVOD Renters', "
+        "'ISP Switchers') is NOT a platform_scope. Those define who is "
+        "in the panel; keep `platform_scope: null` for them.\n"
+        "  * When surfacing to the user (draft brief, confirmation "
+        "copy), phrase as 'YouTube followers' or 'TikTok audience', "
+        "NOT 'platform_scope = [\"youtube\"]'.\n\n"
+
         "CANONICAL DEMOGRAPHIC BUCKETS (use exactly these labels):\n"
         "  GENDER: MALE, FEMALE, NON-BINARY, TRANS FEMALE, TRANS MALE\n"
         "  AGE: 17 AND UNDER, 18-24, 25-34, 35-44, 45-54, 55-64, 65 OR OLDER\n"
@@ -46187,6 +46485,7 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "anchor x engaged_share / 32.99>,\n"
         "  \"follower_ceiling\": <int or null - required if audience_type != 'general'; holds any public-metric ceiling>,\n"
         "  \"follower_platforms\": [\"instagram\", \"tiktok\", ...] or null,\n"
+        "  \"platform_scope\": [\"youtube\"] or [\"tiktok\", \"youtube\"] or null // see PLATFORM SCOPE. null = aggregate; sorted list of canonical platform keys = platform-scoped universe. Different platform_scope = different universe from any otherwise-matching candidate.,\n"
         "  \"is_ip_content\": <true|false - series/movie/book/podcast/game/album/franchise>,\n"
         "  \"resolved_title\": \"exact entity this draft is about (see SUBJECT IDENTITY RESOLUTION)\",\n"
         "  \"medium\": \"series|movie|podcast|game|book|album|franchise|person|brand|platform|cohort\" or null,\n"
@@ -48823,14 +49122,26 @@ def _jitter_draft_est_sample(spec_draft):
 
 
 def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
-                                       history: list) -> dict:
+                                       history: list,
+                                       attrib_extras: dict = None) -> dict:
     """Run one Claude interpret call for a single subject inside a batch.
     Returns a dict with `success` + either `spec_draft`+`candidates` or
     `error`. Never raises - errors bubble up as `success: false`.
+
+    `attrib_extras` (2026-09-04 fix): the calling batch is dispatched
+    via a ThreadPoolExecutor whose worker threads have no Flask
+    request context, so _pm_attrib_extras() inside a worker returns
+    {} and every interpret record ships unattributed. The batch
+    captures attribution ONCE on the request thread and passes it
+    here; if None, falls back to the (usually-empty) request-context
+    lookup so behavior is unchanged when a caller invokes this
+    directly without pre-capturing.
     """
     per_prompt = subject.strip()
     if shared_context:
         per_prompt = f"{per_prompt} {shared_context}".strip()
+    _attrib = attrib_extras if attrib_extras is not None \
+        else (_pm_attrib_extras() or None)
     try:
         try:
             from iq_rankers import MASTER_CATEGORIES
@@ -48847,7 +49158,7 @@ def _synth_chat_interpret_one_subject(subject: str, shared_context: str,
             system_prompt=system_prompt, user_prompt=user_prompt,
             max_tokens=16000, temperature=0.4,
             model=_SYNTH_CHAT_INTERPRET_MODEL,
-            usage_tag=('interpret', 'chatbot', _pm_attrib_extras() or None),
+            usage_tag=('interpret', 'chatbot', _attrib),
         )
         if not result.get('success'):
             return {
@@ -49322,11 +49633,21 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
     print(f"[synth-chat interpret batch] subjects={subjects} "
           f"shared_context={shared_context!r}")
 
+    # Capture per-user attribution NOW while we are on the Flask
+    # request thread. The ThreadPoolExecutor workers below run in
+    # separate threads with no request context, so a per-worker
+    # _pm_attrib_extras() call returns {} and every interpret record
+    # ships unattributed. Pre-capturing here and passing through to
+    # each worker keeps attribution intact (2026-09-04 fix; matches
+    # the deck-job pattern that stashes attribution at kickoff).
+    _batch_attrib = _pm_attrib_extras() or None
+
     results_by_index: dict = {}
     with ThreadPoolExecutor(max_workers=10) as pool:
         futs = {
             pool.submit(_synth_chat_interpret_one_subject,
-                         subj, shared_context, history): idx
+                         subj, shared_context, history,
+                         _batch_attrib): idx
             for idx, subj in enumerate(subjects)
         }
         for fut in as_completed(futs):
@@ -49387,7 +49708,7 @@ def _synth_chat_interpret_batch(user_text: str, subjects: list,
                 max_tokens=32000, temperature=0.4,
                 model=_SYNTH_CHAT_INTERPRET_MODEL,
                 salvage_arrays=True,
-                usage_tag=('interpret', 'chatbot', _pm_attrib_extras() or None))
+                usage_tag=('interpret', 'chatbot', _batch_attrib))
             _data = _res.get('data') if _res.get('success') else None
             if isinstance(_data, dict):
                 _data = [_data]
@@ -54739,6 +55060,35 @@ def _spec_from_draft(draft):
         'follower_platforms': (draft.get('follower_platforms')
                                 if audience_type_out != 'general' else None),
     }
+    # ---- Platform scope passthrough (2026-09-04, Jenna perceptionbox
+    # rerun). Normalized here so the engine host sees a validated list
+    # of canonical platform keys or None. Draft may set the field or
+    # leave it absent (older drafts). Reject garbage silently to None
+    # so a bad value never blocks a build.
+    _ps_raw = draft.get('platform_scope')
+    _ps_norm = None
+    _CANONICAL_PLATFORMS = {
+        'youtube', 'tiktok', 'instagram', 'facebook', 'x', 'linkedin',
+        'twitch', 'snapchat', 'threads', 'substack', 'patreon', 'kick',
+        'rumble', 'pinterest', 'bluesky',
+    }
+    _PLATFORM_ALIASES = {
+        'yt': 'youtube', 'ig': 'instagram', 'tt': 'tiktok',
+        'fb': 'facebook', 'twitter': 'x', 'x/twitter': 'x',
+    }
+    if isinstance(_ps_raw, str):
+        _ps_raw = [_ps_raw]
+    if isinstance(_ps_raw, (list, tuple)) and _ps_raw:
+        _clean = set()
+        for _p in _ps_raw:
+            _pk = str(_p or '').strip().lower()
+            _pk = _PLATFORM_ALIASES.get(_pk, _pk)
+            if _pk in _CANONICAL_PLATFORMS:
+                _clean.add(_pk)
+        if _clean:
+            _ps_norm = sorted(_clean)
+    if _ps_norm:
+        spec['platform_scope'] = _ps_norm
     # ---- Date window passthrough (2026-08-24, Rosie O'Donnell / JKL
     # defect). Resolved event/explicit windows finally reach the
     # engine: `date_range` ('START TO END') stamps the SAMPLE SIZE row
@@ -56830,6 +57180,16 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     # generation, not the server failing).
     if async_fresh is None:
         async_fresh = True
+    # Capture per-user attribution NOW while we are on the Flask
+    # request thread. The async path spawns a background thread with
+    # no request context; the sync path stays on the request thread
+    # but re-merging here keeps behavior uniform between the two.
+    # Merged with _pm_ppu so pay-as-you-go billing fields (session
+    # id, request id, pay_per_use flag) are preserved. 2026-09-04 fix:
+    # before this, background read jobs for full-tier users had no
+    # attribution because _pm_ppu was None and the bg thread's
+    # _pm_attrib_extras() returned {} from missing request context.
+    _pm_read_extras = _pm_merge_extras(_pm_attrib_extras(), _pm_ppu)
     if async_fresh:
         job_id = uuid.uuid4().hex[:12]
         _pm_read_status_write(job_id, {
@@ -56838,7 +57198,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
             'question': text[:300], 'started_at': time.time()})
         threading.Thread(
             target=_pm_run_read_job,
-            args=(job_id, _pm_user, _pm_ppu, text,
+            args=(job_id, _pm_user, _pm_read_extras, text,
                   list(history or [])[-10:], mr, base, digest_block,
                   anchors_block, led),
             daemon=True).start()
@@ -56853,7 +57213,7 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     payload = _pm_generate_read_core(
         text=text, history=history, mr=mr, base=base,
         digest_block=digest_block, anchors_block=anchors_block,
-        led=led, pm_user=_pm_user, pm_ppu=_pm_ppu)
+        led=led, pm_user=_pm_user, pm_ppu=_pm_read_extras)
     try:
         if not payload.pop('_held', False):
             _pm_csv_point(payload.get('profile'), text,
@@ -56925,7 +57285,17 @@ def _pm_generate_read_core(*, text, history, mr, base, digest_block,
     narrate progress. Returns the response payload dict (plus internal
     '_family', '_verify', '_held' when applicable, and '_stages_ms', a
     per-stage wall-clock breakdown the callers route to the ask log /
-    the read-job JSON)."""
+    the read-job JSON).
+
+    `pm_ppu` (2026-09-04): historically this only carried pay-as-you-go
+    billing extras (session id, request id, pay_per_use flag). It now
+    ALSO carries the requesting user's attribution (user, user_email)
+    pre-captured on the request thread by the caller and merged with
+    the PPU dict. This function runs request-context free, so any
+    _pm_attrib_extras() call inside its model calls would return {};
+    passing the pre-merged dict through the existing pm_ppu slot keeps
+    every per-call render_calls record attributed to the right user
+    without a signature change."""
     import prometheus_analysis as pma
     import insights_ledger as il
 
@@ -57556,7 +57926,14 @@ def _pm_run_read_job(job_id, pm_user, pm_ppu, text, history, mr, base,
     phone or reloaded tab picks the read up when it returns. As the
     read advances, each phase transition lands on the job JSON as a
     user-safe `stage` (one tiny S3 put per transition) so the widget
-    can narrate progress (2026-08-28, p1-staged-progress)."""
+    can narrate progress (2026-08-28, p1-staged-progress).
+
+    `pm_ppu` (2026-09-04): now carries the pre-captured request-thread
+    user attribution (user, user_email) merged with pay-as-you-go
+    billing extras. Threaded through to _pm_generate_read_core so
+    every model call inside the read attributes to the requesting
+    user, even though this function runs on a background thread with
+    no Flask request context."""
     head = {'job_id': job_id, 'user': pm_user,
             'question': text[:300], 'started_at': time.time()}
 

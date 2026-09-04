@@ -10165,6 +10165,239 @@ def strip_reddit_from_social_media(df, subject, verbose=True):
 
 
 # ============================================================================
+# Platform scope pin (2026-09-04, Jenna perceptionbox rerun)
+#
+# When a build's SUBJECT identifies a platform-scoped creator/follower
+# universe ('Perception.box YouTube Followers', 'MrBeast TikTok
+# Subscribers', 'Aggregate X Y Instagram Followers'), the defining
+# platform MUST be pinned to 100 on its row in the SOCIAL MEDIA column
+# (or APP/PLATFORM / APP/PLATFORM USAGE / STREAMING/PLATFORM as
+# fallback, in that order — the first appearing on this file wins).
+#
+# Precedent: Perception.box TikTok Followers (audit-approved 2026-09-04)
+# ships SOCIAL MEDIA -> TIKTOK at 100.0, with other platforms carrying
+# their real audience-specific engagement values. This enforcer makes
+# that pattern deterministic for every future platform-scoped build,
+# defense-in-depth against the row-by-row engine failing to elevate
+# the defining platform.
+#
+# The enforcer infers platform_scope from the SUBJECT string (case +
+# punctuation insensitive word-boundary match on the canonical
+# platform vocabulary). If the SUBJECT carries no platform token
+# (aggregate build, or non-follower universe) the enforcer no-ops.
+#
+# Never LOWERS a value — the pin is one-way to 100. Other platforms
+# on the same file keep their engine-reasoned values. Idempotent:
+# second run is a no-op when the target row is already at 100.
+# ============================================================================
+
+
+# Canonical platform vocabulary mirrors migration/creator_follower_sizing
+# ._PLATFORM_TOKENS. Kept local so the enforcer file stays importable
+# even if the creator_follower_sizing module isn't on the path.
+_PIN_PLATFORM_TOKENS = (
+    ('youtube', ('youtube', 'you tube', 'yt')),
+    ('tiktok', ('tiktok', 'tik tok', 'tt')),
+    ('instagram', ('instagram', 'insta', 'ig')),
+    ('facebook', ('facebook', 'fb')),
+    ('x', ('twitter', 'x/twitter')),
+    ('linkedin', ('linkedin',)),
+    ('twitch', ('twitch',)),
+    ('snapchat', ('snapchat', 'snap')),
+    ('threads', ('threads',)),
+    ('substack', ('substack',)),
+    ('patreon', ('patreon',)),
+    ('kick', ('kick',)),
+    ('rumble', ('rumble',)),
+    ('pinterest', ('pinterest',)),
+    ('bluesky', ('bluesky',)),
+)
+
+# Canonical DISPLAY spellings for the pin row's Value cell. These match
+# the hostmap-canonical casing used across profile files (see
+# `_hostmap_canonical` for the general path; these are the well-known
+# platform brands we hard-code because they're stable).
+_PIN_PLATFORM_DISPLAY = {
+    'youtube': 'YouTube',
+    'tiktok': 'TikTok',
+    'instagram': 'Instagram',
+    'facebook': 'Facebook',
+    'x': 'X',
+    'linkedin': 'LinkedIn',
+    'twitch': 'Twitch',
+    'snapchat': 'Snapchat',
+    'threads': 'Threads',
+    'substack': 'Substack',
+    'patreon': 'Patreon',
+    'kick': 'Kick',
+    'rumble': 'Rumble',
+    'pinterest': 'Pinterest',
+    'bluesky': 'Bluesky',
+}
+
+# Column preference order: creator/follower universes anchor in SOCIAL
+# MEDIA first (Perception.box TikTok Followers precedent). APP/PLATFORM
+# variants and STREAMING/PLATFORM are fallbacks for atypical files.
+_PIN_PLATFORM_COL_PREFERENCE = (
+    'SOCIAL MEDIA',
+    'APP/PLATFORM',
+    'APP/PLATFORM USAGE',
+    'STREAMING/PLATFORM',
+)
+
+
+def _infer_platform_scope_from_subject(subject):
+    """Return a list of canonical platform keys named in the subject
+    (case + punctuation insensitive word-boundary match), or [] when
+    no platform token appears. Multi-platform subjects ('X and Y
+    YouTube + TikTok Followers') return every distinct match."""
+    s = str(subject or '').lower()
+    if not s:
+        return []
+    # Normalize any hyphen / dot / slash into space so 'you-tube',
+    # 'you.tube', 'you/tube' all match. Keep alnum + space.
+    import re as _re_local
+    norm = _re_local.sub(r'[^a-z0-9 ]+', ' ', s)
+    norm = _re_local.sub(r'\s+', ' ', norm).strip()
+    padded = f' {norm} '
+    keys = set()
+    for key, toks in _PIN_PLATFORM_TOKENS:
+        for tok in toks:
+            # Require a space boundary on BOTH sides so 'ig' doesn't
+            # match inside 'signals' or 'fb' inside 'sofball'.
+            if f' {tok} ' in padded:
+                keys.add(key)
+                break
+    return sorted(keys)
+
+
+def pin_platform_scope_to_100(df, subject, verbose=True):
+    """Pin the platform's row to BP=100 when the SUBJECT identifies a
+    platform-scoped follower / audience universe. See section header
+    for the full contract.
+
+    Fires ONLY when:
+      * `subject` carries at least one canonical platform token, AND
+      * at least one of the preferred platform columns exists on the
+        file (SOCIAL MEDIA / APP/PLATFORM / APP/PLATFORM USAGE /
+        STREAMING/PLATFORM in that order), AND
+      * the file is a follower / audience universe (SUBJECT or BRAND
+        INPUT Value carries 'followers' / 'subscribers' / 'audience' -
+        i.e. we don't accidentally pin YouTube to 100 on 'YouTube
+        Music' or a title like 'The YouTube Effect').
+
+    Never lowers a value. Idempotent."""
+    if df is None or len(df) == 0:
+        return df, 0
+    if "Column" not in df.columns or "Value" not in df.columns:
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+
+    # Infer scope from subject.
+    scope = _infer_platform_scope_from_subject(subject)
+    if not scope:
+        return df, 0
+
+    # Follower / audience universe gate. Read from BOTH the passed-in
+    # `subject` (the argument this enforcer receives) AND the SUBJECT /
+    # BRAND INPUT rows on the file, so we catch every naming shape.
+    import re as _re_local
+    cu = df["Column"].astype(str).str.strip().str.upper()
+    follower_re = _re_local.compile(
+        r'\b(followers?|subscribers?|subs?|audience|viewers?|listeners?|users?)\b',
+        _re_local.IGNORECASE)
+    is_follower_universe = bool(follower_re.search(str(subject or '')))
+    if not is_follower_universe:
+        for col_up in ('SUBJECT', 'BRAND INPUT'):
+            _mask = cu == col_up
+            if _mask.any():
+                _val = str(df.loc[_mask].iloc[0].get('Value') or '')
+                if follower_re.search(_val):
+                    is_follower_universe = True
+                    break
+    if not is_follower_universe:
+        return df, 0
+
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    # Pick the first preferred column that exists on this file.
+    target_col = None
+    for cand in _PIN_PLATFORM_COL_PREFERENCE:
+        if (cu == cand).any():
+            target_col = cand
+            break
+    if target_col is None:
+        if verbose:
+            print(f"   ⚠️ pin_platform_scope_to_100: subject {subject!r} "
+                  f"scopes to {scope} but no SOCIAL MEDIA / APP/PLATFORM / "
+                  f"STREAMING/PLATFORM column on this file; no-op "
+                  f"(Rule #0: never invent a new Column).")
+        return df, 0
+
+    # Row lookup is case + punctuation insensitive. Compare on
+    # _norm_brand so 'YOUTUBE' / 'YouTube' / 'You Tube' / 'you.tube'
+    # all resolve to the same target row.
+    vu = df["Value"].apply(_norm_brand)
+    col_mask = df["Column"].astype(str).str.strip() == target_col
+
+    n_pinned = 0
+    for pkey in scope:
+        pnorm = _norm_brand(_PIN_PLATFORM_DISPLAY.get(pkey, pkey))
+        row_mask = col_mask & (vu == pnorm)
+        # Alias: 'x' and 'twitter' fold together (same platform, two
+        # display spellings). If the file spells it 'Twitter' but our
+        # key is 'x', catch both.
+        if pkey == 'x':
+            row_mask = row_mask | (col_mask & (vu == _norm_brand('Twitter')))
+        idxs = list(df[row_mask].index)
+        if not idxs:
+            # Row doesn't exist on this file. Rule #0 forbids
+            # inventing a new Column, but a MISSING BRAND ROW inside
+            # an existing column IS a legitimate insert (hostmap-gated).
+            # Log the gap; don't force-insert - if the engine chose
+            # not to emit it, that's a per-run decision we don't
+            # override here. Layer 1 (interpret) already ensures the
+            # universe is scoped correctly.
+            if verbose:
+                print(f"   ℹ️ pin_platform_scope_to_100: subject {subject!r} "
+                      f"scopes to {pkey!r} but no matching row in "
+                      f"{target_col} column; skipped.")
+            continue
+        # Highest-BP row wins (usually the canonical spelling; the
+        # duplicate is a hostmap regression we'd fix separately).
+        best_idx = None
+        best_bp = -1.0
+        for i in idxs:
+            try:
+                v = float(str(df.at[i, bp_col]).replace('%', '').strip())
+            except (ValueError, TypeError):
+                v = 0.0
+            if v > best_bp:
+                best_bp = v
+                best_idx = i
+        if best_idx is None:
+            continue
+        if best_bp >= 100.0 - 1e-6:
+            # Already pinned; idempotent no-op.
+            continue
+        prior_bp = best_bp
+        df = _set_bp(df, best_idx, 100.0, bp_col, cs_col,
+                     raw_col, proj_col, sample_size)
+        n_pinned += 1
+        if verbose:
+            display_val = str(df.at[best_idx, 'Value']).strip()
+            print(f"   📌 pin_platform_scope_to_100: pinned "
+                  f"{target_col} / {display_val!r} 100.0 "
+                  f"(was {prior_bp:.4f}) for platform-scoped subject "
+                  f"{subject!r}")
+
+    return df, n_pinned
+
+
+# ============================================================================
 # Final format normalizer (2026-07-28 pipeline hardening rail #5)
 #
 # Catches the four defect classes flagged on WHEEL OF FORTUNE - Avid Fan.csv
@@ -11723,6 +11956,7 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         strip_url_variant_seed_rows,       # 2026-07-29 (Elton MUSICIAN/BAND) — hide URL-variant seed lists from category displays
         strip_hostmap_hidden_brands,       # 2026-05-27 (Rule #4b) — Hidden never ships
         strip_reddit_from_social_media,    # 2026-09-04 (Rule #4d, Jenna) — Reddit lives in APP/PLATFORM only, never SOCIAL MEDIA
+        pin_platform_scope_to_100,         # 2026-09-04 (Jenna perceptionbox rerun) — SOCIAL MEDIA platform row pinned to 100 on platform-scoped follower universes
         strip_mpb_non_hostmap_brands,      # 2026-05-28 (Rule #4c) — MPB column must match hostmap MPB sections
         strip_url_encoded_subject_dupes,
         strip_corporate_parents,
