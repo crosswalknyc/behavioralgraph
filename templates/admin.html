@@ -3894,6 +3894,21 @@
                         </div>
                     </div>
 
+                    <!-- Sentiment IQ Access (2026-09-04 gap fix: backend
+                         already accepted has_sentiment_iq_access on
+                         create + update, but the admin modal had no
+                         checkbox to grant / revoke it per user. Added
+                         so admins can actually control who sees
+                         Sentiment IQ in the dashboard. -->
+                    <div class="dashboard-access-item" data-access-group="trends">
+                        <div class="dashboard-access-header">
+                            <label class="checkbox-group">
+                                <input type="checkbox" id="hasSentimentIQAccess">
+                                <span style="font-weight: 600;">🎭 SENTIMENT IQ</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- 2026-07-30: standalone Trends IQ + Microdramas IQ +
                          Talent Ranker cards consolidated into a single
                          "📈 TRENDS" group card (further down) that mirrors
@@ -4923,83 +4938,57 @@
         const defaultProfilePhotoUrl = {{ (default_profile_photo or '')|tojson }};
         const defaultProfilePhoto = {{ (default_profile_photo or '')|tojson }};
 
-        // Per Jenna 2026-08-25: "only let super admins grant access to
-        // allow product access to users and assign user status". Fields
-        // that only a super_admin may modify on a user record; kept in
-        // sync with SUPER_ADMIN_ONLY_USER_FIELDS in app.py.
-        const SUPER_ADMIN_ONLY_USER_FIELDS = [
-            'role',
-            'has_profile_iq_access','has_subscriber_iq_access',
-            'has_ecommerce_iq_access',
-            'has_ticket_sales_iq_access',
-            'has_hedge_fund_iq_access','gets_hedge_fund_iq_emails',
-            'hedge_fund_iq_tabs','hedge_fund_iq_tickers',
-            'hedge_fund_iq_data_cutoff',
-            'analysis_iq_modules',
-            'has_ticket_sales_tracker_access',
-            'has_rankers_iq_access','rankers_iq_options',
-            'has_talent_fit_access',
-            'has_sf_conversion_access','has_flywheel_conversion_access',
-            'has_brand_partnership_iq_access','has_sentiment_iq_access',
-            'has_journey_iq_access','allowed_journey_iq_runs',
-            'has_intent_iq_access','allowed_intent_iq_runs',
-            'has_share_of_time_access','has_share_of_time_run_access',
-            'has_blue_iq_access',
-            'has_brand_tracking_iq_access',
-            'has_impact_iq_access','impact_iq_journeys',
-            'has_trends_iq_access','has_microdramas_iq_access',
-            'allowed_lenses',
-            'allowed_trends_tabs','allowed_rankers_tabs',
-            'has_chatbot_profile_iq_access',
-            'prometheus_access',
-            'auto_access_new'
-        ];
+        // Per Jenna 2026-09-04 (verbatim: "make sure admins can revoke
+        // and grant access to certain things for users"). Loosened from
+        // the 2026-08-25 posture: product-access flags are now editable
+        // by every admin. Only `role` (which promotes / demotes admin
+        // itself) remains super-admin-only so a regular admin cannot
+        // self-promote. Kept in sync with SUPER_ADMIN_ONLY_USER_FIELDS
+        // in app.py.
+        const SUPER_ADMIN_ONLY_USER_FIELDS = ['role'];
 
-        // Disable the role dropdown + every product-access checkbox in
-        // the user create/edit modal when the current admin is not a
-        // super_admin. Backend enforces the same guard (see
-        // SUPER_ADMIN_ONLY_USER_FIELDS in app.py); this keeps the UI
-        // honest so non-super admins can't fill out controls that would
-        // 403 on save. Idempotent - safe to call every modal open.
+        // Disable ONLY the role dropdown in the user create / edit
+        // modal when the current admin is not a super_admin. Backend
+        // enforces the same guard (SUPER_ADMIN_ONLY_USER_FIELDS in
+        // app.py). Per Jenna 2026-09-04, every product-access checkbox
+        // in this modal is now editable by every admin, so the previous
+        // sweeping disable pass is retired. Idempotent - safe to call
+        // every modal open.
         function _applySuperAdminOnlyControls() {
             const isSuper = currentUserRole === 'super_admin';
             const roleSel = document.getElementById('newRole');
             if (roleSel) {
                 roleSel.disabled = !isSuper;
-                roleSel.title = isSuper ? '' : 'Only a super admin can assign user status';
+                roleSel.title = isSuper ? '' : 'Only a super admin can assign user status (role)';
             }
-            const disableTitle = 'Only a super admin can grant product access';
-            document.querySelectorAll('#userModal [id^="has"][id$="Access"]').forEach(el => {
-                el.disabled = !isSuper;
-                el.title = isSuper ? '' : disableTitle;
-            });
-            const extras = [
+            // Re-enable + clear any tooltip that the pre-2026-09-04
+            // implementation may have written onto product-access
+            // controls in a still-open modal DOM. Belt-and-suspenders
+            // so a stale disabled state can't survive across a role
+            // change in the same session.
+            const wasDisabledIds = [
                 'getsHedgeFundIQEmails','hedgeFundIQDataCutoff','allHedgeFundTickers',
                 'prometheusAccessFull','prometheusAccessPullsOnly',
-                // Prometheus mode (2026-09-03): three-way per-user split.
-                // Only super admins can grant / revoke.
-                'prometheusModeBoth','prometheusModeAnalysis','prometheusModePull'
+                'prometheusModeBoth','prometheusModeAnalysis','prometheusModePull',
+                'allowAllTrendsTabs','allowAllRankersTabs'
             ];
-            extras.forEach(id => {
+            wasDisabledIds.forEach(id => {
                 const el = document.getElementById(id);
-                if (el) {
-                    el.disabled = !isSuper;
-                    el.title = isSuper ? '' : disableTitle;
-                }
+                if (el && !isSuper) { el.disabled = false; el.title = ''; }
+                if (el && isSuper) { el.disabled = false; el.title = ''; }
+            });
+            document.querySelectorAll('#userModal [id^="has"][id$="Access"]').forEach(el => {
+                el.disabled = false; el.title = '';
             });
             const trendsAllOn = !!(document.getElementById('allowAllTrendsTabs') && document.getElementById('allowAllTrendsTabs').checked);
             const rankersAllOn = !!(document.getElementById('allowAllRankersTabs') && document.getElementById('allowAllRankersTabs').checked);
-            ['allowAllTrendsTabs', 'allowAllRankersTabs'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) { el.disabled = !isSuper; el.title = isSuper ? '' : disableTitle; }
-            });
             document.querySelectorAll('.allowed-trends-tab-checkbox').forEach(el => {
-                el.disabled = !isSuper || trendsAllOn;
-                el.title = isSuper ? '' : disableTitle;
+                el.disabled = trendsAllOn;
+                el.title = '';
             });
             document.querySelectorAll('.allowed-rankers-tab-checkbox').forEach(el => {
-                el.disabled = !isSuper || rankersAllOn;
-                el.title = isSuper ? '' : disableTitle;
+                el.disabled = rankersAllOn;
+                el.title = '';
             });
             const notice = document.getElementById('userModalSuperAdminNotice');
             if (notice) notice.style.display = isSuper ? 'none' : 'block';
@@ -10069,6 +10058,8 @@
             if (biqAccessReset) biqAccessReset.checked = false;
             var btAccessReset = document.getElementById('hasBrandTrackingIQAccess');
             if (btAccessReset) btAccessReset.checked = false;
+            var sentAccessReset = document.getElementById('hasSentimentIQAccess');
+            if (sentAccessReset) sentAccessReset.checked = false;
             var iiqAccessReset = document.getElementById('hasImpactIQAccess');
             if (iiqAccessReset) iiqAccessReset.checked = false;
             setImpactIQJourneys(['*']);
@@ -10248,6 +10239,8 @@
             if (biqAccess) biqAccess.checked = user.has_blue_iq_access === true; // Default false
             var btAccess = document.getElementById('hasBrandTrackingIQAccess');
             if (btAccess) btAccess.checked = user.has_brand_tracking_iq_access === true; // Default false
+            var sentAccess = document.getElementById('hasSentimentIQAccess');
+            if (sentAccess) sentAccess.checked = user.has_sentiment_iq_access === true; // Default false
             var tiqAccess = document.getElementById('hasTrendsIQAccess');
             if (tiqAccess) tiqAccess.checked = user.has_trends_iq_access === true; // Default false
             var mdAccess = document.getElementById('hasMicrodramasIQAccess');
@@ -11932,6 +11925,7 @@
                 hasMicrodramasIQAccess: false,
                 hasBlueIQAccess: false,
                 hasBrandTrackingIQAccess: false,
+                hasSentimentIQAccess: false,
                 hasHedgeFundIQAccess: false,
                 hasRankersIQAccess: false,
                 hasShareOfTimeAccess: true,
@@ -13835,6 +13829,7 @@
                 hedge_fund_iq_tickers: document.getElementById('allHedgeFundTickers').checked ? ['*'] : getHedgeFundIQTickers(),
                 has_blue_iq_access: !!(document.getElementById('hasBlueIQAccess') && document.getElementById('hasBlueIQAccess').checked),
                 has_brand_tracking_iq_access: !!(document.getElementById('hasBrandTrackingIQAccess') && document.getElementById('hasBrandTrackingIQAccess').checked),
+                has_sentiment_iq_access: !!(document.getElementById('hasSentimentIQAccess') && document.getElementById('hasSentimentIQAccess').checked),
                 has_trends_iq_access: !!(document.getElementById('hasTrendsIQAccess') && document.getElementById('hasTrendsIQAccess').checked),
                 has_microdramas_iq_access: !!(document.getElementById('hasMicrodramasIQAccess') && document.getElementById('hasMicrodramasIQAccess').checked),
                 allowed_lenses: getAllowedLensesPayload(),

@@ -2538,7 +2538,16 @@ _PRODUCT_ACCESS_FIELDS = frozenset([
     'auto_access_new',
 ])
 # 'role' drives the SA / A / U badge - the "user status" in the UI.
-SUPER_ADMIN_ONLY_USER_FIELDS = _PRODUCT_ACCESS_FIELDS | frozenset({'role'})
+# 2026-09-04 (Jenna, verbatim: "make sure admins can revoke and grant
+# access to certain things for users"). Partial loosen of the 2026-08-25
+# posture: product-access flags in _PRODUCT_ACCESS_FIELDS above are now
+# editable by ALL admins so any admin can grant / revoke a user's access
+# to any product. Only `role` remains super-admin-only so a regular
+# admin cannot self-promote or promote another user to admin /
+# super_admin. _PRODUCT_ACCESS_FIELDS is kept as documentation and for
+# potential future re-tightening -- do not delete without checking who
+# imports it.
+SUPER_ADMIN_ONLY_USER_FIELDS = frozenset({'role'})
 
 
 def _reject_if_non_super_touches_restricted(req_data, existing_user=None):
@@ -2576,8 +2585,8 @@ def _reject_if_non_super_touches_restricted(req_data, existing_user=None):
     return jsonify({
         'success': False,
         'error': (
-            "Only a super admin can grant product access or assign "
-            "user status. Restricted fields in this request: "
+            "Only a super admin can assign user status (role). "
+            "Restricted fields in this request: "
             + ", ".join(sorted(changing))
         ),
     }), 403
