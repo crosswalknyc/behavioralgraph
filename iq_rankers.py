@@ -713,6 +713,25 @@ def _build_covered_single_names_from_db(*, ch_connect: Callable) -> set[str]:
     return _build_covered_single_names(jobs)
 
 
+_ARTIFACT_NAME_TOKENS = (".bak", "prepatch", "pre_patch", "_backups/")
+
+
+def _is_backup_artifact_name(*parts: str) -> bool:
+    """True when any of the given name/key fragments looks like a backup
+    file artifact rather than a real profile. A bad ingest on 2026-06-01
+    swept ~225 `<Subject>_<TS>.prepatch.bak` files into
+    `reference.profile_iq_daily_metrics`; their multi-word cleaned names
+    then wrongly 'covered' real single-word subjects (the Paramount+
+    disappearance). Artifacts must never be processed by the nightly
+    cron, never cover a sibling, and never render on the leaderboard.
+    """
+    for p in parts:
+        low = (p or "").lower()
+        if any(tok in low for tok in _ARTIFACT_NAME_TOKENS):
+            return True
+    return False
+
+
 def _build_covered_single_names(jobs: list[dict]) -> set[str]:
     """Identify single-name Profile IQ profiles that are 'covered' by a
     multi-word sibling and should therefore be skipped from the IQ Ranker.
@@ -747,6 +766,10 @@ def _build_covered_single_names(jobs: list[dict]) -> set[str]:
               or j.get("name") or "").strip()
         subj = j.get("profile_subject") or ""
         if not pn or not subj:
+            continue
+        # Backup-file artifacts (e.g. "Paramount+_..._23_00.prepatch.bak")
+        # are not profiles and must not cover anything.
+        if _is_backup_artifact_name(subj, pn):
             continue
         # Judge single vs multi-word on the subject part only, so a
         # "{Subject} - {Cut}" sibling can't cover its own parent.
@@ -1188,6 +1211,9 @@ def _iter_profile_jobs(s3_cache_jobs: list[dict]) -> Iterable[dict]:
             ("project_name", "display_name", "profile_subject", "s3_key")).lower()
         if "avid fan" in haystack:
             continue
+        # Backup-file artifacts must never get nightly metrics rows.
+        if _is_backup_artifact_name(haystack):
+            continue
         # We dedupe on profile_subject so multi-year runs of the same person
         # only get one row per day.
         subject = j.get("profile_subject") or ""
@@ -1493,6 +1519,14 @@ def aggregate_leaderboard(
         "AND positionCaseInsensitive(project_name, 'avid fan')   = 0"
     )
 
+    # Backup-file artifacts (one bad ingest swept `.prepatch.bak` files
+    # into the metrics table) never render, whatever the date window.
+    where_no_artifacts = (
+        "AND positionCaseInsensitive(profile_subject, '.bak') = 0 "
+        "AND positionCaseInsensitive(profile_subject, 'prepatch') = 0 "
+        "AND positionCaseInsensitive(profile_subject, 'pre_patch') = 0"
+    )
+
     # Single-word project names that are also a brand_term in some other
     # profile's daily-metrics row are duplicates: their pre-fix rows in
     # `profile_iq_daily_metrics` were computed against the broad "Anthony"
@@ -1647,6 +1681,7 @@ def aggregate_leaderboard(
           {where_sub}
           {where_search}
           {where_no_avid}
+          {where_no_artifacts}
           {where_no_covered}
         GROUP BY profile_subject
     ),
@@ -1676,6 +1711,7 @@ def aggregate_leaderboard(
           AND {where_master}
           {where_sub}
           {where_no_avid}
+          {where_no_artifacts}
           {where_no_covered}
         GROUP BY profile_subject
     )
