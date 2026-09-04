@@ -53012,9 +53012,30 @@ def api_synth_chat_clarify():
         # from a prior turn can't re-offer a mismatched parent
         # (2026-09-02, companion to the _maybe_ask_parent_link gate).
         _ask_subject_rp = draft.get('subject') or ''
+        # 2026-09-04 hotfix (Jenna live 500): _subject_identity_mismatch
+        # takes (prompt, subject, candidate_display) and the 2026-09-02
+        # author left a bare `prompt` reference that was never bound in
+        # this branch (NameError at runtime). The user's natural-language
+        # ask is stashed on the draft during interpret via
+        # spec_draft['user_prompt'] (see line ~54237). Fall back through
+        # a couple of legacy field names, then to the subject itself as
+        # a last resort so the identity-mismatch helper never sees None
+        # (empty first arg still works: helper does `prompt or ''`,
+        # ORs both args together, and its whole body is wrapped in
+        # try/except Exception -> False, so a stale draft cannot re-500
+        # here regardless).
+        _clarify_prompt = str(
+            body.get('prompt')
+            or draft.get('user_prompt')
+            or draft.get('prompt')
+            or draft.get('original_prompt')
+            or draft.get('question')
+            or _ask_subject_rp
+            or ''
+        )
         cands = [c for c in cands
                  if not _subject_identity_mismatch(
-                     prompt, _ask_subject_rp, c.get('display_name'))]
+                     _clarify_prompt, _ask_subject_rp, c.get('display_name'))]
         low = answer.lower().strip()
         declined = bool(_re.match(
             r'^(no|none|neither|nope|fresh|new|not a cut|'
@@ -53053,9 +53074,11 @@ def api_synth_chat_clarify():
         # identity token with the ask, drop the link and route to the
         # build-fresh branch below instead of committing derive_cut.
         # Catches stale drafts whose candidates were stashed before
-        # the identity gate landed.
+        # the identity gate landed. 2026-09-04 hotfix: reuse the
+        # _clarify_prompt bound at the top of this branch (bare
+        # `prompt` was a NameError; see the note above).
         if picked is not None and _subject_identity_mismatch(
-                prompt, draft.get('subject') or '',
+                _clarify_prompt, draft.get('subject') or '',
                 picked.get('display_name')):
             picked = None
             declined = True
