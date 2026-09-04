@@ -44561,8 +44561,9 @@ https://www.instagram.com/p/..."></textarea>
         
         // Live Features - controls which Analysis Tools are visible to non-admin users
         const userRole = '{{ role }}';
-        const isSuperAdmin = userRole === 'super_admin';
-        const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+        const isCloaked = {{ 'true' if cloaked_from else 'false' }};
+        const isSuperAdmin = userRole === 'super_admin' && !isCloaked;
+        const isAdmin = (userRole === 'admin' || userRole === 'super_admin') && !isCloaked;
         
         // Allowed behavioral categories for this user (controls which categories show in Behavioral tab)
         const allowedBehavioralCategories = {{ allowed_behavioral_categories | tojson | safe }};
@@ -45188,6 +45189,15 @@ https://www.instagram.com/p/..."></textarea>
                         var opt = viewDropdown.querySelector('option[value="' + pv[0] + '"]');
                         if (opt) opt.disabled = !pv[1];
                     });
+                    // If the current product was just revoked, land on the first granted one.
+                    var _cur = viewDropdown.options[viewDropdown.selectedIndex];
+                    if (_cur && _cur.disabled) {
+                        var _fb = Array.from(viewDropdown.options).find(function(o) { return !o.disabled; });
+                        if (_fb) {
+                            viewDropdown.value = _fb.value;
+                            try { viewDropdown.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
+                        }
+                    }
                     window.hasShareOfTimeRunAccess = !!d.has_share_of_time_run_access && (d.has_share_of_time_access !== false);
                     if (Array.isArray(d.allowed_trends_tabs)) window.__allowedTrendsTabs = d.allowed_trends_tabs;
                     if (Array.isArray(d.allowed_rankers_tabs)) window.__allowedRankersTabs = d.allowed_rankers_tabs;
@@ -45257,6 +45267,7 @@ https://www.instagram.com/p/..."></textarea>
                         var opt = viewDropdown.options[i];
                         var groupName = opt.getAttribute('data-group');
                         if (!groupName) {
+                            if (opt.disabled) continue;
                             panelEl.appendChild(_buildLeafOption(opt));
                             continue;
                         }
@@ -45278,10 +45289,12 @@ https://www.instagram.com/p/..."></textarea>
                         parentBtn.setAttribute('aria-expanded', _expandedNavGroups.has(groupName) ? 'true' : 'false');
                         var _groupItemCount = 0;
                         for (var _gc = 0; _gc < viewDropdown.options.length; _gc++) {
-                            if (viewDropdown.options[_gc].getAttribute('data-group') === groupName) {
+                            var _gopt = viewDropdown.options[_gc];
+                            if (_gopt.getAttribute('data-group') === groupName && !_gopt.disabled) {
                                 _groupItemCount++;
                             }
                         }
+                        if (_groupItemCount === 0) continue;
                         var _nameSpan = document.createElement('span');
                         _nameSpan.className = 'view-nav-group-name';
                         _nameSpan.textContent = groupName;
@@ -45308,6 +45321,7 @@ https://www.instagram.com/p/..."></textarea>
                         for (var k = 0; k < viewDropdown.options.length; k++) {
                             var sib = viewDropdown.options[k];
                             if (sib.getAttribute('data-group') !== groupName) continue;
+                            if (sib.disabled) continue;
                             var leaf = _buildLeafOption(sib);
                             leaf.classList.add('view-nav-suboption');
                             submenu.appendChild(leaf);
@@ -120530,8 +120544,10 @@ https://www.instagram.com/p/..."></textarea>
                 return true;
             });
             
-            // Run access is now handled via the 'accessible' flag from the server
-            // All profiles are shown; inaccessible ones appear locked/dimmed
+            // Run access: hide profiles the user was not granted. Locked
+            // dimmed rows made a restricted user look like they had the
+            // full catalog.
+            profiles = profiles.filter(p => p.accessible !== false);
             
             const searchTerm = (document.getElementById('dashProfileSearchInput')?.value || '').toLowerCase().trim();
 
