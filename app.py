@@ -3620,10 +3620,14 @@ def admin_cloak():
         if not target_username:
             return jsonify({'success': False, 'error': 'Username required'}), 400
         users_data = load_users()
-        if target_username not in users_data.get('users', {}):
+        target_user = users_data.get('users', {}).get(target_username)
+        if not target_user:
             return jsonify({'success': False, 'error': 'User not found'}), 404
         original_username = session.get('username')
         session['username'] = target_username
+        # Impersonate their role too — leftover session['role'] from the
+        # super_admin would otherwise keep admin-only UI and APIs open.
+        session['role'] = _normalize_role(target_user.get('role', 'user'))
         session['cloaked_from'] = original_username
         return jsonify({'success': True, 'redirect': '/'})
     except Exception as e:
@@ -9178,7 +9182,13 @@ def compute_product_access_flags(user, role):
         'analysis_iq_modules': list(u.get('analysis_iq_modules', []) or []),
         'allowed_behavioral_categories': u.get('allowed_behavioral_categories', ['*']) or ['*'],
         'allowed_categories': u.get('allowed_categories', ['*']) or ['*'],
-        'allowed_runs': u.get('allowed_runs', ['*']) or ['*'],
+        # Preserve an explicit empty list (zero profiles granted). The
+        # `or ['*']` form treated [] as missing and reopened the catalog.
+        'allowed_runs': (
+            list(u['allowed_runs'])
+            if isinstance(u.get('allowed_runs'), list)
+            else ['*']
+        ),
         'has_rankers_iq_access': bool(u.get('has_rankers_iq_access', False)),
         'rankers_iq_options': u.get('rankers_iq_options', []) or [],
         'has_ticket_sales_iq_access': u.get('has_ticket_sales_iq_access', True) is not False,
@@ -9245,18 +9255,13 @@ def compute_product_access_flags(user, role):
 
 
 def apply_cloak_product_access_overrides(access):
-    """Mutate access dict when admin is cloaked.
+    """Passthrough. Cloak is true impersonation.
 
-    Analysis IQ was retired 2026-09-03 as a top-level flag, but the
-    sub-module list (analysis_iq_modules) still gates SF Conversion,
-    Flywheel Conversion, Journey IQ, Brand Partnership, and Intent
-    Ingest via compound checks. Cloak preserves full sub-module
-    visibility so a cloaked super_admin sees exactly what the end
-    user would with all modules granted.
+    Callers still wrap computed flags through here so a future cloak
+    tweak has one seam. Do not grant extra modules, tabs, or runs —
+    a cloaked super_admin must see the target user's dashboard, not
+    their own.
     """
-    if session.get('cloaked_from'):
-        access = dict(access)
-        access['analysis_iq_modules'] = list(_ANALYSIS_IQ_MODULES_FULL)
     return access
 
 
@@ -16362,10 +16367,10 @@ def _require_module_access(*flag_names, module_label: str = None):
 
     Order of checks:
       1. Session must be authenticated (401 otherwise).
-      2. Admin / super_admin bypass (always granted).
-      3. Cloaked admin session bypass (impersonating another user still
-         gets full access — matches Analysis IQ cloak behavior).
-      4. If ANY of the passed flag names resolves truthy on the user's
+      2. Admin / super_admin bypass when acting as themselves.
+         Cloaked sessions use the target user's record, so this does
+         not fire while impersonating a regular user.
+      3. If ANY of the passed flag names resolves truthy on the user's
          computed access dict, grant. Multi-flag support is used when a
          module has both a top-level flag and an Analysis IQ submodule
          alias (e.g. SF Conversion = has_sf_conversion_access OR
@@ -16381,8 +16386,6 @@ def _require_module_access(*flag_names, module_label: str = None):
         }), 401)
     role = _normalize_role(user.get('role', 'user'))
     if role in ('admin', 'super_admin'):
-        return True, None
-    if session.get('cloaked_from'):
         return True, None
     access = apply_cloak_product_access_overrides(
         compute_product_access_flags(user, role))
@@ -16410,26 +16413,25 @@ def _require_module_access(*flag_names, module_label: str = None):
 def _user_can_access_profile_run(user, s3_key: str) -> bool:
     """True if `user` can access the given Profile IQ S3 key.
 
-    Mirrors the same allowed_runs + allowed_categories logic used to tag
-    the `accessible` flag in /api/jobs so the UI and backend agree. Gen
-    Pop files are always accessible for authenticated users because the
-    dashboard's default cohort view needs them.
+    Mirrors the `accessible` flag in /api/jobs so the UI and backend
+    agree. Gen Pop files are always accessible for authenticated users
+    because the dashboard's default cohort view needs them.
 
-    Access sources (any grants):
-      * role in (admin, super_admin), or cloaked
+    Access sources:
+      * role in (admin, super_admin) acting as themselves
       * user.allowed_runs is None / contains '*'
-      * s3_key is in user.allowed_runs
-      * user.allowed_categories is None / contains '*'
-      * the profile's category (from s3_cache jobs metadata) is in
-        user.allowed_categories
+      * s3_key is in an explicit user.allowed_runs list
       * key contains 'gen_pop' (Gen Pop is universal)
+
+    Category Access is a subscription for auto-adding *new* profiles
+    onto allowed_runs. It does not unlock the rest of the catalog when
+    an admin has picked an explicit run list (the previous OR with
+    allowed_categories=['*'] made Run Access a no-op).
     """
     if not user:
         return False
     role = user.get('role', 'user')
     if role in ('admin', 'super_admin'):
-        return True
-    if session.get('cloaked_from'):
         return True
     key_lower = (s3_key or '').lower()
     if 'gen_pop' in key_lower:
@@ -16440,25 +16442,6 @@ def _user_can_access_profile_run(user, s3_key: str) -> bool:
         return True
     if isinstance(allowed_runs, list) and s3_key in allowed_runs:
         return True
-    allowed_categories = user.get('allowed_categories')
-    if allowed_categories is None or (
-            isinstance(allowed_categories, list)
-            and '*' in allowed_categories):
-        return True
-    allowed_cats = {(c or '').upper()
-                    for c in (allowed_categories or [])
-                    if c}
-    if allowed_cats:
-        try:
-            for job in (s3_cache.get('jobs') or []):
-                jk = job.get('s3_key') or job.get('key')
-                if jk == s3_key:
-                    cat = (job.get('category') or '').upper()
-                    if cat and cat in allowed_cats:
-                        return True
-                    break
-        except Exception:
-            pass
     return False
 
 
@@ -16473,7 +16456,7 @@ def _require_profile_run_access(s3_key: str):
             'error': 'Not authenticated',
         }), 401)
     role = _normalize_role(user.get('role', 'user'))
-    if role in ('admin', 'super_admin') or session.get('cloaked_from'):
+    if role in ('admin', 'super_admin'):
         return True, None
     # Explicit umbrella deny (has_profile_iq_access default is True, so
     # this only fires when admin has flipped it off for that user).
@@ -17254,7 +17237,7 @@ def _user_intent_iq_title_access(user):
 
     Mirrors _user_jiq_run_access(). Returns ``(is_admin, allow_all,
     allowed_slugs)``:
-      * ``is_admin`` — admin / super_admin / cloaked sessions see everything.
+      * ``is_admin`` — admin / super_admin acting as themselves see everything.
       * ``allow_all`` — non-admin with default-open policy
         (``allowed_intent_iq_runs`` missing, not a list, or contains ``'*'``).
         Preserves back-compat for users created before per-title gating.
@@ -17262,7 +17245,7 @@ def _user_intent_iq_title_access(user):
         open when ``allow_all`` is False. Empty set = explicitly revoked.
     """
     role = (user or {}).get('role')
-    is_admin = role in ('admin', 'super_admin') or bool(session.get('cloaked_from'))
+    is_admin = role in ('admin', 'super_admin')
     if is_admin:
         return True, True, set()
     raw = (user or {}).get('allowed_intent_iq_runs')
@@ -26733,26 +26716,23 @@ def list_jobs():
         
         # Mark run access: tag each profile with 'accessible' flag instead of filtering
         allowed_runs = None
-        allowed_categories = None
-        u = None
         try:
             _users_data = load_users()
             u = _users_data.get('users', {}).get(session.get('username')) if session.get('username') else None
             if u is not None:
                 allowed_runs = u.get('allowed_runs')
-                allowed_categories = u.get('allowed_categories')
         except Exception:
             pass
-        has_all_access = allowed_runs is None or (isinstance(allowed_runs, list) and len(allowed_runs) == 1 and allowed_runs[0] == '*')
-        # Category Access also grants access: if a user is subscribed to a category,
-        # all profiles in that category are accessible (not just future ones).
-        has_all_cats = (
-            allowed_categories is None
-            or (isinstance(allowed_categories, list) and '*' in allowed_categories)
+        has_all_access = (
+            allowed_runs is None
+            or (isinstance(allowed_runs, list) and '*' in allowed_runs)
         )
-        allowed_cats_upper = set()
-        if not has_all_cats and isinstance(allowed_categories, list):
-            allowed_cats_upper = {(c or '').upper() for c in allowed_categories if c}
+        # Explicit Run Access is the live allow-list. Category Access only
+        # auto-subscribes *new* profiles onto that list (see
+        # auto_add_runs_to_all_users); it must not reopen the catalog when
+        # an admin has picked specific profiles (allowed_categories
+        # defaults to ['*'] on new users, which previously made every
+        # profile accessible).
         if has_all_access:
             for e in job_list:
                 e['accessible'] = True
@@ -26760,10 +26740,7 @@ def list_jobs():
             allowed_set = set(allowed_runs or [])
             for e in job_list:
                 sk = e.get('s3_key') or ''
-                cat_upper = (e.get('category') or '').upper()
                 if sk in allowed_set or 'gen_pop' in sk.lower():
-                    e['accessible'] = True
-                elif has_all_cats or (cat_upper and cat_upper in allowed_cats_upper):
                     e['accessible'] = True
                 else:
                     e['accessible'] = False
@@ -30286,9 +30263,6 @@ def user_can_run_analysis_module(user, module_key):
     """True if user can run the given Analysis IQ module (talent_search, svod, campaign, etc.)."""
     if not user:
         return False
-    # When admin is cloaked as another user, grant full Analysis IQ access
-    if session.get('cloaked_from'):
-        return True
     role = user.get('role', 'user')
     if role in ('admin', 'super_admin'):
         return True
@@ -39733,7 +39707,7 @@ def _user_jiq_run_access(user):
     """Resolve a user's Journey IQ per-run access policy.
 
     Returns a tuple ``(is_admin, allow_all, allowed_keys)``:
-      * ``is_admin`` — admin / super_admin / cloaked sessions: see everything.
+      * ``is_admin`` — admin / super_admin acting as themselves: see everything.
       * ``allow_all`` — non-admin user with the default-open policy
         (``allowed_journey_iq_runs`` is missing, not a list, or contains
         ``'*'``). Preserves existing behavior for users who haven't been
@@ -39743,7 +39717,7 @@ def _user_jiq_run_access(user):
         granted" (the admin explicitly revoked everything).
     """
     role = (user or {}).get('role')
-    is_admin = role in ('admin', 'super_admin') or bool(session.get('cloaked_from'))
+    is_admin = role in ('admin', 'super_admin')
     if is_admin:
         return True, True, set()
     raw = (user or {}).get('allowed_journey_iq_runs')
@@ -39770,7 +39744,7 @@ def list_journey_iq():
     """Return Journey IQ runs visible to the caller (newest first).
 
     Visibility rules:
-      * Admin / super_admin / cloaked sessions see every LIVE run.
+      * Admin / super_admin acting as themselves see every LIVE run.
       * Other users with Digital Journey IQ access (via role, the standalone
         ``has_journey_iq_access`` flag, or Analysis IQ + ``journey_iq``
         module) see runs filtered by their per-user
@@ -39798,7 +39772,7 @@ def list_journey_iq():
         # Optional admin-only archive include
         include_archive = (request.args.get('include_archive') or '').lower() in ('1', 'true', 'yes')
         role = (user or {}).get('role')
-        is_admin = role in ('admin', 'super_admin') or bool(session.get('cloaked_from'))
+        is_admin = role in ('admin', 'super_admin')
         archived_runs = []
         if include_archive and is_admin:
             archived_runs = _jiq.list_archived_runs(s3_client, limit=200)
@@ -39825,7 +39799,7 @@ def get_journey_iq_result(s3_key):
 
     Access rules:
       * Users without Digital Journey IQ access are blocked at the door.
-      * Admins (admin / super_admin / cloaked) can load any key.
+      * Admins (admin / super_admin acting as themselves) can load any key.
       * Non-admins must have the requested key in their per-user
         ``allowed_journey_iq_runs`` list (or have the default-open
         ``['*']`` / unset list). Prevents URL-guessing past the list view.
