@@ -54260,6 +54260,56 @@ def api_synth_chat_interpret():
                 spec_draft['user_prompt'] = str(text)[:4000]
         except Exception:
             pass
+        # Chip pair for existing_match (2026-09-04, Jenna verbatim: "it
+        # shouldnt just say is this the one you want yes or no and then
+        # you click the chip and if yes it would have retunred that one
+        # and if I said no it would run the one I asked"). Two chips
+        # replace the free-text "approve or send another message"
+        # nudge, one click each:
+        #   Yes, use this        -> hand back the matched existing file
+        #                           at 0 credits (the current approve
+        #                           path for a decision=existing_match
+        #                           draft)
+        #   No, run what I asked -> flip the draft to a fresh new_build
+        #                           and take the normal build path
+        #                           (session-only force_new_build flag
+        #                           on /api/brief-chat/approve; the
+        #                           partner API `/api/v1/*` never sees
+        #                           these fields, per
+        #                           no-external-overrides.mdc: chatbot
+        #                           chips are a user-driven session
+        #                           flow, not a wire-protocol override).
+        # Existing_match-only. Other verdicts already have their own
+        # approve/adjust chip flows and stay unchanged.
+        _chip_options = None
+        _chip_targets = None
+        if _dec_norm == 'existing_match':
+            _fresh_new_credits = int(_V1_CREDITS.get(
+                'new_build', CREDITS_PROFILE_ANALYSIS))
+            _chip_options = [
+                {'id': 'use_existing', 'label': 'Yes, use this'},
+                {'id': 'run_new', 'label': 'No, run what I asked'},
+            ]
+            _chip_targets = {
+                'use_existing': {
+                    'action': 'approve',
+                    'endpoint': '/api/brief-chat/approve',
+                    'credits': 0,
+                },
+                'run_new': {
+                    'action': 'approve',
+                    'endpoint': '/api/brief-chat/approve',
+                    'credits': _fresh_new_credits,
+                    'force_new_build': True,
+                },
+            }
+            # Surface the fresh-build cost so the cost line can read
+            # "0 credits to reuse, or N credits for a fresh build"
+            # instead of just "0 credits (reusing the existing file)".
+            try:
+                spec_draft['estimated_credits_new_build'] = _fresh_new_credits
+            except Exception:
+                pass
         return jsonify({
             'success': True,
             'spec_draft': spec_draft,
@@ -54281,6 +54331,10 @@ def api_synth_chat_interpret():
             # Plain-language window this build/cut will run with
             # (ECHO RULE 2026-08-24). '' only for existing_match.
             'date_window': _draft_window_field(spec_draft, _dec_norm),
+            # Chip pair for existing_match. None on every other verdict
+            # so the frontend can no-op cleanly.
+            'chip_options': _chip_options,
+            'chip_targets': _chip_targets,
         })
     except Exception as e:
         traceback.print_exc()
@@ -55459,6 +55513,49 @@ def api_synth_chat_approve():
                              'approve called without a spec_draft',
                              tb='(request validation)')
         return jsonify(_chatbot_calm_payload())
+
+    # Chip pair override (2026-09-04, Jenna existing_match UX). The
+    # session-only 'No, run what I asked' chip flips an existing_match
+    # draft into a fresh new_build in one click. Semantically the
+    # same as the user typing 'no, build me a new one' as free text
+    # and letting the interpret step re-decide - but without the
+    # extra Claude round-trip.
+    #
+    # Session-only per no-external-overrides.mdc: chatbot chips are
+    # a user-driven session flow, not a wire-protocol override. The
+    # partner API `/api/v1/*` (via `/api/v1/profiles/run`) never
+    # touches `force_new_build`; only this session route
+    # `/api/synth-chat/approve` (alias `/api/brief-chat/approve`) does.
+    # Ops-side forcing still lives in migration/local_override_profile.py.
+    #
+    # Guardrails:
+    #   * Only mutates when the draft's own decision is 'existing_match'.
+    #     A new_build / derive_cut / refresh draft with a stray
+    #     force_new_build=true flag is a no-op (chips only render on
+    #     existing_match, so a stray flag from any other origin is
+    #     rejected here as well).
+    #   * Strips ALL existing_match_* pointers so the normalized-match
+    #     backstop in _normalize_v1_decision cannot flip it BACK to
+    #     existing_match on entity-match fuzz.
+    #   * Re-prices estimated_credits to the new_build tier so the
+    #     credit preflight below charges the right amount.
+    #   * Idempotency store still keys on the mutated spec; a rapid
+    #     double-click on the chip does not double-queue (the standard
+    #     hostname-scoped idempotency + queue-side dedupe handles it).
+    if bool(body.get('force_new_build')) and \
+            str(draft.get('decision') or '').strip().lower() == 'existing_match':
+        for _emk in ('existing_match_s3_key', 'existing_match_display_name',
+                     'existing_match_days_old', 'existing_match_last_modified'):
+            draft.pop(_emk, None)
+        draft['decision'] = 'new_build'
+        try:
+            _fresh_credits = int(
+                _V1_CREDITS.get('new_build', CREDITS_PROFILE_ANALYSIS))
+            draft['estimated_credits'] = _fresh_credits
+            draft['base_credits'] = _fresh_credits
+            draft.pop('estimated_credits_new_build', None)
+        except Exception:
+            pass
 
     spec = _spec_from_draft(draft)
     run_avid = bool(body.get('run_avid', True))

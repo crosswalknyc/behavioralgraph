@@ -66311,6 +66311,16 @@ https://www.instagram.com/p/..."></textarea>
                         _pmDeckPickSuggestion(o);
                         return;
                     }
+                    // 2026-09-04 Jenna existing_match chip UX. Two chip
+                    // actions bypass the default free-text submit and
+                    // go straight to the approve path so the reader
+                    // gets a one-click Yes / No instead of a
+                    // re-interpret round trip.
+                    if (o && (o.chipAction === 'use_existing'
+                              || o.chipAction === 'run_new')) {
+                        _synthChatExistingMatchChipClick(o);
+                        return;
+                    }
                     synthChatChipSend(String((o && o.send) || (o && o.label) || o));
                 });
             }
@@ -69681,6 +69691,31 @@ https://www.instagram.com/p/..."></textarea>
                         data.clarify_steps[0], synthChatCurrentDraft);
                     return;
                 }
+                // 2026-09-04 Jenna existing_match chip UX. If the
+                // interpret step returned a chip pair (existing_match
+                // only), attach it to the summary bubble so the reader
+                // clicks Yes / No instead of typing. Every other
+                // decision path takes the plain synthChatPushTurn
+                // route below (unchanged).
+                if (data.chip_options && data.chip_options.length &&
+                        String(synthChatCurrentDraft.decision || '')
+                            .toLowerCase() === 'existing_match') {
+                    var _emOpts = data.chip_options.map(function(o) {
+                        var _tgt = (data.chip_targets
+                                    && data.chip_targets[o.id]) || {};
+                        return {
+                            label: String(o.label || o.id),
+                            chipAction: String(o.id || ''),
+                            chipForceNewBuild: !!_tgt.force_new_build,
+                            chipCredits: (typeof _tgt.credits === 'number')
+                                ? _tgt.credits : null
+                        };
+                    });
+                    _synthChatPushTurnWithMeta('agent', summary,
+                        { options: _emOpts });
+                    _synthChatShowBrief(synthChatCurrentDraft, data.model);
+                    return;
+                }
                 synthChatPushTurn('agent', summary);
                 _synthChatShowBrief(synthChatCurrentDraft, data.model);
             } catch (e) {
@@ -70912,10 +70947,26 @@ https://www.instagram.com/p/..."></textarea>
             }
             var credits = s.estimated_credits;
             if (typeof credits === 'number') {
-                facts.push(credits === 0
-                    ? 'Cost: 0 credits (reusing the existing file)'
-                    : 'Cost: ' + credits + ' credit' +
-                        (credits === 1 ? '' : 's') + ' on approval');
+                // 2026-09-04 Jenna existing_match chip UX: when a
+                // fresh-build cost rides the draft
+                // (estimated_credits_new_build), surface it inline so
+                // the No chip's cost is visible next to the Yes chip's
+                // 0-credit reuse price.
+                var _emFreshCr = (String(s.decision || '').toLowerCase()
+                                  === 'existing_match')
+                    ? s.estimated_credits_new_build : null;
+                if (credits === 0 && typeof _emFreshCr === 'number'
+                        && _emFreshCr > 0) {
+                    facts.push('Cost: 0 credits to reuse, or '
+                        + _emFreshCr + ' credit'
+                        + (_emFreshCr === 1 ? '' : 's')
+                        + ' for a fresh build');
+                } else {
+                    facts.push(credits === 0
+                        ? 'Cost: 0 credits (reusing the existing file)'
+                        : 'Cost: ' + credits + ' credit' +
+                            (credits === 1 ? '' : 's') + ' on approval');
+                }
             }
             if (mins) facts.push('Build time: ~' + mins + ' min');
             var line = lead;
@@ -70929,6 +70980,19 @@ https://www.instagram.com/p/..."></textarea>
             }
             if (refreshHint && _dec === 'time_shifted_refresh') {
                 line += '\n\n' + refreshHint;
+            }
+            // 2026-09-04 Jenna existing_match chip UX (verbatim: "it
+            // shouldnt just say is this the one you want yes or no
+            // and then you click the chip and if yes it would have
+            // retunred that one and if I said no it would run the
+            // one I asked"). On existing_match the trailing prompt
+            // asks the question directly; the chip pair rides on
+            // the bubble meta.options so the reader can click Yes /
+            // No instead of typing. Every other verdict keeps the
+            // "Approve to run, or send another message to adjust."
+            // nudge (chip flows for those live under clarify).
+            if (_dec === 'existing_match') {
+                return line + '\n\nIs this the one you want?';
             }
             return line + '\n\nApprove to run, or send another message to adjust.';
         }
@@ -70958,7 +71022,32 @@ https://www.instagram.com/p/..."></textarea>
                          : 'Draft closed. Ask me anything else when ready.');
         }
 
-        async function synthChatApproveBrief() {
+        // 2026-09-04 Jenna existing_match chip UX. Dedicated
+        // handler for the chip pair the interpret step emits on
+        // existing_match. Yes routes to the plain approve path (the
+        // existing_match approve reply hands back the reused file at
+        // 0 credits). No mutates the draft transcript-side (subject
+        // is unchanged; the label just reads clean in the history)
+        // and re-invokes approve with forceNewBuild so the backend
+        // flips the draft to a fresh new_build.
+        function _synthChatExistingMatchChipClick(o) {
+            if (!o) return;
+            var lbl = String(o.label || o.chipAction || '').trim();
+            if (lbl) synthChatPushTurn('user', lbl);
+            if (o.chipAction === 'run_new') {
+                synthChatApproveBrief({ forceNewBuild: true });
+            } else {
+                synthChatApproveBrief();
+            }
+        }
+
+        async function synthChatApproveBrief(opts) {
+            // 2026-09-04 Jenna existing_match chip UX. opts.forceNewBuild
+            // flips an existing_match draft to a fresh new_build via
+            // the session-only force_new_build flag on the approve
+            // POST. Session only per no-external-overrides.mdc: the
+            // partner API `/api/v1/*` never accepts this flag.
+            opts = opts || {};
             // Batch mode short-circuit: if we have an array of
             // drafts, hand off to the multi-approve helper. It
             // fires N approve calls in parallel and starts N polls.
@@ -71005,6 +71094,11 @@ https://www.instagram.com/p/..."></textarea>
                         spec_draft: synthChatCurrentDraft,
                         run_avid: runAvid,
                         email_to: emailTo,
+                        // 2026-09-04 Jenna existing_match chip UX.
+                        // Session-only flag; the backend flips the
+                        // draft from existing_match to new_build
+                        // when this is true.
+                        force_new_build: !!opts.forceNewBuild,
                     }),
                     signal: synthChatInflightController ? synthChatInflightController.signal : undefined,
                 });
