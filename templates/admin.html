@@ -2596,6 +2596,7 @@
                             <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('credit_pool')">Credit Pool</th>
                             <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('credits_used')">Credits Used</th>
                             <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('total_sessions')">Sessions</th>
+                            <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('prometheus_actions_30d')" title="Prometheus actions in the last 30 days: interpret, analysis, deck, and route calls made on the dashboard by anyone in this company.">Prometheus <span style="font-size:0.65rem; color:var(--text-secondary); font-weight:400;">(30d)</span></th>
                             <th style="cursor: pointer; text-align: center;" onclick="sortCompanyTable('last_active')">Last Active</th>
                             <th style="text-align: center;">Defaults</th>
                         </tr>
@@ -2618,7 +2619,7 @@
                 </div>
 
                 <!-- Stats cards -->
-                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.75rem; margin-bottom: 1rem;">
+                <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.75rem; margin-bottom: 1rem;">
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem 1rem;">
                         <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Users</div>
                         <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);" id="cdTotalUsers">0</div>
@@ -2646,6 +2647,11 @@
                     <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem 1rem;">
                         <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Sessions</div>
                         <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);" id="cdTotalSessions">0</div>
+                    </div>
+                    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.75rem 1rem;" title="Prometheus actions across all users in this company, last 30 days: interpret, analysis, deck, and route calls. Compute cost is what the actions cost to run.">
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Prometheus <span style="font-size:0.55rem; font-weight:400; color:var(--text-secondary);">(30d)</span></div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #58a6ff;" id="cdPrometheusActions">--</div>
+                        <div style="font-size: 0.65rem; color: var(--text-secondary); margin-top: 0.1rem;" id="cdPrometheusCost">Compute cost pending</div>
                     </div>
                 </div>
 
@@ -2717,6 +2723,7 @@
                                     <th style="text-align:center;">Remaining</th>
                                     <th style="text-align:center;">Sessions</th>
                                     <th style="text-align:center;">Profiles Viewed</th>
+                                    <th style="text-align:center;" title="Prometheus actions this user ran in the last 30 days: interpret, analysis, deck, and route calls on the dashboard.">Prometheus <span style="font-size:0.65rem; color:var(--text-secondary); font-weight:400;">(30d)</span></th>
                                     <th style="text-align:center;">Last Login</th>
                                 </tr>
                             </thead>
@@ -5111,7 +5118,7 @@
             document.getElementById('companyTotalCredits').textContent = totalCredits.toLocaleString();
             document.getElementById('companyTotalSessions').textContent = totalSessions.toLocaleString();
             if (list.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);padding:2rem;">No companies found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-secondary);padding:2rem;">No companies found.</td></tr>';
                 return;
             }
             tbody.innerHTML = list.map(c => {
@@ -5122,12 +5129,14 @@
                     if (c.credit_pool === -1) poolCell = '<span style="color:var(--accent-cyan);">Unlimited</span>';
                     else poolCell = `<span>${(c.credit_pool_remaining ?? 0).toLocaleString()} / ${c.credit_pool.toLocaleString()}</span>`;
                 }
+                const promActions = (c.prometheus_actions_30d != null) ? c.prometheus_actions_30d : 0;
                 return `<tr style="cursor:pointer;" onclick="openCompanyDetail('${c.name.replace(/'/g, "\\'")}')">
                     <td style="font-weight:600;">${c.name}</td>
                     <td style="text-align:center;">${c.user_count}</td>
                     <td style="text-align:center;">${poolCell}</td>
                     <td style="text-align:center;">${c.credits_used.toLocaleString()}</td>
                     <td style="text-align:center;">${c.total_sessions.toLocaleString()}</td>
+                    <td style="text-align:center;">${promActions.toLocaleString()}</td>
                     <td style="text-align:center;">${la}</td>
                     <td style="text-align:center;">${badge}</td>
                 </tr>`;
@@ -5196,9 +5205,13 @@
 
                 // Consulting-hour tally — fire-and-forget alongside credit pool.
                 _cdRefreshConsultingHours(companyName);
+                // Prometheus 30d rollup for this company — same fire-and-forget
+                // pattern. Populates the company detail tile + adds the
+                // per-user Prometheus column on the employees table.
+                _cdRefreshPrometheusUsage(companyName);
                 const tbody = document.getElementById('companyEmployeeTableBody');
                 if (users.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-secondary);padding:1rem;">No employees. Click "+ Add User" to add one.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-secondary);padding:1rem;">No employees. Click "+ Add User" to add one.</td></tr>';
                     return;
                 }
                 tbody.innerHTML = users.map(u => {
@@ -5229,6 +5242,7 @@
                         }
                     }
 
+                    const promCellId = `cdEmpProm_${(u.username || '').replace(/[^A-Za-z0-9_]/g, '_')}`;
                     return `<tr>
                         <td><a href="#" onclick="event.preventDefault(); showAdminTab('users'); setTimeout(() => editUser('${u.username}'), 200);" style="color:var(--accent-cyan);text-decoration:none;">${u.username}</a></td>
                         <td>${name}</td>
@@ -5239,11 +5253,54 @@
                         <td style="text-align:center;font-weight:600;">${remaining}</td>
                         <td style="text-align:center;">${u.total_sessions}</td>
                         <td style="text-align:center;">${u.profiles_viewed}</td>
+                        <td style="text-align:center;" id="${promCellId}"><span style="color:var(--text-secondary);">--</span></td>
                         <td style="text-align:center;">${ll}</td>
                     </tr>`;
                 }).join('');
             } catch (e) {
                 console.error('Failed to load company employees:', e);
+            }
+        }
+
+        async function _cdRefreshPrometheusUsage(companyName) {
+            // Company Prometheus rollup: total actions + compute cost in the
+            // trailing 30 days, plus per-user actions to paint the employee
+            // table's Prometheus column. Fire-and-forget; a fetch failure
+            // leaves the tile at `--` and the employee cells at `--`.
+            const tileEl = document.getElementById('cdPrometheusActions');
+            const costEl = document.getElementById('cdPrometheusCost');
+            if (!tileEl) return;
+            try {
+                const resp = await fetch(`/api/admin/companies/${encodeURIComponent(companyName)}/prometheus-usage?days=30`, { credentials: 'same-origin' });
+                const data = await resp.json();
+                if (!data || !data.success) {
+                    tileEl.textContent = '--';
+                    if (costEl) costEl.textContent = 'Compute cost unavailable';
+                    return;
+                }
+                const usage = data.usage || {};
+                const totals = usage.totals || { actions: 0, cost_usd: 0 };
+                tileEl.textContent = (totals.actions || 0).toLocaleString();
+                if (costEl) costEl.textContent = `$${(totals.cost_usd || 0).toFixed(2)} compute cost`;
+                (usage.by_user || []).forEach(row => {
+                    const id = `cdEmpProm_${(row.username || '').replace(/[^A-Za-z0-9_]/g, '_')}`;
+                    const cell = document.getElementById(id);
+                    if (cell) {
+                        const n = (row.totals && row.totals.actions) || 0;
+                        cell.innerHTML = n > 0
+                            ? `<span style="font-weight:600;color:#58a6ff;">${n.toLocaleString()}</span>`
+                            : '<span style="color:var(--text-secondary);">0</span>';
+                    }
+                });
+                // Any employee row not covered by usage.by_user gets 0.
+                document.querySelectorAll('[id^="cdEmpProm_"]').forEach(cell => {
+                    if (cell.textContent.trim() === '--') {
+                        cell.innerHTML = '<span style="color:var(--text-secondary);">0</span>';
+                    }
+                });
+            } catch (e) {
+                tileEl.textContent = '--';
+                if (costEl) costEl.textContent = 'Compute cost unavailable';
             }
         }
 
@@ -10584,6 +10641,10 @@
                         <div class="stat-value">${totalActions}</div>
                         <div class="stat-label">Total Actions</div>
                     </div>
+                    <div class="user-stat-card" style="cursor:pointer;" onclick="showUserDetailTab('prometheus', document.querySelector('[data-user-detail-tab-key=\'prometheus\']'))" title="Open Prometheus usage detail">
+                        <div class="stat-value" id="userPrometheusActionsTile">--</div>
+                        <div class="stat-label">Prometheus Actions<br><span style="font-size:0.7rem;opacity:0.75;">last 30 days</span></div>
+                    </div>
                 </div>
 
                 <div class="user-details-tabs">
@@ -10592,6 +10653,7 @@
                     <button class="user-detail-tab" onclick="showUserDetailTab('features', this)">⚡ Features</button>
                     <button class="user-detail-tab" onclick="showUserDetailTab('profiles', this)">👁️ Profiles</button>
                     <button class="user-detail-tab" onclick="showUserDetailTab('activity', this)">🕐 Activity</button>
+                    <button class="user-detail-tab" data-user-detail-tab-key="prometheus" onclick="showUserDetailTab('prometheus', this)">🧠 Prometheus</button>
                 </div>
 
                 <div id="userDetailTab-overview" class="user-detail-content">
@@ -10738,6 +10800,28 @@
                     </div>
                 </div>
 
+                <div id="userDetailTab-prometheus" class="user-detail-content" style="display: none;">
+                    <div class="activity-section" id="userPrometheusPane">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom:0.5rem;">
+                            <h4 style="margin:0;">🧠 Prometheus Usage <span id="userPrometheusRangeLabel" style="font-size:0.75rem; color:var(--text-secondary); font-weight:400; margin-left:0.4rem;">(last 30 days)</span></h4>
+                            <div style="display:flex; align-items:center; gap:0.35rem;">
+                                <label style="font-size:0.72rem; color:var(--text-secondary);">Window</label>
+                                <select id="userPrometheusDays" onchange="loadUserPrometheusUsage('${username}', this.value)" style="padding:0.2rem 0.4rem; background:var(--bg-input); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:0.75rem;">
+                                    <option value="7">Last 7 days</option>
+                                    <option value="30" selected>Last 30 days</option>
+                                    <option value="90">Last 90 days</option>
+                                </select>
+                            </div>
+                        </div>
+                        <p style="color: var(--text-secondary); font-size: 0.8rem; margin: 0 0 0.75rem;">
+                            Every Prometheus action this user runs on the dashboard: natural-language interpret, on-screen analyses, deck builds, and route classifications. Credit-consuming profile builds appear in the Credits Used tab; this tab covers the non-credit Prometheus activity plus its compute cost.
+                        </p>
+                        <div id="userPrometheusContent" style="min-height:160px;">
+                            <div style="text-align:center; padding:1.5rem; color:var(--text-secondary); font-size:0.85rem;">Loading Prometheus usage...</div>
+                        </div>
+                    </div>
+                </div>
+
                 <div style="margin-top: 1.5rem; display: flex; gap: 1rem;">
                     <button class="btn btn-secondary" onclick="closeUserDetails()" style="flex: 1;">Close</button>
                     <button class="btn btn-secondary" onclick="exportUserActivityAllToCSV()" style="flex: 1;">Export All</button>
@@ -10746,6 +10830,92 @@
             `;
             
             document.getElementById('userDetailsContent').innerHTML = content;
+
+            // Kick off the Prometheus rollup fetch in the background so the
+            // tile + tab populate without blocking the modal open.
+            loadUserPrometheusUsage(username, 30);
+        }
+
+        // Prometheus usage renderer. Reads
+        // /api/admin/users/<u>/prometheus-usage?days=<n> and paints both
+        // the tile total and the tab body. Never throws.
+        async function loadUserPrometheusUsage(username, days) {
+            const tile = document.getElementById('userPrometheusActionsTile');
+            const rangeLabel = document.getElementById('userPrometheusRangeLabel');
+            const pane = document.getElementById('userPrometheusContent');
+            const sel = document.getElementById('userPrometheusDays');
+            const d = Math.max(1, Math.min(parseInt(days || 30, 10) || 30, 90));
+            if (rangeLabel) rangeLabel.textContent = `(last ${d} days)`;
+            if (sel && String(sel.value) !== String(d)) sel.value = String(d);
+            if (pane) pane.innerHTML = '<div style="text-align:center; padding:1.5rem; color:var(--text-secondary); font-size:0.85rem;">Loading Prometheus usage...</div>';
+            try {
+                const resp = await fetch(`/api/admin/users/${encodeURIComponent(username)}/prometheus-usage?days=${d}`);
+                const data = await resp.json();
+                if (!data || !data.success) {
+                    const msg = (data && data.error) ? data.error : 'Failed to load Prometheus usage';
+                    if (tile) tile.textContent = '--';
+                    if (pane) pane.innerHTML = `<div style="text-align:center; padding:1.5rem; color:#ef4444; font-size:0.85rem;">${msg}</div>`;
+                    return;
+                }
+                renderUserPrometheusUsage(username, data.usage || {});
+            } catch (e) {
+                if (tile) tile.textContent = '--';
+                if (pane) pane.innerHTML = `<div style="text-align:center; padding:1.5rem; color:#ef4444; font-size:0.85rem;">Failed to load Prometheus usage</div>`;
+            }
+        }
+
+        function renderUserPrometheusUsage(username, usage) {
+            const tile = document.getElementById('userPrometheusActionsTile');
+            const pane = document.getElementById('userPrometheusContent');
+            const totals = usage.totals || { actions: 0, cost_usd: 0, duration_s: 0, last_at: null };
+            if (tile) tile.textContent = String(totals.actions || 0);
+            if (!pane) return;
+            const bySurface = usage.by_surface || {};
+            const descs = usage.surface_descriptions || {};
+            const surfaceOrder = ['interpret', 'analysis', 'deck', 'corpus_select', 'ask_classify', 'other'];
+            const surfaceRows = surfaceOrder
+                .map(k => [k, bySurface[k] || null])
+                .filter(([k, v]) => v && v.actions > 0);
+            const surfaceHtml = surfaceRows.length > 0
+                ? surfaceRows.map(([k, v]) => `
+                    <div class="feature-item" style="margin-bottom: 0.4rem;">
+                        <span title="${(descs[k] || '').replace(/"/g, '&quot;')}">${v.label || k}</span>
+                        <span class="count">${v.actions} action${v.actions === 1 ? '' : 's'} · $${(v.cost_usd || 0).toFixed(4)}${v.duration_s ? ' · ' + (v.duration_s/60).toFixed(1) + ' min' : ''}</span>
+                    </div>`).join('')
+                : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.75rem 0;">No Prometheus activity in this window.</div>';
+            const recent = usage.recent_actions || [];
+            const recentHtml = recent.length > 0
+                ? recent.slice(0, 50).map(r => {
+                    const when = r.ts ? formatDateTimePST(r.ts) : '';
+                    const dur = (r.duration_s != null) ? ` · ${r.duration_s.toFixed ? r.duration_s.toFixed(1) : r.duration_s}s` : '';
+                    return `<div class="activity-item"><span>${r.surface_label || r.surface} · $${(r.cost_usd || 0).toFixed(4)}${dur}</span><span class="time">${when}</span></div>`;
+                }).join('')
+                : '<div style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.75rem; text-align: center;">No recent actions</div>';
+            const summaryTotalMin = (totals.duration_s || 0) / 60;
+            pane.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+                    <div class="stat-card" style="padding: 0.75rem;">
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Actions</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-cyan);">${totals.actions || 0}</div>
+                    </div>
+                    <div class="stat-card" style="padding: 0.75rem;">
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Compute cost</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #e67e22;">$${(totals.cost_usd || 0).toFixed(2)}</div>
+                    </div>
+                    <div class="stat-card" style="padding: 0.75rem;">
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Active time</div>
+                        <div style="font-size: 1.5rem; font-weight: 700; color: #2ecc71;">${summaryTotalMin.toFixed(1)}m</div>
+                    </div>
+                </div>
+                <h5 style="margin: 0.75rem 0 0.4rem; font-size: 0.85rem; color: var(--text-secondary);">By action type</h5>
+                <div class="feature-usage-grid" style="display: block; margin-bottom: 1rem;">
+                    ${surfaceHtml}
+                </div>
+                <h5 style="margin: 0.75rem 0 0.4rem; font-size: 0.85rem; color: var(--text-secondary);">Recent actions</h5>
+                <div class="recent-activity-list">
+                    ${recentHtml}
+                </div>
+            `;
         }
 
         function exportUserActivityAllToCSV() {

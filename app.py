@@ -5909,6 +5909,33 @@ def api_list_companies():
             ll = user.get('last_login')
             if ll and (c['last_active'] is None or ll > c['last_active']):
                 c['last_active'] = ll
+
+        # 30-day Prometheus action count per company. Read once, fold
+        # per user -> company. Never raises: a fetch failure just leaves
+        # every company at 0 for this window (the render_calls prefix is
+        # cache-backed so this is cheap on the second poll).
+        try:
+            import prometheus_usage_admin as pua
+            label_idx = _prometheus_usage_label_index(users)
+            per_user = pua.fetch_all_users_counts(label_idx,
+                                                  days=pua.DEFAULT_DAYS)
+            username_to_company = {}
+            for username, user in users.items():
+                co = (user.get('company') or '').strip()
+                if co:
+                    username_to_company[username] = co
+            for co in companies:
+                companies[co]['prometheus_actions_30d'] = 0
+            for username, count in per_user.items():
+                co = username_to_company.get(username)
+                if co and co in companies:
+                    companies[co]['prometheus_actions_30d'] += int(count)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+            for co in companies:
+                companies[co].setdefault('prometheus_actions_30d', 0)
+
         return jsonify({'success': True, 'companies': sorted(companies.values(), key=lambda x: x['name'].lower())})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -7412,6 +7439,134 @@ def get_user_stats(username):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
+
+
+# ---------------------------------------------------------------------------
+# Prometheus usage rollup for the admin surfaces (2026-09-03).
+#
+# Every Prometheus surface (interpret, analysis, deck, corpus_select,
+# ask_classify) already auto-attributes the logged-in user via
+# _pm_attrib_extras() in _pm_claude_json, so the per-call records at
+# s3://dashboard-inputs/system/usage/render_calls/YYYY_MM_DD/ carry every
+# field the admin surface needs (ts, surface, cost_usd, duration_s,
+# user_email). These endpoints roll those records up per user and per
+# company for the User Details modal and the Company tab.
+#
+# Copy: "Prometheus", "actions", "reads", "analyses", "deck builds",
+# "compute cost". No exposure of models, providers, queues, or workers.
+# ---------------------------------------------------------------------------
+
+
+def _prometheus_usage_labels_for_user(user):
+    """Return the case-normalized label set that identifies one user in
+    the render_calls records. Every Prometheus call is tagged with
+    _pm_attrib_extras() which sets `user_email` = email or username and
+    `user` = username or email, so any of email / username should match.
+    """
+    if not user:
+        return set()
+    labels = set()
+    email = str(user.get('email') or '').strip().lower()
+    if email:
+        labels.add(email)
+    username = str(user.get('username') or '').strip().lower()
+    if username:
+        labels.add(username)
+    return labels
+
+
+def _prometheus_usage_label_index(users_dict):
+    """Build {normalized_label: username} across every user so a single
+    render_calls scan can attribute every record without a per-user
+    loop. Case-insensitive keys."""
+    idx = {}
+    for username, user in (users_dict or {}).items():
+        u_norm = str(username or '').strip().lower()
+        e_norm = str((user or {}).get('email') or '').strip().lower()
+        for lbl in (u_norm, e_norm):
+            if lbl and lbl not in idx:
+                idx[lbl] = username
+    return idx
+
+
+def _prometheus_usage_days_arg():
+    """Parse the ?days= query arg, defaulting + capping per the module."""
+    try:
+        import prometheus_usage_admin as pua
+    except Exception:
+        return 30
+    try:
+        raw = (request.args.get('days') or '').strip()
+    except Exception:
+        raw = ''
+    try:
+        val = int(raw or pua.DEFAULT_DAYS)
+    except (TypeError, ValueError):
+        val = pua.DEFAULT_DAYS
+    return max(1, min(val, pua.MAX_DAYS))
+
+
+@app.route('/api/admin/users/<username>/prometheus-usage', methods=['GET'])
+@requires_admin
+def get_user_prometheus_usage(username):
+    """Return the Prometheus action rollup for one user over the
+    trailing window (default 30 days, max 90)."""
+    try:
+        import prometheus_usage_admin as pua
+    except Exception as exc:
+        return jsonify({'success': False,
+                        'error': f'Prometheus rollup unavailable: {exc}'}), 500
+    try:
+        data = load_users()
+        if username not in data.get('users', {}):
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        user = data['users'][username]
+        days = _prometheus_usage_days_arg()
+        labels = _prometheus_usage_labels_for_user({
+            'username': username, 'email': user.get('email')})
+        summary = pua.fetch_user_usage(user_emails=labels, days=days,
+                                       include_actions=True)
+        return jsonify({'success': True,
+                        'username': username,
+                        'company': (user.get('company') or '').strip(),
+                        'usage': summary})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/companies/<path:company_name>/prometheus-usage',
+           methods=['GET'])
+@requires_admin
+def get_company_prometheus_usage(company_name):
+    """Return the Prometheus rollup for one company plus per-user rows."""
+    try:
+        import prometheus_usage_admin as pua
+    except Exception as exc:
+        return jsonify({'success': False,
+                        'error': f'Prometheus rollup unavailable: {exc}'}), 500
+    try:
+        data = load_users()
+        users = data.get('users', {})
+        wanted = (company_name or '').strip().lower()
+        user_map = {}
+        for username, user in users.items():
+            if (user.get('company') or '').strip().lower() != wanted:
+                continue
+            labels = _prometheus_usage_labels_for_user({
+                'username': username, 'email': user.get('email')})
+            user_map[username] = list(labels)
+        days = _prometheus_usage_days_arg()
+        summary = pua.fetch_company_usage(user_map=user_map, days=days)
+        return jsonify({'success': True,
+                        'company': company_name,
+                        'user_count': len(user_map),
+                        'usage': summary})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # Inactivity alerts retired 2026-09-03 per Jenna directive.
