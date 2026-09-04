@@ -55730,9 +55730,13 @@ _pm_resolved_model = {'name': None}
 # classification can never break on model naming.
 _PM_CLASSIFY_MODEL_ENV = (os.environ.get('PROMETHEUS_CLASSIFY_MODEL')
                           or '').strip()
+# 2026-09-04: dated ID first per Anthropic's Feb-2026 retirement of
+# claude-3-5-haiku-20241022. Migration notice explicitly recommends
+# the dated haiku-4-5-20251001 form. Alias kept as legacy fallback so
+# analytics keyed on the family name still resolve.
 _PM_CLASSIFY_CANDIDATES = (
     ([_PM_CLASSIFY_MODEL_ENV] if _PM_CLASSIFY_MODEL_ENV else [])
-    + ['claude-haiku-4-5', 'claude-haiku-4-5-20251001'])
+    + ['claude-haiku-4-5-20251001', 'claude-haiku-4-5'])
 _PM_CLASSIFY_SURFACES = frozenset(('corpus_select', 'ask_classify'))
 _pm_resolved_classify = {'name': None}
 _PM_DECK_PREFIX = 'system/prometheus_decks/'

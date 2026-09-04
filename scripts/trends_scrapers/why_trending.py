@@ -118,7 +118,7 @@ _TOTAL_ITEM_CAP          = 180
 # convention the rest of the workspace uses (claude_client.py defaults
 # to claude-sonnet-4-5); haiku-4-5 is the cheap fast tier from the
 # same family. Overridable via WHY_TRENDING_MODEL env var.
-_CLAUDE_MODEL = os.environ.get('WHY_TRENDING_MODEL') or 'claude-haiku-4-5'
+_CLAUDE_MODEL = os.environ.get('WHY_TRENDING_MODEL') or 'claude-haiku-4-5-20251001'
 # Enough to fit 120 items of context-rich prompt (~200 tokens each) +
 # 120 responses (~30 tokens each). Empirical cap on haiku is 8k output.
 _MAX_TOKENS   = 8000

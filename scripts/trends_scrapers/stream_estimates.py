@@ -199,7 +199,7 @@ _MODEL_HI = (os.environ.get('STREAM_ESTIMATES_MODEL_HI')
               or _WEBSEARCH_MODEL
               or 'claude-sonnet-4-5')
 _MODEL_LO = (os.environ.get('STREAM_ESTIMATES_MODEL_LO')
-              or 'claude-haiku-4-5')
+              or 'claude-haiku-4-5-20251001')
 
 # Threshold below which an item is 'hi' (top of its kind) vs 'lo'
 # (long-tail). best_rank is the item's best chart position in its
