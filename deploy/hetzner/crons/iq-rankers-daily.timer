@@ -1,0 +1,14 @@
+[Unit]
+Description=Fire iq-rankers-daily.service daily at 09:00 UTC
+Requires=iq-rankers-daily.service
+
+[Timer]
+# 09:00 UTC = 04:00 ET (safely after the nightly clickstream pipeline).
+OnCalendar=*-*-* 09:00:00 UTC
+# If the box was down at the scheduled time, run on next boot.
+Persistent=true
+AccuracySec=1min
+Unit=iq-rankers-daily.service
+
+[Install]
+WantedBy=timers.target
