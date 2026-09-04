@@ -513,13 +513,45 @@ def _set_bp(df, idx, new_bp, bp_col, cs_col, raw_col, proj_col, sample_size):
     # "Invalid value 'X' for dtype 'str'" when we assign a float. This bit
     # the G13 Lisa BLACKPINK auto-patch tonight (logged
     # "G13 auto-patch FAILED (Invalid value '100.0' for dtype 'str')").
-    # Coerce target columns to float64 once before assignment so every
-    # gate that calls _set_bp (G14, G17, G7 NEAR_TIE, ...) is safe.
+    # Coerce target columns to a dtype that accepts a subsequent
+    # `df.at[idx, col] = float_value` write so every gate that calls
+    # _set_bp (G14, G17, G7 NEAR_TIE, ...) is safe.
+    #
+    # 2026-09-04 (StringDtype NaN-corruption fix): the coercion used to
+    # be `pd.to_numeric(df[_dtcol], errors='coerce')`, which NaN-ified
+    # every `%`-suffixed cell (like `'39.5700%'`). Under default pandas
+    # today the guard didn't fire on the object-dtype BP column, but
+    # under `future.infer_string=True` (pandas 3.x default, or the
+    # nightly CI env) the guard fired and silently corrupted every
+    # untouched leader row (2 of 6 nightly test_pre_ship_vetting
+    # failures traced to this). Switch to `astype(object)`: object
+    # dtype accepts subsequent `df.at[idx, col] = float_value` writes
+    # while preserving every existing cell verbatim, so `%`-suffixed
+    # strings survive. Downstream `_bp` in this file already parses
+    # mixed object cells correctly (line ~379).
+    #
+    # Defense-in-depth per no-rebuild-level-correction.mdc ("an agent
+    # should fix everything and never need rebuild"): after the loop,
+    # revert any cell that became NaN but was non-empty pre-transform.
+    # This makes _set_bp self-healing against any future pandas dtype
+    # surprise: the enforcer never emits a NaN-tainted frame.
     for _dtcol in (bp_col, raw_col, proj_col):
-        if (_dtcol and _dtcol in df.columns
-                and df[_dtcol].dtype.name not in ('object', 'O',
-                                                  'float64', 'int64')):
-            df[_dtcol] = pd.to_numeric(df[_dtcol], errors='coerce')
+        if not _dtcol or _dtcol not in df.columns:
+            continue
+        _pre = df[_dtcol].copy()
+        if df[_dtcol].dtype.name not in ('object', 'O',
+                                         'float64', 'int64'):
+            df[_dtcol] = df[_dtcol].astype(object)
+        # Defense-in-depth: never introduce NaN silently.
+        if df[_dtcol].isna().any():
+            _mask = (df[_dtcol].isna()
+                     & _pre.notna()
+                     & (_pre.astype(str) != '')
+                     & (_pre.astype(str).str.lower() != 'nan'))
+            if _mask.any():
+                df.loc[_mask, _dtcol] = _pre[_mask]
+                print(f"[_set_bp] dtype-guard reverted {int(_mask.sum())} "
+                      f"NaN cells in {_dtcol} (defense-in-depth)")
     df.at[idx, bp_col] = round(float(new_bp), 4)
     new_raw = int(round(sample_size * new_bp / 100.0))
     if raw_col:
