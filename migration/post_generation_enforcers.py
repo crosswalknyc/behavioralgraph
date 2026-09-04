@@ -10025,6 +10025,142 @@ def strip_youtube_from_wrong_category(df, subject, verbose=True):
 
 
 # ============================================================================
+# strip_reddit_from_social_media
+# ----------------------------------------------------------------------------
+# 2026-09-04 (Jenna, phone dictation): "Reddit is listed in social media on
+# any CSV files and delete it and make a pipeline rule no to never insert
+# Reddit in social media because it belongs in App/Platforms."
+#
+# Client observation: Reddit appeared in TWO categories on the same profile
+# (SOCIAL MEDIA + APP/PLATFORM) with different values (60.8% and 16.9% on
+# the Film Titles and Blair Witch Adjacencies cohorts). Reddit is a
+# read-and-comment community app; the workspace convention is that Reddit
+# belongs in APP/PLATFORM only, never in SOCIAL MEDIA.
+#
+# Enforcer behaviour (per rule 0a "fix in place, never re-pull"):
+#   1. Drop every SOCIAL MEDIA row whose Value normalizes to REDDIT.
+#   2. Renormalize Category Share within SOCIAL MEDIA so remaining rows
+#      still form a coherent share view.
+#   3. If Reddit is ALSO missing from APP/PLATFORM (or APP/PLATFORM USAGE)
+#      AND either of those columns already exists on the file, MOVE the
+#      SOCIAL MEDIA value across (preserves the audience-specific
+#      engagement signal). Recompute Raw + Projection off the file's
+#      sample size via _set_bp.
+#   4. If neither APP/PLATFORM nor APP/PLATFORM USAGE exists on the file
+#      (rare): drop the SOCIAL MEDIA row and log loudly. Rule #0 forbids
+#      inventing a new Column value.
+#
+# Idempotent: second run finds nothing to drop, no-op.
+# Hostmap-gated: Reddit is confirmed in reference.host_mapping (canonical
+# spelling `Reddit`), so the APP/PLATFORM insert side always passes
+# _is_in_hostmap(). Sanity check is defensive.
+# ============================================================================
+
+
+def strip_reddit_from_social_media(df, subject, verbose=True):
+    """Drop Reddit rows from SOCIAL MEDIA. If APP/PLATFORM(/USAGE) is
+    present on the file and Reddit is missing from it, move the dropped
+    value across so the audience signal is preserved. See section header
+    for the full contract.
+    """
+    if df is None or len(df) == 0:
+        return df, 0
+    if "Column" not in df.columns or "Value" not in df.columns:
+        return df, 0
+
+    bp_col, cs_col, raw_col, proj_col = _detect_cols(df)
+    if bp_col is None:
+        return df, 0
+    sample_size = _detect_sample_size(df, bp_col, raw_col)
+
+    cu = df["Column"].astype(str).str.strip().str.upper()
+    # _norm_brand: case + punctuation insensitive; catches 'reddit',
+    # 'Reddit', 'REDDIT', 'Reddit.com' (Rule #4 canonical spelling is
+    # 'Reddit'; hostmap sanity check via _is_in_hostmap below).
+    vu = df["Value"].apply(_norm_brand)
+    reddit_norm = _norm_brand("Reddit")
+
+    sm_mask = (cu == "SOCIAL MEDIA") & (vu == reddit_norm)
+    sm_idx = list(df[sm_mask].index)
+    if not sm_idx:
+        return df, 0
+
+    # Capture the highest-BP SOCIAL MEDIA Reddit value in case we need
+    # to move it to APP/PLATFORM.
+    best_bp = 0.0
+    dropped_details = []
+    for i in sm_idx:
+        try:
+            v = float(str(df.at[i, bp_col]).replace("%", "").strip())
+        except Exception:
+            v = 0.0
+        dropped_details.append((str(df.at[i, "Column"]),
+                                str(df.at[i, "Value"]), v))
+        if v > best_bp:
+            best_bp = v
+
+    # Is Reddit already present in APP/PLATFORM(/USAGE)?
+    app_platform_cols = {"APP/PLATFORM", "APP/PLATFORM USAGE"}
+    ap_mask = cu.isin(app_platform_cols) & (vu == reddit_norm)
+    ap_exists = bool(ap_mask.any())
+
+    # Which APP column spelling does this file use? None if neither.
+    app_col_spelling = None
+    for candidate in ("APP/PLATFORM", "APP/PLATFORM USAGE"):
+        if (cu == candidate).any():
+            app_col_spelling = str(df[cu == candidate].iloc[0]["Column"]).strip()
+            break
+
+    df = df.drop(index=sm_idx).reset_index(drop=True)
+    df = _renormalize_category(df, "SOCIAL MEDIA", bp_col, cs_col,
+                               raw_col, proj_col, sample_size)
+
+    moved = False
+    if not ap_exists and app_col_spelling and best_bp > 0:
+        # Rule #10 checklist: hostmap-gate the insert. Reddit is a well-
+        # known hostmap entry; failing this gate would be a hostmap
+        # regression, not a runtime issue. Skip the insert (drop-only)
+        # if the gate fails so we never invent an unknown brand row.
+        if _is_in_hostmap("Reddit"):
+            canonical = _hostmap_canonical("Reddit") or "Reddit"
+            # Build a new row shaped like the current file's columns.
+            new_row = {c: "" for c in df.columns}
+            new_row["Column"] = app_col_spelling
+            new_row["Value"] = canonical
+            df = pd.concat(
+                [df, pd.DataFrame([new_row])],
+                ignore_index=True,
+            )
+            new_idx = int(df.index[-1])
+            # _set_bp recomputes BP/CS/Raw/Proj coherently.
+            df = _set_bp(df, new_idx, best_bp, bp_col, cs_col,
+                         raw_col, proj_col, sample_size)
+            df = _renormalize_category(df, app_col_spelling, bp_col,
+                                       cs_col, raw_col, proj_col,
+                                       sample_size)
+            moved = True
+        else:
+            if verbose:
+                print("   ⚠️ strip_reddit_from_social_media: 'Reddit' not "
+                      "in hostmap cache; dropping SOCIAL MEDIA row without "
+                      "APP/PLATFORM move")
+
+    if verbose:
+        for col, val, bp in dropped_details:
+            print(f"   🚫 strip_reddit_from_social_media: dropped "
+                  f"{col} / {val!r}  BP={bp:.4f}  (belongs in APP/PLATFORM)")
+        if moved:
+            print(f"   ➡️  strip_reddit_from_social_media: moved value to "
+                  f"{app_col_spelling} at BP={best_bp:.4f}")
+        elif not app_col_spelling:
+            print("   ⚠️ strip_reddit_from_social_media: no APP/PLATFORM "
+                  "column on this file; SOCIAL MEDIA row dropped, audience "
+                  "signal not moved (Rule #0: never invent a new Column)")
+
+    return df, len(sm_idx) + (1 if moved else 0)
+
+
+# ============================================================================
 # Final format normalizer (2026-07-28 pipeline hardening rail #5)
 #
 # Catches the four defect classes flagged on WHEEL OF FORTUNE - Avid Fan.csv
@@ -11582,6 +11718,7 @@ def run_all_enforcers(df, subject, brand_category=None, verbose=True,
         strip_input_metadata_leakage,      # 2026-05-27 (D5) — prompt-context echoes
         strip_url_variant_seed_rows,       # 2026-07-29 (Elton MUSICIAN/BAND) — hide URL-variant seed lists from category displays
         strip_hostmap_hidden_brands,       # 2026-05-27 (Rule #4b) — Hidden never ships
+        strip_reddit_from_social_media,    # 2026-09-04 (Rule #4d, Jenna) — Reddit lives in APP/PLATFORM only, never SOCIAL MEDIA
         strip_mpb_non_hostmap_brands,      # 2026-05-28 (Rule #4c) — MPB column must match hostmap MPB sections
         strip_url_encoded_subject_dupes,
         strip_corporate_parents,
