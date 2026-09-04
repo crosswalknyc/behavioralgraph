@@ -43,6 +43,8 @@ from migration.bpiq_subset_cut import (  # noqa: E402
     _implied_conversion_count,
     _per_platform_incremental_counts,
     _recompute_conversion_valuation,
+    _check_rule6_byte_copy,
+    _walk_leaves_with_parent,
 )
 
 FAILURES = []
@@ -1339,6 +1341,263 @@ _check(
     and report3["count_after"] is None,
     f"before={before_cv}, after={sub['valuation']['conversion_value']}, "
     f"report={report3}",
+)
+
+
+# ---------------------------------------------------------------------
+# Rule 6 (2026-09-04, Liz F1 Boomer audit)
+# ---------------------------------------------------------------------
+
+print()
+print("--- test_rule6_flags_significance_byte_copy ---")
+
+# Simulate the F1 Coke Boomer defect signature: subset panel is a Boomer
+# subset (panel_ratio ~ 0.03) but diagnostics.significance.n_discordant,
+# primary_test_z, detection_floor_pp, and delta_ci_95_pp were left as
+# byte copies of the parent's 10M-panel values.
+parent = _parent_with_weight(observed_n=475_903, projection_weight=32.99)
+parent["diagnostics"]["significance"] = {
+    "n_observed": 10_000_007,
+    "n_discordant": 1_170_283,
+    "primary_test": "pooled_two_sample_z_on_paired_marginals",
+    "primary_test_z": 668.127,
+    "primary_test_p_value": 0.0,
+    "significant": True,
+    "delta_pp_point": 11.703,
+    "delta_ci_95_pp": [11.669, 11.737],
+    "detection_floor_pp": 0.034,
+    "notes": "At n=10M the detection floor is ~0.04pp, so p-values "
+             "are dropped from the client-facing slide.",
+}
+parent["incidence_note"] = (
+    "All pre and post penetration percentages are incidence rates: "
+    "unique brand engagers observed in the window as a share of the "
+    "10,000,000-panelist sample."
+)
+
+# Build a properly-scaled subset via the helper.
+sub = build_subset_payload(parent, 0.602, "fixture_r6_boomer", "Boomer")
+# Now inject the F1 defect signature: byte-copy the parent's significance
+# stats onto the subset without scaling them for the smaller panel.
+sub["diagnostics"]["significance"] = copy.deepcopy(
+    parent["diagnostics"]["significance"]
+)
+sub["diagnostics"]["significance"]["n_observed"] = sub["audience_size"]
+sub["incidence_note"] = parent["incidence_note"]
+
+violations = _check_rule6_byte_copy(sub, parent)
+paths = {v["path"] for v in violations}
+rules = {v["rule"] for v in violations}
+_check(
+    "Rule 6 flags byte-copied n_discordant on smaller panel",
+    "diagnostics.significance.n_discordant" in paths,
+    f"got paths={sorted(paths)}",
+)
+_check(
+    "Rule 6 flags byte-copied primary_test_z on smaller panel",
+    "diagnostics.significance.primary_test_z" in paths,
+    f"got paths={sorted(paths)}",
+)
+_check(
+    "Rule 6 flags byte-copied detection_floor_pp on smaller panel",
+    "diagnostics.significance.detection_floor_pp" in paths,
+    f"got paths={sorted(paths)}",
+)
+_check(
+    "Rule 6 flags byte-copied delta_ci_95_pp bounds on smaller panel",
+    any("delta_ci_95_pp" in p for p in paths),
+    f"got paths={sorted(paths)}",
+)
+_check(
+    "Rule 6 flags stale 'n=10M' text in significance.notes",
+    "diagnostics.significance.notes" in paths,
+    f"got paths={sorted(paths)}",
+)
+_check(
+    "Rule 6 flags stale 10M panel text in incidence_note",
+    "incidence_note" in paths,
+    f"got paths={sorted(paths)}",
+)
+_check(
+    "Rule 6 violations all carry rule=6",
+    rules == {6},
+    f"got rules={rules}",
+)
+
+
+print()
+print("--- test_rule6_allowlist_holds_for_preserved_rates ---")
+
+# delta_pp_point (post_pen - pre_pen), primary_test_p_value, and the
+# `significant` boolean are legitimately byte-identical under uniform
+# panel scaling. Byte-copying them from parent must NOT fire Rule 6.
+parent = _parent_with_weight(observed_n=475_903, projection_weight=32.99)
+parent["diagnostics"]["significance"] = {
+    "n_observed": 10_000_007,
+    "delta_pp_point": 11.703,
+    "primary_test_p_value": 0.0,
+    "significant": True,
+}
+sub = build_subset_payload(parent, 0.602, "fixture_r6_allowlist", "Boomer")
+sub["diagnostics"]["significance"]["delta_pp_point"] = 11.703
+sub["diagnostics"]["significance"]["primary_test_p_value"] = 0.0
+sub["diagnostics"]["significance"]["significant"] = True
+
+violations = _check_rule6_byte_copy(sub, parent)
+_check(
+    "Rule 6 does NOT flag delta_pp_point byte match (rate delta)",
+    not any(v["path"] == "diagnostics.significance.delta_pp_point"
+            for v in violations),
+    f"got violations={violations}",
+)
+_check(
+    "Rule 6 does NOT flag primary_test_p_value byte match (0.0 stays 0.0)",
+    not any(v["path"] == "diagnostics.significance.primary_test_p_value"
+            for v in violations),
+    f"got violations={violations}",
+)
+_check(
+    "Rule 6 does NOT flag significant boolean byte match",
+    not any(v["path"] == "diagnostics.significance.significant"
+            for v in violations),
+    f"got violations={violations}",
+)
+
+
+print()
+print("--- test_rule6_flags_sentiment_sub_cluster_byte_copy ---")
+
+# The exact F1 Coke Boomer defect: sentiment.top_positive[i].count was
+# a byte copy of the parent's 4924-sample cluster count on the subset.
+parent = _parent_with_weight(observed_n=475_903, projection_weight=32.99)
+parent["sentiment"] = {
+    "enabled": True,
+    "sample_size": 4923,
+    "top_positive": [
+        {"summary": "Cluster A", "count": 83},
+        {"summary": "Cluster B", "count": 61},
+        {"summary": "Cluster C", "count": 47},
+    ],
+    "top_negative": [{"summary": "Cluster N1", "count": 11}],
+    "top_neutral": [{"summary": "Cluster T1", "count": 43}],
+}
+sub = build_subset_payload(parent, 0.602, "fixture_r6_sentiment", "Boomer")
+# Force the sentiment sub-cluster counts to byte-match parent (the
+# defect signature).
+sub["sentiment"]["top_positive"] = copy.deepcopy(parent["sentiment"]["top_positive"])
+sub["sentiment"]["top_negative"] = copy.deepcopy(parent["sentiment"]["top_negative"])
+sub["sentiment"]["top_neutral"] = copy.deepcopy(parent["sentiment"]["top_neutral"])
+
+violations = _check_rule6_byte_copy(sub, parent)
+count_paths = [v["path"] for v in violations
+               if v["path"].endswith(".count")]
+_check(
+    "Rule 6 flags every byte-copied top_positive[i].count",
+    all(f"sentiment.top_positive[{i}].count" in count_paths
+        for i in range(3)),
+    f"got count_paths={count_paths}",
+)
+_check(
+    "Rule 6 flags byte-copied top_negative[0].count",
+    "sentiment.top_negative[0].count" in count_paths,
+    f"got count_paths={count_paths}",
+)
+_check(
+    "Rule 6 flags byte-copied top_neutral[0].count",
+    "sentiment.top_neutral[0].count" in count_paths,
+    f"got count_paths={count_paths}",
+)
+
+
+print()
+print("--- test_rule6_does_not_fire_on_similar_size_panels ---")
+
+# When the subset panel is close to parent size (panel_ratio >= 0.9),
+# byte-copies of size-sensitive fields are not flagged. The check is
+# scoped to materially smaller subsets to avoid false positives on
+# same-cohort or near-full-cohort reads.
+parent = _parent_with_weight(observed_n=475_903, projection_weight=32.99)
+parent["diagnostics"]["significance"] = {
+    "n_discordant": 1_170_283, "primary_test_z": 668.127,
+}
+sub = copy.deepcopy(parent)
+# Subset panel same size as parent (panel_ratio = 1.0).
+violations = _check_rule6_byte_copy(sub, parent)
+_check(
+    "Rule 6 does NOT fire when panel_ratio >= 0.9",
+    len(violations) == 0,
+    f"got violations={violations}",
+)
+
+
+print()
+print("--- test_rule6_excludes_demographics_frozen_by_rule2 ---")
+
+# demographics.*.count is a Rule 2 frozen peer-shared bucket count. It
+# is legitimately byte-identical between the F1 and F2 subsets of the
+# same cohort, and coincidentally byte-identical to the parent at
+# low-count buckets (Non-Binary=2, Trans Female=1, Other=1). Rule 6
+# must skip demographics.* entirely because peer-freeze correctness
+# is verified by Rule 2, not Rule 6.
+parent = _parent_with_weight(observed_n=475_903, projection_weight=32.99)
+parent["demographics"] = {
+    "pre": {
+        "gender": [
+            {"value": "Female", "count": 186, "percentage": 55.0},
+            {"value": "Non-Binary", "count": 2, "percentage": 0.6},
+            {"value": "Trans Female", "count": 1, "percentage": 0.2},
+        ],
+        "age": [
+            {"value": "Other", "count": 1, "percentage": 0.4},
+        ],
+    },
+}
+sub = build_subset_payload(parent, 0.602, "fixture_r6_demo_excl", "Boomer")
+sub["demographics"] = {
+    "pre": {
+        "gender": [
+            {"value": "Female", "count": 189, "percentage": 54.41},
+            # Coincidentally byte-identical to parent:
+            {"value": "Non-Binary", "count": 2, "percentage": 0.67},
+            {"value": "Trans Female", "count": 1, "percentage": 0.18},
+        ],
+        "age": [
+            {"value": "Other", "count": 1, "percentage": 0.12},
+        ],
+    },
+}
+violations = _check_rule6_byte_copy(sub, parent)
+demo_hits = [v["path"] for v in violations
+             if v["path"].startswith("demographics.")]
+_check(
+    "Rule 6 excludes demographics.* from byte-copy checks",
+    len(demo_hits) == 0,
+    f"unexpected demographics violations: {demo_hits}",
+)
+
+
+print()
+print("--- test_rule6_verify_subset_invariants_integration ---")
+
+# End-to-end: verify_subset_invariants must include Rule 6 violations
+# in its return list.
+parent = _parent_with_weight(observed_n=475_903, projection_weight=32.99)
+parent["diagnostics"]["significance"] = {
+    "n_observed": 10_000_007,
+    "n_discordant": 1_170_283,
+    "detection_floor_pp": 0.034,
+}
+sub = build_subset_payload(parent, 0.602, "fixture_r6_integ", "Boomer")
+# Inject the defect
+sub["diagnostics"]["significance"]["n_discordant"] = 1_170_283
+sub["diagnostics"]["significance"]["detection_floor_pp"] = 0.034
+all_violations = verify_subset_invariants(sub, parent, 0.602)
+rule6 = [v for v in all_violations if v.get("rule") == 6]
+_check(
+    "verify_subset_invariants surfaces Rule 6 byte-copy violations",
+    len(rule6) >= 2,
+    f"got {len(rule6)} rule-6 violations: "
+    f"{[v['path'] for v in rule6]}",
 )
 
 

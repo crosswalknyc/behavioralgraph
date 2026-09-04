@@ -1547,7 +1547,196 @@ def verify_subset_invariants(
                     ),
                 })
 
+    # Rule 6 (2026-09-04, Liz F1 Boomer audit): a subset with a
+    # materially smaller panel must not byte-match the parent on any
+    # field known to scale with sample size. Catches the "secondary
+    # field-scale skip" defect where a builder scaled the load-bearing
+    # counts (per_platform, totals, valuation) but left a secondary
+    # block (sentiment sub-cluster counts, significance stats,
+    # detection floor, CI bounds) as a byte copy of the parent. Also
+    # catches text notes that still cite the parent's 10M panel size
+    # verbatim.
+    v.extend(_check_rule6_byte_copy(subset, parent))
+
     return v
+
+
+# Fields whose value scales with sample size. Bare dict-key names.
+# A byte-identical value on a subset with panel_ratio < 0.9 is a
+# Rule 6 violation. Keep this narrow to what actually scales:
+# raw counts, projected counts, discordant pairs, z-statistic, and
+# detection floor. Add here when a new size-dependent leaf shows up.
+_SIZE_SENSITIVE_KEYS = frozenset({
+    # int counts
+    "pre_hits", "post_hits", "pre_users", "post_users",
+    "pre_users_projected", "post_users_projected",
+    "hits", "hits_projected",
+    "positive", "neutral", "negative",
+    "control_size", "projected_control_size",
+    "control_pre_users", "control_post_users",
+    "control_pre_hits", "control_post_hits",
+    "sample_size", "audience_size", "projected_audience_size",
+    "n_observed", "n_discordant",
+    "incremental_users", "incremental_users_projected",
+    # sentiment sub-cluster count key
+    "count",
+    # significance stats that scale with sqrt(n) or 1/sqrt(n)
+    "primary_test_z", "detection_floor_pp",
+})
+
+# Path substrings for size-sensitive fields when the leaf key alone
+# does not disambiguate. Kept as substring matches for robustness
+# across list indices.
+_SIZE_SENSITIVE_PATH_FRAGMENTS = (
+    # 95% CI bounds move as 1/sqrt(n)
+    "delta_ci_95_pp",
+)
+
+# Path suffixes where a byte-identical subset/parent value is expected
+# and legitimate, even on a materially smaller subset panel. Kept
+# narrow: only for values preserved under uniform panel scaling
+# (differences of two rates on the same panel) or that remain fixed
+# regardless of n at the observed effect size.
+_BYTE_MATCH_EXPECTED_SUFFIXES = (
+    # penetration delta (post_pen - pre_pen) is preserved under uniform
+    # per-user scaling of both terms
+    "diagnostics.significance.delta_pp_point",
+    # boolean flag; either significant or not
+    "diagnostics.significance.significant",
+    # p-value stays 0.0 when z remains extreme; no defect signal
+    "diagnostics.significance.primary_test_p_value",
+)
+
+# Path prefixes that are frozen against the PEER subset (same cohort_id,
+# other brand pull) per Rule 2, not against the parent. Rule 6 must not
+# fire on these paths because a Rule 2 freeze happens between peers, so
+# any coincidental byte match with the parent at low-count demographic
+# buckets (Non-Binary=2, Trans Female=1, Other=1) is not a defect
+# signal. The Rule 2 verifier in `verify_subset_invariants` covers
+# peer-freeze correctness on `demographics.*`.
+_RULE6_EXCLUDED_PATH_PREFIXES = (
+    "demographics.",
+)
+
+# Text-note strings that must not carry the parent's 10M panel size
+# verbatim once the subset panel is materially smaller. Regex-friendly
+# substrings; a byte-match against the parent on these paths AND a
+# hit on any forbidden substring in the subset value fires Rule 6.
+_TEXT_NOTE_PATHS = (
+    "diagnostics.significance.notes",
+    "incidence_note",
+)
+_TEXT_NOTE_STALE_MARKERS = (
+    "n=10M",
+    "10,000,000-panelist",
+)
+
+
+def _walk_leaves_with_parent(subset, parent, path=""):
+    """Yield (path, key, subset_leaf, parent_leaf) for every leaf in
+    subset that also exists in parent, resolving list indices
+    positionally. Used only by the Rule 6 byte-copy check."""
+    if isinstance(subset, dict) and isinstance(parent, dict):
+        for k, v in subset.items():
+            child_path = f"{path}.{k}" if path else k
+            if k not in parent:
+                continue
+            pv = parent[k]
+            if isinstance(v, (dict, list)):
+                yield from _walk_leaves_with_parent(v, pv, child_path)
+            else:
+                yield child_path, k, v, pv
+    elif isinstance(subset, list) and isinstance(parent, list):
+        for i, (sv, pv) in enumerate(zip(subset, parent)):
+            child_path = f"{path}[{i}]"
+            if isinstance(sv, (dict, list)):
+                yield from _walk_leaves_with_parent(sv, pv, child_path)
+            else:
+                # For a raw list-of-scalars leaf, inherit the key from
+                # the last dotted segment of `path` so the caller can
+                # match against _SIZE_SENSITIVE_PATH_FRAGMENTS.
+                key = path.rsplit(".", 1)[-1] if path else ""
+                yield child_path, key, sv, pv
+
+
+def _check_rule6_byte_copy(subset: dict, parent: dict) -> list:
+    """Return Rule 6 violations for size-sensitive byte copies.
+
+    A subset with a materially smaller panel must not byte-match the
+    parent on any leaf whose value is known to scale with sample
+    size, and must not carry a text note that cites the parent's
+    panel size verbatim.
+    """
+    out: list = []
+    sub_n = subset.get("audience_size")
+    par_n = parent.get("audience_size")
+    if not (isinstance(sub_n, (int, float)) and isinstance(par_n, (int, float))
+            and par_n > 0 and sub_n > 0):
+        return out
+    panel_ratio = float(sub_n) / float(par_n)
+    if panel_ratio >= 0.9:
+        # Subset panel is not materially smaller; a byte-copy is not
+        # a defect signal at this scale.
+        return out
+
+    for path, key, sv, pv in _walk_leaves_with_parent(subset, parent):
+        # Text notes: byte-copy AND stale panel marker in the subset
+        # value = defect. Cheap early check.
+        if isinstance(sv, str) and isinstance(pv, str) and sv == pv:
+            if path in _TEXT_NOTE_PATHS:
+                for marker in _TEXT_NOTE_STALE_MARKERS:
+                    if marker in sv:
+                        out.append({
+                            "rule": 6,
+                            "path": path,
+                            "subset_value": sv[:80],
+                            "parent_value": pv[:80],
+                            "message": (
+                                f"Rule 6: {path} still cites the parent's "
+                                f"panel size ('{marker}') verbatim. Update "
+                                "the text to reflect the subset's smaller "
+                                "panel."
+                            ),
+                        })
+                        break
+            continue
+        # Numeric byte-copy check
+        if not (isinstance(sv, (int, float)) and isinstance(pv, (int, float))):
+            continue
+        if sv == 0 or pv == 0:
+            continue
+        if sv != pv:
+            continue
+        is_key_sensitive = key in _SIZE_SENSITIVE_KEYS
+        is_path_sensitive = any(
+            frag in path for frag in _SIZE_SENSITIVE_PATH_FRAGMENTS
+        )
+        if not (is_key_sensitive or is_path_sensitive):
+            continue
+        if any(path.endswith(suf) for suf in _BYTE_MATCH_EXPECTED_SUFFIXES):
+            continue
+        # Rule 2 territory (demographics.*): frozen against the peer
+        # subset (same cohort_id, other brand pull), not the parent.
+        # Peer-freeze correctness is checked separately by
+        # `verify_subset_invariants` Rule 2 pass.
+        if any(path.startswith(prefix)
+               for prefix in _RULE6_EXCLUDED_PATH_PREFIXES):
+            continue
+        out.append({
+            "rule": 6,
+            "path": path,
+            "subset_value": sv,
+            "parent_value": pv,
+            "message": (
+                f"Rule 6: {path} ({sv}) is byte-identical to parent on a "
+                f"subset with panel_ratio {panel_ratio:.4f}. Size-sensitive "
+                "field should scale with n; a byte match indicates a "
+                "field-scale skip. Scale the value against the subset "
+                "panel and re-derive any downstream stat that depends on "
+                "it."
+            ),
+        })
+    return out
 
 
 # ---------------------------------------------------------------------
@@ -1913,4 +2102,7 @@ __all__ = [
     "_recompute_conversion_valuation",
     "_implied_conversion_count",
     "_per_platform_incremental_counts",
+    # Rule 6 byte-copy helper (2026-09-04).
+    "_check_rule6_byte_copy",
+    "_walk_leaves_with_parent",
 ]
