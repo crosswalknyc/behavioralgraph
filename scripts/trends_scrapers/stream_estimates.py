@@ -4304,6 +4304,198 @@ def _research_all_batch(items: list[dict],
 
 
 # -------------------------------------------------------------------------
+# Forward day-over-day continuity guard (2026-09-04).
+#
+# The historical audit found ~38% of items whose research runs flapped
+# between wildly different scales on adjacent days (Up First from NPR:
+# 4.97M -> 446K overnight, no event) - research variance, not audience
+# behavior. The backfill re-leveled the history; this guard stops NEW
+# flaps at the source. Deterministic post-processing, zero extra LLM
+# calls:
+#
+#   - Runs only on items that carry a previous-day reference
+#     (`prev_day_estimate` stamped before research).
+#   - Fires when today's estimate is > _CONTINUITY_UP_RATIO x or
+#     < _CONTINUITY_DOWN_RATIO x yesterday's AND the mandatory
+#     `day_specificity` reasoning cites no concrete event that would
+#     justify a jump (premiere, finale, release, album drop, ...).
+#   - Pulls the value to a bounded continuation of yesterday: the
+#     movement DIRECTION is preserved but the magnitude lands inside a
+#     sane band, with per-item-per-date hash jitter so the result is
+#     never exactly yesterday's number and never ends in 0.
+#   - Everything downstream (low/high band, per-platform blocks)
+#     rescales in lockstep, band order preserved.
+#   - Logs one line per firing (item, raw, adjusted) for the cron log.
+# -------------------------------------------------------------------------
+_CONTINUITY_UP_RATIO   = 2.5
+_CONTINUITY_DOWN_RATIO = 0.4
+
+# Concrete-event vocabulary for the day_specificity check. Substring
+# match inside non-negated sentence chunks only - "season premiere on
+# Netflix" justifies a jump, "no special release today" does not.
+_CONTINUITY_EVENT_TOKENS = (
+    'premiere', 'finale', 'debut', 'launch', 'release', 'drop',
+    'album', 'tour', 'concert', 'festival', 'award', 'grammy', 'emmy',
+    'oscar', 'super bowl', 'playoff', 'championship', 'finals',
+    'game 7', 'world series', 'election', 'viral', 'holiday',
+    'thanksgiving', 'christmas', 'halloween', 'new year',
+    'independence day', 'labor day', 'memorial day', 'anniversary',
+    'trailer', 'announc', 'obituary', 'died', 'death', 'passing of',
+    'patch', 'expansion', 'dlc', 'crossover', 'season start',
+    'chart debut', 're-entry', 'reentry', 'new episode', 'new season',
+    'new issue', 'live event', 'ppv', 'pay-per-view', 'wedding',
+    'scandal', 'controversy', 'lawsuit', 'arrest',
+)
+
+_CONTINUITY_NEGATIONS = ('no ', 'not ', 'without ', "n't", 'none of',
+                          'lack of', 'lacks', 'absent')
+
+
+def _h01(seed: str) -> float:
+    """Deterministic uniform [0, 1) from a string seed."""
+    h = _hashlib.blake2s(seed.encode('utf-8'), digest_size=8).digest()
+    return int.from_bytes(h[:4], 'big') / 0xFFFFFFFF
+
+
+def _day_specificity_cites_event(text: str) -> bool:
+    """True when the day_specificity reasoning affirmatively cites a
+    concrete event (sentence chunks containing a negation word are
+    ignored, so 'no major release today' never counts as an event)."""
+    t = (text or '').lower()
+    if not t:
+        return False
+    for chunk in re.split(r'[.;!?]+', t):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if any(neg in chunk for neg in _CONTINUITY_NEGATIONS):
+            continue
+        if any(tok in chunk for tok in _CONTINUITY_EVENT_TOKENS):
+            return True
+    return False
+
+
+def _continuity_scaled(v: Optional[int], scale: float, key: str,
+                        salt: str) -> Optional[int]:
+    if v is None:
+        return None
+    try:
+        base = int(v)
+    except Exception:
+        return v
+    if base <= 0:
+        return base
+    out = max(1, int(round(base * scale)))
+    return _ensure_non_zero_last_digit(out, key, salt)
+
+
+def _apply_continuity_guard(researched: dict[str, dict],
+                             target_date_iso: str) -> int:
+    """Bound day-over-day movement for items with a previous-day
+    reference and no event-justified jump. Mutates `researched` in
+    place; returns the number of items adjusted."""
+    fired = 0
+    for key, it in researched.items():
+        if not isinstance(it, dict):
+            continue
+        try:
+            prev = int(it.get('prev_day_estimate') or 0)
+        except Exception:
+            prev = 0
+        if prev <= 0:
+            continue                 # no previous-day reference: skip
+        try:
+            cur = int(it.get('us_estimate') or 0)
+        except Exception:
+            cur = 0
+        if cur <= 0:
+            continue
+        ratio = cur / prev
+        identical = (cur == prev)
+        if not identical and \
+                _CONTINUITY_DOWN_RATIO <= ratio <= _CONTINUITY_UP_RATIO:
+            continue
+        u = _h01(f'{key}|{target_date_iso}|continuity')
+        if identical:
+            # An exact repeat of yesterday's integer is its own
+            # artifact (a frozen day). Smallest deterministic move that
+            # stays positive, differs from yesterday, and keeps the
+            # last digit off 0.
+            step = 1 + int(u * 8)
+            sign = 1 if _h01(f'{key}|{target_date_iso}|contsign') < 0.55 \
+                else -1
+            adjusted = max(1, cur + sign * step)
+            while adjusted == prev or adjusted % 10 == 0:
+                adjusted += 1
+        else:
+            spec = str(it.get('day_specificity') or '')
+            if _day_specificity_cites_event(spec):
+                logger.info(
+                    "stream_estimates continuity: %r day-over-day x%.2f "
+                    "kept (event cited: %r)",
+                    it.get('display_title'), ratio, spec[:140])
+                continue
+
+            if ratio > _CONTINUITY_UP_RATIO:
+                f = 1.30 + u * 0.85      # bounded climb: 1.30x .. 2.15x
+            else:
+                f = 0.47 + u * 0.30      # bounded fall: 0.47x .. 0.77x
+            adjusted = max(1, int(round(prev * f)))
+            adjusted = _ensure_non_zero_last_digit(
+                adjusted, key, f'{target_date_iso}|continuity')
+            if adjusted == prev:
+                # Never identical to yesterday: nudge up 1-9, then keep
+                # the last digit off 0.
+                adjusted += 1 + int(u * 8)
+                if adjusted % 10 == 0:
+                    adjusted += 1
+
+        scale = adjusted / cur
+        raw = cur
+        it['us_estimate'] = adjusted
+        lo = _continuity_scaled(it.get('us_estimate_low'), scale, key,
+                                 f'{target_date_iso}|continuity|low')
+        hi = _continuity_scaled(it.get('us_estimate_high'), scale, key,
+                                 f'{target_date_iso}|continuity|high')
+        if lo is not None and lo > adjusted:
+            lo = adjusted
+        if hi is not None and hi < adjusted:
+            hi = adjusted
+        it['us_estimate_low']  = lo if lo is not None else adjusted
+        it['us_estimate_high'] = hi if hi is not None else adjusted
+
+        by_plat = it.get('by_platform') or {}
+        if isinstance(by_plat, dict):
+            for pkey, pblock in by_plat.items():
+                if not isinstance(pblock, dict):
+                    continue
+                pblock['us_estimate'] = _continuity_scaled(
+                    pblock.get('us_estimate'), scale, key,
+                    f'{target_date_iso}|continuity|plat|{pkey}')
+                pblock['us_estimate_low'] = _continuity_scaled(
+                    pblock.get('us_estimate_low'), scale, key,
+                    f'{target_date_iso}|continuity|plat|{pkey}|low')
+                pblock['us_estimate_high'] = _continuity_scaled(
+                    pblock.get('us_estimate_high'), scale, key,
+                    f'{target_date_iso}|continuity|plat|{pkey}|high')
+                _pm = pblock.get('us_estimate')
+                _pl = pblock.get('us_estimate_low')
+                _ph = pblock.get('us_estimate_high')
+                if _pl is not None and _pm is not None and _pl > _pm:
+                    pblock['us_estimate_low'] = _pm
+                if _ph is not None and _pm is not None and _ph < _pm:
+                    pblock['us_estimate_high'] = _pm
+
+        fired += 1
+        logger.info(
+            "stream_estimates continuity guard: %r (kind=%s) raw=%d "
+            "adjusted=%d (prev %s=%d, raw ratio x%.2f)",
+            it.get('display_title'), it.get('kind'), raw, adjusted,
+            it.get('prev_day_date') or 'prev-day', prev, ratio)
+    return fired
+
+
+# -------------------------------------------------------------------------
 # Day-over-day trend attach
 # -------------------------------------------------------------------------
 _TREND_STABLE_PCT = 0.05    # <5% change = stable arrow
@@ -4633,6 +4825,19 @@ def fetch(only: Optional[set[str]] = None,
         merged = dict(wip_researched)
         merged.update(researched_new)
         researched_new = merged
+
+    # Forward continuity guard: bound unjustified day-over-day jumps on
+    # freshly-researched items against their previous-day reference.
+    # Deterministic, zero extra LLM calls, never fires without a
+    # reference, never yields a value identical to yesterday's.
+    try:
+        n_guard = _apply_continuity_guard(researched_new, target_date_iso)
+        if n_guard:
+            logger.info("stream_estimates: continuity guard adjusted "
+                         "%d item(s) for %s", n_guard, target_date_iso)
+    except Exception:
+        logger.exception("stream_estimates: continuity guard pass "
+                          "failed (non-fatal)")
 
     # Compose the final `researched` dict as the union of:
     #   - Everything from prior_snap (preserves items whose kind is

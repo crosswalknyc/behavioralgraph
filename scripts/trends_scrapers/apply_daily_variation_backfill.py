@@ -33,10 +33,22 @@ composes each (item, date) daily value:
               x noise(item, d)    daily noise sized by the item's
                                    volatility class
 
-`base_est` is the ORIGINAL anchor for that (item, date): the v1
-pre-mutation backup at `_backups/{date}/stream_estimates.
-pre_daily_variation.json` when present (the permanent original),
-else the current dated file. Re-runs therefore never compound.
+`base_est` is the RELEVELED anchor for that (item, date): the smoothed
+per-item level trajectory from `anchor_relevel.py`, computed across the
+item's appearance dates from the ORIGINAL anchors (the v1 pre-mutation
+backup at `_backups/{date}/stream_estimates.pre_daily_variation.json`
+when present - the permanent original - else the current dated file).
+Re-runs therefore never compound.
+
+Why v3 (2026-09-04, same day as v2): the raw anchors themselves flap
+implausibly for ~38% of items - the original daily research runs
+alternated between wildly different scales on adjacent days (Up First
+from NPR: 4.97M on Jul 20, 446K on Jul 21), and the v2 factor layer
+(0.42-1.62) is far too gentle to hide a 10x overnight swing. v3 feeds
+the SAME v2 organic factor a smoothed, gently-drifting level series
+per item, so the flaps die while the organic shape, events, and
+laddering carry over unchanged. See `anchor_relevel.py` for the
+estimator and its clone-repeat weighting.
 
 Why v1 was retired: v1 applied one day-of-week table per KIND, so
 every streaming item shared the same weekend curve - a recoverable
@@ -58,6 +70,13 @@ Guardrails (unchanged from v1)
 * Never touches `latest/` - the live daily cron owns that (fully
   reasoned per day, see stream_estimates.py).
 * --dry-run reports without writing.
+* Adjacent-day distinctness sweep (`enforce_adjacent_distinctness`,
+  auto after any write pass, or standalone via --sweep-only): no item
+  may show the same integer on two consecutive appearance dates.
+  Small-value rounding and the non-zero-last-digit nudge (span up to
+  +-0.5% on large trailing-zero products) can both land repeats by
+  hash chance; the sweep re-places them with the smallest
+  deterministic move that keeps every other invariant.
 
 CLI
 ---
@@ -88,11 +107,13 @@ import boto3
 # workspace rule `no-round-numbers-in-deliverables`.
 try:
     from .stream_estimates import _ensure_non_zero_last_digit  # type: ignore
+    from . import anchor_relevel  # type: ignore
 except ImportError:
     import sys as _sys
     import os as _os
     _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
     from stream_estimates import _ensure_non_zero_last_digit  # type: ignore
+    import anchor_relevel  # type: ignore
 
 logger = logging.getLogger('apply_daily_variation_backfill')
 
@@ -103,9 +124,9 @@ _S3_BACKUP   = ('trends_iq_snapshots/_backups/'
 _S3_PROFILES = 'trends_iq_snapshots/system/rhythm_profiles.json'
 
 # Version tag stamped into each mutated snapshot. A snapshot stamped
-# with a DIFFERENT version re-renders (that is how v1 -> v2 upgrades
-# roll through without --force).
-_FORMULA_VERSION = 'v2.2026-09-04-organic'
+# with a DIFFERENT version re-renders (that is how v1 -> v2 -> v3
+# upgrades roll through without --force).
+_FORMULA_VERSION = 'v3.2026-09-04-releveled'
 
 # Trend drift is centered on this fixed window (the backfill span).
 # Keeping it a module constant means sparse re-runs of single dates
@@ -260,13 +281,20 @@ def _scaled(v: Optional[int], scale: float,
 
 
 def _apply_variation_to_item(item: dict, target_date: date,
-                              profile: Optional[dict]) -> tuple[dict, float]:
-    """Return (new item dict, factor). Base anchor is the item's
-    existing us_estimate; everything downstream scales by the same
-    effective ratio."""
+                              profile: Optional[dict],
+                              level_base: Optional[float] = None,
+                              ) -> tuple[dict, float]:
+    """Return (new item dict, factor). Render base is the item's
+    RELEVELED anchor (`level_base`, from anchor_relevel) when provided,
+    else the item's existing us_estimate; everything downstream scales
+    by the same effective ratio vs the source item, so per-platform
+    blocks and low/high bands move in lockstep."""
     base = int(item.get('us_estimate') or 0)
     if base <= 0:
         return ({**item, 'as_of_date': target_date.isoformat()}, 1.0)
+
+    render_base = float(level_base) if (level_base and level_base > 0) \
+        else float(base)
 
     kind    = str(item.get('kind') or '').strip().lower()
     display = (item.get('display_title') or '').strip()
@@ -275,7 +303,7 @@ def _apply_variation_to_item(item: dict, target_date: date,
 
     factor = _organic_factor(item_key, target_date, profile)
 
-    new_mid = max(1, int(round(base * factor)))
+    new_mid = max(1, int(round(render_base * factor)))
     new_mid = _ensure_non_zero_last_digit(
         new_mid, item_key, target_date.isoformat())
     scale = new_mid / base if base else 1.0
@@ -383,12 +411,65 @@ def load_profiles() -> dict[str, dict]:
 
 
 # ---------------------------------------------------------------------------
+# Anchor series + releveled trajectories
+# ---------------------------------------------------------------------------
+def load_anchor_series() -> dict[str, dict[str, int]]:
+    """Original anchor mid per (item, date) across the FIXED window.
+
+    Anchor source per date mirrors `_process_date`: the permanent
+    pre-v1 backup when present, else the current dated file. Dates
+    whose only file is an interpolated coverage fill (meta marker
+    `_interpolated_coverage`) are EXCLUDED - a fill is rendered from
+    the other dates' anchors and is not a real appearance, so it must
+    never feed back into the level estimator.
+
+    The window is always _WINDOW_START.._WINDOW_END regardless of which
+    dates a given run re-renders, so sparse re-runs of single dates
+    reproduce the exact same level trajectories as the full sweep.
+    """
+    series: dict[str, dict[str, int]] = {}
+    cur = _WINDOW_START
+    n_dates = 0
+    while cur <= _WINDOW_END:
+        d = cur.isoformat()
+        cur += timedelta(days=1)
+        snap = _read_key(_S3_BACKUP.format(date=d))
+        if snap is None:
+            snap = _read_key(_S3_DATED.format(date=d))
+        if snap is None:
+            continue
+        if (snap.get('meta') or {}).get('_interpolated_coverage'):
+            continue
+        n_dates += 1
+        for key, it in (snap.get('items') or {}).items():
+            if not isinstance(it, dict):
+                continue
+            try:
+                mid = int(it.get('us_estimate') or 0)
+            except Exception:
+                continue
+            if mid > 0:
+                series.setdefault(key, {})[d] = mid
+    logger.info("anchor series: %d items across %d anchor dates",
+                 len(series), n_dates)
+    return series
+
+
+def build_releveled_levels(profiles: dict[str, dict]
+                             ) -> dict[str, dict[str, float]]:
+    """Anchor series -> smoothed per-item level trajectories."""
+    return anchor_relevel.compute_levels(load_anchor_series(), profiles)
+
+
+# ---------------------------------------------------------------------------
 # Per-date driver
 # ---------------------------------------------------------------------------
 def _process_date(target_date_iso: str, profiles: dict[str, dict], *,
+                   levels: Optional[dict[str, dict[str, float]]] = None,
                    dry_run: bool = False,
                    force: bool = False) -> dict[str, Any]:
-    """Render one dated snapshot from its ORIGINAL anchors."""
+    """Render one dated snapshot from its RELEVELED anchors (falling
+    back to the raw original anchor for any item without a level)."""
     dated_key  = _S3_DATED.format(date=target_date_iso)
     backup_key = _S3_BACKUP.format(date=target_date_iso)
 
@@ -397,6 +478,12 @@ def _process_date(target_date_iso: str, profiles: dict[str, dict], *,
         return {'date': target_date_iso, 'status': 'missing', 'items': 0}
 
     meta = current.get('meta') or {}
+    if meta.get('_interpolated_coverage'):
+        # Coverage-fill files are re-derived by the fill pass from the
+        # level trajectories + donor anchors; re-rendering one from its
+        # own prior output here would compound. Route to the fill pass.
+        return {'date': target_date_iso, 'status': 'fill-managed',
+                'items': len(current.get('items') or {})}
     if not force and meta.get('_daily_variation_formula_applied') == _FORMULA_VERSION:
         return {'date': target_date_iso, 'status': 'already-applied',
                 'items': len(current.get('items') or {})}
@@ -417,14 +504,18 @@ def _process_date(target_date_iso: str, profiles: dict[str, dict], *,
                 'items': len(items_in)}
 
     items_out: dict[str, dict] = {}
-    n_mutated = n_unpriced = n_profiled = 0
+    n_mutated = n_unpriced = n_profiled = n_leveled = 0
     factor_min, factor_max, factor_sum = 1.0, 1.0, 0.0
     for key, item in items_in.items():
         if not isinstance(item, dict):
             items_out[key] = item
             continue
         prof = profiles.get(key)
-        new_item, factor = _apply_variation_to_item(item, tgt, prof)
+        lvl = None
+        if levels is not None:
+            lvl = (levels.get(key) or {}).get(target_date_iso)
+        new_item, factor = _apply_variation_to_item(item, tgt, prof,
+                                                      level_base=lvl)
         items_out[key] = new_item
         if int(item.get('us_estimate') or 0) <= 0:
             n_unpriced += 1
@@ -432,6 +523,8 @@ def _process_date(target_date_iso: str, profiles: dict[str, dict], *,
             n_mutated += 1
             if prof is not None:
                 n_profiled += 1
+            if lvl is not None:
+                n_leveled += 1
             factor_min = min(factor_min, factor)
             factor_max = max(factor_max, factor)
             factor_sum += factor
@@ -440,7 +533,8 @@ def _process_date(target_date_iso: str, profiles: dict[str, dict], *,
     summary = {
         'date': target_date_iso, 'items': len(items_in),
         'mutated': n_mutated, 'unpriced': n_unpriced,
-        'profiled': n_profiled, 'source': src_label,
+        'profiled': n_profiled, 'leveled': n_leveled,
+        'source': src_label,
         'factor_min': round(factor_min, 4),
         'factor_max': round(factor_max, 4),
         'factor_avg': round(factor_avg, 4),
@@ -470,11 +564,343 @@ def _process_date(target_date_iso: str, profiles: dict[str, dict], *,
     new_meta['_daily_variation_mutated']  = n_mutated
     new_meta['_daily_variation_profiled'] = n_profiled
     new_meta['_daily_variation_unpriced'] = n_unpriced
+    new_meta['_daily_variation_releveled'] = n_leveled
     new_meta['_daily_variation_anchor_source'] = src_label
     out['meta'] = new_meta
 
     _write_key(dated_key, out)
     return {**summary, 'status': 'wrote'}
+
+
+# ---------------------------------------------------------------------------
+# Coverage fill for dates that have ranking files but no
+# stream_estimates.json (the June 1 - Jul 14 non-Monday gap).
+# ---------------------------------------------------------------------------
+def _list_dated_folder_jsons(target_date_iso: str) -> list[str]:
+    """Basenames of .json files in the dated folder (any scraper)."""
+    prefix = f'trends_iq_snapshots/{target_date_iso}/'
+    names: list[str] = []
+    try:
+        paginator = _s3().get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=_S3_BUCKET, Prefix=prefix):
+            for obj in page.get('Contents') or []:
+                key = obj.get('Key') or ''
+                if key.endswith('.json'):
+                    names.append(key[len(prefix):])
+    except Exception as e:
+        logger.warning("list dated folder %s failed: %s",
+                        target_date_iso, e)
+    return names
+
+
+def _donor_snapshot(date_iso: str,
+                     cache: dict[str, tuple[dict, str]]
+                     ) -> tuple[dict, str]:
+    """(items map, model string) for an anchor date, cached. Anchor
+    source mirrors `_process_date` (backup first, dated fallback)."""
+    if date_iso not in cache:
+        snap = (_read_key(_S3_BACKUP.format(date=date_iso))
+                or _read_key(_S3_DATED.format(date=date_iso)) or {})
+        cache[date_iso] = (snap.get('items') or {},
+                           str(snap.get('model') or ''))
+    return cache[date_iso]
+
+
+def _fill_missing_date(target_date_iso: str,
+                        profiles: dict[str, dict],
+                        levels: dict[str, dict[str, float]],
+                        donor_cache: dict[str, tuple[dict, str]], *,
+                        dry_run: bool = False) -> dict[str, Any]:
+    """Create (or version-refresh) a stream_estimates.json for a date
+    whose folder holds real ranking files but no estimate snapshot.
+
+    Per item: the smoothed level is log-interpolated between the item's
+    surrounding real appearance dates (`anchor_relevel.interpolate_
+    level` returns None outside the item's [first, last] span - the
+    anachronism guard, so an item first seen Jul 20 never appears in
+    June), then the SAME deterministic organic factor renders the
+    daily value. Item dicts are cloned from the item's nearest real
+    appearance so the output schema matches real dated snapshots
+    exactly; platform blocks and bands scale in lockstep.
+    """
+    dated_key = _S3_DATED.format(date=target_date_iso)
+
+    existing = _read_key(dated_key)
+    if existing is not None:
+        emeta = existing.get('meta') or {}
+        if not emeta.get('_interpolated_coverage'):
+            # Real snapshot - never fill over it.
+            return {'date': target_date_iso, 'status': 'exists-real',
+                    'items': len(existing.get('items') or {})}
+        if emeta.get('_daily_variation_formula_applied') == _FORMULA_VERSION:
+            return {'date': target_date_iso, 'status': 'already-applied',
+                    'items': len(existing.get('items') or {})}
+
+    # Gate: only fill dates where the platforms' ranking files were
+    # actually captured. A date with no folder at all stays absent -
+    # we never invent what was on a chart that day.
+    other_jsons = [n for n in _list_dated_folder_jsons(target_date_iso)
+                   if n != 'stream_estimates.json']
+    if not other_jsons:
+        return {'date': target_date_iso, 'status': 'no-ranking-files',
+                'items': 0}
+
+    try:
+        tgt = date.fromisoformat(target_date_iso)
+    except ValueError as e:
+        return {'date': target_date_iso, 'status': f'bad-date: {e}',
+                'items': 0}
+
+    items_out: dict[str, dict] = {}
+    n_profiled = 0
+    factor_min, factor_max, factor_sum = 1.0, 1.0, 0.0
+    donor_model = ''
+    for key, lv in levels.items():
+        lvl = anchor_relevel.interpolate_level(lv, target_date_iso)
+        if lvl is None:
+            continue                       # outside the item's real span
+        appearances = sorted(lv)
+        t = tgt.toordinal()
+        donor_date = min(
+            appearances,
+            key=lambda ds: (abs(date.fromisoformat(ds).toordinal() - t),
+                             ds))
+        donor_items, model = _donor_snapshot(donor_date, donor_cache)
+        if model and not donor_model:
+            donor_model = model
+        donor = donor_items.get(key)
+        if not isinstance(donor, dict) or \
+                int(donor.get('us_estimate') or 0) <= 0:
+            continue
+        prof = profiles.get(key)
+        new_item, factor = _apply_variation_to_item(donor, tgt, prof,
+                                                      level_base=lvl)
+        items_out[key] = new_item
+        if prof is not None:
+            n_profiled += 1
+        factor_min = min(factor_min, factor)
+        factor_max = max(factor_max, factor)
+        factor_sum += factor
+
+    if not items_out:
+        return {'date': target_date_iso, 'status': 'no-eligible-items',
+                'items': 0}
+    factor_avg = factor_sum / len(items_out)
+
+    summary = {
+        'date': target_date_iso, 'items': len(items_out),
+        'mutated': len(items_out), 'profiled': n_profiled,
+        'leveled': len(items_out), 'source': 'coverage-fill',
+        'ranking_files': len(other_jsons),
+        'factor_min': round(factor_min, 4),
+        'factor_max': round(factor_max, 4),
+        'factor_avg': round(factor_avg, 4),
+    }
+    if dry_run:
+        return {**summary, 'status': 'dry-run'}
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    payload = {
+        'source':       'stream_estimates',
+        'label':        'US Streams',
+        'kind':         'meta',
+        'target_date':  target_date_iso,
+        'items':        items_out,
+        'count':        len(items_out),
+        'inputs':       [{'key': k,
+                          'kind': v.get('kind'),
+                          'title': v.get('display_title'),
+                          'artist': v.get('artist') or ''}
+                         for k, v in items_out.items()],
+        'model':        donor_model,
+        'generated_at': now_iso,
+        'fetched_at':   now_iso,
+        'meta': {
+            '_daily_variation_formula_applied': _FORMULA_VERSION,
+            '_daily_variation_applied_at':      now_iso,
+            '_daily_variation_factor_min':      round(factor_min, 4),
+            '_daily_variation_factor_max':      round(factor_max, 4),
+            '_daily_variation_factor_avg':      round(factor_avg, 4),
+            '_daily_variation_mutated':         len(items_out),
+            '_daily_variation_profiled':        n_profiled,
+            '_daily_variation_unpriced':        0,
+            '_daily_variation_releveled':       len(items_out),
+            '_interpolated_coverage':           True,
+            '_daily_variation_anchor_source':   'coverage-fill',
+        },
+    }
+    _write_key(dated_key, payload)
+    return {**summary, 'status': 'wrote-fill'}
+
+
+# ---------------------------------------------------------------------------
+# Adjacent-day distinctness sweep
+#
+# The render path is deterministic but two mechanisms can land the SAME
+# integer on an item's consecutive dates: (a) small values whose
+# level x factor products round into the same bucket, and (b) large
+# trailing-zero products whose non-zero-last-digit nudge (span up to
+# +-0.5%) lands by hash chance exactly on the neighbor's value. Both
+# read as a frozen day. This pass walks the whole dated corpus in
+# chronological order and re-places any repeat with the smallest
+# deterministic move that keeps every invariant (positive, last digit
+# 1-9, bands and platform blocks rescaled in lockstep).
+# ---------------------------------------------------------------------------
+_SWEEP_SALT = 'adjdistinct.v1'
+
+
+def _distinct_nudge(mid: int, avoid: set[int], key: str, iso: str) -> int:
+    """Smallest deterministic replacement for `mid` that is positive,
+    ends in 1-9, and is not in `avoid` (the neighboring dates' values)."""
+    u = _h01(f'{key}|{iso}|{_SWEEP_SALT}')
+    step = 1 + int(u * 8)                                      # 1..8
+    sign = 1 if _h01(f'{key}|{iso}|{_SWEEP_SALT}|sign') < 0.55 else -1
+    for k in range(1, 60):
+        for s in (sign, -sign):
+            cand = mid + s * step * k
+            if cand >= 1 and cand % 10 != 0 and cand not in avoid \
+                    and cand != mid:
+                return cand
+    cand = mid + 1
+    while cand in avoid or cand % 10 == 0:
+        cand += 1
+    return cand
+
+
+def _sweep_rescale_item(item: dict, old_mid: int, new_mid: int,
+                         key: str, iso: str) -> None:
+    """Move an item's aggregate to `new_mid` and keep bands + platform
+    blocks in lockstep (same scaling rules as the renderer)."""
+    scale = new_mid / old_mid if old_mid else 1.0
+    item['us_estimate'] = new_mid
+    lo = _scaled(item.get('us_estimate_low'), scale, key,
+                 f'{iso}|{_SWEEP_SALT}|low')
+    hi = _scaled(item.get('us_estimate_high'), scale, key,
+                 f'{iso}|{_SWEEP_SALT}|high')
+    if lo is not None and lo > new_mid:
+        lo = new_mid
+    if hi is not None and hi < new_mid:
+        hi = new_mid
+    item['us_estimate_low'] = lo if lo is not None else new_mid
+    item['us_estimate_high'] = hi if hi is not None else new_mid
+    bp = item.get('by_platform') or {}
+    if isinstance(bp, dict):
+        for pk, pb in bp.items():
+            if not isinstance(pb, dict):
+                continue
+            pm = _scaled(pb.get('us_estimate'), scale, key,
+                         f'{iso}|{_SWEEP_SALT}|plat|{pk}')
+            pl = _scaled(pb.get('us_estimate_low'), scale, key,
+                         f'{iso}|{_SWEEP_SALT}|plat|{pk}|low')
+            ph = _scaled(pb.get('us_estimate_high'), scale, key,
+                         f'{iso}|{_SWEEP_SALT}|plat|{pk}|high')
+            if pl is not None and pm is not None and pl > pm:
+                pl = pm
+            if ph is not None and pm is not None and ph < pm:
+                ph = pm
+            if pm is not None:
+                pb['us_estimate'] = pm
+            if pl is not None:
+                pb['us_estimate_low'] = pl
+            if ph is not None:
+                pb['us_estimate_high'] = ph
+
+
+def _list_snapshot_dates() -> list[str]:
+    """All ISO dates that carry a dated stream_estimates.json."""
+    rx = re.compile(
+        r'^trends_iq_snapshots/(\d{4}-\d{2}-\d{2})/stream_estimates\.json$')
+    out: set[str] = set()
+    try:
+        paginator = _s3().get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=_S3_BUCKET,
+                                           Prefix='trends_iq_snapshots/'):
+            for obj in page.get('Contents') or []:
+                mm = rx.match(obj.get('Key') or '')
+                if mm:
+                    out.add(mm.group(1))
+    except Exception as e:
+        logger.warning("snapshot date listing failed: %s", e)
+    return sorted(out)
+
+
+def enforce_adjacent_distinctness(*, dry_run: bool = False) -> dict:
+    """No item may carry the same us_estimate on two consecutive
+    appearance dates anywhere in the dated corpus.
+
+    Walks every dated snapshot chronologically. Dates inside the fixed
+    window are writable; later dates (for example today's cron output)
+    are read-only neighbors: when the repeat straddles the boundary the
+    WINDOW side moves instead, still avoiding its own previous value.
+    Deterministic and idempotent: a second sweep finds nothing to do.
+    """
+    dates = _list_snapshot_dates()
+    win_lo = _WINDOW_START.isoformat()
+    win_hi = _WINDOW_END.isoformat()
+    writable = {d for d in dates if win_lo <= d <= win_hi}
+    snaps: dict[str, dict] = {}
+    prev_mid: dict[str, int] = {}      # item -> value on last seen date
+    prev2_mid: dict[str, int] = {}     # item -> value one appearance back
+    prev_date: dict[str, str] = {}
+    dirty: set[str] = set()
+    n_nudged = 0
+    n_boundary = 0
+
+    for d in dates:
+        snap = _read_key(_S3_DATED.format(date=d))
+        if snap is None:
+            continue
+        snaps[d] = snap
+        items = snap.get('items') or {}
+        d_writable = d in writable
+        for k, it in items.items():
+            if not isinstance(it, dict):
+                continue
+            mid = it.get('us_estimate')
+            if not isinstance(mid, int) or mid <= 0:
+                continue
+            pv = prev_mid.get(k)
+            if pv is not None and mid == pv:
+                if d_writable:
+                    new_mid = _distinct_nudge(mid, {pv}, k, d)
+                    _sweep_rescale_item(it, mid, new_mid, k, d)
+                    dirty.add(d)
+                    n_nudged += 1
+                    mid = new_mid
+                elif prev_date.get(k) in writable:
+                    # Repeat straddles the window boundary and the later
+                    # date is read-only: move the earlier (window) date,
+                    # avoiding both the read-only value and the value
+                    # one appearance back.
+                    pd = prev_date[k]
+                    pit = (snaps.get(pd) or {}).get('items', {}).get(k)
+                    if isinstance(pit, dict):
+                        avoid = {mid}
+                        p2 = prev2_mid.get(k)
+                        if p2 is not None:
+                            avoid.add(p2)
+                        new_prev = _distinct_nudge(pv, avoid, k, pd)
+                        _sweep_rescale_item(pit, pv, new_prev, k, pd)
+                        dirty.add(pd)
+                        n_boundary += 1
+                        pv = new_prev
+            prev2_mid[k] = prev_mid.get(k, mid)
+            prev_mid[k] = mid
+            prev_date[k] = d
+
+    if not dry_run:
+        for d in sorted(dirty):
+            snap = snaps[d]
+            meta = snap.get('meta') or {}
+            meta['_adjacent_distinct_sweep'] = _FORMULA_VERSION
+            snap['meta'] = meta
+            _write_key(_S3_DATED.format(date=d), snap)
+
+    summary = {'dates_scanned': len(snaps), 'nudged': n_nudged,
+               'boundary_nudged': n_boundary,
+               'dates_rewritten': len(dirty), 'dry_run': dry_run}
+    logger.info("distinctness sweep: %s", summary)
+    return summary
 
 
 # ---------------------------------------------------------------------------
@@ -526,11 +952,27 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument('--force', action='store_true',
                         help='Re-render even when the sentinel already '
                               'matches the current formula version.')
+    parser.add_argument('--fill-missing', action='store_true',
+                        help='For dates in range whose folder holds '
+                              'ranking files but no stream_estimates.'
+                              'json, create one by interpolating each '
+                              'item\'s smoothed level between its real '
+                              'appearance dates. Dates with no folder '
+                              'at all are always skipped.')
+    parser.add_argument('--sweep-only', action='store_true',
+                        help='Skip rendering; only run the adjacent-day '
+                              'distinctness sweep over the whole dated '
+                              'corpus.')
     args = parser.parse_args(argv)
 
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s %(levelname)s %(name)s %(message)s')
+
+    if args.sweep_only:
+        sweep = enforce_adjacent_distinctness(dry_run=args.dry_run)
+        print(f"sweep summary: {sweep}")
+        return 0
 
     if args.dates:
         dates = _parse_dates_arg(args.dates)
@@ -547,39 +989,97 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     profiles = load_profiles()
+    # Level trajectories are ALWAYS computed over the fixed module
+    # window from the permanent anchors, regardless of which dates this
+    # run touches - sparse re-runs must reproduce the full sweep.
+    levels = build_releveled_levels(profiles)
 
     logger.info("processing %d date(s): %s .. %s (formula=%s, "
-                 "dry_run=%s, force=%s)",
+                 "dry_run=%s, force=%s, fill_missing=%s)",
                  len(dates), dates[0], dates[-1], _FORMULA_VERSION,
-                 args.dry_run, args.force)
+                 args.dry_run, args.force, args.fill_missing)
 
     summaries: list[dict] = []
     for d in dates:
         try:
-            s = _process_date(d, profiles, dry_run=args.dry_run,
-                               force=args.force)
+            s = _process_date(d, profiles, levels=levels,
+                               dry_run=args.dry_run, force=args.force)
         except Exception as e:
             logger.exception("failed for %s", d)
             s = {'date': d, 'status': f'ERROR: {type(e).__name__}: {e}'}
         summaries.append(s)
         logger.info("  %s -> %s (items=%d, mutated=%d, profiled=%d, "
-                     "src=%s, factor min/avg/max=%s/%s/%s)",
+                     "leveled=%d, src=%s, factor min/avg/max=%s/%s/%s)",
                      s.get('date'), s.get('status'),
                      s.get('items', 0), s.get('mutated', 0),
-                     s.get('profiled', 0), s.get('source', '-'),
+                     s.get('profiled', 0), s.get('leveled', 0),
+                     s.get('source', '-'),
                      s.get('factor_min'), s.get('factor_avg'),
                      s.get('factor_max'))
+
+    fill_summaries: list[dict] = []
+    if args.fill_missing:
+        fill_candidates = [s['date'] for s in summaries
+                           if s.get('status') in ('missing',
+                                                    'fill-managed')]
+        donor_cache: dict[str, tuple[dict, str]] = {}
+        logger.info("coverage fill: %d candidate date(s)",
+                     len(fill_candidates))
+        for d in fill_candidates:
+            try:
+                fs = _fill_missing_date(d, profiles, levels, donor_cache,
+                                          dry_run=args.dry_run)
+            except Exception as e:
+                logger.exception("fill failed for %s", d)
+                fs = {'date': d,
+                      'status': f'ERROR: {type(e).__name__}: {e}'}
+            fill_summaries.append(fs)
+            logger.info("  fill %s -> %s (items=%d, ranking_files=%s, "
+                         "factor min/avg/max=%s/%s/%s)",
+                         fs.get('date'), fs.get('status'),
+                         fs.get('items', 0), fs.get('ranking_files', '-'),
+                         fs.get('factor_min'), fs.get('factor_avg'),
+                         fs.get('factor_max'))
 
     wrote    = sum(1 for s in summaries if s.get('status') == 'wrote')
     already  = sum(1 for s in summaries if s.get('status') == 'already-applied')
     missing  = sum(1 for s in summaries if s.get('status') == 'missing')
     no_items = sum(1 for s in summaries if s.get('status') == 'no-items')
     dry      = sum(1 for s in summaries if s.get('status') == 'dry-run')
+    fillman  = sum(1 for s in summaries if s.get('status') == 'fill-managed')
     errored  = sum(1 for s in summaries
                    if str(s.get('status', '')).startswith('ERROR'))
     print(f"\nsummary: wrote={wrote} already-applied={already} "
           f"missing={missing} no-items={no_items} dry-run={dry} "
-          f"errors={errored} total={len(summaries)}")
+          f"fill-managed={fillman} errors={errored} "
+          f"total={len(summaries)}")
+    if args.fill_missing:
+        f_wrote = sum(1 for s in fill_summaries
+                      if s.get('status') == 'wrote-fill')
+        f_skip  = sum(1 for s in fill_summaries
+                      if s.get('status') == 'no-ranking-files')
+        f_alr   = sum(1 for s in fill_summaries
+                      if s.get('status') == 'already-applied')
+        f_dry   = sum(1 for s in fill_summaries
+                      if s.get('status') == 'dry-run')
+        f_err   = sum(1 for s in fill_summaries
+                      if str(s.get('status', '')).startswith('ERROR'))
+        print(f"fill summary: wrote={f_wrote} "
+              f"skipped-no-ranking-files={f_skip} "
+              f"already-applied={f_alr} dry-run={f_dry} errors={f_err} "
+              f"candidates={len(fill_summaries)}")
+        errored += f_err
+
+    # Adjacent-day distinctness holds corpus-wide after any write pass.
+    f_wrote_n = sum(1 for s in fill_summaries
+                    if s.get('status') == 'wrote-fill')
+    if wrote or f_wrote_n or args.force:
+        try:
+            sweep = enforce_adjacent_distinctness(dry_run=args.dry_run)
+            print(f"sweep summary: {sweep}")
+        except Exception:
+            logger.exception("distinctness sweep failed")
+            errored += 1
     return 2 if errored else 0
 
 
