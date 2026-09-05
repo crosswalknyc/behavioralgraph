@@ -4602,6 +4602,13 @@ def fetch(only: Optional[set[str]] = None,
     `resume_from_wip` (bool): when True, load the WIP checkpoint for
     the target date (if any) and skip items already researched.
     """
+    # Live-cron runs pass no explicit target date. Capture that BEFORE
+    # defaulting: the previous-day folder math further down differs
+    # between a live run (whose output is published under the RUN date
+    # by `_base.write_snapshot`, i.e. today's folder + latest/) and a
+    # backfill run (whose output is published under the TARGET date by
+    # `fetch_for_date`).
+    live_run = not target_date_iso
     if not target_date_iso:
         target_date_iso = (
             datetime.now(timezone.utc).date() - timedelta(days=1)
@@ -4770,7 +4777,24 @@ def fetch(only: Optional[set[str]] = None,
     except Exception:
         _tgt = date.today() - timedelta(days=1)
     _prev_iso = (_tgt - timedelta(days=1)).isoformat()
-    _prev_days_back = max(1, (date.today() - _tgt).days + 1)
+    if live_run:
+        # Live cron: this run publishes as TODAY'S series point (dated
+        # copy under the run date, plus latest/). The previous series
+        # point - the snapshot users saw as "today" yesterday,
+        # INCLUDING any in-place corrections applied to that file
+        # after it was first written - is the dated folder for
+        # (run day - 1). That folder's content is labeled (target - 1)
+        # by the same writer, so `_prev_iso` above stays honest.
+        # Without this split, a live run would anchor to the
+        # (target - 1) folder, which is two series days back: the
+        # 2026-09-05 cron would have skipped the corrected 2026-09-04
+        # values entirely and re-anchored to 2026-09-03.
+        _prev_days_back = 1
+    else:
+        # Backfill: `fetch_for_date` publishes under the target date
+        # itself, so the previous series point is the (target - 1)
+        # folder.
+        _prev_days_back = max(1, (date.today() - _tgt).days + 1)
     _prev_snap = _read_dated_snapshot('stream_estimates',
                                         days_back=_prev_days_back)
     if not _prev_snap:
@@ -4859,10 +4883,17 @@ def fetch(only: Optional[set[str]] = None,
     except Exception:
         target_date_obj = date.today() - timedelta(days=1)
     prev_date_iso = (target_date_obj - timedelta(days=1)).isoformat()
+    # Same series-point math as the previous-day reference stamping
+    # above: a live run's previous series point is the (run day - 1)
+    # folder (yesterday's published output, including any in-place
+    # corrections), while a backfill run's is the (target - 1) folder.
     # `_read_dated_snapshot` counts days back from date.today(); for
     # backfill runs the target may itself be historical, so compute
     # the actual days-back from today.
-    days_back_1 = max(1, (date.today() - target_date_obj).days + 1)
+    if live_run:
+        days_back_1 = 1
+    else:
+        days_back_1 = max(1, (date.today() - target_date_obj).days + 1)
     yesterday = _read_dated_snapshot('stream_estimates',
                                        days_back=days_back_1)
     if not yesterday:
