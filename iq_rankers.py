@@ -698,7 +698,8 @@ def _build_covered_single_names_from_db(*, ch_connect: Callable) -> set[str]:
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT DISTINCT profile_subject, anyHeavy(project_name) "
+            "SELECT profile_subject, anyHeavy(project_name), "
+            "anyHeavy(category), anyHeavy(subcategory) "
             "FROM reference.profile_iq_daily_metrics "
             "GROUP BY profile_subject"
         )
@@ -708,12 +709,20 @@ def _build_covered_single_names_from_db(*, ch_connect: Callable) -> set[str]:
             conn.close()
         except Exception:
             pass
-    jobs = [{"profile_subject": (s or ""), "project_name": (p or "")}
-            for s, p in rows]
+    jobs = [{"profile_subject": (s or ""), "project_name": (p or ""),
+             "category": (c or ""), "subcategory": (sc or "")}
+            for s, p, c, sc in rows]
     return _build_covered_single_names(jobs)
 
 
 _ARTIFACT_NAME_TOKENS = (".bak", "prepatch", "pre_patch", "_backups/")
+
+# A profile_subject carrying the dated-filename suffix
+# (`..._08_28_2026_04_00`) is an ingestion artifact: the subject should
+# be the clean entity name, and the same entity usually exists again
+# under a different timestamp (AMASS_CUSTOMERS appears twice), which
+# would render duplicate leaderboard rows.
+_ARTIFACT_TS_SUFFIX = re.compile(r"_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}(\.|$)")
 
 
 def _is_backup_artifact_name(*parts: str) -> bool:
@@ -729,7 +738,41 @@ def _is_backup_artifact_name(*parts: str) -> bool:
         low = (p or "").lower()
         if any(tok in low for tok in _ARTIFACT_NAME_TOKENS):
             return True
+        if _ARTIFACT_TS_SUFFIX.search(low):
+            return True
     return False
+
+
+# Master bucket + subcategory labels that identify a PERSON profile.
+# The covered-singles suppression below only ever applies to people:
+# a bare first-name profile ("Anthony") duplicates the fallback match
+# surface of its multi-word siblings ("Anthony Mackie"). A single-word
+# BRAND / CONTENT / PLATFORM name ("Netflix", "Marriott", "Power") is a
+# complete entity in its own right and must rank alongside its more
+# specific cohort siblings ("Netflix AVOD Subscribers") - Jenna
+# 2026-09-04. s3_cache jobs carry the subcategory-level label in
+# `category` (ACTOR, ATHLETE, ...); ClickHouse rows carry the master
+# bucket in `category` (TALENT) and the label in `subcategory`, so the
+# check accepts either spelling on either field.
+_PERSON_CATEGORY_KEYS = frozenset(
+    {"TALENT"}
+    | {c.strip().upper() for c in MASTER_CATEGORIES.get("TALENT", [])}
+    | {"CREATOR/INFLUENCER"}
+)
+
+
+def _is_person_profile(job: dict) -> bool:
+    """True when the job's category labels identify a person profile.
+
+    Unknown / empty categories count as person so legacy rows with no
+    category keep the historical suppression behavior (never let an
+    unlabeled bare first name surface as a duplicate).
+    """
+    labels = [(job.get("category") or "").strip().upper(),
+              (job.get("subcategory") or "").strip().upper()]
+    if not any(labels):
+        return True
+    return any(v in _PERSON_CATEGORY_KEYS for v in labels if v)
 
 
 def _build_covered_single_names(jobs: list[dict]) -> set[str]:
@@ -748,6 +791,15 @@ def _build_covered_single_names(jobs: list[dict]) -> set[str]:
     Profile IQ CSV, and any historical metrics rows for these subjects
     are left intact -- only the Ranker's view filter / nightly cron is
     affected.
+
+    ONLY PERSON PROFILES can be covered (Jenna 2026-09-04): "parent
+    brands should appear alongside their more specific sibling
+    profiles". A single-word BRAND / CONTENT / PLATFORM subject
+    ("Netflix", "Marriott", "Power", "YouTube") always ranks even when
+    a multi-word sibling shares its first word ("Netflix AVOD
+    Subscribers", "YouTube TV"). The suppression is a person-name
+    dedupe and nothing more; `_is_person_profile` holds the category
+    check.
 
     A derived cut NEVER covers its own base profile (fixed 2026-09-04).
     Cut files follow the "{Subject} - {Cut}" naming convention
@@ -779,7 +831,12 @@ def _build_covered_single_names(jobs: list[dict]) -> set[str]:
         if len(words) >= 2:
             multiword_first_words.add(words[0].lower())
         elif len(words) == 1:
-            singles_by_word.setdefault(words[0].lower(), []).append(subj)
+            # Only PERSON profiles are candidates for coverage (Jenna
+            # 2026-09-04): parent brands, titles, and platforms rank
+            # alongside their cohort siblings; bare first names stay
+            # suppressed by their multi-word person siblings.
+            if _is_person_profile(j):
+                singles_by_word.setdefault(words[0].lower(), []).append(subj)
     covered: set[str] = set()
     for fw, subs in singles_by_word.items():
         if fw in multiword_first_words:
@@ -1524,7 +1581,9 @@ def aggregate_leaderboard(
     where_no_artifacts = (
         "AND positionCaseInsensitive(profile_subject, '.bak') = 0 "
         "AND positionCaseInsensitive(profile_subject, 'prepatch') = 0 "
-        "AND positionCaseInsensitive(profile_subject, 'pre_patch') = 0"
+        "AND positionCaseInsensitive(profile_subject, 'pre_patch') = 0 "
+        "AND NOT match(profile_subject, "
+        "'_[0-9]{2}_[0-9]{2}_[0-9]{4}_[0-9]{2}_[0-9]{2}($|\\\\.)')"
     )
 
     # Single-word project names that are also a brand_term in some other
