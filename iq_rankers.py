@@ -1272,7 +1272,13 @@ def _iter_profile_jobs(s3_cache_jobs: list[dict]) -> Iterable[dict]:
         if "avid fan" in haystack:
             continue
         # Backup-file artifacts must never get nightly metrics rows.
-        if _is_backup_artifact_name(haystack):
+        # Check NAME fields only, never the s3_key: every legitimate
+        # root profile key embeds the dated-filename stamp
+        # (Netflix_05_22_2026_21_45.csv), so running the timestamp
+        # pattern against the key would flag the entire catalog.
+        if _is_backup_artifact_name(j.get("profile_subject"),
+                                    j.get("project_name"),
+                                    j.get("display_name")):
             continue
         # We dedupe on profile_subject so multi-year runs of the same person
         # only get one row per day.
