@@ -330,6 +330,12 @@ STREAMING_PLATFORMS = [
     # in the streaming sub-tab strip.
     ('max',        'HBO Max',      False),
     ('primevideo', 'Prime Video',  False),
+    # 2026-09-04: Paramount+ and Peacock. Both ride JustWatch's public
+    # GraphQL (the same no-cookie path the FAST tab uses), so they run
+    # from Hetzner in the daily run_all batch - no residential hop, no
+    # donated session. Slugs follow the disneyplus/espnplus convention.
+    ('paramountplus', 'Paramount+', False),
+    ('peacock',       'Peacock',    False),
     ('espnplus',   'ESPN+',        False),
     # 2026-08-20: BritBox (BBC + ITV joint venture, US premium British
     # TV catalog) and MGM+ (Amazon-owned premium, formerly Epix). Both
@@ -3496,6 +3502,8 @@ _STREAMING_PANEL_TO_PLATFORM = {
     'britbox':    'britbox',
     'mgmplus':    'mgmplus',
     'starz':      'starz',
+    'paramountplus': 'paramountplus',
+    'peacock':       'peacock',
 }
 # FAST-channel panel slug -> platform key inside
 # `stream_estimates.items[<kind_prefix>:<norm>].by_platform`. See

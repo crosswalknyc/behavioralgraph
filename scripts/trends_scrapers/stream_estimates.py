@@ -141,9 +141,10 @@ _S3_DATED  = 'trends_iq_snapshots/{date}/'
 # now the SLA rather than "top-N cross-platform after global dedup".
 _MAX_PODCAST_ITEMS   = 300   # was 150 - 4 panels x top ~60 unique
 _MAX_SONG_ITEMS      = 250   # was 100 - 4 panels x top ~60 unique
-_MAX_STREAMING_ITEMS = 300   # was 200 - 9 platforms (netflix, disneyplus,
-                              # hulu, max, primevideo, espnplus, britbox,
-                              # mgmplus, starz) x top ~30-40 unique
+_MAX_STREAMING_ITEMS = 380   # was 300 - 11 platforms (netflix, disneyplus,
+                              # hulu, max, primevideo, paramountplus,
+                              # peacock, espnplus, britbox, mgmplus,
+                              # starz) x top ~30-40 unique
 _MAX_BOOK_ITEMS      = 400   # was 220 - 3 book + 3 libby panels each
                               # ship 30-100 unique-per-panel
 # Wattpad: 6 rails (Hot 50 + Originals 25 + 4 genre rails 25 each =
@@ -184,7 +185,14 @@ _MAX_FAST_CHANNEL_ITEMS = 400
 
 _WEBSEARCH_MODEL      = (os.environ.get('STREAM_ESTIMATES_MODEL')
                           or 'claude-sonnet-4-5')
-_WEBSEARCH_MAX_TOKENS = 1200
+# 2026-09-04: 1200 -> 2000. Items with NO previous-day reference (new
+# titles entering a chart, day-one platform additions like Paramount+/
+# Peacock) draw longer rationale plus the mandatory day_specificity
+# field and were truncating mid-JSON at 1200 (stop_reason=max_tokens),
+# burning the tokens AND the retry. 2000 lets those complete; steady-
+# state responses are unaffected (max_tokens is a cap, only generated
+# tokens bill).
+_WEBSEARCH_MAX_TOKENS = 2000
 _WEBSEARCH_MAX_USES   = 1        # per-item web_search calls. Capped at 1
                                   # so a single search call is the max any
                                   # long-tail item ever spends (rule set
@@ -441,6 +449,10 @@ _STREAMING_SLUGS = (
     # 2026-08-20: Starz (Lionsgate premium, ~12M US subs; Power +
     # Outlander + Spartacus + Starz Originals). See META entry.
     ('starz',      'Starz'),
+    # 2026-09-04: Paramount+ + Peacock (JustWatch-fed, run on Hetzner).
+    # Anchors + per-platform ceilings live in _STREAMING_PLATFORMS_META.
+    ('paramountplus', 'Paramount+'),
+    ('peacock',       'Peacock'),
 )
 
 
@@ -2170,6 +2182,44 @@ _STREAMING_PLATFORMS_META = [
          'Content Ratings originals list. Audience skews female-adult '
          'for Outlander, male-25-54 for Power Universe.'
      )},
+    {'key': 'paramountplus',
+     'label': 'Paramount+',
+     'ceiling': 12_000_000,
+     'anchors': (
+         "Paramount+ (Paramount Skydance's flagship streamer, ~77-80M "
+         'global subs, ~40M+ US as of 2026). Nielsen Gauge: Paramount+ '
+         '= ~1.2-1.8% of total US TV usage. Flagship originals '
+         '(Landman, Tulsa King, Lioness, 1923, NCIS franchise, Star '
+         'Trek: Strange New Worlds) hit 3-6M US households/week during '
+         'a live season; the South Park exclusive window and big '
+         'theatrical pay-one titles (Mission: Impossible, Sonic, A '
+         'Quiet Place) reach 2-5M/week. NFL on CBS + UEFA live windows '
+         'briefly spike flagship-adjacent content. Library staples '
+         '(Yellowstone reruns, SpongeBob, Criminal Minds) sustain '
+         '1-3M/week. Steady-state top-10 without a flagship air window '
+         '700K-2.5M. Anchor: Paramount Skydance Q2 2026 earnings + '
+         'Nielsen Streaming Content Ratings + Antenna monthly SVOD '
+         'engagement reports.'
+     )},
+    {'key': 'peacock',
+     'label': 'Peacock',
+     'ceiling': 12_000_000,
+     'anchors': (
+         "Peacock (NBCUniversal's streamer, ~36-41M US subs as of "
+         '2026 per Comcast earnings; effectively all-US footprint). '
+         'Nielsen Gauge: Peacock = ~1.3-1.7% of total US TV usage. '
+         'Unscripted tentpoles in a live window (Love Island USA, The '
+         'Traitors) hit 3-7M US viewers/week; Sunday Night Football '
+         'streams 2-4M/week in season; Olympics windows spike well '
+         'above steady state. Scripted originals (Poker Face, Ted, '
+         'Twisted Metal, Happy\'s Place next-day) reach 1.5-4M/week. '
+         'Library staples (The Office, Parks and Recreation, Modern '
+         'Family, Yellowstone licensed run) sustain 2-4M/week - '
+         'The Office alone is a top-5 US streaming library title most '
+         'weeks. Steady-state top-10 without a live tentpole 800K-'
+         '2.5M. Anchor: Comcast Q2 2026 earnings + Nielsen Streaming '
+         'Content Ratings + Antenna monthly SVOD engagement reports.'
+     )},
 ]
 
 
@@ -2671,6 +2721,12 @@ _CHART_LABEL_TO_PLATFORM = (
     ('mgm plus',         'mgmplus'),
     ('mgmplus',          'mgmplus'),
     ('starz',            'starz'),
+    # 2026-09-04: Paramount+ + Peacock streaming platforms.
+    ('paramount+',       'paramountplus'),
+    ('paramount plus',   'paramountplus'),
+    ('paramountplus',    'paramountplus'),
+    ('paramount',        'paramountplus'),
+    ('peacock',          'peacock'),
     # FAST-channel platforms (chart-label prefixes from `_FAST_SLUGS`).
     # `amazon live tv` is handled up above alongside `amazon music` to
     # win the match before the bare `amazon` catch-all.

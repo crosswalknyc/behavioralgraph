@@ -57845,8 +57845,10 @@ https://www.instagram.com/p/..."></textarea>
 
         // Preferred platform tab order. Netflix leads because its public
         // TSV feed is always populated; the rest fall behind once cookies
-        // are donated. Anything unknown appends at the end.
-        var _tiqStreamOrder = ['netflix', 'disneyplus', 'hulu', 'max', 'primevideo', 'espnplus', 'britbox', 'mgmplus', 'starz'];
+        // are donated. Anything unknown appends at the end. Paramount+ and
+        // Peacock (2026-09-04) sit with the major general-entertainment
+        // platforms, ahead of ESPN+ and the premium-niche tail.
+        var _tiqStreamOrder = ['netflix', 'disneyplus', 'hulu', 'max', 'primevideo', 'paramountplus', 'peacock', 'espnplus', 'britbox', 'mgmplus', 'starz'];
 
         function renderTIQStreaming(streaming) {
             var allKeys = Object.keys(streaming || {});

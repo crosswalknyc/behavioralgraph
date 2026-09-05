@@ -117,6 +117,12 @@ SCRAPERS = [
     #   - Hulu (2026-07): kept returning 0 items from Hetzner despite
     #     valid donated cookies; Hulu WAFs the datacenter IP pre-auth.
     ('primevideo', 'scripts.trends_scrapers.primevideo',    'Prime Video', 'streaming'),
+    # Paramount+ and Peacock (2026-09-04). Both ride JustWatch's public
+    # GraphQL - the same no-cookie, no-IP-block path fast_channels uses
+    # - so they run fine from Hetzner's datacenter IP. No residential
+    # hop, no donated session, no cookie-donation domain.
+    ('paramountplus', 'scripts.trends_scrapers.paramountplus', 'Paramount+', 'streaming'),
+    ('peacock',       'scripts.trends_scrapers.peacock',       'Peacock',    'streaming'),
     # Meta Horizon Store (formerly Oculus). One snapshot with two
     # panels (Top Free + Top Paid) - matches how the store surfaces
     # its own rails on the Games landing page. Anonymous fetch works
