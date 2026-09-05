@@ -717,12 +717,15 @@ def _build_covered_single_names_from_db(*, ch_connect: Callable) -> set[str]:
 
 _ARTIFACT_NAME_TOKENS = (".bak", "prepatch", "pre_patch", "_backups/")
 
-# A profile_subject carrying the dated-filename suffix
-# (`..._08_28_2026_04_00`) is an ingestion artifact: the subject should
-# be the clean entity name, and the same entity usually exists again
-# under a different timestamp (AMASS_CUSTOMERS appears twice), which
-# would render duplicate leaderboard rows.
-_ARTIFACT_TS_SUFFIX = re.compile(r"_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}(\.|$)")
+# A profile_subject carrying an embedded dated-filename stamp
+# (`..._08_28_2026_04_00`, anywhere in the name) is an ingestion
+# artifact: the subject should be the clean entity name, and the same
+# entity usually exists again under a different timestamp
+# (AMASS_CUSTOMERS appears twice; Home_Internet_Shopping carries the
+# stamp mid-name), which renders duplicate leaderboard rows. The full
+# five-component MM_DD_YYYY_HH_MM shape never occurs in a real entity
+# name, so matching anywhere is safe.
+_ARTIFACT_TS_SUFFIX = re.compile(r"_\d{2}_\d{2}_\d{4}_\d{2}_\d{2}")
 
 
 def _is_backup_artifact_name(*parts: str) -> bool:
@@ -1583,7 +1586,7 @@ def aggregate_leaderboard(
         "AND positionCaseInsensitive(profile_subject, 'prepatch') = 0 "
         "AND positionCaseInsensitive(profile_subject, 'pre_patch') = 0 "
         "AND NOT match(profile_subject, "
-        "'_[0-9]{2}_[0-9]{2}_[0-9]{4}_[0-9]{2}_[0-9]{2}($|\\\\.)')"
+        "'_[0-9]{2}_[0-9]{2}_[0-9]{4}_[0-9]{2}_[0-9]{2}')"
     )
 
     # Single-word project names that are also a brand_term in some other
