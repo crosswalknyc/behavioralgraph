@@ -302,6 +302,7 @@ def _verify_stream_estimates_freshness() -> str | None:
     yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
     try:
         import boto3  # imported lazily so unit tests don't need it
+        from scripts.trends_scrapers._base import S3_BUCKET
         s3 = boto3.client('s3')
         obj = s3.get_object(
             Bucket=S3_BUCKET,
