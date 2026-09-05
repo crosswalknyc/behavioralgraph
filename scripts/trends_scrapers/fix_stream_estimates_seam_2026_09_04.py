@@ -45,6 +45,23 @@ shipped guard to today's two files:
 Idempotent: a second run finds every pair inside the band and adjusts
 nothing (only the meta timestamp moves).
 
+Parameterized re-runs (2026-09-04 scale fix): after the Sept 3
+reference itself is corrected (v3.1 releveling), the alignment can be
+re-run FROM the morning pre-fix backups (the fresh research, which for
+the scale-defect items was plausible) against the corrected reference:
+
+    python3 -m scripts.trends_scrapers.fix_stream_estimates_seam_2026_09_04 \
+        --source-tag pre_continuity_seam_fix \
+        --backup-tag pre_scale_seam_refix
+
+`--source-tag` reads each file's items from
+`_backups/2026-09-04/stream_estimates[.latest].<tag>.json` instead of
+the live key; `--backup-tag` names the pre-write backup of the current
+live bytes (same convention, only written if absent). The guard's
+plausibility floor skip (see `stream_estimates._apply_continuity_guard`)
+applies on re-runs too, so a fresh plausible value is never pulled down
+to continue an implausibly tiny reference.
+
 Run from the bg-webapp root on the box that has the trends env:
 
     python3 -m scripts.trends_scrapers.fix_stream_estimates_seam_2026_09_04 --dry-run
@@ -79,10 +96,19 @@ KEY_LATEST = 'trends_iq_snapshots/latest/stream_estimates.json'
 KEY_DATED = f'trends_iq_snapshots/{FIX_DATE}/stream_estimates.json'
 KEY_PREV = f'trends_iq_snapshots/{PREV_DATE}/stream_estimates.json'
 
-BK_LATEST = (f'trends_iq_snapshots/_backups/{FIX_DATE}/'
-             'stream_estimates.latest.pre_continuity_seam_fix.json')
-BK_DATED = (f'trends_iq_snapshots/_backups/{FIX_DATE}/'
-            'stream_estimates.pre_continuity_seam_fix.json')
+DEFAULT_BACKUP_TAG = 'pre_continuity_seam_fix'
+
+
+def _tagged_backup_key(name: str, tag: str) -> str:
+    """Backup-convention key for one of the two fixed files.
+
+    `name` is 'latest' or 'dated-<date>'; tags follow the
+    `stream_estimates[.latest].<tag>.json` naming used by the original
+    seam-fix backups."""
+    stem = ('stream_estimates.latest' if name == 'latest'
+            else 'stream_estimates')
+    return f'trends_iq_snapshots/_backups/{FIX_DATE}/{stem}.{tag}.json'
+
 
 _S3 = None
 
@@ -206,11 +232,15 @@ def _verify(items: dict[str, Any], prev_items: dict[str, Any]) -> dict:
 # Per-file fix
 # ---------------------------------------------------------------------------
 def fix_one(name: str, key: str, backup_key: str, prev_snap: dict,
-            *, dry_run: bool) -> Optional[dict]:
-    snap = _read_key(key)
+            *, dry_run: bool,
+            source_key: Optional[str] = None) -> Optional[dict]:
+    read_key = source_key or key
+    snap = _read_key(read_key)
     if snap is None:
-        print(f"[{name}] {key}: MISSING, skipped")
+        print(f"[{name}] {read_key}: MISSING, skipped")
         return None
+    if source_key:
+        print(f"[{name}] items sourced from s3://{BUCKET}/{source_key}")
     items = snap.get('items')
     if not isinstance(items, dict) or not items:
         print(f"[{name}] {key}: no items, skipped")
@@ -268,6 +298,8 @@ def fix_one(name: str, key: str, backup_key: str, prev_snap: dict,
     meta['_continuity_seam_fix_at'] = datetime.now(timezone.utc).isoformat()
     meta['_continuity_seam_fix_reference'] = PREV_DATE
     meta['_continuity_seam_fix_adjusted'] = adjusted
+    if source_key:
+        meta['_continuity_seam_fix_source'] = source_key
     snap['meta'] = meta
 
     print(f"[{name}] items={len(items)} sept3_refs={stamped} "
@@ -353,9 +385,19 @@ def print_sample_table(result: dict, prev_items: dict,
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        description='One-off 2026-09-04 stream_estimates continuity '
-                    'seam fix (see module docstring).')
+        description='2026-09-04 stream_estimates continuity seam fix '
+                    '(see module docstring).')
     parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--source-tag', default='',
+                        help='Read the fresh items from the '
+                             '_backups/2026-09-04/ file with this tag '
+                             'instead of the live key (e.g. '
+                             'pre_continuity_seam_fix to re-align from '
+                             'the morning pre-fix backups).')
+    parser.add_argument('--backup-tag', default=DEFAULT_BACKUP_TAG,
+                        help='Tag for the pre-write backup of the '
+                             'current live bytes (same naming '
+                             'convention; only written if absent).')
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -372,9 +414,13 @@ def main(argv: Optional[list[str]] = None) -> int:
           f"sweep={prev_meta.get('_adjacent_distinct_sweep')}")
 
     results = []
-    for name, key, bk in (('latest', KEY_LATEST, BK_LATEST),
-                          ('dated-2026-09-04', KEY_DATED, BK_DATED)):
-        r = fix_one(name, key, bk, prev_snap, dry_run=args.dry_run)
+    for name, key in (('latest', KEY_LATEST),
+                      ('dated-2026-09-04', KEY_DATED)):
+        src = (_tagged_backup_key(name, args.source_tag)
+               if args.source_tag else None)
+        bk = _tagged_backup_key(name, args.backup_tag)
+        r = fix_one(name, key, bk, prev_snap, dry_run=args.dry_run,
+                    source_key=src)
         if r:
             results.append(r)
 

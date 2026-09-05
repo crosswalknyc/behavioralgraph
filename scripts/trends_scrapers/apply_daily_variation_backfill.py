@@ -126,7 +126,13 @@ _S3_PROFILES = 'trends_iq_snapshots/system/rhythm_profiles.json'
 # Version tag stamped into each mutated snapshot. A snapshot stamped
 # with a DIFFERENT version re-renders (that is how v1 -> v2 -> v3
 # upgrades roll through without --force).
-_FORMULA_VERSION = 'v3.2026-09-04-releveled'
+# v3.1 (2026-09-04 scale fix): anchor_relevel now runs plausibility-
+# aware cluster selection before smoothing (drops sub-floor artifact
+# clusters >= 20x below an item's raw-date-majority plausible cluster),
+# so bimodal-garbage items re-level to their plausible scale. Items
+# without the signature produce bit-identical levels; the organic
+# factor layer is unchanged.
+_FORMULA_VERSION = 'v3.1.2026-09-04-scalefix'
 
 # Trend drift is centered on this fixed window (the backfill span).
 # Keeping it a module constant means sparse re-runs of single dates

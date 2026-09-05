@@ -90,6 +90,19 @@ import boto3
 
 from scripts.trends_scrapers import _usage_tap  # noqa: E402
 
+# Per-kind absolute plausibility floors (2026-09-04 scale fix). Shared
+# with the backfill releveler so the forward continuity guard and the
+# historical cluster selection agree on what "implausibly small" means
+# for each kind. Fail-safe: if the import breaks, the floor reads 0 for
+# every kind and the guard behaves exactly as before the fix.
+try:
+    from scripts.trends_scrapers.anchor_relevel import (  # noqa: E402
+        kind_plausibility_floor,
+    )
+except ImportError:                                       # pragma: no cover
+    def kind_plausibility_floor(kind: str) -> int:        # type: ignore
+        return 0
+
 logger = logging.getLogger(__name__)
 
 
@@ -4415,6 +4428,30 @@ def _apply_continuity_guard(researched: dict[str, dict],
         if not identical and \
                 _CONTINUITY_DOWN_RATIO <= ratio <= _CONTINUITY_UP_RATIO:
             continue
+        if not identical:
+            # Plausibility self-heal (2026-09-04 scale fix): when the
+            # previous-day reference sits BELOW the kind's absolute
+            # plausibility floor while today's fresh estimate sits at
+            # or above it, the reference is a surviving artifact (a
+            # wrong-unit/wrong-field level that leaked into a prior
+            # snapshot), not a real audience level. Never pull a
+            # plausible fresh value down to continue an implausible
+            # reference - keep the fresh value and let the series
+            # re-anchor at the plausible scale.
+            try:
+                kind = (str(it.get('kind') or '').strip()
+                        or str(key).split(':', 1)[0])
+                floor = kind_plausibility_floor(kind)
+            except Exception:
+                floor = 0
+            if floor > 0 and prev < floor <= cur:
+                logger.info(
+                    "stream_estimates continuity guard skip: %r "
+                    "(kind=%s) prev=%d sits below kind floor %d while "
+                    "fresh=%d is plausible; keeping fresh value",
+                    it.get('display_title'), it.get('kind'), prev,
+                    floor, cur)
+                continue
         u = _h01(f'{key}|{target_date_iso}|continuity')
         if identical:
             # An exact repeat of yesterday's integer is its own
