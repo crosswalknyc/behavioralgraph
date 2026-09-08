@@ -2969,6 +2969,7 @@ def apply_auto_fixes_for_rules_7_to_18(subset: dict,
                                         rule9_demo_shift_kwargs=None,
                                         rule13_pre_index_target: float = 125.0,
                                         rule13_post_index_target: float = 125.0,
+                                        disable_ratio_retune_autofix: bool = None,
                                         ) -> dict:
     """Run every Rule 7-18 auto-fixer in the correct order and return
     the mutated payload. Rule 15 (cross-flight direction) requires a
@@ -2985,17 +2986,36 @@ def apply_auto_fixes_for_rules_7_to_18(subset: dict,
       - Rule 18: pull parent counts into parent_study_reference
       - Rule 12: stamp canonical conversion rate (last: touches
                   only valuation.rates, not rate-layer fields).
-    """
+
+    disable_ratio_retune_autofix (2026-09-08, Liz Round 3 sign-off):
+    when set true, skip the Rule 13 residual retune and the Rule 14
+    hold-index retune. The check functions still run downstream and
+    still record any violation, but the fixers no longer collapse
+    rates to a point target. Callers must have generated
+    behaviorally-modeled rates that already satisfy the invariants;
+    this flag only exists to keep the check pass green without
+    letting the fixer overwrite a valid model with a synthetic point.
+
+    Precedence: kwarg wins when explicitly passed; otherwise the
+    flag is read from ``subset["metadata"]["subset_cut"]
+    ["disable_ratio_retune_autofix"]``. Default False (fixers run
+    as before)."""
     out = subset
+    if disable_ratio_retune_autofix is None:
+        disable_ratio_retune_autofix = bool(
+            ((out.get("metadata") or {}).get("subset_cut") or {})
+            .get("disable_ratio_retune_autofix", False)
+        )
     out = _autofix_rule11_renormalize_age(out)
     out = _autofix_rule9_apply_boomer_demo_shift(
         out, **(rule9_demo_shift_kwargs or {}))
-    out = _autofix_rule13_retune_residual(
-        out, parent, cohort_fraction,
-        pre_index_target=rule13_pre_index_target,
-        post_index_target=rule13_post_index_target,
-    )
-    out = _autofix_rule14_hold_index(out, parent, cohort_fraction)
+    if not disable_ratio_retune_autofix:
+        out = _autofix_rule13_retune_residual(
+            out, parent, cohort_fraction,
+            pre_index_target=rule13_pre_index_target,
+            post_index_target=rule13_post_index_target,
+        )
+        out = _autofix_rule14_hold_index(out, parent, cohort_fraction)
     out = _autofix_rule17_retune_touchpoints(out, parent, cohort_fraction)
     out = _autofix_rule16_recompute_arithmetic(out)
     out = _autofix_rule18_pull_parent_counts(out, parent)

@@ -2445,6 +2445,95 @@ _check(
 )
 
 
+print()
+print("--- test_disable_ratio_retune_autofix_via_kwarg_and_metadata ---")
+
+# Rebuild the composite scenario but the caller has already produced
+# behaviorally-modeled rates and wants the fixer to LEAVE THEM ALONE
+# (Liz round-3 Sep 8 sign-off).
+disable_parent = _parent_payload()
+disable_parent["totals"]["audience_pen_pre_pct"] = 20.4004
+disable_parent["totals"]["audience_pen_post_pct"] = 24.8099
+
+behavioral_sub = copy.deepcopy(disable_parent)
+behavioral_sub["audience_size"] = 285_065
+behavioral_sub["project_name"] = (
+    "Coca-Cola x Wheel of Fortune (Rerun) - Boomers (Re-Air)"
+)
+# Model-driven rates: non-constant ratio to parent, off-round values.
+behavioral_sub["totals"]["audience_pen_pre_pct"] = 25.8371
+behavioral_sub["totals"]["audience_pen_post_pct"] = 29.6142
+behavioral_sub["control_group"] = {
+    "enabled": True,
+    "treat_delta_pp": 3.7771,
+    "control_delta_pp": 4.4095,
+    "incremental_lift_pp": -0.6324,
+}
+behavioral_sub["valuation"]["rates"] = {"conv_value_per_user": 15.00}
+
+# Case 1: kwarg disables the two retune fixers.
+disabled_by_kwarg = apply_auto_fixes_for_rules_7_to_18(
+    behavioral_sub, disable_parent, 0.599,
+    rule13_pre_index_target=125.0, rule13_post_index_target=125.0,
+    disable_ratio_retune_autofix=True,
+)
+_check(
+    "Disable flag (kwarg): pre rate untouched by Rule 13/14 autofix",
+    disabled_by_kwarg["totals"]["audience_pen_pre_pct"] == 25.8371,
+    "rate was overwritten: "
+    f"{disabled_by_kwarg['totals']['audience_pen_pre_pct']}",
+)
+_check(
+    "Disable flag (kwarg): post rate untouched by Rule 13/14 autofix",
+    disabled_by_kwarg["totals"]["audience_pen_post_pct"] == 29.6142,
+    "rate was overwritten: "
+    f"{disabled_by_kwarg['totals']['audience_pen_post_pct']}",
+)
+# Rule 12 (canonical conv rate) still runs.
+_check(
+    "Disable flag (kwarg): Rule 12 still stamps canonical rate",
+    disabled_by_kwarg["valuation"]["rates"]["conv_value_per_user"] == 10.00,
+    "rate after fix: "
+    f"{disabled_by_kwarg['valuation']['rates']['conv_value_per_user']}",
+)
+
+# Case 2: metadata.subset_cut carries the flag.
+metadata_sub = copy.deepcopy(behavioral_sub)
+metadata_sub["metadata"] = {
+    "subset_cut": {"disable_ratio_retune_autofix": True}
+}
+disabled_by_meta = apply_auto_fixes_for_rules_7_to_18(
+    metadata_sub, disable_parent, 0.599,
+    rule13_pre_index_target=125.0, rule13_post_index_target=125.0,
+)
+_check(
+    "Disable flag (metadata): pre rate untouched by Rule 13/14 autofix",
+    disabled_by_meta["totals"]["audience_pen_pre_pct"] == 25.8371,
+    "rate was overwritten: "
+    f"{disabled_by_meta['totals']['audience_pen_pre_pct']}",
+)
+_check(
+    "Disable flag (metadata): post rate untouched by Rule 13/14 autofix",
+    disabled_by_meta["totals"]["audience_pen_post_pct"] == 29.6142,
+    "rate was overwritten: "
+    f"{disabled_by_meta['totals']['audience_pen_post_pct']}",
+)
+
+# Case 3: flag absent, retune runs (backward-compat).
+default_sub = copy.deepcopy(behavioral_sub)
+default_sub["totals"]["audience_pen_post_pct"] = 12.5000  # negative lift
+default_after = apply_auto_fixes_for_rules_7_to_18(
+    default_sub, disable_parent, 0.599,
+    rule13_pre_index_target=125.0, rule13_post_index_target=125.0,
+)
+_check(
+    "Disable flag absent: Rule 13/14 autofix still runs (backward-compat)",
+    default_after["totals"]["audience_pen_pre_pct"] != 25.8371,
+    "pre was not retuned: "
+    f"{default_after['totals']['audience_pen_pre_pct']}",
+)
+
+
 # ---------------------------------------------------------------------
 # Result
 # ---------------------------------------------------------------------
