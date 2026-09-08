@@ -5136,6 +5136,16 @@
         }
         .profile-select-item::-webkit-scrollbar-track { background: transparent; }
 
+        /* Brand Partnership sidebar: long partnership names scroll
+           sideways (same affordance as Profile IQ).
+           (Cousin Liz request 2026-09-08) */
+        .bpiq-name-scroll::-webkit-scrollbar { height: 5px; }
+        .bpiq-name-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.25);
+            border-radius: 3px;
+        }
+        .bpiq-name-scroll::-webkit-scrollbar-track { background: transparent; }
+
         .profile-select-item:not(.locked) {
             color: #ffffff;
         }
@@ -61909,7 +61919,7 @@ https://www.instagram.com/p/..."></textarea>
                                 : '<div style="width:28px;height:28px;border-radius:50%;background:var(--bg-input);border:2px solid var(--border-color);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🤝</div>';
                             html += '<div class="profile-tree-item" data-bpiq-key="' + esc(f.key) + '" onclick="selectBpiqResult(\'' + String(f.key).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" title="' + esc(f.last_modified || '') + '" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-color);font-size:13px;">'
                                 + thumb
-                                + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(f.name || f.key) + '</span>'
+                                + '<span class="bpiq-name-scroll" style="flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;white-space:nowrap;">' + esc(f.name || f.key) + '</span>'
                                 + '</div>';
                         });
                         html += '</div>';
