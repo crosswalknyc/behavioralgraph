@@ -326,3 +326,12 @@ body[data-theme="light"] #brandTrackingIQView table.btiq-table tr.active td {
     font-size: 0.82rem;
     font-weight: 600;
 }
+
+#brandTrackingIQView a.btiq-link {
+    color: #C7F23E;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(199, 242, 62, 0.35);
+}
+#brandTrackingIQView a.btiq-link:hover {
+    border-bottom-color: #C7F23E;
+}

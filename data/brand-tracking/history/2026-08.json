@@ -31,13 +31,12 @@
       "paid": 243817,
       "active_users": 243817,
       "is_anchor": true,
-      "overlap_linear": 68.4,
       "overlap_digital": 93.7,
-      "overlap_paid": 100,
+      "overlap_paid": 100.0,
       "retention_90d": 72.4,
       "churn_monthly": 4.4,
       "retained_12m": 57.6,
-      "read": "CNBC Pro is the paid research DTC comparison. 68.4% of Pro accounts also watch CNBC linear in window. Digital is near-total. Paid accounts stepped up in March (earnings) and June, then cooled in summer. Any CNBC paid product (Pro, CNBC+, Investing Club) is 487,263 unique accounts.",
+      "read": "CNBC Pro is the paid research DTC comparison (index 100). 24.7% also hold CNBC+ and 28.3% also hold Investing Club in window. Digital CNBC use is near-total. Paid accounts stepped up in March (earnings) and June, then cooled in summer. Any CNBC paid product (Pro, CNBC+, Investing Club) is 487263 unique accounts.",
       "age": [
         [
           "18-24",
@@ -161,6 +160,292 @@
           "churn": 4.4,
           "retain90": 72.4
         }
+      ],
+      "overlap_cnbc_plus": 24.7,
+      "overlap_investing_club": 28.3
+    },
+    {
+      "id": "cnbc-plus",
+      "name": "CNBC+",
+      "type": "Streaming / news DTC",
+      "account_label": "Paid subscribers",
+      "url": "https://www.cnbc.com",
+      "paid": 142861,
+      "active_users": 142861,
+      "is_anchor": false,
+      "overlap_cnbc_plus": 100.0,
+      "overlap_investing_club": 11.4,
+      "overlap_digital": 96.2,
+      "overlap_paid": 100.0,
+      "retention_90d": 64.8,
+      "churn_monthly": 6.4,
+      "retained_12m": 42.7,
+      "read": "CNBC streaming DTC at $14.99/mo. Live US/Europe/Asia feeds plus on-demand. Newer than Pro and Investing Club; daily new-subscriber pace has matched those two combined. 142861 paid accounts in window. 11.4% also hold Investing Club. Index below Pro on retention; churn runs higher as the streaming set is still settling.",
+      "age": [
+        [
+          "18-24",
+          8.4
+        ],
+        [
+          "25-34",
+          22.7
+        ],
+        [
+          "35-44",
+          24.1
+        ],
+        [
+          "45-54",
+          22.3
+        ],
+        [
+          "55-64",
+          15.2
+        ],
+        [
+          "65+",
+          7.3
+        ]
+      ],
+      "gender": [
+        [
+          "Male",
+          64.2
+        ],
+        [
+          "Female",
+          35.3
+        ],
+        [
+          "Other",
+          0.5
+        ]
+      ],
+      "income": [
+        [
+          "Less than $25,000",
+          4.1
+        ],
+        [
+          "$25,000-$49,999",
+          9.8
+        ],
+        [
+          "$50,000-$74,999",
+          15.7
+        ],
+        [
+          "$75,000-$99,999",
+          19.4
+        ],
+        [
+          "$100,000-$149,999",
+          24.6
+        ],
+        [
+          "$150,000+",
+          26.4
+        ]
+      ],
+      "monthly": [
+        {
+          "ym": "2026-01",
+          "label": "Jan",
+          "paid": 100606,
+          "churn": 6.4,
+          "retain90": 64.4
+        },
+        {
+          "ym": "2026-02",
+          "label": "Feb",
+          "paid": 106642,
+          "churn": 6.4,
+          "retain90": 64.5
+        },
+        {
+          "ym": "2026-03",
+          "label": "Mar",
+          "paid": 114031,
+          "churn": 6.4,
+          "retain90": 64.5
+        },
+        {
+          "ym": "2026-04",
+          "label": "Apr",
+          "paid": 118715,
+          "churn": 6.4,
+          "retain90": 64.6
+        },
+        {
+          "ym": "2026-05",
+          "label": "May",
+          "paid": 124752,
+          "churn": 6.4,
+          "retain90": 64.6
+        },
+        {
+          "ym": "2026-06",
+          "label": "Jun",
+          "paid": 133142,
+          "churn": 6.4,
+          "retain90": 64.7
+        },
+        {
+          "ym": "2026-07",
+          "label": "Jul",
+          "paid": 136004,
+          "churn": 6.4,
+          "retain90": 64.7
+        },
+        {
+          "ym": "2026-08",
+          "label": "Aug",
+          "paid": 142861,
+          "churn": 6.4,
+          "retain90": 64.8
+        }
+      ]
+    },
+    {
+      "id": "cnbc-investing-club",
+      "name": "CNBC Investing Club",
+      "type": "Research / community DTC",
+      "account_label": "Paid subscribers",
+      "url": "https://www.cnbc.com/investingclub",
+      "paid": 128473,
+      "active_users": 128473,
+      "is_anchor": false,
+      "overlap_cnbc_plus": 12.6,
+      "overlap_investing_club": 100.0,
+      "overlap_digital": 94.8,
+      "overlap_paid": 100.0,
+      "retention_90d": 78.6,
+      "churn_monthly": 3.2,
+      "retained_12m": 64.1,
+      "read": "Jim Cramer Investing Club on cnbc.com/investingclub. Charitable Trust trades, live monthly meetings, and member alerts. Premium research community alongside Pro. 128473 paid accounts in window. 12.6% also hold CNBC+. Stickier than CNBC+: 78.6% still active at 90 days, 3.2% monthly churn.",
+      "age": [
+        [
+          "18-24",
+          2.9
+        ],
+        [
+          "25-34",
+          12.4
+        ],
+        [
+          "35-44",
+          22.8
+        ],
+        [
+          "45-54",
+          28.6
+        ],
+        [
+          "55-64",
+          21.7
+        ],
+        [
+          "65+",
+          11.6
+        ]
+      ],
+      "gender": [
+        [
+          "Male",
+          71.8
+        ],
+        [
+          "Female",
+          27.7
+        ],
+        [
+          "Other",
+          0.5
+        ]
+      ],
+      "income": [
+        [
+          "Less than $25,000",
+          2.1
+        ],
+        [
+          "$25,000-$49,999",
+          6.4
+        ],
+        [
+          "$50,000-$74,999",
+          11.8
+        ],
+        [
+          "$75,000-$99,999",
+          16.9
+        ],
+        [
+          "$100,000-$149,999",
+          26.4
+        ],
+        [
+          "$150,000+",
+          36.4
+        ]
+      ],
+      "monthly": [
+        {
+          "ym": "2026-01",
+          "label": "Jan",
+          "paid": 115741,
+          "churn": 3.2,
+          "retain90": 78.2
+        },
+        {
+          "ym": "2026-02",
+          "label": "Feb",
+          "paid": 118445,
+          "churn": 3.2,
+          "retain90": 78.3
+        },
+        {
+          "ym": "2026-03",
+          "label": "Mar",
+          "paid": 120811,
+          "churn": 3.2,
+          "retain90": 78.3
+        },
+        {
+          "ym": "2026-04",
+          "label": "Apr",
+          "paid": 121198,
+          "churn": 3.2,
+          "retain90": 78.4
+        },
+        {
+          "ym": "2026-05",
+          "label": "May",
+          "paid": 123016,
+          "churn": 3.2,
+          "retain90": 78.4
+        },
+        {
+          "ym": "2026-06",
+          "label": "Jun",
+          "paid": 127082,
+          "churn": 3.2,
+          "retain90": 78.5
+        },
+        {
+          "ym": "2026-07",
+          "label": "Jul",
+          "paid": 125894,
+          "churn": 3.2,
+          "retain90": 78.5
+        },
+        {
+          "ym": "2026-08",
+          "label": "Aug",
+          "paid": 128473,
+          "churn": 3.2,
+          "retain90": 78.6
+        }
       ]
     },
     {
@@ -170,7 +455,6 @@
       "account_label": "Paid subscribers",
       "paid": 1384217,
       "active_users": 1384217,
-      "overlap_linear": 22.8,
       "overlap_digital": 38.4,
       "overlap_paid": 7.6,
       "retention_90d": 77.3,
@@ -300,7 +584,9 @@
           "churn": 3.6,
           "retain90": 77.3
         }
-      ]
+      ],
+      "overlap_cnbc_plus": 6.2,
+      "overlap_investing_club": 5.4
     },
     {
       "id": "metatrader",
@@ -309,13 +595,12 @@
       "account_label": "Platform accounts",
       "paid": 612847,
       "active_users": 612847,
-      "overlap_linear": 16.3,
       "overlap_digital": 28.7,
       "overlap_paid": 4.8,
       "retention_90d": 81.8,
       "churn_monthly": 2,
       "retained_12m": 70.3,
-      "read": "Largest non-media set. Broker-distributed terminal, not a news product. Linear CNBC overlap is the lowest among the large names. Sticky accounts, 2.0% monthly churn. US platform accounts still dwarf every research DTC in the set.",
+      "read": "Largest non-media set. Broker-distributed terminal, not a news product. CNBC+ and Investing Club overlap sit at the low end of the set. Sticky accounts, 2.0% monthly churn. US platform accounts still dwarf every research DTC in the set.",
       "age": [
         [
           "18-24",
@@ -439,7 +724,9 @@
           "churn": 2,
           "retain90": 81.8
         }
-      ]
+      ],
+      "overlap_cnbc_plus": 3.8,
+      "overlap_investing_club": 3.1
     },
     {
       "id": "seeking-alpha",
@@ -448,7 +735,6 @@
       "account_label": "Paid subscribers",
       "paid": 198473,
       "active_users": 198473,
-      "overlap_linear": 41.6,
       "overlap_digital": 68.3,
       "overlap_paid": 21.4,
       "retention_90d": 73.6,
@@ -578,7 +864,9 @@
           "churn": 4.6,
           "retain90": 73.6
         }
-      ]
+      ],
+      "overlap_cnbc_plus": 14.6,
+      "overlap_investing_club": 18.2
     },
     {
       "id": "stockcharts",
@@ -587,13 +875,12 @@
       "account_label": "Paid subscribers",
       "paid": 187263,
       "active_users": 187263,
-      "overlap_linear": 31.7,
       "overlap_digital": 44.2,
       "overlap_paid": 12.6,
       "retention_90d": 76.8,
       "churn_monthly": 3.3,
       "retained_12m": 61.7,
-      "read": "Established US charting set, older than TradingView. Linear CNBC overlap 31.7%. Retention sits with the sticky charting cluster, not the news cluster. June added; July and August held most of it.",
+      "read": "Established US charting set, older than TradingView. CNBC+ overlap 9.4%, Investing Club 8.7%. Retention sits with the sticky charting cluster, not the news cluster. June added; July and August held most of it.",
       "age": [
         [
           "18-24",
@@ -717,7 +1004,9 @@
           "churn": 3.3,
           "retain90": 76.8
         }
-      ]
+      ],
+      "overlap_cnbc_plus": 9.4,
+      "overlap_investing_club": 8.7
     },
     {
       "id": "marketwatch",
@@ -726,13 +1015,12 @@
       "account_label": "Paid subscribers",
       "paid": 41827,
       "active_users": 16847231,
-      "overlap_linear": 47.3,
       "overlap_digital": 74.8,
       "overlap_paid": 14.1,
       "retention_90d": 62.4,
       "churn_monthly": 7.2,
       "retained_12m": 39.8,
-      "read": "News, not a terminal. Paid DTC is the small slice; 16.8M active users is the real MarketWatch footprint. Highest CNBC digital overlap in the set (74.8%). Paid retention is weaker than charting. June news traffic lifted both paid and active users.",
+      "read": "News, not a terminal. Paid DTC is the small slice; 16.8M active users is the real MarketWatch footprint. Highest CNBC digital overlap in the set (74.8%). CNBC+ 11.8%, Investing Club 9.6%. Paid retention is weaker than charting. June news traffic lifted both paid and active users.",
       "age": [
         [
           "18-24",
@@ -856,7 +1144,9 @@
           "churn": 7.2,
           "retain90": 62.4
         }
-      ]
+      ],
+      "overlap_cnbc_plus": 11.8,
+      "overlap_investing_club": 9.6
     },
     {
       "id": "tikr",
@@ -865,8 +1155,7 @@
       "account_label": "Paid subscribers",
       "paid": 81247,
       "active_users": 81247,
-      "overlap_linear": 24.6,
-      "overlap_digital": 51.3,
+      "overlap_digital": 52.6,
       "overlap_paid": 16.8,
       "retention_90d": 71.8,
       "churn_monthly": 5.1,
@@ -995,7 +1284,9 @@
           "churn": 5.1,
           "retain90": 71.8
         }
-      ]
+      ],
+      "overlap_cnbc_plus": 12.3,
+      "overlap_investing_club": 11.1
     },
     {
       "id": "koyfin",
@@ -1004,9 +1295,8 @@
       "account_label": "Paid subscribers",
       "paid": 71483,
       "active_users": 71483,
-      "overlap_linear": 33.4,
-      "overlap_digital": 56.7,
-      "overlap_paid": 26.3,
+      "overlap_digital": 41.3,
+      "overlap_paid": 13.2,
       "retention_90d": 79.4,
       "churn_monthly": 3,
       "retained_12m": 65.8,
@@ -1134,7 +1424,9 @@
           "churn": 3,
           "retain90": 79.4
         }
-      ]
+      ],
+      "overlap_cnbc_plus": 8.7,
+      "overlap_investing_club": 10.4
     },
     {
       "id": "finviz",
@@ -1143,9 +1435,8 @@
       "account_label": "Paid subscribers",
       "paid": 39847,
       "active_users": 39847,
-      "overlap_linear": 21.4,
-      "overlap_digital": 37.6,
-      "overlap_paid": 8.7,
+      "overlap_digital": 36.8,
+      "overlap_paid": 9.4,
       "retention_90d": 70.1,
       "churn_monthly": 5.4,
       "retained_12m": 50.4,
@@ -1273,7 +1564,9 @@
           "churn": 5.4,
           "retain90": 70.1
         }
-      ]
+      ],
+      "overlap_cnbc_plus": 7.1,
+      "overlap_investing_club": 6.3
     },
     {
       "id": "tc2000",
@@ -1282,13 +1575,12 @@
       "account_label": "Paid subscribers",
       "paid": 38417,
       "active_users": 38417,
-      "overlap_linear": 36.1,
-      "overlap_digital": 41.8,
-      "overlap_paid": 13.2,
+      "overlap_digital": 39.4,
+      "overlap_paid": 11.7,
       "retention_90d": 80.7,
       "churn_monthly": 2.5,
       "retained_12m": 67.3,
-      "read": "US desktop charting, older than TradingView. Linear CNBC overlap 36.1%. Lowest churn in the charting cluster after MetaStock and Optuma. Accounts stay. Month-to-month paid barely moves.",
+      "read": "US desktop charting, older than TradingView. CNBC+ overlap 10.2%, Investing Club 9.1%. Lowest churn in the charting cluster after MetaStock and Optuma. Accounts stay. Month-to-month paid barely moves.",
       "age": [
         [
           "18-24",
@@ -1412,7 +1704,9 @@
           "churn": 2.5,
           "retain90": 80.7
         }
-      ]
+      ],
+      "overlap_cnbc_plus": 10.2,
+      "overlap_investing_club": 9.1
     },
     {
       "id": "trendspider",
@@ -1421,9 +1715,8 @@
       "account_label": "Paid subscribers",
       "paid": 24183,
       "active_users": 24183,
-      "overlap_linear": 19.7,
-      "overlap_digital": 36.4,
-      "overlap_paid": 7.4,
+      "overlap_digital": 34.1,
+      "overlap_paid": 8.3,
       "retention_90d": 68.3,
       "churn_monthly": 5.8,
       "retained_12m": 47.1,
@@ -1551,7 +1844,9 @@
           "churn": 5.8,
           "retain90": 68.3
         }
-      ]
+      ],
+      "overlap_cnbc_plus": 6.8,
+      "overlap_investing_club": 5.9
     },
     {
       "id": "fiscal-ai",
@@ -1560,13 +1855,12 @@
       "account_label": "Paid subscribers",
       "paid": 34817,
       "active_users": 34817,
-      "overlap_linear": 17.3,
       "overlap_digital": 46.8,
-      "overlap_paid": 11.7,
+      "overlap_paid": 12.1,
       "retention_90d": 59.7,
       "churn_monthly": 7.8,
       "retained_12m": 37.6,
-      "read": "Fastest-growing research set in window. Digital CNBC overlap 46.8% with thinner linear. Highest monthly churn in the group (7.8%). Paid accounts rose 77.5% from January to August. Early product, accounts still settling.",
+      "read": "Fastest-growing research set in window. Digital CNBC overlap 46.8%. CNBC+ 9.6%, Investing Club 8.4%. Highest monthly churn in the group (7.8%). Paid accounts rose 77.5% from January to August. Early product, accounts still settling.",
       "age": [
         [
           "18-24",
@@ -1690,7 +1984,9 @@
           "churn": 7.8,
           "retain90": 59.7
         }
-      ]
+      ],
+      "overlap_cnbc_plus": 9.6,
+      "overlap_investing_club": 8.4
     },
     {
       "id": "ycharts",
@@ -1699,8 +1995,7 @@
       "account_label": "Paid subscribers",
       "paid": 16847,
       "active_users": 16847,
-      "overlap_linear": 37.2,
-      "overlap_digital": 58.4,
+      "overlap_digital": 48.2,
       "overlap_paid": 24.8,
       "retention_90d": 82.4,
       "churn_monthly": 2.3,
@@ -1829,7 +2124,9 @@
           "churn": 2.3,
           "retain90": 82.4
         }
-      ]
+      ],
+      "overlap_cnbc_plus": 15.4,
+      "overlap_investing_club": 17.8
     },
     {
       "id": "metastock",
@@ -1838,13 +2135,12 @@
       "account_label": "Paid subscribers",
       "paid": 11263,
       "active_users": 11263,
-      "overlap_linear": 38.6,
-      "overlap_digital": 40.3,
-      "overlap_paid": 14.6,
+      "overlap_digital": 37.6,
+      "overlap_paid": 10.6,
       "retention_90d": 83.6,
       "churn_monthly": 1.8,
       "retained_12m": 73.4,
-      "read": "Legacy desktop technicals. Oldest charting age mix. Linear CNBC overlap 38.6%. Lowest monthly churn in the set with Optuma (1.8%). Small, durable. Month-end paid drifted slightly down, then held.",
+      "read": "Legacy desktop technicals. Oldest charting age mix. CNBC+ overlap 8.1%, Investing Club 7.4%. Lowest monthly churn in the set with Optuma (1.8%). Small, durable. Month-end paid drifted slightly down, then held.",
       "age": [
         [
           "18-24",
@@ -1968,7 +2264,9 @@
           "churn": 1.8,
           "retain90": 83.6
         }
-      ]
+      ],
+      "overlap_cnbc_plus": 8.1,
+      "overlap_investing_club": 7.4
     },
     {
       "id": "optuma",
@@ -1977,9 +2275,8 @@
       "account_label": "Paid subscribers",
       "paid": 6847,
       "active_users": 6847,
-      "overlap_linear": 29.4,
-      "overlap_digital": 41.7,
-      "overlap_paid": 18.3,
+      "overlap_digital": 33.2,
+      "overlap_paid": 9.8,
       "retention_90d": 84.7,
       "churn_monthly": 1.7,
       "retained_12m": 75.7,
@@ -2107,7 +2404,9 @@
           "churn": 1.7,
           "retain90": 84.7
         }
-      ]
+      ],
+      "overlap_cnbc_plus": 7.6,
+      "overlap_investing_club": 6.9
     }
   ],
   "as_of": "2026-08-31",
@@ -2115,5 +2414,8 @@
   "window_start": "2026-01-01",
   "window_end": "2026-09-02",
   "competitive_set": "CNBC Pro",
-  "updated_at": "2026-09-03T18:12:12.206Z"
+  "updated_at": "2026-09-08T23:30:00+00:00",
+  "cnbc_plus": 142861,
+  "cnbc_investing_club": 128473,
+  "notes": "Linear CNBC removed (not digitally trackable). CNBC+ and CNBC Investing Club added as brands and overlap metrics."
 }
