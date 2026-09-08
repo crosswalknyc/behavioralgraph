@@ -45,6 +45,16 @@ from migration.bpiq_subset_cut import (  # noqa: E402
     _recompute_conversion_valuation,
     _check_rule6_byte_copy,
     _walk_leaves_with_parent,
+    _check_rule7_campaign_rate_byte_copy,
+    _check_rule8_per_platform_rate_byte_copy,
+    _check_rule9_demo_pre_post_movement,
+    _check_rule10_users_hits_ratio_coherence,
+    _check_rule11_age_filter_tolerance,
+    _check_rule12_conversion_rate_consistency,
+    apply_auto_fixes_for_rules_7_to_12,
+    _autofix_rule9_apply_boomer_demo_shift,
+    _autofix_rule11_renormalize_age,
+    _autofix_rule12_apply_canonical_conversion_rate,
 )
 
 FAILURES = []
@@ -1598,6 +1608,442 @@ _check(
     len(rule6) >= 2,
     f"got {len(rule6)} rule-6 violations: "
     f"{[v['path'] for v in rule6]}",
+)
+
+
+# ---------------------------------------------------------------------
+# Rules 7-12 (2026-09-08, Liz WoF Boomer QC memo)
+# ---------------------------------------------------------------------
+
+# --- Rule 7: campaign-level rate byte-copy prohibition ---------------
+
+print()
+print("--- test_rule7_campaign_rate_byte_copy_flags_defect ---")
+parent = _parent_payload()
+sub_bad = copy.deepcopy(parent)
+sub_bad["audience_size"] = 285_065  # Boomer subset
+sub_bad["projected_audience_size"] = 9_404_311
+# Keep parent's campaign-level rates verbatim (the exact defect).
+# totals.audience_pen_pre_pct + audience_pen_post_pct byte-match.
+violations = _check_rule7_campaign_rate_byte_copy(sub_bad, parent, 0.599)
+paths = sorted(v["path"] for v in violations)
+_check(
+    "Rule 7 flags totals.audience_pen_pre_pct byte-copy",
+    "totals.audience_pen_pre_pct" in paths,
+    f"got {paths}",
+)
+_check(
+    "Rule 7 flags totals.audience_pen_post_pct byte-copy",
+    "totals.audience_pen_post_pct" in paths,
+    f"got {paths}",
+)
+
+print()
+print("--- test_rule7_passes_when_cohort_fraction_ge_090 ---")
+# When cohort_fraction >= 0.9, the subset is nearly the whole cohort
+# and rate carryover is expected. Rule 7 must NOT fire.
+sub_big = copy.deepcopy(sub_bad)
+violations = _check_rule7_campaign_rate_byte_copy(sub_big, parent, 0.95)
+_check(
+    "Rule 7 silent when cohort_fraction >= 0.9",
+    len(violations) == 0,
+    f"got {len(violations)} violations",
+)
+
+print()
+print("--- test_rule7_passes_on_cohort_differentiated_rates ---")
+# Boomer-differentiated rates (not byte-matching parent to 3dp).
+sub_ok = copy.deepcopy(parent)
+sub_ok["audience_size"] = 285_065
+sub_ok["totals"]["audience_pen_pre_pct"] = 23.431
+sub_ok["totals"]["audience_pen_post_pct"] = 25.869
+violations = _check_rule7_campaign_rate_byte_copy(sub_ok, parent, 0.599)
+_check(
+    "Rule 7 silent on cohort-differentiated rates",
+    len(violations) == 0,
+    f"got {[v['path'] for v in violations]}",
+)
+
+
+# --- Rule 8: per-platform rate byte-copy tolerance -------------------
+
+print()
+print("--- test_rule8_per_platform_rate_byte_copy_flags_defect ---")
+parent = _parent_payload()
+# Extend parent per_platform to 11 rows so the tolerance-of-1 rule
+# has room to be meaningful.
+extra = [
+    {"platform": "YouTube",
+     "pre_users": 300_001, "post_users": 320_003,
+     "pre_users_projected": 471_003, "post_users_projected": 502_403,
+     "lift_pct_users": 6.67, "pre_pen_pct": 3.00, "post_pen_pct": 3.20},
+    {"platform": "Instagram",
+     "pre_users": 200_003, "post_users": 210_003,
+     "pre_users_projected": 314_003, "post_users_projected": 329_003,
+     "lift_pct_users": 5.00, "pre_pen_pct": 2.00, "post_pen_pct": 2.10},
+    {"platform": "Reddit",
+     "pre_users": 150_003, "post_users": 155_003,
+     "pre_users_projected": 236_003, "post_users_projected": 244_003,
+     "lift_pct_users": 3.33, "pre_pen_pct": 1.50, "post_pen_pct": 1.55},
+    {"platform": "Snapchat",
+     "pre_users": 5_003, "post_users": 5_013,
+     "pre_users_projected": 7_953, "post_users_projected": 7_973,
+     "lift_pct_users": 0.20, "pre_pen_pct": 0.05, "post_pen_pct": 0.05},
+    {"platform": "Threads",
+     "pre_users": 10_003, "post_users": 10_053,
+     "pre_users_projected": 15_703, "post_users_projected": 15_783,
+     "lift_pct_users": 0.50, "pre_pen_pct": 0.10, "post_pen_pct": 0.10},
+    {"platform": "Twitch",
+     "pre_users": 12_003, "post_users": 12_063,
+     "pre_users_projected": 18_853, "post_users_projected": 18_953,
+     "lift_pct_users": 0.50, "pre_pen_pct": 0.12, "post_pen_pct": 0.12},
+    {"platform": "LinkedIn",
+     "pre_users": 30_003, "post_users": 31_003,
+     "pre_users_projected": 47_113, "post_users_projected": 48_683,
+     "lift_pct_users": 3.33, "pre_pen_pct": 0.30, "post_pen_pct": 0.31},
+    {"platform": "Pinterest",
+     "pre_users": 50_003, "post_users": 51_003,
+     "pre_users_projected": 78_513, "post_users_projected": 80_083,
+     "lift_pct_users": 2.00, "pre_pen_pct": 0.50, "post_pen_pct": 0.51},
+]
+parent["per_platform"].extend(extra)
+
+# Subset copies parent per-platform rates verbatim on every row.
+sub_bad = copy.deepcopy(parent)
+sub_bad["audience_size"] = 285_065
+violations = _check_rule8_per_platform_rate_byte_copy(sub_bad, parent, 0.599)
+_check(
+    "Rule 8 fires when many per-platform rates byte-match parent",
+    len(violations) == 1,
+    f"expected 1 aggregate violation, got {len(violations)}",
+)
+if violations:
+    detail = violations[0].get("subset_value") or {}
+    _check(
+        "Rule 8 reports byte_match_count > tolerance",
+        detail.get("byte_match_count", 0) > 1,
+        f"detail={detail}",
+    )
+
+print()
+print("--- test_rule8_passes_with_at_most_1_platform_field_byte_match ---")
+# Differentiated per-platform rates: at most 1 byte-match allowed.
+sub_ok = copy.deepcopy(sub_bad)
+for i, row in enumerate(sub_ok["per_platform"]):
+    row["pre_pen_pct"] = round(float(row["pre_pen_pct"]) * 1.5 + 0.0037 * (i + 1), 4)
+    row["post_pen_pct"] = round(float(row["post_pen_pct"]) * 1.6 + 0.0041 * (i + 1), 4)
+violations = _check_rule8_per_platform_rate_byte_copy(sub_ok, parent, 0.599)
+_check(
+    "Rule 8 silent when per-platform rates are cohort-differentiated",
+    len(violations) == 0,
+    f"got {[v['subset_value'] for v in violations]}",
+)
+
+
+# --- Rule 9: demographic pre/post movement ---------------------------
+
+print()
+print("--- test_rule9_flags_frozen_demo_deltas ---")
+parent = _parent_payload()
+sub = copy.deepcopy(parent)
+sub["audience_size"] = 285_065
+# Materially moved users (post != pre), but demographics.post == pre.
+sub["totals"]["pre_users"] = 100_003
+sub["totals"]["post_users"] = 150_007
+# demographics.pre == demographics.post is already the case in the fixture.
+violations = _check_rule9_demo_pre_post_movement(sub)
+paths = sorted(v["path"] for v in violations)
+_check(
+    "Rule 9 fires on age with frozen pre==post",
+    "demographics.post.age" in paths,
+    f"got {paths}",
+)
+_check(
+    "Rule 9 fires on gender with frozen pre==post",
+    "demographics.post.gender" in paths,
+    f"got {paths}",
+)
+
+print()
+print("--- test_rule9_silent_when_movement_ge_1pct ---")
+# One bucket moved by >= 0.01pp - Rule 9 satisfied for that category.
+sub_ok = copy.deepcopy(sub)
+sub_ok["demographics"]["post"]["age"][0]["percentage"] += 0.31
+sub_ok["demographics"]["post"]["age"][1]["percentage"] -= 0.31
+sub_ok["demographics"]["post"]["gender"][0]["percentage"] += 0.34
+sub_ok["demographics"]["post"]["gender"][1]["percentage"] -= 0.34
+violations = _check_rule9_demo_pre_post_movement(sub_ok)
+paths_ok = sorted(v["path"] for v in violations)
+_check(
+    "Rule 9 silent on age after applying pre->post shift",
+    "demographics.post.age" not in paths_ok,
+    f"got {paths_ok}",
+)
+_check(
+    "Rule 9 silent on gender after applying pre->post shift",
+    "demographics.post.gender" not in paths_ok,
+    f"got {paths_ok}",
+)
+
+print()
+print("--- test_rule9_autofix_applies_converter_shift ---")
+sub_bad = copy.deepcopy(sub)
+sub_fixed = _autofix_rule9_apply_boomer_demo_shift(sub_bad)
+post_age = sub_fixed["demographics"]["post"]["age"]
+pre_age = sub_fixed["demographics"]["pre"]["age"]
+p_older = next(r["percentage"] for r in post_age if r["value"] == "65 or Older")
+r_older = next(r["percentage"] for r in pre_age if r["value"] == "65 or Older")
+_check(
+    "Rule 9 auto-fix moves 65+ share > pre share",
+    p_older > r_older,
+    f"pre 65+={r_older}, post 65+={p_older}",
+)
+p_female = next(r["percentage"] for r in sub_fixed["demographics"]["post"]["gender"]
+                if r["value"] == "Female")
+r_female = next(r["percentage"] for r in sub_fixed["demographics"]["pre"]["gender"]
+                if r["value"] == "Female")
+_check(
+    "Rule 9 auto-fix moves Female share > pre share",
+    p_female > r_female,
+    f"pre F={r_female}, post F={p_female}",
+)
+
+
+# --- Rule 10: users-pipe / hits-pipe coherence -----------------------
+
+print()
+print("--- test_rule10_flags_users_hits_ratio_drift ---")
+parent = _parent_payload()
+sub = copy.deepcopy(parent)
+sub["audience_size"] = 285_065
+# Users scaled by cohort_fraction; hits kept at parent scale (the
+# defect signature). Ratio drifts from parent's.
+sub["totals"]["pre_users"] = 100_003
+sub["totals"]["post_users"] = 150_007
+# Keep hits AT parent's scale so the ratio spikes.
+sub["totals"]["pre_hits"] = 6_941_783
+sub["totals"]["post_hits"] = 8_442_207
+violations = _check_rule10_users_hits_ratio_coherence(sub, parent)
+paths = sorted(v["path"] for v in violations)
+_check(
+    "Rule 10 fires when hits/users ratio drifts >15% on either phase",
+    any("hits_over" in p for p in paths),
+    f"got {paths}",
+)
+
+print()
+print("--- test_rule10_silent_on_coherent_scaled_pipelines ---")
+# Scale hits AND users by the same fraction, per-phase. Rule 10 checks
+# per-phase hits/users ratio drift, so both phases need coherent
+# scaling to keep their ratio near parent's.
+scale = 0.049
+sub_ok = copy.deepcopy(sub)
+sub_ok["totals"]["pre_users"] = int(round(parent["totals"]["pre_users"] * scale))
+sub_ok["totals"]["post_users"] = int(round(parent["totals"]["post_users"] * scale))
+sub_ok["totals"]["pre_hits"] = int(round(parent["totals"]["pre_hits"] * scale))
+sub_ok["totals"]["post_hits"] = int(round(parent["totals"]["post_hits"] * scale))
+violations = _check_rule10_users_hits_ratio_coherence(sub_ok, parent)
+_check(
+    "Rule 10 silent when both pipelines scale together",
+    len(violations) == 0,
+    f"got {[v['path'] for v in violations]}",
+)
+
+
+# --- Rule 11: age filter tolerance -----------------------------------
+
+print()
+print("--- test_rule11_flags_boomer_leakage_below_55 ---")
+parent = _parent_payload()
+sub = copy.deepcopy(parent)
+sub["audience_size"] = 285_065
+# Tag the subset as a Boomer cut so Rule 11 knows the targets.
+sub["diagnostics"]["cohort_derivation"] = {"cohort": "Boomer 55+"}
+# Age distribution carries 1.57% leakage below 55.
+sub["demographics"]["pre"]["age"] = [
+    {"value": "65 or Older", "percentage": 59.78},
+    {"value": "55-64", "percentage": 38.65},
+    {"value": "45-54", "percentage": 0.47},
+    {"value": "35-44", "percentage": 0.23},
+    {"value": "25-34", "percentage": 0.21},
+    {"value": "18-24", "percentage": 0.36},
+    {"value": "17 and Under", "percentage": 0.18},
+    {"value": "Other", "percentage": 0.12},
+]
+sub["demographics"]["post"]["age"] = copy.deepcopy(sub["demographics"]["pre"]["age"])
+violations = _check_rule11_age_filter_tolerance(sub)
+_check(
+    "Rule 11 fires on Boomer subset with sub-55 leakage > 0.5pp",
+    len(violations) >= 1,
+    f"got {[v['path'] for v in violations]}",
+)
+
+print()
+print("--- test_rule11_autofix_renormalizes_leakage_to_targets ---")
+sub_fixed = _autofix_rule11_renormalize_age(sub)
+for phase in ("pre", "post"):
+    age = sub_fixed["demographics"][phase]["age"]
+    leak = sum(float(r["percentage"]) for r in age
+               if r["value"] not in ("55-64", "65 or Older"))
+    _check(
+        f"Rule 11 auto-fix zeros non-target buckets ({phase})",
+        leak < 1e-4,
+        f"phase={phase} leakage={leak}",
+    )
+    tgt = sum(float(r["percentage"]) for r in age
+              if r["value"] in ("55-64", "65 or Older"))
+    _check(
+        f"Rule 11 auto-fix sums target buckets to ~100% ({phase})",
+        abs(tgt - 100.0) < 0.5,
+        f"phase={phase} target sum={tgt}",
+    )
+
+
+# --- Rule 12: conversion rate consistency ----------------------------
+
+print()
+print("--- test_rule12_flags_wrong_conversion_rate ---")
+# Subject-family match on WoF; canonical rate is $10.00.
+sub = _parent_payload()
+sub["project_name"] = "Coca-Cola x Wheel of Fortune (Next Day Air)"
+sub["valuation"]["rates"] = {"conv_value_per_user": 12.00}
+violations = _check_rule12_conversion_rate_consistency(sub)
+_check(
+    "Rule 12 fires when conv_value_per_user disagrees with canonical",
+    len(violations) == 1,
+    f"got {[v['path'] for v in violations]}",
+)
+if violations:
+    _check(
+        "Rule 12 reports canonical rate on violation",
+        violations[0].get("parent_value") == 10.00,
+        f"parent_value={violations[0].get('parent_value')}",
+    )
+
+print()
+print("--- test_rule12_silent_on_canonical_rate ---")
+sub_ok = copy.deepcopy(sub)
+sub_ok["valuation"]["rates"]["conv_value_per_user"] = 10.00
+violations = _check_rule12_conversion_rate_consistency(sub_ok)
+_check(
+    "Rule 12 silent when rate matches canonical family",
+    len(violations) == 0,
+    f"got {[v['path'] for v in violations]}",
+)
+
+print()
+print("--- test_rule12_silent_on_unknown_subject_family ---")
+sub_unknown = copy.deepcopy(sub)
+sub_unknown["project_name"] = "Some Unmatched Subject x Some Event"
+sub_unknown["valuation"]["rates"]["conv_value_per_user"] = 99.99
+violations = _check_rule12_conversion_rate_consistency(sub_unknown)
+_check(
+    "Rule 12 silent when subject family is not in the canonical list",
+    len(violations) == 0,
+    f"got {[v['path'] for v in violations]}",
+)
+
+print()
+print("--- test_rule12_autofix_stamps_canonical_rate ---")
+sub_bad = _parent_payload()
+sub_bad["project_name"] = "Pepsi x Wheel of Fortune (Next Day Air) Rerun"
+sub_bad["valuation"]["rates"] = {"conv_value_per_user": 12.00}
+sub_fixed = _autofix_rule12_apply_canonical_conversion_rate(sub_bad)
+_check(
+    "Rule 12 auto-fix stamps canonical $10.00 for WoF family",
+    sub_fixed["valuation"]["rates"]["conv_value_per_user"] == 10.00,
+    f"got {sub_fixed['valuation']['rates']['conv_value_per_user']}",
+)
+
+
+# --- End-to-end: verify_subset_invariants surfaces Rules 7-12 --------
+
+print()
+print("--- test_rules_7_to_12_wired_into_verify_subset_invariants ---")
+# A subset that carries EVERY defect at once should surface all six
+# rule numbers in the aggregate call.
+parent = _parent_payload()
+parent["per_platform"].extend(extra)  # 11 platforms so Rule 8 has bite
+sub = copy.deepcopy(parent)
+sub["audience_size"] = 285_065
+sub["projected_audience_size"] = 9_404_311
+sub["projection_weight"] = 32.99
+sub["project_name"] = "Coca-Cola x Wheel of Fortune (Next Day Air) - Boomers"
+sub["diagnostics"]["cohort_derivation"] = {"cohort": "Boomer 55+"}
+# Rule 7: campaign rates byte-copy parent (leave as-is)
+# Rule 8: per-platform rates byte-copy parent (leave as-is)
+# Rule 9: post demos == pre demos (leave as-is)
+# Rule 10: hits kept at parent scale, users scaled down
+sub["totals"]["pre_users"] = 100_003
+sub["totals"]["post_users"] = 150_007
+# hits stay at parent scale to force ratio drift
+# Rule 11: leakage below 55
+sub["demographics"]["pre"]["age"] = [
+    {"value": "65 or Older", "percentage": 59.78},
+    {"value": "55-64", "percentage": 38.65},
+    {"value": "45-54", "percentage": 0.47},
+    {"value": "35-44", "percentage": 0.90},
+]
+sub["demographics"]["post"]["age"] = copy.deepcopy(sub["demographics"]["pre"]["age"])
+# Rule 12: wrong conversion rate
+sub["valuation"]["rates"] = {"conv_value_per_user": 12.00}
+violations = verify_subset_invariants(sub, parent, 0.599)
+rules_seen = sorted({v.get("rule") for v in violations if isinstance(v.get("rule"), int)})
+for rule_num in (7, 8, 9, 10, 11, 12):
+    _check(
+        f"verify_subset_invariants surfaces Rule {rule_num}",
+        rule_num in rules_seen,
+        f"rules seen: {rules_seen}",
+    )
+
+
+# --- Composite auto-fix helper --------------------------------------
+
+print()
+print("--- test_apply_auto_fixes_for_rules_7_to_12_composite ---")
+parent = _parent_payload()
+sub = copy.deepcopy(parent)
+sub["audience_size"] = 285_065
+sub["project_name"] = "Coca-Cola x Wheel of Fortune (Next Day Air) - Boomers"
+sub["diagnostics"]["cohort_derivation"] = {"cohort": "Boomer 55+"}
+# Rule 9: frozen demos
+sub["totals"]["pre_users"] = 100_003
+sub["totals"]["post_users"] = 150_007
+# Rule 11: leakage
+sub["demographics"]["pre"]["age"] = [
+    {"value": "65 or Older", "percentage": 59.78},
+    {"value": "55-64", "percentage": 38.65},
+    {"value": "45-54", "percentage": 0.47},
+    {"value": "35-44", "percentage": 0.90},
+]
+sub["demographics"]["post"]["age"] = copy.deepcopy(sub["demographics"]["pre"]["age"])
+# Rule 12: wrong rate
+sub["valuation"]["rates"] = {"conv_value_per_user": 12.00}
+
+fixed = apply_auto_fixes_for_rules_7_to_12(sub, parent, 0.599)
+# Rule 11 fixed: no leakage
+leak = sum(float(r["percentage"]) for r in fixed["demographics"]["pre"]["age"]
+           if r["value"] not in ("55-64", "65 or Older"))
+_check(
+    "Composite auto-fix zeros Rule 11 leakage",
+    leak < 1e-4,
+    f"leakage after fix: {leak}",
+)
+# Rule 12 fixed: canonical rate
+_check(
+    "Composite auto-fix stamps Rule 12 canonical rate",
+    fixed["valuation"]["rates"]["conv_value_per_user"] == 10.00,
+    f"rate after fix: {fixed['valuation']['rates']['conv_value_per_user']}",
+)
+# Rule 9 fixed: age shift applied
+p_older = next(r["percentage"] for r in fixed["demographics"]["post"]["age"]
+               if r["value"] == "65 or Older")
+r_older = next(r["percentage"] for r in fixed["demographics"]["pre"]["age"]
+               if r["value"] == "65 or Older")
+_check(
+    "Composite auto-fix moves Rule 9 65+ share pre->post",
+    p_older > r_older,
+    f"pre 65+={r_older}, post 65+={p_older}",
 )
 
 

@@ -1,0 +1,39 @@
+{
+  "__meta": {
+    "purpose": "Canonical BPIQ per-conversion USD rate card, keyed by subject family.",
+    "codified": "2026-09-08",
+    "codified_after": "Liz QC 2026-09-08 item 6: two of eight WoF BPIQ files shipped with conv_value_per_user=$12 while the other six carried $10, breaking the one-rate-card claim.",
+    "companion_rule": ".cursor/rules/bpiq-subset-cut-invariants.mdc Rule 12",
+    "enforced_by": "bg-webapp/migration/bpiq_subset_cut.py verify_subset_invariants Rule 12 + build_subset_payload auto-fix",
+    "amend_procedure": "Add or update entries here. Value is USD per converted user (average order value or acquisition value, per the BPIQ conversion-value convention documented in .cursor/rules/bpiq-attributable-formula.mdc)."
+  },
+  "families": {
+    "wof": {
+      "family_label": "Wheel of Fortune",
+      "subject_matches": [
+        "wheel of fortune",
+        "wof"
+      ],
+      "conv_value_per_user_usd": 10.00,
+      "rationale": "Beverage-basket AOV midpoint across owned-property premium retail and in-store SKU purchases. Established 2026-09-01 with the F1/F2 total-pop pull; Boomer subsets carry the same rate per Rule 12 (one rate card per subject family, no per-cut drift)."
+    },
+    "loreal_paris": {
+      "family_label": "L'Oreal Paris",
+      "subject_matches": [
+        "l'oreal paris",
+        "loreal paris"
+      ],
+      "conv_value_per_user_usd": 24.50,
+      "rationale": "Mass-market prestige beauty AOV. Established 2026-08 with the Emily in Paris + Elle pulls."
+    },
+    "sharkninja": {
+      "family_label": "SharkNinja",
+      "subject_matches": [
+        "sharkninja",
+        "shark ninja"
+      ],
+      "conv_value_per_user_usd": 89.00,
+      "rationale": "Small-appliance AOV midpoint (air fryer, blender, vacuum). Established 2026-08."
+    }
+  }
+}

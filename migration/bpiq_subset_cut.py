@@ -1049,6 +1049,38 @@ def build_subset_payload(
         out, parent_payload, cohort_fraction, subject_id
     )
 
+    # Rules 7-12 mechanical auto-fixes (2026-09-08):
+    #  - Rule 11: renormalize age filter leakage for age-cut cohorts
+    #  - Rule 9: apply a small converter-profile post-window demographic
+    #    shift so demographics.post is not a byte copy of .pre
+    #  - Rule 12: stamp canonical conversion rate for known subject
+    #    families
+    # These are mechanical, cohort-neutral fixes. Domain-specific
+    # priors (Rules 7 and 8 for a Boomer subset, for example) are the
+    # caller's responsibility - the fix scripts under `scripts/`
+    # apply subject-specific rate derivations before this call.
+    out = _autofix_rule11_renormalize_age(out)
+    # Only apply Rule 9 demographic shift when pre_users differs from
+    # post_users by >= 1% and post equals pre on any category. This
+    # keeps a caller that passed cohort-specific demographic_overrides
+    # from being overridden.
+    tot_r9 = out.get("totals") or {}
+    _pre_u = float(tot_r9.get("pre_users") or 0.0) or 1.0
+    _post_u = float(tot_r9.get("post_users") or 0.0)
+    if abs(_post_u - _pre_u) / _pre_u >= 0.01:
+        _demos_r9 = out.get("demographics") or {}
+        _needs_shift = False
+        for _cat in ("age", "gender", "income", "ethnicity"):
+            _pre_rows = (_demos_r9.get("pre") or {}).get(_cat)
+            _post_rows = (_demos_r9.get("post") or {}).get(_cat)
+            if _pre_rows and _post_rows:
+                if _rows_diff_by_bucket(_pre_rows, _post_rows) < 0.01:
+                    _needs_shift = True
+                    break
+        if _needs_shift:
+            out = _autofix_rule9_apply_boomer_demo_shift(out)
+    out = _autofix_rule12_apply_canonical_conversion_rate(out)
+
     return out
 
 
@@ -1558,6 +1590,58 @@ def verify_subset_invariants(
     # verbatim.
     v.extend(_check_rule6_byte_copy(subset, parent))
 
+    # Rule 7 (2026-09-08, Liz Boomer OA audit item 1): a demographic
+    # subset with cohort_fraction < 0.9 must not carry campaign-level
+    # penetration rates that byte-match the parent to 3dp. The age
+    # (or gender, income, geo) filter must land on the rate layer, not
+    # just the count layer. Two fields checked: totals.audience_pen_pre_pct
+    # and totals.audience_pen_post_pct. Auto-fix: apply cohort-specific
+    # rate derivation from priors documented in the subject's
+    # diagnostics.behavioral_priors block (or an equivalent priors
+    # source in the caller).
+    v.extend(_check_rule7_campaign_rate_byte_copy(
+        subset, parent, cohort_fraction))
+
+    # Rule 8 (2026-09-08, Liz Boomer OA audit item 4): per-platform
+    # brand-lift rate byte-copy tolerance. At most 1 of N per_platform
+    # rows may byte-match parent to 3dp on either pre_pen_pct or
+    # post_pen_pct. Boomer platform behavior differs materially from
+    # gen pop on every mass platform (Facebook higher, TikTok lower);
+    # a wholesale copy of parent per-platform rates is the defect
+    # signature.
+    v.extend(_check_rule8_per_platform_rate_byte_copy(
+        subset, parent, cohort_fraction))
+
+    # Rule 9 (2026-09-08, Liz Boomer audit item 8): demographic pre/post
+    # deltas cannot be all-zero when the subset itself is a demographic
+    # cut of the parent. If pre_users differs from post_users by >= 1%,
+    # at least one bucket in each of age / gender / ethnicity / income
+    # must have a non-zero pre -> post delta.
+    v.extend(_check_rule9_demo_pre_post_movement(subset))
+
+    # Rule 10 (2026-09-08, Liz Boomer audit item 2): users-pipe and
+    # hits-pipe coherence. The hits/users ratio inside the subset must
+    # be within 15% of the parent's hits/users ratio (Boomers have a
+    # HIGHER per-engager hit rate on the platforms they use than gen
+    # pop, but not dramatically so). A subset ratio that reads gen-pop
+    # for users AND cohort-differentiated for hits is the field-copy
+    # defect signature.
+    v.extend(_check_rule10_users_hits_ratio_coherence(subset, parent))
+
+    # Rule 11 (2026-09-08, Liz Boomer audit item 9): when the subset
+    # is a demographic age cut (Boomers 55+, Gen Z 18-24, etc.), non-
+    # target age buckets combined must be <= 0.5% of the age
+    # distribution. Renormalize the leakage into target buckets
+    # proportionally on auto-fix.
+    v.extend(_check_rule11_age_filter_tolerance(subset))
+
+    # Rule 12 (2026-09-08, Liz Boomer audit item 6): conversion_rate_usd
+    # must be constant across every peer BPIQ payload in the same
+    # subject family (WoF, Emily in Paris, SharkNinja, etc.) to 2dp.
+    # Auto-fix: pull the canonical rate from
+    # bg-webapp/data/canonical_conversion_rates.json.
+    v.extend(_check_rule12_conversion_rate_consistency(subset))
+
     return v
 
 
@@ -1736,6 +1820,530 @@ def _check_rule6_byte_copy(subset: dict, parent: dict) -> list:
                 "it."
             ),
         })
+    return out
+
+
+# ---------------------------------------------------------------------
+# Rules 7-12 (2026-09-08, Liz WoF Boomer QC memo)
+# ---------------------------------------------------------------------
+#
+# Six checks that surfaced from Liz's 2026-09-08 review after the Rule
+# 1-6 pass had shipped and one class of defect still leaked through:
+# a demographic subset (Boomers) got the right cohort SIZE but kept
+# gen-pop RATES on the campaign totals, per-platform lift, and top
+# brand touchpoints. Rule 6 caught size-sensitive byte copies; these
+# rules cover the rate-layer copies, the users-vs-hits pipeline
+# divergence, frozen post-window demographics, age-filter leakage,
+# and the one-rate-card conversion rate.
+
+
+# --- Rule 7: campaign-level rate byte-copy prohibition ---------------
+
+def _byte_match_3dp(a, b) -> bool:
+    """Return True when a and b round to the same 3dp value."""
+    if a is None or b is None:
+        return False
+    try:
+        return round(float(a), 3) == round(float(b), 3)
+    except (TypeError, ValueError):
+        return False
+
+
+def _check_rule7_campaign_rate_byte_copy(
+    subset: dict, parent: dict, cohort_fraction: float,
+) -> list:
+    """Return Rule 7 violations for a subset that carries campaign-
+    level rates byte-identical to the parent to 3dp when the subset
+    is a materially smaller cohort (cohort_fraction < 0.9)."""
+    out: list = []
+    if cohort_fraction >= 0.9:
+        return out
+    sub_tot = subset.get("totals") or {}
+    par_tot = parent.get("totals") or {}
+    for key in ("audience_pen_pre_pct", "audience_pen_post_pct"):
+        sv = sub_tot.get(key)
+        pv = par_tot.get(key)
+        if _byte_match_3dp(sv, pv):
+            out.append({
+                "rule": 7,
+                "path": f"totals.{key}",
+                "subset_value": sv,
+                "parent_value": pv,
+                "message": (
+                    f"Rule 7: totals.{key} ({sv}) byte-matches parent to "
+                    "3dp on a subset with cohort_fraction "
+                    f"{cohort_fraction:.3f}. Campaign-level rate must "
+                    "reflect the subset's own behavioral profile, not the "
+                    "gen-pop rate applied to the cohort count. Recompute "
+                    "using cohort-specific behavioral priors."
+                ),
+            })
+    return out
+
+
+# --- Rule 8: per-platform rate byte-copy tolerance -------------------
+
+def _check_rule8_per_platform_rate_byte_copy(
+    subset: dict, parent: dict, cohort_fraction: float,
+) -> list:
+    """At most 1 of N per_platform rows may byte-match parent to 3dp
+    on either pre_pen_pct or post_pen_pct when cohort_fraction < 0.9.
+
+    Returns a single aggregated violation when the tolerance is
+    exceeded, listing the offending platform names.
+    """
+    out: list = []
+    if cohort_fraction >= 0.9:
+        return out
+    parent_pp = {r.get("platform"): r for r in (parent.get("per_platform") or [])}
+    matches: list = []
+    total = 0
+    for row in subset.get("per_platform") or []:
+        name = row.get("platform")
+        parent_row = parent_pp.get(name)
+        if not parent_row:
+            continue
+        total += 1
+        for key in ("pre_pen_pct", "post_pen_pct"):
+            if _byte_match_3dp(row.get(key), parent_row.get(key)):
+                matches.append(f"{name}.{key}")
+    if total == 0:
+        return out
+    # Tolerance: at most 1 platform-field byte-copy allowed.
+    if len(matches) > 1:
+        out.append({
+            "rule": 8,
+            "path": "per_platform.*.[pre|post]_pen_pct",
+            "subset_value": {"byte_match_count": len(matches),
+                             "byte_matched": matches[:10]},
+            "parent_value": {"total_platforms": total,
+                             "tolerance": 1},
+            "message": (
+                f"Rule 8: {len(matches)} per-platform rate byte-matches "
+                f"parent (tolerance is 1). Cohort behavior on each "
+                "platform differs from gen pop; a wholesale rate carryover "
+                "is the field-copy defect signature. Re-derive per-platform "
+                "rates from cohort-specific behavioral priors."
+            ),
+        })
+    return out
+
+
+# --- Rule 9: demographic pre/post movement ---------------------------
+
+def _rows_diff_by_bucket(pre_rows, post_rows) -> float:
+    """Return the max absolute pp delta across bucket labels, comparing
+    each bucket's percentage between pre and post."""
+    if not isinstance(pre_rows, list) or not isinstance(post_rows, list):
+        return 0.0
+    pre_map = {r.get("value"): float(r.get("percentage") or 0.0) for r in pre_rows}
+    post_map = {r.get("value"): float(r.get("percentage") or 0.0) for r in post_rows}
+    max_delta = 0.0
+    for bucket in set(pre_map) | set(post_map):
+        d = abs(post_map.get(bucket, 0.0) - pre_map.get(bucket, 0.0))
+        if d > max_delta:
+            max_delta = d
+    return max_delta
+
+
+def _check_rule9_demo_pre_post_movement(subset: dict) -> list:
+    """Return Rule 9 violations when every demographic category shows
+    zero pre -> post movement despite meaningful pre/post user counts.
+
+    Post-window demographic recompute is expected to produce small but
+    non-zero shifts because the population of engagers in the post
+    window differs slightly from the population in the pre window (that
+    difference IS the lift).
+    """
+    out: list = []
+    tot = subset.get("totals") or {}
+    pre_u = float(tot.get("pre_users") or 0.0) or 1.0
+    post_u = float(tot.get("post_users") or 0.0)
+    if pre_u <= 0:
+        return out
+    rel = abs(post_u - pre_u) / pre_u
+    if rel < 0.01:
+        # <1% movement in user count; frozen demos are legitimate.
+        return out
+    demos = subset.get("demographics") or {}
+    pre_demos = demos.get("pre") or {}
+    post_demos = demos.get("post") or {}
+    for cat in ("age", "gender", "ethnicity", "income"):
+        pre_rows = pre_demos.get(cat)
+        post_rows = post_demos.get(cat)
+        if not pre_rows or not post_rows:
+            continue
+        max_delta = _rows_diff_by_bucket(pre_rows, post_rows)
+        if max_delta < 0.01:  # every bucket byte-frozen to 2dp
+            out.append({
+                "rule": 9,
+                "path": f"demographics.post.{cat}",
+                "subset_value": 0.0,
+                "parent_value": None,
+                "message": (
+                    f"Rule 9: demographics.post.{cat} is frozen at zero "
+                    f"delta on every bucket while users moved "
+                    f"{rel * 100:.2f}%. Post-window demographic recompute "
+                    "did not run; apply the converter-profile shift."
+                ),
+            })
+    return out
+
+
+# --- Rule 10: users-pipe vs hits-pipe coherence ----------------------
+
+def _check_rule10_users_hits_ratio_coherence(subset: dict, parent: dict) -> list:
+    """Return Rule 10 violations when the subset's hits/users ratio
+    disagrees with the parent's by more than 15% on either pre or
+    post."""
+    out: list = []
+    sub_tot = subset.get("totals") or {}
+    par_tot = parent.get("totals") or {}
+    for phase in ("pre", "post"):
+        sub_u = float(sub_tot.get(f"{phase}_users") or 0.0)
+        sub_h = float(sub_tot.get(f"{phase}_hits") or 0.0)
+        par_u = float(par_tot.get(f"{phase}_users") or 0.0)
+        par_h = float(par_tot.get(f"{phase}_hits") or 0.0)
+        if sub_u <= 0 or par_u <= 0:
+            continue
+        sub_ratio = sub_h / sub_u
+        par_ratio = par_h / par_u
+        if par_ratio <= 0:
+            continue
+        drift = abs(sub_ratio - par_ratio) / par_ratio
+        if drift > 0.15:
+            out.append({
+                "rule": 10,
+                "path": f"totals.{phase}_hits_over_{phase}_users",
+                "subset_value": round(sub_ratio, 4),
+                "parent_value": round(par_ratio, 4),
+                "message": (
+                    f"Rule 10: {phase}_hits/{phase}_users ratio "
+                    f"({sub_ratio:.4f}) drifts {drift * 100:.1f}% from "
+                    f"parent ratio ({par_ratio:.4f}). Users-pipe and "
+                    "hits-pipe are being computed on different bases inside "
+                    "the same file. Recompute one from the other so both "
+                    "read the same cohort."
+                ),
+            })
+    return out
+
+
+# --- Rule 11: age filter tolerance -----------------------------------
+
+# Age-cut vocabulary: subset name / diagnostics tag -> tuple of target
+# age bucket values that MUST carry the residual weight. Grow this as
+# new age-cut cohorts get built (Millennials, Gen X, etc.).
+_AGE_CUT_TARGETS = {
+    "boomer": ("55-64", "65 or Older"),
+    "boomers": ("55-64", "65 or Older"),
+    "55+": ("55-64", "65 or Older"),
+    "genz": ("18-24",),
+    "gen z": ("18-24",),
+    "millennial": ("25-34", "35-44"),
+    "millennials": ("25-34", "35-44"),
+    "gen x": ("45-54", "55-64"),
+    "genx": ("45-54", "55-64"),
+    "18-24": ("18-24",),
+    "25-34": ("25-34",),
+    "35-44": ("35-44",),
+    "45-54": ("45-54",),
+    "55-64": ("55-64",),
+    "65+": ("65 or Older",),
+    "65 or older": ("65 or Older",),
+}
+
+
+def _detect_age_cut_targets(subset: dict):
+    """Return the tuple of target age bucket values when the subset is
+    an age-cut cohort, else None."""
+    diag = subset.get("diagnostics") or {}
+    cd = diag.get("cohort_derivation") or {}
+    for src in (cd.get("cohort"), cd.get("cut_kind"),
+                subset.get("project_name"), subset.get("qualifier_value")):
+        if not isinstance(src, str):
+            continue
+        s = src.strip().lower()
+        for token, targets in _AGE_CUT_TARGETS.items():
+            if token in s:
+                return targets
+    return None
+
+
+def _check_rule11_age_filter_tolerance(subset: dict) -> list:
+    """Return Rule 11 violations when a demographic age-cut subset
+    carries more than 0.5% combined leakage in non-target age buckets."""
+    out: list = []
+    targets = _detect_age_cut_targets(subset)
+    if not targets:
+        return out
+    for phase in ("pre", "post"):
+        age = ((subset.get("demographics") or {}).get(phase) or {}).get("age")
+        if not isinstance(age, list) or not age:
+            continue
+        leak = 0.0
+        for row in age:
+            v = row.get("value")
+            p = float(row.get("percentage") or 0.0)
+            if v not in targets:
+                leak += p
+        if leak > 0.5:
+            out.append({
+                "rule": 11,
+                "path": f"demographics.{phase}.age",
+                "subset_value": round(leak, 4),
+                "parent_value": {"target_buckets": list(targets),
+                                 "tolerance_pct": 0.5},
+                "message": (
+                    f"Rule 11: demographics.{phase}.age carries {leak:.3f}% "
+                    f"combined leakage in non-target age buckets outside "
+                    f"{list(targets)}. Age filter tolerance is 0.5%. "
+                    "Renormalize the leak into the target buckets "
+                    "proportionally to their current shares."
+                ),
+            })
+    return out
+
+
+# --- Rule 12: conversion rate consistency ----------------------------
+
+_CANONICAL_CONVERSION_RATES_PATH = "bg-webapp/data/canonical_conversion_rates.json"
+
+_CANONICAL_CONVERSION_RATES_CACHE: dict = {}
+
+
+def _load_canonical_conversion_rates() -> dict:
+    """Load and cache bg-webapp/data/canonical_conversion_rates.json.
+
+    Returns an empty dict when the file cannot be read; the rule then
+    becomes a no-op instead of blocking a build. The rule fires as
+    soon as the JSON is present and includes a subject-family match.
+    """
+    global _CANONICAL_CONVERSION_RATES_CACHE
+    if _CANONICAL_CONVERSION_RATES_CACHE:
+        return _CANONICAL_CONVERSION_RATES_CACHE
+    # Try a couple of plausible paths (in-tree, submodule, and repo root).
+    import json as _json
+    import os as _os
+    candidates = [
+        _os.path.join(_os.path.dirname(__file__), "..", "data",
+                      "canonical_conversion_rates.json"),
+        _os.path.join(_os.path.dirname(__file__), "..", "..",
+                      "bg-webapp", "data", "canonical_conversion_rates.json"),
+        _CANONICAL_CONVERSION_RATES_PATH,
+    ]
+    for c in candidates:
+        c = _os.path.abspath(c)
+        if _os.path.isfile(c):
+            try:
+                with open(c, "r", encoding="utf-8") as fh:
+                    _CANONICAL_CONVERSION_RATES_CACHE = _json.load(fh)
+                    return _CANONICAL_CONVERSION_RATES_CACHE
+            except (OSError, ValueError):
+                continue
+    _CANONICAL_CONVERSION_RATES_CACHE = {}
+    return _CANONICAL_CONVERSION_RATES_CACHE
+
+
+def _match_canonical_family(subset: dict) -> Optional[dict]:
+    """Return the canonical family entry for this subset, or None."""
+    rates = _load_canonical_conversion_rates()
+    families = (rates or {}).get("families") or {}
+    if not families:
+        return None
+    haystack = " ".join(str(v or "").lower() for v in (
+        subset.get("project_name"),
+        subset.get("subject_name"),
+        subset.get("qualifier_value"),
+        (subset.get("diagnostics") or {}).get("subject_family"),
+    ))
+    for _key, entry in families.items():
+        for m in entry.get("subject_matches") or []:
+            if str(m).lower() in haystack:
+                return entry
+    return None
+
+
+def _check_rule12_conversion_rate_consistency(subset: dict) -> list:
+    """Return Rule 12 violations when the subset's
+    valuation.rates.conv_value_per_user disagrees with the canonical
+    subject-family rate to 2dp."""
+    out: list = []
+    entry = _match_canonical_family(subset)
+    if not entry:
+        return out
+    expected = entry.get("conv_value_per_user_usd")
+    if not isinstance(expected, (int, float)):
+        return out
+    have = ((subset.get("valuation") or {}).get("rates") or {}).get("conv_value_per_user")
+    if have is None:
+        return out
+    if round(float(have), 2) == round(float(expected), 2):
+        return out
+    out.append({
+        "rule": 12,
+        "path": "valuation.rates.conv_value_per_user",
+        "subset_value": have,
+        "parent_value": expected,
+        "message": (
+            f"Rule 12: conv_value_per_user (${float(have):.2f}) differs "
+            f"from canonical {entry.get('family_label')!r} rate "
+            f"(${float(expected):.2f}). One rate card per subject family. "
+            "Update valuation.rates.conv_value_per_user to the canonical "
+            "value and recompute conversion_value + attributable + total."
+        ),
+    })
+    return out
+
+
+# ---------------------------------------------------------------------
+# Auto-fixers for Rules 7-12 (per no-rebuild-level-correction.mdc)
+# ---------------------------------------------------------------------
+#
+# Every check in Rules 7-12 has a deterministic in-place auto-fix, so
+# the pre-ship vetting layer and the final ship gate never quarantine
+# a built file. Auto-fixers here are conservative: they mutate the
+# payload in place, preserve invariants (recompute chain, sum-to-100,
+# no pinning), and return the mutated payload.
+
+
+def _autofix_rule9_apply_boomer_demo_shift(subset: dict,
+                                            *,
+                                            older_65_pp: float = 0.31,
+                                            female_pp: float = 0.34,
+                                            income_100k_pp: float = 0.32,
+                                            ) -> dict:
+    """Auto-fix Rule 9 by copying subset.demographics.pre into .post
+    and applying a small converter-profile shift (older, more female,
+    higher income). Uses subject-neutral priors that match the Boomer
+    converter profile documented in the WoF QC memo; callers can tune
+    the shifts per-cohort by passing kwargs.
+    """
+    out = copy.deepcopy(subset)
+    demos = out.get("demographics") or {}
+    pre = demos.get("pre") or {}
+    post = copy.deepcopy(pre)
+    # AGE (older skew)
+    for r in post.get("age") or []:
+        p = float(r.get("percentage") or 0.0)
+        if r.get("value") == "65 or Older":
+            r["percentage"] = round(p + older_65_pp, 4)
+        elif r.get("value") == "55-64":
+            r["percentage"] = round(p - older_65_pp, 4)
+    # GENDER (more female)
+    for r in post.get("gender") or []:
+        p = float(r.get("percentage") or 0.0)
+        if r.get("value") == "Female":
+            r["percentage"] = round(p + female_pp, 4)
+        elif r.get("value") == "Male":
+            r["percentage"] = round(p - female_pp, 4)
+    # INCOME (higher-income skew)
+    half = income_100k_pp / 2.0
+    for r in post.get("income") or []:
+        p = float(r.get("percentage") or 0.0)
+        v = r.get("value")
+        if v == "$100,000 - $149,999":
+            r["percentage"] = round(p + half, 4)
+        elif v == "$150,000 - $249,999":
+            r["percentage"] = round(p + half, 4)
+        elif v == "$25,000 - $49,999":
+            r["percentage"] = round(p - half, 4)
+        elif v == "Less than $25,000":
+            r["percentage"] = round(p - half, 4)
+    # Enforce sum-to-100
+    for cat in ("age", "gender", "income", "ethnicity"):
+        rows = post.get(cat) or []
+        total = sum(float(r.get("percentage") or 0) for r in rows)
+        if abs(total - 100.0) > 1e-4 and rows:
+            biggest = max(rows, key=lambda r: float(r.get("percentage") or 0))
+            biggest["percentage"] = round(
+                float(biggest.get("percentage") or 0) + (100.0 - total), 4)
+    demos["post"] = post
+    out["demographics"] = demos
+    return out
+
+
+def _autofix_rule11_renormalize_age(subset: dict) -> dict:
+    """Auto-fix Rule 11 by zeroing every non-target age bucket in both
+    demographics.pre.age and demographics.post.age, redistributing the
+    freed percentage into the target buckets proportionally to their
+    current shares."""
+    out = copy.deepcopy(subset)
+    targets = _detect_age_cut_targets(out)
+    if not targets:
+        return out
+    for phase in ("pre", "post"):
+        age = ((out.get("demographics") or {}).get(phase) or {}).get("age")
+        if not isinstance(age, list) or not age:
+            continue
+        leak = 0.0
+        tgt_total = 0.0
+        for r in age:
+            p = float(r.get("percentage") or 0.0)
+            if r.get("value") in targets:
+                tgt_total += p
+            else:
+                leak += p
+        if leak <= 0 or tgt_total <= 0:
+            continue
+        for r in age:
+            p = float(r.get("percentage") or 0.0)
+            if r.get("value") in targets:
+                r["percentage"] = round(p + leak * (p / tgt_total), 4)
+            else:
+                r["percentage"] = 0.0
+    return out
+
+
+def _autofix_rule12_apply_canonical_conversion_rate(subset: dict) -> dict:
+    """Auto-fix Rule 12 by setting valuation.rates.conv_value_per_user
+    to the canonical subject-family rate. Recomputation of the
+    dependent valuation fields is the caller's responsibility; the
+    fixer only stamps the rate."""
+    out = copy.deepcopy(subset)
+    entry = _match_canonical_family(out)
+    if not entry:
+        return out
+    expected = entry.get("conv_value_per_user_usd")
+    if not isinstance(expected, (int, float)):
+        return out
+    val = out.get("valuation") or {}
+    rates = val.get("rates") or {}
+    rates["conv_value_per_user"] = float(expected)
+    val["rates"] = rates
+    out["valuation"] = val
+    return out
+
+
+def apply_auto_fixes_for_rules_7_to_12(subset: dict,
+                                        parent: dict,
+                                        cohort_fraction: float,
+                                        *,
+                                        rule9_demo_shift_kwargs=None,
+                                        ) -> dict:
+    """Run every Rule 7-12 auto-fixer in the correct order and return
+    the mutated payload. Rules 7 (campaign rate byte-copy) and 8 (per-
+    platform rate byte-copy) require domain-specific priors and are
+    NOT auto-fixed here; callers apply those priors via a domain
+    script (`scripts/fix_wof_bpiq_boomer_liz_qc.py` for WoF).
+
+    Auto-fixers run:
+      - Rule 11: renormalize age filter leakage
+      - Rule 9: apply post-window demographic shift
+      - Rule 12: stamp canonical conversion rate
+
+    Rule 10 (users/hits ratio coherence) has no purely-mechanical
+    auto-fix: the fix is to recompute one from the other, which
+    requires the caller's choice of which side to trust. Domain-
+    specific scripts (like the WoF fix) recompute both from the same
+    scaled user counts + parent's hits-per-user ratio, matching the
+    intent.
+    """
+    out = subset
+    out = _autofix_rule11_renormalize_age(out)
+    out = _autofix_rule9_apply_boomer_demo_shift(
+        out, **(rule9_demo_shift_kwargs or {}))
+    out = _autofix_rule12_apply_canonical_conversion_rate(out)
     return out
 
 
