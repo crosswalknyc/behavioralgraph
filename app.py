@@ -48463,6 +48463,70 @@ def _sg_intersection_pins(hay):
     return pins, parts
 
 
+# 2026-09-08 (Jenna): the intersection guard misfired on "Cut this
+# Heavy Social Users Who Skew Female Profile by TikTok users" - the
+# haystack carried "Female" (from the parent profile's name) and "gen
+# z" (from an earlier user turn), which stacked to 2 demographic pins
+# and triggered the useless "combined or separate" clarify. But the
+# CURRENT ask is a single-brand behavioral cut ("by TikTok users"),
+# not a stacked demographic ambiguity. Two suppression rules on the
+# guard:
+#   1. First-class behavioral-cut phrasing in the CURRENT turn ("cut
+#      ... by <cohort> users/customers/subs/...", "cut ... who use/
+#      watch/stream/listen/rent/read/subscribe ...") means the user
+#      has already declared the cut dimension. Do not ask a stacked-
+#      qualifier clarify.
+#   2. If the CURRENT turn has fewer than 2 demographic pins on its
+#      own, the ambiguity lives in history (earlier turn), not in
+#      this ask. Don't re-ask a new clarify - the earlier turn either
+#      was already answered or is unrelated context.
+# Both suppressions skip only the NEW-clarify path; a follow-up that
+# says "combined" or "separate" still routes through the compound-
+# cut / separate-cuts branches below.
+_SG_IX_BEHAVIORAL_COHORT_NOUN_RE = re.compile(
+    r"\b(?:users?|customers?|subscribers?|subs|members?|fans?|"
+    r"shoppers?|viewers?|listeners?|players?|buyers?|watchers?|"
+    r"renters?|owners?|switchers?|streamers?|readers?|attendees?|"
+    r"consumers?|purchasers?|enthusiasts?|drinkers?|drivers?|"
+    r"gamers?|travelers?|voters?)\b",
+    re.IGNORECASE,
+)
+_SG_IX_BEHAVIORAL_VERB_RE = re.compile(
+    r"\bwho\s+(?:use|uses|used|watch|watches|watched|stream|streams|"
+    r"streamed|listen|listens|listened|shop|shops|shopped|buy|buys|"
+    r"bought|rent|rents|rented|read|reads|drive|drives|drove|own|"
+    r"owns|subscribe|subscribes|subscribed|attend|attends|attended)"
+    r"\b",
+    re.IGNORECASE,
+)
+_SG_IX_CUT_PREFIX_RE = re.compile(
+    r"\b(?:cut|filter|slice|carve|derive|split)\b",
+    re.IGNORECASE,
+)
+
+
+def _sg_is_behavioral_cut_ask(cur):
+    """True when the CURRENT turn is a first-class behavioral-cut ask
+    that has already declared its cut dimension (a brand, platform, or
+    behavior). Guards against parent-name descriptors ('Skew Female')
+    or historical mentions re-triggering the stacked-demographic
+    clarify."""
+    s = str(cur or '')
+    if not s or not _SG_IX_CUT_PREFIX_RE.search(s):
+        return False
+    if _SG_IX_BEHAVIORAL_VERB_RE.search(s):
+        return True
+    # "cut this X by/to <cohort> users" - noun-form cohort filter.
+    if not _SG_IX_BEHAVIORAL_COHORT_NOUN_RE.search(s):
+        return False
+    # Confirm the noun-form is paired with a "by/to/on <cohort>"
+    # clause so we're not catching a lone "cut for owners" prefix.
+    return bool(re.search(
+        r"\b(?:by|to|on|down\s+to|only|just)\s+(?:just\s+|only\s+"
+        r"|the\s+)?[a-z0-9]",
+        s, re.IGNORECASE))
+
+
 def _sg_guard_intersection(draft, text, history, allow_ask):
     hay = _sg_haystack(text, history)
     pins, parts = _sg_intersection_pins(hay)
@@ -48474,6 +48538,14 @@ def _sg_guard_intersection(draft, text, history, allow_ask):
         re.IGNORECASE))
     said_separate = bool(re.search(r"\bseparate\b", cur,
                                    re.IGNORECASE))
+    # 2026-09-08 behavioral-cut suppression (see notes above). Applies
+    # only when the user is NOT already answering an earlier clarify.
+    if not (said_combined or said_separate):
+        if _sg_is_behavioral_cut_ask(cur):
+            return None
+        cur_pins, _ = _sg_intersection_pins(cur)
+        if len(cur_pins) < 2:
+            return None
     if said_separate:
         draft['intersection_mode'] = 'separate'
         _append_identity_echo(
