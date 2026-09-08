@@ -121526,6 +121526,15 @@ https://www.instagram.com/p/..."></textarea>
             'bluecrush',
             'grinch'
         ]);
+        // Profiles forced to 100% Media / 0% everything else - as LITERAL
+        // 0%, not the "-" that CONTENT profiles render. Matched by
+        // normalized-subject startsWith so the Total Universe and every
+        // cohort/year cut collapse together. Both the display name and the
+        // underlying brand form are listed. (2026-09-08)
+        const _AUDIENCE_SHARE_FORCE_MEDIA = new Set([
+            'blairwitchadjacencies',
+            'horrorstreamingenthusiasts'
+        ]);
         function _normSubjectKeyForAudienceShare(s) {
             if (!s) return '';
             return String(s)
@@ -121662,6 +121671,24 @@ https://www.instagram.com/p/..."></textarea>
             const brandCat = String(parsed.brandCategory || '').trim().toUpperCase();
             const profileCat = _currentProfileCategory();
             let archetype = _detectAudienceShareArchetype(brandCat, profileCat);
+
+            // Per-subject FORCE MEDIA=100% override (2026-09-08). Some
+            // profiles qualify purely on media consumption (e.g. Blair Witch
+            // & Adjacencies (Horror Streaming Enthusiasts)) and should read
+            // 100% Media with the other four channels at LITERAL 0% - not the
+            // "-" the CONTENT short-circuit renders. Returning a normal share
+            // object (archetype left as-is, noOwned false) makes
+            // _renderAudienceShareBoxes print "0%" for the four and "100%"
+            // for Media. startsWith match collapses the TU + every cut.
+            const _forceMediaKey = _normSubjectKeyForAudienceShare(subjectName);
+            if (_forceMediaKey) {
+                for (const ovr of _AUDIENCE_SHARE_FORCE_MEDIA) {
+                    if (_forceMediaKey.startsWith(ovr)) {
+                        return { social: 0, search: 0, retail: 0, media: 100, owned: 0,
+                                 archetype: 'MEDIA_BRAND', noOwned: false, dataActive: false };
+                    }
+                }
+            }
 
             // 2026-06-24: per-subject opt-out of the CONTENT 100%-Media
             // short-circuit. For movie franchises in the override list,
