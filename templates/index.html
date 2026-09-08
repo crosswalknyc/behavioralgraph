@@ -5113,7 +5113,6 @@
                readability. (2026-09-08) */
             white-space: normal;
             overflow-wrap: break-word;
-            word-break: break-word;
             line-height: 1.3;
             transition: all 0.15s;
             min-width: 0;
@@ -61901,7 +61900,7 @@ https://www.instagram.com/p/..."></textarea>
                                 : '<div style="width:28px;height:28px;border-radius:50%;background:var(--bg-input);border:2px solid var(--border-color);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🤝</div>';
                             html += '<div class="profile-tree-item" data-bpiq-key="' + esc(f.key) + '" onclick="selectBpiqResult(\'' + String(f.key).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" title="' + esc(f.last_modified || '') + '" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-color);font-size:13px;">'
                                 + thumb
-                                + '<span style="flex:1;min-width:0;white-space:normal;overflow-wrap:break-word;word-break:break-word;line-height:1.3;">' + esc(f.name || f.key) + '</span>'
+                                + '<span style="flex:1;min-width:0;white-space:normal;overflow-wrap:break-word;line-height:1.3;">' + esc(f.name || f.key) + '</span>'
                                 + '</div>';
                         });
                         html += '</div>';
@@ -120659,7 +120658,7 @@ https://www.instagram.com/p/..."></textarea>
                     if (runs.length === 1) {
                         const fullName = getProfileFullName(first);
                         const isLocked = first.accessible === false;
-                        const searchLabel = `<div style="display: flex; align-items: center; gap: 0.5rem;"><span style="font-size: 0.9rem; opacity: 0.7;">${isLocked ? '🔒' : icon}</span><span style="flex: 1;">${escapeAttr(fullName)}</span><span style="font-size: 0.75rem; color: var(--text-secondary); opacity: 0.6;">${getCategoryDisplayLabel(cat)}</span></div>`;
+                        const searchLabel = `<div style="display: flex; align-items: flex-start; gap: 0.5rem;"><span style="font-size: 0.9rem; opacity: 0.7; flex-shrink: 0;">${isLocked ? '🔒' : icon}</span><span style="flex: 1; min-width: 0;"><span style="display: block;">${escapeAttr(fullName)}</span><span style="display: block; font-size: 0.7rem; color: var(--text-secondary); opacity: 0.6; margin-top: 2px;">${getCategoryDisplayLabel(cat)}</span></span></div>`;
                         html += _profileItemHtml(first, searchLabel, { skipLockIcon: true });
                     } else {
                         // Collapse multi-cut subjects to a single clickable
@@ -120668,7 +120667,7 @@ https://www.instagram.com/p/..."></textarea>
                         // cuts are accessed via the Data Cuts popover.
                         const base = _pickBaseRun(runs) || first;
                         const isLocked = base.accessible === false;
-                        const searchLabel = `<div style="display: flex; align-items: center; gap: 0.5rem;"><span style="font-size: 0.9rem; opacity: 0.7;">${isLocked ? '🔒' : icon}</span><span style="flex: 1;">${escapeAttr(subjectDisplayName)}</span><span style="font-size: 0.75rem; color: var(--text-secondary); opacity: 0.6;">${getCategoryDisplayLabel(cat)}</span></div>`;
+                        const searchLabel = `<div style="display: flex; align-items: flex-start; gap: 0.5rem;"><span style="font-size: 0.9rem; opacity: 0.7; flex-shrink: 0;">${isLocked ? '🔒' : icon}</span><span style="flex: 1; min-width: 0;"><span style="display: block;">${escapeAttr(subjectDisplayName)}</span><span style="display: block; font-size: 0.7rem; color: var(--text-secondary); opacity: 0.6; margin-top: 2px;">${getCategoryDisplayLabel(cat)}</span></span></div>`;
                         html += _profileItemHtml(base, searchLabel, { skipLockIcon: true });
                     }
                 });
