@@ -3237,6 +3237,7 @@
                     <h2>📁 Content by Category</h2>
                     <div style="display: flex; gap: 0.5rem;">
                         <button class="btn btn-small btn-secondary" onclick="loadContentFiles()">↻ Refresh</button>
+                        <button class="btn btn-small btn-secondary" onclick="auditDataCutFamilies()" title="Find data cuts whose name has drifted from their Total Universe">🧩 Audit Data Cuts</button>
                         <button class="btn btn-small btn-secondary" onclick="toggleArchiveView()">
                             <span id="archiveToggleText">📦 Show Archived</span>
                         </button>
@@ -4498,6 +4499,18 @@
                 <button class="btn btn-secondary" onclick="closeRenameModal()" style="flex: 1;">Cancel</button>
                 <button class="btn btn-success" onclick="renameFile()" style="flex: 1;">💾 Save</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Data-Cut Family Audit Modal -->
+    <div class="modal" id="familyAuditModal">
+        <div class="modal-content" style="max-width: 760px;">
+            <div class="modal-header">
+                <h2>🧩 Data-Cut Family Audit</h2>
+                <button class="modal-close" onclick="closeFamilyAuditModal()">&times;</button>
+            </div>
+            <p style="font-size:0.8rem;color:var(--text-secondary);margin:0 0 1rem;">Data cuts whose display name has drifted from their Total Universe (so they'd show up as a separate title). "Fix" re-labels each cut to "&lt;Total Universe name&gt; - &lt;cut&gt;" so it groups back under its profile.</p>
+            <div id="familyAuditBody" style="max-height:60vh;overflow-y:auto;">Loading…</div>
         </div>
     </div>
 
@@ -14193,6 +14206,57 @@
             document.getElementById('renameModal').classList.remove('show');
         }
 
+        // ============ DATA-CUT FAMILY GROUPING ============
+        // Keep a profile's data cuts labeled under their Total Universe so a
+        // display-name rename doesn't split them into separate titles.
+        function _famEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+        async function familyOfferSync(baseKey){
+            try{
+                const res = await fetch('/api/admin/family-sync', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ base_key: baseKey, apply:false }) });
+                const data = await res.json();
+                if(!data.success || !data.changes || !data.changes.length) return;
+                const n = data.changes.length;
+                if(!confirm('This profile has ' + n + ' data cut' + (n>1?'s':'') + ' whose name no longer matches the Total Universe. Rename ' + (n>1?'them':'it') + ' so ' + (n>1?'they stay':'it stays') + ' grouped under this profile?')) return;
+                const res2 = await fetch('/api/admin/family-sync', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ base_key: baseKey, apply:true }) });
+                const data2 = await res2.json();
+                if(data2.success && data2.applied){ showToast('Re-labeled ' + n + ' data cut' + (n>1?'s':'') + ' to match'); loadContentFiles(); }
+                else { showToast((data2 && data2.error) || 'Could not sync data cuts', true); }
+            }catch(e){ console.error('family sync error', e); }
+        }
+
+        function closeFamilyAuditModal(){ document.getElementById('familyAuditModal').classList.remove('show'); }
+
+        async function auditDataCutFamilies(){
+            const modal = document.getElementById('familyAuditModal');
+            const body = document.getElementById('familyAuditBody');
+            modal.classList.add('show');
+            body.innerHTML = 'Scanning…';
+            try{
+                const res = await fetch('/api/admin/family-audit', { credentials:'same-origin' });
+                const data = await res.json();
+                if(!data.success){ body.innerHTML = 'Error: ' + _famEsc(data.error||'failed'); return; }
+                if(!data.families || !data.families.length){ body.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);">✅ All data cuts are grouped correctly under their Total Universe.</div>'; return; }
+                body.innerHTML = data.families.map(function(f){
+                    const cuts = f.cuts.map(function(c){ return '<div style="font-size:0.72rem;color:var(--text-secondary);margin:2px 0 0 0.5rem;">• ' + _famEsc(c.current) + ' &rarr; <span style="color:var(--accent-lime);">' + _famEsc(c.suggested) + '</span></div>'; }).join('');
+                    return '<div style="border:1px solid var(--border-color);border-radius:8px;padding:0.7rem 0.8rem;margin-bottom:0.6rem;">'
+                         + '<div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;">'
+                         + '<div style="font-weight:600;font-size:0.85rem;">' + _famEsc(f.base_display) + ' <span style="color:var(--text-secondary);font-weight:400;">&mdash; ' + f.cuts.length + ' cut' + (f.cuts.length>1?'s':'') + '</span></div>'
+                         + '<button class="btn btn-small btn-success" data-basekey="' + _famEsc(f.base_key) + '" onclick="familyFixOne(this.getAttribute(\'data-basekey\'))">Fix</button>'
+                         + '</div>' + cuts + '</div>';
+                }).join('');
+            }catch(e){ body.innerHTML = 'Error: ' + _famEsc(e.message); }
+        }
+
+        async function familyFixOne(baseKey){
+            try{
+                const res = await fetch('/api/admin/family-sync', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ base_key: baseKey, apply:true }) });
+                const data = await res.json();
+                if(data.success && data.applied){ showToast('Fixed ' + (data.changes ? data.changes.length : 0) + ' cut(s)'); auditDataCutFamilies(); loadContentFiles(); }
+                else { showToast((data && data.error) || 'Nothing to fix', true); }
+            }catch(e){ showToast('Error: ' + e.message, true); }
+        }
+
         // ============ EDIT TITLE (hover + platform) ============
 
         function openEditTitleModal(fileKey) {
@@ -14435,6 +14499,9 @@
                         project_name: newDisplayName,
                         filename: newKey.split('/').pop()
                     });
+                    // Offer to relabel this profile's data cuts so a display
+                    // rename doesn't split them into separate titles.
+                    familyOfferSync(newKey);
                 } else {
                     showToast(data.error || 'Failed to rename file', true);
                 }
