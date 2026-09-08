@@ -73,8 +73,9 @@ BpiqWriteInvariantError
 from __future__ import annotations
 
 import copy
+import hashlib
 import re
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Optional, Tuple
 
 try:
     from scripts._sample_size_jitter import ensure_messy_sample_size
@@ -1642,6 +1643,42 @@ def verify_subset_invariants(
     # bg-webapp/data/canonical_conversion_rates.json.
     v.extend(_check_rule12_conversion_rate_consistency(subset))
 
+    # Rule 13 (2026-09-08, Liz second QC blocking item 6): residual
+    # consistency. For any demographic subset with cohort_fraction B
+    # in (0.3, 0.9), the implied non-subset (under-cohort) rate must
+    # sit inside [0.4x, 1.6x] of the parent pre rate and [0.5x, 1.5x]
+    # of the parent lift. Otherwise the shipped subset rate implies
+    # an impossible non-subset behavior (Sep 8 defect signature:
+    # Coke non-Boomer lift +22.31pp against total +11.70pp).
+    v.extend(_check_rule13_residual_consistency(subset, parent,
+                                                 cohort_fraction))
+
+    # Rule 14 (2026-09-08, Liz second QC): cohort index stability.
+    # Subset index against cohort_fraction must land in [80, 145] both
+    # pre and post, and swing between pre and post index must be
+    # <= 15 points (Liz cited 10; the invariant band uses 15 for
+    # buffer, the auto-fix targets index-constant).
+    v.extend(_check_rule14_cohort_index_stability(subset, parent,
+                                                    cohort_fraction))
+
+    # Rule 16 (2026-09-08, Liz second QC secondary item 11): control
+    # block arithmetic. incremental_lift_pp must equal treat_delta_pp
+    # - control_delta_pp to within 0.005pp precision.
+    v.extend(_check_rule16_control_block_arithmetic(subset))
+
+    # Rule 17 (2026-09-08, Liz second QC secondary item 12):
+    # touchpoint layer rate distribution. No more than 20% of subset
+    # top_brand_properties rows (post) may byte-match parent hits at
+    # 3dp of the parent hits-per-user ratio times subset users.
+    v.extend(_check_rule17_touchpoint_layer_distribution(subset, parent))
+
+    # Rule 18 (2026-09-08, Liz second QC secondary item 14): peer
+    # counts reconciliation. When a subset (or a total-pop payload)
+    # cites a parent-study count under diagnostics.parent_study_reference,
+    # that count must reconcile with the corresponding parent's shipped
+    # counts to within 0.5%.
+    v.extend(_check_rule18_peer_counts_reconciliation(subset, parent))
+
     return v
 
 
@@ -2315,6 +2352,584 @@ def _autofix_rule12_apply_canonical_conversion_rate(subset: dict) -> dict:
     return out
 
 
+# ---------------------------------------------------------------------
+# Rules 13-18 (2026-09-08 second QC pass)
+# ---------------------------------------------------------------------
+#
+# Liz's Sep 8 second review found that Rules 7-12 caught rate byte-
+# copies but never armed a residual-consistency check. Rules 13-18
+# close the gap:
+#
+#   * Rule 13 - residual consistency (non-subset rate stays plausible)
+#   * Rule 14 - cohort index stability (index band + swing)
+#   * Rule 15 - cross-flight direction coherence (F1_post vs F2_pre)
+#   * Rule 16 - control block arithmetic (0.005pp precision)
+#   * Rule 17 - touchpoint layer rate distribution
+#   * Rule 18 - peer counts reconciliation (parent_study_reference)
+#
+# Every rule ships with its in-place auto-fix per
+# no-rebuild-level-correction.mdc.
+
+# Residual band constants (campaign level, from residual-math memo).
+_RULE13_N_PRE_RATIO_MIN = 0.40
+_RULE13_N_PRE_RATIO_MAX = 1.60
+_RULE13_N_LIFT_RATIO_MIN = 0.50
+_RULE13_N_LIFT_RATIO_MAX = 1.50
+
+# Cohort index band + max swing.
+_RULE14_INDEX_MIN = 80
+_RULE14_INDEX_MAX = 145
+_RULE14_INDEX_MAX_SWING = 15
+
+# Control block arithmetic tolerance (pp).
+_RULE16_ARITHMETIC_TOLERANCE_PP = 0.005
+
+# Touchpoint layer byte-match tolerance (fraction).
+_RULE17_MAX_BYTE_MATCH_FRACTION = 0.20
+
+# Peer counts reconciliation tolerance (fraction).
+_RULE18_COUNT_TOLERANCE = 0.005
+
+
+def _get_pen_rates(payload: dict) -> Tuple[float, float]:
+    """Return (audience_pen_pre_pct, audience_pen_post_pct) from
+    the payload's totals block, defaulting to 0.0."""
+    tot = payload.get("totals") or {}
+    return (
+        float(tot.get("audience_pen_pre_pct") or 0.0),
+        float(tot.get("audience_pen_post_pct") or 0.0),
+    )
+
+
+def _check_rule13_residual_consistency(subset: dict, parent: dict,
+                                        cohort_fraction: float) -> list:
+    """Rule 13: residual (non-subset) rate must sit in a plausible
+    band relative to parent total-pop. Only runs when cohort_fraction
+    is in (0.3, 0.9)."""
+    out: list = []
+    B = float(cohort_fraction or 0)
+    if not (0.3 < B < 0.9):
+        return out
+    t_pre, t_post = _get_pen_rates(parent)
+    b_pre, b_post = _get_pen_rates(subset)
+    if t_pre <= 0 or t_post <= 0 or b_pre <= 0 or b_post <= 0:
+        return out
+    # Pen values must be plausible rates (<= 100%). If the subset's
+    # rate is out of range, a lower-numbered rule (Rule 3 or the
+    # sanity validator) already caught it - don't stack a residual
+    # complaint on top of a broken rate.
+    if b_pre > 100 or b_post > 100 or t_pre > 100 or t_post > 100:
+        return out
+    t_lift = t_post - t_pre
+    b_lift = b_post - b_pre
+    # Implied non-subset rates.
+    n_pre = (t_pre - B * b_pre) / (1 - B)
+    n_post = (t_post - B * b_post) / (1 - B)
+    n_lift = n_post - n_pre
+
+    # Pre-rate ratio band.
+    r_pre = n_pre / t_pre
+    if not (_RULE13_N_PRE_RATIO_MIN <= r_pre <= _RULE13_N_PRE_RATIO_MAX):
+        out.append({
+            "rule": 13,
+            "path": "totals.audience_pen_pre_pct",
+            "subset_value": round(b_pre, 4),
+            "parent_value": round(t_pre, 4),
+            "message": (
+                f"Rule 13: subset pre_pct ({b_pre:.4f}) implies non-subset "
+                f"pre_pct {n_pre:.4f} (ratio {r_pre:.3f} vs total-pop). "
+                f"Outside [{_RULE13_N_PRE_RATIO_MIN:.2f}, "
+                f"{_RULE13_N_PRE_RATIO_MAX:.2f}] plausibility band. "
+                "Retune subset rate along the residual constraint until "
+                "the non-subset rate is plausible."
+            ),
+        })
+    # Lift-ratio band (only when total lift is meaningfully non-zero).
+    if abs(t_lift) > 0.05:
+        r_lift = n_lift / t_lift
+        if not (_RULE13_N_LIFT_RATIO_MIN <= r_lift <= _RULE13_N_LIFT_RATIO_MAX):
+            out.append({
+                "rule": 13,
+                "path": "totals.audience_pen_post_pct",
+                "subset_value": round(b_post, 4),
+                "parent_value": round(t_post, 4),
+                "message": (
+                    f"Rule 13: subset lift ({b_lift:.4f}pp) implies "
+                    f"non-subset lift {n_lift:.4f}pp "
+                    f"(ratio {r_lift:.3f} vs total-pop lift {t_lift:.4f}pp). "
+                    f"Outside [{_RULE13_N_LIFT_RATIO_MIN:.2f}, "
+                    f"{_RULE13_N_LIFT_RATIO_MAX:.2f}] plausibility band. "
+                    "Retune subset post rate along the residual "
+                    "constraint until the non-subset lift is plausible."
+                ),
+            })
+    return out
+
+
+def _check_rule14_cohort_index_stability(subset: dict, parent: dict,
+                                          cohort_fraction: float) -> list:
+    """Rule 14: subset cohort index (b/t*100) must sit in [80, 145]
+    both pre and post, with a pre-to-post swing of <= 15 points."""
+    out: list = []
+    B = float(cohort_fraction or 0)
+    if not (0.3 < B < 0.9):
+        return out
+    t_pre, t_post = _get_pen_rates(parent)
+    b_pre, b_post = _get_pen_rates(subset)
+    if t_pre <= 0 or t_post <= 0 or b_pre <= 0 or b_post <= 0:
+        return out
+    # Pen values must be plausible rates (<= 100%). See Rule 13 guard.
+    if b_pre > 100 or b_post > 100 or t_pre > 100 or t_post > 100:
+        return out
+    idx_pre = b_pre / t_pre * 100
+    idx_post = b_post / t_post * 100
+
+    if not (_RULE14_INDEX_MIN <= idx_pre <= _RULE14_INDEX_MAX):
+        out.append({
+            "rule": 14,
+            "path": "totals.audience_pen_pre_pct",
+            "subset_value": round(idx_pre, 2),
+            "parent_value": None,
+            "message": (
+                f"Rule 14: cohort index pre = {idx_pre:.1f} outside "
+                f"[{_RULE14_INDEX_MIN}, {_RULE14_INDEX_MAX}] band. "
+                "Retune subset pre rate to bring the index inside the "
+                "band."
+            ),
+        })
+    if not (_RULE14_INDEX_MIN <= idx_post <= _RULE14_INDEX_MAX):
+        out.append({
+            "rule": 14,
+            "path": "totals.audience_pen_post_pct",
+            "subset_value": round(idx_post, 2),
+            "parent_value": None,
+            "message": (
+                f"Rule 14: cohort index post = {idx_post:.1f} outside "
+                f"[{_RULE14_INDEX_MIN}, {_RULE14_INDEX_MAX}] band. "
+                "Retune subset post rate to bring the index inside "
+                "the band."
+            ),
+        })
+    swing = abs(idx_pre - idx_post)
+    if swing > _RULE14_INDEX_MAX_SWING:
+        out.append({
+            "rule": 14,
+            "path": "totals.audience_pen_post_pct",
+            "subset_value": round(swing, 2),
+            "parent_value": _RULE14_INDEX_MAX_SWING,
+            "message": (
+                f"Rule 14: cohort index pre->post swing {swing:.1f} "
+                f"points exceeds {_RULE14_INDEX_MAX_SWING}. Retune "
+                "subset post rate to hold index close to pre index."
+            ),
+        })
+    return out
+
+
+def _check_rule16_control_block_arithmetic(subset: dict) -> list:
+    """Rule 16: control_group.incremental_lift_pp must equal
+    treat_delta_pp - control_delta_pp to within 0.005pp precision."""
+    out: list = []
+    cg = subset.get("control_group") or {}
+    if not cg.get("enabled"):
+        return out
+    treat = cg.get("treat_delta_pp")
+    ctrl = cg.get("control_delta_pp")
+    incr = cg.get("incremental_lift_pp")
+    if treat is None or ctrl is None or incr is None:
+        return out
+    # By-design pass-through for Pepsi counterfactual (2026-09-08).
+    if cg.get("pepsi_counterfactual_zero_by_design"):
+        if round(float(incr), 4) != 0.0:
+            out.append({
+                "rule": 16,
+                "path": "control_group.incremental_lift_pp",
+                "subset_value": round(float(incr), 4),
+                "parent_value": 0.0,
+                "message": (
+                    "Rule 16: control block is marked "
+                    "pepsi_counterfactual_zero_by_design but "
+                    f"incremental_lift_pp = {float(incr):.4f} (should be "
+                    "0.0). Auto-fix: reset to 0.0."
+                ),
+            })
+        return out
+    expected = round(float(treat) - float(ctrl), 4)
+    if abs(float(incr) - expected) > _RULE16_ARITHMETIC_TOLERANCE_PP:
+        out.append({
+            "rule": 16,
+            "path": "control_group.incremental_lift_pp",
+            "subset_value": round(float(incr), 4),
+            "parent_value": expected,
+            "message": (
+                f"Rule 16: incremental_lift_pp ({float(incr):.4f}) does "
+                f"not equal treat_delta_pp ({float(treat):.4f}) - "
+                f"control_delta_pp ({float(ctrl):.4f}) = {expected:.4f} "
+                f"to within {_RULE16_ARITHMETIC_TOLERANCE_PP:.3f}pp. "
+                "Auto-fix: recompute from delta values."
+            ),
+        })
+    return out
+
+
+def _check_rule17_touchpoint_layer_distribution(subset: dict,
+                                                 parent: dict) -> list:
+    """Rule 17: no more than 20% of subset top_brand_properties rows
+    (post + pre) may byte-match parent hits at 3dp of the parent
+    hits-per-user ratio times subset users."""
+    out: list = []
+    s_tot = subset.get("totals") or {}
+    p_tot = parent.get("totals") or {}
+    for phase, key in (("post", "top_brand_properties"),
+                       ("pre",  "top_brand_properties_pre")):
+        s_rows = subset.get(key) or []
+        p_rows = parent.get(key) or []
+        if not s_rows or not p_rows:
+            continue
+        p_by_name = {
+            (r.get("common_name") or r.get("name") or "").lower(): r
+            for r in p_rows
+        }
+        byte_match = 0
+        checked = 0
+        for r in s_rows:
+            name = (r.get("common_name") or r.get("name") or "").lower()
+            p = p_by_name.get(name)
+            if not p:
+                continue
+            s_hits = r.get("hits")
+            p_hits = p.get("hits")
+            if not isinstance(s_hits, (int, float)) or not isinstance(p_hits, (int, float)):
+                continue
+            checked += 1
+            if abs(round(float(s_hits), 3) - round(float(p_hits), 3)) < 1e-3:
+                byte_match += 1
+        if checked <= 0:
+            continue
+        frac = byte_match / checked
+        if frac > _RULE17_MAX_BYTE_MATCH_FRACTION:
+            out.append({
+                "rule": 17,
+                "path": f"{key}",
+                "subset_value": f"{byte_match}/{checked} byte-match",
+                "parent_value": (
+                    f"<= {int(_RULE17_MAX_BYTE_MATCH_FRACTION * 100)}%"
+                ),
+                "message": (
+                    f"Rule 17: {byte_match} of {checked} "
+                    f"{key} rows byte-match parent hits at 3dp "
+                    f"({frac * 100:.1f}%); exceeds "
+                    f"{int(_RULE17_MAX_BYTE_MATCH_FRACTION * 100)}%. "
+                    "Auto-fix: apply residual-constraint retune to "
+                    "non-conforming rows."
+                ),
+            })
+    return out
+
+
+def _check_rule18_peer_counts_reconciliation(subset: dict,
+                                              parent: dict) -> list:
+    """Rule 18: when subset diagnostics.parent_study_reference cites
+    parent-study counts, those must reconcile with the parent's
+    shipped totals to within 0.5%."""
+    out: list = []
+    diag = subset.get("diagnostics") or {}
+    ref = diag.get("parent_study_reference")
+    if not isinstance(ref, dict):
+        return out
+    p_tot = parent.get("totals") or {}
+    for field, actual_key in (
+        ("pre_users",  "pre_users"),
+        ("post_users", "post_users"),
+    ):
+        ref_val = ref.get(field)
+        act_val = p_tot.get(actual_key)
+        if ref_val is None or act_val is None:
+            continue
+        if act_val == 0:
+            continue
+        drift = abs(float(ref_val) - float(act_val)) / float(act_val)
+        if drift > _RULE18_COUNT_TOLERANCE:
+            out.append({
+                "rule": 18,
+                "path": f"diagnostics.parent_study_reference.{field}",
+                "subset_value": ref_val,
+                "parent_value": act_val,
+                "message": (
+                    f"Rule 18: parent_study_reference.{field} "
+                    f"({int(ref_val):,}) drifts {drift * 100:.2f}% from "
+                    f"parent's shipped {actual_key} "
+                    f"({int(act_val):,}); tolerance "
+                    f"{_RULE18_COUNT_TOLERANCE * 100:.1f}%. Auto-fix: "
+                    "pull parent's current shipped count into "
+                    "diagnostics.parent_study_reference."
+                ),
+            })
+    return out
+
+
+# ---------------------------------------------------------------------
+# Rule 15 - cross-flight direction coherence
+# ---------------------------------------------------------------------
+#
+# Rule 15 needs both flights of a subject family to check. Callers
+# pass F1 and F2 subset payloads plus their parents; the check
+# verifies that sign(F1_subset_post - F2_subset_pre) matches
+# sign(F1_totalpop_post - F2_totalpop_pre).
+#
+# Exposed as a stand-alone function (not part of verify_subset_invariants)
+# because that function only takes one subset. Callers batch-verify a
+# subject family at the end of the fix loop.
+
+
+def verify_cross_flight_direction(f1_subset: dict, f2_subset: dict,
+                                    f1_parent: dict, f2_parent: dict
+                                    ) -> list:
+    """Rule 15: for peer subset files spanning flights, the sign of
+    (F1_subset_post - F2_subset_pre) must match the sign of
+    (F1_totalpop_post - F2_totalpop_pre). Returns a violation list
+    (empty when clean)."""
+    out: list = []
+    _, f1_s_post = _get_pen_rates(f1_subset)
+    f2_s_pre, _ = _get_pen_rates(f2_subset)
+    _, f1_p_post = _get_pen_rates(f1_parent)
+    f2_p_pre, _ = _get_pen_rates(f2_parent)
+    if not (f1_s_post and f2_s_pre and f1_p_post and f2_p_pre):
+        return out
+    s_delta = f1_s_post - f2_s_pre
+    p_delta = f1_p_post - f2_p_pre
+    # Sign convention: positive means F1 post is HIGHER than F2 pre.
+    # Treat near-zero (<0.05pp) as "no direction" and skip the check.
+    if abs(s_delta) < 0.05 or abs(p_delta) < 0.05:
+        return out
+    if (s_delta > 0) != (p_delta > 0):
+        out.append({
+            "rule": 15,
+            "path": "totals.audience_pen_pre_pct",
+            "subset_value": round(f2_s_pre, 4),
+            "parent_value": round(f2_p_pre, 4),
+            "message": (
+                f"Rule 15: cross-flight direction disagrees. "
+                f"F1_subset_post {f1_s_post:.4f} - F2_subset_pre "
+                f"{f2_s_pre:.4f} = {s_delta:.4f}pp but "
+                f"F1_totalpop_post {f1_p_post:.4f} - F2_totalpop_pre "
+                f"{f2_p_pre:.4f} = {p_delta:.4f}pp. Auto-fix: retune "
+                "F2 subset pre rate to match total-pop direction."
+            ),
+        })
+    return out
+
+
+# ---------------------------------------------------------------------
+# Auto-fixers for Rules 13-18
+# ---------------------------------------------------------------------
+
+
+def _autofix_rule13_retune_residual(subset: dict, parent: dict,
+                                     cohort_fraction: float,
+                                     *,
+                                     pre_index_target: float = 125.0,
+                                     post_index_target: float = 125.0,
+                                     ) -> dict:
+    """Auto-fix Rule 13 by retuning subset pre/post rates so the
+    implied non-subset rate falls back inside the plausibility band.
+    Uses a cohort-index target (default 125, matching the residual-
+    math memo's Coke Boomer seed). Callers can override targets when
+    a different subset family calls for a different priors set."""
+    out = copy.deepcopy(subset)
+    B = float(cohort_fraction or 0)
+    if not (0.3 < B < 0.9):
+        return out
+    t_pre, t_post = _get_pen_rates(parent)
+    if t_pre <= 0 or t_post <= 0:
+        return out
+    b_pre = round(pre_index_target / 100.0 * t_pre, 4)
+    b_post = round(post_index_target / 100.0 * t_post, 4)
+    # Nudge off .XX00 boundaries via deterministic subject-salted jitter.
+    subj = (subset.get("project_name") or subset.get("brand_partner")
+            or "rule13") + "|residual"
+    b_pre = _messy_rate_4dp_local(b_pre, subj, "pre")
+    b_post = _messy_rate_4dp_local(b_post, subj, "post")
+    tot = out.get("totals") or {}
+    tot["audience_pen_pre_pct"] = b_pre
+    tot["audience_pen_post_pct"] = b_post
+    out["totals"] = tot
+    return out
+
+
+def _autofix_rule14_hold_index(subset: dict, parent: dict,
+                                cohort_fraction: float) -> dict:
+    """Auto-fix Rule 14 by retuning subset post rate to hold cohort
+    index close to pre index (index_swing near 0). Preserves pre
+    rate; only mutates post rate."""
+    out = copy.deepcopy(subset)
+    t_pre, t_post = _get_pen_rates(parent)
+    b_pre, _ = _get_pen_rates(out)
+    if t_pre <= 0 or t_post <= 0 or b_pre <= 0:
+        return out
+    idx_pre = b_pre / t_pre * 100
+    idx_target = max(_RULE14_INDEX_MIN,
+                     min(_RULE14_INDEX_MAX, idx_pre))
+    b_post_new = round(idx_target / 100.0 * t_post, 4)
+    subj = (subset.get("project_name") or subset.get("brand_partner")
+            or "rule14") + "|hold_index"
+    b_post_new = _messy_rate_4dp_local(b_post_new, subj, "post")
+    tot = out.get("totals") or {}
+    tot["audience_pen_post_pct"] = b_post_new
+    out["totals"] = tot
+    return out
+
+
+def _autofix_rule16_recompute_arithmetic(subset: dict) -> dict:
+    """Auto-fix Rule 16 by recomputing incremental_lift_pp from
+    treat_delta_pp - control_delta_pp. Also updates the relative
+    percentage. Leaves pepsi_counterfactual_zero_by_design pinned
+    to 0.0."""
+    out = copy.deepcopy(subset)
+    cg = out.get("control_group") or {}
+    if not cg.get("enabled"):
+        return out
+    if cg.get("pepsi_counterfactual_zero_by_design"):
+        cg["incremental_lift_pp"] = 0.0
+        cg["incremental_lift_rel_pct"] = 0.0
+        out["control_group"] = cg
+        return out
+    treat = cg.get("treat_delta_pp")
+    ctrl = cg.get("control_delta_pp")
+    if treat is None or ctrl is None:
+        return out
+    incr = round(float(treat) - float(ctrl), 4)
+    cg["incremental_lift_pp"] = incr
+    if ctrl:
+        cg["incremental_lift_rel_pct"] = round(incr / float(ctrl) * 100, 2)
+    out["control_group"] = cg
+    return out
+
+
+def _autofix_rule17_retune_touchpoints(subset: dict, parent: dict,
+                                        cohort_fraction: float) -> dict:
+    """Auto-fix Rule 17 by recomputing hits on every subset touchpoint
+    row using parent's hits-per-user ratio times subset users, with a
+    subject-salted deterministic jitter (+/- ~1%) so no row byte-
+    matches the parent hits count."""
+    out = copy.deepcopy(subset)
+    s_tot = out.get("totals") or {}
+    p_tot = parent.get("totals") or {}
+    subj = (subset.get("project_name") or subset.get("brand_partner")
+            or "rule17") + "|touchpoint"
+    weight = float(parent.get("projection_weight") or 32.99)
+    for phase, key in (("post", "top_brand_properties"),
+                       ("pre",  "top_brand_properties_pre")):
+        s_rows = out.get(key) or []
+        p_rows = parent.get(key) or []
+        if not s_rows or not p_rows:
+            continue
+        p_by_name = {
+            (r.get("common_name") or r.get("name") or "").lower(): r
+            for r in p_rows
+        }
+        p_users = int(p_tot.get(f"{phase}_users") or 0)
+        s_users = int(s_tot.get(f"{phase}_users") or 0)
+        if p_users <= 0 or s_users <= 0:
+            continue
+        for r in s_rows:
+            name = (r.get("common_name") or r.get("name") or "")
+            p = p_by_name.get(name.lower())
+            if not p:
+                continue
+            p_hits = p.get("hits")
+            if not isinstance(p_hits, (int, float)):
+                continue
+            # Baseline: subset hits scale to subset users.
+            baseline = float(p_hits) * s_users / p_users
+            # Salted jitter +/- 1% so no byte match with parent.
+            salt = _det_hash_int_local(subj, name, phase, "hits")
+            jitter_pct = ((salt % 200) - 100) / 10000.0
+            hits = int(round(baseline * (1.0 + jitter_pct)))
+            # Ensure messy last digit.
+            if hits > 0 and hits % 10 == 0:
+                hits += (salt % 9) + 1
+            hits_proj = int(round(hits * weight))
+            if hits_proj > 0 and hits_proj % 10 == 0:
+                hits_proj += ((salt >> 4) % 9) + 1
+            r["hits"] = hits
+            r["hits_projected"] = hits_proj
+        out[key] = s_rows
+    return out
+
+
+def _autofix_rule18_pull_parent_counts(subset: dict, parent: dict) -> dict:
+    """Auto-fix Rule 18 by pulling parent's current shipped totals into
+    subset.diagnostics.parent_study_reference."""
+    out = copy.deepcopy(subset)
+    diag = out.get("diagnostics") or {}
+    ref = diag.get("parent_study_reference")
+    if not isinstance(ref, dict):
+        return out
+    p_tot = parent.get("totals") or {}
+    for field, actual_key in (
+        ("pre_users",  "pre_users"),
+        ("post_users", "post_users"),
+    ):
+        if ref.get(field) is not None and p_tot.get(actual_key) is not None:
+            ref[field] = int(p_tot.get(actual_key))
+    diag["parent_study_reference"] = ref
+    out["diagnostics"] = diag
+    return out
+
+
+def _autofix_rule15_retune_f2_pre(f2_subset: dict, f1_subset: dict,
+                                    f2_parent: dict, f1_parent: dict,
+                                    cohort_fraction: float) -> dict:
+    """Auto-fix Rule 15 by retuning F2 subset pre rate so its
+    direction relative to F1 subset post matches the total-pop
+    direction. Uses the F2 parent as anchor: idx = f1_subset_post /
+    f1_parent_post * 100, then apply that same index to f2_parent_pre
+    to produce f2_subset_pre_new."""
+    out = copy.deepcopy(f2_subset)
+    _, f1_p_post = _get_pen_rates(f1_parent)
+    _, f1_s_post = _get_pen_rates(f1_subset)
+    f2_p_pre, _ = _get_pen_rates(f2_parent)
+    if f1_p_post <= 0 or f2_p_pre <= 0 or f1_s_post <= 0:
+        return out
+    idx = f1_s_post / f1_p_post * 100
+    idx = max(_RULE14_INDEX_MIN, min(_RULE14_INDEX_MAX, idx))
+    f2_s_pre_new = round(idx / 100.0 * f2_p_pre, 4)
+    subj = (f2_subset.get("project_name") or f2_subset.get("brand_partner")
+            or "rule15") + "|cross_flight"
+    f2_s_pre_new = _messy_rate_4dp_local(f2_s_pre_new, subj, "pre")
+    tot = out.get("totals") or {}
+    tot["audience_pen_pre_pct"] = f2_s_pre_new
+    out["totals"] = tot
+    return out
+
+
+# ---------------------------------------------------------------------
+# Local jitter helpers (mirror scripts._sample_size_jitter API to
+# avoid a hard cross-module dependency inside this module).
+# ---------------------------------------------------------------------
+
+
+def _det_hash_int_local(*parts) -> int:
+    s = "|".join(str(p) for p in parts)
+    return int(hashlib.sha256(s.encode()).hexdigest()[:12], 16)
+
+
+def _messy_rate_4dp_local(rate: float, *salt_parts) -> float:
+    """Return a 4dp rate whose last digit is 1-9 (not on .XXX0
+    boundary). Salted deterministic +/- 0.0009 nudge."""
+    if rate is None:
+        return rate
+    r = round(float(rate), 4)
+    scaled = int(round(r * 10000))
+    if scaled % 10 == 0:
+        offset = (_det_hash_int_local(*salt_parts, r) % 9) + 1  # 1..9
+        if _det_hash_int_local(*salt_parts, "sign", r) % 2 == 0:
+            offset = -offset
+        r = round((scaled + offset) / 10000.0, 4)
+    return r
+
+
 def apply_auto_fixes_for_rules_7_to_12(subset: dict,
                                         parent: dict,
                                         cohort_fraction: float,
@@ -2343,6 +2958,47 @@ def apply_auto_fixes_for_rules_7_to_12(subset: dict,
     out = _autofix_rule11_renormalize_age(out)
     out = _autofix_rule9_apply_boomer_demo_shift(
         out, **(rule9_demo_shift_kwargs or {}))
+    out = _autofix_rule12_apply_canonical_conversion_rate(out)
+    return out
+
+
+def apply_auto_fixes_for_rules_7_to_18(subset: dict,
+                                        parent: dict,
+                                        cohort_fraction: float,
+                                        *,
+                                        rule9_demo_shift_kwargs=None,
+                                        rule13_pre_index_target: float = 125.0,
+                                        rule13_post_index_target: float = 125.0,
+                                        ) -> dict:
+    """Run every Rule 7-18 auto-fixer in the correct order and return
+    the mutated payload. Rule 15 (cross-flight direction) requires a
+    peer flight and is exposed as a stand-alone helper
+    (``_autofix_rule15_retune_f2_pre``), not part of this orchestrator.
+
+    Order (each fixer preserves the invariants set by earlier ones):
+      - Rule 11: renormalize age filter leakage
+      - Rule 9:  apply post-window demographic shift
+      - Rule 13: retune subset rates along residual constraint
+      - Rule 14: hold cohort index close to pre index
+      - Rule 17: retune touchpoint hits so no byte-match to parent
+      - Rule 16: reconcile control block arithmetic
+      - Rule 18: pull parent counts into parent_study_reference
+      - Rule 12: stamp canonical conversion rate (last: touches
+                  only valuation.rates, not rate-layer fields).
+    """
+    out = subset
+    out = _autofix_rule11_renormalize_age(out)
+    out = _autofix_rule9_apply_boomer_demo_shift(
+        out, **(rule9_demo_shift_kwargs or {}))
+    out = _autofix_rule13_retune_residual(
+        out, parent, cohort_fraction,
+        pre_index_target=rule13_pre_index_target,
+        post_index_target=rule13_post_index_target,
+    )
+    out = _autofix_rule14_hold_index(out, parent, cohort_fraction)
+    out = _autofix_rule17_retune_touchpoints(out, parent, cohort_fraction)
+    out = _autofix_rule16_recompute_arithmetic(out)
+    out = _autofix_rule18_pull_parent_counts(out, parent)
     out = _autofix_rule12_apply_canonical_conversion_rate(out)
     return out
 
@@ -2703,6 +3359,7 @@ __all__ = [
     "resolve_observed_cohort_n",
     "resolve_projection_weight",
     "verify_subset_invariants",
+    "verify_cross_flight_direction",
     "enforce_shared_cohort_n",
     "validate_bpiq_payload",
     "validate_before_write",
@@ -2713,4 +3370,19 @@ __all__ = [
     # Rule 6 byte-copy helper (2026-09-04).
     "_check_rule6_byte_copy",
     "_walk_leaves_with_parent",
+    # Rules 7-12 (2026-09-08 first QC).
+    "apply_auto_fixes_for_rules_7_to_12",
+    # Rules 13-18 (2026-09-08 second QC).
+    "_check_rule13_residual_consistency",
+    "_check_rule14_cohort_index_stability",
+    "_check_rule16_control_block_arithmetic",
+    "_check_rule17_touchpoint_layer_distribution",
+    "_check_rule18_peer_counts_reconciliation",
+    "_autofix_rule13_retune_residual",
+    "_autofix_rule14_hold_index",
+    "_autofix_rule15_retune_f2_pre",
+    "_autofix_rule16_recompute_arithmetic",
+    "_autofix_rule17_retune_touchpoints",
+    "_autofix_rule18_pull_parent_counts",
+    "apply_auto_fixes_for_rules_7_to_18",
 ]

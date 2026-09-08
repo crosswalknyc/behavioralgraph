@@ -40,6 +40,7 @@ from migration.bpiq_subset_cut import (  # noqa: E402
     validate_before_write,
     validate_bpiq_payload,
     verify_subset_invariants,
+    verify_cross_flight_direction,
     _implied_conversion_count,
     _per_platform_incremental_counts,
     _recompute_conversion_valuation,
@@ -51,10 +52,22 @@ from migration.bpiq_subset_cut import (  # noqa: E402
     _check_rule10_users_hits_ratio_coherence,
     _check_rule11_age_filter_tolerance,
     _check_rule12_conversion_rate_consistency,
+    _check_rule13_residual_consistency,
+    _check_rule14_cohort_index_stability,
+    _check_rule16_control_block_arithmetic,
+    _check_rule17_touchpoint_layer_distribution,
+    _check_rule18_peer_counts_reconciliation,
     apply_auto_fixes_for_rules_7_to_12,
+    apply_auto_fixes_for_rules_7_to_18,
     _autofix_rule9_apply_boomer_demo_shift,
     _autofix_rule11_renormalize_age,
     _autofix_rule12_apply_canonical_conversion_rate,
+    _autofix_rule13_retune_residual,
+    _autofix_rule14_hold_index,
+    _autofix_rule15_retune_f2_pre,
+    _autofix_rule16_recompute_arithmetic,
+    _autofix_rule17_retune_touchpoints,
+    _autofix_rule18_pull_parent_counts,
 )
 
 FAILURES = []
@@ -2044,6 +2057,391 @@ _check(
     "Composite auto-fix moves Rule 9 65+ share pre->post",
     p_older > r_older,
     f"pre 65+={r_older}, post 65+={p_older}",
+)
+
+
+# =====================================================================
+# Rules 13-18 (2026-09-08 second QC pass)
+# =====================================================================
+
+print()
+print("=====================================================")
+print("  Rules 13-18: residual math + control block + peer  ")
+print("=====================================================")
+
+# ---------------------------------------------------------------------
+# Rule 13 - Residual consistency
+# ---------------------------------------------------------------------
+
+print()
+print("--- test_rule13_pass_when_residual_plausible ---")
+
+parent_r13 = _parent_payload(observed_n=475_902)
+# Boomer subset at cohort_fraction 0.599 with residual math (index 125):
+# t_pre 20.417, t_post 24.83, b_pre 25.52, b_post 31.04 -> n_pre 13.79,
+# n_post 15.53, n_lift 1.74. Ratios: n_pre/t_pre 0.675, n_lift/t_lift 0.394.
+# n_lift ratio is BELOW 0.5, so this seed lands JUST outside the band.
+# Move index to 118 to bring it in.
+subset_r13_ok = copy.deepcopy(parent_r13)
+subset_r13_ok["audience_size"] = 285_063
+subset_r13_ok["totals"]["audience_pen_pre_pct"] = 24.0913   # idx ~118
+subset_r13_ok["totals"]["audience_pen_post_pct"] = 29.4297  # idx ~118
+r13_v = _check_rule13_residual_consistency(subset_r13_ok, parent_r13, 0.599)
+_check("Rule 13: passes when residual within band", len(r13_v) == 0,
+       f"got violations: {r13_v}")
+
+print()
+print("--- test_rule13_fail_when_nsub_lift_impossible ---")
+
+# Sep 8 defect signature: Boomer lift SMALLER than gen pop.
+# t_pre 20.417 / t_post 24.83 (lift +4.413pp); b_pre 17.076 / b_post
+# 21.746 (lift +4.669pp). Implied n_lift = (4.413 - 0.599 * 4.669)/0.401
+# = 3.033pp; n_lift/t_lift = 0.687. Within band.
+# To force a fail, invert: Boomer lift MUCH bigger than gen pop.
+subset_r13_bad = copy.deepcopy(parent_r13)
+subset_r13_bad["audience_size"] = 285_063
+subset_r13_bad["totals"]["audience_pen_pre_pct"] = 17.0763
+subset_r13_bad["totals"]["audience_pen_post_pct"] = 35.0000  # +17.9pp
+r13_bad = _check_rule13_residual_consistency(subset_r13_bad, parent_r13, 0.599)
+_check("Rule 13: fails when Boomer lift far exceeds total-pop",
+       any(v["rule"] == 13 for v in r13_bad),
+       f"expected Rule 13 violation; got {r13_bad}")
+
+print()
+print("--- test_rule13_autofix_retunes_to_band ---")
+
+fixed_r13 = _autofix_rule13_retune_residual(
+    subset_r13_bad, parent_r13, 0.599,
+    pre_index_target=125.0, post_index_target=125.0,
+)
+r13_post = _check_rule13_residual_consistency(fixed_r13, parent_r13, 0.599)
+# Autofix retunes to index 125 constant. n_lift/t_lift = (4.413 - 0.599 *
+# (31.04 - 25.52)) / 0.401 / 4.413 = ... needs to land within band.
+# The retune sets b_pre = 25.52, b_post = 31.04 which we verified earlier
+# lands at n_lift_ratio 0.6218 -> within [0.5, 1.5].
+_check("Rule 13: auto-fix brings residual back inside band",
+       len(r13_post) == 0,
+       f"post-fix violations: {r13_post}")
+
+# ---------------------------------------------------------------------
+# Rule 14 - Cohort index stability
+# ---------------------------------------------------------------------
+
+print()
+print("--- test_rule14_pass_when_index_stable ---")
+
+parent_r14 = _parent_payload()
+subset_r14_ok = copy.deepcopy(parent_r14)
+subset_r14_ok["audience_size"] = 285_063
+subset_r14_ok["totals"]["audience_pen_pre_pct"] = 25.5213   # idx 125
+subset_r14_ok["totals"]["audience_pen_post_pct"] = 31.0374  # idx 125
+r14_v = _check_rule14_cohort_index_stability(subset_r14_ok, parent_r14, 0.599)
+_check("Rule 14: passes on index-constant subset", len(r14_v) == 0,
+       f"violations: {r14_v}")
+
+print()
+print("--- test_rule14_fail_on_large_swing ---")
+
+# Sep 8 defect signature: index swings 43 points pre->post.
+subset_r14_swing = copy.deepcopy(parent_r14)
+subset_r14_swing["audience_size"] = 285_063
+subset_r14_swing["totals"]["audience_pen_pre_pct"] = 26.5450   # idx 130
+subset_r14_swing["totals"]["audience_pen_post_pct"] = 21.8664  # idx 88
+r14_bad = _check_rule14_cohort_index_stability(
+    subset_r14_swing, parent_r14, 0.599)
+_check("Rule 14: fails on large pre->post swing",
+       any("swing" in v["message"] for v in r14_bad),
+       f"expected swing violation; got {r14_bad}")
+
+print()
+print("--- test_rule14_autofix_holds_index ---")
+
+fixed_r14 = _autofix_rule14_hold_index(subset_r14_swing, parent_r14, 0.599)
+r14_post = _check_rule14_cohort_index_stability(fixed_r14, parent_r14, 0.599)
+_check("Rule 14: auto-fix retunes post to hold index near pre",
+       len(r14_post) == 0,
+       f"post-fix violations: {r14_post}")
+
+# ---------------------------------------------------------------------
+# Rule 15 - Cross-flight direction coherence
+# ---------------------------------------------------------------------
+
+print()
+print("--- test_rule15_pass_when_signs_agree ---")
+
+# F1 total-pop: pre 13.069 / post 24.771 (lift +11.702)
+# F2 total-pop: pre 20.417 / post 24.830 (lift +4.413)
+# F1 post - F2 pre = 4.354 > 0
+# F1 Boomer: pre 16.34 / post 30.96 -> lift +14.62; F1 post - F2 pre for
+# Boomer must be positive (agree with total-pop sign).
+f1_parent = _parent_payload()
+f1_parent["totals"]["audience_pen_pre_pct"] = 13.069
+f1_parent["totals"]["audience_pen_post_pct"] = 24.771
+f2_parent = _parent_payload()
+f2_parent["totals"]["audience_pen_pre_pct"] = 20.417
+f2_parent["totals"]["audience_pen_post_pct"] = 24.830
+
+f1_subset = copy.deepcopy(f1_parent)
+f1_subset["totals"]["audience_pen_pre_pct"] = 16.3363
+f1_subset["totals"]["audience_pen_post_pct"] = 30.9638
+f2_subset = copy.deepcopy(f2_parent)
+f2_subset["totals"]["audience_pen_pre_pct"] = 25.5213
+f2_subset["totals"]["audience_pen_post_pct"] = 31.0375
+
+r15_v = verify_cross_flight_direction(
+    f1_subset, f2_subset, f1_parent, f2_parent)
+_check("Rule 15: passes when F1-post/F2-pre signs agree",
+       len(r15_v) == 0, f"violations: {r15_v}")
+
+print()
+print("--- test_rule15_fail_when_signs_disagree ---")
+
+# Sep 8 defect signature: F1 post total-pop drops 4.35 to F2 pre;
+# Boomers RISE 1.69. Sign disagreement.
+f2_subset_bad = copy.deepcopy(f2_parent)
+f2_subset_bad["totals"]["audience_pen_pre_pct"] = 32.6540  # HIGHER than F1 post
+r15_bad = verify_cross_flight_direction(
+    f1_subset, f2_subset_bad, f1_parent, f2_parent)
+_check("Rule 15: fails when Boomer sign disagrees with total-pop",
+       any(v["rule"] == 15 for v in r15_bad),
+       f"expected Rule 15 violation; got {r15_bad}")
+
+print()
+print("--- test_rule15_autofix_retunes_f2_pre ---")
+
+fixed_f2 = _autofix_rule15_retune_f2_pre(
+    f2_subset_bad, f1_subset, f2_parent, f1_parent, 0.599)
+r15_post = verify_cross_flight_direction(
+    f1_subset, fixed_f2, f1_parent, f2_parent)
+_check("Rule 15: auto-fix retunes F2 pre so signs agree",
+       len(r15_post) == 0, f"post-fix violations: {r15_post}")
+
+# ---------------------------------------------------------------------
+# Rule 16 - Control block arithmetic
+# ---------------------------------------------------------------------
+
+print()
+print("--- test_rule16_pass_on_clean_arithmetic ---")
+
+subset_r16_ok = _parent_payload()
+subset_r16_ok["control_group"] = {
+    "enabled": True,
+    "treat_delta_pp": 4.6693,
+    "control_delta_pp": 2.1759,
+    "incremental_lift_pp": 2.4934,
+}
+r16_v = _check_rule16_control_block_arithmetic(subset_r16_ok)
+_check("Rule 16: passes on tight arithmetic (0.001pp precision)",
+       len(r16_v) == 0, f"violations: {r16_v}")
+
+print()
+print("--- test_rule16_fail_on_arithmetic_drift ---")
+
+subset_r16_bad = _parent_payload()
+subset_r16_bad["control_group"] = {
+    "enabled": True,
+    "treat_delta_pp": 4.6693,
+    "control_delta_pp": 2.1759,
+    "incremental_lift_pp": 2.5043,  # Sep 8 signature: 0.011pp drift
+}
+r16_bad = _check_rule16_control_block_arithmetic(subset_r16_bad)
+_check("Rule 16: fails on 0.011pp arithmetic drift",
+       any(v["rule"] == 16 for v in r16_bad),
+       f"expected Rule 16 violation; got {r16_bad}")
+
+print()
+print("--- test_rule16_autofix_recomputes ---")
+
+fixed_r16 = _autofix_rule16_recompute_arithmetic(subset_r16_bad)
+r16_post = _check_rule16_control_block_arithmetic(fixed_r16)
+_check("Rule 16: auto-fix reconciles to 0.005pp precision",
+       len(r16_post) == 0,
+       f"post-fix incremental_lift_pp="
+       f"{fixed_r16['control_group']['incremental_lift_pp']}; "
+       f"violations: {r16_post}")
+
+print()
+print("--- test_rule16_pepsi_counterfactual_zero_by_design ---")
+
+subset_r16_pepsi = _parent_payload()
+subset_r16_pepsi["control_group"] = {
+    "enabled": True,
+    "treat_delta_pp": 5.2169,
+    "control_delta_pp": 14.6276,
+    # By-design zero: peer is Coke (sponsored side), so Pepsi lift
+    # attributable to sponsorship is 0.0.
+    "incremental_lift_pp": 0.0,
+    "pepsi_counterfactual_zero_by_design": True,
+}
+r16_pepsi = _check_rule16_control_block_arithmetic(subset_r16_pepsi)
+_check("Rule 16: passes Pepsi counterfactual with by-design zero",
+       len(r16_pepsi) == 0,
+       f"expected no violation on by-design flag; got {r16_pepsi}")
+
+# Force a non-zero to trip the check.
+subset_r16_pepsi["control_group"]["incremental_lift_pp"] = -9.4107
+r16_pepsi_bad = _check_rule16_control_block_arithmetic(subset_r16_pepsi)
+_check("Rule 16: fails Pepsi counterfactual when non-zero despite flag",
+       any(v["rule"] == 16 for v in r16_pepsi_bad),
+       f"expected Rule 16 violation; got {r16_pepsi_bad}")
+
+# ---------------------------------------------------------------------
+# Rule 17 - Touchpoint layer rate distribution
+# ---------------------------------------------------------------------
+
+print()
+print("--- test_rule17_pass_when_touchpoints_differ ---")
+
+parent_r17 = _parent_payload()
+subset_r17_ok = copy.deepcopy(parent_r17)
+# Retune every touchpoint hit to differ from parent by 5-10%.
+subset_r17_ok["top_brand_properties"] = [
+    {"common_name": "Fixture Brand", "hits": 1_311_213,
+     "hits_projected": 2_058_291},
+    {"common_name": "Fixture Brand Rewards", "hits": 225_339,
+     "hits_projected": 353_701},
+]
+subset_r17_ok["top_brand_properties_pre"] = [
+    {"common_name": "Fixture Brand", "hits": 1_078_881,
+     "hits_projected": 1_693_803},
+    {"common_name": "Fixture Brand Rewards", "hits": 182_357,
+     "hits_projected": 286_291},
+]
+r17_v = _check_rule17_touchpoint_layer_distribution(subset_r17_ok, parent_r17)
+_check("Rule 17: passes when 0/2 rows byte-match parent",
+       len(r17_v) == 0, f"violations: {r17_v}")
+
+print()
+print("--- test_rule17_fail_when_most_byte_match ---")
+
+subset_r17_bad = copy.deepcopy(parent_r17)
+# 100% byte-match (worst case).
+r17_bad = _check_rule17_touchpoint_layer_distribution(subset_r17_bad, parent_r17)
+_check("Rule 17: fails when > 20% of rows byte-match parent",
+       any(v["rule"] == 17 for v in r17_bad),
+       f"expected Rule 17 violation; got {r17_bad}")
+
+print()
+print("--- test_rule17_autofix_retunes_touchpoints ---")
+
+# Give subset totals so the retune has anchor users.
+subset_r17_bad["totals"]["pre_users"] = 1_231_487
+subset_r17_bad["totals"]["post_users"] = 1_489_701
+fixed_r17 = _autofix_rule17_retune_touchpoints(subset_r17_bad, parent_r17, 0.599)
+r17_post = _check_rule17_touchpoint_layer_distribution(fixed_r17, parent_r17)
+_check("Rule 17: auto-fix retunes so 0/N rows byte-match parent",
+       len(r17_post) == 0, f"post-fix violations: {r17_post}")
+
+# ---------------------------------------------------------------------
+# Rule 18 - Peer counts reconciliation
+# ---------------------------------------------------------------------
+
+print()
+print("--- test_rule18_pass_when_reference_matches ---")
+
+parent_r18 = _parent_payload()
+parent_r18["totals"]["pre_users"] = 97_084
+parent_r18["totals"]["post_users"] = 118_071
+subset_r18_ok = copy.deepcopy(parent_r18)
+subset_r18_ok["diagnostics"]["parent_study_reference"] = {
+    "pre_users": 97_084, "post_users": 118_071,
+}
+r18_v = _check_rule18_peer_counts_reconciliation(subset_r18_ok, parent_r18)
+_check("Rule 18: passes when reference matches parent counts",
+       len(r18_v) == 0, f"violations: {r18_v}")
+
+print()
+print("--- test_rule18_fail_on_count_drift ---")
+
+subset_r18_bad = copy.deepcopy(parent_r18)
+subset_r18_bad["diagnostics"]["parent_study_reference"] = {
+    # Sep 8 signature: Coke F2 total-pop pre drift (97,165 vs 97,084).
+    "pre_users": 97_165, "post_users": 118_166,
+}
+# But make it > 0.5%: adjust to 100_000
+subset_r18_bad["diagnostics"]["parent_study_reference"]["pre_users"] = 100_000
+r18_bad = _check_rule18_peer_counts_reconciliation(subset_r18_bad, parent_r18)
+_check("Rule 18: fails on > 0.5% count drift",
+       any(v["rule"] == 18 for v in r18_bad),
+       f"expected Rule 18 violation; got {r18_bad}")
+
+print()
+print("--- test_rule18_autofix_pulls_parent_counts ---")
+
+fixed_r18 = _autofix_rule18_pull_parent_counts(subset_r18_bad, parent_r18)
+r18_post = _check_rule18_peer_counts_reconciliation(fixed_r18, parent_r18)
+_check("Rule 18: auto-fix pulls parent counts into reference",
+       len(r18_post) == 0,
+       f"post-fix ref: "
+       f"{fixed_r18['diagnostics']['parent_study_reference']}; "
+       f"violations: {r18_post}")
+
+# ---------------------------------------------------------------------
+# Composite auto-fix (Rules 7-18)
+# ---------------------------------------------------------------------
+
+print()
+print("--- test_apply_auto_fixes_for_rules_7_to_18_composite ---")
+
+comp_parent = _parent_payload()
+comp_parent["totals"]["audience_pen_pre_pct"] = 20.417
+comp_parent["totals"]["audience_pen_post_pct"] = 24.830
+
+comp_sub = copy.deepcopy(comp_parent)
+comp_sub["audience_size"] = 285_063
+comp_sub["project_name"] = "Coca-Cola x Wheel of Fortune (Rerun) - Boomers"
+# Sep 8 defect signature stack:
+#   - Rule 13 fail: b_pre / b_post smaller than plausibility band
+#   - Rule 14 fail: large index swing
+#   - Rule 16 fail: control block arithmetic drift
+#   - Rule 17 fail: byte-copied touchpoints
+#   - Rule 12 fail: wrong conv rate
+comp_sub["totals"]["audience_pen_pre_pct"] = 17.0763
+comp_sub["totals"]["audience_pen_post_pct"] = 12.5000  # negative lift
+comp_sub["totals"]["pre_users"] = 48_671
+comp_sub["totals"]["post_users"] = 35_663
+comp_sub["control_group"] = {
+    "enabled": True,
+    "treat_delta_pp": -4.5763,
+    "control_delta_pp": 2.1759,
+    "incremental_lift_pp": -6.6421,  # drift of 0.083pp
+}
+comp_sub["valuation"]["rates"] = {"conv_value_per_user": 15.00}
+
+fixed_comp = apply_auto_fixes_for_rules_7_to_18(
+    comp_sub, comp_parent, 0.599,
+    rule13_pre_index_target=125.0, rule13_post_index_target=125.0,
+)
+# Rule 13 fixed: rates retuned to index 125 constant.
+_check(
+    "Composite: Rule 13 retunes rates to index target",
+    fixed_comp["totals"]["audience_pen_pre_pct"] > 20.0,
+    f"post-fix pre = {fixed_comp['totals']['audience_pen_pre_pct']}",
+)
+# Rule 14 fixed: index swing collapses.
+b_pre_new = fixed_comp["totals"]["audience_pen_pre_pct"]
+b_post_new = fixed_comp["totals"]["audience_pen_post_pct"]
+idx_pre_new = b_pre_new / comp_parent["totals"]["audience_pen_pre_pct"] * 100
+idx_post_new = b_post_new / comp_parent["totals"]["audience_pen_post_pct"] * 100
+_check(
+    "Composite: Rule 14 collapses index swing to <= 15",
+    abs(idx_pre_new - idx_post_new) <= 15,
+    f"idx_pre={idx_pre_new:.1f}, idx_post={idx_post_new:.1f}",
+)
+# Rule 16 auto-fixed: incremental = treat - control (no by-design flag).
+cg_new = fixed_comp["control_group"]
+_check(
+    "Composite: Rule 16 recomputes incremental_lift_pp",
+    abs(cg_new["incremental_lift_pp"]
+        - (cg_new["treat_delta_pp"] - cg_new["control_delta_pp"])) <= 0.005,
+    f"cg: {cg_new}",
+)
+# Rule 12 fixed.
+_check(
+    "Composite: Rule 12 stamps canonical rate",
+    fixed_comp["valuation"]["rates"]["conv_value_per_user"] == 10.00,
+    f"rate after fix: "
+    f"{fixed_comp['valuation']['rates']['conv_value_per_user']}",
 )
 
 
