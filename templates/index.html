@@ -137288,6 +137288,21 @@ https://www.instagram.com/p/..."></textarea>
             return String(Math.round(Number(v)));
         }
 
+        // 2026-09-08 (Jenna): trim trailing zeros on percentage cells
+        // in every CSV export so the file reads truthful ('18%' not
+        // '18.00%', '0.2%' not '0.2000%') while preserving up to maxDp
+        // decimals when they carry information. Empty input returns ''
+        // so downstream code that concatenates it stays clean.
+        function _fmtPctTrim(v, maxDp) {
+            if (v == null || v === '' || !isFinite(v)) return '';
+            const dp = (typeof maxDp === 'number' && maxDp >= 0) ? maxDp : 4;
+            let s = Number(v).toFixed(dp);
+            if (s.indexOf('.') !== -1) {
+                s = s.replace(/0+$/, '').replace(/\.$/, '');
+            }
+            return s;
+        }
+
         function exportSpotlightCSV(category) {
             if (!currentDashboardData || !currentProfileData) return;
             
@@ -145252,15 +145267,16 @@ https://www.instagram.com/p/..."></textarea>
                         csvContent += `Label,Profile %,Gen Pop %,Index${_pageDemoCohortHead}\n`;
                         const labelFn = (catKey === 'sexual_orientation') ? soDisplayLabel : (l) => l;
                         Object.keys(data).forEach(label => {
-                            const val = (parseFloat(data[label]) || 0).toFixed(2);
+                            const valNum = parseFloat(data[label]) || 0;
+                            const val = _fmtPctTrim(valNum, 2);
                             const gpNum = parseFloat(genPop[label]) || 0;
-                            const gp = gpNum.toFixed(2);
+                            const gp = _fmtPctTrim(gpNum, 2);
                             const idx = Math.round(parseFloat(index[label]) || 100);
                             let _pageDemoCohortCells = '';
                             _pageDemoCohorts.forEach(function (c) {
                                 const cPct = _cohortDemoPct(c, catKey, label);
                                 const cIdx = _cohortDemoIndex(c, catKey, label, gpNum);
-                                _pageDemoCohortCells += ',' + (cPct == null ? '' : cPct.toFixed(2) + '%');
+                                _pageDemoCohortCells += ',' + (cPct == null ? '' : _fmtPctTrim(cPct, 2) + '%');
                                 _pageDemoCohortCells += ',' + (cIdx === '' ? '' : cIdx);
                             });
                             csvContent += `"${labelFn(label)}",${val}%,${gp}%,${idx}${_pageDemoCohortCells}\n`;
@@ -145282,15 +145298,24 @@ https://www.instagram.com/p/..."></textarea>
                     _pageBehCohortHead += ',' + _csvSafeHeader(c.label, 'Index');
                 });
 
+                // 2026-09-08 (Jenna): genPopBehavioral is the authoritative
+                // Gen Pop source for behavioral rows. item.genPopPct is
+                // empty on most profiles so the prior read produced
+                // Gen Pop = 0.00% across every row.
+                const _etcGpBehavioral = currentDashboardData.genPopBehavioral || {};
                 Object.keys(behavioral).forEach(category => {
                     const items = behavioral[category] || [];
                     if (items.length > 0) {
+                        const _etcGpCatMap = _etcGpBehavioral[category]
+                            || _etcGpBehavioral[String(category).toUpperCase()]
+                            || {};
                         csvContent += `${category.toUpperCase()}\n`;
                         csvContent += `Name,Audience %,Audience Numbers,Gen Pop %,Gen Pop Numbers,Index${_pageBehCohortHead}\n`;
                         items.forEach(item => {
-                            const audiencePct = (item.pct || 0).toFixed(2);
+                            const audiencePct = _fmtPctTrim(item.pct || 0, 2);
                             const audienceNumbers = (item.projection != null && item.projection !== '') ? Math.round(Number(item.projection)) : Math.round(((item.pct || 0) / 100) * US_POP);
-                            const genPopPct = item.genPopPct || 0;
+                            const _gpFromMap = parseFloat(_etcGpCatMap[item.name]);
+                            const genPopPct = isFinite(_gpFromMap) ? _gpFromMap : (parseFloat(item.genPopPct) || 0);
                             const genPopNumbers = (item.genPopProjection != null && item.genPopProjection !== '') ? Math.round(Number(item.genPopProjection)) : Math.round((genPopPct / 100) * US_POP);
                             const index = item.index || 0;
                             let _pageBehCohortCells = '';
@@ -145304,11 +145329,11 @@ https://www.instagram.com/p/..."></textarea>
                                 if (cIdx === '' && cPct != null && genPopPct > 0) {
                                     cIdx = Math.round((cPct / genPopPct) * 100);
                                 }
-                                _pageBehCohortCells += ',' + (cPct == null ? '' : cPct.toFixed(2) + '%');
+                                _pageBehCohortCells += ',' + (cPct == null ? '' : _fmtPctTrim(cPct, 2) + '%');
                                 _pageBehCohortCells += ',' + (cProj == null ? '' : cProj);
                                 _pageBehCohortCells += ',' + (cIdx === '' ? '' : cIdx);
                             });
-                            csvContent += `"${item.name}",${audiencePct}%,${audienceNumbers},${genPopPct.toFixed(2)}%,${genPopNumbers},${index}${_pageBehCohortCells}\n`;
+                            csvContent += `"${item.name}",${audiencePct}%,${audienceNumbers},${_fmtPctTrim(genPopPct, 2)}%,${genPopNumbers},${index}${_pageBehCohortCells}\n`;
                         });
                         csvContent += `\n`;
                     }
@@ -145328,9 +145353,9 @@ https://www.instagram.com/p/..."></textarea>
                 csvContent += `Interest,Audience %,Gen Pop %,Index${_pageIntCohortHead}\n`;
                 Object.entries(interests).forEach(([name, vals]) => {
                     const pctNum = (vals.pct != null ? Number(vals.pct) : 0);
-                    const pct = pctNum.toFixed(2);
+                    const pct = _fmtPctTrim(pctNum, 2);
                     const gpPctNum = (vals.genPopPct != null ? Number(vals.genPopPct) : 0);
-                    const genPopPct = gpPctNum.toFixed(2);
+                    const genPopPct = _fmtPctTrim(gpPctNum, 2);
                     const index = vals.index != null ? vals.index : 0;
                     let _pageIntCohortCells = '';
                     _pageIntCohorts.forEach(function (c) {
@@ -145340,7 +145365,7 @@ https://www.instagram.com/p/..."></textarea>
                         if (cIdx === '' && cPct != null && gpPctNum > 0) {
                             cIdx = Math.round((cPct / gpPctNum) * 100);
                         }
-                        _pageIntCohortCells += ',' + (cPct == null ? '' : cPct.toFixed(2));
+                        _pageIntCohortCells += ',' + (cPct == null ? '' : _fmtPctTrim(cPct, 2));
                         _pageIntCohortCells += ',' + (cIdx === '' ? '' : cIdx);
                     });
                     csvContent += `"${String(name).replace(/"/g, '""')}",${pct},${genPopPct},${index}${_pageIntCohortCells}\n`;
@@ -145391,10 +145416,10 @@ https://www.instagram.com/p/..."></textarea>
                         if (cIdx === '' && cPct != null && gpPctNum > 0) {
                             cIdx = Math.round((cPct / gpPctNum) * 100);
                         }
-                        _pageLocCohortCells += ',' + (cPct == null ? '' : cPct.toFixed(4) + '%');
+                        _pageLocCohortCells += ',' + (cPct == null ? '' : _fmtPctTrim(cPct, 4) + '%');
                         _pageLocCohortCells += ',' + (cIdx === '' ? '' : cIdx);
                     });
-                    csvContent += `${rank},"${normalizeDmaDisplay(loc.name)}",${(loc.pct || 0).toFixed(4)}%,${(loc.genPopPct || 0).toFixed(4)}%,${loc.index || 0}${_pageLocCohortCells}\n`;
+                    csvContent += `${rank},"${normalizeDmaDisplay(loc.name)}",${_fmtPctTrim(loc.pct || 0, 4)}%,${_fmtPctTrim(loc.genPopPct || 0, 4)}%,${loc.index || 0}${_pageLocCohortCells}\n`;
                 });
                 filename = `${profileName}_Location.csv`;
                 
@@ -145507,15 +145532,16 @@ https://www.instagram.com/p/..."></textarea>
                 csvContent += `Label,Profile %,Gen Pop %,Index${_allDemoCohortHead}\n`;
                 const labelFn = (catKey === 'sexual_orientation') ? _allSoLabel : (l) => l;
                 Object.keys(data).forEach(label => {
-                    const val = (parseFloat(data[label]) || 0).toFixed(2);
+                    const valNum = parseFloat(data[label]) || 0;
+                    const val = _fmtPctTrim(valNum, 2);
                     const gpNum = parseFloat(genPop[label]) || 0;
-                    const gp = gpNum.toFixed(2);
+                    const gp = _fmtPctTrim(gpNum, 2);
                     const idx = Math.round(parseFloat(index[label]) || 100);
                     let cohortCells = '';
                     _allCohorts.forEach(function (c) {
                         const cPct = _cohortDemoPct(c, catKey, label);
                         const cIdx = _cohortDemoIndex(c, catKey, label, gpNum);
-                        cohortCells += ',' + (cPct == null ? '' : cPct.toFixed(2) + '%');
+                        cohortCells += ',' + (cPct == null ? '' : _fmtPctTrim(cPct, 2) + '%');
                         cohortCells += ',' + (cIdx === '' ? '' : cIdx);
                     });
                     csvContent += `"${labelFn(label)}",${val}%,${gp}%,${idx}${cohortCells}\n`;
@@ -145534,17 +145560,26 @@ https://www.instagram.com/p/..."></textarea>
                 _allBehCohortHead += ',' + _csvSafeHeader(c.label, 'Numbers');
                 _allBehCohortHead += ',' + _csvSafeHeader(c.label, 'Index');
             });
+            // 2026-09-08 (Jenna): read Gen Pop from the authoritative
+            // genPopBehavioral map. item.genPopPct is empty on most
+            // profiles' behavioral items, which shipped Gen Pop = 0
+            // across every row until this fix.
+            const _eatGpBehavioral = currentDashboardData.genPopBehavioral || {};
             Object.keys(behavioral).forEach(category => {
                 const items = behavioral[category] || [];
                 if (items.length === 0) return;
+                const _eatGpCatMap = _eatGpBehavioral[category]
+                    || _eatGpBehavioral[String(category).toUpperCase()]
+                    || {};
                 csvContent += `${category.toUpperCase()}\n`;
                 csvContent += `Name,Audience %,Audience Numbers,Gen Pop %,Gen Pop Numbers,Index${_allBehCohortHead}\n`;
                 items.forEach(item => {
-                    const audiencePct = (item.pct || 0).toFixed(2);
+                    const audiencePct = _fmtPctTrim(item.pct || 0, 2);
                     const audienceNumbers = (item.projection != null && item.projection !== '')
                         ? Math.round(Number(item.projection))
                         : Math.round(((item.pct || 0) / 100) * US_POP);
-                    const genPopPct = item.genPopPct || 0;
+                    const _gpFromMap = parseFloat(_eatGpCatMap[item.name]);
+                    const genPopPct = isFinite(_gpFromMap) ? _gpFromMap : (parseFloat(item.genPopPct) || 0);
                     const genPopNumbers = (item.genPopProjection != null && item.genPopProjection !== '')
                         ? Math.round(Number(item.genPopProjection))
                         : Math.round((genPopPct / 100) * US_POP);
@@ -145560,11 +145595,11 @@ https://www.instagram.com/p/..."></textarea>
                         if (cIdx === '' && cPct != null && genPopPct > 0) {
                             cIdx = Math.round((cPct / genPopPct) * 100);
                         }
-                        cohortCells += ',' + (cPct == null ? '' : cPct.toFixed(2) + '%');
+                        cohortCells += ',' + (cPct == null ? '' : _fmtPctTrim(cPct, 2) + '%');
                         cohortCells += ',' + (cProj == null ? '' : cProj);
                         cohortCells += ',' + (cIdx === '' ? '' : cIdx);
                     });
-                    csvContent += `"${item.name}",${audiencePct}%,${audienceNumbers},${genPopPct.toFixed(2)}%,${genPopNumbers},${index}${cohortCells}\n`;
+                    csvContent += `"${item.name}",${audiencePct}%,${audienceNumbers},${_fmtPctTrim(genPopPct, 2)}%,${genPopNumbers},${index}${cohortCells}\n`;
                 });
                 csvContent += `\n`;
             });
@@ -145582,9 +145617,9 @@ https://www.instagram.com/p/..."></textarea>
             csvContent += `Interest,Audience %,Gen Pop %,Index${_allIntCohortHead}\n`;
             Object.entries(interests).forEach(([name, vals]) => {
                 const pctNum = (vals.pct != null ? Number(vals.pct) : 0);
-                const pct = pctNum.toFixed(2);
+                const pct = _fmtPctTrim(pctNum, 2);
                 const gpPctNum = (vals.genPopPct != null ? Number(vals.genPopPct) : 0);
-                const genPopPct = gpPctNum.toFixed(2);
+                const genPopPct = _fmtPctTrim(gpPctNum, 2);
                 const index = vals.index != null ? vals.index : 0;
                 let cohortCells = '';
                 _allCohorts.forEach(function (c) {
@@ -145594,7 +145629,7 @@ https://www.instagram.com/p/..."></textarea>
                     if (cIdx === '' && cPct != null && gpPctNum > 0) {
                         cIdx = Math.round((cPct / gpPctNum) * 100);
                     }
-                    cohortCells += ',' + (cPct == null ? '' : cPct.toFixed(2));
+                    cohortCells += ',' + (cPct == null ? '' : _fmtPctTrim(cPct, 2));
                     cohortCells += ',' + (cIdx === '' ? '' : cIdx);
                 });
                 csvContent += `"${String(name).replace(/"/g, '""')}",${pct},${genPopPct},${index}${cohortCells}\n`;
@@ -145647,10 +145682,10 @@ https://www.instagram.com/p/..."></textarea>
                     if (cIdx === '' && cPct != null && gpPctNum > 0) {
                         cIdx = Math.round((cPct / gpPctNum) * 100);
                     }
-                    cohortCells += ',' + (cPct == null ? '' : cPct.toFixed(4) + '%');
+                    cohortCells += ',' + (cPct == null ? '' : _fmtPctTrim(cPct, 4) + '%');
                     cohortCells += ',' + (cIdx === '' ? '' : cIdx);
                 });
-                csvContent += `${rank},"${normalizeDmaDisplay(loc.name)}",${(loc.pct || 0).toFixed(4)}%,${(loc.genPopPct || 0).toFixed(4)}%,${loc.index || 0}${cohortCells}\n`;
+                csvContent += `${rank},"${normalizeDmaDisplay(loc.name)}",${_fmtPctTrim(loc.pct || 0, 4)}%,${_fmtPctTrim(loc.genPopPct || 0, 4)}%,${loc.index || 0}${cohortCells}\n`;
             });
 
             // -----------------------------------------------------------
