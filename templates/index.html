@@ -5108,12 +5108,13 @@
             font-size: 0.7rem;
             color: var(--text-secondary);
             border-radius: 4px;
-            white-space: nowrap;
-            /* Long entity names no longer truncate with an ellipsis; the row
-               scrolls horizontally so the full title can be read.
-               (Cousin Liz request 2026-09-08) */
-            overflow-x: auto;
-            overflow-y: hidden;
+            /* Long entity names WRAP to fit the menu width. Utility choice
+               (Cousins Liz & Jenna): wrapping beats sideways scroll for
+               readability. (2026-09-08) */
+            white-space: normal;
+            overflow-wrap: break-word;
+            word-break: break-word;
+            line-height: 1.3;
             transition: all 0.15s;
             min-width: 0;
             max-width: 100%;
@@ -5126,25 +5127,6 @@
                by text-transform. */
             text-transform: uppercase;
         }
-
-        /* Slim horizontal scrollbar for profile names that overflow the
-           sidebar width (see overflow-x: auto above). */
-        .profile-select-item::-webkit-scrollbar { height: 5px; }
-        .profile-select-item::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.25);
-            border-radius: 3px;
-        }
-        .profile-select-item::-webkit-scrollbar-track { background: transparent; }
-
-        /* Brand Partnership sidebar: long partnership names scroll
-           sideways (same affordance as Profile IQ).
-           (Cousin Liz request 2026-09-08) */
-        .bpiq-name-scroll::-webkit-scrollbar { height: 5px; }
-        .bpiq-name-scroll::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.25);
-            border-radius: 3px;
-        }
-        .bpiq-name-scroll::-webkit-scrollbar-track { background: transparent; }
 
         .profile-select-item:not(.locked) {
             color: #ffffff;
@@ -61919,7 +61901,7 @@ https://www.instagram.com/p/..."></textarea>
                                 : '<div style="width:28px;height:28px;border-radius:50%;background:var(--bg-input);border:2px solid var(--border-color);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🤝</div>';
                             html += '<div class="profile-tree-item" data-bpiq-key="' + esc(f.key) + '" onclick="selectBpiqResult(\'' + String(f.key).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" title="' + esc(f.last_modified || '') + '" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-color);font-size:13px;">'
                                 + thumb
-                                + '<span class="bpiq-name-scroll" style="flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;white-space:nowrap;">' + esc(f.name || f.key) + '</span>'
+                                + '<span style="flex:1;min-width:0;white-space:normal;overflow-wrap:break-word;word-break:break-word;line-height:1.3;">' + esc(f.name || f.key) + '</span>'
                                 + '</div>';
                         });
                         html += '</div>';
