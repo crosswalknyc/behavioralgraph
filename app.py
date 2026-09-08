@@ -23744,12 +23744,23 @@ def set_profile_image():
         cache_key = profile_name.lower().strip()
         
         # Store the entry we're about to add (so we don't lose it if cache gets reloaded)
+        # 2026-09-08 (Jenna): stamp the acting admin's username onto every
+        # new upload so we can answer "who uploaded this and when" from the
+        # cache alone. Older entries stay untouched (no backfill). The
+        # `uploaded_at` field duplicates `cached_at` on new entries but
+        # exists as a stable attribution timestamp so a future
+        # cache-refresh pass that touches `cached_at` won't lose the
+        # original upload moment.
+        _uploader = (session.get('username') if session else None) or 'unknown'
+        _upload_iso = datetime.now().isoformat()
         new_entry = {
             'image_url': image_url,
             'title': profile_name,
             'source': 'custom',
             'is_custom': True,
-            'cached_at': datetime.now().isoformat()
+            'cached_at': _upload_iso,
+            'uploaded_by': _uploader,
+            'uploaded_at': _upload_iso
         }
         
         # Add to cache (in-memory)
@@ -23877,12 +23888,19 @@ def remove_profile_image():
         
         # Remove from cache
         if cache_key in profile_image_cache:
+            # 2026-09-08 (Jenna): capture prior entry so the Render access
+            # log records both the acting admin AND the original uploader
+            # of the image being removed. No new cache field is written
+            # (the entry itself is going away); attribution lives in the
+            # per-request log line.
+            _prev_entry = profile_image_cache.get(cache_key) or {}
+            _actor = (session.get('username') if session else None) or 'unknown'
             del profile_image_cache[cache_key]
             profile_image_cache_dirty = True
             saved = save_profile_image_cache(deleted_keys={cache_key})
             if not saved:
                 print(f"   ⚠️ Warning: Cache save may have failed after removing {cache_key}")
-            print(f"   ✅ Removed from cache: {cache_key}")
+            print(f"   ✅ Removed from cache: {cache_key} (by={_actor} was_uploaded_by={_prev_entry.get('uploaded_by', '?')} was_uploaded_at={_prev_entry.get('uploaded_at', _prev_entry.get('cached_at', '?'))})")
         else:
             print(f"   ℹ️ Cache key not found: {cache_key}")
         

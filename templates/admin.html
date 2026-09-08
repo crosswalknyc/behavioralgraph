@@ -8968,6 +8968,20 @@
                 
                 const data = await response.json();
                 if (data.success) {
+                    // 2026-09-08 (Jenna): record image removal from the
+                    // profile-images list view too (separate call site
+                    // from the modal-DELETE path).
+                    try {
+                        fetch('/api/track-action', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                action: 'profile_image_remove',
+                                details: profileName || ''
+                            })
+                        }).catch(() => { /* non-critical */ });
+                    } catch (_e) { /* non-critical */ }
                     alert('Image removed successfully');
                     loadProfileImages();
                 } else {
@@ -14911,6 +14925,29 @@
                     else if (isTicketSalesTracker) toastLabel = 'Ticket Sales Tracker image saved!';
                     else if (isBpiq) toastLabel = 'Brand Partnership image saved!';
                     showToast(toastLabel);
+                    // 2026-09-08 (Jenna): record image upload in the acting
+                    // admin's activity log so future audits can answer
+                    // "how often is <user> uploading images?" from
+                    // users.json. Fire-and-forget: never blocks the
+                    // modal close on failure.
+                    try {
+                        const _imgActionType = isTicketSales
+                            ? 'ticket_sales_image_upload'
+                            : (isTicketSalesTracker
+                                ? 'ticket_sales_tracker_image_upload'
+                                : (isBpiq
+                                    ? 'bpiq_image_upload'
+                                    : 'profile_image_upload'));
+                        fetch('/api/track-action', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                action: _imgActionType,
+                                details: profileName || fileKey || ''
+                            })
+                        }).catch(() => { /* non-critical */ });
+                    } catch (_e) { /* non-critical */ }
                     
                     if (!isTicketSales && !isTicketSalesTracker && !isBpiq) {
                         const purgatoryId = document.getElementById('profileImagePurgatoryId').value;
@@ -14996,6 +15033,21 @@
                 
                 if (data.success) {
                     showToast('Custom image removed');
+                    // 2026-09-08 (Jenna): record image removal in acting
+                    // admin's activity log so audits can answer
+                    // "how often is <user> removing images?" from
+                    // users.json. Fire-and-forget.
+                    try {
+                        fetch('/api/track-action', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                action: isBpiq ? 'bpiq_image_remove' : 'profile_image_remove',
+                                details: profileName || fileKey || ''
+                            })
+                        }).catch(() => { /* non-critical */ });
+                    } catch (_e) { /* non-critical */ }
                     closeProfileImageModal();
                     if (isBpiq && fileKey) {
                         updateFileRowInPlace(fileKey, fileKey, { custom_image: null });
