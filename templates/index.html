@@ -5109,8 +5109,11 @@
             color: var(--text-secondary);
             border-radius: 4px;
             white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            /* Long entity names no longer truncate with an ellipsis; the row
+               scrolls horizontally so the full title can be read.
+               (Cousin Liz request 2026-09-08) */
+            overflow-x: auto;
+            overflow-y: hidden;
             transition: all 0.15s;
             min-width: 0;
             max-width: 100%;
@@ -5123,6 +5126,15 @@
                by text-transform. */
             text-transform: uppercase;
         }
+
+        /* Slim horizontal scrollbar for profile names that overflow the
+           sidebar width (see overflow-x: auto above). */
+        .profile-select-item::-webkit-scrollbar { height: 5px; }
+        .profile-select-item::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.25);
+            border-radius: 3px;
+        }
+        .profile-select-item::-webkit-scrollbar-track { background: transparent; }
 
         .profile-select-item:not(.locked) {
             color: #ffffff;
