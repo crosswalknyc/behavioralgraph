@@ -46194,6 +46194,38 @@ def _synth_chat_interpret_prompts(user_text, chat_history=None, master_categorie
         "MS NOW in late 2025; a request for 'MSNBC' means MS NOW "
         "(existing profile 'MS NOW'). Echo the resolution in "
         "`identity_note` ('resolved to MS NOW, formerly MSNBC').\n"
+        "  * URLS AND DOMAINS (HARD RULE - Jenna 2026-09-08): a URL, "
+        "bare domain, or website is a FULLY VALID way to name the "
+        "subject. When the request is (or contains) something like "
+        "`www.heb.com`, `heb.com`, `https://www.heb.com/store-"
+        "locator/`, or the domain rides in the REQUESTER IDENTITY "
+        "CONTEXT block below as `domain: heb.com`, resolve the "
+        "domain to the underlying real-world entity and use the "
+        "CANONICAL BRAND NAME as `subject` and `resolved_title` - "
+        "NEVER the raw URL. Examples:\n"
+        "      `heb.com` or `www.heb.com`         -> HEB\n"
+        "      `wf.com`                           -> Wells Fargo\n"
+        "      `homedepot.com`                    -> The Home Depot\n"
+        "      `bofa.com`                         -> Bank of America\n"
+        "      `microsoft.com`                    -> Microsoft\n"
+        "      `walmart.com` or `www.walmart.com` -> Walmart\n"
+        "      `target.com`                       -> Target\n"
+        "      `tesla.com`                        -> Tesla\n"
+        "      `netflix.com`                      -> Netflix\n"
+        "      `nike.com`                         -> Nike\n"
+        "    Use the brand's own trade name as it commonly appears "
+        "in press and product packaging (spaces, punctuation, and "
+        "capitalization the same way the brand writes itself). Fold "
+        "the domain into `identity_note` as ONE line "
+        "('resolved from heb.com'). Set `identity_confident` = true "
+        "when you're confident which brand owns the domain and "
+        "false only when the domain is genuinely obscure or maps to "
+        "multiple candidates - in that unresolvable case keep the "
+        "user's own words, list options in `identity_versions`, and "
+        "let the flow ask. NEVER refuse the request or emit "
+        "`subject_verified` = false just because the input arrived "
+        "as a URL - a URL is a normal, expected way to identify a "
+        "brand and is treated as first-class subject input.\n"
         "  * RATIONALE DISCIPLINE: every free-text field (persona_notes, "
         "decision_reason, assumptions, category_note, cut labels and "
         "rationales) must be written from the RESOLVED identity only. "
@@ -63747,8 +63779,9 @@ def _v1_conclude(prompt, run_avid=True, identity_context=None,
         if _sv_suggest:
             _sv_msg += (f". Did you mean '{_sv_suggest}'? If so, ask "
                         f"for it under that exact name; if not, "
-                        f"include the subject's website domain in the "
-                        f"request to confirm the spelling.")
+                        f"include the subject's website (e.g. "
+                        f"`www.example.com`) so we can confirm the "
+                        f"spelling.")
         return {
             'draft': draft,
             'candidates': candidates,
@@ -64021,6 +64054,105 @@ def _v1_clean_competitor_name(raw):
     return re.sub(r'\s+', ' ', name).strip()
 
 
+# URL / domain detection in the prompt itself (Jenna 2026-09-08). A
+# partner or user was told "we do not work off URLs" - but the
+# canonical way to identify a brand IS its website. If the caller
+# types `www.heb.com` or `https://heb.com/store-locator/` as the
+# prompt, we extract the bare host, keep the original prompt intact
+# for interpret context, and promote the host into identity_context
+# so the interpret step has the same domain grounding a partner would
+# have gotten if they had passed `domain` as a side-input field. The
+# SUBJECT IDENTITY RESOLUTION rule in _synth_chat_interpret_prompts
+# is updated in the same change to teach Claude to resolve a URL to
+# the underlying entity (heb.com -> HEB, wf.com -> Wells Fargo).
+
+# Full URL with a scheme: unambiguous.
+_V1_URL_WITH_SCHEME_RE = re.compile(
+    r'\b(?P<scheme>https?)://'
+    r'(?P<host>(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63})'
+    r'(?::\d+)?'
+    r'(?:/[^\s]*)?',
+    flags=re.IGNORECASE,
+)
+
+# www.<host>.<tld> anywhere in the prompt: unambiguous.
+_V1_URL_WWW_RE = re.compile(
+    r'\bwww\.'
+    r'(?P<host>(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63})'
+    r'(?:/[^\s]*)?',
+    flags=re.IGNORECASE,
+)
+
+# Bare `label.tld` shape used ONLY when the whole prompt is a single
+# domain-like token (so we don't accidentally match "i.e." or "P.M."
+# inside a sentence). Common TLDs are the safe bet; a full IANA list
+# would over-match on things like "e.g." matching "eg" as a TLD.
+_V1_BARE_HOST_RE = re.compile(
+    r'^\s*'
+    r'(?P<host>(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+'
+    r'(?:com|net|org|co|io|us|app|ai|tv|store|shop|inc|club|gov|edu|'
+    r'biz|info|dev|xyz|me|us|uk|ca|au|de|fr|it|es|jp|kr|cn|in|br|mx|'
+    r'nl|se|no|dk|fi|be|ch|at|ie|nz|za|sg|hk|tw|il|ru|pl|cz|gr|pt|'
+    r'tr|hu|ro|ua|kz|by|lt|lv|ee|is|ar|cl|co|pe|ve|cr|do|ec|gt|hn|'
+    r'ni|pa|py|sv|uy|ao|dz|cm|ci|eg|et|gh|ke|ma|ng|sn|tn|ug|zm|zw))'
+    r'(?:/[^\s]*)?'
+    r'\s*$',
+    flags=re.IGNORECASE,
+)
+
+
+def _v1_normalize_host(host):
+    """Trim scheme, path, query, port, www.; lowercase; strip trailing dots.
+    Return '' if the result isn't a plausible domain."""
+    v = str(host or '').strip()
+    if not v:
+        return ''
+    v = re.sub(r'^[a-z][a-z0-9+.-]*://', '', v, flags=re.I)
+    v = v.split('/', 1)[0]
+    v = v.split('?', 1)[0]
+    v = v.split('#', 1)[0]
+    v = v.split(':', 1)[0]  # drop :port
+    v = v.strip().strip('.').lower()
+    if v.startswith('www.'):
+        v = v[4:]
+    if not re.match(r'^[a-z0-9.-]+\.[a-z]{2,63}$', v):
+        return ''
+    return v
+
+
+def _v1_extract_domain_from_prompt(prompt):
+    """Return a bare host if `prompt` contains an unambiguous URL/domain,
+    else ''. Recognizes:
+      * `https://heb.com/...`, `http://example.co.uk`         (scheme)
+      * `www.heb.com/store-locator`                            (www.)
+      * `heb.com`, `www.heb.com` when the whole prompt IS that (bare)
+
+    We deliberately do NOT extract bare `foo.com` embedded inside a
+    longer sentence - too many false positives (abbreviations,
+    filenames, etc.). If a partner wants us to grab a bare domain
+    mid-sentence, they can include `https://` or `www.`.
+    """
+    p = str(prompt or '').strip()
+    if not p:
+        return ''
+    m = _V1_URL_WITH_SCHEME_RE.search(p)
+    if m:
+        h = _v1_normalize_host(m.group('host'))
+        if h:
+            return h
+    m = _V1_URL_WWW_RE.search(p)
+    if m:
+        h = _v1_normalize_host(m.group('host'))
+        if h:
+            return h
+    m = _V1_BARE_HOST_RE.match(p)
+    if m:
+        h = _v1_normalize_host(m.group('host'))
+        if h:
+            return h
+    return ''
+
+
 def _v1_parse_check_run_body(body):
     """Validate a /check or /run JSON body. Returns
     (prompt, run_avid, identity_context, competitor_brands,
@@ -64076,16 +64208,23 @@ def _v1_parse_check_run_body(body):
                 'success': False,
                 'error': f'"{k}" exceeds {cap} characters'}), 400)
         if k == 'domain':
-            # Normalize a pasted URL down to the bare host.
-            v = re.sub(r'^[a-z][a-z0-9+.-]*://', '', v, flags=re.I)
-            v = v.split('/', 1)[0].split('?', 1)[0].strip().lower()
-            v = v[4:] if v.startswith('www.') else v
-            if not re.match(r'^[a-z0-9.-]+\.[a-z]{2,}$', v):
+            v = _v1_normalize_host(v)
+            if not v:
                 return None, True, None, None, (jsonify({
                     'success': False,
                     'error': ('"domain" must be a website domain like '
                               'example.com')}), 400)
         ictx[k] = v
+
+    # URL / domain in the prompt itself (Jenna 2026-09-08). A partner
+    # who types `www.heb.com` or `https://heb.com/store-locator` as
+    # the prompt should get resolved to the underlying brand (HEB)
+    # instead of being told "we do not work off URLs". If the caller
+    # ALSO passed a `domain` side-input, we keep the side-input as
+    # authoritative and just record the in-prompt host for logging.
+    _prompt_domain = _v1_extract_domain_from_prompt(prompt)
+    if _prompt_domain and 'domain' not in ictx:
+        ictx['domain'] = _prompt_domain
 
     # competitor_brands (2026-08-31): optional array of brand names the
     # caller wants represented inside this subject's profile. Cleaned
