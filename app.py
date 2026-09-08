@@ -64369,7 +64369,13 @@ def api_v1_profiles_check():
         'success': True,
         'buildable': True,
         'decision': decision,
-        'decision_reason': draft.get('decision_reason') or '',
+        # Fail-closed scrub of interpret-step prose (2026-09-08): the
+        # server-composed and Claude-composed decision_reason /
+        # brief_summary strings read clean by construction, but the
+        # runtime scrub is defense in depth against future prompt drift
+        # (any banned token = empty string, safer than a leak).
+        'decision_reason': _scrub_v1_freetext(
+            draft.get('decision_reason') or '', cap=400),
         'subject': draft.get('subject'),
         # Resolved identity line (2026-08-24 Furious defect): callers
         # see exactly which real-world entity the build is about
@@ -64387,7 +64393,8 @@ def api_v1_profiles_check():
         'existing_match_last_modified': None,
         'credits_would_charge': price,
         'refresh_row_hypothesis': draft.get('refresh_row_hypothesis') or None,
-        'brief_summary': conclusion['brief_summary'],
+        'brief_summary': _scrub_v1_freetext(
+            conclusion.get('brief_summary') or '', cap=700),
         # Plain-language window the run would use (ECHO RULE
         # 2026-08-24). Null only for existing_match reuse.
         'date_window': _draft_window_field(draft, decision) or None,
@@ -64562,7 +64569,9 @@ def api_v1_profiles_run():
         resp_body = {
             'success': True,
             'decision': 'existing_match',
-            'decision_reason': draft.get('decision_reason') or '',
+            # Fail-closed prose scrub (2026-09-08 defense in depth).
+            'decision_reason': _scrub_v1_freetext(
+                draft.get('decision_reason') or '', cap=400),
             'reused_existing': True,
             'subject': draft.get('existing_match_display_name') or draft.get('subject'),
             's3_key': ex_key,
@@ -64779,7 +64788,14 @@ def api_v1_profiles_run():
     resp_body = {
         'success': True,
         'decision': decision,
-        'decision_reason': draft.get('decision_reason') or '',
+        # Fail-closed prose scrub (2026-09-08 defense in depth) - both
+        # decision_reason (Claude-composed on the fresh path, server-
+        # composed on catalog matches) and brief_summary (server-
+        # composed by _v1_build_brief_summary) read clean today, but
+        # any future prompt drift that puts a banned token into these
+        # fields is now safely wiped to '' at the response layer.
+        'decision_reason': _scrub_v1_freetext(
+            draft.get('decision_reason') or '', cap=400),
         'run_id': run_id,
         'subject': spec.get('name'),
         'brand_category': spec.get('brand_category'),
@@ -64790,7 +64806,7 @@ def api_v1_profiles_run():
         'credits_remaining': credits_left,
         'estimated_run_minutes': _estimate_run_minutes(decision, run_avid),
         'status_url': status_url,
-        'brief_summary': brief_summary,
+        'brief_summary': _scrub_v1_freetext(brief_summary or '', cap=700),
         # Plain-language window this run uses (ECHO RULE 2026-08-24).
         'date_window': _draft_window_field(draft, decision) or None,
         # Subject resolved to a real, verifiable entity (2026-08-25).
