@@ -9053,6 +9053,17 @@ def _journeys_access_of(user, product_key):
     cfg = _GRANULAR_JOURNEY_PRODUCTS.get(product_key)
     if not cfg:
         return None
+    # Super admins have blanket access to every journey. This mirrors
+    # compute_product_access_flags (which returns '*' for the super_admin
+    # role), but that resolver is NOT applied by get_current_user() — the
+    # callers here pass the RAW stored user record. Without this guard, a
+    # stale or scoped journeys field left on an admin's OWN record silently
+    # filters every result out, locking them out of their own product with an
+    # empty list rather than a 403 (see Brand Partnership empty-menu,
+    # 2026-09-08). Resolving super_admin -> '*' here restores the documented
+    # intent for every granular journey product.
+    if (user or {}).get('role') == 'super_admin':
+        return '*'
     raw = (user or {}).get(cfg['field'])
     if raw == '*':
         return '*'
