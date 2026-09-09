@@ -19257,7 +19257,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                             <option value="intentIQ" {% if not has_intent_iq_access %}disabled{% endif %}>📈 Attribution IQ</option>
                             <option value="impactIQ" {% if not has_impact_iq_access %}disabled{% endif %}>🌊 Impact IQ</option>
                             <option value="brandPartnershipIQ" {% if 'brand_partnership_iq' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🤝 Brand Partnership</option>
-                            <option value="flywheelConversion" {% if 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' and role != 'admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
+                            <option value="flywheelConversion" {% if not has_flywheel_conversion_access and 'flywheel_conversion' not in analysis_iq_modules and role != 'super_admin' %}disabled{% endif %}>🔄 Flywheel Conversion</option>
                             {# Share of Time removed from dropdown 2026-08-20
                                per Jenna. Handler (showShareOfTimeIQ),
                                shareOfTimeIQView, /api/share-of-time/* routes,
@@ -45177,7 +45177,7 @@ https://www.instagram.com/p/..."></textarea>
                         ['profileIQ', d.has_profile_iq_access !== false],
                         ['subscriberIQ', !!d.has_subscriber_iq_access],
                         ['sfConversion', !!d.has_sf_conversion_access || hasAnalysisModule('sf_lf_conversion')],
-                        ['flywheelConversion', isAdmin || hasAnalysisModule('flywheel_conversion')],
+                        ['flywheelConversion', !!d.has_flywheel_conversion_access || hasAnalysisModule('flywheel_conversion')],
                         ['brandPartnershipIQ', !!d.has_brand_partnership_iq_access || hasAnalysisModule('brand_partnership_iq')],
                         ['journeyIQ', !!d.has_journey_iq_access || hasAnalysisModule('journey_iq')],
                         ['impactIQ', d.has_impact_iq_access !== false],
@@ -45188,7 +45188,7 @@ https://www.instagram.com/p/..."></textarea>
                         ['ticketSalesIQ', !!d.has_ticket_sales_iq_access],
                         ['ticketSalesTracker', !!d.has_ticket_sales_tracker_access],
                         ['hedgeFundIQ', !!d.has_hedge_fund_iq_access],
-                        ['sentimentIQ', isAdmin],
+                        ['sentimentIQ', !!d.has_sentiment_iq_access],
                         ['ecommerceIQ', !!d.has_ecommerce_iq_access],
                         ['shareOfTimeIQ', isAdmin && (d.has_share_of_time_access !== false)],
                         ['blueIQ', !!d.has_blue_iq_access],
