@@ -38555,10 +38555,15 @@ def _run_brand_partnership_iq(job_id):
                     'lift_pct_users': _lift(post_brand, pre_brand),
                     'pre_users_projected':  _bpiq_project(pre_brand),
                     'post_users_projected': _bpiq_project(post_brand),
-                    # Penetration = % of platform users in audience who also
-                    # had a brand touchpoint (a "share-of-attention" proxy).
-                    'pre_pen_pct':  round(100.0 * pre_brand  / pre_on,  2) if pre_on  else 0.0,
-                    'post_pen_pct': round(100.0 * post_brand / post_on, 2) if post_on else 0.0,
+                    # Penetration = % of the FULL audience cohort that had a
+                    # brand touchpoint on this platform. Same denominator as
+                    # the headline pre/post pen, so every platform pct is
+                    # <= the headline and rows are comparable across files
+                    # (2026-09-08: replaced the old platform-conditional
+                    # basis brand/on_platform, which printed shares above
+                    # the headline pen and read as a different metric).
+                    'pre_pen_pct':  round(100.0 * pre_brand  / max(audience_size, 1), 2),
+                    'post_pen_pct': round(100.0 * post_brand / max(audience_size, 1), 2),
                 })
         else:
             # Fallback: keep an empty platform_out so the dashboard renders.
@@ -38607,11 +38612,12 @@ def _run_brand_partnership_iq(job_id):
             'lift_pct_users': _lift(post_direct, pre_direct),
             'pre_users_projected':  _bpiq_project(pre_direct),
             'post_users_projected': _bpiq_project(post_direct),
-            # By definition every user in this row had a brand touchpoint,
-            # so penetration of "platform-active users in this row" is 100%.
-            # Sending null tells the dashboard to render '—' instead.
-            'pre_pen_pct':  None,
-            'post_pen_pct': None,
+            # Cohort-basis penetration, same denominator as every other row
+            # (2026-09-08). Previously null (the old platform-conditional
+            # basis was definitionally 100% here); on the cohort basis the
+            # Direct row carries a real share like any platform.
+            'pre_pen_pct':  round(100.0 * pre_direct  / max(audience_size, 1), 2),
+            'post_pen_pct': round(100.0 * post_direct / max(audience_size, 1), 2),
         })
 
         # ── Phase 2.5: control-group brand engagement (incremental DiD) ────
