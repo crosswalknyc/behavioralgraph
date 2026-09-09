@@ -59536,7 +59536,25 @@ def _scrub_v1_status(raw_status: dict | None) -> dict:
         out['reason'] = _reason or _V1_FAILED_REASON
         _cr = raw_status.get('credits_refunded')
         if isinstance(_cr, (int, float)) and _cr > 0:
-            out['credits_refunded'] = int(_cr)
+            _cr_int = int(_cr)
+            out['credits_refunded'] = _cr_int
+            # Prefer an explicit engine-side USD refund if present,
+            # otherwise convert the credit refund via the current
+            # decision-tier USD table (2026-09-09).
+            _ru = raw_status.get('refund_usd')
+            if isinstance(_ru, (int, float)) and _ru > 0:
+                out['refund_usd'] = round(float(_ru), 2)
+            else:
+                # Map the credit count back to a USD figure using the
+                # decision the engine recorded. Fall back to new_build
+                # (safe upper) when the decision field is absent.
+                _dec = str(raw_status.get('decision') or '').strip().lower()
+                if _dec:
+                    out['refund_usd'] = _v1_price_usd_for(_dec, 0)
+                else:
+                    # 3 credits -> derive_cut, 5+ -> new_build tier.
+                    out['refund_usd'] = _v1_price_usd_for(
+                        'derive_cut' if _cr_int <= 3 else 'new_build', 0)
     return out
 
 
@@ -59596,6 +59614,105 @@ _V1_CREDITS = {
     'cut_needs_parent':     CREDITS_PROFILE_ANALYSIS + 3,   # 8
     'subscriber_iq':        CREDITS_SVOD,                   # 10
 }
+
+
+# USD prices for the partner-facing v1 API (2026-09-09 Jenna directive:
+# the API must speak in dollars, not internal credits). Values default
+# to MODULE_CATALOG rows in bg-webapp/wallet.py:
+#   api_profile_iq_build         -> $500
+#   api_profile_iq_cut           -> $100
+#   api_subscriber_iq_build      -> $1000
+# and can be overridden per-workspace via system/pricing.json (the same
+# knob the admin billing pricing panel writes to). Fallbacks live inline
+# so a wallet import failure at boot never removes pricing.
+_V1_USD_FALLBACK = {
+    'existing_match':       0.0,
+    'derive_cut':           100.0,
+    'time_shifted_refresh': 500.0,
+    'new_build':            500.0,
+    'cut_needs_parent':     600.0,   # parent build + cut
+    'subscriber_iq':        1000.0,
+}
+
+_V1_USD_ADDON_CUT_FALLBACK = 100.0   # api_profile_iq_cut
+
+
+def _v1_tool_price_usd(tool_key: str, default: float) -> float:
+    """Read the current admin-configured USD price for a tool_key from
+    wallet.tool_price_usd(). Silently falls back to `default` if the
+    wallet layer or pricing.json is unavailable, so the API surface
+    keeps quoting a stable number even during a boot race."""
+    try:
+        import wallet as _w
+        val = float(_w.tool_price_usd(tool_key))
+        if val > 0.0:
+            return val
+    except Exception:
+        pass
+    return float(default)
+
+
+def _v1_price_usd_for(decision: str, cut_count: int = 0) -> float:
+    """USD price a partner would pay for one v1 run at `decision` tier
+    with `cut_count` embedded addon cuts. This is the ONLY place the
+    API surface converts an internal decision into a dollar amount -
+    every /check, /run, /status response reads through it, so a
+    per-workspace pricing.json edit propagates everywhere at once."""
+    d = (decision or '').strip().lower()
+    cut_count = max(int(cut_count or 0), 0)
+    cut_each = _v1_tool_price_usd(
+        'api_profile_iq_cut', _V1_USD_ADDON_CUT_FALLBACK)
+    if d == 'existing_match':
+        return 0.0
+    if d == 'subscriber_iq':
+        base = _v1_tool_price_usd(
+            'api_subscriber_iq_build', _V1_USD_FALLBACK['subscriber_iq'])
+        return round(base + cut_each * cut_count, 2)
+    if d == 'derive_cut':
+        # Cut-only derive: the addon cut counter and the decision-tier
+        # already both charge for the cut - never double count. Price
+        # is a single cut_each.
+        return round(cut_each, 2)
+    if d == 'cut_needs_parent':
+        # Parent build + one cut, and any additional addon cuts stack
+        # on top the same as new_build.
+        base = _v1_tool_price_usd(
+            'api_profile_iq_build', _V1_USD_FALLBACK['new_build'])
+        # First cut is baked into the tier; every extra cut is +cut_each.
+        extra_cuts = max(cut_count - 1, 0) if cut_count > 0 else 0
+        return round(base + cut_each + cut_each * extra_cuts, 2)
+    # new_build, time_shifted_refresh, and everything else default to
+    # the api_profile_iq_build tier.
+    base = _v1_tool_price_usd(
+        'api_profile_iq_build',
+        _V1_USD_FALLBACK.get(d, _V1_USD_FALLBACK['new_build']))
+    return round(base + cut_each * cut_count, 2)
+
+
+def _v1_balance_usd(username: str) -> float:
+    """Partner's dollar wallet balance. Reads through wallet.py so
+    unlimited accounts and company-shared wallets both surface the
+    correct number. Falls back to 0.0 on any error - the caller only
+    reads this for display, never for gating (the credit preflight
+    still owns the actual permit-to-run decision)."""
+    try:
+        import wallet as _w
+        data = load_users()
+        subject = _w.resolve_billing_subject(username, data)
+        rec = subject.get('record') or {}
+        if _w.is_unlimited(rec):
+            return -1.0
+        return round(float(_w.wallet_balance(rec)), 2)
+    except Exception:
+        return 0.0
+
+
+def _v1_price_usd_for_cut() -> float:
+    """USD price for a single embedded addon cut, exposed for schema
+    display + addon_cuts[].price_usd. Cheap wrapper so the schema
+    reads live from pricing.json too."""
+    return round(_v1_tool_price_usd(
+        'api_profile_iq_cut', _V1_USD_ADDON_CUT_FALLBACK), 2)
 
 # --------------------------------------------------------------------
 # Partner-API rate limiter (2026-08-18 security hardening, fix #2).
@@ -59836,6 +59953,13 @@ def _partner_credit_preflight(username: str, min_credits: int):
     """Confirm the partner has at least `min_credits` credits before
     we spend a Claude call on their behalf. Returns (None, None) on
     allow, (jsonify_response, 402) on reject.
+
+    Response includes both credit and USD framings (2026-09-09):
+      * balance_usd, price_usd_minimum   - the primary partner-facing
+        numbers.
+      * credits_required_minimum,
+        credits_remaining                - kept for backward compat
+        with existing integrations.
     """
     if min_credits <= 0:
         return None, None
@@ -59846,17 +59970,34 @@ def _partner_credit_preflight(username: str, min_credits: int):
         # If the credit lookup blows up, fail closed - don't spend Claude.
         return jsonify({
             'success': False,
-            'error': 'credit balance temporarily unavailable',
+            'error': 'balance temporarily unavailable',
         }), 503
     try:
         _, remaining = check_user_credits(username)
     except Exception:
         remaining = 0
+    # Convert the internal min-credit gate to its USD equivalent so
+    # the partner sees the number in the currency they top up in.
+    # min_credits 3 -> derive_cut ($100), min_credits 5 -> new_build
+    # ($500); anything else routes through new_build as a safe upper
+    # bound so a partner is never quoted less than they'll actually
+    # need at run time.
+    if min_credits <= 3:
+        _price_usd_min = _v1_price_usd_for('derive_cut', 0)
+    else:
+        _price_usd_min = _v1_price_usd_for('new_build', 0)
+    _bal_usd = _v1_balance_usd(username)
     resp = jsonify({
         'success': False,
-        'error': (f'insufficient credits: this endpoint requires at '
-                  f'least {min_credits} credit balance to run '
-                  f'(current balance: {remaining}).'),
+        'error': (f"insufficient balance: this endpoint requires at "
+                  f"least ${_price_usd_min:.2f} on hand to run "
+                  f"(current balance: "
+                  f"{'unlimited' if _bal_usd == -1.0 else f'${_bal_usd:.2f}'})."),
+        # USD framing (primary going forward).
+        'price_usd_minimum': _price_usd_min,
+        'balance_usd': _bal_usd,
+        # Legacy credit framing (kept so existing integrations that
+        # key off these two field names keep working).
         'credits_required_minimum': min_credits,
         'credits_remaining': remaining,
     })
@@ -63908,13 +64049,18 @@ def _v1_check_caveats():
 
 @app.route('/api/v1/profiles/check', methods=['POST'])
 def api_v1_profiles_check():
-    """Preview what a run would do without charging credits or enqueuing.
+    """Preview what a run would do without charging or enqueuing.
 
     Response includes:
       * decision (see /run for the five values)
       * existing_match_* fields (when applicable)
-      * credits_would_charge (0 for existing_match, 3 for derive_cut,
-        5 for time_shifted_refresh / new_build, 8 for cut_needs_parent)
+      * price_usd (primary, 2026-09-09) - USD a /run at this decision
+        would charge. 0 for existing_match, $100 for derive_cut, $500
+        for time_shifted_refresh / new_build, $600 for cut_needs_parent
+        (per-workspace overrides published live in
+        GET /api/v1/schema.pricing_usd).
+      * credits_would_charge (kept for legacy integrations) - the
+        internal credit count for the same charge.
       * download_url if existing_match (24h S3 pre-signed URL) - the
         partner can just fetch and save without ever calling /run
     """
@@ -63976,6 +64122,9 @@ def api_v1_profiles_check():
             'decision': decision,
             'refusal_code': conclusion['refusal_code'],
             'refusal_reason': conclusion['refusal_message'],
+            # USD is the primary framing (2026-09-09). credits kept
+            # for existing integrations; both are 0 on a refusal.
+            'price_usd': 0.0,
             'credits_would_charge': 0,
             'subject_verified': bool(
                 conclusion.get('subject_verified', True)),
@@ -64007,6 +64156,9 @@ def api_v1_profiles_check():
         # Null permanently (standing decision 2026-08-25: in-place
         # corrections are part of the product; revisions not exposed).
         'existing_match_last_modified': None,
+        # USD is the primary framing going forward. `credits_would_charge`
+        # is retained so existing integrations keep working.
+        'price_usd': _v1_price_usd_for(decision, len(_v1_cuts or [])),
         'credits_would_charge': price,
         'refresh_row_hypothesis': draft.get('refresh_row_hypothesis') or None,
         'brief_summary': _scrub_v1_freetext(
@@ -64033,8 +64185,10 @@ def api_v1_profiles_check():
         resp['estimated_audience_low'] = _est['low']
         resp['estimated_audience_high'] = _est['high']
     if _v1_cuts:
+        _cut_usd_each = _v1_price_usd_for_cut()
         resp['addon_cuts'] = [
             {'label': c.get('name_label') or c.get('label') or c['cut_id'],
+             'price_usd': _cut_usd_each,
              'credits': ADDON_CUT_CREDITS} for c in _v1_cuts]
     if decision == 'existing_match' and ex_key:
         url = _generate_presigned_profile_url(ex_key, expires_seconds=86400)
@@ -64068,17 +64222,21 @@ def api_v1_profiles_run():
     prevents partners and dashboard users from accidentally
     double-pulling or bypassing existing-match detection.
 
-    Credit tiers by decision:
-      * existing_match       0 credits (returns download_url immediately)
-      * derive_cut           3 credits (cut derived from an existing parent)
-      * time_shifted_refresh 5 credits (rebuild anchored to older parent)
-      * new_build            5 credits (fresh build from scratch)
-      * cut_needs_parent     8 credits (parent build + cut derivation)
+    Price tiers by decision (USD is the primary framing 2026-09-09;
+    credits are kept as a mirror so existing integrations that key off
+    credits_charged / credits_remaining continue to work):
+      * existing_match       $0    / 0 credits (returns download_url now)
+      * derive_cut           $100  / 3 credits (cut off existing parent)
+      * time_shifted_refresh $500  / 5 credits (rebuild anchored older)
+      * new_build            $500  / 5 credits (fresh build from scratch)
+      * cut_needs_parent     $600  / 8 credits (parent build + cut)
+    Values above are defaults; the current per-workspace numbers are
+    published live in `pricing_usd` on GET /api/v1/schema.
 
     Response fields depend on decision. On existing_match, the response
-    includes `download_url` and `credits_charged: 0` - no run_id needed.
-    On every other decision, `run_id` + `status_url` are returned for
-    polling GET /api/v1/profiles/<run_id>.
+    includes `download_url`, `charge_usd: 0`, and `credits_charged: 0`
+    - no run_id needed. On every other decision, `run_id` + `status_url`
+    are returned for polling GET /api/v1/profiles/<run_id>.
     """
     user, err = _synth_chat_gate()
     if err:
@@ -64158,6 +64316,9 @@ def api_v1_profiles_run():
             'decision': decision,
             'error': conclusion['refusal_message'],
             'refusal_code': conclusion['refusal_code'],
+            # USD is the primary framing (2026-09-09). credits kept
+            # for legacy integrations. Both zero on a refusal.
+            'charge_usd': 0.0,
             'credits_charged': 0,
             'subject_verified': bool(
                 conclusion.get('subject_verified', True)),
@@ -64168,12 +64329,20 @@ def api_v1_profiles_run():
     # tier that exceeds the partner's balance, refuse cleanly.
     if price > 0 and not has_credits_for(username, price):
         _, credits_left = check_user_credits(username)
+        _price_usd_tier = _v1_price_usd_for(decision, len(_v1_run_cuts or []))
+        _bal_usd = _v1_balance_usd(username)
+        _bal_str = ('unlimited' if _bal_usd == -1.0
+                    else f"${_bal_usd:.2f}")
         return jsonify({
             'success': False,
-            'error': (f'insufficient credits: this decision ({decision}) '
-                      f'costs {price} and this key has {credits_left} '
-                      'remaining'),
+            'error': (f"insufficient balance: this run ({decision}) costs "
+                      f"${_price_usd_tier:.2f} and this key has {_bal_str} "
+                      f"on hand."),
             'decision': decision,
+            # USD framing (primary going forward).
+            'price_usd': _price_usd_tier,
+            'balance_usd': _bal_usd,
+            # Legacy credit fields for existing integrations.
             'credits_required': price,
             'credits_remaining': credits_left,
         }), 402
@@ -64182,6 +64351,7 @@ def api_v1_profiles_run():
     if decision == 'existing_match':
         url = _generate_presigned_profile_url(ex_key, expires_seconds=86400)
         _, credits_left = check_user_credits(username)
+        _bal_usd = _v1_balance_usd(username)
         resp_body = {
             'success': True,
             'decision': 'existing_match',
@@ -64194,6 +64364,10 @@ def api_v1_profiles_run():
             'profile_name': ex_key.rsplit('/', 1)[-1],
             'download_url': url,
             'download_expires_seconds': 86400 if url else None,
+            # USD is the primary framing (2026-09-09). credits kept for
+            # existing integrations. An existing_match is always free.
+            'charge_usd': 0.0,
+            'balance_usd': _bal_usd,
             'credits_charged': 0,
             'credits_remaining': credits_left,
             'subject_verified': True,
@@ -64312,10 +64486,17 @@ def api_v1_profiles_run():
             charged = False
         if not charged:
             _, credits_left = check_user_credits(username)
+            _price_usd_tier = _v1_price_usd_for(
+                decision, len(_v1_run_cuts or []))
+            _bal_usd = _v1_balance_usd(username)
             return jsonify({
                 'success': False,
-                'error': 'credit charge failed - no run started',
+                'error': 'charge failed - no run started',
                 'decision': decision,
+                # USD framing (primary going forward).
+                'price_usd': _price_usd_tier,
+                'balance_usd': _bal_usd,
+                # Legacy credit fields for existing integrations.
                 'credits_required': price,
                 'credits_remaining': credits_left,
             }), 402
@@ -64390,6 +64571,8 @@ def api_v1_profiles_run():
     _record_run_owner(run_id, username)
 
     _, credits_left = check_user_credits(username)
+    _charge_usd = _v1_price_usd_for(decision, len(_v1_run_cuts or []))
+    _bal_usd = _v1_balance_usd(username)
 
     # PRE-BUILD scope summary (2026-08-24): programmatic, plans only,
     # no measured-sounding numbers. Previously this echoed the interpret
@@ -64418,6 +64601,11 @@ def api_v1_profiles_run():
         'run_avid': run_avid,
         'parent_s3_key': ex_key or None,
         'derive_type': d_type or None,
+        # USD framing (primary going forward). credits kept for
+        # existing integrations - the two always describe the same
+        # charge in different currencies.
+        'charge_usd': _charge_usd,
+        'balance_usd': _bal_usd,
         'credits_charged': price,
         'credits_remaining': credits_left,
         'estimated_run_minutes': _estimate_run_minutes(decision, run_avid),
@@ -64639,7 +64827,12 @@ def api_v1_schema():
                     'decision_reason': 'string',
                     'subject': 'string',
                     'resolved_identity': 'string or null',
-                    'credits_would_charge': 'integer',
+                    'price_usd': ('number - USD price a /run at this '
+                                  'decision would charge (primary '
+                                  'framing going forward)'),
+                    'credits_would_charge': ('integer - legacy credit '
+                                             'framing kept for existing '
+                                             'integrations'),
                     'existing_match_s3_key': 'string or null',
                     'existing_match_display_name': 'string or null',
                     'existing_match_days_old': ('integer or null - file '
@@ -64651,8 +64844,8 @@ def api_v1_schema():
                     'subject_verified': 'boolean',
                     'estimated_audience_low': 'integer (when applicable)',
                     'estimated_audience_high': 'integer (when applicable)',
-                    'addon_cuts': ('array of {label, credits} (when '
-                                   'the ask carries derived cuts)'),
+                    'addon_cuts': ('array of {label, price_usd, credits} '
+                                   '(when the ask carries derived cuts)'),
                     'date_window': 'string or null',
                     'download_url': ('string (existing_match only, '
                                      '24h expiry)'),
@@ -64670,6 +64863,23 @@ def api_v1_schema():
                     'Idempotency-Key': ('optional - same key within 24h '
                                         'returns the original response '
                                         'instead of re-charging')},
+                # USD is the primary pricing surface (2026-09-09).
+                # `credit_tiers` is kept as a mirror for existing
+                # integrations that key off it. Numbers here are the
+                # current admin-configured values, so a pricing.json
+                # edit shows up in this response immediately.
+                'pricing_usd': {
+                    'existing_match': _v1_price_usd_for(
+                        'existing_match', 0),
+                    'derive_cut': _v1_price_usd_for('derive_cut', 0),
+                    'time_shifted_refresh': _v1_price_usd_for(
+                        'time_shifted_refresh', 0),
+                    'new_build': _v1_price_usd_for('new_build', 0),
+                    'cut_needs_parent': _v1_price_usd_for(
+                        'cut_needs_parent', 1),
+                    'addon_cut_each': _v1_price_usd_for_cut(),
+                    'currency': 'USD',
+                },
                 'credit_tiers': {
                     'existing_match': _V1_CREDITS.get('existing_match', 0),
                     'derive_cut': _V1_CREDITS.get('derive_cut', 3),
@@ -64686,8 +64896,16 @@ def api_v1_schema():
                     'run_id': ('string (absent on existing_match - the '
                                'file returns immediately)'),
                     'status_url': 'string',
-                    'credits_charged': 'integer',
-                    'credits_remaining': 'integer',
+                    'charge_usd': ('number - USD debited from the '
+                                   'balance for this run (primary '
+                                   'framing going forward)'),
+                    'balance_usd': ('number - USD balance remaining '
+                                    'after the charge, or -1 on an '
+                                    'unlimited key'),
+                    'credits_charged': ('integer - legacy credit '
+                                        'framing kept for existing '
+                                        'integrations'),
+                    'credits_remaining': 'integer - legacy credit framing',
                     'estimated_run_minutes': 'integer',
                     'existing_match_days_old': ('integer or null (on '
                                                 'existing_match)'),
@@ -64714,7 +64932,10 @@ def api_v1_schema():
                     'within_estimate': ('boolean (when the delivered '
                                         'audience was verified against '
                                         'the quote)'),
-                    'credits_refunded': 'integer (on failed runs)',
+                    'refund_usd': ('number (on failed runs - USD '
+                                   'refunded to the balance)'),
+                    'credits_refunded': ('integer (on failed runs - '
+                                         'legacy credit framing)'),
                 },
             },
             'GET /api/v1/genpop': {
