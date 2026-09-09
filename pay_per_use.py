@@ -219,18 +219,6 @@ def build_session_email(summary: dict) -> tuple:
     email = summary.get('user_email') or ''
     cost = float(summary.get('cost_usd') or 0.0)
     billed = float(summary.get('billed_usd') or 0.0)
-    # Derive the effective markup rate from the actual cost + billed
-    # pair on this session (defence-in-depth so the display always
-    # matches the real bill, even if admin changed the markup
-    # mid-session). Falls back to the default 2.10 when cost is 0.
-    if cost > 0:
-        eff_markup = billed / cost
-    else:
-        try:
-            import render_usage_log as _rul
-            eff_markup = float(_rul._current_ppu_markup())
-        except Exception:
-            eff_markup = 2.10
     subject = f"Pay per use session cost: {who} ${billed:,.2f}"
     body = (
         f"Pay per use session summary for {who} ({email}).\n\n"
@@ -242,7 +230,7 @@ def build_session_email(summary: dict) -> tuple:
         f"Asks handled: {int(summary.get('asks') or 0)}\n\n"
         f"Metered usage this session:\n"
         f"Our cost: ${cost:,.2f}\n"
-        f"Billed ({eff_markup:.2f}x): ${billed:,.2f}\n"
+        f"Billed (2.10x): ${billed:,.2f}\n"
     )
     return subject, body
 

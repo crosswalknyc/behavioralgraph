@@ -691,33 +691,38 @@ def tool_monthly_usd(tool_key: str) -> float:
 
 def compute_user_monthly_charge(username: str,
                                 *, user_record: dict = None) -> dict:
-    """Sum the monthly access fees for every tool the given user has
-    access to (via their has_*_access flags).
+    """Return the monthly access charge summary for a user.
+
+    Jenna 2026-09-09 policy:
+      - Unlimited users: always $0 (never billed).
+      - monthly_service override: if the monthly_service row's
+        monthly_usd is > 0, it REPLACES the per-feature sum for
+        every paying user (bundle price wins).
+      - Otherwise: sum the per-feature monthly fees for the tools
+        this user has has_*_access=true on. Custom tools without an
+        access_flag count for every paying user (treated as
+        universal).
 
     Returns:
       {
-        'total_usd': float,        # sum of monthly access fees
-        'lines': [                 # per-tool breakdown for the invoice
-          {'tool_key': ..., 'display_name': ...,
-           'access_flag': ..., 'monthly_usd': ...},
+        'total_usd': float,        # what the cron should charge
+        'lines': [                 # per-tool breakdown for receipt
+          {'tool_key', 'display_name', 'access_flag', 'monthly_usd'},
           ...
         ],
-        'unlimited': bool,         # user has unlimited -> total 0
+        'unlimited': bool,
         'monthly_service_override_usd': float,
-                                  # non-zero when the 'monthly_service'
-                                  # row is set (bundle price). Callers
-                                  # decide whether to use this OR the
-                                  # summed total depending on the
-                                  # billing rule Jenna picks.
+                                  # non-zero when override is active;
+                                  # lines[] is a single bundle line
+                                  # in that case.
+        'bundle_active': bool,     # true when total_usd came from
+                                  # the override, false when it came
+                                  # from the per-feature sum.
       }
 
-    Never raises. Does not deduct or charge; the caller (a monthly
-    billing cron) picks the deduction path (wallet vs. invoice vs.
-    card-on-file) after reading this summary. Unlimited users always
-    return total_usd=0.
+    Never raises. Never deducts or charges; the caller (the monthly
+    cron) applies the charge.
     """
-    # Load user if not provided (kept optional so callers with the
-    # dict already in hand can skip the extra S3 read).
     if user_record is None:
         try:
             from app import load_users  # type: ignore
@@ -736,25 +741,22 @@ def compute_user_monthly_charge(username: str,
             "lines": [],
             "unlimited": True,
             "monthly_service_override_usd": 0.0,
+            "bundle_active": False,
         }
     lines = []
-    total = 0.0
+    per_feature_total = 0.0
     override = 0.0
+    bundle_display = "Monthly Service (base access)"
     for row in module_catalog():
         monthly = float(row.get("monthly_usd") or 0.0)
         if monthly <= 0.0:
             continue
-        # Special-case the 'monthly_service' bundle row - it does not
-        # depend on an access flag and is treated as an override.
-        # Jenna 2026-09-09: '(if they are all turned on unless it's
-        # just overwritten with a monthly service price)'.
         if row.get("tool_key") == "monthly_service":
             override = monthly
+            bundle_display = row.get(
+                "display_name") or bundle_display
             continue
         flag = row.get("access_flag")
-        # Rows without an access_flag (custom tools that the admin
-        # didn't tie to a gate) count for every paying customer -
-        # the flag-less monthly is treated as universal.
         if flag and not user_record.get(flag):
             continue
         lines.append({
@@ -763,12 +765,28 @@ def compute_user_monthly_charge(username: str,
             "access_flag": flag,
             "monthly_usd": monthly,
         })
-        total += monthly
+        per_feature_total += monthly
+    # Apply the bundle-override rule (Jenna 2026-09-09):
+    # 'monthly_service always wins for that user if > 0'.
+    if override > 0.0:
+        return {
+            "total_usd": round(override, 2),
+            "lines": [{
+                "tool_key": "monthly_service",
+                "display_name": bundle_display,
+                "access_flag": None,
+                "monthly_usd": round(override, 2),
+            }],
+            "unlimited": False,
+            "monthly_service_override_usd": round(override, 2),
+            "bundle_active": True,
+        }
     return {
-        "total_usd": round(total, 2),
+        "total_usd": round(per_feature_total, 2),
         "lines": lines,
         "unlimited": False,
-        "monthly_service_override_usd": round(override, 2),
+        "monthly_service_override_usd": 0.0,
+        "bundle_active": False,
     }
 
 

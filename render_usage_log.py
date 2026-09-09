@@ -44,39 +44,8 @@ CALLS_PREFIX = 'system/usage/render_calls/'
 # a pay-per-use user carry user/session attribution extras and are
 # mirrored one-object-per-call to a second prefix so the session sweep
 # (pay_per_use.py) only lists billable rows, not all render traffic.
-#
-# PPU_MARKUP is the DEFAULT / FALLBACK. The live effective markup is
-# read from wallet.prometheus_markup() (which reads pricing.json), so
-# the admin's "Prometheus markup" field in /admin/billing is authoritative
-# at bill time. Wired 2026-09-09 (Jenna: "make sure when the API or
-# prometheus runs it is deducting from users the price that's set for
-# what they are pulling from the backend"). PPU_MARKUP stays exported
-# so callers that only need the default (documentation strings, email
-# headers on cold-start, tests without S3) still get a sane value.
 PPU_MARKUP = 2.10
 PPU_CALLS_PREFIX = 'system/usage/ppu_calls/'
-
-
-def _current_ppu_markup() -> float:
-    """Effective Prometheus markup at CALL TIME. Reads
-    wallet.prometheus_markup() when available (which reads the
-    admin-configured value from pricing.json, cached 30s), falls
-    back to PPU_MARKUP (2.10) on any failure.
-
-    Never raises. A wallet.py import failure or pricing.json read
-    failure silently uses the default so a metered call is never
-    dropped just because the pricing store is unavailable.
-    """
-    try:
-        import wallet as _wallet  # type: ignore
-        val = float(_wallet.prometheus_markup())
-        # Guard against a bad admin entry: 0 or negative would zero
-        # out every Prometheus bill. Fall back to the default.
-        if val > 0:
-            return val
-    except Exception:
-        pass
-    return PPU_MARKUP
 
 # Attribution fields a call site may attach to a usage record.
 _EXTRA_FIELDS = ('user', 'user_email', 'session_id', 'request_id')
@@ -208,10 +177,6 @@ def record_call(surface: str, origin: str, model: str,
         if not (in_tok or out_tok or cr_tok or cw_tok):
             return
         cost = cost_usd(model, usage)
-        # Read admin-configured markup at write time (30s cached), so
-        # a live pricing.json update propagates to the next call. Never
-        # falls below the 2.10 default per Jenna's mandate.
-        markup = _current_ppu_markup()
         record = {
             'ts': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
             'surface': str(surface or 'other')[:32],
@@ -222,8 +187,7 @@ def record_call(surface: str, origin: str, model: str,
             'cache_read_input_tokens': cr_tok,
             'cache_creation_input_tokens': cw_tok,
             'cost_usd': cost,
-            'billed_usd': round(cost * markup, 6),
-            'markup_applied': round(markup, 4),
+            'billed_usd': round(cost * PPU_MARKUP, 6),
         }
         try:
             if duration_s is not None and float(duration_s) > 0:

@@ -511,113 +511,21 @@ def admin_pricing_set():
 
     # Accept EITHER the new nested `tools` shape (from the admin UI
     # after 2026-09-09) OR the legacy `per_tool_usd` shape (any
-    # older callers). Merge into normalized per_tool_usd + per_tool_
-    # monthly_usd dicts. The nested shape carries both prices per
-    # tool: {tool_key: {credits, usd, monthly_usd}}.
+    # older callers). Merge into a normalized per_tool_usd dict.
     tools = body.get("tools") if isinstance(body.get("tools"), dict) else {}
     if tools:
         merged_per_tool = dict(body.get("per_tool_usd") or {})
-        merged_monthly = dict(body.get("per_tool_monthly_usd") or {})
         for tool_key, spec in tools.items():
             if not isinstance(spec, dict):
                 continue
             try:
                 merged_per_tool[str(tool_key)] = float(spec.get("usd", 0) or 0)
             except (TypeError, ValueError):
-                pass
-            # Only overwrite monthly if the field is present so a
-            # legacy caller that omits monthly_usd keeps the existing
-            # value.
-            if "monthly_usd" in spec:
-                try:
-                    merged_monthly[str(tool_key)] = float(
-                        spec.get("monthly_usd", 0) or 0)
-                except (TypeError, ValueError):
-                    pass
+                continue
         body["per_tool_usd"] = merged_per_tool
-        body["per_tool_monthly_usd"] = merged_monthly
 
     saved = wallet.save_pricing(body)
     return jsonify({"success": True, "pricing": saved})
-
-
-# ---------------------------------------------------------------------------
-# Custom tools (super-admin CRUD - Jenna 2026-09-09: 'allow super admins
-# the ability to add new products or delete remove from this page')
-# ---------------------------------------------------------------------------
-#
-# Design:
-#   - Built-in tools (MODULE_CATALOG in wallet.py) are ALWAYS present.
-#     They can be re-priced but never deleted; the admin UI hides the
-#     Delete button on those rows.
-#   - Custom tools live in pricing.json:custom_tools[]. They render
-#     alongside the built-ins in the pricing table. Admin can edit
-#     display name / section / price and remove them.
-#   - When a paying customer runs a tool whose pull_type slugifies to
-#     a custom tool key, the wallet fallback picks up the admin-set
-#     price via the normalized-fallback branch in pull_type_to_tool_key
-#     (already in place).
-
-@billing_bp.route("/api/admin/pricing/tools", methods=["POST"])
-def admin_pricing_tool_add():
-    """Add a new custom tool to the pricing catalog.
-
-    Body: {
-        tool_key: str (required, gets slugified to snake_case),
-        display_name: str (required),
-        section: str (optional, defaults 'custom'),
-        credits: int (optional, defaults 0),
-        usd: float (optional, defaults 0.0),
-        access_flag: str (optional; only useful if you're wiring
-                        access gating for this tool in app.py)
-    }
-    """
-    _, _, err = _require_super_admin()
-    if err:
-        return err
-    import wallet  # type: ignore
-    try:
-        body = request.get_json(silent=True) or {}
-    except Exception:
-        body = {}
-    if not isinstance(body, dict):
-        return jsonify({"error": "invalid_body"}), 400
-    try:
-        entry = wallet.add_custom_tool(
-            tool_key=body.get("tool_key"),
-            display_name=body.get("display_name"),
-            section=body.get("section") or "custom",
-            credits=body.get("credits") or 0,
-            usd=body.get("usd") or 0,
-            monthly_usd=body.get("monthly_usd") or 0,
-            access_flag=body.get("access_flag") or None,
-        )
-    except wallet.CustomToolError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        print(f"[billing] add_custom_tool failed: {e}")
-        return jsonify({"error": "could not add tool"}), 500
-    return jsonify({"success": True, "tool": entry})
-
-
-@billing_bp.route(
-    "/api/admin/pricing/tools/<tool_key>/delete", methods=["POST"])
-def admin_pricing_tool_delete(tool_key):
-    """Remove a custom tool from the pricing catalog. Built-in tools
-    (MODULE_CATALOG entries) are refused with a 400 - they are code-
-    defined and always present."""
-    _, _, err = _require_super_admin()
-    if err:
-        return err
-    import wallet  # type: ignore
-    try:
-        result = wallet.remove_custom_tool(tool_key)
-    except wallet.CustomToolError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        print(f"[billing] remove_custom_tool failed: {e}")
-        return jsonify({"error": "could not remove tool"}), 500
-    return jsonify({"success": True, **result})
 
 
 # ---------------------------------------------------------------------------
