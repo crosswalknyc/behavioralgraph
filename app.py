@@ -245,6 +245,18 @@ def api_version():
 
 print("✅ Health check endpoints registered (/health, /healthz, /ready, /api/version) - ready for Render")
 
+
+# Billing / wallet blueprint (2026-09-08 Jenna: dashboard signup fee,
+# Buy Credits, admin card on file, Prometheus metered billing). All
+# routes gated on STRIPE_ENABLED env var; when disabled the routes
+# still register but every Stripe call short-circuits with a
+# "billing not configured" response. See bg-webapp/billing_schema.md.
+try:
+    from billing_routes import register_billing_blueprint
+    register_billing_blueprint(app)
+except Exception as _billing_import_err:
+    print(f"⚠️ Billing blueprint not registered: {_billing_import_err}")
+
 # Global error handler for API routes - ensures JSON responses.
 # The partner surface (/api/v1/*) gets a fixed generic message with no
 # exception detail (2026-08-28 client finding #12: error paths must be
@@ -2269,6 +2281,46 @@ def has_credits_for(username, amount):
     return credits_left >= amount
 
 
+def _try_wallet_fallback(user, pull_type, description, job_id, outcome):
+    """Wallet-side fallback for consume_credit (Jenna 2026-09-08).
+
+    Called INSIDE the _consume mutator after internal credits (or the
+    company pool) fail to cover the pull. Only fires for users flagged
+    `paying_customer=true` whose configured `billing_mode` (and card
+    on file, when applicable) authorizes the deduction.
+
+    Returns True when the wallet absorbed the pull (mutator should
+    commit the write), False otherwise (mutator should return None).
+
+    Never raises: any import/lookup/deduct error is logged and treated
+    as "wallet did not absorb", preserving the legacy insufficient-
+    credits behavior exactly.
+    """
+    try:
+        import wallet as _wallet  # local import so tests can stub
+        if not _wallet.is_paying_customer(user):
+            return False
+        tool_key = _wallet.pull_type_to_tool_key(pull_type)
+        usd, mode = _wallet.should_charge_wallet(user, tool_key)
+        if mode != 'wallet' or usd <= 0:
+            return False
+        can, _reason = _wallet.wallet_can_absorb(user, usd)
+        if not can:
+            return False
+        _wallet.apply_wallet_deduct(
+            user, usd,
+            description=description or 'Usage',
+            tool_key=tool_key,
+            job_id=job_id or '')
+        outcome['ok'] = True
+        outcome['wallet_charged_usd'] = usd
+        outcome['wallet_tool_key'] = tool_key
+        return True
+    except Exception as _e:
+        print(f"[wallet] fallback failed: {_e}")
+        return False
+
+
 def consume_credit(username, description=None, job_id=None, pull_type=None, credits_used=1):
     """Consume credits from user and/or company pool.
     Returns True if successful.
@@ -2277,6 +2329,11 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
     (see _users_cas_mutate): the debit arithmetic is always applied to
     the current balance, so a refund landed by the queue worker between
     our read and write is folded in on retry instead of clobbered.
+
+    Wallet fallback (Jenna 2026-09-08): when internal credits (personal
+    or company pool) don't cover the pull AND the user is a paying
+    customer, the wallet may absorb the pull instead. See
+    _try_wallet_fallback and bg-webapp/wallet.py.
     """
     used_at = datetime.now().isoformat()
     entry = {
@@ -2311,8 +2368,14 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
             ceiling_remaining = -1 if ceiling == -1 else (ceiling - user_used)
 
             if not pool_unlimited and pool_remaining < credits_used:
+                # Pool exhausted -> try wallet fallback for paying customers.
+                if _try_wallet_fallback(user, pull_type, description, job_id, outcome):
+                    return data
                 return None
             if ceiling != -1 and ceiling_remaining < credits_used:
+                # User's ceiling on this pool reached -> try wallet fallback.
+                if _try_wallet_fallback(user, pull_type, description, job_id, outcome):
+                    return data
                 return None
 
             user['credits_used'] = user.get('credits_used', 0) + credits_used
@@ -2327,6 +2390,9 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
             return data
 
         if not user_unlimited and _numeric_credits_balance(user) < credits_used:
+            # Personal credits exhausted -> try wallet fallback for paying customers.
+            if _try_wallet_fallback(user, pull_type, description, job_id, outcome):
+                return data
             return None
 
         if not user_unlimited:
@@ -2344,6 +2410,24 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
     except Exception:
         traceback.print_exc()
         return False
+
+    # Wallet post-hook: if the wallet absorbed this pull AND the
+    # user's billing_mode is auto_reload AND the new balance dropped
+    # below the threshold, fire an off-session Stripe charge to top
+    # up. Runs OUTSIDE the CAS mutator because it makes a Stripe
+    # network call. Never blocks the pull - the deduction has already
+    # committed; auto-reload success or failure only affects the
+    # user's next pull.
+    if outcome.get('ok') and outcome.get('wallet_charged_usd'):
+        try:
+            import wallet as _wallet
+            # Re-read the user snapshot post-CAS for the current
+            # balance + card metadata.
+            _post = load_users().get('users', {}).get(username) or {}
+            _wallet.try_auto_reload(username, _post)
+        except Exception as _ar_e:
+            print(f"[wallet] auto-reload skipped: {_ar_e}")
+
     return outcome['ok']
 
 

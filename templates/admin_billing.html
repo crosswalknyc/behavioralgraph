@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Billing - Crosswalk Admin</title>
+  <script src="https://js.stripe.com/v3/"></script>
+  <style>
+    :root {
+      --graphite: #0C1618;
+      --slate: #15252A;
+      --off-white: #E9E8E1;
+      --olive: #5E7E12;
+      --amethyst: #8E3FA8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--off-white);
+      color: var(--graphite);
+      margin: 0;
+    }
+    header {
+      background: var(--graphite);
+      color: var(--off-white);
+      padding: 20px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header .brand { font-weight: 800; font-size: 20px; }
+    header a { color: var(--off-white); text-decoration: none;
+                font-size: 14px; margin-left: 20px; }
+    main { max-width: 1400px; margin: 0 auto; padding: 32px; }
+    h1 { font-size: 28px; margin: 0 0 20px 0; }
+    h2 { font-size: 18px; margin: 0 0 12px 0; }
+    .tabs {
+      display: flex;
+      gap: 4px;
+      border-bottom: 2px solid #E5E7EB;
+      margin-bottom: 24px;
+    }
+    .tab {
+      padding: 12px 20px;
+      background: none;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #6B7280;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      font-family: inherit;
+    }
+    .tab.active {
+      color: var(--graphite);
+      border-bottom-color: var(--graphite);
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .user-row {
+      display: grid;
+      grid-template-columns: 220px 160px 100px 120px 120px 120px 120px 1fr;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #F0F0EA;
+      font-size: 13px;
+      align-items: center;
+    }
+    .user-row.header {
+      background: #F9F9F5;
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6B7280;
+      border-radius: 6px 6px 0 0;
+    }
+    .user-row .amount {
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .user-row .amount.negative { color: #C43D2E; }
+    .tag {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .tag.paying { background: #E8F5E8; color: var(--olive); }
+    .tag.non-paying { background: #F0F0F0; color: #6B7280; }
+    .tag.auto_reload { background: #FFF3E5; color: #A05A00; }
+    .tag.prepay_only { background: #E5F0FF; color: #003D80; }
+    .tag.monthly_invoice { background: #F0E5FF; color: #4A0080; }
+    button, .btn {
+      padding: 6px 12px;
+      background: var(--graphite);
+      color: var(--off-white);
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    button:hover { opacity: 0.9; }
+    button.secondary {
+      background: transparent;
+      color: var(--graphite);
+      border: 1px solid #D0D0D0;
+    }
+    button.danger {
+      background: #C43D2E;
+    }
+    input[type=text], input[type=number], input[type=email], select {
+      padding: 8px 10px;
+      border: 1px solid #D0D0D0;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    label { font-size: 13px; color: #6B7280; display: block; margin: 8px 0 4px 0; }
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.55);
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: white;
+      border-radius: 12px;
+      max-width: 640px;
+      width: calc(100vw - 40px);
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      padding: 28px;
+    }
+    .modal h3 { margin: 0 0 8px 0; font-size: 20px; }
+    .modal .close {
+      float: right;
+      background: none;
+      color: #6B7280;
+      font-size: 20px;
+      padding: 0 4px;
+    }
+    .stripe-el {
+      padding: 12px 14px;
+      border: 1px solid #D0D0D0;
+      border-radius: 8px;
+      background: white;
+    }
+    .banner {
+      padding: 14px 20px;
+      border-radius: 8px;
+      margin: 12px 0;
+      font-size: 13px;
+    }
+    .banner.success { background: #E8F5E8; color: var(--olive); }
+    .banner.error { background: #FFECEB; color: #C43D2E; }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: 1fr 120px 120px;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .pricing-grid .tool-name { font-weight: 500; }
+    .pricing-grid input { text-align: right; }
+    .kv-row {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 12px;
+      margin-bottom: 8px;
+      align-items: center;
+    }
+    .txn-list {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 12px;
+    }
+    .txn-list th {
+      text-align: left;
+      color: #6B7280;
+      font-size: 10px;
+      text-transform: uppercase;
+      padding: 6px 8px;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .txn-list td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #F5F5F0;
+    }
+    .txn-list td.amount {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .amount.positive { color: var(--olive); font-weight: 600; }
+    #search-box {
+      width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Crosswalk / Admin / Billing</div>
+    <div>
+      <a href="/admin">Users</a>
+      <a href="/">Dashboard</a>
+    </div>
+  </header>
+
+  <main>
+    <h1>Billing</h1>
+    <div id="banner"></div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="users">Users</button>
+      <button class="tab" data-tab="pricing">Pricing</button>
+    </div>
+
+    <div id="tab-users" class="tab-panel">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between;
+                    align-items: center; margin-bottom: 16px;">
+          <h2 style="margin: 0;">All Users</h2>
+          <input id="search-box" type="text" placeholder="Search by
+            email or username">
+        </div>
+        <div id="users-container"></div>
+      </div>
+    </div>
+
+    <div id="tab-pricing" class="tab-panel" style="display: none;">
+      <div class="card">
+        <h2>Per-Tool USD Prices</h2>
+        <p style="color: #6B7280; font-size: 13px; margin-top: 0;">
+          The wallet is charged these amounts when a paying customer
+          runs a pull and their internal allowance is exhausted.
+        </p>
+        <div id="pricing-body"></div>
+      </div>
+      <div class="card">
+        <h2>Prometheus Metered Billing</h2>
+        <p style="color: #6B7280; font-size: 13px; margin-top: 0;">
+          Prometheus sessions are billed by Anthropic-cost markup
+          (session close reads billed_usd from the render usage log).
+        </p>
+        <div class="kv-row">
+          <label style="margin: 0;">Markup multiplier:</label>
+          <div>
+            <input id="markup" type="number" step="0.01" min="1">
+            <button id="save-markup">Save</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Top-up Packs</h2>
+        <p style="color: #6B7280; font-size: 13px; margin-top: 0;">
+          Amounts shown as quick-select buttons on the user Wallet
+          page. Custom amount is always allowed above the minimum.
+        </p>
+        <div id="packs-body"></div>
+        <div class="kv-row" style="margin-top: 12px;">
+          <label style="margin: 0;">Minimum custom amount:</label>
+          <div>
+            $<input id="min-custom" type="number" step="1" min="1"
+                    style="width: 100px;">
+            <button id="save-packs">Save packs</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- User Billing Modal -->
+  <div id="user-modal" class="modal-backdrop">
+    <div class="modal">
+      <button class="close" onclick="closeModal()">&times;</button>
+      <h3 id="modal-title">User Billing</h3>
+      <div id="modal-subtitle" style="color: #6B7280; font-size: 13px;
+        margin-bottom: 20px;"></div>
+
+      <div id="modal-banner"></div>
+
+      <div class="card" style="padding: 16px; margin: 0 0 16px 0;">
+        <div class="kv-row">
+          <label style="margin: 0;">Paying customer</label>
+          <label style="margin: 0; display: flex; align-items: center;
+                        gap: 8px;">
+            <input id="m-paying" type="checkbox">
+            <span style="color: #6B7280; font-size: 12px;">
+              When enabled, this user's wallet may absorb charges
+              once internal credits drain.
+            </span>
+          </label>
+        </div>
+        <div class="kv-row">
+          <label style="margin: 0;">Billing mode</label>
+          <select id="m-mode">
+            <option value="prepay_only">Prepay only</option>
+            <option value="auto_reload">Auto-reload</option>
+            <option value="monthly_invoice">Monthly invoice</option>
+          </select>
+        </div>
+        <div id="ar-fields" style="display: none;">
+          <div class="kv-row">
+            <label style="margin: 0;">Auto-reload threshold</label>
+            <div>$<input id="m-ar-threshold" type="number" step="1"
+                    min="0" style="width: 100px;"></div>
+          </div>
+          <div class="kv-row">
+            <label style="margin: 0;">Auto-reload top-up amount</label>
+            <div>$<input id="m-ar-amount" type="number" step="1"
+                    min="0" style="width: 100px;"></div>
+          </div>
+        </div>
+        <div id="mi-fields" style="display: none;">
+          <div class="kv-row">
+            <label style="margin: 0;">Monthly invoice limit</label>
+            <div>$<input id="m-mi-limit" type="number" step="100"
+                    min="0" style="width: 120px;"></div>
+          </div>
+        </div>
+        <div style="text-align: right; margin-top: 12px;">
+          <button id="m-save-config">Save configuration</button>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 16px; margin: 0 0 16px 0;">
+        <h3 style="margin: 0 0 12px 0; font-size: 16px;">
+          Card on file
+        </h3>
+        <div id="m-card-status"
+          style="color: #6B7280; font-size: 13px; margin-bottom: 12px;">
+          No card on file.
+        </div>
+        <div id="m-card-form" style="display: none;">
+          <label>Card details</label>
+          <div id="card-element" class="stripe-el"></div>
+          <div style="margin-top: 8px; color: #6B7280; font-size: 11px;">
+            Card is stored securely with Stripe. Crosswalk never sees
+            the card number.
+          </div>
+          <div style="text-align: right; margin-top: 12px;">
+            <button class="secondary" onclick="hideCardForm()">
+              Cancel
+            </button>
+            <button id="m-save-card">Save card</button>
+          </div>
+        </div>
+        <div id="m-card-actions">
+          <button id="m-add-card">Add card</button>
+          <button id="m-remove-card" class="secondary"
+                  style="display: none;">Remove card</button>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 16px; margin: 0 0 16px 0;">
+        <h3 style="margin: 0 0 12px 0; font-size: 16px;">
+          Wallet
+        </h3>
+        <div class="kv-row">
+          <label style="margin: 0;">Balance</label>
+          <div id="m-balance" style="font-size: 24px; font-weight: 700;">
+            $0.00
+          </div>
+        </div>
+        <div class="kv-row">
+          <label style="margin: 0;">Manual adjustment</label>
+          <div>
+            $<input id="m-adj-amount" type="number" step="0.01"
+                    style="width: 100px;">
+            <input id="m-adj-desc" type="text" placeholder="Note"
+                   style="width: 200px;">
+            <button id="m-adj-add">Credit</button>
+            <button id="m-adj-sub" class="secondary">Debit</button>
+          </div>
+        </div>
+        <div class="kv-row">
+          <label style="margin: 0;">Charge card now</label>
+          <div>
+            $<input id="m-charge-amount" type="number" step="0.01"
+                    style="width: 100px;">
+            <input id="m-charge-desc" type="text" placeholder="Note"
+                   style="width: 200px;">
+            <button id="m-charge-btn">Charge</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 16px;">
+        <h3 style="margin: 0 0 12px 0; font-size: 16px;">
+          Transaction history (last 50)
+        </h3>
+        <div id="m-txns"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const fmtUsd = (n) => {
+      const v = Number(n) || 0;
+      const sign = v < 0 ? '-' : '';
+      return sign + '$' + Math.abs(v).toLocaleString('en-US', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+      });
+    };
+    const fmtDate = (iso) => {
+      if (!iso) return '';
+      try {
+        const d = new Date(iso);
+        return d.toLocaleString('en-US', {
+          month: 'short', day: 'numeric', hour: 'numeric',
+          minute: '2-digit'
+        });
+      } catch (e) { return iso; }
+    };
+
+    let stripe = null, stripeElements = null, cardElement = null;
+    let currentUsername = null;
+    let stripePublishableKey = null;
+    let allUsers = [];
+
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(x =>
+          x.classList.remove('active'));
+        t.classList.add('active');
+        document.querySelectorAll('.tab-panel').forEach(p =>
+          p.style.display = 'none');
+        $('tab-' + t.dataset.tab).style.display = 'block';
+      });
+    });
+
+    // Search
+    $('search-box').addEventListener('input', () => {
+      renderUsers();
+    });
+
+    async function loadUsers() {
+      const r = await fetch('/api/admin/users_billing', {
+        credentials: 'same-origin'
+      });
+      if (r.status === 401 || r.status === 403) {
+        $('banner').innerHTML =
+          '<div class="banner error">Admin login required.</div>';
+        return;
+      }
+      if (!r.ok) {
+        $('banner').innerHTML =
+          '<div class="banner error">Could not load users.</div>';
+        return;
+      }
+      const j = await r.json();
+      allUsers = j.users || [];
+      stripePublishableKey = j.stripe_publishable_key || '';
+      if (stripePublishableKey && !stripe) {
+        stripe = Stripe(stripePublishableKey);
+      }
+      if (!j.stripe_enabled) {
+        $('banner').innerHTML =
+          '<div class="banner error">Stripe is not configured.' +
+          ' Set STRIPE_SECRET_KEY / STRIPE_PUBLISHABLE_KEY to enable' +
+          ' card operations.</div>';
+      }
+      renderUsers();
+    }
+
+    function renderUsers() {
+      const q = ($('search-box').value || '').toLowerCase().trim();
+      const filtered = q ? allUsers.filter(u =>
+        (u.username || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q)
+      ) : allUsers;
+      let html = '<div class="user-row header">';
+      html += '<div>User</div><div>Email</div><div>Paying</div>';
+      html += '<div>Mode</div><div>Card</div>';
+      html += '<div class="amount">Balance</div>';
+      html += '<div class="amount">Spend</div>';
+      html += '<div></div>';
+      html += '</div>';
+      filtered.forEach(u => {
+        const modeMap = {
+          prepay_only: 'Prepay',
+          auto_reload: 'Auto',
+          monthly_invoice: 'Invoice',
+        };
+        const balCls = u.wallet_balance_usd < 0 ? ' negative' : '';
+        html += '<div class="user-row">';
+        html += '<div>' + (u.username || '') + '</div>';
+        html += '<div style="color: #6B7280;">' +
+          (u.email || '') + '</div>';
+        html += '<div>' + (u.paying_customer
+          ? '<span class="tag paying">Paying</span>'
+          : '<span class="tag non-paying">-</span>') + '</div>';
+        html += '<div>' + (u.paying_customer
+          ? '<span class="tag ' + u.billing_mode + '">' +
+            (modeMap[u.billing_mode] || u.billing_mode) + '</span>'
+          : '') + '</div>';
+        html += '<div>' + (u.has_card_on_file
+          ? (u.card_brand || 'card') + ' ****' + (u.card_last4 || '')
+          : '<span style="color: #B8B8B0;">-</span>') + '</div>';
+        html += '<div class="amount' + balCls + '">' +
+          fmtUsd(u.wallet_balance_usd) + '</div>';
+        html += '<div class="amount">' +
+          fmtUsd(u.wallet_lifetime_spend_usd) + '</div>';
+        html += '<div><button onclick="openModal(\'' +
+          u.username + '\')">Manage</button></div>';
+        html += '</div>';
+      });
+      $('users-container').innerHTML = html;
+    }
+
+    async function openModal(username) {
+      currentUsername = username;
+      $('modal-banner').innerHTML = '';
+      const u = allUsers.find(x => x.username === username);
+      if (!u) return;
+      $('modal-title').textContent = 'Billing: ' + username;
+      $('modal-subtitle').textContent = u.email || '';
+      $('m-paying').checked = !!u.paying_customer;
+      $('m-mode').value = u.billing_mode || 'prepay_only';
+      $('m-ar-threshold').value = u.auto_reload_threshold_usd || 500;
+      $('m-ar-amount').value = u.auto_reload_amount_usd || 1000;
+      $('m-mi-limit').value = u.monthly_invoice_limit_usd || 5000;
+      updateModeFields();
+      $('m-balance').textContent = fmtUsd(u.wallet_balance_usd);
+      if (u.wallet_balance_usd < 0)
+        $('m-balance').style.color = '#C43D2E';
+      else $('m-balance').style.color = '';
+      renderCardStatus(u);
+      renderTxns(u.wallet_transactions || []);
+      $('user-modal').classList.add('open');
+    }
+
+    function closeModal() {
+      $('user-modal').classList.remove('open');
+      currentUsername = null;
+      hideCardForm();
+    }
+
+    function updateModeFields() {
+      const mode = $('m-mode').value;
+      $('ar-fields').style.display =
+        mode === 'auto_reload' ? 'block' : 'none';
+      $('mi-fields').style.display =
+        mode === 'monthly_invoice' ? 'block' : 'none';
+    }
+    $('m-mode').addEventListener('change', updateModeFields);
+
+    function renderCardStatus(u) {
+      if (u.has_card_on_file) {
+        $('m-card-status').innerHTML =
+          '<strong>' + (u.card_brand || 'Card') + ' ****' +
+          (u.card_last4 || '') + '</strong> on file.';
+        $('m-add-card').style.display = 'none';
+        $('m-remove-card').style.display = 'inline-block';
+      } else {
+        $('m-card-status').textContent = 'No card on file.';
+        $('m-add-card').style.display = 'inline-block';
+        $('m-remove-card').style.display = 'none';
+      }
+    }
+
+    function renderTxns(txns) {
+      if (!txns || !txns.length) {
+        $('m-txns').innerHTML =
+          '<div style="color: #B8B8B0; font-size: 13px;">' +
+          'No transactions.</div>';
+        return;
+      }
+      const kindLabels = {
+        topup: 'Top-up', auto_reload: 'Auto-reload',
+        deduct: 'Usage', refund: 'Refund',
+        adjustment: 'Adjustment',
+      };
+      let html = '<table class="txn-list"><thead><tr>';
+      html += '<th>Date</th><th>Type</th><th>Description</th>';
+      html += '<th style="text-align:right;">Amount</th>';
+      html += '<th style="text-align:right;">Balance</th>';
+      html += '</tr></thead><tbody>';
+      txns.slice(0, 50).forEach(t => {
+        const amt = Number(t.amount_usd || 0);
+        const cls = amt >= 0 ? 'positive' : '';
+        const sign = amt >= 0 ? '+' : '';
+        html += '<tr>';
+        html += '<td>' + fmtDate(t.ts) + '</td>';
+        html += '<td>' + (kindLabels[t.kind] || t.kind) + '</td>';
+        html += '<td>' + (t.description || '') + '</td>';
+        html += '<td class="amount ' + cls + '">' + sign +
+          fmtUsd(Math.abs(amt)) + '</td>';
+        html += '<td class="amount">' + fmtUsd(t.balance_after_usd) +
+          '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      $('m-txns').innerHTML = html;
+    }
+
+    $('m-save-config').addEventListener('click', async () => {
+      const body = {
+        paying_customer: $('m-paying').checked,
+        billing_mode: $('m-mode').value,
+        auto_reload_threshold_usd:
+          Number($('m-ar-threshold').value || 500),
+        auto_reload_amount_usd:
+          Number($('m-ar-amount').value || 1000),
+        monthly_invoice_limit_usd:
+          Number($('m-mi-limit').value || 5000),
+      };
+      const r = await fetch(
+        '/api/admin/user/' + currentUsername + '/billing/config',
+        { method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok) {
+        showModalBanner('error', j.error || 'Save failed');
+        return;
+      }
+      showModalBanner('success', 'Configuration saved.');
+      await loadUsers();
+    });
+
+    $('m-add-card').addEventListener('click', showCardForm);
+    async function showCardForm() {
+      if (!stripe) {
+        showModalBanner('error',
+          'Stripe not configured. Cannot add a card.');
+        return;
+      }
+      $('m-card-form').style.display = 'block';
+      $('m-card-actions').style.display = 'none';
+      // Request a SetupIntent for this user.
+      const r = await fetch(
+        '/api/admin/user/' + currentUsername +
+        '/billing/setup-intent',
+        { method: 'POST', credentials: 'same-origin' });
+      const j = await r.json();
+      if (!r.ok) {
+        showModalBanner('error', j.error || 'Setup failed');
+        hideCardForm();
+        return;
+      }
+      if (!stripeElements) {
+        stripeElements = stripe.elements();
+        cardElement = stripeElements.create('card');
+        cardElement.mount('#card-element');
+      }
+      $('m-save-card').dataset.clientSecret = j.client_secret;
+    }
+    function hideCardForm() {
+      $('m-card-form').style.display = 'none';
+      $('m-card-actions').style.display = 'block';
+    }
+    $('m-save-card').addEventListener('click', async () => {
+      const cs = $('m-save-card').dataset.clientSecret;
+      if (!cs || !cardElement) return;
+      $('m-save-card').disabled = true;
+      const { setupIntent, error } = await stripe.confirmCardSetup(
+        cs, { payment_method: { card: cardElement } });
+      if (error) {
+        showModalBanner('error', error.message);
+        $('m-save-card').disabled = false;
+        return;
+      }
+      // Send payment_method to backend to attach + persist.
+      const r = await fetch(
+        '/api/admin/user/' + currentUsername + '/billing/attach-card',
+        { method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            payment_method_id: setupIntent.payment_method
+          }) });
+      const j = await r.json();
+      $('m-save-card').disabled = false;
+      if (!r.ok) {
+        showModalBanner('error', j.error || 'Attach failed');
+        return;
+      }
+      showModalBanner('success', 'Card saved.');
+      hideCardForm();
+      cardElement.clear();
+      await loadUsers();
+      // Reopen modal to refresh card display.
+      const u = allUsers.find(x => x.username === currentUsername);
+      if (u) renderCardStatus(u);
+    });
+
+    $('m-remove-card').addEventListener('click', async () => {
+      if (!confirm('Remove card on file?')) return;
+      const r = await fetch(
+        '/api/admin/user/' + currentUsername +
+        '/billing/remove-card',
+        { method: 'POST', credentials: 'same-origin' });
+      const j = await r.json();
+      if (!r.ok) {
+        showModalBanner('error', j.error || 'Remove failed');
+        return;
+      }
+      showModalBanner('success', 'Card removed.');
+      await loadUsers();
+      const u = allUsers.find(x => x.username === currentUsername);
+      if (u) renderCardStatus(u);
+    });
+
+    async function adjust(sign) {
+      const amt = parseFloat($('m-adj-amount').value);
+      const desc = $('m-adj-desc').value || 'Manual adjustment';
+      if (!amt || amt <= 0) return;
+      const r = await fetch(
+        '/api/admin/user/' + currentUsername + '/billing/adjust',
+        { method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount_usd: amt * sign,
+            description: desc,
+          }) });
+      const j = await r.json();
+      if (!r.ok) {
+        showModalBanner('error', j.error || 'Adjustment failed');
+        return;
+      }
+      showModalBanner('success',
+        (sign > 0 ? 'Credit' : 'Debit') + ' of ' + fmtUsd(amt) +
+        ' applied.');
+      $('m-adj-amount').value = '';
+      $('m-adj-desc').value = '';
+      await loadUsers();
+      const u = allUsers.find(x => x.username === currentUsername);
+      if (u) {
+        $('m-balance').textContent = fmtUsd(u.wallet_balance_usd);
+        renderTxns(u.wallet_transactions || []);
+      }
+    }
+    $('m-adj-add').addEventListener('click', () => adjust(1));
+    $('m-adj-sub').addEventListener('click', () => adjust(-1));
+
+    $('m-charge-btn').addEventListener('click', async () => {
+      const amt = parseFloat($('m-charge-amount').value);
+      const desc = $('m-charge-desc').value ||
+        'Admin-initiated charge';
+      if (!amt || amt <= 0) return;
+      if (!confirm('Charge ' + fmtUsd(amt) + ' to card on file?'))
+        return;
+      const r = await fetch(
+        '/api/admin/user/' + currentUsername +
+        '/billing/charge-card',
+        { method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount_usd: amt,
+            description: desc,
+          }) });
+      const j = await r.json();
+      if (!r.ok) {
+        showModalBanner('error', j.error || 'Charge failed');
+        return;
+      }
+      showModalBanner('success',
+        'Charge of ' + fmtUsd(amt) + ' succeeded.');
+      $('m-charge-amount').value = '';
+      $('m-charge-desc').value = '';
+      await loadUsers();
+      const u = allUsers.find(x => x.username === currentUsername);
+      if (u) {
+        $('m-balance').textContent = fmtUsd(u.wallet_balance_usd);
+        renderTxns(u.wallet_transactions || []);
+      }
+    });
+
+    function showModalBanner(kind, msg) {
+      $('modal-banner').innerHTML =
+        '<div class="banner ' + kind + '">' + msg + '</div>';
+      if (kind === 'success') {
+        setTimeout(() => {
+          $('modal-banner').innerHTML = '';
+        }, 3500);
+      }
+    }
+
+    // Pricing tab
+    async function loadPricing() {
+      const r = await fetch('/api/admin/pricing', {
+        credentials: 'same-origin'
+      });
+      if (!r.ok) return;
+      const p = await r.json();
+      renderPricing(p);
+    }
+
+    function renderPricing(p) {
+      const tools = p.tools || {};
+      let html = '<div class="pricing-grid" style="font-weight: 600;' +
+        ' color: #6B7280; font-size: 11px; text-transform: uppercase;' +
+        '">';
+      html += '<div>Tool</div><div style="text-align:right;">' +
+        'Credits</div><div style="text-align:right;">USD</div>';
+      html += '</div>';
+      Object.keys(tools).forEach(key => {
+        const t = tools[key] || {};
+        html += '<div class="pricing-grid" data-tool="' + key + '">';
+        html += '<div class="tool-name">' +
+          (t.display_name || key) + '</div>';
+        html += '<div><input type="number" step="1" min="0" ' +
+          'class="tool-credits" value="' + (t.credits || 0) + '">' +
+          '</div>';
+        html += '<div><input type="number" step="0.01" min="0" ' +
+          'class="tool-usd" value="' + (t.usd || 0) + '"></div>';
+        html += '</div>';
+      });
+      html += '<div style="text-align: right; margin-top: 12px;">' +
+        '<button id="save-tools">Save all prices</button></div>';
+      $('pricing-body').innerHTML = html;
+      $('markup').value = p.prometheus_markup || 2.10;
+      renderPacks(p.top_up_packs_usd || []);
+      $('min-custom').value = p.top_up_min_custom_usd || 100;
+      $('save-tools').addEventListener('click', saveTools);
+    }
+
+    function renderPacks(packs) {
+      let html = '';
+      packs.forEach((amt, i) => {
+        html += '<div style="margin-bottom: 6px; display: flex;' +
+          ' gap: 8px; align-items: center;">' +
+          '$<input type="number" step="1" min="1" ' +
+          'value="' + amt + '" data-pack-idx="' + i +
+          '" style="width: 100px;" class="pack-input">' +
+          '<button class="secondary" onclick="removePack(' + i +
+          ')">Remove</button></div>';
+      });
+      html += '<button class="secondary" onclick="addPack()">' +
+        '+ Add pack</button>';
+      $('packs-body').innerHTML = html;
+    }
+
+    window.removePack = (idx) => {
+      const inputs = document.querySelectorAll('.pack-input');
+      const arr = Array.from(inputs).map(i => Number(i.value || 0));
+      arr.splice(idx, 1);
+      renderPacks(arr);
+    };
+    window.addPack = () => {
+      const inputs = document.querySelectorAll('.pack-input');
+      const arr = Array.from(inputs).map(i => Number(i.value || 0));
+      arr.push(500);
+      renderPacks(arr);
+    };
+
+    async function saveTools() {
+      const grids = document.querySelectorAll(
+        '#pricing-body .pricing-grid[data-tool]');
+      const tools = {};
+      grids.forEach(g => {
+        const key = g.dataset.tool;
+        const credits = Number(g.querySelector(
+          '.tool-credits').value || 0);
+        const usd = Number(g.querySelector(
+          '.tool-usd').value || 0);
+        tools[key] = { credits: credits, usd: usd };
+      });
+      const r = await fetch('/api/admin/pricing', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tools: tools }),
+      });
+      if (r.ok) {
+        $('banner').innerHTML =
+          '<div class="banner success">Prices saved.</div>';
+      } else {
+        const j = await r.json();
+        $('banner').innerHTML =
+          '<div class="banner error">' +
+          (j.error || 'Save failed') + '</div>';
+      }
+    }
+
+    $('save-markup').addEventListener('click', async () => {
+      const v = Number($('markup').value || 0);
+      const r = await fetch('/api/admin/pricing', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prometheus_markup: v }),
+      });
+      if (r.ok) $('banner').innerHTML =
+        '<div class="banner success">Markup saved.</div>';
+    });
+    $('save-packs').addEventListener('click', async () => {
+      const inputs = document.querySelectorAll('.pack-input');
+      const arr = Array.from(inputs).map(i => Number(i.value || 0))
+                       .filter(v => v > 0);
+      const minCustom = Number($('min-custom').value || 100);
+      const r = await fetch('/api/admin/pricing', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          top_up_packs_usd: arr,
+          top_up_min_custom_usd: minCustom,
+        }),
+      });
+      if (r.ok) $('banner').innerHTML =
+        '<div class="banner success">Packs saved.</div>';
+    });
+
+    loadUsers();
+    loadPricing();
+  </script>
+</body>
+</html>

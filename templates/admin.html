@@ -1855,6 +1855,7 @@
                 <button class="admin-tab" onclick="showSettingsTab('creditUsageExport')">📊 Credit Usage by Period</button>
                 <button class="admin-tab" id="settingsTabDailySpend" onclick="showSettingsTab('dailySpend')" style="display: {{ 'inline-block' if current_user_role == 'super_admin' else 'none' }};">💵 Daily Spend</button>
                 <button class="admin-tab" id="settingsTabDefaultPhoto" onclick="showSettingsTab('defaultProfilePhoto')" style="display: {{ 'inline-block' if current_user_role == 'super_admin' else 'none' }};">👤 Default Profile Photo</button>
+                <a class="admin-tab" id="settingsTabBilling" href="/admin/billing" style="display: {{ 'inline-block' if current_user_role == 'super_admin' else 'none' }}; text-decoration: none;">💳 Billing</a>
             </div>
             
             <!-- Gmail Integration Tab -->

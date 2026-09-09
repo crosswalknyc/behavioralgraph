@@ -440,6 +440,100 @@ def _claim_stamp(s3, key: str, summary: dict) -> bool:
         return False
 
 
+def _apply_ppu_wallet_deduction(summary: dict) -> None:
+    """Deduct a closed Prometheus session's billed_usd from the user's
+    wallet, when applicable (Jenna 2026-09-08).
+
+    A pay-per-use session's `billed_usd` is already Anthropic cost x
+    2.10 (see render_usage_log). We push that number straight into the
+    wallet as a `deduct` transaction tagged tool='prometheus'. After
+    the deduction commits, we let `wallet.try_auto_reload` decide
+    whether to fire an off-session Stripe charge.
+
+    Only fires for users flagged paying_customer=true. Internal
+    Crosswalk users (Jenna, Jessie, Liz) never see a wallet debit
+    from Prometheus - their sessions are already covered by their
+    internal allowance and by-design don't route through the wallet.
+
+    Fail-safe: any import/lookup/deduct error becomes a print statement.
+    Never raises.
+    """
+    try:
+        billed = round(float(summary.get('billed_usd') or 0.0), 2)
+    except (TypeError, ValueError):
+        billed = 0.0
+    if billed <= 0:
+        return
+    email = str(summary.get('user_email') or '').strip().lower()
+    if not email:
+        return
+    try:
+        # Lazy imports: pay_per_use.py is imported early by app.py, so
+        # we defer the app + wallet imports until sweep time to avoid
+        # any startup-order surprises.
+        from app import load_users, _users_cas_mutate  # type: ignore
+        import wallet as _wallet  # type: ignore
+    except Exception as e:
+        print(f"[pay-per-use] wallet deduction unavailable: {e}")
+        return
+
+    # Find the dashboard username by email match.
+    users_data = load_users() or {}
+    target_username = None
+    for uname, u in (users_data.get('users') or {}).items():
+        if str((u or {}).get('email') or '').strip().lower() == email:
+            target_username = uname
+            break
+    if not target_username:
+        return
+
+    outcome = {'billed': billed}
+
+    def _apply(data):
+        u = (data.get('users') or {}).get(target_username)
+        if not u:
+            return None
+        if not _wallet.is_paying_customer(u):
+            return None
+        # Enforce billing-mode limits (monthly_invoice negative floor,
+        # prepay_only sufficient-balance check).
+        can, _reason = _wallet.wallet_can_absorb(u, billed)
+        if not can and _wallet.billing_mode(u) == 'prepay_only':
+            # No card, no auto-reload -> allow the deduction to go
+            # negative anyway (Prometheus session already ran; we
+            # cannot un-consume the compute). Admin will see the
+            # negative balance in the transaction history and can
+            # top up / reconcile manually. This matches the "never
+            # block a session mid-flight" invariant from
+            # no-rebuild-level-correction.
+            pass
+        _wallet.apply_wallet_deduct(
+            u, billed,
+            description=(f"Prometheus session ({summary.get('asks', 0)} "
+                         f"asks, {summary.get('active_seconds', 0):.0f}s "
+                         f"active)"),
+            tool_key='prometheus',
+            job_id=str(summary.get('session_start', '') or ''))
+        outcome['committed'] = True
+        return data
+
+    try:
+        _users_cas_mutate(_apply)
+    except Exception as e:
+        print(f"[pay-per-use] wallet deduction CAS failed: {e}")
+        return
+
+    if not outcome.get('committed'):
+        return
+
+    # Post-CAS: fire auto-reload if applicable. Fresh user snapshot.
+    try:
+        post = load_users().get('users', {}).get(target_username) or {}
+        _wallet.try_auto_reload(target_username, post)
+    except Exception as e:
+        print(f"[pay-per-use] auto-reload skipped: {e}")
+
+
 def sweep_closed_sessions(now: float = None, s3=None, send=None) -> list:
     """Close idle pay-per-use sessions and email each summary exactly
     once. Reads the shared S3 usage rows (the source of truth), so
@@ -468,6 +562,16 @@ def sweep_closed_sessions(now: float = None, s3=None, send=None) -> list:
             except Exception as e:
                 print(f"[pay-per-use] summary email failed: {e}")
             emailed.append(summary)
+            # Wallet deduction (Jenna 2026-09-08). If this session's
+            # user is a paying customer, deduct billed_usd from their
+            # wallet in real time and fire auto-reload if the balance
+            # drops below their threshold. Runs AFTER the stamp so a
+            # retry never double-charges. Never blocks the sweep -
+            # any error is logged and the email still lands.
+            try:
+                _apply_ppu_wallet_deduction(summary)
+            except Exception as _wd_e:
+                print(f"[pay-per-use] wallet deduction skipped: {_wd_e}")
     except Exception as e:
         print(f"[pay-per-use] sweep failed: {e}")
     return emailed

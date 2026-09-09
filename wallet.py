@@ -1,0 +1,710 @@
+"""Dollar-balance wallet + per-tool pricing (2026-09-08).
+
+Jenna's mandate: "I want to enter something where people can either
+sign up online for the dashboard and pay a fee that is charged to
+their credit card or can buy additional credits with their credit
+card or where an admin can put a credit card in and it charges their
+prometheus charges to it."
+
+Resolution (2026-09-08): single dollar wallet, admin sets per-tool
+prices, Prometheus deducts metered Anthropic x 2.10 in real time.
+Internal Crosswalk allowances (`credits` field) drain first, then the
+wallet.
+
+This module is PURE math + state. It does not touch Stripe. It does
+not send emails. Callers (app.py routes, pay_per_use.py session close)
+wire it into their own flows.
+
+Public surface:
+
+    load_pricing() -> dict                # per-tool USD costs
+    save_pricing(pricing) -> dict
+    tool_price_usd(tool_key) -> float
+    prometheus_markup() -> float          # 2.10 currently
+
+    wallet_balance(user) -> float
+    is_paying_customer(user) -> bool
+    admits_wallet_ui(user) -> bool        # who sees Buy Credits
+
+    deduct_from_wallet(username, amount_usd, description, ...)
+                        -> (ok, new_balance, txn_row)
+    topup_wallet(username, amount_usd, description, ...)
+                        -> (ok, new_balance, txn_row)
+
+Deduction ordering (called from consume_credit's mutator):
+
+    should_charge_wallet(user, credits_used, pricing) -> (usd, tool_key)
+        Returns (usd_to_charge, tool_key) when the wallet should be hit
+        AFTER credits are exhausted. (0.0, '') when internal allowance
+        covers it OR user isn't a paying customer.
+
+Idempotency and atomicity live in the caller (`_users_cas_mutate`).
+This module writes to a users.json dict passed by reference; the CAS
+loop retries on collision. That's the same pattern consume_credit
+already uses.
+"""
+from __future__ import annotations
+
+import json
+import os
+from datetime import datetime, timezone
+from typing import Optional
+
+
+# ---------------------------------------------------------------------------
+# Pricing config
+# ---------------------------------------------------------------------------
+
+# S3 key for the per-tool pricing dict. Admin panel writes here, all
+# code paths read here. Bucket = METADATA_BUCKET from app.py.
+PRICING_S3_KEY = "system/pricing.json"
+
+# Local mirror (also read on cold-start when S3 is unreachable). Same
+# treatment as other config files.
+_LOCAL_PRICING_MIRROR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "_state", "pricing.json",
+)
+
+# Hardcoded fallback if neither S3 nor local mirror has anything. Set
+# by Jenna 2026-09-08.
+DEFAULT_PRICING = {
+    "per_tool_usd": {
+        # Standard IQ pulls
+        "profile_iq_build": 500.0,
+        "profile_iq_derived_cut": 100.0,
+        "subscriber_iq_build": 1000.0,
+        "chatbot_profile_iq_build": 500.0,
+        # Analysis / journey / attribution modules (default 0 = free
+        # until the admin sets a value)
+        "digital_journey_iq": 0.0,
+        "impact_iq": 0.0,
+        "attribution_iq": 0.0,
+        "analysis_iq": 0.0,
+        "trends_iq": 0.0,
+        "rankers_iq": 0.0,
+        "sentiment_iq": 0.0,
+        "brand_partnership_iq": 0.0,
+        "sf_conversion": 0.0,
+        "flywheel_conversion": 0.0,
+        "intent_iq": 0.0,
+        "share_of_time": 0.0,
+        "hedge_fund_iq": 0.0,
+    },
+    "top_up_packs_usd": [250, 500, 1000, 2500],
+    "top_up_min_custom_usd": 100.0,
+    "prometheus_markup_multiplier": 2.10,
+    "auto_reload_defaults": {
+        "threshold_usd": 500.0,
+        "amount_usd": 1000.0,
+    },
+    "monthly_invoice_defaults": {
+        "limit_usd": 5000.0,
+    },
+}
+
+
+# Cache the last-read pricing so repeated tool_price_usd() calls in a
+# request don't refetch. Callers who need fresh values (admin save)
+# invalidate via _clear_pricing_cache.
+_pricing_cache: dict = {"value": None, "loaded_at": 0.0}
+_PRICING_CACHE_TTL_S = 30.0
+
+
+def _clear_pricing_cache():
+    _pricing_cache["value"] = None
+    _pricing_cache["loaded_at"] = 0.0
+
+
+def _now_ts() -> float:
+    import time
+    return time.time()
+
+
+def load_pricing(*, force_reload: bool = False) -> dict:
+    """Return the effective pricing dict. Cached ~30s.
+
+    Loads from S3 first; falls back to the local mirror; falls back to
+    DEFAULT_PRICING. Never raises: a missing pricing file is a fresh
+    install and DEFAULT_PRICING is authoritative.
+    """
+    if (not force_reload
+            and _pricing_cache["value"] is not None
+            and (_now_ts() - _pricing_cache["loaded_at"])
+                < _PRICING_CACHE_TTL_S):
+        return _pricing_cache["value"]
+    doc = None
+    # S3 first (canonical). Import lazily so this module has no hard
+    # dep on app.py's boto3 client during tests.
+    try:
+        from app import s3_client, METADATA_BUCKET  # type: ignore
+        if s3_client:
+            try:
+                resp = s3_client.get_object(
+                    Bucket=METADATA_BUCKET, Key=PRICING_S3_KEY)
+                raw = resp["Body"].read().decode("utf-8")
+                doc = json.loads(raw)
+            except Exception as e:
+                _msg = str(e)
+                if "NoSuchKey" not in _msg and "404" not in _msg:
+                    print(f"[wallet] pricing S3 load failed: {e}")
+    except Exception:
+        # app not importable (tests) - fall through to local mirror.
+        pass
+    if doc is None:
+        try:
+            if os.path.exists(_LOCAL_PRICING_MIRROR):
+                with open(_LOCAL_PRICING_MIRROR, "r") as fh:
+                    doc = json.load(fh)
+        except Exception as e:
+            print(f"[wallet] pricing local mirror load failed: {e}")
+    if doc is None or not isinstance(doc, dict):
+        doc = json.loads(json.dumps(DEFAULT_PRICING))  # deep copy
+    # Ensure the shape has at least the DEFAULT_PRICING keys. New
+    # per-tool keys added to DEFAULT_PRICING after a customer already
+    # saved their own pricing land at their default (0.0 for optional,
+    # canonical for standard pulls).
+    merged = json.loads(json.dumps(DEFAULT_PRICING))
+    for k, v in doc.items():
+        if k == "per_tool_usd" and isinstance(v, dict):
+            merged["per_tool_usd"].update(
+                {kk: float(vv) for kk, vv in v.items()
+                 if isinstance(vv, (int, float))})
+        else:
+            merged[k] = v
+    _pricing_cache["value"] = merged
+    _pricing_cache["loaded_at"] = _now_ts()
+    return merged
+
+
+def save_pricing(new_pricing: dict) -> dict:
+    """Persist pricing to S3 + local mirror. Admin-only surface.
+
+    Returns the effective merged dict on success. Does NOT enforce
+    role gating; callers must already have confirmed the caller is a
+    super_admin.
+    """
+    # Merge over defaults so partial saves (admin only changed
+    # profile_iq_build) don't clobber the rest.
+    merged = json.loads(json.dumps(DEFAULT_PRICING))
+    if isinstance(new_pricing, dict):
+        for k, v in new_pricing.items():
+            if k == "per_tool_usd" and isinstance(v, dict):
+                merged["per_tool_usd"].update({
+                    kk: float(vv) for kk, vv in v.items()
+                    if isinstance(vv, (int, float)) and float(vv) >= 0})
+            elif k in ("top_up_packs_usd",) and isinstance(v, list):
+                merged[k] = [
+                    float(x) for x in v
+                    if isinstance(x, (int, float)) and float(x) > 0]
+            elif k in ("top_up_min_custom_usd",
+                       "prometheus_markup_multiplier") \
+                    and isinstance(v, (int, float)):
+                merged[k] = float(v)
+            elif k in ("auto_reload_defaults",
+                       "monthly_invoice_defaults") \
+                    and isinstance(v, dict):
+                merged[k] = {kk: float(vv) for kk, vv in v.items()
+                             if isinstance(vv, (int, float))}
+    # Write to S3
+    try:
+        from app import s3_client, METADATA_BUCKET  # type: ignore
+        if s3_client:
+            body = json.dumps(merged, indent=2).encode("utf-8")
+            s3_client.put_object(
+                Bucket=METADATA_BUCKET, Key=PRICING_S3_KEY,
+                Body=body, ContentType="application/json")
+    except Exception as e:
+        print(f"[wallet] pricing S3 save failed: {e}")
+    # Local mirror best-effort
+    try:
+        os.makedirs(os.path.dirname(_LOCAL_PRICING_MIRROR), exist_ok=True)
+        with open(_LOCAL_PRICING_MIRROR, "w") as fh:
+            json.dump(merged, fh, indent=2)
+    except Exception as e:
+        print(f"[wallet] pricing local mirror save failed: {e}")
+    _clear_pricing_cache()
+    return merged
+
+
+def tool_price_usd(tool_key: str) -> float:
+    """USD price for a single pull of the named tool. 0.0 for unset
+    tools (free until admin sets a value)."""
+    p = load_pricing()
+    return float(p.get("per_tool_usd", {}).get(str(tool_key), 0.0))
+
+
+# Map free-form pull_type strings (as passed to consume_credit) to the
+# canonical pricing key. Admins configure prices against the canonical
+# keys in system/pricing.json. Unknown pull_types map to '' -> no
+# wallet charge, existing credits-only behavior preserved.
+_PULL_TYPE_TO_TOOL_KEY = {
+    # Profile IQ family
+    "profile analysis": "profile_iq_build",
+    "profile iq": "profile_iq_build",
+    "profile iq build": "profile_iq_build",
+    "chatbot profile iq": "chatbot_profile_iq_build",
+    "chatbot profile iq build": "chatbot_profile_iq_build",
+    "derived cut": "profile_iq_derived_cut",
+    "avid cut": "profile_iq_derived_cut",
+    "gender cut": "profile_iq_derived_cut",
+    "age cut": "profile_iq_derived_cut",
+    "geo cut": "profile_iq_derived_cut",
+    "behavioral cut": "profile_iq_derived_cut",
+    # Subscriber IQ
+    "subscriber iq": "subscriber_iq_build",
+    "subscriber iq build": "subscriber_iq_build",
+    "svod": "subscriber_iq_build",
+    # Attribution / marketing modules
+    "ticket sales": "attribution_iq",
+    "ticket sales tracker": "attribution_iq",
+    "sf-lf conversion": "attribution_iq",
+    "flywheel conversion": "attribution_iq",
+    "campaign roi": "attribution_iq",
+    "watch time": "attribution_iq",
+    "roas iq": "attribution_iq",
+    # Talent
+    "talent fit assessment": "profile_iq_build",
+    "find me talent": "profile_iq_build",
+}
+
+
+def pull_type_to_tool_key(pull_type: str) -> str:
+    """Map a consume_credit pull_type argument to a pricing key.
+
+    Falls back to the normalized pull_type string when the canonical
+    map doesn't match, so a new pull_type can be priced by adding it
+    to system/pricing.json without a code change.
+    """
+    pt = str(pull_type or "").strip().lower()
+    if not pt:
+        return ""
+    if pt in _PULL_TYPE_TO_TOOL_KEY:
+        return _PULL_TYPE_TO_TOOL_KEY[pt]
+    # Normalized fallback: allow admin to price against the raw
+    # pull_type by adding a key like "custom_flow" to pricing.
+    return pt.replace(" ", "_").replace("-", "_")
+
+
+def prometheus_markup() -> float:
+    """Multiplier applied to raw Anthropic cost for Prometheus session
+    billing. Default 2.10 per Jenna's 110%-markup mandate."""
+    p = load_pricing()
+    return float(p.get("prometheus_markup_multiplier", 2.10))
+
+
+def top_up_pack_sizes() -> list:
+    """Ordered list of USD amounts for the Buy Credits page."""
+    p = load_pricing()
+    packs = p.get("top_up_packs_usd") or []
+    return [float(x) for x in packs if float(x) > 0]
+
+
+def top_up_min_custom() -> float:
+    """Minimum custom top-up amount (Stripe charges $0.30 flat + 2.9%,
+    so we set a floor to avoid churning tiny top-ups)."""
+    p = load_pricing()
+    return float(p.get("top_up_min_custom_usd", 100.0))
+
+
+# ---------------------------------------------------------------------------
+# Wallet reads
+# ---------------------------------------------------------------------------
+
+def wallet_balance(user: dict) -> float:
+    """Current $ balance for a users.json user record. 0.0 for a
+    non-paying customer."""
+    if not user:
+        return 0.0
+    try:
+        return float(user.get("wallet_balance_usd", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def is_paying_customer(user: dict) -> bool:
+    """Whether this user's pulls should route through the wallet
+    after internal allowance drains. `paying_customer` flag is
+    admin-set."""
+    if not user:
+        return False
+    return bool(user.get("paying_customer"))
+
+
+def admits_wallet_ui(user: dict) -> bool:
+    """Whether the 'Add Funds' / wallet-balance UI should render for
+    this user. Jenna 2026-09-08: super_admin + paying_customer=true.
+    Everyone else keeps the existing credits-only UX."""
+    if not user:
+        return False
+    if user.get("role") == "super_admin":
+        return True
+    return is_paying_customer(user)
+
+
+def billing_mode(user: dict) -> str:
+    """One of 'prepay_only', 'auto_reload', 'monthly_invoice'.
+
+    Default 'prepay_only' - no card on file, user must top up
+    manually before every empty-wallet event.
+    """
+    if not user:
+        return "prepay_only"
+    m = str(user.get("billing_mode") or "").strip().lower()
+    if m in ("prepay_only", "auto_reload", "monthly_invoice"):
+        return m
+    return "prepay_only"
+
+
+def auto_reload_threshold(user: dict) -> float:
+    """Balance at or below which auto-reload triggers. Falls back to
+    the pricing config's default."""
+    if not user:
+        return top_up_min_custom()
+    v = user.get("auto_reload_threshold_usd")
+    if isinstance(v, (int, float)) and float(v) >= 0:
+        return float(v)
+    return float(load_pricing().get("auto_reload_defaults", {})
+                 .get("threshold_usd", 500.0))
+
+
+def auto_reload_amount(user: dict) -> float:
+    """How much to charge on an auto-reload trigger."""
+    if not user:
+        return 1000.0
+    v = user.get("auto_reload_amount_usd")
+    if isinstance(v, (int, float)) and float(v) >= 0:
+        return float(v)
+    return float(load_pricing().get("auto_reload_defaults", {})
+                 .get("amount_usd", 1000.0))
+
+
+def monthly_invoice_limit(user: dict) -> float:
+    """Wallet may run negative up to this dollar amount when
+    billing_mode='monthly_invoice'. Beyond the limit, pulls block."""
+    if not user:
+        return 0.0
+    v = user.get("monthly_invoice_limit_usd")
+    if isinstance(v, (int, float)) and float(v) >= 0:
+        return float(v)
+    return float(load_pricing().get("monthly_invoice_defaults", {})
+                 .get("limit_usd", 5000.0))
+
+
+def has_card_on_file(user: dict) -> bool:
+    return bool(
+        (user or {}).get("stripe_customer_id")
+        and (user or {}).get("stripe_payment_method_id"))
+
+
+# ---------------------------------------------------------------------------
+# Wallet writes (in-place, called under _users_cas_mutate)
+# ---------------------------------------------------------------------------
+
+def _append_txn(user: dict, txn: dict, cap: int = 500):
+    """Insert a transaction record at the head of the user's
+    wallet_transactions list, capped at `cap` entries. Preserves
+    audit history newest-first (same pattern as credit_usage_history)."""
+    hist = user.setdefault("wallet_transactions", [])
+    if not isinstance(hist, list):
+        hist = []
+    hist.insert(0, txn)
+    user["wallet_transactions"] = hist[:cap]
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def apply_wallet_deduct(user: dict, amount_usd: float, *,
+                        description: str = "",
+                        tool_key: str = "",
+                        job_id: str = "",
+                        stripe_ref: str = "") -> dict:
+    """Debit the wallet in place. Returns the transaction row.
+
+    Called from consume_credit's _consume mutator AFTER internal
+    credits (if any) have been decided. Amount is positive dollars;
+    the wallet moves by -amount. May take balance negative for
+    monthly_invoice mode (caller enforces the limit).
+
+    Callers with atomicity requirements MUST invoke this inside the
+    same _users_cas_mutate closure that reads the user record, so a
+    concurrent top-up gets folded in on retry.
+    """
+    amt = round(float(amount_usd), 2)
+    if amt <= 0:
+        return {}
+    old = wallet_balance(user)
+    new = round(old - amt, 2)
+    user["wallet_balance_usd"] = new
+    user["wallet_lifetime_spend_usd"] = round(
+        float(user.get("wallet_lifetime_spend_usd", 0.0) or 0.0) + amt, 2)
+    txn = {
+        "ts": _now_iso(),
+        "kind": "deduct",
+        "amount_usd": -amt,
+        "balance_after_usd": new,
+        "description": description or "Usage",
+        "job_id": job_id,
+        "tool": tool_key,
+        "stripe_ref": stripe_ref,
+    }
+    _append_txn(user, txn)
+    return txn
+
+
+def apply_wallet_topup(user: dict, amount_usd: float, *,
+                       description: str = "",
+                       stripe_ref: str = "",
+                       kind: str = "topup") -> dict:
+    """Credit the wallet in place. Returns the transaction row.
+
+    `kind` is one of 'topup' (customer prepay), 'auto_reload' (Stripe
+    charged the saved card on auto-reload), 'refund' (Stripe refund
+    or admin adjustment), 'adjustment' (admin manual credit).
+    """
+    amt = round(float(amount_usd), 2)
+    if amt <= 0:
+        return {}
+    old = wallet_balance(user)
+    new = round(old + amt, 2)
+    user["wallet_balance_usd"] = new
+    if kind in ("topup", "auto_reload"):
+        user["wallet_lifetime_topups_usd"] = round(
+            float(user.get("wallet_lifetime_topups_usd", 0.0) or 0.0)
+            + amt, 2)
+    txn = {
+        "ts": _now_iso(),
+        "kind": kind,
+        "amount_usd": amt,
+        "balance_after_usd": new,
+        "description": description or "Top up",
+        "job_id": "",
+        "tool": "",
+        "stripe_ref": stripe_ref,
+    }
+    _append_txn(user, txn)
+    return txn
+
+
+def apply_wallet_refund(user: dict, amount_usd: float, *,
+                        description: str = "",
+                        stripe_ref: str = "") -> dict:
+    """Refund a previous deduction. Positive dollars adds to wallet."""
+    return apply_wallet_topup(user, amount_usd,
+                              description=description or "Refund",
+                              stripe_ref=stripe_ref, kind="refund")
+
+
+# ---------------------------------------------------------------------------
+# Deduction routing (called by consume_credit)
+# ---------------------------------------------------------------------------
+
+def should_charge_wallet(user: dict, tool_key: str,
+                        pricing: Optional[dict] = None) -> tuple:
+    """Decide whether a pull for `tool_key` should hit the wallet AND
+    at what dollar amount.
+
+    Returns (usd_to_charge, mode) where:
+
+      usd > 0  -> the wallet should be debited by this dollar amount.
+                 The caller (consume_credit mutator) must call
+                 apply_wallet_deduct() with the same amount.
+      usd == 0 -> the wallet should not be touched. Either the user
+                 isn't a paying customer, the tool is free, or the
+                 caller's internal-credits path already covered it.
+
+    Mode is diagnostic: 'wallet' | 'no_charge' | 'not_paying'.
+
+    This function does NOT decide whether internal credits cover the
+    pull - the existing consume_credit path handles that. When
+    consume_credit determines the internal-credits path FAILED
+    because the user is out of internal credits, THEN it consults
+    should_charge_wallet to see if the wallet should absorb the pull.
+    """
+    if not user:
+        return 0.0, "not_paying"
+    if not is_paying_customer(user):
+        return 0.0, "not_paying"
+    pricing = pricing or load_pricing()
+    usd = float(pricing.get("per_tool_usd", {}).get(str(tool_key), 0.0))
+    if usd <= 0:
+        return 0.0, "no_charge"
+    return round(usd, 2), "wallet"
+
+
+def wallet_can_absorb(user: dict, amount_usd: float) -> tuple:
+    """Whether the wallet has room for this deduction.
+
+    Returns (can_absorb, reason_when_false).
+
+    Rules by billing_mode:
+      - prepay_only: balance must be >= amount.
+      - auto_reload: balance >= amount OR (has_card_on_file and
+                    after-auto-reload balance >= amount).
+      - monthly_invoice: balance - amount >= -monthly_invoice_limit.
+    """
+    if amount_usd <= 0:
+        return True, ""
+    bal = wallet_balance(user)
+    mode = billing_mode(user)
+    if bal >= amount_usd:
+        return True, ""
+    if mode == "prepay_only":
+        return False, "insufficient_balance_prepay"
+    if mode == "auto_reload":
+        if not has_card_on_file(user):
+            return False, "auto_reload_no_card"
+        # Assume auto-reload will succeed. The caller triggers the
+        # Stripe charge synchronously and rolls back the deduct on
+        # Stripe failure.
+        return True, ""
+    if mode == "monthly_invoice":
+        limit = monthly_invoice_limit(user)
+        after = bal - amount_usd
+        if after >= -abs(limit):
+            return True, ""
+        return False, "monthly_invoice_limit_exceeded"
+    return False, "unknown_billing_mode"
+
+
+# ---------------------------------------------------------------------------
+# Auto-reload trigger evaluation (post-deduction hook)
+# ---------------------------------------------------------------------------
+
+def needs_auto_reload(user: dict) -> tuple:
+    """After a deduction, decide whether we should fire an auto-reload
+    charge against the saved card.
+
+    Returns (should_fire, amount_usd). should_fire=True only when:
+      - billing_mode is 'auto_reload'
+      - user has a saved card
+      - current balance is at or below the threshold
+    """
+    if billing_mode(user) != "auto_reload":
+        return False, 0.0
+    if not has_card_on_file(user):
+        return False, 0.0
+    if wallet_balance(user) > auto_reload_threshold(user):
+        return False, 0.0
+    return True, auto_reload_amount(user)
+
+
+def try_auto_reload(username: str, user_snapshot: dict) -> dict:
+    """Post-CAS-write hook: fire the Stripe auto-reload charge when
+    needed and credit the wallet.
+
+    Called AFTER the deducting CAS mutation commits. Must not run
+    inside a CAS mutator because it makes a Stripe network call.
+    Returns a status dict:
+
+      {"fired": bool, "amount_usd": float, "payment_intent_id": str,
+       "error": str}
+
+    Idempotency: keyed by (username, minute_bucket, amount_cents). A
+    double-invocation within the same minute at the same amount folds
+    into a single Stripe charge.
+
+    Never raises. All error paths return {"fired": False,
+    "error": "..."}.
+    """
+    result = {"fired": False, "amount_usd": 0.0,
+              "payment_intent_id": "", "error": ""}
+    try:
+        should, amount = needs_auto_reload(user_snapshot)
+        if not should or amount <= 0:
+            return result
+        try:
+            import billing as _billing  # type: ignore
+        except Exception as e:
+            result["error"] = f"billing_module_unavailable: {e}"
+            return result
+        if not _billing.is_enabled():
+            result["error"] = "stripe_not_enabled"
+            return result
+        cus_id = str(user_snapshot.get("stripe_customer_id") or "")
+        pm_id = str(user_snapshot.get("stripe_payment_method_id") or "")
+        if not (cus_id and pm_id):
+            result["error"] = "missing_card_on_file"
+            return result
+        # Minute-bucket idempotency: two rapid deductions that both
+        # drop the balance below threshold should not double-charge.
+        from datetime import datetime, timezone
+        bucket = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
+        idem = (f"auto-reload-{username}-{int(amount * 100)}-"
+                f"{bucket}")
+        try:
+            charge = _billing.charge_saved_card(
+                customer_id=cus_id,
+                payment_method_id=pm_id,
+                amount_usd=amount,
+                description="Auto-reload (wallet threshold)",
+                username=username,
+                metadata={
+                    "purpose": "auto_reload",
+                    "idempotency_key": idem,
+                },
+            )
+        except _billing.BillingError as e:
+            result["error"] = str(e)
+            return result
+        status = str(charge.get("status") or "").lower()
+        if status != "succeeded":
+            result["error"] = f"charge_not_completed: {status}"
+            return result
+        # Charge succeeded. Credit wallet under a fresh CAS.
+        try:
+            from app import _users_cas_mutate  # type: ignore
+        except Exception:
+            result["error"] = "cas_unavailable"
+            return result
+
+        pi_id = str(charge.get("id") or "")
+
+        def _apply(data):
+            u = (data.get("users") or {}).get(username)
+            if not u:
+                return None
+            # Idempotency: if we already logged this pi as a topup,
+            # skip (webhook may have arrived first).
+            for t in list(u.get("wallet_transactions") or [])[:20]:
+                if (str(t.get("stripe_ref") or "") == pi_id
+                        and str(t.get("kind") or "")
+                        in ("topup", "auto_reload")):
+                    return None
+            apply_wallet_topup(
+                u, amount,
+                description="Auto-reload",
+                stripe_ref=pi_id,
+                kind="auto_reload")
+            return data
+
+        _users_cas_mutate(_apply)
+        result.update({
+            "fired": True,
+            "amount_usd": amount,
+            "payment_intent_id": pi_id,
+        })
+        return result
+    except Exception as e:
+        result["error"] = f"unexpected: {e}"
+        return result
+
+
+# ---------------------------------------------------------------------------
+# Public exports
+# ---------------------------------------------------------------------------
+
+__all__ = [
+    "PRICING_S3_KEY",
+    "DEFAULT_PRICING",
+    "load_pricing", "save_pricing",
+    "tool_price_usd", "prometheus_markup",
+    "top_up_pack_sizes", "top_up_min_custom",
+    "wallet_balance", "is_paying_customer", "admits_wallet_ui",
+    "billing_mode", "auto_reload_threshold", "auto_reload_amount",
+    "monthly_invoice_limit", "has_card_on_file",
+    "apply_wallet_deduct", "apply_wallet_topup", "apply_wallet_refund",
+    "should_charge_wallet", "wallet_can_absorb", "needs_auto_reload",
+]

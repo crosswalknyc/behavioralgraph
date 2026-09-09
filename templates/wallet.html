@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wallet - Crosswalk</title>
+  <style>
+    /* Crosswalk brand tokens (graphite teal + off-white). See
+       .cursor/skills/crosswalk-brand-standards for the source. */
+    :root {
+      --graphite: #0C1618;
+      --slate: #15252A;
+      --off-white: #E9E8E1;
+      --olive: #5E7E12;
+      --amethyst: #8E3FA8;
+      --pavement: #3B3D38;
+      --title-dark: #0C1618;
+      --body-dark: #5C6560;
+      --muted-dark: #888C89;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--off-white);
+      color: var(--title-dark);
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+    header {
+      background: var(--graphite);
+      color: var(--off-white);
+      padding: 20px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header .brand { font-weight: 800; font-size: 20px; letter-spacing: -0.01em; }
+    header a { color: var(--off-white); text-decoration: none; font-size: 14px; }
+    header a:hover { text-decoration: underline; }
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 32px 96px;
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 800;
+      margin: 0 0 8px 0;
+      letter-spacing: -0.02em;
+    }
+    .subtitle {
+      color: var(--body-dark);
+      font-size: 14px;
+      margin: 0 0 32px 0;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 28px;
+      margin: 0 0 24px 0;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .balance-card {
+      background: var(--graphite);
+      color: var(--off-white);
+    }
+    .balance-card h2 {
+      margin: 0 0 4px 0;
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0.7;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .balance-card .amount {
+      font-size: 48px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+    .balance-card .amount.negative { color: #FF9F87; }
+    .balance-meta {
+      display: flex;
+      gap: 32px;
+      margin-top: 16px;
+      font-size: 13px;
+      opacity: 0.7;
+    }
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 16px 0;
+      letter-spacing: -0.01em;
+    }
+    .pack-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .pack-btn {
+      background: white;
+      border: 2px solid #E5E7EB;
+      border-radius: 8px;
+      padding: 20px 12px;
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      color: var(--title-dark);
+      font-family: inherit;
+    }
+    .pack-btn:hover {
+      border-color: var(--graphite);
+      transform: translateY(-1px);
+    }
+    .pack-btn.primary {
+      background: var(--graphite);
+      color: var(--off-white);
+      border-color: var(--graphite);
+    }
+    .custom-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .custom-row input {
+      flex: 1;
+      padding: 12px 14px;
+      border: 1px solid #E5E7EB;
+      border-radius: 8px;
+      font-size: 16px;
+      font-family: inherit;
+    }
+    .custom-row button {
+      padding: 12px 20px;
+      background: var(--graphite);
+      color: var(--off-white);
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .custom-row button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .txn-list {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .txn-list th {
+      text-align: left;
+      color: var(--muted-dark);
+      font-weight: 500;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 8px 12px;
+      border-bottom: 1px solid #F0F0EA;
+    }
+    .txn-list td {
+      padding: 12px;
+      border-bottom: 1px solid #F5F5F0;
+    }
+    .txn-list td.amount.positive { color: var(--olive); font-weight: 600; }
+    .txn-list td.amount.negative { color: var(--body-dark); }
+    .txn-list td.amount { text-align: right; font-variant-numeric: tabular-nums; }
+    .empty {
+      color: var(--muted-dark);
+      font-size: 14px;
+      padding: 40px 0;
+      text-align: center;
+    }
+    .banner {
+      padding: 14px 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    .banner.success { background: #F0F9E8; color: var(--olive); }
+    .banner.error { background: #FFF0F0; color: #C43D2E; }
+    .banner.warning { background: #FFF8E1; color: #7A5B00; }
+    .billing-mode-tag {
+      display: inline-block;
+      padding: 4px 10px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-left: 12px;
+      vertical-align: middle;
+    }
+    .disabled-notice {
+      background: #FFF8E1;
+      color: #7A5B00;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">Crosswalk / Wallet</div>
+    <a href="/">Back to dashboard</a>
+  </header>
+
+  <main>
+    <h1>Wallet</h1>
+    <p class="subtitle">Your Crosswalk balance is used for every profile
+    pull and Prometheus analysis session.</p>
+
+    <div id="banner"></div>
+
+    <div class="card balance-card">
+      <h2>Available balance</h2>
+      <div id="balance" class="amount">$0.00</div>
+      <div class="balance-meta">
+        <div>Lifetime top-ups: <span id="lifetime-topups">$0.00</span></div>
+        <div>Lifetime spend: <span id="lifetime-spend">$0.00</span></div>
+        <div id="billing-mode-container"></div>
+      </div>
+    </div>
+
+    <div id="disabled-notice" class="disabled-notice" style="display: none;">
+      Billing is not configured yet. Contact your admin to enable
+      top-ups.
+    </div>
+
+    <div id="topup-card" class="card" style="display: none;">
+      <h2>Add funds</h2>
+      <div id="pack-grid" class="pack-grid"></div>
+      <div class="custom-row">
+        <span style="color: var(--muted-dark); font-size: 14px;">
+          Custom amount:
+        </span>
+        <input id="custom-amount" type="number" step="0.01" min="100"
+               placeholder="e.g., 750.00">
+        <button id="custom-submit">Add funds</button>
+      </div>
+      <p style="margin: 12px 0 0 0; color: var(--muted-dark);
+                font-size: 12px;">
+        Minimum <span id="min-custom">$100.00</span>. Payments are
+        processed by Stripe. Cards accepted: Visa, Mastercard, Amex,
+        Discover.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Recent transactions</h2>
+      <div id="txn-body">
+        <div class="empty">No transactions yet.</div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const fmtUsd = (n) => {
+      const v = Number(n) || 0;
+      const sign = v < 0 ? '-' : '';
+      return sign + '$' + Math.abs(v).toLocaleString('en-US', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+      });
+    };
+    const fmtDate = (iso) => {
+      if (!iso) return '';
+      try {
+        const d = new Date(iso);
+        return d.toLocaleString('en-US', {
+          month: 'short', day: 'numeric', hour: 'numeric',
+          minute: '2-digit'
+        });
+      } catch (e) { return iso; }
+    };
+
+    // Query-string banners (Stripe redirect uses ?wallet=topup_success
+    // / ?wallet=topup_cancelled).
+    const params = new URLSearchParams(window.location.search);
+    const walletFlag = params.get('wallet');
+    if (walletFlag === 'topup_success') {
+      $('banner').innerHTML =
+        '<div class="banner success">Payment received. Your wallet ' +
+        'will update within a few seconds.</div>';
+    } else if (walletFlag === 'topup_cancelled') {
+      $('banner').innerHTML =
+        '<div class="banner warning">Top-up cancelled. No charge ' +
+        'was made.</div>';
+    }
+
+    async function loadState() {
+      const r = await fetch('/api/wallet/state', {
+        credentials: 'same-origin'
+      });
+      if (r.status === 401) {
+        window.location.href = '/login?next=/wallet';
+        return;
+      }
+      if (!r.ok) {
+        $('banner').innerHTML =
+          '<div class="banner error">Could not load wallet state. ' +
+          'Please refresh.</div>';
+        return;
+      }
+      const s = await r.json();
+      renderState(s);
+    }
+
+    function renderState(s) {
+      // Balance
+      const bal = Number(s.wallet_balance_usd || 0);
+      $('balance').textContent = fmtUsd(bal);
+      if (bal < 0) $('balance').classList.add('negative');
+      else $('balance').classList.remove('negative');
+
+      $('lifetime-topups').textContent =
+        fmtUsd(s.lifetime_topups_usd);
+      $('lifetime-spend').textContent =
+        fmtUsd(s.lifetime_spend_usd);
+
+      // Billing mode tag
+      const modeMap = {
+        prepay_only: 'Prepay',
+        auto_reload: 'Auto-reload',
+        monthly_invoice: 'Monthly invoice',
+      };
+      const modeLabel = modeMap[s.billing_mode] || 'Prepay';
+      $('billing-mode-container').innerHTML =
+        '<span class="billing-mode-tag">' + modeLabel + '</span>';
+
+      // Show / hide the top-up card based on Stripe status and UI
+      // visibility.
+      if (!s.ui_visible) {
+        $('topup-card').style.display = 'none';
+        $('disabled-notice').style.display = 'block';
+        $('disabled-notice').textContent =
+          'Your account is not currently set up for self-serve ' +
+          'top-ups. Contact your admin.';
+      } else if (!s.stripe_enabled) {
+        $('topup-card').style.display = 'none';
+        $('disabled-notice').style.display = 'block';
+        $('disabled-notice').textContent =
+          'Billing is not configured yet. Contact your admin to ' +
+          'enable top-ups.';
+      } else {
+        $('topup-card').style.display = 'block';
+        $('disabled-notice').style.display = 'none';
+        renderPacks(s.top_up_packs_usd || []);
+        $('min-custom').textContent =
+          fmtUsd(s.top_up_min_custom_usd || 100);
+        $('custom-amount').min = s.top_up_min_custom_usd || 100;
+      }
+
+      // Transactions
+      renderTxns(s.transactions || []);
+    }
+
+    function renderPacks(packs) {
+      const grid = $('pack-grid');
+      grid.innerHTML = '';
+      packs.forEach((amt, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'pack-btn' + (i === 1 ? ' primary' : '');
+        btn.textContent = fmtUsd(amt);
+        btn.onclick = () => topUp(amt);
+        grid.appendChild(btn);
+      });
+    }
+
+    function renderTxns(txns) {
+      if (!txns || !txns.length) {
+        $('txn-body').innerHTML =
+          '<div class="empty">No transactions yet.</div>';
+        return;
+      }
+      let html = '<table class="txn-list"><thead><tr>' +
+        '<th>Date</th><th>Type</th><th>Description</th>' +
+        '<th style="text-align:right;">Amount</th>' +
+        '<th style="text-align:right;">Balance</th>' +
+        '</tr></thead><tbody>';
+      const kindLabels = {
+        topup: 'Top-up',
+        auto_reload: 'Auto-reload',
+        deduct: 'Usage',
+        refund: 'Refund',
+        adjustment: 'Adjustment',
+      };
+      txns.forEach(t => {
+        const amt = Number(t.amount_usd || 0);
+        const cls = amt >= 0 ? 'positive' : 'negative';
+        const sign = amt >= 0 ? '+' : '';
+        html += '<tr>';
+        html += '<td>' + fmtDate(t.ts) + '</td>';
+        html += '<td>' + (kindLabels[t.kind] || t.kind) + '</td>';
+        html += '<td>' + (t.description || '') + '</td>';
+        html += '<td class="amount ' + cls + '">' + sign +
+          fmtUsd(Math.abs(amt)) + '</td>';
+        html += '<td class="amount">' + fmtUsd(t.balance_after_usd) +
+          '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      $('txn-body').innerHTML = html;
+    }
+
+    async function topUp(amount) {
+      // Redirect to Stripe hosted checkout.
+      try {
+        const r = await fetch('/api/wallet/create-checkout-session', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount_usd: Number(amount) }),
+        });
+        const j = await r.json();
+        if (!r.ok || !j.url) {
+          $('banner').innerHTML =
+            '<div class="banner error">' +
+            (j.error === 'billing_not_configured'
+              ? 'Billing is not configured. Contact your admin.'
+              : j.error === 'below_minimum'
+                ? 'Amount is below the minimum of ' +
+                  fmtUsd(j.min_usd) + '.'
+                : 'Could not start checkout: ' + (j.error || 'unknown'))
+            + '</div>';
+          return;
+        }
+        window.location.href = j.url;
+      } catch (e) {
+        $('banner').innerHTML =
+          '<div class="banner error">Network error. Please retry.' +
+          '</div>';
+      }
+    }
+
+    $('custom-submit').addEventListener('click', () => {
+      const v = parseFloat($('custom-amount').value);
+      if (!v || v <= 0) return;
+      topUp(v);
+    });
+    $('custom-amount').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') $('custom-submit').click();
+    });
+
+    loadState();
+  </script>
+</body>
+</html>
