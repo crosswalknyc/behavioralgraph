@@ -55622,11 +55622,12 @@ def api_synth_chat_approve():
         return jsonify({
             'success': False,
             'guidance': True,
-            'error': (f'Not enough credits for this run ({price} needed, '
-                      f'{_left} remaining). Use the credits button in the '
-                      'top bar to request more.'),
+            'error': (f"You're out of credits for this run - {price} needed, "
+                      f"{_left} remaining. Top up to keep going."),
             'credits_required': price,
             'credits_remaining': _left,
+            'top_up_url': '/wallet',
+            'top_up_label': 'Buy more credits',
         }), 402
 
     # Thread the commissioning user + their exact ask onto the job so a
@@ -56851,8 +56852,9 @@ def _pm_search_demand_response(user, text, history):
         return jsonify({
             'success': False,
             'guidance': True,
-            'error': ('No credits remaining for analysis. Use the credits '
-                      'button in the top bar to request more.'),
+            'error': ("You're out of credits. Top up to keep going."),
+            'top_up_url': '/wallet',
+            'top_up_label': 'Buy more credits',
         }), 402
     led = {'block': '', 'exact': None, 'entries': []}
     _t_ledger = time.monotonic()
@@ -57078,8 +57080,9 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
         return jsonify({
             'success': False,
             'guidance': True,
-            'error': ('No credits remaining for analysis. Use the credits '
-                      'button in the top bar to request more.'),
+            'error': ("You're out of credits. Top up to keep going."),
+            'top_up_url': '/wallet',
+            'top_up_label': 'Buy more credits',
         }), 402
     mr = metric_request if isinstance(metric_request, dict) else {}
     subj_hint = str(mr.get('subject') or '').strip()
@@ -58374,8 +58377,9 @@ def api_synth_chat_analyze():
         return jsonify({
             'success': False,
             'guidance': True,
-            'error': ('No credits remaining for analysis. Use the credits '
-                      'button in the top bar to request more.'),
+            'error': ("You're out of credits. Top up to keep going."),
+            'top_up_url': '/wallet',
+            'top_up_label': 'Buy more credits',
         }), 402
     try:
         import prometheus_analysis as pma
@@ -59037,8 +59041,10 @@ def api_synth_chat_deck():
         return jsonify({
             'success': False,
             'guidance': True,
-            'error': ('No credits remaining for a deck build. Use the '
-                      'credits button in the top bar to request more.'),
+            'error': ("You're out of credits for a deck build. Top up "
+                      'to keep going.'),
+            'top_up_url': '/wallet',
+            'top_up_label': 'Buy more credits',
         }), 402
     if _charge_user:
         try:

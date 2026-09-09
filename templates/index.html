@@ -18973,10 +18973,10 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             <div id="creditsRequestSection">
                 {% if credits != -1 %}
                 <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
-                    Need more credits? Click below to request additional credits for your account.
+                    Need more credits? Top up your wallet in a couple of clicks.
                 </p>
-                <button class="request-credits-btn" id="requestCreditsBtn" onclick="requestMoreCredits()">
-                    🛒 Request More Credits
+                <button class="request-credits-btn" id="requestCreditsBtn" onclick="goBuyMoreCredits()">
+                    💳 Buy more credits
                 </button>
                 {% else %}
                 <p style="color: var(--accent-lime); font-size: 0.9rem;">
@@ -19146,7 +19146,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
             </div>
             <div class="header-right-section">
                 <div class="user-info-bar">
-                    <div class="credits-display" id="creditsDisplay" onclick="openCreditsModal()" title="Click to view credits and request more">
+                    <div class="credits-display" id="creditsDisplay" onclick="openCreditsModal()" title="Click to view credits and buy more">
                         <span class="credits-icon">💳</span>
                         <span class="credits-label">Credits:</span>
                         <span class="credits-value" id="creditsValue">{{ 'Unlimited' if credits == -1 else credits }}</span>
@@ -66531,6 +66531,12 @@ https://www.instagram.com/p/..."></textarea>
                         _synthChatExistingMatchChipClick(o);
                         return;
                     }
+                    // 2026-09-09 Jenna: out-of-credits guidance chip
+                    // jumps straight to the wallet top-up page.
+                    if (o && o.chipAction === 'buy_credits' && o.url) {
+                        try { window.location.href = String(o.url); } catch (_) {}
+                        return;
+                    }
                     synthChatChipSend(String((o && o.send) || (o && o.label) || o));
                 });
             }
@@ -66772,6 +66778,25 @@ https://www.instagram.com/p/..."></textarea>
                     body: JSON.stringify({ history: synthChatHistory }),
                 });
             } catch (_) {}
+        }
+
+        // Push a guidance-error turn from Prometheus / brief-chat. If
+        // the server sent data.top_up_url (2026-09-09 out-of-credits
+        // flow), attach a chip that jumps straight to /wallet so the
+        // reader can top up in one click instead of hunting for the
+        // credits badge.
+        function _pmPushGuidanceTurn(text, data) {
+            var url = data && data.top_up_url;
+            if (url) {
+                var lbl = (data && data.top_up_label) || 'Buy more credits';
+                _synthChatPushTurnWithMeta('agent', text, {
+                    options: [{ label: '💳 ' + lbl,
+                                chipAction: 'buy_credits',
+                                url: String(url) }]
+                });
+            } else {
+                synthChatPushTurn('agent', text);
+            }
         }
 
         // Patch the last turn whose meta.run_id matches, updating its
@@ -69150,10 +69175,11 @@ https://www.instagram.com/p/..."></textarea>
                         _synthChatReportClientError('brief-chat/analyze',
                             'no parseable reply (status ' + (_fr.r && _fr.r.status) + ')');
                     }
-                    synthChatPushTurn('agent',
+                    _pmPushGuidanceTurn(
                         (data && data.guidance && data.error)
                             ? String(data.error)
-                            : SYNTH_CHAT_CALM_MSG);
+                            : SYNTH_CHAT_CALM_MSG,
+                        data);
                     return 'done';
                 }
                 if (data.action === 'build_profile' ||
@@ -69287,10 +69313,11 @@ https://www.instagram.com/p/..."></textarea>
                         _synthChatReportClientError('brief-chat/deck',
                             'no parseable reply (status ' + (_fr.r && _fr.r.status) + ')');
                     }
-                    synthChatPushTurn('agent',
+                    _pmPushGuidanceTurn(
                         (data && data.guidance && data.error)
                             ? String(data.error)
-                            : SYNTH_CHAT_CALM_MSG);
+                            : SYNTH_CHAT_CALM_MSG,
+                        data);
                     return;
                 }
                 var job = data.job_id;
@@ -69746,7 +69773,7 @@ https://www.instagram.com/p/..."></textarea>
                             { options: _mcOpts });
                         return;
                     }
-                    synthChatPushTurn('agent', _gMsg || SYNTH_CHAT_CALM_MSG);
+                    _pmPushGuidanceTurn(_gMsg || SYNTH_CHAT_CALM_MSG, data);
                     if (data.read_job_id) {
                         // Analysis read generating in the background
                         // (2026-08-27): poll until it lands in-thread.
@@ -70859,10 +70886,11 @@ https://www.instagram.com/p/..."></textarea>
                     console.error('[brief-chat] clarify reply not ok');
                     synthChatClarify = null;
                     synthChatCurrentDraft = (st && st.draft) || synthChatCurrentDraft;
-                    synthChatPushTurn('agent',
+                    _pmPushGuidanceTurn(
                         (data.guidance && data.error)
                             ? String(data.error)
-                            : SYNTH_CHAT_CALM_MSG);
+                            : SYNTH_CHAT_CALM_MSG,
+                        data);
                     _synthChatShowBrief(synthChatCurrentDraft, null);
                     return;
                 }
@@ -70960,10 +70988,11 @@ https://www.instagram.com/p/..."></textarea>
                     if (!r.ok || !data.success) {
                         console.error('[brief-chat] batch clarify reply not ok');
                         synthChatBatchClarify = null;
-                        synthChatPushTurn('agent',
+                        _pmPushGuidanceTurn(
                             (data.guidance && data.error)
                                 ? String(data.error)
-                                : SYNTH_CHAT_CALM_MSG);
+                                : SYNTH_CHAT_CALM_MSG,
+                            data);
                         return;
                     }
                     st.draft0 = data.draft || st.draft0;
@@ -71000,10 +71029,11 @@ https://www.instagram.com/p/..."></textarea>
                 if (!r2.ok || !d2.success) {
                     console.error('[brief-chat] batch strategy reply not ok');
                     synthChatBatchClarify = null;
-                    synthChatPushTurn('agent',
+                    _pmPushGuidanceTurn(
                         (d2.guidance && d2.error)
                             ? String(d2.error)
-                            : SYNTH_CHAT_CALM_MSG);
+                            : SYNTH_CHAT_CALM_MSG,
+                        d2);
                     return;
                 }
                 st.draft0 = d2.draft || st.draft0;
@@ -71315,10 +71345,11 @@ https://www.instagram.com/p/..."></textarea>
                 var data = await r.json();
                 if (!r.ok || !data.success) {
                     console.error('[brief-chat] approve reply not ok');
-                    synthChatPushTurn('agent',
+                    _pmPushGuidanceTurn(
                         (data.guidance && data.error)
                             ? String(data.error)
-                            : SYNTH_CHAT_CALM_MSG);
+                            : SYNTH_CHAT_CALM_MSG,
+                        data);
                     return;
                 }
                 if (data.reused_existing || !data.run_id) {
@@ -71442,7 +71473,9 @@ https://www.instagram.com/p/..."></textarea>
                     } else {
                         errored.push({ subject: subj,
                                        error: (r && r.error) || 'queue failed',
-                                       guidance: !!(r && r.guidance) });
+                                       guidance: !!(r && r.guidance),
+                                       top_up_url: (r && r.top_up_url) || null,
+                                       top_up_label: (r && r.top_up_label) || null });
                     }
                 }
                 var panel = document.getElementById('synthChatBriefPreview');
@@ -71466,15 +71499,21 @@ https://www.instagram.com/p/..."></textarea>
                 if (errored.length) {
                     console.error('[brief-chat] batch approve failures', errored);
                     var _gErr = null;
+                    var _gTop = null;
                     for (var _gi = 0; _gi < errored.length; _gi++) {
-                        if (errored[_gi].guidance) { _gErr = errored[_gi].error; break; }
+                        if (errored[_gi].guidance) {
+                            _gErr = errored[_gi].error;
+                            _gTop = { top_up_url: errored[_gi].top_up_url || null,
+                                      top_up_label: errored[_gi].top_up_label || null };
+                            break;
+                        }
                     }
                     if (!_gErr) {
                         _synthChatReportClientError('brief-chat/approve',
                             'batch queue failures: ' +
                             errored.map(function(e){return e.subject + ' (' + e.error + ')';}).join('; '));
                     }
-                    synthChatPushTurn('agent', _gErr ? String(_gErr) : SYNTH_CHAT_CALM_MSG);
+                    _pmPushGuidanceTurn(_gErr ? String(_gErr) : SYNTH_CHAT_CALM_MSG, _gTop || {});
                 }
             } catch (e) {
                 console.error('[brief-chat] batch approve failed', e);
@@ -119220,7 +119259,7 @@ https://www.instagram.com/p/..."></textarea>
                 } else { 
                     console.error('❌ Submit failed:', data);
                     if (response.status === 403 && data.credits_left === 0) {
-                        alert('❌ No credits remaining!\n\nPlease contact an administrator to get more credits.');
+                        if (confirm('You\u2019re out of credits. Buy more credits now?')) { try { window.location.href = '/wallet'; } catch (_) { window.open('/wallet', '_blank'); } }
                         updateCreditsDisplay(0);
                     } else {
                         alert(data.error || 'Failed to submit analysis'); 
@@ -162345,7 +162384,7 @@ https://www.instagram.com/p/..."></textarea>
             const requestBtn = document.getElementById('requestCreditsBtn');
             if (requestBtn) {
                 requestBtn.disabled = false;
-                requestBtn.textContent = '🛒 Request More Credits';
+                requestBtn.textContent = '💳 Buy more credits';
             }
             // Live-refresh the counters so usage recorded since page
             // load (chatbot runs, analyses, decks) shows immediately -
@@ -162558,37 +162597,20 @@ https://www.instagram.com/p/..."></textarea>
             }
         }
         
-        async function requestMoreCredits() {
-            const btn = document.getElementById('requestCreditsBtn');
-            const originalText = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = '⏳ Sending request...';
-            
-            try {
-                const response = await fetch('/api/request-credits', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Show success message
-                    document.getElementById('creditsRequestSection').style.display = 'none';
-                    document.getElementById('creditsSuccessMessage').style.display = 'block';
-                } else {
-                    // Show error but also show fallback contact info
-                    alert(data.error + '\n\n' + (data.fallback_message || 'Please contact Liz Huszarik at liz@crosswalknyc.com or +1 (818) 231-2610'));
-                    btn.disabled = false;
-                    btn.textContent = originalText;
-                }
-            } catch (error) {
-                console.error('Error requesting credits:', error);
-                alert('Failed to send request. Please contact Liz Huszarik directly at liz@crosswalknyc.com or +1 (818) 231-2610');
-                btn.disabled = false;
-                btn.textContent = originalText;
+        // 2026-09-09 Jenna: the "Request More Credits" button now
+        // takes the user straight to /wallet where they can top up in
+        // one flow instead of firing an email request. The old email
+        // path (POST /api/request-credits) is still wired on the
+        // server as a fallback for surfaces that need it, but the
+        // modal no longer calls it.
+        function goBuyMoreCredits() {
+            try { window.location.href = '/wallet'; } catch (_) {
+                window.open('/wallet', '_blank');
             }
         }
+        // Compat shim: any legacy caller that still points at
+        // requestMoreCredits() lands on the same top-up page.
+        function requestMoreCredits() { goBuyMoreCredits(); }
         
         // ============================================================================
         // PROFILE PICTURE UPLOAD
