@@ -48,3 +48,10 @@ trendspy>=0.1.6
 # Crosswalk wordmark + cover-image center-crop.
 python-pptx>=1.0.0
 Pillow>=10.4.0
+# Stripe SDK - powers /admin/billing, /wallet, and pay-per-use
+# session close on Prometheus. billing.py imports the module
+# lazily and no-ops when STRIPE_ENABLED != 'true', so a missing
+# install cannot 500 unrelated routes; but with STRIPE_ENABLED=true
+# on prod the wallet page requires it. Pinned <13 to avoid the
+# next major bump landing without regression coverage.
+stripe>=12.0.0,<13.0
