@@ -51,6 +51,14 @@ BUCKET      = os.environ.get('TRENDS_DIGEST_BUCKET') or os.environ.get('TRENDS_I
 STATE_PREFIX = 'trends_iq_alerts/'
 SES_REGION  = os.environ.get('TRENDS_DIGEST_REGION', 'us-east-2')
 SES_FROM    = os.environ.get('TRENDS_DIGEST_FROM',   'BehavioralGraph <jenna@crosswalknyc.com>')
+# Public dashboard URL for the "manage your watchlist" link. The old
+# hardcoded www.behavioralgraph.com does not resolve (NXDOMAIN); the live
+# production host is the verified Render custom domain below. Overridable
+# via env so the dev/staging digest can point elsewhere.
+APP_URL     = (os.environ.get('TRENDS_DIGEST_APP_URL')
+               or os.environ.get('APP_URL')
+               or os.environ.get('PUBLIC_APP_URL')
+               or 'https://dashboard.crosswalknyc.com').rstrip('/')
 
 
 def _s3():
@@ -92,6 +100,24 @@ def _entry_slug(kind: str, source: str, key: str) -> str:
     return f"{kind}|{source}|{key}"
 
 
+def _latest_present_rank(arc: dict):
+    """Most recent day in the arc that actually has a rank.
+
+    The arc's raw `current_rank` is literally the last *calendar* day
+    (see trends_history._summarize_arc / _iter_recent_days, which always
+    make today the final day). The digest cron runs in the early UTC
+    morning, before today's snapshot has been scraped, so that last day
+    is `present:false` and `current_rank` is None on every run - which
+    made every watched item look unchanged and produced the perpetual
+    "no material movement" digest. Walk back to the newest day that has
+    real data so movement is measured off the latest available snapshot.
+    """
+    for d in reversed(arc.get('days') or []):
+        if d.get('present') and d.get('rank') is not None:
+            return d.get('rank')
+    return arc.get('current_rank')
+
+
 def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dict]]:
     """Return (alerts, new_state, watchlist_entries) for this user.
 
@@ -113,6 +139,10 @@ def _compute_alerts_for_user(user_slug: str) -> tuple[list[dict], dict, list[dic
         geo    = e.get('geo') or 'National'
         slug   = _entry_slug(kind, source, key)
         curr = trends_history.history_for_item(kind, source, key, geo=geo, days=14, force_refresh=True)
+        # Normalize current_rank to the latest day that actually has data
+        # so classify_alert_transition compares real snapshots run-over-run
+        # (today's calendar day is usually unscraped at digest time).
+        curr['current_rank'] = _latest_present_rank(curr)
         new_arcs[slug] = {
             'current_rank': curr.get('current_rank'),
             'best_rank':    curr.get('best_rank'),
@@ -201,9 +231,9 @@ def _render_email(user_slug: str, alerts: list[dict],
 
     text_lines.append("--")
     text_lines.append("Open Trends IQ to manage your watchlist:")
-    text_lines.append("https://www.behavioralgraph.com/  (Trends section)")
+    text_lines.append(f"{APP_URL}/  (Trends section)")
     html_lines.append("<hr style='margin:24px 0;border:0;border-top:1px solid #ddd;'/>")
-    html_lines.append("<p style='color:#666;font-size:0.9em;'>Manage your watchlist in Trends IQ: <a href='https://www.behavioralgraph.com/'>open the dashboard</a>.</p>")
+    html_lines.append(f"<p style='color:#666;font-size:0.9em;'>Manage your watchlist in Trends IQ: <a href='{APP_URL}/'>open the dashboard</a>.</p>")
     return subject, ''.join(html_lines), '\n'.join(text_lines)
 
 
