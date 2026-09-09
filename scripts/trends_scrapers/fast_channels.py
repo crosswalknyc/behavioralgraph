@@ -107,15 +107,16 @@ FAST_PLATFORMS: list[tuple[str, str, str, bool]] = [
 # each. Change 2026-08-21 (Jenna: "need to split film/tv on FAST
 # because right now on tubi it shows lioness the paramount+ show
 # instead of the movie one").
-_PER_PLATFORM_LIMIT = 100
-_PER_KIND_LIMIT     = 50
+_PER_PLATFORM_LIMIT = 200
+_PER_KIND_LIMIT     = 100
 
 # How many Amazon FREE-tier titles to page through before giving up on
-# hitting `_PER_PLATFORM_LIMIT` pure-FAST results. 4 pages (400 titles)
-# is plenty - the FREE monetization pool on Amazon is ~356 titles as
-# of Aug 2026, and roughly 60% survive the FLATRATE-exclusion filter,
-# so we typically finish inside 2-3 pages.
-_AMAZON_MAX_PAGES = 4
+# hitting `_PER_KIND_LIMIT` pure-FAST results per kind. 8 pages (800
+# titles) covers the deeper 100-per-kind target (Jenna 2026-09-09:
+# every list carries 100+ items where the source has them); the FREE
+# monetization pool on Amazon is large enough that roughly 60% survive
+# the FLATRATE-exclusion filter, so we typically finish early.
+_AMAZON_MAX_PAGES = 8
 
 # JustWatch package clear-name prefix used to identify Amazon offers
 # when post-filtering the FREE pool. Matches "Amazon Prime Video",

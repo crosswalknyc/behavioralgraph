@@ -859,19 +859,37 @@ def _collect_all_items() -> list[dict]:
     # title as either film or tv; the platform is the source_label
     # so lens reasoning can differentiate ("Millennials love Netflix's
     # rewatch nostalgia titles but skip Disney+'s kids catalog").
-    for slug, label in (('netflix',    'Netflix'),
-                         ('disneyplus', 'Disney+'),
-                         ('hulu',       'Hulu'),
-                         ('max',        'HBO Max'),
-                         ('primevideo', 'Prime Video'),
-                         ('espnplus',   'ESPN+')):
+    for slug, label in (('netflix',       'Netflix'),
+                         ('disneyplus',    'Disney+'),
+                         ('hulu',          'Hulu'),
+                         ('max',           'HBO Max'),
+                         ('primevideo',    'Prime Video'),
+                         ('paramountplus', 'Paramount+'),
+                         ('peacock',       'Peacock'),
+                         ('britbox',       'BritBox'),
+                         ('mgmplus',       'MGM+'),
+                         ('starz',         'Starz'),
+                         ('espnplus',      'ESPN+')):
         snap = _read(slug) or {}
         for pool_key, kind in (('us_films', 'film'),
                                 ('us_tv',    'tv'),
                                 ('national', 'title')):
-            for it in (snap.get(pool_key) or [])[:20]:
+            for it in (snap.get(pool_key) or [])[:110]:
                 _add(kind, it.get('title') or '',
                       source_label=snap.get('label') or label)
+
+    # Streaming depth extension (scripts/trends_scrapers/
+    # streaming_depth.py): JustWatch top-100 films + shows per
+    # platform that trends_iq merges under each platform's own rows.
+    # Score them here so lens filtering covers the full 100-deep
+    # lists, not just the storefront-scraped top ranks.
+    depth = _read('streaming_depth') or {}
+    for slug, block in (depth.get('sources') or {}).items():
+        label = (block or {}).get('label') or slug
+        for pool_key, kind in (('films', 'film'), ('tv', 'tv')):
+            for it in ((block or {}).get(pool_key) or [])[:110]:
+                _add(kind, it.get('title') or '',
+                      source_label=label)
 
     # Films (ticketing)
     films = _read('film_ticketing') or {}
@@ -902,10 +920,10 @@ def _collect_all_items() -> list[dict]:
     # top headlines from GDELT don't have a separate snapshot file
     # (they're recomputed per-request), so we score the two topic
     # feeds we do have plus every article on their `by_source` breakouts.
-    for src in ('philanthropy_news', 'business_news'):
+    for src in ('philanthropy_news', 'business_news', 'wall_street_news'):
         snap = _read(src) or {}
         seen = set()
-        for it in (snap.get('national') or [])[:80]:
+        for it in (snap.get('national') or [])[:150]:
             t = (it.get('title') or '').strip()
             if not t or t in seen:
                 continue
@@ -914,7 +932,7 @@ def _collect_all_items() -> list[dict]:
                   extra=it.get('source_label') or it.get('source') or '',
                   source_label=snap.get('label') or src)
         for source_key, lst in (snap.get('by_source') or {}).items():
-            for it in (lst or [])[:20]:
+            for it in (lst or [])[:30]:
                 t = (it.get('title') or '').strip()
                 if not t or t in seen:
                     continue
@@ -928,7 +946,7 @@ def _collect_all_items() -> list[dict]:
     # This is by far the biggest coverage gap in the prior scraper:
     # searches was the first tab a user sees and NONE of it was scored.
     gw = _read('google_wide') or {}
-    for it in (gw.get('national') or [])[:120]:
+    for it in (gw.get('national') or [])[:320]:
         term = (it.get('term') or it.get('title') or '').strip()
         if not term:
             continue
@@ -953,7 +971,7 @@ def _collect_all_items() -> list[dict]:
             _add('person', title,
                   extra=(it.get('description') or '')[:180],
                   source_label='Wikipedia trending / people')
-    for it in (wiki.get('national') or [])[:40]:
+    for it in (wiki.get('national') or [])[:120]:
         title = it.get('title') or it.get('name') or ''
         if title and title not in wiki_seen:
             wiki_seen.add(title)
@@ -1036,7 +1054,7 @@ def _collect_all_items() -> list[dict]:
     # health; treat as best-effort. Two shapes seen in the wild:
     # sources.<slug>.items (most_played + top_sellers) OR a flat
     # `national` list; support both.
-    steam = _read('steam') or {}
+    steam = _read('steam_charts') or {}
     for slug, panel in (steam.get('sources') or {}).items():
         for it in (panel.get('items') or []):
             title = it.get('title') or ''

@@ -1104,7 +1104,7 @@ def fetch() -> dict[str, Any]:
         # `national` mirrors Spotify (the biggest reach) so the standard
         # snapshot summary in _index.json shows a useful count. The real
         # breakdown lives in `sources` and is what compute_view reads.
-        'national': spotify_items[:50] or apple_items[:50],
+        'national': spotify_items[:100] or apple_items[:100],
         'available': bool(spotify_items or apple_items or shazam_items
                           or ytm_items or tt_items),
         'sources': {

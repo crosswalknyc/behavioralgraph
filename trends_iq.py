@@ -3100,7 +3100,7 @@ def compute_search_movers(state: Optional[str]) -> dict:
                                               -int(r.get('score') or 0)))
 
     for bucket in ('breakout', 'rising', 'falling', 'sustained'):
-        result[bucket] = result[bucket][:25]
+        result[bucket] = result[bucket][:100]
 
     result['available']    = True
     result['today_day']    = today_end or today_start
@@ -5756,7 +5756,7 @@ _FUSE_WEIGHTS = {
 }
 _FUSE_CROSS_PLATFORM_BONUS = 0.25
 _FUSE_MIN_KEY_LEN          = 3
-_FUSE_TOP_N                = 60
+_FUSE_TOP_N                = 100
 
 # Strip 4-digit year tokens so "The Odyssey (2026)" collapses to
 # "odyssey" - same underlying entity as bare "The Odyssey". Only years
@@ -6133,7 +6133,7 @@ def _parse_rss(body: str, source: str, domain: str, limit: int = 15) -> list[dic
 def _fetch_one_feed(feed_tuple: tuple) -> list[dict]:
     source, url, domain = feed_tuple
     body = _get_text(url)
-    return _parse_rss(body, source, domain, limit=10)
+    return _parse_rss(body, source, domain, limit=15)
 
 
 def _fetch_all_news_feeds() -> list[list[dict]]:
@@ -6179,16 +6179,21 @@ def _filter_by_state(items: list[dict], keywords: Optional[list[str]]) -> list[d
 
 def _fetch_trending_headlines_and_sources(keywords: Optional[list[str]]
                                             ) -> tuple[list[dict], list[dict]]:
-    """Return (trending_headlines[:15], articles_by_source[all_outlets]).
+    """Return (trending_headlines[:150], articles_by_source[all_outlets]).
 
-    Aggregates the top item per outlet into the flat "trending headlines"
-    board, and keeps a per-outlet list for the "by source" board. When
-    `keywords` is non-empty, region-matching items rise to the top of
-    each outlet's slice so state / DMA selections visibly re-rank the
-    boards without ever emptying a tile.
+    Builds the flat "trending headlines" board as a round-robin
+    interleave across outlets: every outlet's #1 story first, then
+    every outlet's #2, and so on. Outlet diversity still leads the
+    board (same spirit as the old top-1-per-outlet build) while the
+    list now runs 100+ deep (Jenna 2026-09-09: every list carries
+    100+ items where the source has them). Per-outlet lists ride on
+    the "by source" board. When `keywords` is non-empty,
+    region-matching items rise to the top of each outlet's slice so
+    state / DMA selections visibly re-rank the boards without ever
+    emptying a tile.
     """
     per_source = _fetch_all_news_feeds()
-    flat: list[dict] = []
+    ordered_by_outlet: list[list[dict]] = []
     by_source: list[dict] = []
     for outlet_items in per_source:
         if not outlet_items:
@@ -6198,10 +6203,17 @@ def _fetch_trending_headlines_and_sources(keywords: Optional[list[str]]
         by_source.append({
             'source':   source,
             'domain':   outlet_items[0].get('domain', ''),
-            'articles': ordered[:5],
+            'articles': ordered[:10],
         })
         if ordered:
-            flat.append(ordered[0])
+            ordered_by_outlet.append(ordered)
+    # Round-robin: position 0 of every outlet, then position 1, ...
+    flat: list[dict] = []
+    max_len = max((len(o) for o in ordered_by_outlet), default=0)
+    for pos in range(max_len):
+        for outlet in ordered_by_outlet:
+            if pos < len(outlet):
+                flat.append(outlet[pos])
     seen = set()
     dedup = []
     for h in flat:
@@ -6210,7 +6222,7 @@ def _fetch_trending_headlines_and_sources(keywords: Optional[list[str]]
             continue
         seen.add(key)
         dedup.append(h)
-    dedup = dedup[:15]
+    dedup = dedup[:150]
     by_source.sort(key=lambda x: (0 if x.get('articles') else 1, x.get('source', '')))
     return dedup, by_source
 
@@ -6682,7 +6694,7 @@ def _fetch_trending_people(headlines: list[dict],
             counts[name] += 1
 
     people: list[dict] = []
-    for name, cnt in counts.most_common(80):
+    for name, cnt in counts.most_common(400):
         if cnt < 2:
             continue
         people.append({
@@ -6692,7 +6704,7 @@ def _fetch_trending_people(headlines: list[dict],
             'context_meta': context_meta.get(name, [])[:3],
             'sources':      sorted(source_diversity.get(name, [])),
         })
-        if len(people) >= 40:
+        if len(people) >= 100:
             break
 
     if people:
@@ -7646,6 +7658,43 @@ def _enrich_streaming_with_posters(items: list[dict], default_kind: str,
         logger.info("streaming poster batch failed: %s", e)
 
 
+def _norm_stream_title(title: str) -> str:
+    """Fold a title for cross-source dedupe: casefold, strip
+    punctuation, drop a leading article. 'The Walking Dead' from the
+    platform's own storefront and 'Walking Dead, The' from the depth
+    extension collapse to one row."""
+    t = re.sub(r'[^a-z0-9 ]+', ' ', (title or '').casefold())
+    t = re.sub(r'\s+', ' ', t).strip()
+    if t.startswith('the '):
+        t = t[4:]
+    return t
+
+
+def _merge_streaming_depth(primary: list[dict], extension: list[dict],
+                            limit: int = 100) -> list[dict]:
+    """Extend a platform's own ranked list with depth-extension rows.
+
+    The platform snapshot's rows keep the top ranks (official Top 10
+    ordering, storefront trending order); extension rows follow in
+    their own popularity order, skipping titles already present.
+    Re-stamps `bucket_rank` 1..N on the merged list.
+    """
+    merged: list[dict] = list(primary[:limit])
+    seen = {_norm_stream_title(r.get('title') or '') for r in merged}
+    seen.discard('')
+    for row in extension:
+        if len(merged) >= limit:
+            break
+        key = _norm_stream_title(row.get('title') or '')
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        merged.append(dict(row))
+    for i, r in enumerate(merged, 1):
+        r['bucket_rank'] = i
+    return merged
+
+
 def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
                                 keywords: Optional[list[str]] = None,
                                 asof: Optional[str] = None) -> dict:
@@ -7677,12 +7726,28 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
                        'available': avail}
               for slug, label, avail in STREAMING_PLATFORMS}
 
+    # Depth extension: JustWatch top-100 films + top-100 shows per
+    # platform, written daily by scripts/trends_scrapers/
+    # streaming_depth.py. Missing snapshot (first day, or a platform
+    # JustWatch doesn't carry, like ESPN+) -> that platform simply
+    # keeps its own snapshot depth.
+    depth_sources = (_read_snapshot('streaming_depth', asof) or {}).get('sources') or {}
+
     for slug, label, _static_avail in STREAMING_PLATFORMS:
         snap = _read_snapshot(slug, asof)
+        depth_block = depth_sources.get(slug) or {}
         if not snap:
-            continue
+            # Platform's own snapshot missing entirely - ship the
+            # depth extension alone rather than an empty panel.
+            if depth_block.get('films') or depth_block.get('tv'):
+                snap = {'available': True}
+            else:
+                continue
         items = _snapshot_items_for_geo(snap, state, keywords=keywords)
-        items = items[:25]
+        # 220 covers the deepest snapshot shape in the fleet: the
+        # JustWatch-native platforms (Paramount+ / Peacock) write a
+        # 100-film + 100-show zipper into `national`.
+        items = items[:220]
         _annotate_streaming_weeks(slug, items)
         snap_available = snap.get('available')
         if snap_available is None:
@@ -7697,8 +7762,8 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
             netflix_films = snap.get('us_films') or []
             netflix_tv    = snap.get('us_tv')    or []
             if netflix_films or netflix_tv:
-                films = netflix_films[:20]
-                tv    = netflix_tv[:20]
+                films = netflix_films[:100]
+                tv    = netflix_tv[:100]
 
         # ESPN+ is a sports platform. Any item that lexically resembles
         # a "film" (misclassified documentary, mislabeled 30-for-30
@@ -7713,6 +7778,30 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
                 r['category_display'] = 'TV'
                 r['bucket_rank']      = i
 
+        # Depth extension merge (Jenna 2026-09-09: every list carries
+        # 100+ items where the source has them). The platform's own
+        # rows keep the top ranks; JustWatch popularity rows fill the
+        # list out to 100 per kind. Extension rows already carry a
+        # JustWatch poster in `image`, so the enricher below skips
+        # them - no added poster-lookup latency.
+        if depth_block:
+            films = _merge_streaming_depth(
+                films, depth_block.get('films') or [], 100)
+            tv = _merge_streaming_depth(
+                tv, depth_block.get('tv') or [], 100)
+            # Rebuild the flat legacy `items` list as a films/tv zipper
+            # so drilldowns and any legacy consumer see the same depth.
+            merged_flat: list[dict] = []
+            for i in range(max(len(films), len(tv))):
+                if i < len(films):
+                    merged_flat.append(films[i])
+                if i < len(tv):
+                    merged_flat.append(tv[i])
+            for i, r in enumerate(merged_flat, 1):
+                r['rank'] = i
+            if merged_flat:
+                items = merged_flat
+
         # Enrich Film + TV rows with an `image` field via iTunes Search.
         # Cached at module scope so subsequent renders (same title, same
         # kind) return instantly. First cold render of a new title
@@ -7725,9 +7814,9 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
 
         payload = {
             'label':      label,
-            'items':      items[:20],
-            'films':      films[:20],
-            'tv':         tv[:20],
+            'items':      items[:200],
+            'films':      films[:100],
+            'tv':         tv[:100],
             'available':  bool(snap_available),
             'fetched_at': snap.get('fetched_at'),
         }
@@ -7825,14 +7914,13 @@ def _fetch_fast_trending(state: Optional[str], lookback_days: int,
             r['bucket_rank'] = i
 
         # Channel lineup for this platform (top-N by weekly airings).
-        # Cap at 50 - the frontend renders these as a scrollable strip
-        # and 50 covers every channel a viewer would actually see on
-        # the FAST grid; the long-tail placeholder channels aren't
-        # useful for a dashboard reader.
+        # Cap at 100 (Jenna 2026-09-09: every list carries 100+ items
+        # where the source has them; the lineups snapshot carries
+        # hundreds of channels per platform).
         lineup_block = channel_sources.get(slug) or {}
         raw_channels = lineup_block.get('channels') or []
         channels_out: list[dict] = []
-        for i, ch in enumerate(raw_channels[:50], 1):
+        for i, ch in enumerate(raw_channels[:100], 1):
             if not isinstance(ch, dict):
                 continue
             channels_out.append({
@@ -7935,7 +8023,7 @@ def _fetch_gaming_trending(state: Optional[str], lookback_days: int,
             for bucket, sk in source_spec:
                 block = ((snap.get('sources') or {}).get(sk) or {})
                 raw_items = list(block.get('items') or [])
-                bucket_items = raw_items[:25]
+                bucket_items = raw_items[:100]
                 for i, it in enumerate(bucket_items, 1):
                     it['bucket_rank'] = i
                 panel_out[bucket] = bucket_items
@@ -7965,7 +8053,7 @@ def _fetch_gaming_trending(state: Optional[str], lookback_days: int,
             raw_items = _snapshot_items_for_geo(snap, state, keywords=keywords)
             panel_available = None
             panel_note = None
-        items = raw_items[:25]
+        items = raw_items[:100]
         for i, it in enumerate(items, 1):
             it['rank'] = i
         available = (panel_available if panel_available is not None
@@ -8615,7 +8703,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # `national` list on legacy snapshots that predate the classifier.
     wikipedia_trending = list(wiki_snap.get('people')
                                 or wiki_snap.get('national')
-                                or [])[:30]
+                                or [])[:100]
 
     # Music charts (Spotify + Apple Music + Shazam + TikTok + Amazon).
     # Scraper returns {sources: {spotify:{items:...}, apple:{...}, ...}}.
@@ -8698,7 +8786,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # Philanthropy news snapshot -> combined list + per-source split.
     # Frontend picks how to slice; both shapes travel in the payload.
     phil_snap        = results.get('philanthropy_news') or {}
-    philanthropy_news = list(phil_snap.get('national') or [])[:40]
+    philanthropy_news = list(phil_snap.get('national') or [])[:150]
     philanthropy_by_source = phil_snap.get('by_source') or {}
 
     # Business news (NYT Business RSS + WSJ Business via Google News
@@ -8706,7 +8794,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # for the flat "Business" sub-tab and a `by_source` split so the
     # UI can render per-outlet cards if we want that later.
     biz_snap         = results.get('business_news') or {}
-    business_news    = list(biz_snap.get('national') or [])[:40]
+    business_news    = list(biz_snap.get('national') or [])[:150]
     business_by_source = biz_snap.get('by_source') or {}
 
     # Wall Street news (MarketWatch + CNBC Markets + IBD + Seeking
@@ -8716,7 +8804,7 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # for the flat "Wall Street" sub-tab and a `by_source` split so
     # the UI can render per-outlet cards if we want that later.
     ws_snap          = results.get('wall_street_news') or {}
-    wall_street_news = list(ws_snap.get('national') or [])[:50]
+    wall_street_news = list(ws_snap.get('national') or [])[:150]
     wall_street_by_source = ws_snap.get('by_source') or {}
 
     # Persona-lens relevance scores.  Daily Claude pass over every

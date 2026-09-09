@@ -67,8 +67,8 @@ _FEEDS: list[tuple[str, str, str, str]] = [
 
 # Per-feed cap keeps a single prolific site (Guardian pushes 45 items /
 # day) from crowding the combined view.
-_PER_FEED_CAP = 12
-_TOTAL_CAP    = 40
+_PER_FEED_CAP = 30
+_TOTAL_CAP    = 150
 
 
 def _fetch_body(url: str, *, timeout: int = 15) -> str:

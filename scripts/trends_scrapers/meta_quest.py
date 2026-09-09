@@ -87,7 +87,7 @@ _PDP_URL_TMPL     = 'https://www.meta.com/experiences/pdp/{pid}/'
 # items; more than that would require a follow-on Relay pagination
 # call. 20 is plenty for the Gaming panel (which caps display at 25
 # per pill).
-_MAX_ITEMS_PER_PANEL = 20
+_MAX_ITEMS_PER_PANEL = 100
 
 
 def _parse_section_edges(html: str, section_id: str) -> list[dict]:

@@ -67,7 +67,7 @@ _MOST_PLAYED_URL = (
 _TOP_SELLERS_INPUT = {
     'country_code': 'US',
     'page_start': 0,
-    'page_count': 25,
+    'page_count': 100,
     'context': {
         'language': 'english',
         'country_code': 'US',
@@ -97,7 +97,7 @@ _APP_PAGE_URL_TMPL = 'https://store.steampowered.com/{store_url_path}'
 _STEAM_ASSET_CDN = 'https://shared.akamai.steamstatic.com/store_item_assets/'
 
 # Cap per column. 25 matches the Gaming panel's display cap.
-_MAX_ITEMS_PER_PANEL = 25
+_MAX_ITEMS_PER_PANEL = 100
 
 # Recency window for the NEW badge. Anything released in the past
 # 14 days trips `is_new`; the frontend renders a small NEW chip on

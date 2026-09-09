@@ -57,6 +57,7 @@
     "starz.py",
     "steam_charts.py",
     "stream_estimates.py",
+    "streaming_depth.py",
     "target.py",
     "tiktok.py",
     "trends_auto_login.py",

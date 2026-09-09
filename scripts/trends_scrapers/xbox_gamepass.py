@@ -57,10 +57,11 @@ DISPLAY_CAT_URL = ('https://displaycatalog.mp.microsoft.com/v7.0/products'
 _TRENDING_RAIL_TITLE   = 'Most popular on cloud'
 _RECENTLY_ADDED_TITLE  = 'Recently added'
 
-# How many product IDs to pull from the trending rail. 40 is plenty for
-# the Gaming panel (which caps at 25 visible) and covers the tail if
-# DisplayCatalog drops a couple.
-_MAX_TRENDING_IDS      = 40
+# How many product IDs to pull from the trending rail. The "Most
+# popular on cloud" rail carries 3,000+ games, so 110 gives the Gaming
+# panel a full 100-deep list (Jenna 2026-09-09) with headroom for the
+# occasional DisplayCatalog hydration miss.
+_MAX_TRENDING_IDS      = 110
 _MAX_RECENTLY_IDS      = 25
 
 # DisplayCatalog batches. The API accepts up to ~50 bigIds per query,

@@ -105,7 +105,7 @@ def _first_creator_name(item: dict) -> str:
     return item.get('firstCreatorName') or ''
 
 
-def _fetch_media(media_type: str, limit: int = 30) -> list[dict]:
+def _fetch_media(media_type: str, limit: int = 100) -> list[dict]:
     """Query the Thunder API for one media type. Sorted by popularity
     descending. Retries 2x on 429/5xx.
     """
@@ -185,7 +185,7 @@ def fetch() -> dict[str, Any]:
     sources: dict[str, dict] = {}
     all_flat: list[dict] = []
     for mt in _MEDIA_TYPES:
-        items = _fetch_media(mt, limit=30)
+        items = _fetch_media(mt, limit=100)
         sources[mt] = {
             'label':     _LABELS[mt],
             'sub':       _SUBS[mt],

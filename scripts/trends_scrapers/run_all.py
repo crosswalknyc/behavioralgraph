@@ -123,6 +123,13 @@ SCRAPERS = [
     # hop, no donated session, no cookie-donation domain.
     ('paramountplus', 'scripts.trends_scrapers.paramountplus', 'Paramount+', 'streaming'),
     ('peacock',       'scripts.trends_scrapers.peacock',       'Peacock',    'streaming'),
+    # Streaming depth extender (2026-09-09, Jenna: every list carries
+    # 100+ items where the source has them). JustWatch top-100 films +
+    # top-100 shows per platform for the residential-scraped streamers
+    # (Netflix / Hulu / Disney+ / HBO Max / BritBox / MGM+ / Starz) and
+    # Prime Video. trends_iq merges these under each platform's own
+    # snapshot rows, so official orderings keep the top ranks.
+    ('streaming_depth', 'scripts.trends_scrapers.streaming_depth', 'Streaming Depth', 'streaming'),
     # Meta Horizon Store (formerly Oculus). One snapshot with two
     # panels (Top Free + Top Paid) - matches how the store surfaces
     # its own rails on the Games landing page. Anonymous fetch works

@@ -149,8 +149,8 @@ _FEEDS: list[tuple[str, str, str, str]] = [
 # Per-feed cap keeps a single prolific outlet (GN-via-WSJ can push
 # ~100 items/day) from crowding the combined view; 12/feed x 9 feeds
 # still leaves plenty of room after dedupe under the 50 total cap.
-_PER_FEED_CAP = 12
-_TOTAL_CAP    = 50
+_PER_FEED_CAP = 30
+_TOTAL_CAP    = 150
 
 
 def _fetch_body(url: str, *, timeout: int = 15) -> str:

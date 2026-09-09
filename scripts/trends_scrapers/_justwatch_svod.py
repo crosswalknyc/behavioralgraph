@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 # Films + TV capped separately, mirroring starz.py: the dashboard
 # renders films[:20] + tv[:20] per platform, and the estimator reads
 # national[:40], so 20 + 20 covers both consumers exactly.
-_PER_KIND_LIMIT = 20
+_PER_KIND_LIMIT = 100
 
 
 def _fetch_one_kind(packages: list[str], label: str, object_type: str,

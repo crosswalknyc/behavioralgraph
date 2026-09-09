@@ -522,7 +522,7 @@ def _normalize_story(raw: dict, rank: int, *,
 _API_HOT = 'https://www.wattpad.com/api/v3/stories?filter=hot&limit=100'
 
 
-def _fetch_wattpad_hot(limit: int = 50) -> list[dict]:
+def _fetch_wattpad_hot(limit: int = 100) -> list[dict]:
     j = _get_json(_API_HOT)
     raw = j.get('stories') or []
     items: list[dict] = []
@@ -543,7 +543,7 @@ _API_LIST_TMPL = ('https://www.wattpad.com/api/v3/lists/{list_id}/'
                     'stories?limit=50')
 
 
-def _fetch_wattpad_originals(limit: int = 25) -> list[dict]:
+def _fetch_wattpad_originals(limit: int = 50) -> list[dict]:
     j = _get_json(_API_LIST_TMPL.format(list_id=_ORIGINALS_LIST_ID))
     raw = j.get('stories') or []
     items: list[dict] = []
@@ -563,7 +563,7 @@ _BROWSE_TMPL = 'https://www.wattpad.com/stories/{slug}'
 
 
 def _fetch_wattpad_genre(browse_slug: str, display: str,
-                            limit: int = 25) -> list[dict]:
+                            limit: int = 100) -> list[dict]:
     """Pull top hot stories for a genre from Wattpad's `/stories/<slug>`
     browse page. The page's `hotStoriesForTag` module contains the
     genuinely genre-specific ranking (~19-20 rows per page). If we
@@ -680,16 +680,16 @@ def fetch() -> dict[str, Any]:
             all_flat.append({**it, 'rail': panel_key})
 
     # 1. Hot Stories
-    _wrap('wattpad_hot', _fetch_wattpad_hot(limit=50))
+    _wrap('wattpad_hot', _fetch_wattpad_hot(limit=100))
     time.sleep(0.5)  # be polite
 
     # 2. Wattpad Originals
-    _wrap('wattpad_originals', _fetch_wattpad_originals(limit=25))
+    _wrap('wattpad_originals', _fetch_wattpad_originals(limit=50))
     time.sleep(0.5)
 
     # 3. Per-genre hot rails
     for tag, display, panel_key in _GENRE_RAILS:
-        _wrap(panel_key, _fetch_wattpad_genre(tag, display, limit=25))
+        _wrap(panel_key, _fetch_wattpad_genre(tag, display, limit=100))
         time.sleep(0.5)
 
     # National fold: top-ranked union of Hot + Originals for the

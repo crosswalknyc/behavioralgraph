@@ -438,7 +438,7 @@ def _row_is_comics(item: dict) -> bool:
     return False
 
 
-def _fetch_libby_comics_media(media_type: str, limit: int = 30) -> list[dict]:
+def _fetch_libby_comics_media(media_type: str, limit: int = 100) -> list[dict]:
     """Query Thunder for one media type and filter down to comics."""
     params = {
         'query':      _LIBBY_QUERY,
@@ -506,7 +506,7 @@ def _fetch_libby_comics_media(media_type: str, limit: int = 30) -> list[dict]:
     return items
 
 
-def _fetch_libby_comics(limit_per_type: int = 30) -> dict[str, list[dict]]:
+def _fetch_libby_comics(limit_per_type: int = 100) -> dict[str, list[dict]]:
     """Return {ebook: [...], audiobook: [...]} for the LA County
     Libby collection, ranked by popularity within the comics subject
     filter."""
@@ -525,14 +525,14 @@ def fetch() -> dict[str, Any]:
     "warming up" tile for the missing one."""
     amazon_items = _fetch_amazon_comics(limit=60)
 
-    apple_paid = _fetch_apple_comics(limit=50, tier='paid')
+    apple_paid = _fetch_apple_comics(limit=100, tier='paid')
     apple_items = apple_paid
     apple_label_sub = 'Apple Books top-paid comics, manga, and graphic novels.'
     if not apple_items:
-        apple_items = _fetch_apple_comics(limit=50, tier='free')
+        apple_items = _fetch_apple_comics(limit=100, tier='free')
         apple_label_sub = 'Apple Books top-free comics, manga, and graphic novels.'
 
-    libby_by_type = _fetch_libby_comics(limit_per_type=30)
+    libby_by_type = _fetch_libby_comics(limit_per_type=100)
     # Merge ebook + audiobook into a single Libby panel, dedup by title.
     libby_items: list[dict] = []
     seen: set[str] = set()
