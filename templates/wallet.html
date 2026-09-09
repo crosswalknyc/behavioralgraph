@@ -38,6 +38,36 @@
     header .brand { font-weight: 800; font-size: 20px; letter-spacing: -0.01em; }
     header a { color: var(--off-white); text-decoration: none; font-size: 14px; }
     header a:hover { text-decoration: underline; }
+    header .user-chip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 14px 6px 6px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 999px;
+      font-size: 13px;
+    }
+    header .avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--olive);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.03em;
+    }
+    header .user-meta {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
+    }
+    header .user-name { font-weight: 600; color: var(--off-white); }
+    header .user-email { color: rgba(255,255,255,0.55); font-size: 11px; }
+    header .header-right { display: flex; align-items: center; gap: 20px; }
     main {
       max-width: 900px;
       margin: 0 auto;
@@ -345,7 +375,16 @@
 <body>
   <header>
     <div class="brand">Crosswalk / Wallet</div>
-    <a href="/">Back to dashboard</a>
+    <div class="header-right">
+      <div id="user-chip" class="user-chip" style="display: none;">
+        <div id="user-avatar" class="avatar">?</div>
+        <div class="user-meta">
+          <div id="user-name" class="user-name">-</div>
+          <div id="user-email" class="user-email">-</div>
+        </div>
+      </div>
+      <a href="/">Back to dashboard</a>
+    </div>
   </header>
 
   <main>
@@ -545,6 +584,23 @@
     }
 
     function renderState(s) {
+      // Identity chip so the user can confirm which account they are
+      // signed in as (Jenna 2026-09-09).
+      const display = s.display_name || s.username || '';
+      const email = s.email || '';
+      if (display) {
+        $('user-chip').style.display = 'flex';
+        $('user-name').textContent = display;
+        $('user-email').textContent = email || s.username || '';
+        // Initials for avatar: first letter of first word + first
+        // letter of last word (falls back to first letter of username).
+        const parts = display.trim().split(/\s+/);
+        let initials = (parts[0] || '')[0] || '';
+        if (parts.length > 1) initials += (parts[parts.length - 1] || '')[0] || '';
+        if (!initials && s.username) initials = s.username[0];
+        $('user-avatar').textContent = (initials || '?').toUpperCase();
+      }
+
       // Balance
       const bal = Number(s.wallet_balance_usd || 0);
       $('balance').textContent = fmtUsd(bal);

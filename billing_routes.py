@@ -125,8 +125,14 @@ def wallet_state():
     pricing = wallet.load_pricing()
     ui_visible = wallet.admits_wallet_ui(u)
 
+    _first = str(u.get("first_name") or "").strip()
+    _last = str(u.get("last_name") or "").strip()
+    _display = " ".join(x for x in (_first, _last) if x) or uname
     payload = {
         "username": uname,
+        "display_name": _display,
+        "email": str(u.get("email") or ""),
+        "role": str(u.get("role") or "user"),
         "ui_visible": ui_visible,
         "paying_customer": _get_paying_flag(u),
         "wallet_balance_usd": wallet.wallet_balance(u),
