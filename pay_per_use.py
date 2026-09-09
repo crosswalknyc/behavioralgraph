@@ -505,12 +505,46 @@ def _apply_ppu_wallet_deduction(summary: dict) -> None:
         u = (data.get('users') or {}).get(target_username)
         if not u:
             return None
-        if not _wallet.is_paying_customer(u):
+        # Company-shared wallet routing (Jenna 2026-09-09): resolve the
+        # billing subject so a Prometheus session by a member of a
+        # company hits the COMPANY wallet, not the member's own record.
+        # Prometheus is ask-metered and the primary case for the
+        # "everyone on the team uses Prometheus, only the 3 spenders
+        # can pull Profile IQ" pattern - the tool_key spend-scope check
+        # below enforces that split.
+        subject, subject_kind, subject_key = (
+            _wallet.resolve_billing_subject(u, data or {}))
+        if not _wallet.is_paying_customer(subject):
             return None
+        # Per-member spend scope (Jenna 2026-09-09): only fires when
+        # the subject is a company. Solo wallets have no scope concept.
+        if subject_kind == 'company':
+            allowed, _reason, _scope = _wallet.user_can_spend_from_company(
+                u, 'prometheus', subject)
+            if not allowed:
+                # Member isn't scoped to spend the shared wallet on
+                # Prometheus. The session already ran (we can't
+                # un-consume compute); charge the MEMBER's own wallet
+                # as a fallback so the cost still lands somewhere.
+                # If the member's individual wallet is also empty and
+                # they have no card, it goes negative on the member
+                # record (same as prepay_only fallback below).
+                if _wallet.is_paying_customer(u):
+                    subject = u
+                    subject_kind = 'user'
+                    subject_key = target_username
+                    outcome['scope_fallback'] = True
+                else:
+                    # Neither the shared wallet nor the member is a
+                    # paying customer. Log and skip - the session ran
+                    # for free, which is the correct behavior for
+                    # non-paying internal users.
+                    outcome['unbilled_reason'] = 'not_scoped_and_not_paying'
+                    return None
         # Enforce billing-mode limits (monthly_invoice negative floor,
         # prepay_only sufficient-balance check).
-        can, _reason = _wallet.wallet_can_absorb(u, billed)
-        if not can and _wallet.billing_mode(u) == 'prepay_only':
+        can, _reason = _wallet.wallet_can_absorb(subject, billed)
+        if not can and _wallet.billing_mode(subject) == 'prepay_only':
             # No card, no auto-reload -> allow the deduction to go
             # negative anyway (Prometheus session already ran; we
             # cannot un-consume the compute). Admin will see the
@@ -519,14 +553,23 @@ def _apply_ppu_wallet_deduction(summary: dict) -> None:
             # block a session mid-flight" invariant from
             # no-rebuild-level-correction.
             pass
+        billed_via = ''
+        if subject_kind == 'company':
+            billed_via = (u.get('email')
+                          or u.get('username')
+                          or target_username
+                          or '')
         _wallet.apply_wallet_deduct(
-            u, billed,
+            subject, billed,
             description=(f"Prometheus session ({summary.get('asks', 0)} "
                          f"asks, {summary.get('active_seconds', 0):.0f}s "
                          f"active)"),
             tool_key='prometheus',
-            job_id=str(summary.get('session_start', '') or ''))
+            job_id=str(summary.get('session_start', '') or ''),
+            billed_via_username=billed_via)
         outcome['committed'] = True
+        outcome['subject_kind'] = subject_kind
+        outcome['subject_key'] = subject_key
         return data
 
     try:
@@ -538,10 +581,19 @@ def _apply_ppu_wallet_deduction(summary: dict) -> None:
     if not outcome.get('committed'):
         return
 
-    # Post-CAS: fire auto-reload if applicable. Fresh user snapshot.
+    # Post-CAS: fire auto-reload if applicable. Fresh subject snapshot.
+    # When the deduct hit a company wallet, auto-reload keys off the
+    # company record; when it hit the member's individual wallet
+    # (scope fallback), auto-reload keys off the member.
     try:
-        post = load_users().get('users', {}).get(target_username) or {}
-        _wallet.try_auto_reload(target_username, post)
+        post_data = load_users() or {}
+        s_kind = outcome.get('subject_kind') or 'user'
+        s_key = outcome.get('subject_key') or target_username
+        if s_kind == 'company':
+            post = (post_data.get('companies') or {}).get(s_key) or {}
+        else:
+            post = (post_data.get('users') or {}).get(s_key) or {}
+        _wallet.try_auto_reload(s_key, post)
     except Exception as e:
         print(f"[pay-per-use] auto-reload skipped: {e}")
 

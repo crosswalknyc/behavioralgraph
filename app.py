@@ -2281,6 +2281,45 @@ def has_credits_for(username, amount):
     return credits_left >= amount
 
 
+def _sanitize_spend_scope(value):
+    """Coerce a raw spend-scope request field to a persistable value.
+
+    Accepts (from JSON / form / query):
+      - None / missing / empty string / "inherit"      -> "inherit"
+      - "*" / "all" / "any" / "unrestricted" / "star"  -> "*"
+      - list of strings                                -> deduped list
+        of stripped strings (empty list = explicit deny)
+      - comma-separated string                         -> parsed as list
+      - anything else                                  -> "inherit"
+        (fail-safe: never surface a corrupt value to storage)
+
+    Note: this only sanitizes the STORAGE shape; the RUNTIME evaluation
+    (see wallet._normalize_spend_scope + user_can_spend_from_company)
+    treats "inherit" as "defer to company default_spend_scope" and "*"
+    as "no restriction". Missing / unset stored value also resolves to
+    "inherit" at runtime, so the persistence + runtime layers agree.
+    """
+    if value is None:
+        return "inherit"
+    if isinstance(value, str):
+        s = value.strip()
+        low = s.lower()
+        if not s or low == "inherit":
+            return "inherit"
+        if low in ("*", "all", "any", "unrestricted", "star"):
+            return "*"
+        # Comma-separated list.
+        if "," in s:
+            parts = [p.strip() for p in s.split(",")]
+            return sorted({p for p in parts if p})
+        # Single tool_key.
+        return [s]
+    if isinstance(value, (list, tuple, set, frozenset)):
+        cleaned = {str(x).strip() for x in value if str(x).strip()}
+        return sorted(cleaned)
+    return "inherit"
+
+
 def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
                          data=None, username=None):
     """Wallet-side fallback for consume_credit (Jenna 2026-09-08).
@@ -2318,6 +2357,19 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
         usd, mode = _wallet.should_charge_wallet(subject, tool_key)
         if mode != 'wallet' or usd <= 0:
             return False
+        # Per-member spend scope (Jenna 2026-09-09): when the subject is
+        # a company, check whether THIS user is authorized to spend the
+        # shared wallet on THIS tool_key. Company owners can restrict
+        # e.g. "profile_iq_build" to a subset of the team while letting
+        # everyone spend on "prometheus".
+        if subject_kind == 'company':
+            allowed, reason, _scope = _wallet.user_can_spend_from_company(
+                user, tool_key, subject)
+            if not allowed:
+                outcome['spend_scope_blocked'] = True
+                outcome['spend_scope_tool_key'] = tool_key
+                outcome['spend_scope_company'] = subject_key
+                return False
         can, _reason = _wallet.wallet_can_absorb(subject, usd)
         if not can:
             return False
@@ -5037,6 +5089,13 @@ def create_user():
                 == 'company' else 'user'),
             'company_billing_admin': bool(
                 req_data.get('company_billing_admin')),
+            # Per-member spend scope on the shared wallet (Jenna
+            # 2026-09-09). "inherit" (default), "*", or a list of
+            # tool_keys the member is allowed to spend the company
+            # wallet on. Only meaningful when billing_source='company'.
+            # See wallet.user_can_spend_from_company for full semantics.
+            'company_spend_scope': _sanitize_spend_scope(
+                req_data.get('company_spend_scope')),
             'role': role,
             'credits': req_data.get('credits', cd.get('credits', 5) if cd else 5),
             'credits_used': 0,
@@ -5210,6 +5269,10 @@ def update_user(username):
         if 'company_billing_admin' in req_data:
             user['company_billing_admin'] = bool(
                 req_data.get('company_billing_admin'))
+        # Per-member spend scope on the shared wallet (Jenna 2026-09-09).
+        if 'company_spend_scope' in req_data:
+            user['company_spend_scope'] = _sanitize_spend_scope(
+                req_data.get('company_spend_scope'))
         if 'role' in req_data:
             # Never allow downgrading the primary 'admin' account from super_admin
             if username == 'admin':

@@ -627,9 +627,31 @@
         } else {
           companyBanner.style.display = 'block';
           companyBanner.className = 'banner warning';
+          // Extend the read-only banner with the caller's spend scope
+          // when it's list-restricted, so a teammate knows exactly
+          // what they can and can't spend the shared wallet on.
+          const scope = s.spend_scope || {};
+          let scopeMsg = '';
+          if (scope.routed_to_company &&
+              scope.scope_kind === 'list' &&
+              Array.isArray(scope.scope_display_names) &&
+              scope.scope_display_names.length > 0) {
+            scopeMsg =
+              ' Your account can spend the shared wallet on: ' +
+              scope.scope_display_names.join(', ') + '. ' +
+              'For other tools, contact your billing admin.';
+          } else if (scope.routed_to_company &&
+                     scope.scope_kind === 'list' &&
+                     Array.isArray(scope.scope_display_names) &&
+                     scope.scope_display_names.length === 0) {
+            scopeMsg =
+              ' Your account is not authorized to spend the shared ' +
+              'wallet. Contact your billing admin.';
+          }
           companyBanner.textContent =
             'Balance shown is your team\u2019s shared wallet. Only ' +
-            cname + ' billing admins can top up or change the card.';
+            cname + ' billing admins can top up or change the card.' +
+            scopeMsg;
         }
       } else {
         companyBanner.style.display = 'none';

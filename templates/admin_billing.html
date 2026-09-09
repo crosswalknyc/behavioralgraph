@@ -516,6 +516,40 @@
                     min="0" style="width: 120px;"></div>
           </div>
         </div>
+        <!-- Company default spend scope (Jenna 2026-09-09).
+             Only visible when the current subject is a company. Sets
+             which tools the whole company can spend the shared wallet
+             on by default. Individual members can override upward
+             (via the user admin modal) but never downward past this
+             list unless the admin sets an explicit narrower list on
+             their user record. -->
+        <div id="scope-fields" style="display: none;
+             border-top: 1px solid #E5E7EB; margin-top: 12px;
+             padding-top: 12px;">
+          <div class="kv-row">
+            <label style="margin: 0;">Default spend scope</label>
+            <select id="m-scope-mode">
+              <option value="*">All tools (unrestricted)</option>
+              <option value="list">Specific tools only</option>
+            </select>
+          </div>
+          <div id="m-scope-list-wrap" style="display: none; margin-top: 8px;">
+            <label style="display: block; margin-bottom: 6px;">
+              Tools members can spend the shared wallet on by default
+            </label>
+            <select id="m-scope-list" multiple
+                    style="width: 100%; min-height: 120px;
+                           font-size: 12px;">
+              <!-- Populated from /api/admin/tool_catalog -->
+            </select>
+            <div style="color: #6B7280; font-size: 11px; margin-top: 6px;">
+              Members whose user record has spend scope = "Inherit" (the
+              default) get this list. Billing admins can always spend on
+              any tool regardless of this setting. Individual members can
+              be granted "All tools" or a wider list on their user modal.
+            </div>
+          </div>
+        </div>
         <div style="text-align: right; margin-top: 12px;">
           <button id="m-save-config">Save configuration</button>
         </div>
@@ -874,6 +908,8 @@
       $('m-mi-limit').value = u.monthly_invoice_limit_usd || 5000;
       updateModeFields();
       onUnlimitedToggle();
+      // Company default spend scope: hydrate only for company subjects.
+      hydrateSpendScope(u);
       $('m-balance').textContent = fmtUsd(u.wallet_balance_usd);
       if (u.wallet_balance_usd < 0)
         $('m-balance').style.color = '#C43D2E';
@@ -992,6 +1028,87 @@
       $('m-txns').innerHTML = html;
     }
 
+    // -------- Company default spend scope (Jenna 2026-09-09) --------
+    let __scopeCatalogLoaded = false;
+    async function ensureScopeCatalog() {
+      if (__scopeCatalogLoaded) return;
+      const listEl = $('m-scope-list');
+      if (!listEl) return;
+      try {
+        const r = await fetch('/api/admin/tool_catalog',
+                              { credentials: 'same-origin' });
+        if (!r.ok) return;
+        const data = await r.json();
+        const tools = (data && data.tools) || [];
+        const prior = new Set(
+          Array.from(listEl.selectedOptions).map(o => o.value));
+        listEl.innerHTML = '';
+        const orderKey = t => {
+          if (t.tool_key === 'prometheus') return '0';
+          if (t.tool_key.startsWith('profile_iq')) return '1';
+          if (t.tool_key.startsWith('subscriber_iq')) return '2';
+          if (t.tool_key.startsWith('chatbot')) return '3';
+          return '4_' + (t.section || 'z') + '_' + t.tool_key;
+        };
+        tools.sort((a, b) =>
+          orderKey(a).localeCompare(orderKey(b)));
+        for (const t of tools) {
+          if (!t.tool_key) continue;
+          if (t.tool_key === 'monthly_service') continue;
+          const opt = document.createElement('option');
+          opt.value = t.tool_key;
+          opt.textContent = t.display_name || t.tool_key;
+          opt.selected = prior.has(t.tool_key);
+          listEl.appendChild(opt);
+        }
+        __scopeCatalogLoaded = true;
+      } catch (_) { /* best-effort */ }
+    }
+
+    function hydrateSpendScope(u) {
+      const wrap = $('scope-fields');
+      const modeEl = $('m-scope-mode');
+      const listEl = $('m-scope-list');
+      const listWrap = $('m-scope-list-wrap');
+      if (!wrap || !modeEl || !listEl) return;
+      // Only surface the control for company subjects. Solo user
+      // records have no shared wallet, so there's nothing to scope.
+      if (currentSubjectKind !== 'company') {
+        wrap.style.display = 'none';
+        return;
+      }
+      wrap.style.display = '';
+      const raw = u.default_spend_scope;
+      let mode = '*';
+      let selected = new Set();
+      if (Array.isArray(raw)) {
+        mode = 'list';
+        for (const tk of raw) selected.add(String(tk));
+      } else {
+        mode = '*';
+      }
+      modeEl.value = mode;
+      // Populate + apply prior selection.
+      ensureScopeCatalog().then(() => {
+        for (const o of listEl.options) {
+          o.selected = selected.has(o.value);
+        }
+      });
+      listWrap.style.display = (mode === 'list') ? '' : 'none';
+    }
+
+    // Toggle the list picker when mode flips.
+    const _scopeModeEl = $('m-scope-mode');
+    if (_scopeModeEl) {
+      _scopeModeEl.addEventListener('change', () => {
+        const listWrap = $('m-scope-list-wrap');
+        if (!listWrap) return;
+        listWrap.style.display =
+          (_scopeModeEl.value === 'list') ? '' : 'none';
+        if (_scopeModeEl.value === 'list') ensureScopeCatalog();
+      });
+    }
+
     $('m-save-config').addEventListener('click', async () => {
       // Guardrail: if the admin is turning OFF unlimited, confirm -
       // this flips the user from never-charged to metered and sets
@@ -1019,6 +1136,21 @@
         monthly_invoice_limit_usd:
           Number($('m-mi-limit').value || 5000),
       };
+      // Attach default_spend_scope only on company subjects.
+      if (currentSubjectKind === 'company') {
+        const modeEl2 = $('m-scope-mode');
+        const mode = modeEl2 ? String(modeEl2.value || '*') : '*';
+        if (mode === '*') {
+          body.default_spend_scope = '*';
+        } else {
+          const listEl2 = $('m-scope-list');
+          body.default_spend_scope = listEl2
+            ? Array.from(listEl2.selectedOptions)
+                .map(o => String(o.value || '').trim())
+                .filter(x => x)
+            : [];
+        }
+      }
       const r = await fetch(
         subjectUrl('config'),
         { method: 'POST',

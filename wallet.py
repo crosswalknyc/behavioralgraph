@@ -230,6 +230,14 @@ MODULE_CATALOG = [
      "api", 10, 1000.0, None),
     ("api_chatbot_profile_iq_build", "API - Chatbot Profile IQ",
      "api", 5, 500.0, None),
+    # ---------- Ask-metered (Prometheus) ----------
+    # Prometheus is priced by prometheus_markup_multiplier applied to
+    # per-session usage, not by a flat per-pull rate. It lives in the
+    # catalog so admin UIs (spend-scope picker, module list) can
+    # reference it. Per-pull tool_price_usd stays 0.0; the actual
+    # session billing amount is computed in migration/prometheus_*.
+    ("prometheus",                 "Prometheus (Ask-metered)",
+     "modules", 0, 0.0, "has_prometheus_access"),
     # ---------- Recurring ----------
     ("monthly_service",            "Monthly Service (base access)",
      "subscription", 0, 0.0, None),
@@ -1815,6 +1823,242 @@ def compute_company_monthly_charge(company_name: str,
     return result
 
 
+class SpendNotAuthorizedError(Exception):
+    """Raised when a member tries to spend a company's shared wallet on
+    a tool they aren't scoped for. Callers should catch this and surface
+    a partner-safe message (no internal terminology).
+
+    Attributes:
+      tool_key:     the pricing key that was blocked (e.g. profile_iq_build)
+      display_name: friendly tool label (from MODULE_CATALOG when known)
+      company_name: the company that holds the shared wallet
+      allowed:      the list of tool_keys this member CAN spend on
+                    ('*' when unrestricted; empty list means none)
+    """
+
+    def __init__(self, tool_key: str, display_name: str,
+                 company_name: str, allowed):
+        self.tool_key = tool_key
+        self.display_name = display_name or tool_key
+        self.company_name = company_name
+        self.allowed = allowed
+        super().__init__(
+            f"Not authorized to spend the {company_name} shared "
+            f"wallet on {self.display_name}."
+        )
+
+
+def _normalize_spend_scope(value) -> object:
+    """Normalize a raw spend-scope config value to one of:
+
+      * "*"          -> no restriction (default when unset / garbage)
+      * "inherit"    -> defer to company default (user-side only)
+      * frozenset()  -> explicit list of tool_keys (empty = deny all)
+
+    Fail-open bias: any unparseable value is treated as "*" so a
+    corrupted config never silently blocks paying customers. An empty
+    list `[]`, however, is treated as an explicit "deny everything" -
+    that's a legitimate restrictive config.
+    """
+    if value is None:
+        return "*"
+    if isinstance(value, str):
+        s = value.strip().lower()
+        if s in ("", "*", "all", "any", "unrestricted"):
+            return "*"
+        if s == "inherit":
+            return "inherit"
+        # Single tool_key as a string is legitimate. Wrap it.
+        return frozenset({value.strip()})
+    if isinstance(value, (list, tuple, set, frozenset)):
+        # Explicit list. Empty list = deny all (legitimate).
+        cleaned = frozenset(
+            str(x).strip() for x in value
+            if isinstance(x, str) and str(x).strip()
+        )
+        return cleaned
+    # Anything else (int, dict, ...) -> fail-open.
+    return "*"
+
+
+def _tool_display_name(tool_key: str) -> str:
+    """Best-effort friendly label for a tool_key (MODULE_CATALOG first,
+    custom_tools next, tool_key itself as last resort). Never raises."""
+    try:
+        for tk, disp, *_ in MODULE_CATALOG:
+            if tk == tool_key:
+                return disp
+        p = load_pricing() or {}
+        for c in p.get("custom_tools") or []:
+            if isinstance(c, dict) and c.get("tool_key") == tool_key:
+                return str(c.get("display_name") or tool_key)
+    except Exception:
+        pass
+    return tool_key
+
+
+def user_can_spend_from_company(user: dict, tool_key: str,
+                                company: dict) -> tuple:
+    """Return (allowed: bool, reason: str, allowed_scope).
+
+    Checks whether `user` is authorized to spend `company`'s shared
+    wallet on a pull with the given `tool_key`. Only meaningful when
+    the user's billing subject resolves to `company` (caller must
+    have already established that via resolve_billing_subject).
+
+    Semantics:
+
+      1. `company_billing_admin=True` -> implicit "*" (billing admins
+         can always spend). This is a convenience so a company owner
+         who set up the wallet doesn't lock themselves out.
+
+      2. User `company_spend_scope`:
+           - missing / None / "inherit" -> fall through to company
+           - "*" or "all" or "any"     -> allow every tool
+           - non-empty frozenset       -> allow iff tool_key in set
+           - empty frozenset ([])      -> deny all (explicit no-spend)
+           - unparseable               -> fail-open to "*"
+
+      3. Company `default_spend_scope`:
+           - missing / None / "*"      -> allow every tool (backward
+                                          compat; existing companies
+                                          keep working exactly as
+                                          before)
+           - non-empty frozenset       -> allow iff tool_key in set
+           - empty frozenset ([])      -> deny all
+           - unparseable               -> fail-open to "*"
+
+    Fail-safe: never raises. On any unexpected input structure, returns
+    (True, "fail_open", "*") so a corrupt config can't silently deny a
+    paying customer. Explicit list-based restrictions (including []) are
+    respected exactly.
+
+    Third return value `allowed_scope` is the effective scope that made
+    the call: "*" (unrestricted), "billing_admin" (bypass), or the
+    frozenset of tool_keys.
+    """
+    tk = str(tool_key or "").strip()
+    try:
+        if not isinstance(user, dict) or not isinstance(company, dict):
+            return True, "fail_open", "*"
+        # 1. Billing-admin bypass.
+        if bool(user.get("company_billing_admin")):
+            return True, "billing_admin", "billing_admin"
+        # 2. User-side scope. IMPORTANT distinction from company side:
+        #    a MISSING user field means "inherit" (defer to the
+        #    company default). Only an explicit "*" / "all" / "any"
+        #    is a user-level unrestricted grant. A missing COMPANY
+        #    field, by contrast, means "*" (permissive default,
+        #    backward compat for pre-scope-feature companies).
+        raw_user = user.get("company_spend_scope")
+        if raw_user is None or raw_user == "":
+            u_scope = "inherit"
+        else:
+            u_scope = _normalize_spend_scope(raw_user)
+        if u_scope != "inherit":
+            if u_scope == "*":
+                return True, "user_star", "*"
+            # frozenset
+            if tk in u_scope:
+                return True, "user_list", u_scope
+            return False, "user_list", u_scope
+        # 3. Fall through to company default. Missing here means "*".
+        c_scope = _normalize_spend_scope(company.get("default_spend_scope"))
+        if c_scope in ("*", "inherit"):
+            # "inherit" doesn't make sense on a company; treat as "*".
+            return True, "company_star", "*"
+        # frozenset
+        if tk in c_scope:
+            return True, "company_list", c_scope
+        return False, "company_list", c_scope
+    except Exception as _e:
+        # Fail-open: never deny a paying customer over a config bug.
+        return True, "fail_open", "*"
+
+
+def user_spend_scope_summary(user: dict, users_data: dict,
+                             company: dict = None) -> dict:
+    """Return a UI-safe summary of what this user can spend the shared
+    wallet on. Only meaningful when the user routes through a company.
+    Solo users get {"routed_to_company": False}.
+
+    Shape:
+      {
+        "routed_to_company": True,
+        "company_name": "Acme Corp",
+        "billing_admin": bool,
+        "scope_kind": "star" | "list",
+        "scope_tool_keys": ["prometheus", "profile_iq_build", ...],
+        "scope_display_names": ["Prometheus (Ask-metered)", ...],
+        "source": "billing_admin" | "user" | "company_default"
+      }
+
+    Never raises.
+    """
+    try:
+        if not isinstance(user, dict):
+            return {"routed_to_company": False}
+        if company is None:
+            subj, kind, key = resolve_billing_subject(
+                user, users_data or {})
+            if kind != "company":
+                return {"routed_to_company": False}
+            company = subj
+            company_name = key
+        else:
+            company_name = ""
+            companies = (users_data or {}).get("companies") or {}
+            for cn, c in companies.items():
+                if c is company:
+                    company_name = cn
+                    break
+        if bool(user.get("company_billing_admin")):
+            return {
+                "routed_to_company": True,
+                "company_name": company_name,
+                "billing_admin": True,
+                "scope_kind": "star",
+                "scope_tool_keys": [],
+                "scope_display_names": [],
+                "source": "billing_admin",
+            }
+        raw_user = user.get("company_spend_scope")
+        if raw_user is None or raw_user == "":
+            u_scope = "inherit"
+        else:
+            u_scope = _normalize_spend_scope(raw_user)
+        if u_scope == "inherit":
+            c_scope = _normalize_spend_scope(
+                company.get("default_spend_scope"))
+            eff = c_scope
+            source = "company_default"
+        else:
+            eff = u_scope
+            source = "user"
+        if eff in ("*", "inherit"):
+            return {
+                "routed_to_company": True,
+                "company_name": company_name,
+                "billing_admin": False,
+                "scope_kind": "star",
+                "scope_tool_keys": [],
+                "scope_display_names": [],
+                "source": source,
+            }
+        keys = sorted(eff)
+        return {
+            "routed_to_company": True,
+            "company_name": company_name,
+            "billing_admin": False,
+            "scope_kind": "list",
+            "scope_tool_keys": keys,
+            "scope_display_names": [_tool_display_name(k) for k in keys],
+            "source": source,
+        }
+    except Exception:
+        return {"routed_to_company": False}
+
+
 def iter_paying_subjects(users_data: dict) -> list:
     """Yield every subject the monthly billing engine should consider.
 
@@ -1866,4 +2110,6 @@ __all__ = [
     "hide_builtin_tool", "unhide_builtin_tool", "hidden_builtin_tools",
     "resolve_billing_subject", "company_billing_admins",
     "company_members", "iter_paying_subjects",
+    "user_can_spend_from_company", "user_spend_scope_summary",
+    "SpendNotAuthorizedError",
 ]

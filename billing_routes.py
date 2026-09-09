@@ -251,6 +251,15 @@ def wallet_state():
         "billed_via_company": ctx["billed_via_company"],
         "company_name": ctx["company_name"],
         "viewer_is_billing_admin": ctx["viewer_is_billing_admin"],
+        # Per-member spend scope on the shared wallet (Jenna 2026-09-09).
+        # For solo users this is always {"routed_to_company": False}.
+        # For company members this describes what tools they can spend
+        # the shared wallet on (empty scope_tool_keys + scope_kind="star"
+        # means "unrestricted").
+        "spend_scope": (wallet.user_spend_scope_summary(
+            u, ctx["users_data"], subject)
+            if ctx["billed_via_company"]
+            else {"routed_to_company": False}),
     }
     return jsonify(payload)
 
@@ -650,6 +659,39 @@ def admin_pricing_get():
     resp["prometheus_markup"] = float(
         p.get("prometheus_markup_multiplier", 2.10))
     return jsonify(resp)
+
+
+@billing_bp.route("/api/admin/tool_catalog", methods=["GET"])
+def admin_tool_catalog():
+    """Lightweight tool-catalog list for the admin user modal's
+    per-member spend-scope picker (Jenna 2026-09-09).
+
+    Returns:
+      {
+        "tools": [
+          {"tool_key": "prometheus", "display_name": "...",
+           "section": "modules", "is_custom": false},
+          ...
+        ]
+      }
+
+    Any authenticated admin can read it; the picker only appears on
+    the admin user modal so this endpoint isn't user-facing.
+    """
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import wallet  # type: ignore
+    catalog = wallet.module_catalog(include_hidden=False)
+    tools = []
+    for row in catalog:
+        tools.append({
+            "tool_key":     row["tool_key"],
+            "display_name": row.get("display_name") or row["tool_key"],
+            "section":      row.get("section") or "modules",
+            "is_custom":    bool(row.get("is_custom", False)),
+        })
+    return jsonify({"tools": tools})
 
 
 @billing_bp.route("/api/admin/pricing", methods=["POST"])
@@ -1517,6 +1559,11 @@ def admin_companies_billing():
             "billing_admin_usernames": list(admins),
             "wallet_transactions": list(c.get(
                 "wallet_transactions") or [])[:50],
+            # Company default spend scope (Jenna 2026-09-09). Members
+            # whose company_spend_scope is 'inherit' fall through to
+            # this list at spend time. See
+            # wallet.user_can_spend_from_company for full rules.
+            "default_spend_scope": c.get("default_spend_scope", "*"),
         })
     rows.sort(key=lambda r: (
         not r["paying_customer"],
@@ -1543,6 +1590,24 @@ def admin_company_billing_config(company_name):
     if mode not in ("prepay_only", "auto_reload", "monthly_invoice"):
         return jsonify({"error": "invalid_mode"}), 400
 
+    # Sanitize default_spend_scope up front so a bad value doesn't
+    # slip past the mutator. See app._sanitize_spend_scope for shape
+    # rules; the storage form is "*" | "inherit" | List[str].
+    _has_scope = "default_spend_scope" in body
+    if _has_scope:
+        try:
+            from app import _sanitize_spend_scope  # type: ignore
+            scope_clean = _sanitize_spend_scope(
+                body.get("default_spend_scope"))
+        except Exception:
+            scope_clean = "*"
+        # On a company, "inherit" doesn't make sense (nothing to
+        # inherit from). Coerce to "*" so it stays permissive.
+        if scope_clean == "inherit":
+            scope_clean = "*"
+    else:
+        scope_clean = None
+
     def _apply(c):
         if "paying_customer" in body:
             c["paying_customer"] = bool(body.get("paying_customer"))
@@ -1559,6 +1624,12 @@ def admin_company_billing_config(company_name):
                         c[k] = v
                 except (TypeError, ValueError):
                     pass
+        # Company-wide default spend scope (Jenna 2026-09-09). Members
+        # whose company_spend_scope is "inherit" (the default) fall
+        # through to this value at spend time. See
+        # wallet.user_can_spend_from_company for semantics.
+        if _has_scope:
+            c["default_spend_scope"] = scope_clean
         return True
 
     ok, msg = _mutate_target_company(company_name, _apply)

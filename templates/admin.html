@@ -3284,6 +3284,39 @@
                     </div>
                 </div>
 
+                <!-- Company spend scope (Jenna 2026-09-09) -->
+                <div class="form-row">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Company spend scope</label>
+                        <select id="newSpendScopeMode" onchange="onSpendScopeModeChange()">
+                            <option value="inherit">Inherit company default</option>
+                            <option value="*">All tools (unrestricted)</option>
+                            <option value="list">Specific tools only</option>
+                        </select>
+                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.25rem;">
+                            Controls which tools this member can spend the shared
+                            company wallet on. Billing admins can always spend
+                            on anything. Ignored when Bill through = User's own
+                            wallet.
+                        </small>
+                    </div>
+                    <div class="form-group" id="spendScopeListGroup"
+                         style="flex: 1; display: none;">
+                        <label>Allowed tools</label>
+                        <select id="newSpendScopeList" multiple
+                                style="min-height: 8rem;">
+                            <!-- Options populated at admin-page init from
+                                 wallet.MODULE_CATALOG via /api/admin/tool_catalog -->
+                        </select>
+                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.25rem;">
+                            Hold Cmd/Ctrl to select multiple. Common pattern:
+                            everyone gets "Prometheus (Ask-metered)"; only 2-3
+                            billing admins or lead analysts get "Profile IQ - Full
+                            Build" and "Subscriber IQ".
+                        </small>
+                    </div>
+                </div>
+
                 <div class="form-row">
                     <div class="form-group">
                         <label>Access Expires</label>
@@ -9121,6 +9154,64 @@
             }
         }
 
+        // Company spend scope UI helpers (Jenna 2026-09-09).
+        function onSpendScopeModeChange() {
+            const modeEl = document.getElementById('newSpendScopeMode');
+            const grp = document.getElementById('spendScopeListGroup');
+            if (!modeEl || !grp) return;
+            grp.style.display = (modeEl.value === 'list') ? '' : 'none';
+            if (modeEl.value === 'list') {
+                ensureSpendScopeCatalog();
+            }
+        }
+
+        let __spendScopeCatalogLoaded = false;
+        async function ensureSpendScopeCatalog() {
+            if (__spendScopeCatalogLoaded) return;
+            const listEl = document.getElementById('newSpendScopeList');
+            if (!listEl) return;
+            try {
+                const r = await fetch('/api/admin/tool_catalog',
+                                      { credentials: 'same-origin' });
+                if (!r.ok) return;
+                const data = await r.json();
+                const tools = (data && data.tools) || [];
+                // Preserve prior selections when we (re)populate.
+                const prior = new Set(
+                    Array.from(listEl.selectedOptions).map(o => o.value));
+                listEl.innerHTML = '';
+                // Prometheus first (most common shared-team pattern);
+                // then Profile IQ builds; then everything else in
+                // section order.
+                const orderKey = t => {
+                    if (t.tool_key === 'prometheus') return '0';
+                    if (t.tool_key.startsWith('profile_iq')) return '1';
+                    if (t.tool_key.startsWith('subscriber_iq')) return '2';
+                    if (t.tool_key.startsWith('chatbot')) return '3';
+                    return '4_' + t.section + '_' + t.tool_key;
+                };
+                tools.sort((a, b) =>
+                    orderKey(a).localeCompare(orderKey(b)));
+                for (const t of tools) {
+                    if (!t.tool_key) continue;
+                    if (t.tool_key === 'monthly_service') continue;
+                    const opt = document.createElement('option');
+                    opt.value = t.tool_key;
+                    opt.textContent = t.display_name || t.tool_key;
+                    opt.selected = prior.has(t.tool_key);
+                    listEl.appendChild(opt);
+                }
+                __spendScopeCatalogLoaded = true;
+            } catch (_) {
+                /* best-effort; the field stays empty */
+            }
+        }
+        // Prime the catalog on first user-modal open so the picker is
+        // instant when an admin flips the select to "Specific tools".
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(ensureSpendScopeCatalog, 400);
+        });
+
         async function loadActivityExportCompany() {
             try {
                 const response = await fetch('/api/admin/activity-export/company', { credentials: 'same-origin' });
@@ -9518,6 +9609,15 @@
             const _cbaAdd = document.getElementById(
                 'newCompanyBillingAdmin');
             if (_cbaAdd) _cbaAdd.checked = false;
+            // Per-member spend scope defaults to inherit on create.
+            const _ssModeAdd = document.getElementById('newSpendScopeMode');
+            if (_ssModeAdd) _ssModeAdd.value = 'inherit';
+            const _ssListAdd = document.getElementById('newSpendScopeList');
+            if (_ssListAdd) {
+                for (const o of _ssListAdd.options) o.selected = false;
+            }
+            const _ssGroupAdd = document.getElementById('spendScopeListGroup');
+            if (_ssGroupAdd) _ssGroupAdd.style.display = 'none';
             document.getElementById('accessExpires').value = '';
             document.getElementById('unlimitedAccess').checked = true;
             document.getElementById('accessExpires').disabled = true;
@@ -9716,6 +9816,30 @@
                 ? 'company' : 'user';
             const _cba = document.getElementById('newCompanyBillingAdmin');
             if (_cba) _cba.checked = !!user.company_billing_admin;
+            // Per-member spend scope (Jenna 2026-09-09). Coerce the stored
+            // value to one of the three UI modes: "inherit", "*", "list".
+            (function _hydrateSpendScope() {
+                const modeEl = document.getElementById('newSpendScopeMode');
+                const listEl = document.getElementById('newSpendScopeList');
+                const grp = document.getElementById('spendScopeListGroup');
+                if (!modeEl || !listEl) return;
+                const raw = user.company_spend_scope;
+                let mode = 'inherit';
+                let selected = new Set();
+                if (raw === '*' || raw === 'all' || raw === 'any') {
+                    mode = '*';
+                } else if (Array.isArray(raw)) {
+                    mode = 'list';
+                    for (const tk of raw) selected.add(String(tk));
+                } else {
+                    mode = 'inherit';
+                }
+                modeEl.value = mode;
+                for (const o of listEl.options) {
+                    o.selected = selected.has(o.value);
+                }
+                if (grp) grp.style.display = (mode === 'list') ? '' : 'none';
+            })();
             document.getElementById('newRole').value = user.role;
             document.getElementById('newCredits').value = user.credits === -1 ? '0' : (user.credits ?? 0);
             document.getElementById('unlimitedCredits').checked = user.credits === -1;
@@ -13325,6 +13449,21 @@
                     const el = document.getElementById(
                         'newCompanyBillingAdmin');
                     return !!(el && el.checked);
+                })(),
+                // Per-member spend scope (Jenna 2026-09-09). "inherit"
+                // (default), "*" (all), or list of tool_keys.
+                company_spend_scope: (function() {
+                    const modeEl = document.getElementById('newSpendScopeMode');
+                    const mode = modeEl ? String(modeEl.value || 'inherit') : 'inherit';
+                    if (mode === '*') return '*';
+                    if (mode === 'list') {
+                        const listEl = document.getElementById('newSpendScopeList');
+                        if (!listEl) return 'inherit';
+                        return Array.from(listEl.selectedOptions)
+                            .map(o => String(o.value || '').trim())
+                            .filter(x => x);
+                    }
+                    return 'inherit';
                 })(),
                 role: document.getElementById('newRole').value,
                 credits: document.getElementById('unlimitedCredits').checked ? -1 : parseInt(document.getElementById('newCredits').value),
