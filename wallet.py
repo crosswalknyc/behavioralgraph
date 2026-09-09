@@ -95,6 +95,13 @@ DEFAULT_PRICING = {
         "share_of_time": 0.0,
         "hedge_fund_iq": 0.0,
     },
+    # Per-tool MONTHLY access fee (recurring). Split from per_tool_usd
+    # (which is the per-pull metered charge) on Jenna's 2026-09-09
+    # request: 'one would be a monthly fee for access to the features
+    # ... and then one for pulling one'. Empty by default; admin sets
+    # values in /admin/billing -> Pricing. When both are set, a paying
+    # customer is billed the monthly for access + the per-pull on use.
+    "per_tool_monthly_usd": {},
     "top_up_packs_usd": [250, 500, 1000, 2500],
     "top_up_min_custom_usd": 100.0,
     "prometheus_markup_multiplier": 2.10,
@@ -235,6 +242,7 @@ def module_catalog() -> list:
     """
     p = load_pricing()
     per_tool = p.get("per_tool_usd", {}) or {}
+    per_tool_monthly = p.get("per_tool_monthly_usd", {}) or {}
     custom = p.get("custom_tools") or []
     rows = []
     for tool_key, display, section, def_cr, def_usd, flag in MODULE_CATALOG:
@@ -245,6 +253,8 @@ def module_catalog() -> list:
             "credits": int(def_cr),
             "usd": float(per_tool.get(tool_key, def_usd)),
             "default_usd": float(def_usd),
+            "monthly_usd": float(per_tool_monthly.get(tool_key, 0.0)),
+            "default_monthly_usd": 0.0,
             "access_flag": flag,
             "is_builtin": True,
             "is_custom": False,
@@ -268,19 +278,31 @@ def module_catalog() -> list:
             "credits": int(c.get("credits") or 0),
             "usd": float(per_tool.get(tk, c.get("default_usd") or 0.0)),
             "default_usd": float(c.get("default_usd") or 0.0),
+            "monthly_usd": float(per_tool_monthly.get(
+                tk, c.get("default_monthly_usd") or 0.0)),
+            "default_monthly_usd": float(
+                c.get("default_monthly_usd") or 0.0),
             "access_flag": (str(c.get("access_flag"))
                             if c.get("access_flag") else None),
             "is_builtin": False,
             "is_custom": True,
         })
-    # Fold in any orphan per_tool_usd keys (neither builtin nor custom).
-    for k, v in per_tool.items():
-        if k in builtin_keys or k in custom_keys:
+    # Fold in any orphan per_tool_usd / per_tool_monthly_usd keys
+    # (neither builtin nor custom) so a rogue price never goes
+    # invisible in the admin panel.
+    orphan_keys = set()
+    for k in list(per_tool.keys()) + list(per_tool_monthly.keys()):
+        if k in builtin_keys or k in custom_keys or k in orphan_keys:
             continue
+        orphan_keys.add(k)
         try:
-            usd = float(v)
+            usd = float(per_tool.get(k, 0.0))
         except (TypeError, ValueError):
-            continue
+            usd = 0.0
+        try:
+            monthly = float(per_tool_monthly.get(k, 0.0))
+        except (TypeError, ValueError):
+            monthly = 0.0
         rows.append({
             "tool_key": k,
             "display_name": k.replace("_", " ").title(),
@@ -288,6 +310,8 @@ def module_catalog() -> list:
             "credits": 0,
             "usd": usd,
             "default_usd": 0.0,
+            "monthly_usd": monthly,
+            "default_monthly_usd": 0.0,
             "access_flag": None,
             "is_builtin": False,
             "is_custom": False,
@@ -396,22 +420,39 @@ def save_pricing(new_pricing: dict) -> dict:
             merged["per_tool_usd"].update({
                 kk: float(vv) for kk, vv in v.items()
                 if isinstance(vv, (int, float))})
+        elif k == "per_tool_monthly_usd" and isinstance(v, dict):
+            merged.setdefault("per_tool_monthly_usd", {})
+            merged["per_tool_monthly_usd"].update({
+                kk: float(vv) for kk, vv in v.items()
+                if isinstance(vv, (int, float))})
         else:
             merged[k] = v
+    # Ensure the monthly dict exists even when the on-disk doc
+    # predates the split (older pricing.json won't have the key).
+    merged.setdefault("per_tool_monthly_usd", {})
     if isinstance(new_pricing, dict):
         # Explicit-delete support (needed by remove_custom_tool). The
         # additive .update() below can't drop keys from per_tool_usd
-        # on a partial save; process the delete list first so its
+        # on a partial save; process the delete lists first so their
         # entries are gone before we merge in any incoming prices.
         _delete_keys = new_pricing.get("_delete_per_tool_keys")
         if isinstance(_delete_keys, (list, tuple, set)):
             for _k in _delete_keys:
                 merged.get("per_tool_usd", {}).pop(str(_k), None)
+        _delete_monthly = new_pricing.get("_delete_per_tool_monthly_keys")
+        if isinstance(_delete_monthly, (list, tuple, set)):
+            for _k in _delete_monthly:
+                merged.get("per_tool_monthly_usd", {}).pop(str(_k), None)
         for k, v in new_pricing.items():
-            if k == "_delete_per_tool_keys":
+            if k in ("_delete_per_tool_keys",
+                     "_delete_per_tool_monthly_keys"):
                 continue
             if k == "per_tool_usd" and isinstance(v, dict):
                 merged["per_tool_usd"].update({
+                    kk: float(vv) for kk, vv in v.items()
+                    if isinstance(vv, (int, float)) and float(vv) >= 0})
+            elif k == "per_tool_monthly_usd" and isinstance(v, dict):
+                merged["per_tool_monthly_usd"].update({
                     kk: float(vv) for kk, vv in v.items()
                     if isinstance(vv, (int, float)) and float(vv) >= 0})
             elif k in ("top_up_packs_usd",) and isinstance(v, list):
@@ -514,6 +555,7 @@ def add_custom_tool(tool_key: str, display_name: str, *,
                     section: str = "custom",
                     credits: int = 0,
                     usd: float = 0.0,
+                    monthly_usd: float = 0.0,
                     access_flag: str = None) -> dict:
     """Register a new admin-added tool.
 
@@ -528,7 +570,8 @@ def add_custom_tool(tool_key: str, display_name: str, *,
       - display_name must be non-empty.
       - section defaults to 'custom' (renders as its own header in
         the admin UI); MODULE_CATALOG section names are OK too.
-      - usd must be >= 0.
+      - usd (per-pull) must be >= 0.
+      - monthly_usd (recurring access fee) must be >= 0.
       - access_flag is optional; when present it should match one
         of the existing has_*_access flags (not enforced strictly
         so admins can wire flags before the code lands).
@@ -554,6 +597,13 @@ def add_custom_tool(tool_key: str, display_name: str, *,
         usd_f = 0.0
     if usd_f < 0:
         raise CustomToolError("USD price must be zero or positive")
+    try:
+        monthly_f = float(monthly_usd or 0.0)
+    except (TypeError, ValueError):
+        monthly_f = 0.0
+    if monthly_f < 0:
+        raise CustomToolError(
+            "monthly access fee must be zero or positive")
     builtin_keys = {t for t, *_ in MODULE_CATALOG}
     if tk in builtin_keys:
         raise CustomToolError(
@@ -571,13 +621,20 @@ def add_custom_tool(tool_key: str, display_name: str, *,
         "section": section,
         "credits": credits_i,
         "default_usd": usd_f,
+        "default_monthly_usd": monthly_f,
         "access_flag": (str(access_flag) if access_flag else None),
     }
     existing.append(new_entry)
-    # Persist the tool metadata + the price in one save.
+    # Persist the tool metadata + both prices in one save.
     per_tool = dict(current.get("per_tool_usd") or {})
     per_tool[tk] = usd_f
-    save_pricing({"custom_tools": existing, "per_tool_usd": per_tool})
+    per_tool_monthly = dict(current.get("per_tool_monthly_usd") or {})
+    per_tool_monthly[tk] = monthly_f
+    save_pricing({
+        "custom_tools": existing,
+        "per_tool_usd": per_tool,
+        "per_tool_monthly_usd": per_tool_monthly,
+    })
     return new_entry
 
 
@@ -588,9 +645,8 @@ def remove_custom_tool(tool_key: str) -> dict:
     CustomToolError if the tool_key is a MODULE_CATALOG builtin or
     is not currently registered as a custom tool.
 
-    Also removes the per_tool_usd entry for the deleted key so it
-    can't reappear via the orphan-price fold-in path in
-    module_catalog().
+    Also removes the per_tool_usd + per_tool_monthly_usd entries so
+    the row can't reappear via the orphan-price fold-in path.
     """
     tk = _slugify_tool_key(tool_key)
     if not tk:
@@ -607,11 +663,12 @@ def remove_custom_tool(tool_key: str) -> dict:
     if len(filtered) == len(existing):
         raise CustomToolError(f"'{tk}' is not a custom tool")
     # Persist the shortened custom_tools list AND explicitly delete
-    # the per_tool_usd entry (save_pricing's additive per_tool_usd
-    # merge can't remove keys on its own).
+    # both the per-pull + monthly price entries (the additive per-
+    # tool merge can't remove keys on its own).
     save_pricing({
         "custom_tools": filtered,
         "_delete_per_tool_keys": [tk],
+        "_delete_per_tool_monthly_keys": [tk],
     })
     return {"tool_key": tk, "removed": True}
 
@@ -621,6 +678,98 @@ def tool_price_usd(tool_key: str) -> float:
     tools (free until admin sets a value)."""
     p = load_pricing()
     return float(p.get("per_tool_usd", {}).get(str(tool_key), 0.0))
+
+
+def tool_monthly_usd(tool_key: str) -> float:
+    """Monthly recurring access fee for the named tool. 0.0 = no
+    recurring charge (tool is free to have access to; only pull-time
+    metering applies). 2026-09-09 split."""
+    p = load_pricing()
+    return float(
+        p.get("per_tool_monthly_usd", {}).get(str(tool_key), 0.0))
+
+
+def compute_user_monthly_charge(username: str,
+                                *, user_record: dict = None) -> dict:
+    """Sum the monthly access fees for every tool the given user has
+    access to (via their has_*_access flags).
+
+    Returns:
+      {
+        'total_usd': float,        # sum of monthly access fees
+        'lines': [                 # per-tool breakdown for the invoice
+          {'tool_key': ..., 'display_name': ...,
+           'access_flag': ..., 'monthly_usd': ...},
+          ...
+        ],
+        'unlimited': bool,         # user has unlimited -> total 0
+        'monthly_service_override_usd': float,
+                                  # non-zero when the 'monthly_service'
+                                  # row is set (bundle price). Callers
+                                  # decide whether to use this OR the
+                                  # summed total depending on the
+                                  # billing rule Jenna picks.
+      }
+
+    Never raises. Does not deduct or charge; the caller (a monthly
+    billing cron) picks the deduction path (wallet vs. invoice vs.
+    card-on-file) after reading this summary. Unlimited users always
+    return total_usd=0.
+    """
+    # Load user if not provided (kept optional so callers with the
+    # dict already in hand can skip the extra S3 read).
+    if user_record is None:
+        try:
+            from app import load_users  # type: ignore
+            users = (load_users() or {}).get("users") or {}
+            if isinstance(users, dict):
+                user_record = users.get(username) or {}
+            else:
+                user_record = {}
+        except Exception:
+            user_record = {}
+    if not isinstance(user_record, dict):
+        user_record = {}
+    if user_record.get("unlimited"):
+        return {
+            "total_usd": 0.0,
+            "lines": [],
+            "unlimited": True,
+            "monthly_service_override_usd": 0.0,
+        }
+    lines = []
+    total = 0.0
+    override = 0.0
+    for row in module_catalog():
+        monthly = float(row.get("monthly_usd") or 0.0)
+        if monthly <= 0.0:
+            continue
+        # Special-case the 'monthly_service' bundle row - it does not
+        # depend on an access flag and is treated as an override.
+        # Jenna 2026-09-09: '(if they are all turned on unless it's
+        # just overwritten with a monthly service price)'.
+        if row.get("tool_key") == "monthly_service":
+            override = monthly
+            continue
+        flag = row.get("access_flag")
+        # Rows without an access_flag (custom tools that the admin
+        # didn't tie to a gate) count for every paying customer -
+        # the flag-less monthly is treated as universal.
+        if flag and not user_record.get(flag):
+            continue
+        lines.append({
+            "tool_key": row.get("tool_key"),
+            "display_name": row.get("display_name"),
+            "access_flag": flag,
+            "monthly_usd": monthly,
+        })
+        total += monthly
+    return {
+        "total_usd": round(total, 2),
+        "lines": lines,
+        "unlimited": False,
+        "monthly_service_override_usd": round(override, 2),
+    }
 
 
 # Map free-form pull_type strings (as passed to consume_credit) to the
@@ -1302,7 +1451,8 @@ __all__ = [
     "DEFAULT_PRICING",
     "MODULE_CATALOG", "module_catalog",
     "load_pricing", "save_pricing",
-    "tool_price_usd", "prometheus_markup",
+    "tool_price_usd", "tool_monthly_usd", "prometheus_markup",
+    "compute_user_monthly_charge",
     "top_up_pack_sizes", "top_up_min_custom",
     "wallet_balance", "wallet_stats",
     "is_paying_customer", "is_unlimited", "admits_wallet_ui",
@@ -1311,4 +1461,5 @@ __all__ = [
     "apply_wallet_deduct", "apply_wallet_topup", "apply_wallet_refund",
     "should_charge_wallet", "wallet_can_absorb", "needs_auto_reload",
     "try_auto_reload",
+    "add_custom_tool", "remove_custom_tool", "CustomToolError",
 ]

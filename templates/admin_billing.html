@@ -363,11 +363,25 @@
               </select>
             </div>
             <div>
-              <label style="margin-top:0;">USD price</label>
+              <label style="margin-top:0;">Monthly access $/mo</label>
+              <div style="display:flex; align-items:center; gap:4px;">
+                <span style="color:#6B7280;">$</span>
+                <input id="new-tool-monthly" type="number" step="1"
+                       min="0" value="0" style="width:100%;">
+              </div>
+              <div style="font-size:11px; color:#B8B8B0; margin-top:4px;">
+                Recurring, gated by access flag.
+              </div>
+            </div>
+            <div>
+              <label style="margin-top:0;">Per pull $</label>
               <div style="display:flex; align-items:center; gap:4px;">
                 <span style="color:#6B7280;">$</span>
                 <input id="new-tool-usd" type="number" step="1"
                        min="0" value="0" style="width:100%;">
+              </div>
+              <div style="font-size:11px; color:#B8B8B0; margin-top:4px;">
+                Deducted from wallet on each use.
               </div>
             </div>
           </div>
@@ -1044,16 +1058,18 @@
 
       let html = '<table class="pricing-table">';
       html += '<thead><tr>';
-      html += '<th style="width: 60%;">Tool</th>';
-      html += '<th class="num" style="width: 25%;">USD price</th>';
-      html += '<th style="width: 15%; text-align:right;"></th>';
+      html += '<th style="width: 44%;">Tool</th>';
+      html += '<th class="num" style="width: 22%;">' +
+        'Monthly access</th>';
+      html += '<th class="num" style="width: 22%;">Per pull</th>';
+      html += '<th style="width: 12%; text-align:right;"></th>';
       html += '</tr></thead>';
       html += '<tbody>';
       secOrder.forEach(secKey => {
         const secMeta = sections[secKey] || {};
         const secLabel = secMeta.label ||
           secKey.charAt(0).toUpperCase() + secKey.slice(1);
-        html += '<tr class="section-row"><td colspan="3">' +
+        html += '<tr class="section-row"><td colspan="4">' +
           esc(secLabel) + '</td></tr>';
         bySection[secKey].forEach(key => {
           const t = tools[key] || {};
@@ -1080,11 +1096,22 @@
               esc(key) + '</span>';
           }
           html += '</td>';
+          // Monthly access (recurring)
+          html += '<td class="num"><span class="usd-input-wrap">' +
+            '<span>$</span>' +
+            '<input type="number" step="1" min="0" ' +
+            'class="tool-monthly" value="' +
+            (Number(t.monthly_usd) || 0) + '"></span>' +
+            '<div style="font-size:10px; color:#B8B8B0; ' +
+            'margin-top:2px;">/ month</div></td>';
+          // Per-pull (metered)
           html += '<td class="num"><span class="usd-input-wrap">' +
             '<span>$</span>' +
             '<input type="number" step="1" min="0" ' +
             'class="tool-usd" value="' +
-            (Number(t.usd) || 0) + '"></span></td>';
+            (Number(t.usd) || 0) + '"></span>' +
+            '<div style="font-size:10px; color:#B8B8B0; ' +
+            'margin-top:2px;">/ pull</div></td>';
           html += '<td style="text-align:right;">';
           if (isCustom) {
             html += '<button class="secondary" ' +
@@ -1145,10 +1172,16 @@
         const key = r.dataset.tool;
         // Credits are wired in MODULE_CATALOG (not admin-editable);
         // we round-trip the value via data-credits so the backend
-        // still gets a coherent {credits, usd} pair per tool.
+        // still gets a coherent {credits, usd, monthly_usd} triple.
         const credits = Number(r.dataset.credits || 0);
         const usd = Number(r.querySelector('.tool-usd').value || 0);
-        tools[key] = { credits: credits, usd: usd };
+        const monthlyEl = r.querySelector('.tool-monthly');
+        const monthly = monthlyEl ? Number(monthlyEl.value || 0) : 0;
+        tools[key] = {
+          credits: credits,
+          usd: usd,
+          monthly_usd: monthly,
+        };
       });
       const r = await fetch('/api/admin/pricing', {
         method: 'POST',
@@ -1174,6 +1207,7 @@
       $('new-tool-key').value = '';
       $('new-tool-section').value = 'custom';
       $('new-tool-usd').value = 0;
+      $('new-tool-monthly').value = 0;
       $('new-tool-name').focus();
     }
 
@@ -1202,6 +1236,7 @@
       if (!key) key = _slugify(name);
       const section = $('new-tool-section').value || 'custom';
       const usd = Number($('new-tool-usd').value || 0);
+      const monthly = Number($('new-tool-monthly').value || 0);
       $('btn-save-new-tool').disabled = true;
       const r = await fetch('/api/admin/pricing/tools', {
         method: 'POST',
@@ -1212,6 +1247,7 @@
           display_name: name,
           section: section,
           usd: usd,
+          monthly_usd: monthly,
         }),
       });
       $('btn-save-new-tool').disabled = false;

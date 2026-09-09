@@ -511,18 +511,31 @@ def admin_pricing_set():
 
     # Accept EITHER the new nested `tools` shape (from the admin UI
     # after 2026-09-09) OR the legacy `per_tool_usd` shape (any
-    # older callers). Merge into a normalized per_tool_usd dict.
+    # older callers). Merge into normalized per_tool_usd + per_tool_
+    # monthly_usd dicts. The nested shape carries both prices per
+    # tool: {tool_key: {credits, usd, monthly_usd}}.
     tools = body.get("tools") if isinstance(body.get("tools"), dict) else {}
     if tools:
         merged_per_tool = dict(body.get("per_tool_usd") or {})
+        merged_monthly = dict(body.get("per_tool_monthly_usd") or {})
         for tool_key, spec in tools.items():
             if not isinstance(spec, dict):
                 continue
             try:
                 merged_per_tool[str(tool_key)] = float(spec.get("usd", 0) or 0)
             except (TypeError, ValueError):
-                continue
+                pass
+            # Only overwrite monthly if the field is present so a
+            # legacy caller that omits monthly_usd keeps the existing
+            # value.
+            if "monthly_usd" in spec:
+                try:
+                    merged_monthly[str(tool_key)] = float(
+                        spec.get("monthly_usd", 0) or 0)
+                except (TypeError, ValueError):
+                    pass
         body["per_tool_usd"] = merged_per_tool
+        body["per_tool_monthly_usd"] = merged_monthly
 
     saved = wallet.save_pricing(body)
     return jsonify({"success": True, "pricing": saved})
@@ -576,6 +589,7 @@ def admin_pricing_tool_add():
             section=body.get("section") or "custom",
             credits=body.get("credits") or 0,
             usd=body.get("usd") or 0,
+            monthly_usd=body.get("monthly_usd") or 0,
             access_flag=body.get("access_flag") or None,
         )
     except wallet.CustomToolError as e:
