@@ -17272,6 +17272,7 @@ def api_cron_microdramas_scrapers():
             ('goodshort',   'scripts.microdramas_scrapers.goodshort',   'GoodShort'),
             ('netshort',    'scripts.microdramas_scrapers.netshort',    'NetShort'),
             ('dramashorts', 'scripts.microdramas_scrapers.dramashorts', 'DramaShorts'),
+            ('atwist',      'scripts.microdramas_scrapers.atwist',      'aTwist'),
         ]:
             try:
                 module = importlib.import_module(mod_path)

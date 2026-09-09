@@ -107,6 +107,13 @@ COMPETITOR_SOURCES = [
      'mau_millions':  3.5,
      'note': 'Subscription-only short-drama platform (no coin economy). '
              'Marketed audience 3.5M+, high retention (93% past initial 30 days).'},
+    {'source': 'atwist',    'label': 'aTwist',
+     'mau_millions':  0.42,
+     'note': 'Sept 3, 2026 launch from Hollywood veterans Jana Winograde '
+             '(CEO), Susan Rovner (CCO), Lloyd Braun. Cineverse minority '
+             'investor. Multi-genre from launch (scripted / horror / '
+             'comedy / animation / unscripted) rather than romance-only. '
+             'Launch-week MAU estimate, catalog is app-only.'},
 ]
 
 
@@ -222,6 +229,19 @@ PLATFORM_USER_FLOW = {
         'weekly_new_users':         76_000,
         'weekly_churned_users':     59_000,
     },
+    # aTwist (Sept 3 2026 launch): raw pool is cumulative-signups-to-
+    # date rather than a mature MAU. Weekly gross-new / churn calibrated
+    # to a launch-phase app: heavy top-of-funnel signup pace decaying
+    # off the launch-week peak, elevated churn as first-week installers
+    # sample-and-abandon at typical launch-phase rates (~5%/week). Net
+    # +26K/wk against a 420K base sits in the +250-300% annualized
+    # band that new-platform launches routinely post before growth
+    # normalizes into their steady state.
+    'atwist': {
+        'total_users':             420_000,
+        'weekly_new_users':         47_000,
+        'weekly_churned_users':     21_000,
+    },
 }
 
 
@@ -334,6 +354,14 @@ _TOP_N_DEDUP_CURVES = {
     # every other curve so ratios stay organic across the roster.
     'dramashorts': {1: 1.12, 7: 1.51, 14: 1.92, 30: 2.63, 60: 3.58,
                      90: 4.34, 180: 6.17, 365: 8.41},
+    # aTwist: launch-slate is 10 focused originals so every installer
+    # will sample most of the catalog. That drives higher short-window
+    # dedup than sprawling coin apps because per-viewer title breadth
+    # covers a large fraction of the top-N. Long-window dedup lands
+    # between GoodShort and DramaShorts. Values distinct from every
+    # other curve.
+    'atwist':    {1: 1.10, 7: 1.47, 14: 1.86, 30: 2.55, 60: 3.44,
+                   90: 4.19, 180: 5.94, 365: 8.09},
 }
 
 
@@ -943,6 +971,34 @@ COMPLETION_PROFILES = {
         'free_ep_retention': 0.920,
         'paywall_retention': 0.10,
         'paid_ep_retention': 0.930,
+    },
+    # aTwist (Sept 3 2026 launch): hybrid ads + coins + subscription
+    # rather than pure coin-economy. Rovner interview called out
+    # deliberate TV-network-style engagement design ("the need to keep
+    # people engaged, the need to feel that pace"), so ep-to-ep
+    # retention runs slightly ahead of coin-app baselines. Free
+    # boundary sits earlier (~5 eps ad-supported) since paywall is
+    # softer than ReelShort/DramaBox - viewers can pass through with a
+    # sub instead of coin buys, so the cliff at the paywall is
+    # gentler. Default eps low (~45) matches launch-slate publicized
+    # episode counts (48/42/40/56/etc.).
+    'atwist': {
+        'free_eps':           5,
+        'default_eps':       45,
+        'free_ep_retention': 0.938,
+        'paywall_retention': 0.19,
+        'paid_ep_retention': 0.946,
+    },
+    # DramaShorts (subscription-only, no coin cliff): retention runs
+    # closest to Peacock's subscription model. Paywall is nominal
+    # (30-day sub entry). Default eps ~56 (published averages on
+    # /top-movies).
+    'dramashorts': {
+        'free_eps':           3,
+        'default_eps':       56,
+        'free_ep_retention': 0.942,
+        'paywall_retention': 0.31,
+        'paid_ep_retention': 0.948,
     },
 }
 
