@@ -477,6 +477,35 @@ def main(argv: list[str] | None = None) -> int:
             logging.exception("run_all: headline_estimates post-step crashed")
             results.append({'source': 'headline_estimates', 'error': str(e), 'national': []})
 
+    # ------------------------------------------------------------------
+    # Coverage gate (2026-09-09): after estimates land, recompute the
+    # rendered payload and price EVERY non-Film item still missing a
+    # researched US Audience value through the same machinery (tiering
+    # intact, no budget cap - Jenna 2026-09-09: completeness wins over
+    # cost). Universe derives from the payload itself, so a tab added
+    # later is covered the day it ships. Merges into latest/ + today's
+    # dated snapshot, purges live caches, logs the final coverage
+    # percentage, and emails jenna@ + jessie@ if anything is STILL
+    # missing after the pass (the dashboard renders such rows with a
+    # neutral blank chip, never an error).
+    coverage_summary = None
+    if (not only or 'coverage_gate' in only) and 'coverage_gate' not in skip:
+        try:
+            from scripts.trends_scrapers.coverage_gate import run_gate
+            coverage_summary = run_gate()
+            results.append({
+                'source':  'coverage_gate',
+                'kind':    'meta',
+                'count':   coverage_summary.get('priced_stream', 0)
+                           + coverage_summary.get('priced_headline', 0),
+                'elapsed': 0,
+                'national': [],
+            })
+        except Exception as e:
+            logging.exception("run_all: coverage gate crashed")
+            results.append({'source': 'coverage_gate', 'error': str(e),
+                            'national': []})
+
     _write_index(results)
 
     # ------------------------------------------------------------------
@@ -550,6 +579,14 @@ def main(argv: list[str] | None = None) -> int:
             logging.exception("run_all: freshness verify crashed")
 
     total_elapsed = time.time() - started
+    if coverage_summary:
+        print(f"US Audience coverage: "
+              f"researched={coverage_summary.get('researched_after_pct')}% "
+              f"rendered={coverage_summary.get('rendered_after_pct')}% "
+              f"(priced {coverage_summary.get('priced_stream', 0)} stream + "
+              f"{coverage_summary.get('priced_headline', 0)} headline items, "
+              f"${coverage_summary.get('spend_usd', 0.0):.2f}, "
+              f"still_missing={coverage_summary.get('still_missing', 0)})")
     print(f"\ntrends scrapers complete in {total_elapsed:.1f}s")
     print(f"{'source':<12} {'kind':<9} {'count':>6}  {'elapsed':>8}  error")
     print('-' * 70)

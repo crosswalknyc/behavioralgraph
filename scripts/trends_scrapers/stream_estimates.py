@@ -139,12 +139,22 @@ _S3_DATED  = 'trends_iq_snapshots/{date}/'
 # panel without a chip, which read as "why does the top row have a
 # number and the rest don't?" Coverage on the top-N of each panel is
 # now the SLA rather than "top-N cross-platform after global dedup".
-_MAX_PODCAST_ITEMS   = 300   # was 150 - 4 panels x top ~60 unique
-_MAX_SONG_ITEMS      = 250   # was 100 - 4 panels x top ~60 unique
-_MAX_STREAMING_ITEMS = 380   # was 300 - 11 platforms (netflix, disneyplus,
-                              # hulu, max, primevideo, paramountplus,
-                              # peacock, espnplus, britbox, mgmplus,
-                              # starz) x top ~30-40 unique
+_MAX_PODCAST_ITEMS   = 520   # 2026-09-09: was 300. 6 panels x full 100
+                             # rendered rows (Apple/Spotify/Amazon/
+                             # Audible/Netflix/YouTube) dedupe to ~450;
+                             # the old cap left ranks 81-100 of every
+                             # panel without a chip.
+_MAX_SONG_ITEMS      = 480   # 2026-09-09: was 250. 6 music panels x
+                             # full 100 rendered rows; same rank-81-100
+                             # gap as podcasts before the bump.
+_MAX_STREAMING_ITEMS = 480   # 2026-09-09: was 380. 11 platforms
+                             # (netflix, disneyplus, hulu, max,
+                             # primevideo, paramountplus, peacock,
+                             # espnplus, britbox, mgmplus, starz) x
+                             # top ~30-40 unique, PLUS the 4 Netflix
+                             # global lists (global_films_en/nonen,
+                             # global_tv_en/nonen) that were never
+                             # collected before 2026-09-09.
 _MAX_BOOK_ITEMS      = 400   # was 220 - 3 book + 3 libby panels each
                               # ship 30-100 unique-per-panel
 # Wattpad: 6 rails (Hot 50 + Originals 25 + 4 genre rails 25 each =
@@ -372,12 +382,12 @@ def _collect_podcasts(max_items: int = _MAX_PODCAST_ITEMS) -> list[dict]:
         return []
     per: dict[str, dict] = {}
     for src_slug, panel in (snap.get('sources') or {}).items():
-        # Bumped 2026-08-20 from [:50] to [:80] to cover every visible
-        # row on the dashboard (each podcast panel renders up to
-        # 80-100 rows and Jenna wants a US-listeners chip on all of
-        # them). Post-dedup + best-rank sort still tops out at
-        # _MAX_PODCAST_ITEMS (300 as of the same day).
-        for i, it in enumerate((panel.get('items') or [])[:80]):
+        # 2026-09-09: [:80] -> [:100]. Podcast panels render up to a
+        # full 100 rows; the 80-cap left ranks 81-100 of every panel
+        # without a US-listeners chip (audible was missing 12/100 on
+        # the 09-09 audit). Post-dedup + best-rank sort still tops
+        # out at _MAX_PODCAST_ITEMS.
+        for i, it in enumerate((panel.get('items') or [])[:100]):
             title = (it.get('title') or '').strip()
             key   = _cp_normalize(title)
             if not key:
@@ -408,10 +418,11 @@ def _collect_songs(max_items: int = _MAX_SONG_ITEMS) -> list[dict]:
         return []
     per: dict[str, dict] = {}
     for src_slug, panel in (snap.get('sources') or {}).items():
-        # Bumped 2026-08-20 from [:30] to [:80] so ranks 31-80 of each
-        # music panel (Spotify, Apple, YouTube, Shazam ship 100 rows
-        # each) surface with a US-streams chip.
-        for i, it in enumerate((panel.get('items') or [])[:80]):
+        # 2026-09-09: [:80] -> [:100]. Music panels (Spotify, Apple,
+        # YouTube, Shazam) ship 100 rows each; the 80-cap left ranks
+        # 81-100 without a US-streams chip (apple was missing 8/100
+        # on the 09-09 audit).
+        for i, it in enumerate((panel.get('items') or [])[:100]):
             title  = (it.get('title')  or '').strip()
             artist = (it.get('artist') or '').strip()
             key = _cp_normalize(f'{title} {artist}')
@@ -505,6 +516,17 @@ def _collect_streaming(max_items: int = _MAX_STREAMING_ITEMS) -> list[dict]:
         if slug == 'netflix':
             buckets.append(('film', snap.get('us_films') or []))
             buckets.append(('tv',   snap.get('us_tv')    or []))
+            # Netflix GLOBAL Top 10 lists (2026-09-09): the dashboard
+            # renders four global rails (English / non-English x film /
+            # TV) that were never collected here, so every global-only
+            # title shipped without a US-audience chip. Global titles
+            # still get a US-audience estimate - the prompt asks for
+            # the US slice of the audience, and most global chart
+            # titles have meaningful US viewership.
+            buckets.append(('film', snap.get('global_films_en')    or []))
+            buckets.append(('film', snap.get('global_films_nonen') or []))
+            buckets.append(('tv',   snap.get('global_tv_en')       or []))
+            buckets.append(('tv',   snap.get('global_tv_nonen')    or []))
         else:
             buckets.append(('mixed', snap.get('national') or []))
         # Bumped 2026-08-20 from 30 to 40 per bucket so the full
@@ -3740,6 +3762,19 @@ def _sanitize_result(item: dict, parsed: dict) -> Optional[dict]:
         agg_low  = sum(b['us_estimate_low']  for b in by_platform.values())
         agg_high = sum(b['us_estimate_high'] for b in by_platform.values())
     if agg_mid <= 0:
+        return None
+    # Credibility floor (2026-09-09): a charting item can never carry a
+    # US audience under 100 - a chip reading "8 weekly US listeners" or
+    # "2 weekly US views" on a top-chart row reads as broken data. The
+    # 09-09 audit found 354 such values across the comics / Wattpad /
+    # long-tail research output (e.g. Clarkson's Farm at 2, charting
+    # Berserk volumes at 20-90). Treat sub-100 output as a failed
+    # research call: the item retries once, then ships without an
+    # estimate and the render-time chart-tier baseline covers it until
+    # the next nightly pass re-researches it.
+    if agg_mid < 100:
+        logger.info("stream_estimates %r: implausible sub-100 estimate "
+                     "(%d) rejected", title, agg_mid)
         return None
     if agg_low  <= 0: agg_low  = int(agg_mid * 0.75)
     if agg_high <= 0: agg_high = int(agg_mid * 1.20)
