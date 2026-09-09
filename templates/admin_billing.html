@@ -392,6 +392,11 @@
             <button id="btn-save-new-tool">Add tool</button>
           </div>
         </div>
+        <div id="pricing-hidden-toggle" style="margin-top:12px;
+             font-size:12px; color:#6B7280; display:none;">
+          <!-- Populated by renderPricing() when hidden built-ins
+               exist. Clicking flips the show_hidden state. -->
+        </div>
         <div id="pricing-body" style="margin-top:16px;"></div>
       </div>
       <div class="card">
@@ -1035,13 +1040,26 @@
       renderPricing(p);
     }
 
+    // Persist "Show hidden" toggle across renders in the same
+    // session. Off by default so admins see the clean panel.
+    let _showHidden = false;
+
     function renderPricing(p) {
+      // Cache the latest payload so the show/hide toggle can re-
+      // render without an extra network call.
+      window._lastPricingPayload = p;
       const tools = p.tools || {};
       const sections = p.sections || {};
       // Group tool keys by section, preserving MODULE_CATALOG order.
+      // Skip hidden built-ins here unless _showHidden is on. Custom
+      // tools are never hidden via this list (they're hard-deleted).
       const bySection = {};
+      let hiddenCount = 0;
       Object.keys(tools).forEach(key => {
-        const s = (tools[key] || {}).section || 'extras';
+        const t = tools[key] || {};
+        if (t.is_hidden) hiddenCount += 1;
+        if (t.is_hidden && !_showHidden) return;
+        const s = t.section || 'extras';
         if (!bySection[s]) bySection[s] = [];
         bySection[s].push(key);
       });
@@ -1056,6 +1074,24 @@
       const esc = (s) => String(s || '').replace(/[&<>"']/g, c =>
         ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',
           "'":'&#39;'}[c]));
+
+      // Show-hidden toggle above the table (only appears when
+      // hidden built-ins exist).
+      const toggleEl = $('pricing-hidden-toggle');
+      if (hiddenCount > 0) {
+        toggleEl.style.display = 'block';
+        toggleEl.innerHTML =
+          '<label style="cursor:pointer; user-select:none;">' +
+          '<input type="checkbox" id="show-hidden-cb"' +
+          (_showHidden ? ' checked' : '') +
+          ' style="margin-right:6px; vertical-align:middle;">' +
+          'Show ' + hiddenCount + ' hidden tool' +
+          (hiddenCount === 1 ? '' : 's') +
+          '</label>';
+      } else {
+        toggleEl.style.display = 'none';
+        toggleEl.innerHTML = '';
+      }
 
       let html = '<table class="pricing-table">';
       html += '<thead><tr>';
@@ -1076,9 +1112,15 @@
           const t = tools[key] || {};
           const display = t.display_name || key;
           const isCustom = !!t.is_custom;
+          const isHidden = !!t.is_hidden;
+          const rowStyle = isHidden
+            ? ' style="opacity:0.55; background:#FAFAF6;"'
+            : '';
           html += '<tr data-tool="' + esc(key) + '"' +
             ' data-credits="' + (Number(t.credits) || 0) + '"' +
-            ' data-custom="' + (isCustom ? '1' : '0') + '">';
+            ' data-custom="' + (isCustom ? '1' : '0') + '"' +
+            ' data-hidden="' + (isHidden ? '1' : '0') + '"' +
+            rowStyle + '>';
           html += '<td><div class="tool-name">' + esc(display);
           if (isCustom) {
             html += ' <span style="display:inline-block;' +
@@ -1087,6 +1129,14 @@
               'background:#EAE3FF; color:#4A0080; ' +
               'border-radius:3px; text-transform:uppercase; ' +
               'letter-spacing:0.05em;">custom</span>';
+          }
+          if (isHidden) {
+            html += ' <span style="display:inline-block;' +
+              'padding:1px 6px; margin-left:6px; ' +
+              'font-size:10px; font-weight:600; ' +
+              'background:#E9E8E1; color:#5C6560; ' +
+              'border-radius:3px; text-transform:uppercase; ' +
+              'letter-spacing:0.05em;">hidden</span>';
           }
           html += '</div>';
           if (t.access_flag) {
@@ -1113,13 +1163,30 @@
             (Number(t.usd) || 0) + '"></span>' +
             '<div style="font-size:10px; color:#B8B8B0; ' +
             'margin-top:2px;">/ pull</div></td>';
+          // Action button: Delete (custom) / Hide (visible builtin)
+          // / Restore (hidden builtin).
           html += '<td style="text-align:right;">';
+          const dispEsc = esc(display).replace(/'/g, "\\'");
           if (isCustom) {
             html += '<button class="secondary" ' +
               'onclick="deleteTool(\'' + esc(key) + '\', \'' +
-              esc(display).replace(/'/g, "\\'") + '\')" ' +
+              dispEsc + '\')" ' +
               'style="font-size:11px; padding:4px 10px;">' +
               'Delete</button>';
+          } else if (isHidden) {
+            html += '<button class="secondary" ' +
+              'onclick="unhideTool(\'' + esc(key) + '\', \'' +
+              dispEsc + '\')" ' +
+              'style="font-size:11px; padding:4px 10px;">' +
+              'Restore</button>';
+          } else {
+            html += '<button class="secondary" ' +
+              'onclick="hideTool(\'' + esc(key) + '\', \'' +
+              dispEsc + '\')" ' +
+              'style="font-size:11px; padding:4px 10px;" ' +
+              'title="Hide from this panel. Live billing is ' +
+              'unaffected - a hidden tool still charges its ' +
+              'configured price.">Hide</button>';
           }
           html += '</td>';
           html += '</tr>';
@@ -1288,6 +1355,74 @@
           (j.error || 'Could not delete tool.') + '</div>';
       }
     };
+
+    // Built-in tools are HIDDEN (soft) instead of deleted. The tool
+    // still exists in MODULE_CATALOG and tool_price_usd() still
+    // returns its configured price when its pull_type fires - this
+    // only removes it from the admin panel's default listing so
+    // the UI stops cluttering. Click "Show N hidden" to bring it
+    // back into view with a Restore button.
+    window.hideTool = async (toolKey, display) => {
+      const label = display || toolKey;
+      if (!confirm('Hide "' + label + '" from this panel?\n\n' +
+                   'The tool stays wired in the app and still ' +
+                   'charges its configured price when used. ' +
+                   'Click "Show N hidden" above the table to ' +
+                   'restore it.'))
+        return;
+      const r = await fetch(
+        '/api/admin/pricing/tools/' +
+        encodeURIComponent(toolKey) + '/hide',
+        { method: 'POST', credentials: 'same-origin' });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) {
+        $('banner').innerHTML =
+          '<div class="banner success">Hid ' + label + '.</div>';
+        loadPricing();
+      } else {
+        $('banner').innerHTML =
+          '<div class="banner error">' +
+          (j.error || 'Could not hide tool.') + '</div>';
+      }
+    };
+
+    window.unhideTool = async (toolKey, display) => {
+      const label = display || toolKey;
+      const r = await fetch(
+        '/api/admin/pricing/tools/' +
+        encodeURIComponent(toolKey) + '/unhide',
+        { method: 'POST', credentials: 'same-origin' });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) {
+        $('banner').innerHTML =
+          '<div class="banner success">Restored ' +
+          label + '.</div>';
+        loadPricing();
+      } else {
+        $('banner').innerHTML =
+          '<div class="banner error">' +
+          (j.error || 'Could not restore tool.') + '</div>';
+      }
+    };
+
+    // Wire the "Show N hidden" toggle. Event delegation on the
+    // parent because the checkbox is re-rendered on every
+    // renderPricing() call. Toggle flips _showHidden and re-renders
+    // from the cached payload (no round-trip).
+    (function wireShowHiddenToggle() {
+      const host = $('pricing-hidden-toggle');
+      if (!host) return;
+      host.addEventListener('change', (e) => {
+        if (e.target && e.target.id === 'show-hidden-cb') {
+          _showHidden = !!e.target.checked;
+          if (window._lastPricingPayload) {
+            renderPricing(window._lastPricingPayload);
+          } else {
+            loadPricing();
+          }
+        }
+      });
+    })();
 
     // Wire the add-tool buttons. This script is inline at the bottom
     // of <body> so the elements always exist by the time we run;

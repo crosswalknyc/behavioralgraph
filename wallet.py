@@ -102,6 +102,15 @@ DEFAULT_PRICING = {
     # values in /admin/billing -> Pricing. When both are set, a paying
     # customer is billed the monthly for access + the per-pull on use.
     "per_tool_monthly_usd": {},
+    # Built-in tools an admin has HIDDEN from the pricing panel to
+    # reduce clutter (Jenna 2026-09-09: 'needs to be a way to delete
+    # from there too'). Soft-hide only: the MODULE_CATALOG code still
+    # defines the tool, tool_price_usd() still returns its price for
+    # active billing, and users' has_*_access flags still function.
+    # Only the admin panel skips these rows unless "Show hidden" is on.
+    # Custom tools are HARD-DELETED (via remove_custom_tool) and do
+    # not use this list.
+    "hidden_tools": [],
     "top_up_packs_usd": [250, 500, 1000, 2500],
     "top_up_min_custom_usd": 100.0,
     "prometheus_markup_multiplier": 2.10,
@@ -227,9 +236,21 @@ MODULE_CATALOG = [
 ]
 
 
-def module_catalog() -> list:
+def module_catalog(*, include_hidden: bool = False) -> list:
     """Return the module catalog as list of dicts. Auto-registration
     for new access flags lands here per pricing-catalog-registration.mdc.
+
+    include_hidden=False (default): built-in tools listed in
+      pricing.json:hidden_tools are OMITTED from the returned list.
+      This is what the admin pricing panel uses in its normal
+      render, so hidden built-ins stop cluttering the UI.
+    include_hidden=True: every built-in row is returned, with
+      is_hidden=True stamped on the hidden ones so the caller
+      (admin "Show hidden" toggle) can render them differently.
+
+    Custom tools (added via add_custom_tool) are NEVER hidden via
+    this list - they are HARD-DELETED via remove_custom_tool. The
+    hidden_tools list is built-in-only by design.
 
     Three row sources, in this order:
       1. MODULE_CATALOG built-in tools (code-defined, is_custom=False,
@@ -243,9 +264,19 @@ def module_catalog() -> list:
     p = load_pricing()
     per_tool = p.get("per_tool_usd", {}) or {}
     per_tool_monthly = p.get("per_tool_monthly_usd", {}) or {}
+    hidden_tools = set(p.get("hidden_tools") or [])
     custom = p.get("custom_tools") or []
     rows = []
     for tool_key, display, section, def_cr, def_usd, flag in MODULE_CATALOG:
+        is_hidden = tool_key in hidden_tools
+        if is_hidden and not include_hidden:
+            # Soft-hide: omit from default listings so the admin
+            # panel stays clean. tool_price_usd() still reads the
+            # price directly from pricing.json, so live billing is
+            # unaffected - a hidden tool is invisible in the panel
+            # but still charges its configured price when its
+            # pull_type fires.
+            continue
         rows.append({
             "tool_key": tool_key,
             "display_name": display,
@@ -258,6 +289,7 @@ def module_catalog() -> list:
             "access_flag": flag,
             "is_builtin": True,
             "is_custom": False,
+            "is_hidden": is_hidden,
         })
     builtin_keys = {tk for tk, *_ in MODULE_CATALOG}
     custom_keys = set()
@@ -286,6 +318,7 @@ def module_catalog() -> list:
                             if c.get("access_flag") else None),
             "is_builtin": False,
             "is_custom": True,
+            "is_hidden": False,
         })
     # Fold in any orphan per_tool_usd / per_tool_monthly_usd keys
     # (neither builtin nor custom) so a rogue price never goes
@@ -315,6 +348,7 @@ def module_catalog() -> list:
             "access_flag": None,
             "is_builtin": False,
             "is_custom": False,
+            "is_hidden": False,
         })
     return rows
 
@@ -425,11 +459,18 @@ def save_pricing(new_pricing: dict) -> dict:
             merged["per_tool_monthly_usd"].update({
                 kk: float(vv) for kk, vv in v.items()
                 if isinstance(vv, (int, float))})
+        elif k == "hidden_tools" and isinstance(v, list):
+            # De-duped, string-normalized. Replaces (does not merge)
+            # so unhide removes an entry cleanly on save.
+            merged["hidden_tools"] = sorted({
+                str(x) for x in v if isinstance(x, str) and x.strip()
+            })
         else:
             merged[k] = v
-    # Ensure the monthly dict exists even when the on-disk doc
-    # predates the split (older pricing.json won't have the key).
+    # Ensure the monthly dict + hidden list exist even when the
+    # on-disk doc predates the split (older pricing.json).
     merged.setdefault("per_tool_monthly_usd", {})
+    merged.setdefault("hidden_tools", [])
     if isinstance(new_pricing, dict):
         # Explicit-delete support (needed by remove_custom_tool). The
         # additive .update() below can't drop keys from per_tool_usd
@@ -455,6 +496,14 @@ def save_pricing(new_pricing: dict) -> dict:
                 merged["per_tool_monthly_usd"].update({
                     kk: float(vv) for kk, vv in v.items()
                     if isinstance(vv, (int, float)) and float(vv) >= 0})
+            elif k == "hidden_tools" and isinstance(v, list):
+                # Replace, don't merge. Callers pass the full desired
+                # list (hide_builtin_tool + unhide_builtin_tool below
+                # rebuild the list before calling save_pricing).
+                merged["hidden_tools"] = sorted({
+                    str(x) for x in v
+                    if isinstance(x, str) and x.strip()
+                })
             elif k in ("top_up_packs_usd",) and isinstance(v, list):
                 merged[k] = [
                     float(x) for x in v
@@ -673,9 +722,76 @@ def remove_custom_tool(tool_key: str) -> dict:
     return {"tool_key": tk, "removed": True}
 
 
+def hide_builtin_tool(tool_key: str) -> dict:
+    """Soft-hide a built-in tool from the admin pricing panel.
+
+    Adds tool_key to pricing.json:hidden_tools. Does NOT touch
+    per_tool_usd, per_tool_monthly_usd, or the code-defined
+    MODULE_CATALOG - live billing is completely unaffected. Only
+    the admin panel's default listing skips this row until
+    unhide_builtin_tool is called.
+
+    Raises CustomToolError if:
+      - tool_key doesn't match a MODULE_CATALOG built-in (custom
+        tools use remove_custom_tool instead - they are hard-
+        deleted, not hidden).
+
+    Idempotent: hiding an already-hidden tool is a no-op.
+    """
+    tk = str(tool_key or "").strip()
+    if not tk:
+        raise CustomToolError("tool key is required")
+    builtin_keys = {t for t, *_ in MODULE_CATALOG}
+    if tk not in builtin_keys:
+        raise CustomToolError(
+            f"'{tk}' is not a built-in tool. "
+            f"Custom tools use delete, not hide.")
+    current = load_pricing(force_reload=True)
+    existing = list(current.get("hidden_tools") or [])
+    if tk not in existing:
+        existing.append(tk)
+    save_pricing({"hidden_tools": existing})
+    return {"tool_key": tk, "hidden": True}
+
+
+def unhide_builtin_tool(tool_key: str) -> dict:
+    """Un-hide a previously hidden built-in tool.
+
+    Removes tool_key from pricing.json:hidden_tools. Idempotent:
+    un-hiding a tool that isn't hidden is a no-op. Raises
+    CustomToolError only if tool_key isn't a MODULE_CATALOG
+    built-in (defense-in-depth; a stray custom-tool key in
+    hidden_tools would be silently cleaned by save_pricing's
+    dedupe pass anyway).
+    """
+    tk = str(tool_key or "").strip()
+    if not tk:
+        raise CustomToolError("tool key is required")
+    builtin_keys = {t for t, *_ in MODULE_CATALOG}
+    if tk not in builtin_keys:
+        raise CustomToolError(
+            f"'{tk}' is not a built-in tool")
+    current = load_pricing(force_reload=True)
+    existing = [str(x) for x in (current.get("hidden_tools") or [])
+                if str(x) != tk]
+    save_pricing({"hidden_tools": existing})
+    return {"tool_key": tk, "hidden": False}
+
+
+def hidden_builtin_tools() -> list:
+    """Return the list of currently-hidden built-in tool_keys."""
+    p = load_pricing()
+    return list(p.get("hidden_tools") or [])
+
+
 def tool_price_usd(tool_key: str) -> float:
     """USD price for a single pull of the named tool. 0.0 for unset
-    tools (free until admin sets a value)."""
+    tools (free until admin sets a value).
+
+    Reads directly from pricing.json - independent of the
+    hidden_tools soft-hide mechanism. A hidden tool still charges
+    its configured price when its pull_type fires; hide only
+    affects admin panel visibility."""
     p = load_pricing()
     return float(p.get("per_tool_usd", {}).get(str(tool_key), 0.0))
 
@@ -1480,4 +1596,5 @@ __all__ = [
     "should_charge_wallet", "wallet_can_absorb", "needs_auto_reload",
     "try_auto_reload",
     "add_custom_tool", "remove_custom_tool", "CustomToolError",
+    "hide_builtin_tool", "unhide_builtin_tool", "hidden_builtin_tools",
 ]

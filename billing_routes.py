@@ -467,7 +467,10 @@ def admin_pricing_get():
         return err
     import wallet  # type: ignore
     p = wallet.load_pricing(force_reload=True)
-    catalog = wallet.module_catalog()
+    # Return hidden built-ins alongside the visible catalog so the UI
+    # can render a "Show N hidden" toggle. is_hidden on each row lets
+    # the frontend decide default visibility.
+    catalog = wallet.module_catalog(include_hidden=True)
     # Bundle a UI-friendly `tools` block grouped by section, plus
     # `sections` metadata so the admin panel can render section
     # headers without hardcoding names.
@@ -477,6 +480,7 @@ def admin_pricing_get():
         "rankers":      {"label": "Rankers",      "order": 2},
         "api":          {"label": "Partner API",  "order": 3},
         "subscription": {"label": "Subscription", "order": 4},
+        "custom":       {"label": "Custom",       "order": 5},
         "extras":       {"label": "Other",        "order": 99},
     }
     for row in catalog:
@@ -486,11 +490,18 @@ def admin_pricing_get():
             "credits":      row["credits"],
             "usd":          row["usd"],
             "default_usd":  row["default_usd"],
+            "monthly_usd":  row.get("monthly_usd", 0.0),
+            "default_monthly_usd":
+                            row.get("default_monthly_usd", 0.0),
             "access_flag":  row["access_flag"],
+            "is_custom":    bool(row.get("is_custom", False)),
+            "is_builtin":   bool(row.get("is_builtin", False)),
+            "is_hidden":    bool(row.get("is_hidden", False)),
         }
     resp = dict(p)
     resp["tools"] = tools
     resp["sections"] = sections
+    resp["hidden_tools"] = list(p.get("hidden_tools") or [])
     resp["prometheus_markup"] = float(
         p.get("prometheus_markup_multiplier", 2.10))
     return jsonify(resp)
@@ -605,7 +616,7 @@ def admin_pricing_tool_add():
 def admin_pricing_tool_delete(tool_key):
     """Remove a custom tool from the pricing catalog. Built-in tools
     (MODULE_CATALOG entries) are refused with a 400 - they are code-
-    defined and always present."""
+    defined and always present. Use /hide instead for built-ins."""
     _, _, err = _require_super_admin()
     if err:
         return err
@@ -617,6 +628,54 @@ def admin_pricing_tool_delete(tool_key):
     except Exception as e:
         print(f"[billing] remove_custom_tool failed: {e}")
         return jsonify({"error": "could not remove tool"}), 500
+    return jsonify({"success": True, **result})
+
+
+@billing_bp.route(
+    "/api/admin/pricing/tools/<tool_key>/hide", methods=["POST"])
+def admin_pricing_tool_hide(tool_key):
+    """Soft-hide a built-in tool from the admin pricing panel.
+
+    Jenna 2026-09-09: 'needs to be a way to delete from there too'.
+    Custom tools use /delete (hard delete). Built-in tools use /hide
+    (soft) because their MODULE_CATALOG code still routes real billing
+    to them - a hard delete would leak charges. Hiding stashes the
+    tool_key in pricing.json:hidden_tools; the admin panel omits it
+    from default listings but the price still applies when the
+    tool's pull_type fires.
+
+    Idempotent - hiding an already-hidden tool is a no-op success."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import wallet  # type: ignore
+    try:
+        result = wallet.hide_builtin_tool(tool_key)
+    except wallet.CustomToolError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        print(f"[billing] hide_builtin_tool failed: {e}")
+        return jsonify({"error": "could not hide tool"}), 500
+    return jsonify({"success": True, **result})
+
+
+@billing_bp.route(
+    "/api/admin/pricing/tools/<tool_key>/unhide", methods=["POST"])
+def admin_pricing_tool_unhide(tool_key):
+    """Un-hide a previously-hidden built-in tool.
+
+    Idempotent - un-hiding a tool that isn't hidden is a no-op."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import wallet  # type: ignore
+    try:
+        result = wallet.unhide_builtin_tool(tool_key)
+    except wallet.CustomToolError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        print(f"[billing] unhide_builtin_tool failed: {e}")
+        return jsonify({"error": "could not un-hide tool"}), 500
     return jsonify({"success": True, **result})
 
 
