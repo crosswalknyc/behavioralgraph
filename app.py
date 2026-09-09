@@ -1799,15 +1799,32 @@ CREDITS_ECOMMERCE_IQ = 5
 CREDITS_FLYWHEEL_CONVERSION = 25
 CREDITS_BRAND_PARTNERSHIP_IQ = 15
 CREDITS_JOURNEY_IQ = 10
-# Chatbot (Prometheus / Brief Chat) surfaces. 2026-08-21 Jenna directive:
-# every pull is charged and recorded on ALL surfaces (dashboard, partner
-# API, chatbot) - including unlimited-credit users, whose credits_used +
-# usage history still increment even though their balance never depletes.
-# Profile builds launched from the chatbot price off _V1_CREDITS (same
-# tier table as the partner API); these two cover the lighter Claude-
-# backed chatbot deliverables.
-CREDITS_CHATBOT_ANALYZE = 1   # "Analyze this data" reasoning pass
-CREDITS_CHATBOT_DECK = 1      # PPTX deck build from on-screen data
+# Chatbot (Prometheus / Brief Chat) surfaces.
+#
+# 2026-09-09 (Jenna, verbatim: "Prometheus questions Shouldn't cost
+# anything? So like, analyze ask, wouldn't be a separate fee, that
+# would just fall into the meter usage charge. The only thing that
+# should really show up on the charges are if you're running a real
+# pipeline. So like, you're running build a profile or subscriber IQ,
+# things like that. But the general questions would just be metered
+# usage. So like building a deck, metered usage. I guess it would
+# really just be subscriber IQ and profile IQ right now. That would
+# have those prices on it."):
+#
+# Prometheus asks, "analyze this data", and "build a deck" are
+# session-metered - they never show up as a per-pull line item on the
+# bill. Only real pipeline runs (Profile IQ, Subscriber IQ, their
+# chatbot / partner-API twins) carry discrete prices. These two
+# constants stay at 0 so `consume_credit()` calls and preflight gates
+# are effectively no-ops; the metered spend rolls up through the
+# per-session Prometheus billing in pay_per_use.py (or is included in
+# a subscribed user's flat tier - either way, no per-ask charge).
+#
+# Profile-build price tiers (Chatbot Profile IQ, partner API v1) live
+# in _V1_CREDITS / _V1_USD_FALLBACK further down - those DO still
+# charge per pull.
+CREDITS_CHATBOT_ANALYZE = 0   # metered, not per-pull
+CREDITS_CHATBOT_DECK = 0      # metered, not per-pull
 
 # Pricing settings S3 key
 PRICING_SETTINGS_KEY = 'system/pricing_settings.json'
@@ -56342,21 +56359,19 @@ def _pm_validate_page_context(page_context):
 
 
 def _pm_charge_async(username, description):
-    """Record a chatbot-analysis charge without blocking the response.
+    """No-op stub retained for callsite compatibility.
 
-    The debit is a ~10MB users.json read-modify-write on S3; both call
-    sites already ignored its return value and swallowed failures, so
-    moving it to a daemon thread changes nothing semantically - it
-    just takes the write off the user's wait. consume_credit runs a
-    fresh CAS read internally and needs no request context."""
-    def _charge():
-        try:
-            consume_credit(username, description=description, job_id='',
-                           pull_type='Chatbot Analysis',
-                           credits_used=CREDITS_CHATBOT_ANALYZE)
-        except Exception:
-            traceback.print_exc()
-    threading.Thread(target=_charge, daemon=True).start()
+    2026-09-09 (Jenna): chatbot asks and analyze / deck actions are
+    session-metered, not per-pull charged. This function used to
+    async-record a `Chatbot Analysis` credit debit; that behaviour is
+    retired because CREDITS_CHATBOT_ANALYZE is now 0. Kept as a
+    no-op so existing callers don't need to change shape - the
+    metered usage rolls up through pay_per_use.py at session close,
+    or is included in the subscribed tier for full-tier users."""
+    # Deliberately does nothing. Do not restore the credit debit here
+    # without a fresh explicit directive: it violates the metered-only
+    # pricing policy documented above CREDITS_CHATBOT_ANALYZE.
+    return
 
 
 def _pm_ask_hint(route=None, outcome=None, subject=None, mode=None):
@@ -56846,16 +56861,11 @@ def _pm_search_demand_response(user, text, history):
     _pm_ask_hint(route='search_demand')
     _pm_user = (session.get('username') or user.get('username') or '').strip()
     _pm_ppu = _pm_usage_extras(user)
-    if _pm_user and _pm_ppu is None \
-            and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
-        _pm_ask_hint(outcome='declined_credits')
-        return jsonify({
-            'success': False,
-            'guidance': True,
-            'error': ("You're out of credits. Top up to keep going."),
-            'top_up_url': '/wallet',
-            'top_up_label': 'Buy more credits',
-        }), 402
+    # Prometheus asks are session-metered (2026-09-09 Jenna). No
+    # per-pull credit gate on this route: pay-per-use accounts still
+    # bill via the session close, subscribed accounts are covered by
+    # their tier. Real pipeline pulls (Profile IQ, Subscriber IQ)
+    # remain credit-gated elsewhere.
     led = {'block': '', 'exact': None, 'entries': []}
     _t_ledger = time.monotonic()
     try:
@@ -57074,16 +57084,12 @@ def _pm_generate_metrics_response(user, text, history, metric_request=None,
     _pm_ask_hint(route='reasoned_metrics')
     _pm_user = (session.get('username') or user.get('username') or '').strip()
     _pm_ppu = _pm_usage_extras(user)
-    if not charge_done and _pm_user and _pm_ppu is None \
-            and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
-        _pm_ask_hint(outcome='declined_credits')
-        return jsonify({
-            'success': False,
-            'guidance': True,
-            'error': ("You're out of credits. Top up to keep going."),
-            'top_up_url': '/wallet',
-            'top_up_label': 'Buy more credits',
-        }), 402
+    # Prometheus reasoned-metrics reads are session-metered
+    # (2026-09-09 Jenna). No per-pull credit gate here - the metered
+    # spend rolls up through the Prometheus session bill or is
+    # included in the subscribed tier. `charge_done` is kept in the
+    # function signature for callsite compatibility but no longer
+    # matters for gating.
     mr = metric_request if isinstance(metric_request, dict) else {}
     subj_hint = str(mr.get('subject') or '').strip()
     # Confirmed memory referent (2026-08-27, Jenna: "know context
@@ -58366,21 +58372,12 @@ def api_synth_chat_analyze():
                       'want included), or open a view with data on '
                       'screen, then ask me again.'),
             'followups': [], 'offer_deck': False, 'deck_angle': None})
-    # Credit preflight (2026-08-21): chatbot analyses are tracked usage
-    # like every other pull. Unlimited users always pass; the charge
-    # itself lands after a successful analysis so failures cost nothing.
-    # Pay-as-you-go users skip credits entirely - their usage is billed
-    # in dollars per session instead.
+    # 2026-09-09 Jenna: "Analyze this data" is session-metered, not
+    # per-pull charged. Pay-per-use accounts bill via the session
+    # close; subscribed accounts are covered by their tier. Real
+    # pipeline pulls (Profile IQ, Subscriber IQ) remain credit-gated
+    # in their own routes.
     _pm_user = (session.get('username') or user.get('username') or '').strip()
-    if _pm_user and _pm_ppu is None \
-            and not has_credits_for(_pm_user, CREDITS_CHATBOT_ANALYZE):
-        return jsonify({
-            'success': False,
-            'guidance': True,
-            'error': ("You're out of credits. Top up to keep going."),
-            'top_up_url': '/wallet',
-            'top_up_label': 'Buy more credits',
-        }), 402
     try:
         import prometheus_analysis as pma
     except Exception as e:
@@ -58968,12 +58965,12 @@ def _pm_run_deck_job(job_id, username, ctx, history, angle,
         _pm_deck_status_write(job_id, {**base, 'status': 'error',
                                        'error': str(e)[:400]})
         _pm_notify_delete(job_id)
+        # 2026-09-09 Jenna: decks are session-metered, not per-pull
+        # charged, so there is no per-pull refund to issue on
+        # failure. `charge_user` is always empty in the new flow;
+        # branch retained as a defensive no-op for legacy callers.
         if charge_user:
-            try:
-                refund_credit(charge_user, credits=CREDITS_CHATBOT_DECK,
-                              reason=f'deck build {job_id} failed')
-            except Exception:
-                traceback.print_exc()
+            pass
 
 
 @app.route('/api/brief-chat/deck', methods=['POST'])
@@ -59029,33 +59026,13 @@ def api_synth_chat_deck():
     deck_partner = resolution.get('partner') or ''
     job_id = uuid.uuid4().hex[:12]
     username = (user.get('username') or user.get('email') or '').strip()
-    # Credit preflight + charge (2026-08-21): deck builds are tracked
-    # usage on every account including unlimited ones. Charged up front
-    # with the deck job id; the background job refunds on failure.
-    # Pay-as-you-go users skip credits: their deck's model usage is
-    # billed per session in dollars instead.
-    _charge_user = '' if _pm_ppu else (session.get('username')
-                                       or user.get('username') or '').strip()
-    if _charge_user and not has_credits_for(_charge_user,
-                                            CREDITS_CHATBOT_DECK):
-        return jsonify({
-            'success': False,
-            'guidance': True,
-            'error': ("You're out of credits for a deck build. Top up "
-                      'to keep going.'),
-            'top_up_url': '/wallet',
-            'top_up_label': 'Buy more credits',
-        }), 402
-    if _charge_user:
-        try:
-            consume_credit(
-                _charge_user,
-                description=f'Chatbot Deck - {angle[:120]}',
-                job_id=job_id,
-                pull_type='Chatbot Deck',
-                credits_used=CREDITS_CHATBOT_DECK)
-        except Exception:
-            traceback.print_exc()
+    # 2026-09-09 Jenna: deck builds are session-metered, not per-pull
+    # charged. Pay-per-use accounts bill via the session close;
+    # subscribed accounts are covered by their tier. `_charge_user` is
+    # kept as an empty string for downstream compatibility (the refund
+    # path below reads it and no-ops when empty), but no per-pull
+    # credit is deducted for a deck.
+    _charge_user = ''
     # Attribute the deck's model spend to the enqueuing user for ALL
     # users (not just pay-as-you-go), so the daily spend email's
     # per-user Prometheus breakdown captures deck builds. The bg thread

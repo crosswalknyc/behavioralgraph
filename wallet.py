@@ -159,10 +159,15 @@ MODULE_CATALOG = [
      "modules", 10, 1000.0, "has_subscriber_iq_access"),
     ("chatbot_profile_iq_build",   "Chatbot Profile IQ",
      "modules", 5, 500.0, "has_chatbot_profile_iq_access"),
+    # 2026-09-09 (Jenna): chatbot_analysis and chatbot_deck are
+    # SESSION-METERED, not per-pull charged. Prices stay at 0 by
+    # design - the Prometheus session bill (or the subscribed tier)
+    # covers them. Only real pipeline pulls (Profile IQ, Subscriber
+    # IQ, their chatbot / partner API twins) carry a discrete price.
     ("chatbot_analysis",           "Chatbot - Analyze Ask",
-     "modules", 1, 0.0, "has_chatbot_profile_iq_access"),
+     "modules", 0, 0.0, "has_chatbot_profile_iq_access"),
     ("chatbot_deck",               "Chatbot - Deck Export",
-     "modules", 5, 0.0, "has_chatbot_profile_iq_access"),
+     "modules", 0, 0.0, "has_chatbot_profile_iq_access"),
     # ---------- Analysis / attribution ----------
     ("ecommerce_iq",               "Ecommerce IQ",
      "modules", 5, 0.0, "has_ecommerce_iq_access"),
