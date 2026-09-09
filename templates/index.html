@@ -19005,7 +19005,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
         </div>
     </div>
     
-    <!-- Profile/Subscriber Released Modal - Shown when a purgatory item is released -->
+    <!-- Profile/Subscriber Released Modal - Shown when an analysis finishes and lands in the dashboard -->
     <div class="credits-modal" id="profileReleasedModal" style="display: none;" onclick="if(event.target === this) closeProfileReleasedModal()">
         <div class="credits-modal-content" style="max-width: 460px;" onclick="event.stopPropagation()">
             <h2 id="profileReleasedTitle">✅ Profile IQ Ready</h2>
@@ -19291,17 +19291,11 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                         {% if role == 'super_admin' or role == 'admin' %}
                         <option value="admin">🔐 Admin</option>
                         {% endif %}
-                        {# Purgatory hidden from product dropdown 2026-06-16 per user
-                           request. The /admin#purgatory page, the in-purgatory
-                           release workflow, downloadPurgatoryResult, and the
-                           `purgatory:` handler in initialHandlers all remain
-                           intact so admins can still navigate to it directly via
-                           /admin#purgatory, and pending items still surface from
-                           there. Re-enable in the dropdown by uncommenting:
-                        {% if has_purgatory_access %}
-                        <option value="purgatory">⏳ Purgatory</option>
-                        {% endif %}
-                        #}
+                        {# Purgatory dropdown option retired 2026-09-09
+                           (Jenna, "remove ... purgatory since we dont need it
+                           anymore"). The whole workflow is gone: admin tab,
+                           routes, per-user grant, notifications. Analyses now
+                           publish directly to the dashboard on completion. #}
                         </select>
                         <button type="button" class="view-nav-trigger" id="viewNavTrigger" aria-haspopup="listbox" aria-expanded="false" aria-label="Select product"></button>
                         <div class="view-nav-panel" id="viewNavPanel" role="listbox" aria-label="Product options"></div>
@@ -20570,7 +20564,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                                     </div>
                                     <div id="tstStatusComplete" style="display: none;">
                                         <div style="font-size: 2.5rem;">✅</div>
-                                        <div style="margin: 0.5rem 0;">Complete! Your report is in purgatory and will appear in the dashboard after admin approval.</div>
+                                        <div style="margin: 0.5rem 0;">Complete! Your report is now available in the dashboard.</div>
                                     </div>
                                     <div id="tstStatusError" style="display: none;">
                                         <div style="font-size: 2.5rem;">❌</div>
@@ -20669,7 +20663,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                                     </div>
                                     <div id="sflfStatusComplete" style="display: none;">
                                         <div style="font-size: 2.5rem;">✅</div>
-                                        <div style="margin: 0.5rem 0;">Complete! Your report is in purgatory and will appear in the Short Form Conversion dashboard after admin approval.</div>
+                                        <div style="margin: 0.5rem 0;">Complete! Your report is now available in the Short Form Conversion dashboard.</div>
                                     </div>
                                     <div id="sflfStatusError" style="display: none;">
                                         <div style="font-size: 2.5rem;">❌</div>
@@ -21186,7 +21180,7 @@ https://www.instagram.com/p/..."></textarea>
                                     </div>
                                     <div id="flywheelStatusComplete" style="display: none;">
                                         <div style="font-size: 2.5rem;">✅</div>
-                                        <div style="margin: 0.5rem 0;">Complete! Your report is in purgatory and will appear in the Flywheel Conversion dashboard after admin approval.</div>
+                                        <div style="margin: 0.5rem 0;">Complete! Your report is now available in the Flywheel Conversion dashboard.</div>
                                         <button type="button" class="btn btn-primary" onclick="showFlywheelConversionDashboard()" style="margin-top: 1rem;">📊 Open Flywheel Dashboard</button>
                                     </div>
                                     <div id="flywheelStatusError" style="display: none;">
@@ -45026,7 +45020,7 @@ https://www.instagram.com/p/..."></textarea>
             // Initialize global tooltip system
             initGlobalTooltip();
             
-            // Check for profile-released notifications (purgatory release)
+            // Check for profile-released notifications (analysis-finished pings)
             checkProfileReleasedNotifications();
             
             // View navigation dropdown
@@ -45078,8 +45072,7 @@ https://www.instagram.com/p/..."></textarea>
                     if (ft) ft.setAttribute('style', 'display:none;');
                     if (typeof helmLoadProfileDropdowns === 'function') helmLoadProfileDropdowns();
                 },
-                admin: function() { window.location.href = '/admin'; },
-                purgatory: function() { window.location.href = '/admin#purgatory'; }
+                admin: function() { window.location.href = '/admin'; }
             };
             window.setViewNavDropdown = function(value) {
                 if (viewDropdown && value) {
@@ -45103,11 +45096,11 @@ https://www.instagram.com/p/..."></textarea>
                     }
                     // 2026-07-27: remember the selection per-browser so
                     // log-in / log-out returns the user to where they
-                    // were. Skip admin / purgatory (they navigate to a
-                    // different URL entirely, so restoring them on next
-                    // login would be surprising).
+                    // were. Skip admin (it navigates to a different URL
+                    // entirely, so restoring on next login would be
+                    // surprising).
                     try {
-                        if (val && val !== 'admin' && val !== 'purgatory') {
+                        if (val && val !== 'admin') {
                             localStorage.setItem('bg_last_product', val);
                         }
                     } catch (_) { /* localStorage disabled - no persist */ }
@@ -45140,8 +45133,7 @@ https://www.instagram.com/p/..."></textarea>
                 talentFitIQ: 'Talent Fit IQ: Analyze how well talents resonate with your brand audience using behavioral data and social metrics.',
                 blueIQ: 'Blue IQ: Political-audience tracker. Filter by party (AI-imputed) and state or congressional district to see issue searches, search engines, social platforms, top politicians and articles.',
                 intentIQ: 'Attribution IQ: Title-scoped marketing-intent measurement. Ingest a campaign URL map and report on phase performance, audiences-of-interest, paid vs organic interplay, talent halo, trailer viewership, and audience shift over campaign life.',
-                admin: 'Admin: Manage users, access, and system settings.',
-                purgatory: 'Purgatory: Review and release items pending admin approval.'
+                admin: 'Admin: Manage users, access, and system settings.'
             };
             var triggerEl = document.getElementById('viewNavTrigger');
             var panelEl = document.getElementById('viewNavPanel');
@@ -59220,7 +59212,7 @@ https://www.instagram.com/p/..."></textarea>
                 const data = await response.json();
                 if (!data.success) throw new Error(data.error || 'Failed to load');
                 
-                // Filter to only show released (non-purgatory) files
+                // Filter to only show released files
                 sfConvProfiles = (data.results || []).filter(r => r.status === 'released').map(r => ({
                     s3_key: r.s3_key,
                     project_name: r.name,
@@ -107568,7 +107560,7 @@ https://www.instagram.com/p/..."></textarea>
                 const data = await response.json();
                 if (!data.success) throw new Error(data.error || 'Failed to load');
                 sflfConversionResults = (data.results || []).filter(r => (r.source_type || '') === 'sf_lf_conversion');
-                const pending = sflfConversionResults.filter(r => r.status === 'pending' || r.in_purgatory).length;
+                const pending = sflfConversionResults.filter(r => r.status === 'pending').length;
                 const released = sflfConversionResults.filter(r => r.status === 'released').length;
                 if (statusEl) statusEl.textContent = `${pending} pending • ${released} in dashboard`;
                 filterSFLFConversionResults();
@@ -107594,7 +107586,7 @@ https://www.instagram.com/p/..."></textarea>
                 return;
             }
             const html = results.map(r => {
-                const isPending = r.status === 'pending' || r.in_purgatory;
+                const isPending = r.status === 'pending';
                 const badge = isPending ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>' : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">📊 In Dashboard</span>';
                 const s3KeyEsc = (r.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 const bucketEsc = (r.bucket || 'sf-2-lf-conv').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
@@ -107602,7 +107594,7 @@ https://www.instagram.com/p/..."></textarea>
                 const dateStr = r.created_at ? formatDatePST(r.created_at) : '';
                 const rowClick = isPending ? '' : `onclick="openSFLFConversionResult('${s3KeyEsc}', '${bucketEsc}')"`;
                 const rowStyle = 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;' + (isPending ? '' : ' cursor: pointer;');
-                let buttons = isPending ? `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${(r.purgatory_id||'').replace(/'/g,"\\'")}')">📥</button>` : `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); window.location.href='/api/sf-lf-conversion/download/'+encodeURIComponent('${s3KeyEsc}')">📥</button>`;
+                let buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); window.location.href='/api/sf-lf-conversion/download/'+encodeURIComponent('${s3KeyEsc}')">📥</button>`;
                 return `<div class="job-item" style="${rowStyle}" ${rowClick} ${rowClick ? 'title="Click to open in SF Conversion dashboard"' : ''}><div style="flex: 1; min-width: 0;"><div style="font-weight: 600; font-size: 0.8rem;">${name}</div><div style="font-size: 0.7rem; color: var(--text-secondary);">${dateStr}</div></div><div style="display: flex; align-items: center; gap: 0.35rem;">${badge} ${buttons}</div></div>`;
             }).join('');
             container.innerHTML = html;
@@ -118964,23 +118956,8 @@ https://www.instagram.com/p/..."></textarea>
                 let result = await tryKey(fileKey);
                 if (result.needRedirect) return;
                 let { response, data, ok } = result;
-                // If 404 and key looks like purgatory path, retry with released location (no prefix)
-                if (!ok && response.status === 404 && fileKey && fileKey.startsWith('purgatory/')) {
-                    const releasedKey = fileKey.replace(/^purgatory\/?/, '');
-                    if (releasedKey && releasedKey !== fileKey) {
-                        result = await tryKey(releasedKey);
-                        if (result.needRedirect) return;
-                        response = result.response;
-                        data = result.data;
-                        ok = result.ok;
-                        if (ok && data.s3_key) {
-                            fileKey = data.s3_key;
-                            if (typeof showNotification === 'function') {
-                                showNotification('Profile was released from Purgatory; loaded from dashboard.', 'info');
-                            }
-                        }
-                    }
-                }
+                // 2026-09-09: purgatory retry fallback removed (Purgatory
+                // workflow retired; nothing writes to purgatory/ anymore).
                 if (ok && data.data) {
                     currentCSVData = data.data;
                     currentS3Key = fileKey;
@@ -120591,17 +120568,18 @@ https://www.instagram.com/p/..."></textarea>
             const container = document.getElementById('dashProfileTree');
             if (!container) return;
             
-            // Filter out purgatory items only. We INTENTIONALLY surface
-            // UNCATEGORIZED/OTHER profiles in the selector (under an
-            // "UNCATEGORIZED" group) so users can still find them - they
-            // were previously hard-dropped which made profiles like
-            // "ROSEANNE BARR - Avid Fan" invisible until BRAND CATEGORY
-            // was patched. The Admin tab still surfaces them as
-            // "missing BRAND CATEGORY" defects via the audit toast.
+            // 2026-09-09: purgatory filter retired (workflow removed). We
+            // INTENTIONALLY surface UNCATEGORIZED/OTHER profiles in the
+            // selector (under an "UNCATEGORIZED" group) so users can
+            // still find them - they were previously hard-dropped which
+            // made profiles like "ROSEANNE BARR - Avid Fan" invisible
+            // until BRAND CATEGORY was patched. The Admin tab still
+            // surfaces them as "missing BRAND CATEGORY" defects via the
+            // audit toast. Any legacy s3://.../purgatory/ keys are still
+            // defensively skipped in case a stale cache surfaces one.
             profiles = profiles.filter(p => {
                 const s3Key = p.s3_key || p.key || '';
-                if (s3Key.includes('purgatory/') || s3Key.startsWith('purgatory/')) return false;
-                if (p.in_purgatory || p.status === 'pending') return false;
+                if (s3Key.startsWith('purgatory/')) return false;
                 return true;
             });
             
@@ -123391,8 +123369,8 @@ https://www.instagram.com/p/..."></textarea>
                     // Strategy 1: standard encodeURIComponent (slashes -> %2F).
                     // Strategy 2: split on '/' and encode each segment, joining
                     // with literal '/'. Flask's <path:> converter expects raw
-                    // slashes for nested keys (e.g. "purgatory/Foo.csv"), and
-                    // some Render edges normalize %2F differently. Try both.
+                    // slashes for nested keys, and some Render edges normalize
+                    // %2F differently. Try both.
                     const url1 = '/api/get-csv-data/' + encodeURIComponent(key);
                     const url2 = '/api/get-csv-data/' + key.split('/').map(encodeURIComponent).join('/');
                     let res = await fetch(url1, { credentials: 'same-origin' });
@@ -125255,7 +125233,8 @@ https://www.instagram.com/p/..."></textarea>
             renderDashboardProfileTree(dashboardProfiles);
         }
 
-        // Profile-released notifications (when purgatory profile is released)
+        // Profile-ready notifications (when an analysis finishes and its
+        // profile lands in the dashboard).
         let currentProfileReleasedNotification = null;
         
         // Map source_type to display info
@@ -125406,7 +125385,7 @@ https://www.instagram.com/p/..."></textarea>
             // Track profile view
             trackActivity('profile_view', profileId);
             
-            // Load and display the profile data (with auto-retry at released S3 location if 404 on purgatory key)
+            // Load and display the profile data.
             let profileLoadSucceeded = false;
             try {
                 const csvUrl = `/api/get-csv-data/${encodeURIComponent(profileId)}?_t=${Date.now()}`;
@@ -125415,40 +125394,8 @@ https://www.instagram.com/p/..."></textarea>
                 let data = await response.json();
                 let effectiveId = profileId;
 
-                // If 404 and this was a purgatory key, try the released location (same filename without purgatory/ prefix)
-                if (!data.success && response.status === 404 && profileId.startsWith('purgatory/')) {
-                    const releasedKey = profileId.replace(/^purgatory\//, '');
-                    const retryResponse = await fetch(`/api/get-csv-data/${encodeURIComponent(releasedKey)}?_t=${Date.now()}`, { credentials: 'same-origin', cache: 'no-store' });
-                    if (retryResponse.ok) {
-                        const retryData = await retryResponse.json();
-                        if (retryData.success && retryData.data) {
-                            response = retryResponse;
-                            data = retryData;
-                            effectiveId = releasedKey;
-                            // Update in-memory profile list so this profile uses the new S3 location
-                            const profile = dashboardProfiles.find(p => (p.s3_key || p.job_id) === profileId);
-                            if (profile) {
-                                profile.s3_key = releasedKey;
-                                profile.job_id = releasedKey;
-                            }
-                            // Update session cache so future loads use the new key
-                            const cached = getSessionJobsCache();
-                            if (cached && cached.jobs) {
-                                cached.jobs.forEach(j => {
-                                    if ((j.s3_key || j.job_id) === profileId) {
-                                        j.s3_key = releasedKey;
-                                        j.job_id = j.job_id || j.s3_key;
-                                    }
-                                });
-                                setSessionJobsCache(cached);
-                            }
-                            selectedDashProfile = releasedKey;
-                            if (typeof showNotification === 'function') {
-                                showNotification('Profile was released from Purgatory; loaded from new location.', 'info');
-                            }
-                        }
-                    }
-                }
+                // 2026-09-09: purgatory retry fallback removed (workflow
+                // retired). Analyses now land directly at the root key.
 
                 if (data.success && data.data) {
                     profileLoadSucceeded = true;
@@ -147047,7 +146994,7 @@ https://www.instagram.com/p/..."></textarea>
                 
                 myResults = data.results || [];
                 const profileOnly = myResults.filter(r => (r.source_type || 'profile_analysis') === 'profile_analysis');
-                const profilePending = profileOnly.filter(r => r.status === 'pending' || r.in_purgatory).length;
+                const profilePending = profileOnly.filter(r => r.status === 'pending').length;
                 const profileReleased = profileOnly.filter(r => r.status === 'released').length;
                 const statusText = `${data.pending_count || 0} pending • ${data.released_count || 0} in dashboard`;
                 const profileStatusText = `${profilePending} pending • ${profileReleased} in dashboard`;
@@ -147117,7 +147064,7 @@ https://www.instagram.com/p/..."></textarea>
             if (headerEl) headerEl.style.display = 'flex';
             
             const html = results.map(result => {
-                const isPending = result.status === 'pending' || result.in_purgatory;
+                const isPending = result.status === 'pending';
                 const statusBadge = isPending
                     ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>'
                     : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">📊 In Dashboard</span>';
@@ -147145,9 +147092,8 @@ https://www.instagram.com/p/..."></textarea>
             container.innerHTML = html;
         }
         
-        function downloadPurgatoryResult(purgatoryId) {
-            window.open(`/api/purgatory/download?purgatory_id=${encodeURIComponent(purgatoryId)}`, '_blank');
-        }
+        // downloadPurgatoryResult removed 2026-09-09 - every caller now
+        // uses the direct per-tool /api/<tool>/download route.
         
         // Ticket Sales Tracker Results Library
         let ticketSalesTrackerResults = [];
@@ -147161,7 +147107,7 @@ https://www.instagram.com/p/..."></textarea>
                 const data = await response.json();
                 if (!data.success) throw new Error(data.error || 'Failed to load');
                 ticketSalesTrackerResults = (data.results || []).filter(r => (r.source_type || '') === 'ticket_sales_tracker');
-                const pending = ticketSalesTrackerResults.filter(r => r.status === 'pending' || r.in_purgatory).length;
+                const pending = ticketSalesTrackerResults.filter(r => r.status === 'pending').length;
                 const released = ticketSalesTrackerResults.filter(r => r.status === 'released').length;
                 if (statusEl) statusEl.textContent = `${pending} pending • ${released} in dashboard`;
                 filterTicketSalesTrackerResults();
@@ -147185,7 +147131,7 @@ https://www.instagram.com/p/..."></textarea>
                 return;
             }
             const html = results.map(r => {
-                const isPending = r.status === 'pending' || r.in_purgatory;
+                const isPending = r.status === 'pending';
                 const badge = isPending ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>' : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">📊 In Dashboard</span>';
                 const s3KeyEsc = (r.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 const bucketEsc = (r.bucket || 'ticket-sales-tracker').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
@@ -147193,7 +147139,7 @@ https://www.instagram.com/p/..."></textarea>
                 const dateStr = r.created_at ? formatDatePST(r.created_at) : '';
                 const rowClick = isPending ? '' : `onclick="openReleasedResult('${s3KeyEsc}', '${bucketEsc}')"`;
                 const rowStyle = 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;' + (isPending ? '' : ' cursor: pointer;');
-                let buttons = isPending ? `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${(r.purgatory_id||'').replace(/'/g,"\\'")}')">📥</button>` : `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); window.location.href='/api/ticket-sales-tracker/download/'+encodeURIComponent('${s3KeyEsc}')">📥</button>`;
+                let buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); window.location.href='/api/ticket-sales-tracker/download/'+encodeURIComponent('${s3KeyEsc}')">📥</button>`;
                 return `<div class="job-item" style="${rowStyle}" ${rowClick} ${rowClick ? 'title="Click to open in Ticket Sales Tracker"' : ''}><div style="flex: 1; min-width: 0;"><div style="font-weight: 600; font-size: 0.8rem;">${name}</div><div style="font-size: 0.7rem; color: var(--text-secondary);">${dateStr}</div></div><div style="display: flex; align-items: center; gap: 0.35rem;">${badge} ${buttons}</div></div>`;
             }).join('');
             container.innerHTML = html;
@@ -147248,7 +147194,7 @@ https://www.instagram.com/p/..."></textarea>
             }
             
             const html = results.map(result => {
-                const isPending = result.status === 'pending' || result.in_purgatory;
+                const isPending = result.status === 'pending';
                 const statusBadge = isPending 
                     ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>'
                     : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">📊 In Dashboard</span>';
@@ -147257,13 +147203,8 @@ https://www.instagram.com/p/..."></textarea>
                 const s3KeyEsc = (result.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 const bucketEsc = (result.bucket || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 
-                // Buttons: Download always available, Open in Profile IQ only if released
-                let buttons = '';
-                if (isPending) {
-                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${result.purgatory_id}')" title="Download CSV">📥</button>`;
-                } else {
-                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>`;
-                }
+                // Buttons: released rows open in Profile IQ on click; pending rows are dead until worker completes.
+                let buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>`;
                 
                 const displayName = (result.display_name && result.display_name.trim()) ? result.display_name.trim() : (result.project_name || 'Unknown').replace(/_/g, ' ').trim();
                 const categoryLabel = capitalizeFirstLetters(result.category || '');
@@ -147307,7 +147248,7 @@ https://www.instagram.com/p/..."></textarea>
             if (statusFilter) {
                 list = list.filter(r => r.status === statusFilter);
             }
-            const pending = (svodAcquisitionResults || []).filter(r => r.status === 'pending' || r.in_purgatory).length;
+            const pending = (svodAcquisitionResults || []).filter(r => r.status === 'pending').length;
             const released = (svodAcquisitionResults || []).filter(r => r.status === 'released').length;
             if (statusEl) statusEl.textContent = `${pending} pending • ${released} in dashboard`;
             if (!list || list.length === 0) {
@@ -147315,19 +147256,14 @@ https://www.instagram.com/p/..."></textarea>
                 return;
             }
             const html = list.map(result => {
-                const isPending = result.status === 'pending' || result.in_purgatory;
+                const isPending = result.status === 'pending';
                 const statusBadge = isPending
                     ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>'
                     : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">📊 In Dashboard</span>';
                 const dateStr = result.created_at ? formatDatePST(result.created_at) : '';
                 const s3KeyEsc = (result.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 const bucketEsc = (result.bucket || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
-                let buttons = '';
-                if (isPending) {
-                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${(result.purgatory_id || '').replace(/'/g, "\\'")}')" title="Download CSV">📥</button>`;
-                } else {
-                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>`;
-                }
+                let buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV">📥</button>`;
                 const displayName = (result.display_name && result.display_name.trim()) ? result.display_name.trim() : (result.project_name || 'Unknown').replace(/_/g, ' ').trim();
                 const categoryLabel = capitalizeFirstLetters(result.category || '');
                 const rowClick = isPending ? '' : `onclick="openReleasedResult('${s3KeyEsc}', '${bucketEsc}')"`;
@@ -147370,7 +147306,7 @@ https://www.instagram.com/p/..."></textarea>
                 }
                 const all = data.results || [];
                 ticketSalesResults = all.filter(r => (r.source_type || '') === 'ticket_sales_iq');
-                const pending = ticketSalesResults.filter(r => r.status === 'pending' || r.in_purgatory).length;
+                const pending = ticketSalesResults.filter(r => r.status === 'pending').length;
                 const released = ticketSalesResults.filter(r => r.status === 'released').length;
                 if (statusEl) {
                     statusEl.textContent = `${pending} pending • ${released} in dashboard`;
@@ -147412,20 +147348,14 @@ https://www.instagram.com/p/..."></textarea>
             }
             if (headerEl) headerEl.style.display = 'flex';
             const html = results.map(result => {
-                const isPending = result.status === 'pending' || result.in_purgatory;
+                const isPending = result.status === 'pending';
                 const statusBadge = isPending
                     ? '<span style="background: var(--accent-orange); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">⏳ PENDING</span>'
                     : '<span style="background: var(--accent-lime); color: #1a1a1a; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600;">📊 In Dashboard</span>';
                 const dateStr = result.created_at ? formatDatePST(result.created_at) : '';
-                const purgatoryIdEsc = (result.purgatory_id || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 const s3KeyEsc = (result.s3_key || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
                 const bucketEsc = (result.bucket || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\');
-                let buttons = '';
-                if (isPending) {
-                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadPurgatoryResult('${purgatoryIdEsc}')" title="Download CSV (Impact IQ)">📥</button>`;
-                } else {
-                    buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV (Impact IQ)">📥</button>`;
-                }
+                let buttons = `<button class="btn btn-small" style="background: var(--bg-dark);" onclick="event.stopPropagation(); downloadReleasedResult('${s3KeyEsc}', '${bucketEsc}')" title="Download CSV (Impact IQ)">📥</button>`;
                 const displayName = (result.display_name && result.display_name.trim()) ? result.display_name.trim() : (result.project_name || 'Unknown').replace(/_/g, ' ').trim();
                 const categoryLabel = capitalizeFirstLetters(result.category || '');
                 const rowStyle = 'display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: var(--bg-card); border-radius: 6px; margin-bottom: 0.5rem;';
@@ -162579,7 +162509,8 @@ https://www.instagram.com/p/..."></textarea>
         }
         
         // ============================================================================
-        // ANALYSIS COMPLETE MODAL (Purgatory Download)
+        // ANALYSIS COMPLETE MODAL - fires when an analysis job finishes and
+        // the result is published to the dashboard.
         // ============================================================================
         
         let currentAnalysisJobId = null;
@@ -162622,11 +162553,8 @@ https://www.instagram.com/p/..."></textarea>
                 // Download via job ID
                 window.open(`/api/download/${currentAnalysisJobId}`, '_blank');
             } else if (currentAnalysisS3Key) {
-                // Fallback to S3 key download
-                const purgatoryId = currentAnalysisType === 'svod_acquisition' 
-                    ? `svod-acquisition:${currentAnalysisS3Key}`
-                    : `dashboard-inputs:${currentAnalysisS3Key}`;
-                window.open(`/api/purgatory/download?purgatory_id=${encodeURIComponent(purgatoryId)}`, '_blank');
+                // Fallback: direct download from the tool's per-type endpoint.
+                window.open(`/api/download-cached/${encodeURIComponent(currentAnalysisS3Key)}`, '_blank');
             }
         }
         

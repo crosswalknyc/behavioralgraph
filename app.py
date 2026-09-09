@@ -2676,27 +2676,9 @@ def _reject_if_non_super_touches_restricted(req_data, existing_user=None):
     }), 403
 
 
-def requires_purgatory_access(f):
-    """Decorator that allows admins, super_admins, and users with purgatory approval access."""
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if 'username' not in session:
-            if request.path.startswith('/api/'):
-                return jsonify({'success': False, 'error': 'Session expired. Please log in again.'}), 401
-            return redirect(url_for('login_page'))
-        user = get_current_user()
-        if not user:
-            return jsonify({'success': False, 'error': 'User not found'}), 403
-        
-        role = user.get('role', '')
-        has_purgatory_approval = user.get('has_purgatory_approval', False)
-        
-        # Allow admins, super_admins, or users with purgatory approval
-        if role in ['admin', 'super_admin'] or has_purgatory_approval:
-            return f(*args, **kwargs)
-        
-        return jsonify({'success': False, 'error': 'Purgatory access required'}), 403
-    return decorated
+# requires_purgatory_access decorator retired 2026-09-09 (Jenna,
+# "remove ... purgatory since we dont need it anymore"). Every route
+# it wrapped has been deleted in the same change.
 
 
 # Store for job status and results
@@ -3413,8 +3395,16 @@ def validate_demographics_raw_totals(df, sample_size, fix_discrepancies=True):
     return is_valid, discrepancies, df
 
 
-def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, use_purgatory=True, bucket=None, category=None, source_type='profile_analysis'):
-    """Upload a result file to S3. By default uploads to purgatory/ for admin review before release."""
+def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, use_purgatory=None, bucket=None, category=None, source_type='profile_analysis'):
+    """Upload a result file to S3. Publishes directly to the root key.
+
+    The `use_purgatory` kwarg is a deprecated no-op kept in the signature so
+    existing callers that still pass `use_purgatory=True` do not break. The
+    purgatory workflow (write-to-purgatory, admin approval, release-to-root)
+    was retired 2026-09-09 (Jenna, "remove ... purgatory since we dont
+    need it anymore") - every publish now lands at the root key
+    immediately.
+    """
     if not s3_client:
         return None
     try:
@@ -3424,7 +3414,7 @@ def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, u
         safe_brand_name = re.sub(r'[\s\-/,]+', '_', (brand_name or '').strip())
         safe_brand_name = re.sub(r'_+', '_', safe_brand_name).strip('_') or 'Profile'
         base_key = f"{safe_brand_name}_{timestamp}.csv"
-        s3_key = (S3_PURGATORY_PREFIX + base_key) if use_purgatory else base_key
+        s3_key = base_key
         s3_client.upload_file(file_path, target_bucket, s3_key)
 
         # Sidecar: agent-decision log written by run_full_pipeline next to the
@@ -3460,18 +3450,13 @@ def upload_to_s3(file_path, brand_name, start_date, end_date, created_by=None, u
         except Exception as _research_err:
             print(f"⚠️ Could not upload research sidecar: {_research_err}")
 
-        # If using purgatory, add to purgatory metadata for tracking
-        if use_purgatory and created_by:
-            add_to_purgatory(
-                s3_key=s3_key,
-                bucket=target_bucket,
-                created_by=created_by,
-                project_name=brand_name,
-                category=category or 'Uncategorized',
-                source_type=source_type
-            )
-            print(f"✅ Added to purgatory: {s3_key} (bucket: {target_bucket}, user: {created_by})")
-        
+        # Purgatory add-to-review tail retired 2026-09-09 (Jenna,
+        # "remove ... purgatory since we dont need it anymore").
+        # Every publish now lands at the root key directly; the queue
+        # worker's "profile ready" email path (see rule 6 in
+        # profile-iq-pipeline-rules.mdc) is what tells the caller their
+        # file is live in the dashboard.
+
         return s3_key
     except Exception as e:
         print(f"Error uploading to S3: {e}")
@@ -5092,19 +5077,14 @@ def create_user():
                 else 'both'),
             'pay_per_use_enabled': False,
             'collab_team': req_data.get('collab_team', []),
-            'has_purgatory_approval': False,
             'auto_access_new': req_data.get('auto_access_new', cd.get('auto_access_new', {}) if cd else {}),
         }
         if not data['users'][username]['has_share_of_time_access']:
             data['users'][username]['has_share_of_time_run_access'] = False
-        
-        # Purgatory clearance: only super_admin can grant (or set on create)
-        if 'has_purgatory_approval' in req_data:
-            current_user = get_current_user()
-            if not current_user or current_user.get('role') != 'super_admin':
-                return jsonify({'success': False, 'error': 'Only a super admin can grant purgatory clearance'}), 403
-            data['users'][username]['has_purgatory_approval'] = req_data.get('has_purgatory_approval', False)
-        
+
+        # Purgatory clearance grant block retired 2026-09-09 (Jenna,
+        # "remove ... purgatory since we dont need it anymore"). The
+        # has_purgatory_approval field is silently ignored on create.
         save_users(data)
         
         # Send welcome email if requested and email provided
@@ -5379,13 +5359,11 @@ def update_user(username):
         if 'activity_export_cadence' in req_data:
             cadence = (req_data['activity_export_cadence'] or '').strip().lower()
             user['activity_export_cadence'] = cadence if cadence in ACTIVITY_EXPORT_CADENCES else ''
-        # Purgatory clearance: only super_admin can grant or revoke
-        if 'has_purgatory_approval' in req_data:
-            current_user = get_current_user()
-            if not current_user or current_user.get('role') != 'super_admin':
-                return jsonify({'success': False, 'error': 'Only a super admin can grant or revoke purgatory clearance'}), 403
-            user['has_purgatory_approval'] = req_data['has_purgatory_approval']
-        
+        # Purgatory clearance grant/revoke block retired 2026-09-09
+        # (Jenna, "remove ... purgatory since we dont need it anymore").
+        # The has_purgatory_approval field is silently ignored on update;
+        # existing user records keep the field but nothing reads it.
+
         # Handle username change
         new_username = req_data.get('new_username', '').strip().lower()
         if new_username and new_username != username:
@@ -9447,8 +9425,9 @@ def index():
     # If user only has Fin IQ (no Profile IQ), default to Fin IQ landing page
     default_view_hedge_fund_iq = bool(has_hedge_fund_iq and not has_profile_iq)
 
-    # Purgatory: only super_admins or users explicitly allowed to access/approve (has_purgatory_approval) see it in the dropdown
-    has_purgatory_access = role == 'super_admin' or (user.get('has_purgatory_approval', False) if user else False)
+    # has_purgatory_access derivation retired 2026-09-09 (Jenna,
+    # "remove ... purgatory since we dont need it anymore"). The
+    # dropdown option it gated is gone.
 
     # Get user info for credits request
     first_name = user.get('first_name', '') if user else ''
@@ -9507,7 +9486,6 @@ def index():
                            allowed_rankers_tabs=_acc.get('allowed_rankers_tabs', ['*']),
                            has_chatbot_profile_iq_access=bool(user.get('has_chatbot_profile_iq_access', False)) or role == 'super_admin',
                            default_view_hedge_fund_iq=default_view_hedge_fund_iq,
-                           has_purgatory_access=has_purgatory_access,
                            first_name=first_name,
                            last_name=last_name,
                            company=company,
@@ -24704,224 +24682,25 @@ def send_svod_released_email(created_by, profile_name, released_s3_key):
     return send_email_via_gmail(email, subject, html, text)
 
 def load_purgatory_metadata():
-    """Load purgatory file metadata from S3."""
-    if not s3_client:
-        return {}
-    try:
-        response = s3_client.get_object(Bucket=S3_BUCKET, Key=PURGATORY_METADATA_KEY)
-        return json.loads(response['Body'].read().decode('utf-8'))
-    except:
-        return {}
+    """Retired 2026-09-09 no-op stub.
 
-def save_purgatory_metadata(metadata):
-    """Save purgatory file metadata to S3."""
-    if not s3_client:
-        return False
-    try:
-        s3_client.put_object(
-            Bucket=S3_BUCKET,
-            Key=PURGATORY_METADATA_KEY,
-            Body=json.dumps(metadata, indent=2),
-            ContentType='application/json'
-        )
-        return True
-    except Exception as e:
-        print(f"Error saving purgatory metadata: {e}")
-        return False
-
-def get_purgatory_approvers():
-    """Get all users who can approve purgatory items (super_admins and users with has_purgatory_approval)."""
-    data = load_users()
-    approvers = []
-    
-    for username, user in data.get('users', {}).items():
-        email = user.get('email')
-        if not email:
-            continue
-            
-        # Super admins always get purgatory notifications
-        if user.get('role') == 'super_admin':
-            approvers.append({
-                'username': username,
-                'email': email,
-                'first_name': user.get('first_name', username),
-                'last_name': user.get('last_name', ''),
-                'is_super_admin': True
-            })
-        # Users with purgatory approval permission
-        elif user.get('has_purgatory_approval'):
-            approvers.append({
-                'username': username,
-                'email': email,
-                'first_name': user.get('first_name', username),
-                'last_name': user.get('last_name', ''),
-                'is_super_admin': False
-            })
-    
-    return approvers
-
-def send_purgatory_notification(created_by, project_name, purgatory_id):
-    """Send email notification to all purgatory approvers when a new item is added."""
-    # Get the user who created the profile
-    data = load_users()
-    creator = data.get('users', {}).get(created_by, {})
-    creator_first_name = creator.get('first_name', created_by)
-    creator_last_name = creator.get('last_name', '')
-    creator_company = creator.get('company', 'Unknown Company')
-    
-    creator_display = f"{creator_first_name} {creator_last_name}".strip() or created_by
-    if creator_company and creator_company != 'Unknown Company':
-        creator_display += f" ({creator_company})"
-    
-    # Get all approvers
-    approvers = get_purgatory_approvers()
-    
-    if not approvers:
-        print("⚠️ No purgatory approvers found to notify")
-        return
-    
-    # Build the purgatory review URL
-    # Use environment variable for base URL or default
-    base_url = os.environ.get('APP_BASE_URL', 'https://behavioral-graph.onrender.com')
-    purgatory_url = f"{base_url}/admin#purgatory"
-    
-    subject = f"Purgatory: {project_name}"
-    
-    body = f"""
-        <p><strong>{creator_display}</strong> has pulled a profile for:</p>
-        <div class="email-card">
-            <div class="email-card-title">{project_name}</div>
-        </div>
-        <p style="color: #8892b0;">Please review and release this profile from purgatory.</p>
-        <p><a href="{purgatory_url}" class="email-btn">Review in Purgatory</a></p>
+    The purgatory workflow was removed (Jenna, "remove ... purgatory
+    since we dont need it anymore"). This function stays as a stub so
+    the two defensive read-side callers that look up display metadata
+    for any legacy `purgatory/`-prefixed CSVs still work without a
+    NameError. Every write path was deleted; nothing new lands in
+    purgatory/ anymore.
     """
-    html_content = _wrap_email_html(body, title="New Profile Awaiting Review")
-    
-    text_content = f"""
-New Profile Awaiting Review
-
-{creator_display} has pulled a profile for: {project_name}
-
-Please review and release this profile from purgatory.
-
-Review here: {purgatory_url}
-    """
-    
-    # Send email to each approver
-    for approver in approvers:
-        try:
-            success, msg = send_email_via_gmail(approver['email'], subject, html_content, text_content)
-            if success:
-                print(f"✅ Purgatory notification sent to {approver['email']}")
-            else:
-                print(f"⚠️ Failed to send purgatory notification to {approver['email']}: {msg}")
-        except Exception as e:
-            print(f"❌ Error sending purgatory notification to {approver['email']}: {e}")
-
-def add_to_purgatory(s3_key, bucket, created_by, project_name, category, source_type='profile_analysis'):
-    """Add a file to purgatory with metadata for admin review."""
-    metadata = load_purgatory_metadata()
-    
-    # Create unique ID for this purgatory item
-    purgatory_id = f"{bucket}:{s3_key}"
-    
-    metadata[purgatory_id] = {
-        's3_key': s3_key,
-        'bucket': bucket,
-        'created_by': created_by,
-        'project_name': project_name,
-        'category': category,
-        'source_type': source_type,  # 'profile_analysis' or 'svod_acquisition'
-        'created_at': datetime.now().isoformat(),
-        'status': 'pending',  # pending, approved, rejected
-        'image_url': None,
-        'title': project_name
-    }
-    
-    save_purgatory_metadata(metadata)
-    
-    # Send email notification to all purgatory approvers
-    try:
-        send_purgatory_notification(created_by, project_name, purgatory_id)
-    except Exception as e:
-        print(f"⚠️ Failed to send purgatory notification: {e}")
-    
-    return purgatory_id
-
-def release_from_purgatory(purgatory_id):
-    """Move a file from purgatory to the main bucket location."""
-    metadata = load_purgatory_metadata()
-    
-    if purgatory_id not in metadata:
-        return False, "Item not found in purgatory"
-    
-    item = metadata[purgatory_id]
-    bucket = item['bucket']
-    old_key = item['s3_key']
-    
-    # The old key should be in purgatory/ prefix
-    if not old_key.startswith(S3_PURGATORY_PREFIX):
-        return False, "Item is not in purgatory folder"
-    
-    # New key is without the purgatory/ prefix
-    new_key = old_key.replace(S3_PURGATORY_PREFIX, '', 1)
-    
-    try:
-        # Copy to new location
-        s3_client.copy_object(
-            Bucket=bucket,
-            CopySource={'Bucket': bucket, 'Key': old_key},
-            Key=new_key
-        )
-        
-        # Delete from purgatory
-        s3_client.delete_object(Bucket=bucket, Key=old_key)
-        
-        # Update metadata
-        item['status'] = 'approved'
-        item['released_at'] = datetime.now().isoformat()
-        item['released_key'] = new_key
-        save_purgatory_metadata(metadata)
-        
-        # Auto-add to qualifying users' allowed_runs based on their category subscriptions
-        profile_category = item.get('category', '')
-        auto_add_runs_to_all_users(new_key, key_category_map={new_key: profile_category})
-        auto_add_to_quick_selects(new_key)
-
-        # 2026-07-22 (Jenna): refresh this category's precomputed norm so
-        # the dashboard's "Show Category Norm" checkbox picks up the new
-        # profile immediately. Debounced per-category, daemon-threaded,
-        # never raises. See migration/category_norm_refresh.py.
-        try:
-            from migration.category_norm_refresh import schedule_recompute
-            schedule_recompute(profile_category)
-        except Exception as _norm_err:
-            print(f"⚠️  category-norm refresh scheduling failed on purgatory release: {_norm_err}")
-
-        print(f"✅ Released from purgatory: {old_key} -> {new_key}")
-        return True, new_key
-    except Exception as e:
-        print(f"❌ Error releasing from purgatory: {e}")
-        return False, str(e)
-
-def get_user_purgatory_items(username):
-    """Get purgatory items created by a specific user."""
-    metadata = load_purgatory_metadata()
-    user_items = []
-    
-    for purgatory_id, item in metadata.items():
-        if item.get('created_by') == username and item.get('status') == 'pending':
-            user_items.append({
-                'purgatory_id': purgatory_id,
-                **item
-            })
-    
-    return user_items
+    return {}
 
 def _add_user_profile(s3_key, created_by):
-    """Track user profile creation (legacy function - now handled by purgatory metadata)."""
-    # This is now handled by the purgatory metadata system
-    # Keeping as stub for backward compatibility
+    """Best-effort side effects after a profile CSV lands at its root S3 key.
+
+    Historically also fed a purgatory-metadata tracker; that path was
+    retired 2026-09-09 (Jenna, "remove ... purgatory since we dont need
+    it anymore"). Kept as the single place that provisions the IQ
+    Rankers tracker on new profile creation.
+    """
     print(f"📝 Profile created: {s3_key} by {created_by}")
     # Best-effort: auto-provision an IQ Rankers tracker so the new profile
     # starts feeding the Talent / Brands leaderboards on the next nightly
@@ -24948,301 +24727,13 @@ def _add_user_profile(s3_key, created_by):
         print(f"   ⚠️ iq_rankers auto-provision skipped: {_iqr_err}")
 
 
-# ============================================================================
-# PURGATORY API ENDPOINTS
-# ============================================================================
+# PURGATORY API ENDPOINTS block retired 2026-09-09 (Jenna,
+# "remove ... purgatory since we dont need it anymore"). Every admin
+# review route (/api/admin/purgatory/{get,update,release,reject}) has
+# been deleted; no UI reaches them.
 
-@app.route('/api/admin/purgatory', methods=['GET'])
-@requires_purgatory_access
-def get_purgatory_items():
-    """Get all items in purgatory for admin review."""
-    try:
-        metadata = load_purgatory_metadata()
-        items = []
-        
-        for purgatory_id, item in metadata.items():
-            if item.get('status') == 'pending':
-                # Get file info from S3
-                bucket = item.get('bucket', S3_BUCKET)
-                s3_key = item.get('s3_key', '')
-                
-                try:
-                    # Get file size and last modified
-                    response = s3_client.head_object(Bucket=bucket, Key=s3_key)
-                    file_size = response.get('ContentLength', 0)
-                    last_modified = response.get('LastModified')
-                    if last_modified:
-                        last_modified = last_modified.isoformat()
-                except:
-                    file_size = 0
-                    last_modified = item.get('created_at')
-                
-                items.append({
-                    'purgatory_id': purgatory_id,
-                    's3_key': s3_key,
-                    'bucket': bucket,
-                    'project_name': item.get('project_name', ''),
-                    'title': item.get('title', item.get('project_name', '')),
-                    'category': item.get('category', 'Uncategorized'),
-                    'created_by': item.get('created_by', 'unknown'),
-                    'created_at': item.get('created_at', ''),
-                    'source_type': item.get('source_type', 'profile_analysis'),
-                    'image_url': item.get('image_url'),
-                    'file_size': file_size,
-                    'last_modified': last_modified
-                })
-        
-        # Sort by created_at descending (newest first)
-        items.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-        
-        return jsonify({
-            'success': True,
-            'items': items,
-            'count': len(items)
-        })
-        
-    except Exception as e:
-        print(f"Error getting purgatory items: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/admin/purgatory/update', methods=['POST'])
-@requires_purgatory_access
-def update_purgatory_item():
-    """Update purgatory item metadata (title, category, image)."""
-    try:
-        data = request.get_json()
-        purgatory_id = data.get('purgatory_id')
-        
-        if not purgatory_id:
-            return jsonify({'success': False, 'error': 'Purgatory ID required'})
-        
-        metadata = load_purgatory_metadata()
-        
-        if purgatory_id not in metadata:
-            return jsonify({'success': False, 'error': 'Item not found in purgatory'})
-        
-        # Update allowed fields (title is the profile display name; keep project_name in sync)
-        if 'title' in data:
-            metadata[purgatory_id]['title'] = data['title']
-            metadata[purgatory_id]['project_name'] = data['title']
-        if 'category' in data:
-            metadata[purgatory_id]['category'] = data['category']
-        if 'image_url' in data:
-            metadata[purgatory_id]['image_url'] = data['image_url']
-        if 'project_name' in data:
-            metadata[purgatory_id]['project_name'] = data['project_name']
-        
-        save_purgatory_metadata(metadata)
-        
-        return jsonify({
-            'success': True,
-            'message': 'Purgatory item updated'
-        })
-        
-    except Exception as e:
-        print(f"Error updating purgatory item: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/admin/purgatory/release', methods=['POST'])
-@requires_purgatory_access
-def release_purgatory_item():
-    """Release an item from purgatory to the main bucket."""
-    global s3_cache
-    
-    try:
-        data = request.get_json()
-        purgatory_id = data.get('purgatory_id')
-        
-        if not purgatory_id:
-            return jsonify({'success': False, 'error': 'Purgatory ID required'})
-        
-        metadata = load_purgatory_metadata()
-        
-        if purgatory_id not in metadata:
-            return jsonify({'success': False, 'error': 'Item not found in purgatory'})
-        
-        item = metadata[purgatory_id]
-        # Apply current title, category, and image from the request so edits stick when releasing (no separate Save required)
-        if data.get('title'):
-            item['title'] = data['title']
-            item['project_name'] = data['title']
-        if data.get('category'):
-            item['category'] = data['category']
-        if 'image_url' in data:
-            item['image_url'] = data['image_url'] or None
-        save_purgatory_metadata(metadata)
-        item = metadata[purgatory_id]
-        
-        success, result = release_from_purgatory(purgatory_id)
-        
-        if success:
-            # Update the profile image cache with the custom image if set
-            if item.get('image_url'):
-                cache_key = item.get('project_name', '').lower().strip()
-                if cache_key:
-                    profile_image_cache[cache_key] = {
-                        'image_url': item['image_url'],
-                        'title': item.get('title', item.get('project_name', '')),
-                        'source': 'custom',
-                        'is_custom': True,
-                        'cached_at': datetime.now().isoformat()
-                    }
-                    save_profile_image_cache()
-            
-            # Refresh cache to pick up the new file
-            smart_cache_update()
-            # Apply admin's display name and category to the new cache entry so dashboard shows them
-            display_name = item.get('title') or item.get('project_name', '')
-            if display_name and s3_cache.get('jobs'):
-                for i, job in enumerate(s3_cache['jobs']):
-                    if (job.get('s3_key') or job.get('key')) == result:
-                        s3_cache['jobs'][i]['display_name'] = display_name
-                        s3_cache['jobs'][i]['name'] = display_name
-                        s3_cache['jobs'][i]['project_name'] = display_name
-                        s3_cache['jobs'][i]['brand'] = display_name
-                        if item.get('category'):
-                            s3_cache['jobs'][i]['category'] = item['category']
-                        save_persisted_cache()
-                        break
-            
-            # For ticket_sales_tracker: persist image_url to metadata when released
-            source_type = item.get('source_type', 'profile_analysis')
-            if source_type == 'ticket_sales_tracker' and result and item.get('image_url'):
-                try:
-                    tst_meta = load_ticket_sales_tracker_metadata()
-                    if result not in tst_meta:
-                        tst_meta[result] = {}
-                    tst_meta[result]['image_url'] = item['image_url']
-                    save_ticket_sales_tracker_metadata(tst_meta)
-                    print(f"✅ Saved Ticket Sales Tracker image for {result}")
-                except Exception as e:
-                    print(f"⚠️ Failed to save TST image: {e}")
-            # For SVOD: persist category to SVOD metadata so Subscriber IQ list and content list show the selected category
-            if source_type == 'svod_acquisition' and result:
-                try:
-                    svod_meta = load_svod_metadata()
-                    if result not in svod_meta:
-                        svod_meta[result] = {}
-                    svod_meta[result]['category'] = item.get('category') or 'SVOD Acquisition'
-                    save_svod_metadata(svod_meta)
-                    print(f"✅ Saved SVOD category for {result} -> {svod_meta[result]['category']}")
-                except Exception as e:
-                    print(f"⚠️ Failed to save SVOD category: {e}")
-            # For Brand Partnership IQ: persist title / category / image to
-            # the BPIQ metadata sidecar so the released JSON inherits whatever
-            # was set during purgatory review without needing a second pass
-            # in Content Management.
-            if source_type == 'brand_partnership_iq' and result:
-                try:
-                    bare_key = result
-                    if bare_key.startswith(BRAND_PARTNERSHIP_IQ_S3_PREFIX):
-                        bare_key = bare_key.replace(BRAND_PARTNERSHIP_IQ_S3_PREFIX, '')
-                    bpiq_meta_release = load_bpiq_metadata()
-                    if bare_key not in bpiq_meta_release:
-                        bpiq_meta_release[bare_key] = {}
-                    title_val = (item.get('title') or item.get('project_name') or '').strip()
-                    if title_val:
-                        bpiq_meta_release[bare_key]['display_name'] = title_val
-                    cat_val = (item.get('category') or '').strip()
-                    if cat_val and cat_val.lower() != 'brand partnership iq':
-                        bpiq_meta_release[bare_key]['category'] = cat_val.upper()
-                    if item.get('image_url'):
-                        bpiq_meta_release[bare_key]['image_url'] = item['image_url']
-                    save_bpiq_metadata(bpiq_meta_release)
-                    print(f"✅ Saved BPIQ metadata for {bare_key}")
-                except Exception as e:
-                    print(f"⚠️ Failed to save BPIQ metadata: {e}")
-            if source_type in ('roas_iq', 'ecommerce_iq') and result:
-                print(f"✅ Released {source_type} result: {result}")
-            
-            # Notify the creator: in-dashboard notification (with source_type); email only for Profile IQ
-            created_by = item.get('created_by')
-            source_type = item.get('source_type', 'profile_analysis')
-            if created_by:
-                profile_name = display_name or item.get('project_name', 'Unknown Profile')
-                add_profile_released_notification(created_by, profile_name, result, source_type=source_type)
-                if source_type == 'profile_analysis':
-                    send_profile_released_email(created_by, profile_name, result)
-                elif source_type == 'svod_acquisition':
-                    send_svod_released_email(created_by, profile_name, result)
-            
-            return jsonify({
-                'success': True,
-                'message': 'Item released from purgatory',
-                'new_key': result
-            })
-        else:
-            return jsonify({'success': False, 'error': result})
-        
-    except Exception as e:
-        print(f"Error releasing purgatory item: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/admin/purgatory/reject', methods=['POST'])
-@requires_purgatory_access
-def reject_purgatory_item():
-    """Reject and delete an item from purgatory."""
-    try:
-        data = request.get_json()
-        purgatory_id = data.get('purgatory_id')
-        
-        if not purgatory_id:
-            return jsonify({'success': False, 'error': 'Purgatory ID required'})
-        
-        metadata = load_purgatory_metadata()
-        
-        if purgatory_id not in metadata:
-            return jsonify({'success': False, 'error': 'Item not found in purgatory'})
-        
-        item = metadata[purgatory_id]
-        bucket = item.get('bucket', S3_BUCKET)
-        s3_key = item.get('s3_key', '')
-        
-        # Delete the file from S3
-        try:
-            s3_client.delete_object(Bucket=bucket, Key=s3_key)
-            print(f"🗑️ Deleted purgatory file: {bucket}/{s3_key}")
-        except Exception as e:
-            print(f"Warning: Could not delete S3 file: {e}")
-        
-        # Update metadata status
-        metadata[purgatory_id]['status'] = 'rejected'
-        metadata[purgatory_id]['rejected_at'] = datetime.now().isoformat()
-        save_purgatory_metadata(metadata)
-        
-        return jsonify({
-            'success': True,
-            'message': 'Item rejected and deleted from purgatory'
-        })
-        
-    except Exception as e:
-        print(f"Error rejecting purgatory item: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/purgatory/check-access', methods=['GET'])
-@requires_auth
-def check_purgatory_access():
-    """Check if current user has purgatory approval access."""
-    try:
-        user = get_current_user()
-        if not user:
-            return jsonify({'success': False, 'has_access': False})
-        
-        role = user.get('role', '')
-        has_purgatory_approval = user.get('has_purgatory_approval', False)
-        
-        has_access = role in ['admin', 'super_admin'] or has_purgatory_approval
-        
-        return jsonify({
-            'success': True,
-            'has_access': has_access,
-            'is_admin': role in ['admin', 'super_admin'],
-            'has_purgatory_approval': has_purgatory_approval
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+# /api/purgatory/check-access retired 2026-09-09 (Jenna,
+# "remove ... purgatory since we dont need it anymore").
 
 
 @app.route('/api/settings/default-profile-photo', methods=['GET'])
@@ -25333,32 +24824,13 @@ def update_pricing_settings():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/purgatory/my-items', methods=['GET'])
-@requires_auth
-def get_my_purgatory_items():
-    """Get purgatory items for the current user (visible only to them)."""
-    try:
-        user = get_current_user()
-        if not user:
-            return jsonify({'success': False, 'error': 'Not authenticated'})
-        
-        username = session.get('username', '')
-        items = get_user_purgatory_items(username)
-        
-        return jsonify({
-            'success': True,
-            'items': items,
-            'count': len(items)
-        })
-        
-    except Exception as e:
-        print(f"Error getting user purgatory items: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+# /api/purgatory/my-items retired 2026-09-09 (Jenna,
+# "remove ... purgatory since we dont need it anymore").
 
 @app.route('/api/my-results', methods=['GET'])
 @requires_auth
 def get_my_results():
-    """Get all results created by the current user - both purgatory (pending) and released."""
+    """Get all results created by the current user - all released to the dashboard."""
     try:
         user = get_current_user()
         if not user:
@@ -25740,90 +25212,13 @@ def svod_pricing_api():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/user/purgatory', methods=['GET'])
-@requires_auth
-def get_user_purgatory():
-    """Get purgatory items for the current user (visible only to them until released)."""
-    try:
-        user = get_current_user()
-        if not user:
-            return jsonify({'success': False, 'error': 'Not authenticated'})
-        
-        username = session.get('username', '')
-        items = get_user_purgatory_items(username)
-        
-        return jsonify({
-            'success': True,
-            'items': items,
-            'count': len(items)
-        })
-        
-    except Exception as e:
-        print(f"❌ Error getting user purgatory: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+# /api/user/purgatory retired 2026-09-09 (Jenna,
+# "remove ... purgatory since we dont need it anymore").
 
-def _get_purgatory_file_response(purgatory_id, disposition='attachment'):
-    """Fetch purgatory file from S3 and return a Response. disposition: 'attachment' (download) or 'inline' (view in browser)."""
-    user = get_current_user()
-    if not user:
-        return jsonify({'success': False, 'error': 'Not authenticated'}), 401
-    
-    username = session.get('username', '')
-    is_admin = user.get('role') in ['admin', 'super_admin']
-    
-    metadata = load_purgatory_metadata()
-    
-    if purgatory_id not in metadata:
-        return jsonify({'success': False, 'error': 'Item not found'}), 404
-    
-    item = metadata[purgatory_id]
-    
-    if item.get('created_by') != username and not is_admin:
-        return jsonify({'success': False, 'error': 'Access denied'}), 403
-    
-    bucket = item.get('bucket', S3_BUCKET)
-    s3_key = item.get('s3_key', '')
-    
-    response = s3_client.get_object(Bucket=bucket, Key=s3_key)
-    content = response['Body'].read()
-    filename = s3_key.split('/')[-1]
-    
-    return Response(
-        content,
-        mimetype='text/csv',
-        headers={
-            'Content-Disposition': f'{disposition}; filename="{filename}"',
-            'Content-Type': 'text/csv; charset=utf-8'
-        }
-    )
-
-
-@app.route('/api/purgatory/download')
-@requires_auth
-def download_purgatory_file():
-    """Download a file from purgatory. Use ?purgatory_id=... (URL-encoded; may contain colons/slashes)."""
-    try:
-        purgatory_id = request.args.get('purgatory_id') or request.args.get('id')
-        if not purgatory_id:
-            return jsonify({'success': False, 'error': 'purgatory_id required'}), 400
-        return _get_purgatory_file_response(purgatory_id, disposition='attachment')
-    except Exception as e:
-        print(f"❌ Error downloading purgatory file: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/purgatory/view')
-@requires_auth
-def view_purgatory_file():
-    """Open a purgatory CSV in the browser (inline). Use ?purgatory_id=... (URL-encoded)."""
-    try:
-        purgatory_id = request.args.get('purgatory_id') or request.args.get('id')
-        if not purgatory_id:
-            return jsonify({'success': False, 'error': 'purgatory_id required'}), 400
-        return _get_purgatory_file_response(purgatory_id, disposition='inline')
-    except Exception as e:
-        print(f"❌ Error viewing purgatory file: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+# _get_purgatory_file_response + /api/purgatory/download + /api/purgatory/view
+# retired 2026-09-09 (Jenna, "remove ... purgatory since we dont need
+# it anymore"). Legacy CSVs under purgatory/ are inaccessible from the
+# UI; use `aws s3 cp` for any one-off inspection.
 
 
 @app.route('/api/admin/ticket-sales-image', methods=['POST'])
@@ -26147,14 +25542,10 @@ def change_file_category():
             from datetime import datetime, timezone
             new_last_modified = datetime.now(timezone.utc).isoformat()
         
-        # If this is a purgatory file, update purgatory metadata so category persists in admin list
-        if file_key.startswith(S3_PURGATORY_PREFIX):
-            purgatory_id = f"{S3_BUCKET}:{file_key}"
-            metadata = load_purgatory_metadata()
-            if purgatory_id in metadata:
-                metadata[purgatory_id]['category'] = new_category
-                save_purgatory_metadata(metadata)
-                print(f"🏷️ Updated purgatory metadata category for {file_key} to {new_category}")
+        # Purgatory-metadata category-sync branch retired 2026-09-09
+        # (Jenna, "remove ... purgatory since we dont need it anymore").
+        # Nothing new lands under purgatory/; the S3 file's own category
+        # column (below) is the source of truth going forward.
         
         # Update cache - find job in s3_cache and update its category AND last_modified
         # so smart_cache_update won't see it as "modified" and revert the category
@@ -31108,7 +30499,10 @@ def talent_fit_assess():
             safe_brand = re.sub(r'[^a-zA-Z0-9_-]', '_', brand)[:50]
             safe_talents = '_'.join([re.sub(r'[^a-zA-Z0-9_-]', '_', t)[:20] for t in talents[:3]])
             filename = f"{safe_brand}_{safe_talents}_{timestamp}.json"
-            s3_key = TALENT_FIT_S3_PREFIX + filename
+            # 2026-09-09: publish directly at the root key (purgatory
+            # workflow retired). Legacy `TALENT_FIT_S3_PREFIX = 'purgatory/'`
+            # is no longer consulted for new files.
+            s3_key = filename
             
             s3_client.put_object(
                 Bucket=TALENT_FIT_S3_BUCKET,
@@ -31117,18 +30511,9 @@ def talent_fit_assess():
                 ContentType='application/json'
             )
             
-            username = session.get('username', 'unknown')
-            purgatory_id = add_to_purgatory(
-                s3_key=s3_key,
-                bucket=TALENT_FIT_S3_BUCKET,
-                created_by=username,
-                project_name=f"Talent Fit: {brand} x {', '.join(talents[:3])}",
-                category='talent_fit',
-                source_type='talent_fit'
-            )
-            
+            # 2026-09-09: add_to_purgatory retired. File published
+            # directly at s3_key above; no admin review step.
             result['s3_key'] = s3_key
-            result['purgatory_id'] = purgatory_id
             
         except Exception as e:
             print(f"⚠️ Failed to save to S3: {e}")
@@ -35474,21 +34859,13 @@ def _save_flywheel_results(job_id, results, job):
         print(f"[Flywheel] Saved results to {filepath}")
         
         if s3_client:
-            s3_key = S3_PURGATORY_PREFIX + filename
+            # 2026-09-09: purgatory workflow retired; publish directly at
+            # root key. add_to_purgatory register-for-review call dropped.
+            s3_key = filename
             try:
                 s3_client.upload_file(str(filepath), FLYWHEEL_S3_BUCKET, s3_key)
                 print(f"[Flywheel] Uploaded to S3: {FLYWHEEL_S3_BUCKET}/{s3_key}")
-                
-                username = job.get('username', 'unknown')
-                add_to_purgatory(
-                    s3_key=s3_key,
-                    bucket=FLYWHEEL_S3_BUCKET,
-                    created_by=username,
-                    project_name=project_name,
-                    category='FLYWHEEL',
-                    source_type='flywheel_conversion'
-                )
-                
+
                 job['s3_key'] = s3_key
                 job['bucket'] = FLYWHEEL_S3_BUCKET
                 job['result_file'] = str(filepath)
@@ -37281,25 +36658,14 @@ def _run_roas_iq(job_id):
 
         ts = datetime.now().strftime('%m_%d_%Y_%H_%M')
         safe_name = project_name.replace(' ', '_')
-        base_key = f"{ROAS_IQ_S3_PREFIX}{safe_name}_{ts}.json"
-        s3_key = S3_PURGATORY_PREFIX + base_key
+        # 2026-09-09: purgatory workflow retired; publish directly.
+        s3_key = f"{ROAS_IQ_S3_PREFIX}{safe_name}_{ts}.json"
 
-        update_job_status(job_id, progress=90, message='Uploading to purgatory...')
+        update_job_status(job_id, progress=90, message='Publishing result...')
         s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
                              Body=json.dumps(result_data).encode('utf-8'),
                              ContentType='application/json')
-
-        created_by = job.get('username', '')
-        purgatory_id = add_to_purgatory(
-            s3_key=s3_key,
-            bucket=S3_BUCKET,
-            created_by=created_by,
-            project_name=project_name,
-            category='ROAS IQ',
-            source_type='roas_iq'
-        )
-        jobs[job_id]['purgatory_id'] = purgatory_id
-        print(f"✅ ROAS IQ uploaded to purgatory: {s3_key}")
+        print(f"✅ ROAS IQ published: {s3_key}")
 
         update_job_status(job_id, status='completed', progress=100,
                           message=f'Done! {len(results)} attribution rows across {len(set(r["channel"] for r in results))} channels.',
@@ -37500,25 +36866,14 @@ def _run_ecommerce_iq(job_id):
 
         ts = datetime.now().strftime('%m_%d_%Y_%H_%M')
         safe_name = project_name.replace(' ', '_')
-        base_key = f"{ECOMMERCE_IQ_S3_PREFIX}{safe_name}_{ts}.json"
-        s3_key = S3_PURGATORY_PREFIX + base_key
+        # 2026-09-09: purgatory workflow retired; publish directly.
+        s3_key = f"{ECOMMERCE_IQ_S3_PREFIX}{safe_name}_{ts}.json"
 
-        update_job_status(job_id, progress=90, message='Uploading to purgatory...')
+        update_job_status(job_id, progress=90, message='Publishing result...')
         s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
                              Body=json.dumps(result_data).encode('utf-8'),
                              ContentType='application/json')
-
-        created_by = job.get('username', '')
-        purgatory_id = add_to_purgatory(
-            s3_key=s3_key,
-            bucket=S3_BUCKET,
-            created_by=created_by,
-            project_name=project_name,
-            category='E-Commerce IQ',
-            source_type='ecommerce_iq'
-        )
-        jobs[job_id]['purgatory_id'] = purgatory_id
-        print(f"✅ E-Commerce IQ uploaded to purgatory: {s3_key}")
+        print(f"✅ E-Commerce IQ published: {s3_key}")
 
         stages = set(r['stage'] for r in results)
         stores = set(r['store'] for r in results)
@@ -38309,18 +37664,11 @@ def _run_brand_partnership_iq(job_id):
             }
             ts = datetime.now().strftime('%m_%d_%Y_%H_%M')
             safe = re.sub(r'[^A-Za-z0-9]+', '_', project_name).strip('_') or 'bpiq'
-            base_key = f"{BRAND_PARTNERSHIP_IQ_S3_PREFIX}{safe}_{ts}.json"
-            s3_key = S3_PURGATORY_PREFIX + base_key
+            # 2026-09-09: purgatory workflow retired; publish directly.
+            s3_key = f"{BRAND_PARTNERSHIP_IQ_S3_PREFIX}{safe}_{ts}.json"
             s3_client.put_object(Bucket=S3_BUCKET, Key=s3_key,
                                  Body=json.dumps(empty_data).encode('utf-8'),
                                  ContentType='application/json')
-            purgatory_id = add_to_purgatory(
-                s3_key=s3_key, bucket=S3_BUCKET,
-                created_by=job.get('username', ''),
-                project_name=project_name,
-                category='Brand Partnership IQ',
-                source_type='brand_partnership_iq')
-            jobs[job_id]['purgatory_id'] = purgatory_id
             update_job_status(job_id, s3_key=s3_key)
             return
 
@@ -39010,8 +38358,8 @@ def _run_brand_partnership_iq(job_id):
         # Persist to S3 (purgatory) and register for admin release.
         ts = datetime.now().strftime('%m_%d_%Y_%H_%M')
         safe_name = re.sub(r'[^A-Za-z0-9]+', '_', project_name).strip('_') or 'bpiq'
-        base_key = f"{BRAND_PARTNERSHIP_IQ_S3_PREFIX}{safe_name}_{ts}.json"
-        s3_key = S3_PURGATORY_PREFIX + base_key
+        # 2026-09-09: purgatory workflow retired; publish directly.
+        s3_key = f"{BRAND_PARTNERSHIP_IQ_S3_PREFIX}{safe_name}_{ts}.json"
 
         # Pre-write sanity validator. Enforces the workspace rules on
         # every BPIQ payload before it lands in S3:
@@ -39055,14 +38403,9 @@ def _run_brand_partnership_iq(job_id):
                              Body=json.dumps(result_data).encode('utf-8'),
                              ContentType='application/json')
 
-        purgatory_id = add_to_purgatory(
-            s3_key=s3_key, bucket=S3_BUCKET,
-            created_by=job.get('username', ''),
-            project_name=project_name,
-            category='Brand Partnership IQ',
-            source_type='brand_partnership_iq')
-        jobs[job_id]['purgatory_id'] = purgatory_id
-        print(f"✅ Brand Partnership IQ uploaded to purgatory: {s3_key}")
+        # 2026-09-09: purgatory register-for-review retired; file
+        # was already published at s3_key above.
+        print(f"✅ Brand Partnership IQ published: {s3_key}")
 
         update_job_status(
             job_id, status='completed', progress=100, s3_key=s3_key,
