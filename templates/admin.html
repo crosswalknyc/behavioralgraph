@@ -1379,6 +1379,9 @@
         <!-- Admin Tabs -->
         <div class="admin-tabs">
             <button class="admin-tab active" onclick="showAdminTab('users')">👥 Users</button>
+            {% if current_user_role == 'super_admin' %}
+            <button class="admin-tab" onclick="window.location.href='/admin/billing'">💳 Billing</button>
+            {% endif %}
             <button class="admin-tab" onclick="showAdminTab('companies')">🏢 Companies</button>
             <button class="admin-tab" onclick="showAdminTab('timeTracking')">⏱️ Time Tracking</button>
             <button class="admin-tab" onclick="showAdminTab('content')">📁 Content Management</button>
