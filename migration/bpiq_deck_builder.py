@@ -249,7 +249,12 @@ def _touchpoint_display_name(name: str) -> str:
         if i > 0 and wl in _TITLE_LOWERCASE_TOKENS:
             out.append(wl)
         else:
-            out.append(w[:1].upper() + w[1:].lower())
+            # Capitalize each hyphen-separated segment so all-lowercase
+            # compound brand names title-case correctly
+            # ("coca-cola" -> "Coca-Cola", not "Coca-cola").
+            out.append("-".join(
+                seg[:1].upper() + seg[1:].lower() if seg else seg
+                for seg in w.split("-")))
     return " ".join(out)
 
 
@@ -1497,7 +1502,30 @@ def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
     cg = ctx.data.get("control_group") or {}
     treat_dp   = float(cg.get("treat_delta_pp")   or 0)
     control_dp = float(cg.get("control_delta_pp") or 0)
-    incr_pp    = float(cg.get("incremental_lift_pp") or (treat_dp - control_dp))
+    # Honor an EXPLICIT incremental_lift_pp from the payload, including
+    # an explicit 0.0 (control-brand runs suppress the adjusted lift at
+    # zero by design). Only derive treat-minus-control when the field
+    # is genuinely absent. The old `or` fallback treated 0.0 as falsy
+    # and printed a nonzero (negative) lift on suppressed control
+    # decks, contradicting both the payload and the live dashboard
+    # (which renders `incremental_lift_pp || 0`).
+    _raw_incr = cg.get("incremental_lift_pp")
+    if _raw_incr is None:
+        incr_pp = treat_dp - control_dp
+    else:
+        incr_pp = float(_raw_incr or 0)
+    # Label: the standard case shows the subtraction. When the payload
+    # suppresses the adjusted lift at zero while control drift exceeds
+    # the treated delta, the subtraction label would contradict the
+    # printed +0.00pp, so state the reason instead.
+    if incr_pp == 0.0 and (treat_dp - control_dp) < -0.005:
+        lift_label = (f"Adjusted incremental lift  "
+                      f"(control {control_dp:+.2f}pp exceeded "
+                      f"treated {treat_dp:+.2f}pp)")
+    else:
+        lift_label = (f"Adjusted incremental lift  "
+                      f"(treated {treat_dp:+.2f}pp minus control "
+                      f"{control_dp:+.2f}pp)")
     # Calculator raised to y=2.85 AND row height tightened to 0.60"
     # so the 3-row math block + total bar clears the source line
     # anchored at y=6.30 (fixes C8). row_h=0.65 uses the calculator's
@@ -1505,8 +1533,7 @@ def _slide_brand_lift_value(prs, ctx: DeckCtx, idx: int, total: int):
     _math_calculator(
         s, Inches(0.6), Inches(2.85), Inches(8.0),
         [
-            (f"Adjusted incremental lift  "
-             f"(treated {treat_dp:+.2f}pp minus control {control_dp:+.2f}pp)",
+            (lift_label,
              f"{incr_pp:+.2f}pp"),
             (f"x U.S. consumer audience ({fmt_num(ctx.audience_proj)})",
              fmt_num(ctx.incr_users)),
