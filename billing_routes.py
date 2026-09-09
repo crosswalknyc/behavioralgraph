@@ -1342,6 +1342,128 @@ def stripe_webhook():
 
 
 # ---------------------------------------------------------------------------
+# Usage export (Jenna 2026-09-09)
+# ---------------------------------------------------------------------------
+#
+# The user-admin modal's billing snapshot ships an Export CSV button
+# that streams from here. Unifies two ledgers into one CSV:
+#   1. credit_usage_history: the classic internal-allowance ledger
+#      (recorded even for unlimited users). Every priced pull writes
+#      one row here.
+#   2. wallet_transactions: dollar-side ledger (topup / deduct /
+#      refund) for paying customers.
+# Sorted newest-first so the export opens on the most recent activity.
+#
+# Access: any logged-in admin or super_admin. Regular admins have
+# read-only access to their users' usage per Jenna 2026-09-09
+# ("regular admins can see what they've run, export it, etc.").
+
+
+def _require_admin_or_super():
+    """Return (username, user_dict) or (jsonify_response, 403) tuple.
+    Allows role in {'admin', 'super_admin'}. Everyone else gets 403."""
+    uname, u, err = _require_login()
+    if err:
+        return None, None, err
+    role = str((u or {}).get("role") or "").strip().lower()
+    if role not in ("admin", "super_admin"):
+        return None, None, (jsonify({"error": "not_authorized"}), 403)
+    return uname, u, None
+
+
+@billing_bp.route(
+    "/api/admin/user/<target_username>/export_usage.csv",
+    methods=["GET"])
+def admin_export_user_usage_csv(target_username):
+    """Stream a unified usage CSV for ONE user. Columns:
+        at, source, kind, description, tool_key, pull_type,
+        credits, usd, job_id
+    Where source is 'credit_usage_history' or 'wallet_transactions'.
+    Empty cells are legit - not every row has every field."""
+    _, _, err = _require_admin_or_super()
+    if err:
+        return err
+    try:
+        from app import load_users  # type: ignore
+    except Exception:
+        return jsonify({"error": "app_unavailable"}), 500
+    from flask import Response  # local import so tests can stub Flask
+
+    users = ((load_users() or {}).get("users") or {})
+    u = users.get(target_username)
+    if not isinstance(u, dict):
+        return jsonify({"error": "not_found"}), 404
+
+    # Merge the two ledgers into a single time-sorted list.
+    import csv
+    import io
+
+    rows: list[dict] = []
+    for e in (u.get("credit_usage_history") or []):
+        if not isinstance(e, dict):
+            continue
+        rows.append({
+            "at": str(e.get("used_at") or ""),
+            "source": "credit_usage_history",
+            "kind": str(e.get("pull_type") or "usage"),
+            "description": str(e.get("description") or ""),
+            "tool_key": "",
+            "pull_type": str(e.get("pull_type") or ""),
+            "credits": e.get("credits_used") or "",
+            "usd": "",
+            "job_id": str(e.get("job_id") or ""),
+        })
+    for t in (u.get("wallet_transactions") or []):
+        if not isinstance(t, dict):
+            continue
+        amt = t.get("amount_usd")
+        try:
+            amt_f = float(amt) if amt is not None else 0.0
+        except (TypeError, ValueError):
+            amt_f = 0.0
+        rows.append({
+            "at": str(t.get("at") or ""),
+            "source": "wallet_transactions",
+            "kind": str(t.get("kind") or t.get("type") or "wallet"),
+            "description": str(t.get("description") or ""),
+            "tool_key": str(t.get("tool_key") or ""),
+            "pull_type": "",
+            "credits": "",
+            "usd": f"{amt_f:.2f}",
+            "job_id": str(t.get("job_id") or ""),
+        })
+
+    # Newest-first: stable sort so equal timestamps preserve source
+    # order.
+    rows.sort(key=lambda r: str(r.get("at") or ""), reverse=True)
+
+    buf = io.StringIO()
+    writer = csv.DictWriter(
+        buf,
+        fieldnames=["at", "source", "kind", "description", "tool_key",
+                    "pull_type", "credits", "usd", "job_id"],
+        extrasaction="ignore",
+    )
+    writer.writeheader()
+    for r in rows:
+        writer.writerow(r)
+
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    fname = f"usage_{target_username}_{ts}.csv"
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{fname}"',
+            # Cache-Control: private + no-store so an admin exporting
+            # a user's history doesn't leave the CSV in a shared
+            # cache (e.g. Cloudflare).
+            "Cache-Control": "private, no-store, max-age=0",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
 

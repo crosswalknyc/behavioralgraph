@@ -2596,9 +2596,7 @@ _PRODUCT_ACCESS_FIELDS = frozenset([
     'has_rankers_iq_access', 'rankers_iq_options',
     'has_talent_fit_access',
     'has_sf_conversion_access', 'sf_conversion_journeys',
-    'has_flywheel_conversion_access',
     'has_brand_partnership_iq_access', 'brand_partnership_iq_journeys',
-    'has_sentiment_iq_access',
     'has_journey_iq_access', 'allowed_journey_iq_runs',
     'has_intent_iq_access', 'allowed_intent_iq_runs',
     'has_share_of_time_access', 'has_share_of_time_run_access',
@@ -5034,10 +5032,8 @@ def create_user():
             'has_talent_fit_access': req_data.get('has_talent_fit_access', cd.get('has_talent_fit_access', False) if cd else False),
             'has_sf_conversion_access': req_data.get('has_sf_conversion_access', cd.get('has_sf_conversion_access', False) if cd else False),
             'sf_conversion_journeys': req_data.get('sf_conversion_journeys', cd.get('sf_conversion_journeys', None) if cd else None),
-            'has_flywheel_conversion_access': req_data.get('has_flywheel_conversion_access', cd.get('has_flywheel_conversion_access', False) if cd else False),
             'has_brand_partnership_iq_access': req_data.get('has_brand_partnership_iq_access', cd.get('has_brand_partnership_iq_access', False) if cd else False),
             'brand_partnership_iq_journeys': req_data.get('brand_partnership_iq_journeys', cd.get('brand_partnership_iq_journeys', None) if cd else None),
-            'has_sentiment_iq_access': req_data.get('has_sentiment_iq_access', cd.get('has_sentiment_iq_access', False) if cd else False),
             'has_journey_iq_access': req_data.get('has_journey_iq_access', cd.get('has_journey_iq_access', False) if cd else False),
             'allowed_journey_iq_runs': req_data.get('allowed_journey_iq_runs', cd.get('allowed_journey_iq_runs', ['*']) if cd else ['*']),
             'has_intent_iq_access': req_data.get('has_intent_iq_access', cd.get('has_intent_iq_access', True) if cd else True),
@@ -5246,8 +5242,6 @@ def update_user(username):
             if _err:
                 return jsonify({'success': False, 'error': _err}), 400
             user['sf_conversion_journeys'] = _cleaned
-        if 'has_flywheel_conversion_access' in req_data:
-            user['has_flywheel_conversion_access'] = bool(req_data['has_flywheel_conversion_access'])
         if 'has_brand_partnership_iq_access' in req_data:
             user['has_brand_partnership_iq_access'] = bool(req_data['has_brand_partnership_iq_access'])
         if 'brand_partnership_iq_journeys' in req_data:
@@ -5258,8 +5252,6 @@ def update_user(username):
             if _err:
                 return jsonify({'success': False, 'error': _err}), 400
             user['brand_partnership_iq_journeys'] = _cleaned
-        if 'has_sentiment_iq_access' in req_data:
-            user['has_sentiment_iq_access'] = bool(req_data['has_sentiment_iq_access'])
         if 'has_journey_iq_access' in req_data:
             user['has_journey_iq_access'] = bool(req_data['has_journey_iq_access'])
         if 'allowed_journey_iq_runs' in req_data:
@@ -6825,13 +6817,11 @@ def api_set_company_defaults(company_name):
             'has_rankers_iq_access': req.get('has_rankers_iq_access', False),
             'has_ticket_sales_tracker_access': req.get('has_ticket_sales_tracker_access', False),
             'has_talent_fit_access': req.get('has_talent_fit_access', False),
-            'has_flywheel_conversion_access': req.get('has_flywheel_conversion_access', False),
             'has_brand_partnership_iq_access': req.get('has_brand_partnership_iq_access', False),
             'brand_partnership_iq_journeys': _validate_journeys_payload(
                 req.get('brand_partnership_iq_journeys'),
                 field_name='brand_partnership_iq_journeys',
             )[0],
-            'has_sentiment_iq_access': req.get('has_sentiment_iq_access', False),
             'has_journey_iq_access': req.get('has_journey_iq_access', False),
             'has_share_of_time_access': req.get('has_share_of_time_access', True),
             'has_share_of_time_run_access': req.get('has_share_of_time_run_access', True),
@@ -6898,9 +6888,7 @@ def api_reset_company_users(company_name):
                 user['has_rankers_iq_access'] = cd.get('has_rankers_iq_access', False)
                 user['has_ticket_sales_tracker_access'] = cd.get('has_ticket_sales_tracker_access', False)
                 user['has_talent_fit_access'] = cd.get('has_talent_fit_access', False)
-                user['has_flywheel_conversion_access'] = cd.get('has_flywheel_conversion_access', False)
                 user['has_brand_partnership_iq_access'] = cd.get('has_brand_partnership_iq_access', False)
-                user['has_sentiment_iq_access'] = cd.get('has_sentiment_iq_access', False)
                 user['has_journey_iq_access'] = cd.get('has_journey_iq_access', False)
                 user['has_share_of_time_access'] = cd.get('has_share_of_time_access', True)
                 user['has_share_of_time_run_access'] = cd.get('has_share_of_time_run_access', True)
@@ -6925,9 +6913,7 @@ def api_reset_company_users(company_name):
                 user['has_rankers_iq_access'] = False
                 user['has_ticket_sales_tracker_access'] = False
                 user['has_talent_fit_access'] = False
-                user['has_flywheel_conversion_access'] = False
                 user['has_brand_partnership_iq_access'] = False
-                user['has_sentiment_iq_access'] = False
                 user['has_journey_iq_access'] = False
                 user['has_share_of_time_access'] = True
                 user['has_share_of_time_run_access'] = True
@@ -9224,10 +9210,8 @@ def compute_product_access_flags(user, role):
             'has_ticket_sales_iq_access': True,
             'has_ticket_sales_tracker_access': True,
             'has_talent_fit_access': True,
-            'has_flywheel_conversion_access': True,
             'has_brand_partnership_iq_access': True,
             'brand_partnership_iq_journeys': '*',
-            'has_sentiment_iq_access': True,
             'has_journey_iq_access': True,
             'has_workspace_access': True,
             'has_share_of_time_access': True,
@@ -9289,10 +9273,8 @@ def compute_product_access_flags(user, role):
         'has_ticket_sales_iq_access': u.get('has_ticket_sales_iq_access', True) is not False,
         'has_ticket_sales_tracker_access': bool(u.get('has_ticket_sales_tracker_access', False)),
         'has_talent_fit_access': bool(u.get('has_talent_fit_access', False)),
-        'has_flywheel_conversion_access': bool(u.get('has_flywheel_conversion_access', False)),
         'has_brand_partnership_iq_access': _bp_journeys is not None,
         'brand_partnership_iq_journeys': _bp_journeys,
-        'has_sentiment_iq_access': bool(u.get('has_sentiment_iq_access', False)),
         'has_journey_iq_access': bool(u.get('has_journey_iq_access', False)),
         # has_workspace_access retained ONLY as legacy plumbing for
         # /api/collab/* deck-collab routes (2026-09-03 Workspace product
@@ -9429,9 +9411,7 @@ def index():
     has_ticket_sales_iq = _acc['has_ticket_sales_iq_access']
     has_ticket_sales_tracker = _acc['has_ticket_sales_tracker_access']
     has_talent_fit = _acc.get('has_talent_fit_access', False)
-    has_flywheel_conversion = _acc.get('has_flywheel_conversion_access', False)
     has_brand_partnership_iq = _acc.get('has_brand_partnership_iq_access', False)
-    has_sentiment_iq = _acc.get('has_sentiment_iq_access', False)
     has_journey_iq = _acc.get('has_journey_iq_access', False)
     has_share_of_time = _acc.get('has_share_of_time_access', True)
     has_share_of_time_run = _acc.get('has_share_of_time_run_access', True)
@@ -9489,9 +9469,7 @@ def index():
                            has_ticket_sales_iq_access=has_ticket_sales_iq,
                            has_ticket_sales_tracker_access=has_ticket_sales_tracker,
                            has_talent_fit_access=has_talent_fit,
-                           has_flywheel_conversion_access=has_flywheel_conversion,
                            has_brand_partnership_iq_access=has_brand_partnership_iq,
-                           has_sentiment_iq_access=has_sentiment_iq,
                            has_journey_iq_access=has_journey_iq,
                            has_share_of_time_access=has_share_of_time,
                            has_share_of_time_run_access=has_share_of_time_run,
@@ -30622,7 +30600,6 @@ def user_can_run_analysis_module(user, module_key):
     # Conversion UI tab but got 403 on submit because this map was
     # missing the SF entry. The dropdown and submit gate now agree.
     _MODULE_TOP_LEVEL_FLAG = {
-        'flywheel_conversion':  'has_flywheel_conversion_access',
         'brand_partnership_iq': 'has_brand_partnership_iq_access',
         'journey_iq':           'has_journey_iq_access',
         'sf_lf_conversion':     'has_sf_conversion_access',
@@ -35508,7 +35485,6 @@ def _save_flywheel_results(job_id, results, job):
 def list_flywheel_results():
     """List all flywheel conversion results from S3."""
     ok, err = _require_module_access(
-        'has_flywheel_conversion_access',
         'analysis_iq_modules::flywheel_conversion',
         module_label='Flywheel Conversion')
     if not ok:
@@ -35545,7 +35521,6 @@ def list_flywheel_results():
 def get_flywheel_data(s3_key):
     """Get flywheel conversion data from S3."""
     ok, err = _require_module_access(
-        'has_flywheel_conversion_access',
         'analysis_iq_modules::flywheel_conversion',
         module_label='Flywheel Conversion')
     if not ok:

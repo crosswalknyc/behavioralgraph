@@ -3756,19 +3756,12 @@
                         </div>
                     </div>
 
-                    <!-- 🔄 Flywheel Conversion Access - restored 2026-07-30 per
-                         Jenna ("make sure all features have toggle on/offs for
-                         each user"). Flywheel Conversion is a live product in
-                         the SELECT PRODUCT dropdown (index.html:18287); admins
-                         need a per-user grant toggle for it. -->
-                    <div class="dashboard-access-item" data-access-group="conversion" title="Grants access to the Flywheel Conversion view + the Flywheel Conversion analysis module.">
-                        <div class="dashboard-access-header">
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="hasFlywheelConversionAccess">
-                                <span style="font-weight: 600;">🔄 FLYWHEEL CONVERSION</span>
-                            </label>
-                        </div>
-                    </div>
+                    <!-- Flywheel Conversion admin card removed 2026-09-09 (Jenna,
+                         "remove this"). Product itself + routes stay live;
+                         admin / super_admin retain access via the role bypass
+                         in app._require_module_access. Zero users held the
+                         retired per-user grant at removal time so no non-admin
+                         loses access. -->
 
                     <!-- Brand Partnership IQ Access (granular per-journey, 2026-09-03).
                          Mirrors the Digital Journey IQ pattern: master
@@ -3884,20 +3877,12 @@
                         </div>
                     </div>
 
-                    <!-- Sentiment IQ Access (2026-09-04 gap fix: backend
-                         already accepted has_sentiment_iq_access on
-                         create + update, but the admin modal had no
-                         checkbox to grant / revoke it per user. Added
-                         so admins can actually control who sees
-                         Sentiment IQ in the dashboard. -->
-                    <div class="dashboard-access-item" data-access-group="trends">
-                        <div class="dashboard-access-header">
-                            <label class="checkbox-group">
-                                <input type="checkbox" id="hasSentimentIQAccess">
-                                <span style="font-weight: 600;">🎭 SENTIMENT IQ</span>
-                            </label>
-                        </div>
-                    </div>
+                    <!-- Sentiment IQ admin card removed 2026-09-09 (Jenna,
+                         "remove this"). Sentiment IQ product + view stay live;
+                         admin / super_admin retain access via the role bypass
+                         in app._require_module_access. Zero users held the
+                         retired per-user grant at removal time so no non-admin
+                         loses access. -->
 
                     <!-- 2026-07-30: standalone Trends IQ + Microdramas IQ +
                          Talent Ranker cards consolidated into a single
@@ -9949,7 +9934,6 @@
             // 2026-09-03: SF Conversion granular per-journey grants (reset).
             populateSFConversionJourneysCheckboxes(null);
             syncSFConversionJourneyAccessVisibility();
-            document.getElementById('hasFlywheelConversionAccess').checked = false;
             var bpAccessReset = document.getElementById('hasBrandPartnershipIQAccess');
             if (bpAccessReset) bpAccessReset.checked = false;
             // 2026-09-03: Brand Partnership IQ granular per-journey grants (reset).
@@ -9968,8 +9952,6 @@
             if (biqAccessReset) biqAccessReset.checked = false;
             var btAccessReset = document.getElementById('hasBrandTrackingIQAccess');
             if (btAccessReset) btAccessReset.checked = false;
-            var sentAccessReset = document.getElementById('hasSentimentIQAccess');
-            if (sentAccessReset) sentAccessReset.checked = false;
             var iiqAccessReset = document.getElementById('hasImpactIQAccess');
             if (iiqAccessReset) iiqAccessReset.checked = false;
             setImpactIQJourneys(['*']);
@@ -10134,7 +10116,6 @@
             // 2026-09-03: SF Conversion granular per-journey grants.
             populateSFConversionJourneysCheckboxes(user.sf_conversion_journeys);
             syncSFConversionJourneyAccessVisibility();
-            document.getElementById('hasFlywheelConversionAccess').checked = user.has_flywheel_conversion_access === true; // Default false
             var bpAccess = document.getElementById('hasBrandPartnershipIQAccess');
             if (bpAccess) bpAccess.checked = user.has_brand_partnership_iq_access === true; // Default false
             // 2026-09-03: Brand Partnership IQ granular per-journey grants.
@@ -10156,8 +10137,6 @@
             if (biqAccess) biqAccess.checked = user.has_blue_iq_access === true; // Default false
             var btAccess = document.getElementById('hasBrandTrackingIQAccess');
             if (btAccess) btAccess.checked = user.has_brand_tracking_iq_access === true; // Default false
-            var sentAccess = document.getElementById('hasSentimentIQAccess');
-            if (sentAccess) sentAccess.checked = user.has_sentiment_iq_access === true; // Default false
             var tiqAccess = document.getElementById('hasTrendsIQAccess');
             if (tiqAccess) tiqAccess.checked = user.has_trends_iq_access === true; // Default false
             var mdAccess = document.getElementById('hasMicrodramasIQAccess');
@@ -11846,7 +11825,6 @@
                 hasProfileIQAccess: true,
                 hasSubscriberIQAccess: false,
                 hasSFConversionAccess: false,
-                hasFlywheelConversionAccess: false,
                 hasBrandPartnershipIQAccess: false,
                 hasJourneyIQAccess: false,
                 hasIntentIQAccess: true,
@@ -11855,7 +11833,6 @@
                 hasMicrodramasIQAccess: false,
                 hasBlueIQAccess: false,
                 hasBrandTrackingIQAccess: false,
-                hasSentimentIQAccess: false,
                 hasHedgeFundIQAccess: false,
                 hasRankersIQAccess: false,
                 hasShareOfTimeAccess: true,
@@ -13744,7 +13721,6 @@
                 has_ecommerce_iq_access: document.getElementById('hasEcommerceIQAccess').checked,
                 has_sf_conversion_access: document.getElementById('hasSFConversionAccess').checked,
                 sf_conversion_journeys: getSFConversionJourneysAllowedPayload(),
-                has_flywheel_conversion_access: document.getElementById('hasFlywheelConversionAccess').checked,
                 has_brand_partnership_iq_access: !!(document.getElementById('hasBrandPartnershipIQAccess') && document.getElementById('hasBrandPartnershipIQAccess').checked),
                 brand_partnership_iq_journeys: getBrandPartnershipJourneysAllowedPayload(),
                 has_journey_iq_access: !!(document.getElementById('hasJourneyIQAccess') && document.getElementById('hasJourneyIQAccess').checked),
@@ -13759,7 +13735,6 @@
                 hedge_fund_iq_tickers: document.getElementById('allHedgeFundTickers').checked ? ['*'] : getHedgeFundIQTickers(),
                 has_blue_iq_access: !!(document.getElementById('hasBlueIQAccess') && document.getElementById('hasBlueIQAccess').checked),
                 has_brand_tracking_iq_access: !!(document.getElementById('hasBrandTrackingIQAccess') && document.getElementById('hasBrandTrackingIQAccess').checked),
-                has_sentiment_iq_access: !!(document.getElementById('hasSentimentIQAccess') && document.getElementById('hasSentimentIQAccess').checked),
                 has_trends_iq_access: !!(document.getElementById('hasTrendsIQAccess') && document.getElementById('hasTrendsIQAccess').checked),
                 has_microdramas_iq_access: !!(document.getElementById('hasMicrodramasIQAccess') && document.getElementById('hasMicrodramasIQAccess').checked),
                 allowed_lenses: getAllowedLensesPayload(),
