@@ -218,10 +218,6 @@
       margin-top: 2px;
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
-    .pricing-table .credits-cell {
-      color: #6B7280;
-      font-weight: 500;
-    }
     .pricing-table .usd-input-wrap {
       display: inline-flex;
       align-items: center;
@@ -991,8 +987,7 @@
 
       let html = '<table class="pricing-table">';
       html += '<thead><tr>';
-      html += '<th style="width: 55%;">Tool</th>';
-      html += '<th class="num" style="width: 15%;">Credits</th>';
+      html += '<th style="width: 70%;">Tool</th>';
       html += '<th class="num" style="width: 30%;">USD price</th>';
       html += '</tr></thead>';
       html += '<tbody>';
@@ -1000,12 +995,13 @@
         const secMeta = sections[secKey] || {};
         const secLabel = secMeta.label ||
           secKey.charAt(0).toUpperCase() + secKey.slice(1);
-        html += '<tr class="section-row"><td colspan="3">' +
+        html += '<tr class="section-row"><td colspan="2">' +
           esc(secLabel) + '</td></tr>';
         bySection[secKey].forEach(key => {
           const t = tools[key] || {};
           const display = t.display_name || key;
-          html += '<tr data-tool="' + esc(key) + '">';
+          html += '<tr data-tool="' + esc(key) + '"' +
+            ' data-credits="' + (Number(t.credits) || 0) + '">';
           html += '<td><div class="tool-name">' + esc(display) +
             '</div>';
           if (t.access_flag) {
@@ -1013,8 +1009,6 @@
               esc(t.access_flag) + '</span>';
           }
           html += '</td>';
-          html += '<td class="num credits-cell">' +
-            (Number(t.credits) || 0).toLocaleString() + '</td>';
           html += '<td class="num"><span class="usd-input-wrap">' +
             '<span>$</span>' +
             '<input type="number" step="1" min="0" ' +
@@ -1069,10 +1063,10 @@
       const tools = {};
       rows.forEach(r => {
         const key = r.dataset.tool;
-        const creditsEl = r.querySelector('.credits-cell');
-        const credits = creditsEl
-          ? Number((creditsEl.textContent || '0').replace(/,/g, ''))
-          : 0;
+        // Credits are wired in MODULE_CATALOG (not admin-editable);
+        // we round-trip the value via data-credits so the backend
+        // still gets a coherent {credits, usd} pair per tool.
+        const credits = Number(r.dataset.credits || 0);
         const usd = Number(r.querySelector('.tool-usd').value || 0);
         tools[key] = { credits: credits, usd: usd };
       });

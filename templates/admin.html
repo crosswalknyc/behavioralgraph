@@ -1854,7 +1854,6 @@
                 <button class="admin-tab" onclick="showSettingsTab('quickSelects')">⚡ Quick Selects</button>
                 <button class="admin-tab" onclick="showSettingsTab('liveFeatures')">🚀 Live Features</button>
                 <button class="admin-tab" onclick="showSettingsTab('svodPricing')">📺 SVOD Pricing</button>
-                <button class="admin-tab" onclick="showSettingsTab('analysisPricing')">💰 Analysis Pricing</button>
                 <button class="admin-tab" onclick="showSettingsTab('creditUsageExport')">📊 Credit Usage by Period</button>
                 <button class="admin-tab" id="settingsTabDailySpend" onclick="showSettingsTab('dailySpend')" style="display: {{ 'inline-block' if current_user_role == 'super_admin' else 'none' }};">💵 Daily Spend</button>
                 <button class="admin-tab" id="settingsTabDefaultPhoto" onclick="showSettingsTab('defaultProfilePhoto')" style="display: {{ 'inline-block' if current_user_role == 'super_admin' else 'none' }};">👤 Default Profile Photo</button>
@@ -2409,26 +2408,12 @@
                 </div>
             </div>
 
-            <!-- Analysis Pricing Tab -->
-            <div id="settings-tab-analysisPricing" class="settings-tab-content" style="display: none;">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>💰 Analysis Pricing</h2>
-                        <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                            Set the credit cost for each analysis module. Changes take effect immediately for new runs.
-                        </p>
-                    </div>
-                    <div style="padding: 1rem;">
-                        <div id="analysisPricingList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
-                            <!-- Rows populated by JS -->
-                        </div>
-                        <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
-                            <button class="btn btn-primary" onclick="saveAnalysisPricing()">💾 Save Pricing</button>
-                        </div>
-                        <p id="analysisPricingMessage" style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-secondary);"></p>
-                    </div>
-                </div>
-            </div>
+            <!-- Analysis Pricing tab retired 2026-09-09: pricing is
+                 now managed in USD from /admin/billing. Credit costs
+                 for the two remaining talent-fit paths fall back to
+                 DEFAULT_PRICING (5 / 15) - the backing endpoints at
+                 /api/admin/settings/pricing are left in place so
+                 that flow keeps working. -->
 
             <!-- Credit Usage by Period Tab -->
             <div id="settings-tab-creditUsageExport" class="settings-tab-content" style="display: none;">
@@ -6512,11 +6497,7 @@
             if (tabName === 'svodPricing') {
                 loadSvodPricingUI();
             }
-            
-            if (tabName === 'analysisPricing') {
-                loadAnalysisPricingUI();
-            }
-            
+
             if (tabName === 'liveFeatures') {
                 loadLiveFeatures();
             }
@@ -6869,121 +6850,13 @@
             }
         }
         
-        // Analysis Pricing (Settings)
-        //
-        // Order + key set kept in lock-step with `DEFAULT_PRICING` in app.py
-        // and `_ANALYSIS_IQ_MODULES_FULL` (source of truth for what a user
-        // can actually invoke via Analysis IQ). 2026-08-14 (Jenna): added
-        // Digital Journey (`journey_iq`, 30 credits), Intent Ingest, and
-        // Cross-Show Watching so the admin panel matches every invokable
-        // Analysis IQ module. When adding a new Analysis IQ module in
-        // app.py, add it here too (both the pricing key in DEFAULT_PRICING
-        // and the display tile below).
-        const ANALYSIS_PRICING_LABELS = {
-            'profile_analysis': { label: 'Profile IQ', icon: '👤' },
-            'svod': { label: 'Subscriber IQ', icon: '📺' },
-            'ticket_sales': { label: 'Ticket Sales', icon: '🎟️' },
-            'ticket_sales_tracker': { label: 'Ticket Sales Tracker', icon: '📊' },
-            'campaign_roi': { label: 'Campaign ROI', icon: '📈' },
-            'watch_time': { label: 'Watch Time', icon: '⏱️' },
-            'talent_fit_per_talent': { label: 'Talent Fit (per talent)', icon: '🌟' },
-            'talent_fit_find': { label: 'Find Me Talent', icon: '🔍' },
-            'sf_lf_conversion': { label: 'Short-Form to Long-Form', icon: '🎬' },
-            'cross_show': { label: 'Cross-Show Watching', icon: '🔀' },
-            'flywheel_conversion': { label: 'Flywheel Conversion', icon: '🔄' },
-            'brand_partnership_iq': { label: 'Brand Partnership Valuation', icon: '🤝' },
-            'journey_iq': { label: 'Digital Journey', icon: '🗺️' },
-            'intent_ingest': { label: 'Intent Ingest', icon: '🎯' },
-            'ecommerce_iq': { label: 'Ecommerce IQ', icon: '🛒' }
-        };
-        
-        async function loadAnalysisPricingUI() {
-            const listEl = document.getElementById('analysisPricingList');
-            const msgEl = document.getElementById('analysisPricingMessage');
-            if (!listEl) return;
-            if (msgEl) msgEl.textContent = 'Loading...';
-            
-            try {
-                const res = await fetch('/api/admin/settings/pricing', { credentials: 'same-origin' });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error || 'Failed to load pricing');
-                
-                const pricing = data.pricing || {};
-                listEl.innerHTML = '';
-                
-                Object.keys(ANALYSIS_PRICING_LABELS).forEach(key => {
-                    const meta = ANALYSIS_PRICING_LABELS[key];
-                    const value = pricing[key] !== undefined ? pricing[key] : '';
-                    
-                    const card = document.createElement('div');
-                    card.className = 'analysis-pricing-card';
-                    card.style.cssText = 'background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem;';
-                    card.innerHTML = `
-                        <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
-                            <span style="font-size: 1.2rem;">${meta.icon}</span>
-                            <span>${meta.label}</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <input type="number" min="0" step="1" value="${value}" data-pricing-key="${key}" 
-                                   style="flex: 1; padding: 0.5rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 1rem;">
-                            <span style="color: var(--text-secondary); font-size: 0.85rem;">credits</span>
-                        </div>
-                    `;
-                    listEl.appendChild(card);
-                });
-                
-                if (msgEl) msgEl.textContent = '';
-            } catch (e) {
-                if (msgEl) {
-                    msgEl.textContent = 'Error loading pricing: ' + e.message;
-                    msgEl.style.color = 'var(--accent-red, #ef4444)';
-                }
-            }
-        }
-        
-        async function saveAnalysisPricing() {
-            const listEl = document.getElementById('analysisPricingList');
-            const msgEl = document.getElementById('analysisPricingMessage');
-            if (!listEl) return;
-            
-            const inputs = listEl.querySelectorAll('input[data-pricing-key]');
-            const pricing = {};
-            inputs.forEach(input => {
-                const key = input.getAttribute('data-pricing-key');
-                const value = input.value.trim();
-                if (key && value !== '') {
-                    pricing[key] = parseInt(value, 10);
-                }
-            });
-            
-            try {
-                const res = await fetch('/api/admin/settings/pricing', {
-                    method: 'PUT',
-                    credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(pricing)
-                });
-                const data = await res.json();
-                if (!data.success) throw new Error(data.error || 'Save failed');
-                
-                if (typeof showToast === 'function') showToast('Analysis pricing saved');
-                else alert('Analysis pricing saved');
-                
-                if (msgEl) {
-                    msgEl.textContent = 'Pricing saved successfully.';
-                    msgEl.style.color = 'var(--accent-green, #22c55e)';
-                }
-            } catch (e) {
-                if (typeof showToast === 'function') showToast(e.message || 'Error saving', true);
-                else alert('Error: ' + e.message);
-                
-                if (msgEl) {
-                    msgEl.textContent = 'Error saving: ' + e.message;
-                    msgEl.style.color = 'var(--accent-red, #ef4444)';
-                }
-            }
-        }
-        
+        // Analysis Pricing UI retired 2026-09-09: USD pricing lives on
+        // /admin/billing. The backing /api/admin/settings/pricing GET /
+        // PUT endpoints remain wired for the two talent-fit paths that
+        // still read DEFAULT_PRICING (talent_fit_per_talent /
+        // talent_fit_find); those values fall back to their code
+        // defaults if never edited. See docs/BILLING_SETUP.md.
+
         async function exportCreditUsageByPeriod() {
             const dateFrom = document.getElementById('creditExportDateFrom') && document.getElementById('creditExportDateFrom').value;
             const dateTo = document.getElementById('creditExportDateTo') && document.getElementById('creditExportDateTo').value;
