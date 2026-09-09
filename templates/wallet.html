@@ -388,14 +388,18 @@
   </header>
 
   <main>
-    <h1>Wallet</h1>
-    <p class="subtitle">Your Crosswalk balance is used for every profile
-    pull and Prometheus analysis session.</p>
+    <h1 id="wallet-page-title">Wallet</h1>
+    <p class="subtitle" id="wallet-page-subtitle">Your Crosswalk balance
+    is used for every profile pull and Prometheus analysis session.</p>
+
+    <!-- Company-shared wallet banner (Jenna 2026-09-09) -->
+    <div id="company-banner" class="banner warning"
+         style="display: none;"></div>
 
     <div id="banner"></div>
 
     <div class="card balance-card">
-      <h2>Available balance</h2>
+      <h2 id="balance-label">Available balance</h2>
       <div id="balance" class="amount">$0.00</div>
       <div class="balance-meta">
         <div>Lifetime top-ups: <span id="lifetime-topups">$0.00</span></div>
@@ -601,6 +605,41 @@
         $('user-avatar').textContent = (initials || '?').toUpperCase();
       }
 
+      // Company-shared wallet framing (Jenna 2026-09-09). When the
+      // caller routes to a company, retitle the page + balance card,
+      // show a top banner that names the company, and mention
+      // whether the caller can manage the wallet or is view-only.
+      const companyBanner = $('company-banner');
+      if (s.billed_via_company) {
+        const cname = s.company_name || 'your team';
+        $('wallet-page-title').textContent = cname + ' wallet';
+        $('wallet-page-subtitle').textContent =
+          'Shared team balance. Every pull anyone at ' + cname +
+          ' runs debits this pool.';
+        $('balance-label').textContent = cname + ' shared balance';
+        if (s.viewer_is_billing_admin) {
+          companyBanner.style.display = 'block';
+          companyBanner.className = 'banner success';
+          companyBanner.textContent =
+            'You are a billing admin for ' + cname + '. Cards, ' +
+            'top-ups, and auto-reload settings on this page apply ' +
+            'to the whole team.';
+        } else {
+          companyBanner.style.display = 'block';
+          companyBanner.className = 'banner warning';
+          companyBanner.textContent =
+            'Balance shown is your team\u2019s shared wallet. Only ' +
+            cname + ' billing admins can top up or change the card.';
+        }
+      } else {
+        companyBanner.style.display = 'none';
+        $('wallet-page-title').textContent = 'Wallet';
+        $('wallet-page-subtitle').textContent =
+          'Your Crosswalk balance is used for every profile pull ' +
+          'and Prometheus analysis session.';
+        $('balance-label').textContent = 'Available balance';
+      }
+
       // Balance - unlimited users see "Unlimited" instead of $0.
       if (s.unlimited) {
         $('balance').textContent = 'Unlimited';
@@ -680,8 +719,13 @@
         $('disabled-notice').style.display = 'none';
         $('stats-card').style.display = 'block';
         renderStats(s.stats || {});
-        // Payment method (only for paying customers)
-        if (s.paying_customer) {
+        // Company members who are NOT billing admins see the balance
+        // + stats + transactions only. Card, auto-reload, and top-up
+        // are hidden - only company billing admins can manage those
+        // for the shared wallet.
+        const canManage = s.viewer_is_billing_admin !== false;
+        // Payment method (only for paying customers who can manage)
+        if (s.paying_customer && canManage) {
           $('payment-method-card').style.display = 'block';
           renderCardStatus(s);
           $('autoreload-card').style.display = 'block';
@@ -690,11 +734,15 @@
           $('payment-method-card').style.display = 'none';
           $('autoreload-card').style.display = 'none';
         }
-        $('topup-card').style.display = 'block';
-        renderPacks(s.top_up_packs_usd || []);
-        $('min-custom').textContent =
-          fmtUsd(s.top_up_min_custom_usd || 100);
-        $('custom-amount').min = s.top_up_min_custom_usd || 100;
+        if (canManage) {
+          $('topup-card').style.display = 'block';
+          renderPacks(s.top_up_packs_usd || []);
+          $('min-custom').textContent =
+            fmtUsd(s.top_up_min_custom_usd || 100);
+          $('custom-amount').min = s.top_up_min_custom_usd || 100;
+        } else {
+          $('topup-card').style.display = 'none';
+        }
       }
 
       // Transactions

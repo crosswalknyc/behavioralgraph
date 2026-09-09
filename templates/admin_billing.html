@@ -299,6 +299,7 @@
 
     <div class="tabs">
       <button class="tab active" data-tab="users">Users</button>
+      <button class="tab" data-tab="companies">Companies</button>
       <button class="tab" data-tab="pricing">Pricing</button>
     </div>
 
@@ -311,6 +312,27 @@
             email or username">
         </div>
         <div id="users-container"></div>
+      </div>
+    </div>
+
+    <div id="tab-companies" class="tab-panel" style="display: none;">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between;
+                    align-items: center; margin-bottom: 16px;">
+          <div>
+            <h2 style="margin: 0;">Company-shared wallets</h2>
+            <p style="color: #6B7280; font-size: 13px;
+                      margin: 6px 0 0 0; max-width: 640px;">
+              One master account per company holds the card and
+              balance. Every teammate whose "Bill through" is set to
+              the company draws from this pool. Monthly access
+              charges bill this card once per month.
+            </p>
+          </div>
+          <input id="company-search-box" type="text"
+                 placeholder="Search companies">
+        </div>
+        <div id="companies-container"></div>
       </div>
     </div>
 
@@ -572,6 +594,11 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
+    // HTML-escape for inline strings used in innerHTML fragments.
+    const esc = (s) => String(s == null ? '' : s).replace(
+      /[&<>"']/g, c => (
+        {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',
+         "'":'&#39;'}[c]));
     const fmtUsd = (n) => {
       const v = Number(n) || 0;
       const sign = v < 0 ? '-' : '';
@@ -592,8 +619,27 @@
 
     let stripe = null, stripeElements = null, cardElement = null;
     let currentUsername = null;
+    // Subject-aware billing (Jenna 2026-09-09 company-shared wallet).
+    // 'user' when the modal is showing a person, 'company' when the
+    // modal is showing a company record. subjectUrl() builds the
+    // right API path so every action handler works for both kinds.
+    let currentSubjectKind = 'user';
+    let currentSubjectKey = null;
     let stripePublishableKey = null;
     let allUsers = [];
+    let allCompanies = [];
+
+    function subjectUrl(path) {
+      // path is like 'config' or 'attach-card' - relative to
+      // /api/admin/<kind>/<key>/billing/. `remove-card` on user
+      // routes to `/billing/remove-card`; on company we use the
+      // same suffix ('detach-card' is the actual company route,
+      // but the user path has a `remove-card` alias) - handled
+      // at call sites where it matters.
+      const kind = currentSubjectKind;  // 'user' | 'company'
+      const key = encodeURIComponent(currentSubjectKey || '');
+      return `/api/admin/${kind}/${key}/billing/${path}`;
+    }
 
     // Tab switching
     document.querySelectorAll('.tab').forEach(t => {
@@ -604,12 +650,17 @@
         document.querySelectorAll('.tab-panel').forEach(p =>
           p.style.display = 'none');
         $('tab-' + t.dataset.tab).style.display = 'block';
+        if (t.dataset.tab === 'companies') loadCompanies();
+        if (t.dataset.tab === 'pricing') loadPricing();
       });
     });
 
     // Search
     $('search-box').addEventListener('input', () => {
       renderUsers();
+    });
+    $('company-search-box').addEventListener('input', () => {
+      renderCompanies();
     });
 
     async function loadUsers() {
@@ -702,19 +753,113 @@
         html += '<div class="amount">' +
           fmtUsd(u.wallet_lifetime_spend_usd) + '</div>';
         html += '<div><button onclick="openModal(\'' +
-          u.username + '\')">Manage</button></div>';
+          esc(u.username) + '\', \'user\')">Manage</button></div>';
         html += '</div>';
       });
       $('users-container').innerHTML = html;
     }
 
-    async function openModal(username) {
-      currentUsername = username;
+    async function loadCompanies() {
+      const r = await fetch('/api/admin/companies_billing', {
+        credentials: 'same-origin'
+      });
+      if (!r.ok) {
+        $('companies-container').innerHTML =
+          '<div class="banner error">Could not load companies.</div>';
+        return;
+      }
+      const j = await r.json();
+      allCompanies = j.companies || [];
+      renderCompanies();
+    }
+
+    function renderCompanies() {
+      const q = ($('company-search-box').value || '')
+        .toLowerCase().trim();
+      const rows = q
+        ? allCompanies.filter(c =>
+            (c.company || '').toLowerCase().includes(q))
+        : allCompanies;
+      if (!rows.length) {
+        $('companies-container').innerHTML =
+          '<div style="color:#6B7280; padding:16px; font-size:13px;">' +
+          'No companies yet. Companies appear here once a user is ' +
+          'assigned to one AND their "Bill through" is set to the ' +
+          'company in Admin - Users.</div>';
+        return;
+      }
+      let html = '<div class="user-row header">';
+      html += '<div>Company</div><div>Members</div><div>Paying</div>';
+      html += '<div>Mode</div><div>Card</div>';
+      html += '<div class="amount">Balance</div>';
+      html += '<div class="amount">Spend</div>';
+      html += '<div></div></div>';
+      const modeMap = {
+        prepay_only: 'Prepay',
+        auto_reload: 'Auto',
+        monthly_invoice: 'Invoice',
+      };
+      rows.forEach(c => {
+        const balCls = c.wallet_balance_usd < 0 ? ' negative' : '';
+        html += '<div class="user-row">';
+        html += '<div><strong>' + esc(c.company) + '</strong></div>';
+        html += '<div style="color:#6B7280;">' +
+          (c.member_count || 0) + '</div>';
+        if (c.unlimited) {
+          html += '<div><span class="tag unlimited">Unlimited</span>' +
+            '</div>';
+          html += '<div style="color:#6B7280;">Not charged</div>';
+          html += '<div style="color:#B8B8B0;">-</div>';
+          html += '<div class="amount" style="color:#6B7280;">-</div>';
+        } else {
+          html += '<div>' + (c.paying_customer
+            ? '<span class="tag paying">Paying</span>'
+            : '<span class="tag non-paying">-</span>') + '</div>';
+          html += '<div>' + (c.paying_customer
+            ? '<span class="tag ' + c.billing_mode + '">' +
+              (modeMap[c.billing_mode] || c.billing_mode) + '</span>'
+            : '') + '</div>';
+          html += '<div>' + (c.has_card_on_file
+            ? esc(c.card_brand || 'card') + ' ****' +
+              esc(c.card_last4 || '')
+            : '<span style="color:#B8B8B0;">-</span>') + '</div>';
+          html += '<div class="amount' + balCls + '">' +
+            fmtUsd(c.wallet_balance_usd) + '</div>';
+        }
+        html += '<div class="amount">' +
+          fmtUsd(c.wallet_lifetime_spend_usd) + '</div>';
+        html += '<div><button onclick="openModal(\'' +
+          esc(c.company) + '\', \'company\')">Manage</button></div>';
+        html += '</div>';
+      });
+      $('companies-container').innerHTML = html;
+    }
+
+    async function openModal(key, kind) {
+      currentSubjectKind = kind || 'user';
+      currentSubjectKey = key;
+      currentUsername = (currentSubjectKind === 'user') ? key : null;
       $('modal-banner').innerHTML = '';
-      const u = allUsers.find(x => x.username === username);
+      let u;
+      if (currentSubjectKind === 'company') {
+        u = allCompanies.find(x => x.company === key);
+      } else {
+        u = allUsers.find(x => x.username === key);
+      }
       if (!u) return;
-      $('modal-title').textContent = 'Billing: ' + username;
-      const subtitleParts = [u.email || ''];
+      const label = (currentSubjectKind === 'company')
+        ? 'Company billing: ' + key
+        : 'Billing: ' + key;
+      $('modal-title').textContent = label;
+      const subtitleParts = [];
+      if (currentSubjectKind === 'company') {
+        const mc = u.member_count || 0;
+        subtitleParts.push(
+          'Shared wallet - ' + mc + ' teammate' +
+          (mc === 1 ? '' : 's') + ' route through this pool.');
+      } else {
+        subtitleParts.push(u.email || '');
+      }
       if (u.unlimited) {
         subtitleParts.push(
           '<span class="tag unlimited" style="margin-left:8px;">' +
@@ -741,7 +886,26 @@
     function closeModal() {
       $('user-modal').classList.remove('open');
       currentUsername = null;
+      currentSubjectKey = null;
+      currentSubjectKind = 'user';
       hideCardForm();
+    }
+
+    async function reloadAfterMutation() {
+      // Refresh the list underlying the currently-open modal so
+      // wallet balances / card info stay in sync after an action.
+      if (currentSubjectKind === 'company') {
+        await loadCompanies();
+      } else {
+        await loadUsers();
+      }
+    }
+
+    function findCurrentSubject() {
+      if (currentSubjectKind === 'company') {
+        return allCompanies.find(x => x.company === currentSubjectKey);
+      }
+      return allUsers.find(x => x.username === currentSubjectKey);
     }
 
     function updateModeFields() {
@@ -856,7 +1020,7 @@
           Number($('m-mi-limit').value || 5000),
       };
       const r = await fetch(
-        '/api/admin/user/' + currentUsername + '/billing/config',
+        subjectUrl('config'),
         { method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
@@ -867,7 +1031,7 @@
         return;
       }
       showModalBanner('success', 'Configuration saved.');
-      await loadUsers();
+      await reloadAfterMutation();
     });
 
     $('m-add-card').addEventListener('click', showCardForm);
@@ -879,10 +1043,9 @@
       }
       $('m-card-form').style.display = 'block';
       $('m-card-actions').style.display = 'none';
-      // Request a SetupIntent for this user.
+      // Request a SetupIntent for this subject (user or company).
       const r = await fetch(
-        '/api/admin/user/' + currentUsername +
-        '/billing/setup-intent',
+        subjectUrl('setup-intent'),
         { method: 'POST', credentials: 'same-origin' });
       const j = await r.json();
       if (!r.ok) {
@@ -914,7 +1077,7 @@
       }
       // Send payment_method to backend to attach + persist.
       const r = await fetch(
-        '/api/admin/user/' + currentUsername + '/billing/attach-card',
+        subjectUrl('attach-card'),
         { method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
@@ -930,17 +1093,19 @@
       showModalBanner('success', 'Card saved.');
       hideCardForm();
       cardElement.clear();
-      await loadUsers();
-      // Reopen modal to refresh card display.
-      const u = allUsers.find(x => x.username === currentUsername);
+      await reloadAfterMutation();
+      const u = findCurrentSubject();
       if (u) renderCardStatus(u);
     });
 
     $('m-remove-card').addEventListener('click', async () => {
       if (!confirm('Remove card on file?')) return;
+      // User route is /billing/remove-card (alias for detach-card).
+      // Company route is /billing/detach-card. Route both.
+      const path = currentSubjectKind === 'company'
+        ? 'detach-card' : 'remove-card';
       const r = await fetch(
-        '/api/admin/user/' + currentUsername +
-        '/billing/remove-card',
+        subjectUrl(path),
         { method: 'POST', credentials: 'same-origin' });
       const j = await r.json();
       if (!r.ok) {
@@ -948,8 +1113,8 @@
         return;
       }
       showModalBanner('success', 'Card removed.');
-      await loadUsers();
-      const u = allUsers.find(x => x.username === currentUsername);
+      await reloadAfterMutation();
+      const u = findCurrentSubject();
       if (u) renderCardStatus(u);
     });
 
@@ -958,7 +1123,7 @@
       const desc = $('m-adj-desc').value || 'Manual adjustment';
       if (!amt || amt <= 0) return;
       const r = await fetch(
-        '/api/admin/user/' + currentUsername + '/billing/adjust',
+        subjectUrl('adjust'),
         { method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
@@ -976,8 +1141,8 @@
         ' applied.');
       $('m-adj-amount').value = '';
       $('m-adj-desc').value = '';
-      await loadUsers();
-      const u = allUsers.find(x => x.username === currentUsername);
+      await reloadAfterMutation();
+      const u = findCurrentSubject();
       if (u) {
         $('m-balance').textContent = fmtUsd(u.wallet_balance_usd);
         renderTxns(u.wallet_transactions || []);
@@ -994,8 +1159,7 @@
       if (!confirm('Charge ' + fmtUsd(amt) + ' to card on file?'))
         return;
       const r = await fetch(
-        '/api/admin/user/' + currentUsername +
-        '/billing/charge-card',
+        subjectUrl('charge-card'),
         { method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
@@ -1012,8 +1176,8 @@
         'Charge of ' + fmtUsd(amt) + ' succeeded.');
       $('m-charge-amount').value = '';
       $('m-charge-desc').value = '';
-      await loadUsers();
-      const u = allUsers.find(x => x.username === currentUsername);
+      await reloadAfterMutation();
+      const u = findCurrentSubject();
       if (u) {
         $('m-balance').textContent = fmtUsd(u.wallet_balance_usd);
         renderTxns(u.wallet_transactions || []);

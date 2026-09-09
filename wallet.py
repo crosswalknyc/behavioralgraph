@@ -1296,12 +1296,23 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def apply_wallet_deduct(user: dict, amount_usd: float, *,
+def apply_wallet_deduct(subject: dict, amount_usd: float, *,
                         description: str = "",
                         tool_key: str = "",
                         job_id: str = "",
-                        stripe_ref: str = "") -> dict:
+                        stripe_ref: str = "",
+                        billed_via_username: str = "") -> dict:
     """Debit the wallet in place. Returns the transaction row.
+
+    `subject` is the wallet-holding record - typically a user, but
+    a company when the calling user's billing_source == 'company'
+    (see resolve_billing_subject). All wallet fields are the same
+    shape on either record; this function doesn't care which.
+
+    `billed_via_username` (optional): who triggered the pull, when
+    the subject is a company. Stamped on the transaction so the
+    company admin can see per-user attribution. Ignored (empty
+    string) when subject is a user.
 
     Called from consume_credit's _consume mutator AFTER internal
     credits (if any) have been decided. Amount is positive dollars;
@@ -1309,17 +1320,18 @@ def apply_wallet_deduct(user: dict, amount_usd: float, *,
     monthly_invoice mode (caller enforces the limit).
 
     Callers with atomicity requirements MUST invoke this inside the
-    same _users_cas_mutate closure that reads the user record, so a
-    concurrent top-up gets folded in on retry.
+    same _users_cas_mutate closure that reads the subject record,
+    so a concurrent top-up gets folded in on retry.
     """
     amt = round(float(amount_usd), 2)
     if amt <= 0:
         return {}
-    old = wallet_balance(user)
+    old = wallet_balance(subject)
     new = round(old - amt, 2)
-    user["wallet_balance_usd"] = new
-    user["wallet_lifetime_spend_usd"] = round(
-        float(user.get("wallet_lifetime_spend_usd", 0.0) or 0.0) + amt, 2)
+    subject["wallet_balance_usd"] = new
+    subject["wallet_lifetime_spend_usd"] = round(
+        float(subject.get("wallet_lifetime_spend_usd", 0.0) or 0.0)
+        + amt, 2)
     txn = {
         "ts": _now_iso(),
         "kind": "deduct",
@@ -1330,7 +1342,9 @@ def apply_wallet_deduct(user: dict, amount_usd: float, *,
         "tool": tool_key,
         "stripe_ref": stripe_ref,
     }
-    _append_txn(user, txn)
+    if billed_via_username:
+        txn["billed_via_username"] = billed_via_username
+    _append_txn(subject, txn)
     return txn
 
 
@@ -1475,20 +1489,21 @@ def needs_auto_reload(user: dict) -> tuple:
     return True, auto_reload_amount(user)
 
 
-def try_auto_reload(username: str, user_snapshot: dict) -> dict:
+def try_auto_reload(subject_key: str, subject_snapshot: dict, *,
+                    subject_kind: str = "user") -> dict:
     """Post-CAS-write hook: fire the Stripe auto-reload charge when
     needed and credit the wallet.
 
+    `subject_kind` is 'user' (default, individual wallet) or
+    'company' (shared wallet - top-up lands on the company record).
+    `subject_key` is the username OR the company name accordingly.
+
     Called AFTER the deducting CAS mutation commits. Must not run
     inside a CAS mutator because it makes a Stripe network call.
-    Returns a status dict:
 
-      {"fired": bool, "amount_usd": float, "payment_intent_id": str,
-       "error": str}
-
-    Idempotency: keyed by (username, minute_bucket, amount_cents). A
-    double-invocation within the same minute at the same amount folds
-    into a single Stripe charge.
+    Idempotency: keyed by (subject_kind, subject_key, minute_bucket,
+    amount_cents). Two rapid deductions at the same company within
+    the same minute fold into a single Stripe charge.
 
     Never raises. All error paths return {"fired": False,
     "error": "..."}.
@@ -1496,7 +1511,7 @@ def try_auto_reload(username: str, user_snapshot: dict) -> dict:
     result = {"fired": False, "amount_usd": 0.0,
               "payment_intent_id": "", "error": ""}
     try:
-        should, amount = needs_auto_reload(user_snapshot)
+        should, amount = needs_auto_reload(subject_snapshot)
         if not should or amount <= 0:
             return result
         try:
@@ -1507,26 +1522,29 @@ def try_auto_reload(username: str, user_snapshot: dict) -> dict:
         if not _billing.is_enabled():
             result["error"] = "stripe_not_enabled"
             return result
-        cus_id = str(user_snapshot.get("stripe_customer_id") or "")
-        pm_id = str(user_snapshot.get("stripe_payment_method_id") or "")
+        cus_id = str(subject_snapshot.get("stripe_customer_id") or "")
+        pm_id = str(subject_snapshot.get("stripe_payment_method_id") or "")
         if not (cus_id and pm_id):
             result["error"] = "missing_card_on_file"
             return result
-        # Minute-bucket idempotency: two rapid deductions that both
-        # drop the balance below threshold should not double-charge.
+        # Minute-bucket idempotency, keyed by subject so two users at
+        # the same company can't accidentally double-charge in the
+        # same minute.
         from datetime import datetime, timezone
         bucket = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
-        idem = (f"auto-reload-{username}-{int(amount * 100)}-"
-                f"{bucket}")
+        idem = (f"auto-reload-{subject_kind}-{subject_key}-"
+                f"{int(amount * 100)}-{bucket}")
         try:
             charge = _billing.charge_saved_card(
                 customer_id=cus_id,
                 payment_method_id=pm_id,
                 amount_usd=amount,
                 description="Auto-reload (wallet threshold)",
-                username=username,
+                username=subject_key,
                 metadata={
                     "purpose": "auto_reload",
+                    "subject_kind": subject_kind,
+                    "subject_key": subject_key,
                     "idempotency_key": idem,
                 },
             )
@@ -1547,18 +1565,21 @@ def try_auto_reload(username: str, user_snapshot: dict) -> dict:
         pi_id = str(charge.get("id") or "")
 
         def _apply(data):
-            u = (data.get("users") or {}).get(username)
-            if not u:
+            if subject_kind == "company":
+                subj = (data.get("companies") or {}).get(subject_key)
+            else:
+                subj = (data.get("users") or {}).get(subject_key)
+            if not subj:
                 return None
             # Idempotency: if we already logged this pi as a topup,
             # skip (webhook may have arrived first).
-            for t in list(u.get("wallet_transactions") or [])[:20]:
+            for t in list(subj.get("wallet_transactions") or [])[:20]:
                 if (str(t.get("stripe_ref") or "") == pi_id
                         and str(t.get("kind") or "")
                         in ("topup", "auto_reload")):
                     return None
             apply_wallet_topup(
-                u, amount,
+                subj, amount,
                 description="Auto-reload",
                 stripe_ref=pi_id,
                 kind="auto_reload")
@@ -1580,13 +1601,259 @@ def try_auto_reload(username: str, user_snapshot: dict) -> dict:
 # Public exports
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Company-shared wallet routing (Jenna 2026-09-09)
+# ---------------------------------------------------------------------------
+#
+# Jenna: "how is this working if I need to assign one master account for a
+# company that bills but splits amongst the users for that company?"
+#
+# Model: a user record MAY carry `billing_source='company'`. When set and
+# the user's `company` field names a company that exists in
+# users_data['companies'], every wallet operation for that user routes to
+# the COMPANY record instead of the user record. The company holds the
+# card on file, the balance, the auto-reload settings, and the monthly
+# access billing marker. Multiple users at the same company share one
+# pool - top up once, everyone at the company draws from it.
+#
+# Backward compat: users with no `billing_source` field (i.e. every user
+# who existed before this feature shipped) resolve to themselves. No
+# migration needed. Individual wallets keep working.
+#
+# Access flags: the USER still owns has_*_access flags (they gate whether
+# the user can even trigger a pull). The COMPANY only holds the wallet
+# state. For monthly access billing on a company, we UNION the access
+# flags of every member routing through that company.
+#
+# Safety: no wallet function ever routes silently to nowhere. If the
+# `company` field points to a name that no longer exists in
+# users_data['companies'], the resolver falls back to the user record.
+# The pull will then just fail the "not a paying customer" check if the
+# individual isn't billed, which is the correct fallback.
+
+
+def resolve_billing_subject(user: dict, users_data: dict) -> tuple:
+    """Resolve which record holds the wallet + card for a given user.
+
+    Returns (subject_dict, subject_kind, subject_key):
+      subject_dict: the live dict to read/mutate (user OR company)
+      subject_kind: 'user' or 'company'
+      subject_key:  the key in users_data['users'] or
+                    users_data['companies']
+
+    A user whose billing_source == 'company' AND whose 'company' field
+    names a company that exists in users_data['companies'] resolves to
+    that company. Every other case resolves to the user itself.
+
+    Never raises. On any lookup failure, returns the user record so
+    the pull still charges someone (the individual) instead of
+    silently free.
+    """
+    try:
+        if not isinstance(user, dict) or not isinstance(users_data, dict):
+            return user, "user", ""
+        source = str(user.get("billing_source") or "user").strip().lower()
+        if source != "company":
+            return user, "user", _user_key(user)
+        company_name = str(user.get("company") or "").strip()
+        if not company_name:
+            return user, "user", _user_key(user)
+        companies = users_data.get("companies") or {}
+        company = companies.get(company_name)
+        if not isinstance(company, dict):
+            return user, "user", _user_key(user)
+        return company, "company", company_name
+    except Exception:
+        return user, "user", _user_key(user) if isinstance(user, dict) else ""
+
+
+def _user_key(user: dict) -> str:
+    """Best-effort primary key for a user record (email > username)."""
+    if not isinstance(user, dict):
+        return ""
+    return str(user.get("email") or user.get("username") or "")
+
+
+def company_billing_admins(company_name: str, users_data: dict) -> list:
+    """Return the usernames of users flagged company_billing_admin=True
+    for this company. Empty list if none set.
+
+    A company's billing admins are the only users allowed (in the UI)
+    to manage the company's card on file, top up the balance, and
+    change auto-reload settings. Any user at the company can still
+    RUN pulls that debit the company wallet; only admins can move
+    money in or change payment method."""
+    admins = []
+    for username, u in (users_data.get("users") or {}).items():
+        if not isinstance(u, dict):
+            continue
+        if str(u.get("company") or "").strip() != company_name:
+            continue
+        if bool(u.get("company_billing_admin")):
+            admins.append(username)
+    return admins
+
+
+def company_members(company_name: str, users_data: dict) -> list:
+    """Every user routing through this company (billing_source=company
+    AND company == company_name). Returns list of (username, user_dict)
+    tuples. Includes members even if they aren't billing admins."""
+    out = []
+    for username, u in (users_data.get("users") or {}).items():
+        if not isinstance(u, dict):
+            continue
+        if str(u.get("company") or "").strip() != company_name:
+            continue
+        if str(u.get("billing_source") or "").strip().lower() != "company":
+            continue
+        out.append((username, u))
+    return out
+
+
+def compute_company_monthly_charge(company_name: str,
+                                   users_data: dict) -> dict:
+    """Total monthly access fee for a company, based on the UNION of
+    its members' has_*_access flags.
+
+    Jenna 2026-09-09: 'Union of every member's access flags (if ANY
+    member has Profile IQ access, the company pays the Profile IQ
+    monthly)'.
+
+    Returns the same shape as compute_user_monthly_charge:
+      {
+        'company': str,
+        'total_usd': float,
+        'lines': [{tool_key, display_name, monthly_usd}, ...],
+        'unlimited': bool,       # True if the COMPANY has 'unlimited'
+        'bundle_active': bool,   # monthly_service > 0
+        'monthly_service_override_usd': float,
+        'member_count': int,
+      }
+
+    Never raises. Zero members OR zero pricing -> total 0.
+    """
+    company = (users_data.get("companies") or {}).get(company_name) or {}
+    members = company_members(company_name, users_data)
+    result = {
+        "company": company_name,
+        "total_usd": 0.0,
+        "lines": [],
+        "unlimited": bool(company.get("unlimited")),
+        "bundle_active": False,
+        "monthly_service_override_usd": 0.0,
+        "member_count": len(members),
+    }
+    if result["unlimited"] or not members:
+        return result
+    # Union of every member's has_*_access flags. A flag is "on" for
+    # the company if ANY member has it True.
+    union_flags = set()
+    for _uname, u in members:
+        for k, v in u.items():
+            if not isinstance(k, str):
+                continue
+            if not k.startswith("has_") or not k.endswith("_access"):
+                continue
+            if v:
+                union_flags.add(k)
+    # Bundle override: monthly_service_usd wins if > 0.
+    ms_key = "monthly_service"
+    ms_usd = tool_monthly_usd(ms_key)
+    if ms_usd > 0:
+        result["monthly_service_override_usd"] = ms_usd
+        result["bundle_active"] = True
+        result["total_usd"] = round(ms_usd, 2)
+        # Look up the bundle's display_name so the receipt reads right.
+        display = "Monthly service"
+        for tk, disp, *_ in MODULE_CATALOG:
+            if tk == ms_key:
+                display = disp
+                break
+        result["lines"] = [{
+            "tool_key": ms_key,
+            "display_name": display,
+            "monthly_usd": ms_usd,
+        }]
+        return result
+    # Per-feature sum across the tools whose access flag is in the union.
+    total = 0.0
+    lines = []
+    for tk, disp, _sec, _cr, _def_usd, flag in MODULE_CATALOG:
+        if not flag or flag not in union_flags:
+            continue
+        m = tool_monthly_usd(tk)
+        if m <= 0:
+            continue
+        total += m
+        lines.append({
+            "tool_key": tk,
+            "display_name": disp,
+            "monthly_usd": round(m, 2),
+        })
+    # Custom tools too (they may carry access_flag + monthly_usd).
+    p = load_pricing()
+    for c in (p.get("custom_tools") or []):
+        if not isinstance(c, dict):
+            continue
+        flag = str(c.get("access_flag") or "").strip()
+        if not flag or flag not in union_flags:
+            continue
+        tk = str(c.get("tool_key") or "")
+        if not tk:
+            continue
+        m = tool_monthly_usd(tk)
+        if m <= 0:
+            continue
+        total += m
+        lines.append({
+            "tool_key": tk,
+            "display_name": str(c.get("display_name") or tk),
+            "monthly_usd": round(m, 2),
+        })
+    result["total_usd"] = round(total, 2)
+    result["lines"] = lines
+    return result
+
+
+def iter_paying_subjects(users_data: dict) -> list:
+    """Yield every subject the monthly billing engine should consider.
+
+    Order: users first (skipping any user who routes through a
+    company - the company charge covers them), then companies. A
+    user whose billing_source == 'company' is EXCLUDED from the
+    user pass (no double-billing). A company with zero paying-
+    members is still eligible if company.paying_customer is set,
+    but its computed charge will be 0 (nobody has access flags).
+
+    Returns list of (subject_kind, subject_key, subject_dict).
+    """
+    out = []
+    for username, u in (users_data.get("users") or {}).items():
+        if not isinstance(u, dict):
+            continue
+        # Skip users routing through a company - the company gets
+        # billed instead. Prevents double-billing.
+        source = str(u.get("billing_source") or "").strip().lower()
+        if source == "company":
+            company_name = str(u.get("company") or "").strip()
+            if company_name and company_name in (
+                    users_data.get("companies") or {}):
+                continue
+        out.append(("user", username, u))
+    for company_name, c in (users_data.get("companies") or {}).items():
+        if not isinstance(c, dict):
+            continue
+        out.append(("company", company_name, c))
+    return out
+
+
 __all__ = [
     "PRICING_S3_KEY",
     "DEFAULT_PRICING",
     "MODULE_CATALOG", "module_catalog",
     "load_pricing", "save_pricing",
     "tool_price_usd", "tool_monthly_usd", "prometheus_markup",
-    "compute_user_monthly_charge",
+    "compute_user_monthly_charge", "compute_company_monthly_charge",
     "top_up_pack_sizes", "top_up_min_custom",
     "wallet_balance", "wallet_stats",
     "is_paying_customer", "is_unlimited", "admits_wallet_ui",
@@ -1597,4 +1864,6 @@ __all__ = [
     "try_auto_reload",
     "add_custom_tool", "remove_custom_tool", "CustomToolError",
     "hide_builtin_tool", "unhide_builtin_tool", "hidden_builtin_tools",
+    "resolve_billing_subject", "company_billing_admins",
+    "company_members", "iter_paying_subjects",
 ]

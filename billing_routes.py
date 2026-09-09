@@ -65,6 +65,72 @@ def _current_user_record():
     return uname, u
 
 
+def _current_user_context():
+    """Same as _current_user_record but also returns the full
+    users_data dict so callers that need the companies map (for
+    company-shared wallet routing) don't have to re-load it.
+
+    Returns (uname, user_dict, users_data) or (None, None, None).
+    """
+    from app import load_users  # type: ignore
+    uname = session.get("username")
+    if not uname:
+        return None, None, None
+    data = load_users()
+    u = (data.get("users") or {}).get(uname)
+    return uname, u, data
+
+
+def _resolve_caller_billing_subject():
+    """Resolve which record holds the wallet + card for the current
+    caller. Central helper for every /api/wallet/* endpoint.
+
+    Returns a dict:
+      {
+        "uname": str,               # logged-in user
+        "user": dict,               # logged-in user record
+        "users_data": dict,         # full users.json snapshot
+        "subject": dict,            # user OR company record (whichever
+                                    # owns the wallet)
+        "subject_kind": "user"|"company",
+        "subject_key": str,         # username OR company name
+        "billed_via_company": bool, # True when routed to a company
+        "company_name": str,        # empty unless routed to a company
+        "viewer_is_billing_admin": bool,  # True when the caller is the
+                                    # subject itself OR (for a company
+                                    # subject) the caller has
+                                    # company_billing_admin=True
+      }
+
+    Never raises. When routing fails (company field points to a
+    non-existent company), falls back to the individual user record
+    so the wallet UI still works.
+    """
+    uname, u, data = _current_user_context()
+    if not uname or not u or not data:
+        return None
+    import wallet  # type: ignore
+    subject, subject_kind, subject_key = wallet.resolve_billing_subject(
+        u, data)
+    billed_via_company = (subject_kind == "company")
+    company_name = subject_key if billed_via_company else ""
+    if billed_via_company:
+        viewer_is_admin = bool(u.get("company_billing_admin"))
+    else:
+        viewer_is_admin = True  # own wallet -> can manage themselves
+    return {
+        "uname": uname,
+        "user": u,
+        "users_data": data,
+        "subject": subject,
+        "subject_kind": subject_kind,
+        "subject_key": subject_key,
+        "billed_via_company": billed_via_company,
+        "company_name": company_name,
+        "viewer_is_billing_admin": viewer_is_admin,
+    }
+
+
 def _require_login():
     """Return (username, user_dict) or a (jsonify_response, 401) tuple."""
     uname, u = _current_user_record()
@@ -113,17 +179,33 @@ def wallet_state():
     display metadata, transaction history, and the pricing snapshot
     the UI needs to render the Add Funds packs.
 
-    Non-paying users get a minimal payload (balance=0, ui_visible=false)
-    so the front-end can decide whether to show the wallet at all.
+    Company-shared wallet (Jenna 2026-09-09): if the caller has
+    billing_source='company' AND their company record exists, this
+    payload reports the COMPANY's wallet - balance, billing mode,
+    transactions, card, spend stats. The company's `paying_customer`
+    flag flips the UI on. `viewer_is_billing_admin=false` for regular
+    members hides top-up + card management client-side.
+
+    Non-paying users (individual OR unrouted) get a minimal payload
+    (balance=0, ui_visible=false) so the front-end can decide whether
+    to show the wallet at all.
     """
-    uname, u, err = _require_login()
-    if err:
-        return err
+    ctx = _resolve_caller_billing_subject()
+    if not ctx:
+        return jsonify({"error": "not_logged_in"}), 401
+    uname = ctx["uname"]
+    u = ctx["user"]
+    subject = ctx["subject"]
     import wallet  # type: ignore
     import billing  # type: ignore
 
     pricing = wallet.load_pricing()
+    # Wallet UI visibility: user's own role/paying flag OR company's
+    # paying flag when routed. Company routing turns the wallet UI on
+    # for every member so they can see balance and (if admin) top up.
     ui_visible = wallet.admits_wallet_ui(u)
+    if ctx["billed_via_company"]:
+        ui_visible = ui_visible or bool(subject.get("paying_customer"))
 
     _first = str(u.get("first_name") or "").strip()
     _last = str(u.get("last_name") or "").strip()
@@ -134,33 +216,41 @@ def wallet_state():
         "email": str(u.get("email") or ""),
         "role": str(u.get("role") or "user"),
         "ui_visible": ui_visible,
-        "paying_customer": _get_paying_flag(u),
-        "unlimited": wallet.is_unlimited(u),
-        "wallet_balance_usd": wallet.wallet_balance(u),
-        "lifetime_topups_usd": float(u.get(
+        # Subject fields: report the wallet-holding record's state
+        # (user OR company). Regular access flags stay on the user.
+        "paying_customer": bool(subject.get("paying_customer")),
+        "unlimited": bool(subject.get("unlimited")) if ctx[
+            "billed_via_company"] else wallet.is_unlimited(u),
+        "wallet_balance_usd": wallet.wallet_balance(subject),
+        "lifetime_topups_usd": float(subject.get(
             "wallet_lifetime_topups_usd", 0.0) or 0.0),
-        "lifetime_spend_usd": float(u.get(
+        "lifetime_spend_usd": float(subject.get(
             "wallet_lifetime_spend_usd", 0.0) or 0.0),
-        "billing_mode": wallet.billing_mode(u),
+        "billing_mode": wallet.billing_mode(subject),
         "auto_reload_threshold_usd":
-            wallet.auto_reload_threshold(u),
-        "auto_reload_amount_usd": wallet.auto_reload_amount(u),
+            wallet.auto_reload_threshold(subject),
+        "auto_reload_amount_usd": wallet.auto_reload_amount(subject),
         "monthly_invoice_limit_usd":
-            wallet.monthly_invoice_limit(u),
-        "has_card_on_file": wallet.has_card_on_file(u),
+            wallet.monthly_invoice_limit(subject),
+        "has_card_on_file": wallet.has_card_on_file(subject),
         "card_display": {
-            "last4": str(u.get("stripe_payment_method_last4", "")),
-            "brand": str(u.get("stripe_payment_method_brand", "")),
+            "last4": str(subject.get("stripe_payment_method_last4", "")),
+            "brand": str(subject.get("stripe_payment_method_brand", "")),
         },
-        "transactions": list(u.get("wallet_transactions", []))[:100],
+        "transactions": list(subject.get(
+            "wallet_transactions", []))[:100],
         "top_up_packs_usd": wallet.top_up_pack_sizes(),
         "top_up_min_custom_usd": wallet.top_up_min_custom(),
-        "stats": wallet.wallet_stats(u),
+        "stats": wallet.wallet_stats(subject),
         "auto_reload_defaults": (pricing.get("auto_reload_defaults")
                                  or {"threshold_usd": 500.0,
                                      "amount_usd": 1000.0}),
         "stripe_enabled": billing.is_enabled(),
         "stripe_publishable_key": billing.publishable_key(),
+        # Company-shared wallet context (Jenna 2026-09-09).
+        "billed_via_company": ctx["billed_via_company"],
+        "company_name": ctx["company_name"],
+        "viewer_is_billing_admin": ctx["viewer_is_billing_admin"],
     }
     return jsonify(payload)
 
@@ -184,13 +274,17 @@ def wallet_auto_reload():
     only choose between prepay_only and auto_reload; monthly_invoice
     stays admin-only per no-external-overrides.mdc (external users
     can't grant themselves a credit line).
+
+    Company-shared wallet: when the caller routes through a company,
+    this mutates the COMPANY's auto-reload settings. Only company
+    billing admins may call this route in that case.
     """
-    uname, u, err = _require_login()
+    ctx = _resolve_caller_billing_subject()
+    err = _require_wallet_write_access(ctx)
     if err:
         return err
-    if not _get_paying_flag(u):
-        return jsonify({"error": "not_a_paying_customer"}), 403
     import wallet  # type: ignore
+    subject = ctx["subject"]
 
     body = request.get_json(silent=True) or {}
     enabled = bool(body.get("enabled"))
@@ -210,16 +304,17 @@ def wallet_auto_reload():
         return jsonify({"error": "amount_out_of_range",
                         "min": 100, "max": 10000}), 400
 
-    if enabled and not wallet.has_card_on_file(u):
+    if enabled and not wallet.has_card_on_file(subject):
         return jsonify({"error": "no_card_on_file"}), 400
 
-    def _apply(usr):
-        usr["billing_mode"] = "auto_reload" if enabled else "prepay_only"
-        usr["auto_reload_threshold_usd"] = float(threshold)
-        usr["auto_reload_amount_usd"] = float(amount)
+    def _apply(rec):
+        rec["billing_mode"] = "auto_reload" if enabled else "prepay_only"
+        rec["auto_reload_threshold_usd"] = float(threshold)
+        rec["auto_reload_amount_usd"] = float(amount)
         return True
 
-    ok, _ = _mutate_target_user(uname, _apply)
+    ok, _ = _mutate_billing_subject(
+        ctx["subject_kind"], ctx["subject_key"], _apply)
     if not ok:
         return jsonify({"error": "save_failed"}), 500
     return jsonify({
@@ -238,29 +333,47 @@ def wallet_auto_reload():
 def wallet_setup_intent():
     """User clicks 'Add card' on /wallet -> create a Stripe Customer
     if needed, then a SetupIntent, and return the client_secret to
-    embed in the Stripe Elements iframe. Same shape as the admin
-    setup-intent route but scoped to the caller's own record."""
-    uname, u, err = _require_login()
+    embed in the Stripe Elements iframe.
+
+    Company-shared wallet: routes to the COMPANY's Stripe Customer
+    when the caller is a company billing admin. Regular members are
+    rejected."""
+    ctx = _resolve_caller_billing_subject()
+    err = _require_wallet_write_access(ctx)
     if err:
         return err
-    if not _get_paying_flag(u):
-        return jsonify({"error": "not_a_paying_customer"}), 403
     import billing  # type: ignore
     if not billing.is_enabled():
         return jsonify({"error": "billing_not_configured"}), 503
+    subject = ctx["subject"]
+
+    # Customer identity: use company name/email surrogate when
+    # routing to a company. Company records rarely carry an email so
+    # fall back to the acting user's email (Stripe just wants a
+    # non-empty identifier for the Customer record).
+    if ctx["billed_via_company"]:
+        cust_ident = ctx["company_name"]
+        cust_email = str(ctx["user"].get("email") or "")
+        cust_name = ctx["company_name"]
+    else:
+        cust_ident = ctx["uname"]
+        cust_email = str(ctx["user"].get("email") or "")
+        cust_name = (
+            f"{ctx['user'].get('first_name', '')} "
+            f"{ctx['user'].get('last_name', '')}").strip() or ctx["uname"]
 
     try:
         cus_id = billing.ensure_customer(
-            uname,
-            email=str(u.get("email") or ""),
-            name=(f"{u.get('first_name', '')} "
-                  f"{u.get('last_name', '')}").strip() or uname,
-            existing_customer_id=str(u.get("stripe_customer_id") or ""),
+            cust_ident,
+            email=cust_email,
+            name=cust_name,
+            existing_customer_id=str(subject.get("stripe_customer_id") or ""),
         )
     except billing.BillingError as e:
         return jsonify({"error": str(e)}), 502
-    if cus_id and cus_id != str(u.get("stripe_customer_id") or ""):
-        _persist_customer_id(uname, cus_id)
+    if cus_id and cus_id != str(subject.get("stripe_customer_id") or ""):
+        _persist_subject_customer_id(
+            ctx["subject_kind"], ctx["subject_key"], cus_id)
 
     try:
         si = billing.create_setup_intent(cus_id)
@@ -278,21 +391,24 @@ def wallet_setup_intent():
 def wallet_attach_card():
     """User confirmed the SetupIntent client-side. Attach the
     PaymentMethod to their customer + persist display metadata.
-    Body: {"payment_method_id": "pm_..."}."""
-    uname, u, err = _require_login()
+    Body: {"payment_method_id": "pm_..."}.
+
+    Company-shared wallet: attaches to the COMPANY's Stripe Customer
+    when the caller is a company billing admin."""
+    ctx = _resolve_caller_billing_subject()
+    err = _require_wallet_write_access(ctx)
     if err:
         return err
-    if not _get_paying_flag(u):
-        return jsonify({"error": "not_a_paying_customer"}), 403
     import billing  # type: ignore
     if not billing.is_enabled():
         return jsonify({"error": "billing_not_configured"}), 503
+    subject = ctx["subject"]
 
     body = request.get_json(silent=True) or {}
     pm_id = str(body.get("payment_method_id") or "").strip()
     if not pm_id:
         return jsonify({"error": "missing_payment_method_id"}), 400
-    cus_id = str(u.get("stripe_customer_id") or "")
+    cus_id = str(subject.get("stripe_customer_id") or "")
     if not cus_id:
         return jsonify({"error": "no_stripe_customer"}), 400
 
@@ -301,13 +417,14 @@ def wallet_attach_card():
     except billing.BillingError as e:
         return jsonify({"error": str(e)}), 502
 
-    def _apply(usr):
-        usr["stripe_payment_method_id"] = display["id"]
-        usr["stripe_payment_method_last4"] = display["last4"]
-        usr["stripe_payment_method_brand"] = display["brand"]
+    def _apply(rec):
+        rec["stripe_payment_method_id"] = display["id"]
+        rec["stripe_payment_method_last4"] = display["last4"]
+        rec["stripe_payment_method_brand"] = display["brand"]
         return True
 
-    ok, _ = _mutate_target_user(uname, _apply)
+    ok, _ = _mutate_billing_subject(
+        ctx["subject_kind"], ctx["subject_key"], _apply)
     return jsonify({"success": ok, "card_display": display})
 
 
@@ -315,17 +432,20 @@ def wallet_attach_card():
 def wallet_detach_card():
     """User removes their card on file. Automatically downshifts
     billing_mode from auto_reload to prepay_only so the wallet
-    doesn't sit in a broken 'auto-reload with no card' state."""
-    uname, u, err = _require_login()
+    doesn't sit in a broken 'auto-reload with no card' state.
+
+    Company-shared wallet: routes to the COMPANY when the caller is
+    a company billing admin."""
+    ctx = _resolve_caller_billing_subject()
+    err = _require_wallet_write_access(ctx)
     if err:
         return err
-    if not _get_paying_flag(u):
-        return jsonify({"error": "not_a_paying_customer"}), 403
     import billing  # type: ignore
     if not billing.is_enabled():
         return jsonify({"error": "billing_not_configured"}), 503
+    subject = ctx["subject"]
 
-    pm_id = str(u.get("stripe_payment_method_id") or "")
+    pm_id = str(subject.get("stripe_payment_method_id") or "")
     if pm_id:
         try:
             billing.detach_payment_method(pm_id)
@@ -334,16 +454,17 @@ def wallet_detach_card():
             # matches what the user sees.
             pass
 
-    def _apply(usr):
-        usr["stripe_payment_method_id"] = ""
-        usr["stripe_payment_method_last4"] = ""
-        usr["stripe_payment_method_brand"] = ""
+    def _apply(rec):
+        rec["stripe_payment_method_id"] = ""
+        rec["stripe_payment_method_last4"] = ""
+        rec["stripe_payment_method_brand"] = ""
         # If they were on auto-reload, drop to prepay_only.
-        if str(usr.get("billing_mode") or "").strip() == "auto_reload":
-            usr["billing_mode"] = "prepay_only"
+        if str(rec.get("billing_mode") or "").strip() == "auto_reload":
+            rec["billing_mode"] = "prepay_only"
         return True
 
-    ok, _ = _mutate_target_user(uname, _apply)
+    ok, _ = _mutate_billing_subject(
+        ctx["subject_kind"], ctx["subject_key"], _apply)
     return jsonify({"success": ok})
 
 
@@ -359,8 +480,13 @@ def create_checkout_session():
     redirects the browser to (Stripe hosts the payment form). On
     success Stripe redirects to /wallet/success and fires the
     checkout.session.completed webhook, which credits the wallet.
+
+    Company-shared wallet (Jenna 2026-09-09): only company billing
+    admins may top up a company wallet. The webhook credits the
+    COMPANY record via subject_kind + subject_key metadata.
     """
-    uname, u, err = _require_login()
+    ctx = _resolve_caller_billing_subject()
+    err = _require_wallet_write_access(ctx)
     if err:
         return err
     import wallet  # type: ignore
@@ -369,8 +495,7 @@ def create_checkout_session():
     if not billing.is_enabled():
         return jsonify({"error": "billing_not_configured"}), 503
 
-    if not wallet.admits_wallet_ui(u):
-        return jsonify({"error": "not_a_paying_customer"}), 403
+    subject = ctx["subject"]
 
     try:
         body = request.get_json(silent=True) or {}
@@ -388,22 +513,33 @@ def create_checkout_session():
     if amt > 100_000:
         return jsonify({"error": "above_maximum"}), 400
 
-    # Idempotent Customer create + persist the id if it was new.
+    # Customer identity: company routes to company; user routes to user.
+    if ctx["billed_via_company"]:
+        cust_ident = ctx["company_name"]
+        cust_email = str(ctx["user"].get("email") or "")
+        cust_name = ctx["company_name"]
+    else:
+        cust_ident = ctx["uname"]
+        cust_email = str(ctx["user"].get("email") or "")
+        cust_name = (
+            f"{ctx['user'].get('first_name', '')} "
+            f"{ctx['user'].get('last_name', '')}").strip() or ctx["uname"]
+
     try:
         cus_id = billing.ensure_customer(
-            uname,
-            email=str(u.get("email") or ""),
-            name=(f"{u.get('first_name', '')} "
-                  f"{u.get('last_name', '')}").strip() or uname,
-            existing_customer_id=str(u.get("stripe_customer_id") or ""),
+            cust_ident,
+            email=cust_email,
+            name=cust_name,
+            existing_customer_id=str(subject.get("stripe_customer_id") or ""),
         )
     except billing.BillingDisabled:
         return jsonify({"error": "billing_not_configured"}), 503
     except billing.BillingError as e:
         return jsonify({"error": str(e)}), 502
 
-    if cus_id and cus_id != str(u.get("stripe_customer_id") or ""):
-        _persist_customer_id(uname, cus_id)
+    if cus_id and cus_id != str(subject.get("stripe_customer_id") or ""):
+        _persist_subject_customer_id(
+            ctx["subject_kind"], ctx["subject_key"], cus_id)
 
     base = _dashboard_base_url()
     success_url = (f"{base}/wallet/success"
@@ -416,7 +552,16 @@ def create_checkout_session():
             amount_usd=amt,
             success_url=success_url,
             cancel_url=cancel_url,
-            username=uname,
+            # Pass the acting user as the dashboard_username so
+            # audit/print statements remain identifiable, but attach
+            # subject_kind + subject_key metadata so the webhook
+            # credits the right record.
+            username=ctx["uname"],
+            metadata={
+                "subject_kind": ctx["subject_kind"],
+                "subject_key": ctx["subject_key"],
+                "billed_via_username": ctx["uname"],
+            },
         )
     except billing.BillingError as e:
         return jsonify({"error": str(e)}), 502
@@ -714,6 +859,98 @@ def _persist_customer_id(target_username: str, cus_id: str):
         u["stripe_customer_id"] = cus_id
         return True
     _mutate_target_user(target_username, _apply)
+
+
+# ---------------------------------------------------------------------------
+# Company-shared wallet helpers (Jenna 2026-09-09)
+# ---------------------------------------------------------------------------
+
+def _mutate_target_company(company_name: str, mutator):
+    """Apply mutator(company_dict) to the target company's record
+    under CAS. Returns (True, users_data_final) or (False, error_msg).
+
+    Auto-creates the company record if the caller wants a wallet on a
+    company that only exists implicitly (i.e. some users have it in
+    their 'company' field but no explicit companies entry yet). This
+    matches the pattern used by the credit-pool code which also
+    lazy-creates company records on first pool grant."""
+    from app import _users_cas_mutate  # type: ignore
+
+    outcome = {"ok": False, "msg": ""}
+
+    def _apply(data):
+        companies = data.setdefault("companies", {})
+        c = companies.get(company_name)
+        if c is None:
+            # Lazy-create empty company record so the wallet has a
+            # place to live. Fields default via the mutator + the
+            # wallet getters.
+            c = {}
+            companies[company_name] = c
+        rv = mutator(c)
+        if rv is False:
+            outcome["msg"] = getattr(mutator, "_last_error",
+                                     "mutator_declined")
+            return None
+        outcome["ok"] = True
+        return data
+
+    final = _users_cas_mutate(_apply)
+    if final is None:
+        return False, (outcome["msg"] or "cas_write_skipped")
+    return True, final
+
+
+def _persist_company_customer_id(company_name: str, cus_id: str):
+    def _apply(c):
+        c["stripe_customer_id"] = cus_id
+        return True
+    _mutate_target_company(company_name, _apply)
+
+
+def _mutate_billing_subject(subject_kind: str, subject_key: str,
+                            mutator):
+    """Subject-agnostic CAS mutator. Routes to _mutate_target_user or
+    _mutate_target_company based on subject_kind. Used by the wallet
+    self-serve write endpoints so a single code path handles both
+    individual users and company-shared wallets."""
+    if subject_kind == "company":
+        return _mutate_target_company(subject_key, mutator)
+    return _mutate_target_user(subject_key, mutator)
+
+
+def _persist_subject_customer_id(subject_kind: str, subject_key: str,
+                                 cus_id: str):
+    """Persist a Stripe customer id onto whichever record owns the
+    wallet (user or company)."""
+    if subject_kind == "company":
+        _persist_company_customer_id(subject_key, cus_id)
+    else:
+        _persist_customer_id(subject_key, cus_id)
+
+
+def _require_wallet_write_access(ctx):
+    """Guard for self-serve wallet write endpoints. A caller routed
+    through a company wallet must be a company_billing_admin to
+    top up, add/remove a card, or change auto-reload prefs. Returns
+    None on success, or a (jsonify, http_status) tuple to short-
+    circuit the request with a 403.
+
+    Also enforces the paying_customer flag on the SUBJECT that
+    holds the wallet (user or company). This replaces the older
+    _get_paying_flag(u) checks so a paying company covers its
+    non-paying members automatically."""
+    if not ctx:
+        return jsonify({"error": "not_logged_in"}), 401
+    subject = ctx["subject"]
+    if not bool(subject.get("paying_customer")):
+        return jsonify({"error": "not_a_paying_customer"}), 403
+    if ctx["billed_via_company"] and not ctx["viewer_is_billing_admin"]:
+        return jsonify({
+            "error": "not_company_billing_admin",
+            "company_name": ctx["company_name"],
+        }), 403
+    return None
 
 
 @billing_bp.route(
@@ -1055,6 +1292,11 @@ def admin_users_billing():
             "username": uname,
             "email": str(u.get("email") or ""),
             "role": str(u.get("role") or ""),
+            "company": str(u.get("company") or ""),
+            "billing_source": str(
+                u.get("billing_source") or "user"),
+            "company_billing_admin": bool(
+                u.get("company_billing_admin")),
             "paying_customer": bool(u.get("paying_customer")),
             "unlimited": wallet.is_unlimited(u),
             "billing_mode": wallet.billing_mode(u),
@@ -1130,6 +1372,19 @@ def admin_billing_config(target_username):
                 u["credits"] = 0
         if "paying_customer" in body:
             u["paying_customer"] = bool(body.get("paying_customer"))
+        # Company-shared wallet routing (Jenna 2026-09-09). Admin
+        # flips a user between 'user' (own wallet) and 'company'
+        # (shared wallet at the company they belong to). The
+        # 'company' field must already point to a real company for
+        # 'company' routing to take effect - the resolver falls
+        # back to the user record when the company is missing.
+        if "billing_source" in body:
+            src = str(body.get("billing_source") or "user").strip().lower()
+            if src in ("user", "company"):
+                u["billing_source"] = src
+        if "company_billing_admin" in body:
+            u["company_billing_admin"] = bool(
+                body.get("company_billing_admin"))
         u["billing_mode"] = mode
         for k in ("auto_reload_threshold_usd",
                   "auto_reload_amount_usd",
@@ -1204,6 +1459,343 @@ def admin_billing_remove_card(target_username):
     """Alias for /billing/detach-card; matches the URL used by the
     admin Billing UI."""
     return admin_detach_card(target_username)
+
+
+# ---------------------------------------------------------------------------
+# Company-shared wallet admin endpoints (Jenna 2026-09-09)
+# ---------------------------------------------------------------------------
+#
+# One master account (company record) holds the card + balance. Every
+# user at that company routes their pulls through the same pool. The
+# endpoints below mirror the per-user admin surface exactly but operate
+# on data['companies'][company_name] instead of data['users'][...].
+
+@billing_bp.route("/api/admin/companies_billing", methods=["GET"])
+def admin_companies_billing():
+    """List every company with a wallet-ready snapshot. Same shape as
+    /api/admin/users_billing, plus a `members` count of users routing
+    through each company."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import wallet  # type: ignore
+    import billing  # type: ignore
+    from app import load_users  # type: ignore
+
+    data = load_users() or {}
+    companies = data.get("companies") or {}
+    rows = []
+    for cname, c in companies.items():
+        if not isinstance(c, dict):
+            continue
+        members = wallet.company_members(cname, data)
+        admins = wallet.company_billing_admins(cname, data)
+        rows.append({
+            "company": cname,
+            "paying_customer": bool(c.get("paying_customer")),
+            "unlimited": bool(c.get("unlimited")),
+            "billing_mode": wallet.billing_mode(c),
+            "wallet_balance_usd": wallet.wallet_balance(c),
+            "wallet_lifetime_topups_usd": float(c.get(
+                "wallet_lifetime_topups_usd", 0.0) or 0.0),
+            "wallet_lifetime_spend_usd": float(c.get(
+                "wallet_lifetime_spend_usd", 0.0) or 0.0),
+            "auto_reload_threshold_usd":
+                wallet.auto_reload_threshold(c),
+            "auto_reload_amount_usd": wallet.auto_reload_amount(c),
+            "monthly_invoice_limit_usd":
+                wallet.monthly_invoice_limit(c),
+            "has_card_on_file": wallet.has_card_on_file(c),
+            "card_brand": str(c.get(
+                "stripe_payment_method_brand") or ""),
+            "card_last4": str(c.get(
+                "stripe_payment_method_last4") or ""),
+            "monthly_access_last_billed_ym": str(c.get(
+                "monthly_access_last_billed_ym") or ""),
+            "member_count": len(members),
+            "member_usernames": [u for u, _ in members],
+            "billing_admin_usernames": list(admins),
+            "wallet_transactions": list(c.get(
+                "wallet_transactions") or [])[:50],
+        })
+    rows.sort(key=lambda r: (
+        not r["paying_customer"],
+        r["company"].lower(),
+    ))
+    return jsonify({
+        "companies": rows,
+        "stripe_enabled": billing.is_enabled(),
+        "stripe_publishable_key": billing.publishable_key(),
+    })
+
+
+@billing_bp.route(
+    "/api/admin/company/<company_name>/billing/config",
+    methods=["POST"])
+def admin_company_billing_config(company_name):
+    """Set company billing flags. Mirrors admin_billing_config for a
+    user record."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    body = request.get_json(silent=True) or {}
+    mode = str(body.get("billing_mode") or "prepay_only").strip().lower()
+    if mode not in ("prepay_only", "auto_reload", "monthly_invoice"):
+        return jsonify({"error": "invalid_mode"}), 400
+
+    def _apply(c):
+        if "paying_customer" in body:
+            c["paying_customer"] = bool(body.get("paying_customer"))
+        if "unlimited" in body:
+            c["unlimited"] = bool(body.get("unlimited"))
+        c["billing_mode"] = mode
+        for k in ("auto_reload_threshold_usd",
+                  "auto_reload_amount_usd",
+                  "monthly_invoice_limit_usd"):
+            if k in body:
+                try:
+                    v = float(body[k])
+                    if v >= 0:
+                        c[k] = v
+                except (TypeError, ValueError):
+                    pass
+        return True
+
+    ok, msg = _mutate_target_company(company_name, _apply)
+    if not ok:
+        return jsonify({"error": msg}), 404
+    return jsonify({"success": True})
+
+
+@billing_bp.route(
+    "/api/admin/company/<company_name>/billing/adjust",
+    methods=["POST"])
+def admin_company_billing_adjust(company_name):
+    """Manually credit / debit a company wallet. No card interaction."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import wallet  # type: ignore
+    body = request.get_json(silent=True) or {}
+    try:
+        amt = float(body.get("amount_usd") or 0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "invalid_amount"}), 400
+    if amt == 0:
+        return jsonify({"error": "amount_must_be_nonzero"}), 400
+    desc = str(body.get("description") or "Manual adjustment").strip()
+
+    def _apply(c):
+        if amt > 0:
+            wallet.apply_wallet_topup(
+                c, amt, description=desc, kind="adjustment")
+        else:
+            wallet.apply_wallet_deduct(
+                c, -amt, description=desc, tool_key="admin_adjust")
+        return True
+
+    ok, msg = _mutate_target_company(company_name, _apply)
+    if not ok:
+        return jsonify({"error": msg}), 404
+    return jsonify({"success": True, "amount_usd": amt})
+
+
+@billing_bp.route(
+    "/api/admin/company/<company_name>/billing/setup-intent",
+    methods=["POST"])
+def admin_company_setup_intent(company_name):
+    """Create a Stripe SetupIntent so an admin can add a card to the
+    company record. Auto-provisions the Stripe Customer on the
+    company's behalf the first time this is called."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import billing  # type: ignore
+    if not billing.is_enabled():
+        return jsonify({"error": "billing_not_configured"}), 503
+
+    from app import load_users  # type: ignore
+    company = ((load_users() or {}).get("companies") or {}
+               ).get(company_name) or {}
+
+    try:
+        cus_id = billing.ensure_customer(
+            f"company:{company_name}",
+            email="",  # companies don't have their own email
+            name=company_name,
+            existing_customer_id=str(
+                company.get("stripe_customer_id") or ""),
+        )
+    except billing.BillingError as e:
+        return jsonify({"error": str(e)}), 502
+
+    if cus_id and cus_id != str(company.get("stripe_customer_id") or ""):
+        _persist_company_customer_id(company_name, cus_id)
+
+    try:
+        si = billing.create_setup_intent(cus_id)
+    except billing.BillingError as e:
+        return jsonify({"error": str(e)}), 502
+    return jsonify({
+        "setup_intent_id": si["id"],
+        "client_secret": si["client_secret"],
+        "customer_id": cus_id,
+        "publishable_key": billing.publishable_key(),
+    })
+
+
+@billing_bp.route(
+    "/api/admin/company/<company_name>/billing/attach-card",
+    methods=["POST"])
+def admin_company_attach_card(company_name):
+    """Attach a PaymentMethod to a company. Body:
+    {"payment_method_id": "pm_..."}."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import billing  # type: ignore
+    if not billing.is_enabled():
+        return jsonify({"error": "billing_not_configured"}), 503
+
+    from app import load_users  # type: ignore
+    company = ((load_users() or {}).get("companies") or {}
+               ).get(company_name) or {}
+
+    body = request.get_json(silent=True) or {}
+    pm_id = str(body.get("payment_method_id") or "").strip()
+    if not pm_id:
+        return jsonify({"error": "missing_payment_method_id"}), 400
+    cus_id = str(company.get("stripe_customer_id") or "")
+    if not cus_id:
+        return jsonify({"error": "no_stripe_customer"}), 400
+
+    try:
+        display = billing.attach_payment_method(cus_id, pm_id)
+    except billing.BillingError as e:
+        return jsonify({"error": str(e)}), 502
+
+    def _apply(c):
+        c["stripe_payment_method_id"] = display["id"]
+        c["stripe_payment_method_last4"] = display["last4"]
+        c["stripe_payment_method_brand"] = display["brand"]
+        return True
+
+    ok, _ = _mutate_target_company(company_name, _apply)
+    return jsonify({"success": ok, "card_display": display})
+
+
+@billing_bp.route(
+    "/api/admin/company/<company_name>/billing/detach-card",
+    methods=["POST"])
+def admin_company_detach_card(company_name):
+    """Remove the company's card on file. Downshifts billing_mode
+    off auto_reload."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import billing  # type: ignore
+    if not billing.is_enabled():
+        return jsonify({"error": "billing_not_configured"}), 503
+
+    from app import load_users  # type: ignore
+    company = ((load_users() or {}).get("companies") or {}
+               ).get(company_name) or {}
+    pm_id = str(company.get("stripe_payment_method_id") or "")
+    if pm_id:
+        try:
+            billing.detach_payment_method(pm_id)
+        except billing.BillingError:
+            pass  # best-effort remove locally
+
+    def _apply(c):
+        c["stripe_payment_method_id"] = ""
+        c["stripe_payment_method_last4"] = ""
+        c["stripe_payment_method_brand"] = ""
+        if str(c.get("billing_mode") or "").strip() == "auto_reload":
+            c["billing_mode"] = "prepay_only"
+        return True
+
+    ok, _ = _mutate_target_company(company_name, _apply)
+    return jsonify({"success": ok})
+
+
+@billing_bp.route(
+    "/api/admin/company/<company_name>/billing/charge-card",
+    methods=["POST"])
+def admin_company_charge_card(company_name):
+    """Off-session Stripe charge against the company card. On
+    success, credits the company wallet. Body: {"amount_usd": 500,
+    "description": "..."}."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import billing  # type: ignore
+    import wallet  # type: ignore
+    if not billing.is_enabled():
+        return jsonify({"error": "billing_not_configured"}), 503
+
+    body = request.get_json(silent=True) or {}
+    try:
+        amt = float(body.get("amount_usd") or 0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "invalid_amount"}), 400
+    if amt < 0.50:
+        return jsonify({"error": "amount_below_stripe_min"}), 400
+    desc = (str(body.get("description") or "").strip()
+            or f"Admin top-up ({company_name})")
+
+    from app import load_users  # type: ignore
+    company = ((load_users() or {}).get("companies") or {}
+               ).get(company_name) or {}
+    cus_id = str(company.get("stripe_customer_id") or "")
+    pm_id = str(company.get("stripe_payment_method_id") or "")
+    if not (cus_id and pm_id):
+        return jsonify({"error": "no_card_on_file"}), 400
+
+    try:
+        pi = billing.charge_saved_card(
+            customer_id=cus_id,
+            payment_method_id=pm_id,
+            amount_usd=amt,
+            description=desc,
+            username=f"company:{company_name}",
+            metadata={
+                "purpose": "admin_topup",
+                "subject_kind": "company",
+                "subject_key": company_name,
+            },
+        )
+    except billing.BillingError as e:
+        return jsonify({"error": str(e)}), 502
+    if str(pi.get("status") or "").lower() != "succeeded":
+        return jsonify({
+            "error": "charge_not_completed",
+            "stripe_status": pi.get("status"),
+        }), 502
+
+    pi_id = str(pi.get("id") or "")
+
+    def _apply(c):
+        for t in list(c.get("wallet_transactions") or [])[:20]:
+            if (str(t.get("stripe_ref") or "") == pi_id
+                    and str(t.get("kind") or "")
+                    in ("topup", "auto_reload", "adjustment")):
+                return False  # idempotent
+        wallet.apply_wallet_topup(
+            c, amt, description=desc, stripe_ref=pi_id, kind="topup")
+        return True
+
+    ok, msg = _mutate_target_company(company_name, _apply)
+    if not ok:
+        # `_apply` returning False means webhook already logged it.
+        return jsonify({
+            "success": True, "payment_intent_id": pi_id,
+            "note": "already_recorded"})
+    return jsonify({
+        "success": True,
+        "payment_intent_id": pi_id,
+        "amount_usd": amt,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -1283,6 +1875,62 @@ def _find_user_by_event(event: dict):
     return None, None
 
 
+def _find_subject_by_event(event: dict):
+    """Resolve the SUBJECT that should receive a wallet credit from
+    a webhook event. Preference order (Jenna 2026-09-09 company-
+    shared wallet):
+
+      1. metadata.subject_kind + metadata.subject_key -> user or
+         company record.
+      2. Customer id lookup: check companies first (a company Stripe
+         customer id trumps a user match), then users.
+      3. Fall back to _find_user_by_event (legacy user-only route).
+
+    Returns (subject_kind, subject_key, subject_dict, users_data) or
+    (None, None, None, None) if nothing matched. users_data is
+    returned so callers can persist via _mutate_billing_subject.
+    """
+    from app import load_users  # type: ignore
+    obj = ((event or {}).get("data") or {}).get("object") or {}
+    md = obj.get("metadata") or {}
+    # Also inspect the nested payment_intent metadata (Checkout mode).
+    pi = obj.get("payment_intent")
+    if isinstance(pi, dict):
+        pi_md = pi.get("metadata") or {}
+        for k, v in pi_md.items():
+            md.setdefault(k, v)
+
+    data = load_users() or {}
+    kind = str(md.get("subject_kind") or "").strip().lower()
+    key = str(md.get("subject_key") or "").strip()
+    if kind == "company" and key:
+        c = (data.get("companies") or {}).get(key)
+        if isinstance(c, dict):
+            return "company", key, c, data
+    if kind == "user" and key:
+        u = (data.get("users") or {}).get(key)
+        if isinstance(u, dict):
+            return "user", key, u, data
+
+    # Customer id fallback: check companies first.
+    cus_id = str(obj.get("customer") or "")
+    if cus_id:
+        for cname, c in (data.get("companies") or {}).items():
+            if isinstance(c, dict) and str(
+                    c.get("stripe_customer_id") or "") == cus_id:
+                return "company", cname, c, data
+        for uname, u in (data.get("users") or {}).items():
+            if isinstance(u, dict) and str(
+                    u.get("stripe_customer_id") or "") == cus_id:
+                return "user", uname, u, data
+
+    # Legacy metadata.dashboard_username fallback.
+    uname, u = _find_user_by_event(event)
+    if uname and u:
+        return "user", uname, u, data
+    return None, None, None, None
+
+
 def _amount_from_object(obj: dict) -> float:
     """Extract a USD amount from various Stripe object shapes.
 
@@ -1299,8 +1947,8 @@ def _amount_from_object(obj: dict) -> float:
 
 def _handle_checkout_session_completed(event: dict):
     obj = ((event or {}).get("data") or {}).get("object") or {}
-    uname, u = _find_user_by_event(event)
-    if not uname or not u:
+    subject_kind, subject_key, subject, _ = _find_subject_by_event(event)
+    if not subject:
         print(f"[billing] webhook checkout.session.completed "
               f"unmapped: event_id={event.get('id')}")
         return
@@ -1313,9 +1961,9 @@ def _handle_checkout_session_completed(event: dict):
     md = obj.get("metadata") or {}
     desc = str(md.get("description") or "Wallet top-up").strip()
 
-    def _apply(usr):
+    def _apply(rec):
         wallet.apply_wallet_topup(
-            usr, amt, description=desc, stripe_ref=ref, kind="topup")
+            rec, amt, description=desc, stripe_ref=ref, kind="topup")
         # If a card was captured in this checkout, persist the id so
         # future auto-reload works without a separate SetupIntent
         # (this is why we set setup_future_usage='off_session' when
@@ -1323,13 +1971,13 @@ def _handle_checkout_session_completed(event: dict):
         pi = obj.get("payment_intent")
         if isinstance(pi, dict) and pi.get("payment_method"):
             pm_id = str(pi.get("payment_method") or "")
-            if pm_id and not usr.get("stripe_payment_method_id"):
-                usr["stripe_payment_method_id"] = pm_id
+            if pm_id and not rec.get("stripe_payment_method_id"):
+                rec["stripe_payment_method_id"] = pm_id
         return True
 
-    _mutate_target_user(uname, _apply)
-    print(f"[billing] webhook credited ${amt:.2f} to {uname} "
-          f"(session={ref})")
+    _mutate_billing_subject(subject_kind, subject_key, _apply)
+    print(f"[billing] webhook credited ${amt:.2f} to "
+          f"{subject_kind}:{subject_key} (session={ref})")
 
 
 def _handle_payment_intent_succeeded(event: dict):
@@ -1339,8 +1987,8 @@ def _handle_payment_intent_succeeded(event: dict):
     we key idempotency off Stripe event id AND stripe_ref, a duplicate
     credit is avoided."""
     obj = ((event or {}).get("data") or {}).get("object") or {}
-    uname, u = _find_user_by_event(event)
-    if not uname or not u:
+    subject_kind, subject_key, subject, _ = _find_subject_by_event(event)
+    if not subject:
         return
     md = obj.get("metadata") or {}
     if str(md.get("purpose") or "") not in (
@@ -1356,7 +2004,7 @@ def _handle_payment_intent_succeeded(event: dict):
     # topup, skip. The prior admin_custom_charge inline write leaves
     # exactly this ref on the txn row.
     ref = str(obj.get("id") or "")
-    txns = list(u.get("wallet_transactions") or [])
+    txns = list(subject.get("wallet_transactions") or [])
     already = any(
         str(t.get("stripe_ref") or "") == ref
         and str(t.get("kind") or "") in ("topup", "auto_reload")
@@ -1368,17 +2016,17 @@ def _handle_payment_intent_succeeded(event: dict):
     kind = "auto_reload" if md.get("purpose") == "auto_reload" \
         else "topup"
 
-    def _apply(usr):
+    def _apply(rec):
         wallet.apply_wallet_topup(
-            usr, amt,
+            rec, amt,
             description=str(md.get("description")
                             or "Card charge"),
             stripe_ref=ref, kind=kind)
         return True
 
-    _mutate_target_user(uname, _apply)
-    print(f"[billing] webhook confirmed ${amt:.2f} to {uname} "
-          f"(pi={ref}, kind={kind})")
+    _mutate_billing_subject(subject_kind, subject_key, _apply)
+    print(f"[billing] webhook confirmed ${amt:.2f} to "
+          f"{subject_kind}:{subject_key} (pi={ref}, kind={kind})")
 
 
 def _handle_payment_intent_failed(event: dict):
@@ -1418,8 +2066,8 @@ def _handle_payment_intent_failed(event: dict):
 
 def _handle_charge_refunded(event: dict):
     obj = ((event or {}).get("data") or {}).get("object") or {}
-    uname, u = _find_user_by_event(event)
-    if not uname or not u:
+    subject_kind, subject_key, subject, _ = _find_subject_by_event(event)
+    if not subject:
         return
     # `charge.refunded` fires with the WHOLE charge object, and the
     # refunds are nested under obj.refunds.data. Take the newest
@@ -1434,14 +2082,14 @@ def _handle_charge_refunded(event: dict):
         return
     import wallet  # type: ignore
 
-    def _apply(usr):
+    def _apply(rec):
         wallet.apply_wallet_refund(
-            usr, amt,
+            rec, amt,
             description="Refund",
             stripe_ref=str(newest.get("id") or ""))
         return True
 
-    _mutate_target_user(uname, _apply)
+    _mutate_billing_subject(subject_kind, subject_key, _apply)
 
 
 _WEBHOOK_HANDLERS = {

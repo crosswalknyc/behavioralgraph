@@ -3261,6 +3261,29 @@
                     </div>
                 </div>
 
+                <!-- Company-shared wallet routing (Jenna 2026-09-09) -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Bill through</label>
+                        <select id="newBillingSource">
+                            <option value="user">User's own wallet</option>
+                            <option value="company">Company shared wallet</option>
+                        </select>
+                        <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.25rem;">
+                            When set to Company, this user's pulls debit the
+                            company wallet at the "Company" field above. Requires a
+                            paying_customer flag on the company (set in Admin - Billing - Companies).
+                        </small>
+                    </div>
+                    <div class="form-group">
+                        <label>Company billing admin</label>
+                        <label class="checkbox-group" style="margin-top: 0.35rem;">
+                            <input type="checkbox" id="newCompanyBillingAdmin">
+                            <span>Can manage the company's card, top up, and see spend</span>
+                        </label>
+                    </div>
+                </div>
+
                 <div class="form-row">
                     <div class="form-group">
                         <label>Access Expires</label>
@@ -9489,6 +9512,12 @@
             document.getElementById('newLastName').value = '';
             document.getElementById('newCompany').value = '';
             document.getElementById('newDepartment').value = '';
+            // Company-shared wallet routing (Jenna 2026-09-09).
+            const _bsAdd = document.getElementById('newBillingSource');
+            if (_bsAdd) _bsAdd.value = 'user';
+            const _cbaAdd = document.getElementById(
+                'newCompanyBillingAdmin');
+            if (_cbaAdd) _cbaAdd.checked = false;
             document.getElementById('accessExpires').value = '';
             document.getElementById('unlimitedAccess').checked = true;
             document.getElementById('accessExpires').disabled = true;
@@ -9681,6 +9710,12 @@
             document.getElementById('newLastName').value = user.last_name || '';
             document.getElementById('newCompany').value = user.company || '';
             document.getElementById('newDepartment').value = user.department || '';
+            // Company-shared wallet routing (Jenna 2026-09-09).
+            const _bs = document.getElementById('newBillingSource');
+            if (_bs) _bs.value = (user.billing_source === 'company')
+                ? 'company' : 'user';
+            const _cba = document.getElementById('newCompanyBillingAdmin');
+            if (_cba) _cba.checked = !!user.company_billing_admin;
             document.getElementById('newRole').value = user.role;
             document.getElementById('newCredits').value = user.credits === -1 ? '0' : (user.credits ?? 0);
             document.getElementById('unlimitedCredits').checked = user.credits === -1;
@@ -13280,6 +13315,17 @@
                 last_name: document.getElementById('newLastName').value,
                 company: document.getElementById('newCompany').value,
                 department: document.getElementById('newDepartment').value,
+                // Company-shared wallet routing (Jenna 2026-09-09).
+                billing_source: (function() {
+                    const el = document.getElementById('newBillingSource');
+                    const v = el ? String(el.value || 'user') : 'user';
+                    return v === 'company' ? 'company' : 'user';
+                })(),
+                company_billing_admin: (function() {
+                    const el = document.getElementById(
+                        'newCompanyBillingAdmin');
+                    return !!(el && el.checked);
+                })(),
                 role: document.getElementById('newRole').value,
                 credits: document.getElementById('unlimitedCredits').checked ? -1 : parseInt(document.getElementById('newCredits').value),
                 // Consulting-hour pool total (int minutes; -1 = unlimited).

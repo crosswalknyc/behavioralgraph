@@ -2281,13 +2281,22 @@ def has_credits_for(username, amount):
     return credits_left >= amount
 
 
-def _try_wallet_fallback(user, pull_type, description, job_id, outcome):
+def _try_wallet_fallback(user, pull_type, description, job_id, outcome,
+                         data=None, username=None):
     """Wallet-side fallback for consume_credit (Jenna 2026-09-08).
 
     Called INSIDE the _consume mutator after internal credits (or the
-    company pool) fail to cover the pull. Only fires for users flagged
-    `paying_customer=true` whose configured `billing_mode` (and card
-    on file, when applicable) authorizes the deduction.
+    company pool) fail to cover the pull. Only fires when the resolved
+    billing subject is a paying customer whose configured
+    `billing_mode` (and card on file, when applicable) authorizes the
+    deduction.
+
+    Company-shared wallet (Jenna 2026-09-09): when the user's
+    `billing_source == 'company'` and their `company` field names a
+    company that exists in `data['companies']`, the deduct routes to
+    the COMPANY record instead of the user record. Every user at the
+    company draws from the same pooled balance / card. See
+    wallet.resolve_billing_subject for the resolution rules.
 
     Returns True when the wallet absorbed the pull (mutator should
     commit the write), False otherwise (mutator should return None).
@@ -2298,23 +2307,39 @@ def _try_wallet_fallback(user, pull_type, description, job_id, outcome):
     """
     try:
         import wallet as _wallet  # local import so tests can stub
-        if not _wallet.is_paying_customer(user):
+        # Resolve subject BEFORE the paying-customer check so a user
+        # routing through a paying company gets charged even if the
+        # user record itself isn't flagged paying_customer.
+        subject, subject_kind, subject_key = (
+            _wallet.resolve_billing_subject(user, data or {}))
+        if not _wallet.is_paying_customer(subject):
             return False
         tool_key = _wallet.pull_type_to_tool_key(pull_type)
-        usd, mode = _wallet.should_charge_wallet(user, tool_key)
+        usd, mode = _wallet.should_charge_wallet(subject, tool_key)
         if mode != 'wallet' or usd <= 0:
             return False
-        can, _reason = _wallet.wallet_can_absorb(user, usd)
+        can, _reason = _wallet.wallet_can_absorb(subject, usd)
         if not can:
             return False
+        # billed_via_username stamps who triggered the pull when the
+        # subject is a company (so admins get per-user attribution).
+        billed_via = ''
+        if subject_kind == 'company':
+            billed_via = (username
+                          or user.get('email')
+                          or user.get('username')
+                          or '')
         _wallet.apply_wallet_deduct(
-            user, usd,
+            subject, usd,
             description=description or 'Usage',
             tool_key=tool_key,
-            job_id=job_id or '')
+            job_id=job_id or '',
+            billed_via_username=billed_via)
         outcome['ok'] = True
         outcome['wallet_charged_usd'] = usd
         outcome['wallet_tool_key'] = tool_key
+        outcome['wallet_subject_kind'] = subject_kind
+        outcome['wallet_subject_key'] = subject_key
         return True
     except Exception as _e:
         print(f"[wallet] fallback failed: {_e}")
@@ -2369,12 +2394,16 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
 
             if not pool_unlimited and pool_remaining < credits_used:
                 # Pool exhausted -> try wallet fallback for paying customers.
-                if _try_wallet_fallback(user, pull_type, description, job_id, outcome):
+                if _try_wallet_fallback(user, pull_type, description,
+                                       job_id, outcome, data=data,
+                                       username=username):
                     return data
                 return None
             if ceiling != -1 and ceiling_remaining < credits_used:
                 # User's ceiling on this pool reached -> try wallet fallback.
-                if _try_wallet_fallback(user, pull_type, description, job_id, outcome):
+                if _try_wallet_fallback(user, pull_type, description,
+                                       job_id, outcome, data=data,
+                                       username=username):
                     return data
                 return None
 
@@ -2391,7 +2420,9 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
 
         if not user_unlimited and _numeric_credits_balance(user) < credits_used:
             # Personal credits exhausted -> try wallet fallback for paying customers.
-            if _try_wallet_fallback(user, pull_type, description, job_id, outcome):
+            if _try_wallet_fallback(user, pull_type, description,
+                                   job_id, outcome, data=data,
+                                   username=username):
                 return data
             return None
 
@@ -2412,19 +2443,29 @@ def consume_credit(username, description=None, job_id=None, pull_type=None, cred
         return False
 
     # Wallet post-hook: if the wallet absorbed this pull AND the
-    # user's billing_mode is auto_reload AND the new balance dropped
-    # below the threshold, fire an off-session Stripe charge to top
-    # up. Runs OUTSIDE the CAS mutator because it makes a Stripe
-    # network call. Never blocks the pull - the deduction has already
-    # committed; auto-reload success or failure only affects the
-    # user's next pull.
+    # subject's billing_mode is auto_reload AND the new balance
+    # dropped below the threshold, fire an off-session Stripe charge
+    # to top up. Runs OUTSIDE the CAS mutator because it makes a
+    # Stripe network call. Never blocks the pull - the deduction has
+    # already committed; auto-reload success or failure only affects
+    # the subject's next pull. Routes the top-up to the company card
+    # when the pull was billed through a company (Jenna 2026-09-09).
     if outcome.get('ok') and outcome.get('wallet_charged_usd'):
         try:
             import wallet as _wallet
-            # Re-read the user snapshot post-CAS for the current
+            _subject_kind = outcome.get('wallet_subject_kind') or 'user'
+            _subject_key = outcome.get('wallet_subject_key') or username
+            # Re-read the subject snapshot post-CAS for the current
             # balance + card metadata.
-            _post = load_users().get('users', {}).get(username) or {}
-            _wallet.try_auto_reload(username, _post)
+            _post_data = load_users() or {}
+            if _subject_kind == 'company':
+                _post = (_post_data.get('companies') or {}
+                         ).get(_subject_key) or {}
+            else:
+                _post = (_post_data.get('users') or {}
+                         ).get(_subject_key) or {}
+            _wallet.try_auto_reload(_subject_key, _post,
+                                    subject_kind=_subject_kind)
         except Exception as _ar_e:
             print(f"[wallet] auto-reload skipped: {_ar_e}")
 
@@ -4987,6 +5028,15 @@ def create_user():
             'last_name': req_data.get('last_name', ''),
             'company': company,
             'department': req_data.get('department', ''),
+            # Company-shared wallet routing (Jenna 2026-09-09). Defaults
+            # to 'user' (own wallet); admin flips to 'company' when the
+            # user should draw from the shared company pool.
+            'billing_source': (
+                'company'
+                if str(req_data.get('billing_source') or '').strip().lower()
+                == 'company' else 'user'),
+            'company_billing_admin': bool(
+                req_data.get('company_billing_admin')),
             'role': role,
             'credits': req_data.get('credits', cd.get('credits', 5) if cd else 5),
             'credits_used': 0,
@@ -5149,6 +5199,17 @@ def update_user(username):
             user['company'] = req_data['company']
         if 'department' in req_data:
             user['department'] = req_data['department']
+        # Company-shared wallet routing (Jenna 2026-09-09). A user with
+        # billing_source='company' AND a valid `company` value routes
+        # every wallet operation through the company record instead of
+        # their individual wallet. Unknown values coerce to 'user' so
+        # the safe default is always the individual wallet.
+        if 'billing_source' in req_data:
+            _bs_raw = str(req_data.get('billing_source') or '').strip().lower()
+            user['billing_source'] = 'company' if _bs_raw == 'company' else 'user'
+        if 'company_billing_admin' in req_data:
+            user['company_billing_admin'] = bool(
+                req_data.get('company_billing_admin'))
         if 'role' in req_data:
             # Never allow downgrading the primary 'admin' account from super_admin
             if username == 'admin':
