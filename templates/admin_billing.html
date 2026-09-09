@@ -421,12 +421,14 @@
             <button id="btn-save-new-tool">Add tool</button>
           </div>
         </div>
-        <div id="pricing-hidden-toggle" style="margin-top:12px;
-             font-size:12px; color:#6B7280; display:none;">
-          <!-- Populated by renderPricing() when hidden built-ins
-               exist. Clicking flips the show_hidden state. -->
-        </div>
         <div id="pricing-body" style="margin-top:16px;"></div>
+        <div id="pricing-hidden-toggle" style="margin-top:16px;
+             padding-top:16px; border-top:1px solid #E9E8E1;
+             font-size:12px; color:#6B7280; display:none;">
+          <!-- Populated by renderPricing() when deleted built-ins
+               exist. Clicking flips the show_hidden state so
+               deleted rows appear with a Restore button. -->
+        </div>
       </div>
       <div class="card">
         <h2>Prometheus Metered Billing</h2>
@@ -1378,8 +1380,10 @@
         ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',
           "'":'&#39;'}[c]));
 
-      // Show-hidden toggle above the table (only appears when
-      // hidden built-ins exist).
+      // 2026-09-09 (Jenna): rename Hide -> Delete throughout. The
+      // toggle labels the recoverable soft-delete set as "deleted
+      // tools" so admins recognise this as a restore hatch, not
+      // as a separate visibility mode.
       const toggleEl = $('pricing-hidden-toggle');
       if (hiddenCount > 0) {
         toggleEl.style.display = 'block';
@@ -1388,7 +1392,7 @@
           '<input type="checkbox" id="show-hidden-cb"' +
           (_showHidden ? ' checked' : '') +
           ' style="margin-right:6px; vertical-align:middle;">' +
-          'Show ' + hiddenCount + ' hidden tool' +
+          'Show ' + hiddenCount + ' deleted tool' +
           (hiddenCount === 1 ? '' : 's') +
           '</label>';
       } else {
@@ -1456,9 +1460,9 @@
             html += ' <span style="display:inline-block;' +
               'padding:1px 6px; margin-left:6px; ' +
               'font-size:10px; font-weight:600; ' +
-              'background:#E9E8E1; color:#5C6560; ' +
+              'background:#F0D0D0; color:#8A1F1F; ' +
               'border-radius:3px; text-transform:uppercase; ' +
-              'letter-spacing:0.05em;">hidden</span>';
+              'letter-spacing:0.05em;">deleted</span>';
           }
           html += '</div>';
           if (t.access_flag) {
@@ -1496,16 +1500,27 @@
               '<div style="font-size:10px; color:#B8B8B0; ' +
               'margin-top:2px;">/ pull</div></td>';
           }
-          // Action button: Delete (custom) / Hide (visible builtin)
-          // / Restore (hidden builtin).
+          // 2026-09-09 (Jenna, verbatim: "hide what does it do? there
+          // should be a delete, like ecommerce iq can be forever
+          // deleted"): built-in tools now show a Delete button
+          // (previously Hide). Behaviour is unchanged - hidden_tools[]
+          // in pricing.json still holds the deleted set, and the tool
+          // still exists in MODULE_CATALOG - but the label is honest.
+          // Deleted tools live in a "Show N deleted tools" panel at
+          // the bottom, with a Restore button, so mis-clicks are
+          // recoverable. Custom tools keep their existing hard-Delete
+          // (removes the row from custom_tools[] entirely).
           html += '<td style="text-align:right;">';
           const dispEsc = esc(display).replace(/'/g, "\\'");
+          const delBtnStyle = 'font-size:11px; padding:4px 10px; ' +
+            'color:#8A1F1F; border-color:#F0D0D0;';
           if (isCustom) {
             html += '<button class="secondary" ' +
               'onclick="deleteTool(\'' + esc(key) + '\', \'' +
               dispEsc + '\')" ' +
-              'style="font-size:11px; padding:4px 10px;">' +
-              'Delete</button>';
+              'style="' + delBtnStyle + '" ' +
+              'title="Permanently remove this custom tool from ' +
+              'the catalog.">Delete</button>';
           } else if (isHidden) {
             html += '<button class="secondary" ' +
               'onclick="unhideTool(\'' + esc(key) + '\', \'' +
@@ -1516,10 +1531,12 @@
             html += '<button class="secondary" ' +
               'onclick="hideTool(\'' + esc(key) + '\', \'' +
               dispEsc + '\')" ' +
-              'style="font-size:11px; padding:4px 10px;" ' +
-              'title="Hide from this panel. Live billing is ' +
-              'unaffected - a hidden tool still charges its ' +
-              'configured price.">Hide</button>';
+              'style="' + delBtnStyle + '" ' +
+              'title="Delete removes this tool from the pricing ' +
+              'panel. Safe by default - if the tool ever fires, ' +
+              'it charges its configured price ($0 for anything ' +
+              'you have not priced). Recoverable from ' +
+              '\'Show N deleted tools\' below.">Delete</button>';
           }
           html += '</td>';
           html += '</tr>';
@@ -1697,19 +1714,22 @@
       }
     };
 
-    // Built-in tools are HIDDEN (soft) instead of deleted. The tool
-    // still exists in MODULE_CATALOG and tool_price_usd() still
-    // returns its configured price when its pull_type fires - this
-    // only removes it from the admin panel's default listing so
-    // the UI stops cluttering. Click "Show N hidden" to bring it
-    // back into view with a Restore button.
+    // Built-in tools are soft-deleted (kept in MODULE_CATALOG so the
+    // pipeline never crashes on a missing key, but removed from this
+    // panel). The tool_key stays on the hidden_tools[] set in
+    // pricing.json; the UI treats that as the "deleted" set. Live
+    // billing behaviour: if a deleted tool ever fires, it charges
+    // whatever price is configured for it - $0 for anything the
+    // admin never priced. Restore is available in the "Show N
+    // deleted tools" toggle at the bottom of the panel.
     window.hideTool = async (toolKey, display) => {
       const label = display || toolKey;
-      if (!confirm('Hide "' + label + '" from this panel?\n\n' +
-                   'The tool stays wired in the app and still ' +
-                   'charges its configured price when used. ' +
-                   'Click "Show N hidden" above the table to ' +
-                   'restore it.'))
+      if (!confirm('Delete "' + label + '" from your pricing panel?\n\n' +
+                   'The row disappears from Billing. If the tool ' +
+                   'ever fires a charge, it uses its configured ' +
+                   'price ($0 for tools you have not priced).\n\n' +
+                   'Recoverable from "Show N deleted tools" at ' +
+                   'the bottom of this panel.'))
         return;
       const r = await fetch(
         '/api/admin/pricing/tools/' +
@@ -1718,12 +1738,13 @@
       const j = await r.json().catch(() => ({}));
       if (r.ok) {
         $('banner').innerHTML =
-          '<div class="banner success">Hid ' + label + '.</div>';
+          '<div class="banner success">Deleted ' + label +
+          ' from the pricing panel.</div>';
         loadPricing();
       } else {
         $('banner').innerHTML =
           '<div class="banner error">' +
-          (j.error || 'Could not hide tool.') + '</div>';
+          (j.error || 'Could not delete tool.') + '</div>';
       }
     };
 
@@ -1746,7 +1767,7 @@
       }
     };
 
-    // Wire the "Show N hidden" toggle. Event delegation on the
+    // Wire the "Show N deleted tools" toggle. Event delegation on the
     // parent because the checkbox is re-rendered on every
     // renderPricing() call. Toggle flips _showHidden and re-renders
     // from the cached payload (no round-trip).
