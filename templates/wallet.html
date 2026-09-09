@@ -601,16 +601,24 @@
         $('user-avatar').textContent = (initials || '?').toUpperCase();
       }
 
-      // Balance
-      const bal = Number(s.wallet_balance_usd || 0);
-      $('balance').textContent = fmtUsd(bal);
-      if (bal < 0) $('balance').classList.add('negative');
-      else $('balance').classList.remove('negative');
-
-      $('lifetime-topups').textContent =
-        fmtUsd(s.lifetime_topups_usd);
-      $('lifetime-spend').textContent =
-        fmtUsd(s.lifetime_spend_usd);
+      // Balance - unlimited users see "Unlimited" instead of $0.
+      if (s.unlimited) {
+        $('balance').textContent = 'Unlimited';
+        $('balance').classList.remove('negative');
+        // Suppress lifetime figures for unlimited users - they don't
+        // represent real dollar flow through their account.
+        $('lifetime-topups').textContent = '-';
+        $('lifetime-spend').textContent = '-';
+      } else {
+        const bal = Number(s.wallet_balance_usd || 0);
+        $('balance').textContent = fmtUsd(bal);
+        if (bal < 0) $('balance').classList.add('negative');
+        else $('balance').classList.remove('negative');
+        $('lifetime-topups').textContent =
+          fmtUsd(s.lifetime_topups_usd);
+        $('lifetime-spend').textContent =
+          fmtUsd(s.lifetime_spend_usd);
+      }
 
       // Billing mode tag
       const modeMap = {
@@ -618,7 +626,9 @@
         auto_reload: 'Auto-reload',
         monthly_invoice: 'Monthly invoice',
       };
-      const modeLabel = modeMap[s.billing_mode] || 'Prepay';
+      const modeLabel = s.unlimited
+        ? 'Unlimited access'
+        : (modeMap[s.billing_mode] || 'Prepay');
       $('billing-mode-container').innerHTML =
         '<span class="billing-mode-tag">' + modeLabel + '</span>';
 
@@ -628,6 +638,22 @@
       }
 
       // Show / hide sections based on UI visibility + Stripe status.
+      // Unlimited users are never charged, so no billing UI applies.
+      if (s.unlimited) {
+        // Keep stats + transactions visible so they can see usage,
+        // hide every money-in surface, and show a clear notice.
+        $('stats-card').style.display = 'block';
+        renderStats(s.stats || {});
+        $('payment-method-card').style.display = 'none';
+        $('autoreload-card').style.display = 'none';
+        $('topup-card').style.display = 'none';
+        $('disabled-notice').style.display = 'block';
+        $('disabled-notice').textContent =
+          'Your account has unlimited access. No charges apply, ' +
+          'so top-ups and cards are not needed.';
+        renderTxns(s.transactions || []);
+        return;
+      }
       if (!s.ui_visible) {
         // Non-paying user, or wallet UI hidden by admin. Show only
         // the balance + a soft disabled notice; no top-up UI.

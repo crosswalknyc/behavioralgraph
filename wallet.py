@@ -484,6 +484,34 @@ def is_paying_customer(user: dict) -> bool:
     return bool(user.get("paying_customer"))
 
 
+def is_unlimited(user: dict) -> bool:
+    """True when the user carries the unlimited-credits sentinel
+    (``credits == -1``).
+
+    Jenna 2026-09-09 (verbatim): *"if osmeone has unlimited enabled
+    it shouldnt ever actually charge them so in that case billing
+    would be off for that perosn"*.
+
+    consume_credit already skips the wallet fallback when
+    ``user_unlimited`` is True (see app.py :: consume_credit), so
+    unlimited users never trigger a wallet deduction organically.
+    This helper is the defence-in-depth: every wallet-charging code
+    path consults it and short-circuits, so a future new charging
+    path cannot accidentally bill an unlimited user.
+
+    Company-pool unlimited (pool total == -1) is enforced in
+    consume_credit's pool branch; that state doesn't live on the
+    user record itself so this helper only inspects the personal
+    ``credits`` value.
+    """
+    if not user:
+        return False
+    try:
+        return int(user.get("credits", 0) or 0) == -1
+    except (TypeError, ValueError):
+        return False
+
+
 def admits_wallet_ui(user: dict) -> bool:
     """Whether the 'Add Funds' / wallet-balance UI should render for
     this user. Jenna 2026-09-08: super_admin + paying_customer=true.
@@ -773,6 +801,10 @@ def should_charge_wallet(user: dict, tool_key: str,
         return 0.0, "not_paying"
     if not is_paying_customer(user):
         return 0.0, "not_paying"
+    if is_unlimited(user):
+        # Defence-in-depth per Jenna 2026-09-09: unlimited users are
+        # NEVER charged even if a future code path forgets to check.
+        return 0.0, "unlimited"
     pricing = pricing or load_pricing()
     usd = float(pricing.get("per_tool_usd", {}).get(str(tool_key), 0.0))
     if usd <= 0:
@@ -950,7 +982,7 @@ __all__ = [
     "tool_price_usd", "prometheus_markup",
     "top_up_pack_sizes", "top_up_min_custom",
     "wallet_balance", "wallet_stats",
-    "is_paying_customer", "admits_wallet_ui",
+    "is_paying_customer", "is_unlimited", "admits_wallet_ui",
     "billing_mode", "auto_reload_threshold", "auto_reload_amount",
     "monthly_invoice_limit", "has_card_on_file",
     "apply_wallet_deduct", "apply_wallet_topup", "apply_wallet_refund",

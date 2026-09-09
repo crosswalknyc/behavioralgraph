@@ -135,6 +135,7 @@ def wallet_state():
         "role": str(u.get("role") or "user"),
         "ui_visible": ui_visible,
         "paying_customer": _get_paying_flag(u),
+        "unlimited": wallet.is_unlimited(u),
         "wallet_balance_usd": wallet.wallet_balance(u),
         "lifetime_topups_usd": float(u.get(
             "wallet_lifetime_topups_usd", 0.0) or 0.0),
@@ -904,6 +905,7 @@ def admin_users_billing():
             "email": str(u.get("email") or ""),
             "role": str(u.get("role") or ""),
             "paying_customer": bool(u.get("paying_customer")),
+            "unlimited": wallet.is_unlimited(u),
             "billing_mode": wallet.billing_mode(u),
             "wallet_balance_usd": wallet.wallet_balance(u),
             "wallet_lifetime_topups_usd": float(u.get(

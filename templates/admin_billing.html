@@ -95,6 +95,7 @@
     }
     .tag.paying { background: #E8F5E8; color: var(--olive); }
     .tag.non-paying { background: #F0F0F0; color: #6B7280; }
+    .tag.unlimited { background: #EAE3FF; color: #4A0080; }
     .tag.auto_reload { background: #FFF3E5; color: #A05A00; }
     .tag.prepay_only { background: #E5F0FF; color: #003D80; }
     .tag.monthly_invoice { background: #F0E5FF; color: #4A0080; }
@@ -518,18 +519,25 @@
         html += '<div>' + (u.username || '') + '</div>';
         html += '<div style="color: #6B7280;">' +
           (u.email || '') + '</div>';
-        html += '<div>' + (u.paying_customer
-          ? '<span class="tag paying">Paying</span>'
-          : '<span class="tag non-paying">-</span>') + '</div>';
-        html += '<div>' + (u.paying_customer
-          ? '<span class="tag ' + u.billing_mode + '">' +
-            (modeMap[u.billing_mode] || u.billing_mode) + '</span>'
-          : '') + '</div>';
-        html += '<div>' + (u.has_card_on_file
-          ? (u.card_brand || 'card') + ' ****' + (u.card_last4 || '')
-          : '<span style="color: #B8B8B0;">-</span>') + '</div>';
-        html += '<div class="amount' + balCls + '">' +
-          fmtUsd(u.wallet_balance_usd) + '</div>';
+        if (u.unlimited) {
+          html += '<div><span class="tag unlimited">Unlimited</span></div>';
+          html += '<div style="color: #6B7280;">Not charged</div>';
+          html += '<div style="color: #B8B8B0;">-</div>';
+          html += '<div class="amount" style="color: #6B7280;">-</div>';
+        } else {
+          html += '<div>' + (u.paying_customer
+            ? '<span class="tag paying">Paying</span>'
+            : '<span class="tag non-paying">-</span>') + '</div>';
+          html += '<div>' + (u.paying_customer
+            ? '<span class="tag ' + u.billing_mode + '">' +
+              (modeMap[u.billing_mode] || u.billing_mode) + '</span>'
+            : '') + '</div>';
+          html += '<div>' + (u.has_card_on_file
+            ? (u.card_brand || 'card') + ' ****' + (u.card_last4 || '')
+            : '<span style="color: #B8B8B0;">-</span>') + '</div>';
+          html += '<div class="amount' + balCls + '">' +
+            fmtUsd(u.wallet_balance_usd) + '</div>';
+        }
         html += '<div class="amount">' +
           fmtUsd(u.wallet_lifetime_spend_usd) + '</div>';
         html += '<div><button onclick="openModal(\'' +
@@ -545,7 +553,13 @@
       const u = allUsers.find(x => x.username === username);
       if (!u) return;
       $('modal-title').textContent = 'Billing: ' + username;
-      $('modal-subtitle').textContent = u.email || '';
+      const subtitleParts = [u.email || ''];
+      if (u.unlimited) {
+        subtitleParts.push(
+          '<span class="tag unlimited" style="margin-left:8px;">' +
+          'Unlimited access - not charged</span>');
+      }
+      $('modal-subtitle').innerHTML = subtitleParts.join('');
       $('m-paying').checked = !!u.paying_customer;
       $('m-mode').value = u.billing_mode || 'prepay_only';
       $('m-ar-threshold').value = u.auto_reload_threshold_usd || 500;
