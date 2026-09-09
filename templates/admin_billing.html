@@ -168,15 +168,91 @@
     }
     .banner.success { background: #E8F5E8; color: var(--olive); }
     .banner.error { background: #FFECEB; color: #C43D2E; }
-    .pricing-grid {
-      display: grid;
-      grid-template-columns: 1fr 120px 120px;
-      gap: 8px;
-      align-items: center;
-      margin-bottom: 8px;
+    .pricing-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0 0 24px 0;
+      font-size: 13px;
     }
-    .pricing-grid .tool-name { font-weight: 500; }
-    .pricing-grid input { text-align: right; }
+    .pricing-table th {
+      text-align: left;
+      padding: 10px 12px;
+      color: #6B7280;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid #E9E8E1;
+      background: transparent;
+    }
+    .pricing-table th.num { text-align: right; }
+    .pricing-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #F3F2EC;
+      vertical-align: middle;
+    }
+    .pricing-table td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .pricing-table tr.section-row td {
+      background: #F7F6F0;
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #0C1618;
+      padding: 10px 12px;
+      border-top: 1px solid #E9E8E1;
+      border-bottom: 1px solid #E9E8E1;
+    }
+    .pricing-table .tool-name {
+      font-weight: 500;
+      color: #0C1618;
+    }
+    .pricing-table .tool-flag {
+      display: block;
+      font-size: 10.5px;
+      color: #A9A9A0;
+      font-weight: 400;
+      margin-top: 2px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .pricing-table .credits-cell {
+      color: #6B7280;
+      font-weight: 500;
+    }
+    .pricing-table .usd-input-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #FFFFFF;
+      border: 1px solid #D6D4C8;
+      border-radius: 6px;
+      padding: 4px 8px;
+    }
+    .pricing-table .usd-input-wrap:focus-within {
+      border-color: #0C1618;
+      box-shadow: 0 0 0 2px rgba(12, 22, 24, 0.08);
+    }
+    .pricing-table .usd-input-wrap span {
+      color: #6B7280;
+      font-size: 13px;
+    }
+    .pricing-table .usd-input-wrap input {
+      border: 0;
+      outline: 0;
+      padding: 0;
+      width: 90px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      background: transparent;
+      font-size: 13px;
+      color: #0C1618;
+    }
+    .pricing-table .usd-input-wrap input:disabled {
+      color: #B8B8B0;
+    }
     .kv-row {
       display: grid;
       grid-template-columns: 200px 1fr;
@@ -901,48 +977,54 @@
         if (!bySection[s]) bySection[s] = [];
         bySection[s].push(key);
       });
-      // Sort sections by `order` metadata (falls back to alphabetical).
       const secOrder = Object.keys(bySection).sort((a, b) => {
         const oa = (sections[a] && sections[a].order) || 100;
         const ob = (sections[b] && sections[b].order) || 100;
         return oa - ob;
       });
 
-      let html = '';
+      // Escape helper - tool display names come from server data
+      // but sanitize anyway.
+      const esc = (s) => String(s || '').replace(/[&<>"']/g, c =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',
+          "'":'&#39;'}[c]));
+
+      let html = '<table class="pricing-table">';
+      html += '<thead><tr>';
+      html += '<th style="width: 55%;">Tool</th>';
+      html += '<th class="num" style="width: 15%;">Credits</th>';
+      html += '<th class="num" style="width: 30%;">USD price</th>';
+      html += '</tr></thead>';
+      html += '<tbody>';
       secOrder.forEach(secKey => {
         const secMeta = sections[secKey] || {};
         const secLabel = secMeta.label ||
           secKey.charAt(0).toUpperCase() + secKey.slice(1);
-        html += '<div style="margin: 20px 0 8px 0; font-size: 13px; ' +
-          'font-weight: 700; color: #0C1618; text-transform: ' +
-          'uppercase; letter-spacing: 0.05em;">' + secLabel + '</div>';
-        html += '<div class="pricing-grid" style="font-weight: 600;' +
-          ' color: #6B7280; font-size: 11px; text-transform: ' +
-          'uppercase;">' +
-          '<div>Tool</div>' +
-          '<div style="text-align:right;">Credits</div>' +
-          '<div style="text-align:right;">USD</div></div>';
+        html += '<tr class="section-row"><td colspan="3">' +
+          esc(secLabel) + '</td></tr>';
         bySection[secKey].forEach(key => {
           const t = tools[key] || {};
-          html += '<div class="pricing-grid" data-tool="' + key + '">';
-          html += '<div class="tool-name">' +
-            (t.display_name || key);
+          const display = t.display_name || key;
+          html += '<tr data-tool="' + esc(key) + '">';
+          html += '<td><div class="tool-name">' + esc(display) +
+            '</div>';
           if (t.access_flag) {
-            html += ' <span style="font-size: 10px; color: #B8B8B0;' +
-              ' font-weight: 400;">(' + t.access_flag + ')</span>';
+            html += '<span class="tool-flag">' +
+              esc(t.access_flag) + '</span>';
           }
-          html += '</div>';
-          html += '<div><input type="number" step="1" min="0" ' +
-            'class="tool-credits" value="' + (t.credits || 0) +
-            '" disabled title="Credits are wired in code; USD is ' +
-            'the editable price."></div>';
-          html += '<div>$<input type="number" step="1" min="0" ' +
-            'class="tool-usd" value="' + (t.usd || 0) +
-            '" style="width: 100px;"></div>';
-          html += '</div>';
+          html += '</td>';
+          html += '<td class="num credits-cell">' +
+            (Number(t.credits) || 0).toLocaleString() + '</td>';
+          html += '<td class="num"><span class="usd-input-wrap">' +
+            '<span>$</span>' +
+            '<input type="number" step="1" min="0" ' +
+            'class="tool-usd" value="' +
+            (Number(t.usd) || 0) + '"></span></td>';
+          html += '</tr>';
         });
       });
-      html += '<div style="text-align: right; margin-top: 20px;">' +
+      html += '</tbody></table>';
+      html += '<div style="text-align: right; margin-top: 8px;">' +
         '<button id="save-tools">Save all prices</button></div>';
       $('pricing-body').innerHTML = html;
       $('markup').value = (p.prometheus_markup ||
@@ -982,15 +1064,16 @@
     };
 
     async function saveTools() {
-      const grids = document.querySelectorAll(
-        '#pricing-body .pricing-grid[data-tool]');
+      const rows = document.querySelectorAll(
+        '#pricing-body tr[data-tool]');
       const tools = {};
-      grids.forEach(g => {
-        const key = g.dataset.tool;
-        const credits = Number(g.querySelector(
-          '.tool-credits').value || 0);
-        const usd = Number(g.querySelector(
-          '.tool-usd').value || 0);
+      rows.forEach(r => {
+        const key = r.dataset.tool;
+        const creditsEl = r.querySelector('.credits-cell');
+        const credits = creditsEl
+          ? Number((creditsEl.textContent || '0').replace(/,/g, ''))
+          : 0;
+        const usd = Number(r.querySelector('.tool-usd').value || 0);
         tools[key] = { credits: credits, usd: usd };
       });
       const r = await fetch('/api/admin/pricing', {
