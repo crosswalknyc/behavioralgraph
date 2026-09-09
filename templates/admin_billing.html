@@ -1502,18 +1502,49 @@
           }
           // 2026-09-09 (Jenna, verbatim: "hide what does it do? there
           // should be a delete, like ecommerce iq can be forever
-          // deleted"): built-in tools now show a Delete button
-          // (previously Hide). Behaviour is unchanged - hidden_tools[]
-          // in pricing.json still holds the deleted set, and the tool
-          // still exists in MODULE_CATALOG - but the label is honest.
-          // Deleted tools live in a "Show N deleted tools" panel at
-          // the bottom, with a Restore button, so mis-clicks are
-          // recoverable. Custom tools keep their existing hard-Delete
-          // (removes the row from custom_tools[] entirely).
+          // deleted" + "I dont see a meter toggle anywhere"): the
+          // action column now stacks a Metered checkbox above a
+          // Delete button. Metered is admin-toggleable per tool;
+          // locked defaults (Prometheus family) render as checked +
+          // disabled. Custom tools use the same Metered toggle plus
+          // their existing hard-Delete (removes the row from
+          // custom_tools[] entirely).
+          const isMeteredLocked = !!t.metered_locked;
           html += '<td style="text-align:right;">';
           const dispEsc = esc(display).replace(/'/g, "\\'");
           const delBtnStyle = 'font-size:11px; padding:4px 10px; ' +
             'color:#8A1F1F; border-color:#F0D0D0;';
+          // Metered toggle - first line of the action stack.
+          html += '<div style="display:flex; align-items:center; ' +
+            'justify-content:flex-end; gap:6px; ' +
+            'margin-bottom:6px; font-size:11px; ' +
+            'color:#5C6560;">';
+          const toggleAttrs =
+            'type="checkbox" class="tool-metered-toggle" ' +
+            'data-tool="' + esc(key) + '" ' +
+            (isMetered ? 'checked ' : '') +
+            (isMeteredLocked ? 'disabled ' : '') +
+            'style="cursor:' +
+            (isMeteredLocked ? 'not-allowed' : 'pointer') + ';"';
+          const toggleTitle = isMeteredLocked
+            ? 'Prometheus, Analyze Ask, and Deck Export are always ' +
+              'metered by design.'
+            : (isMetered
+                ? 'Metered - session-billed via Prometheus, no per-pull line item. Uncheck to switch back to per-pull priced.'
+                : 'Toggle on to switch this tool to session-metered. Per-pull and monthly prices will be zeroed and hidden.');
+          html += '<label style="display:flex; align-items:center; ' +
+            'gap:4px; cursor:' +
+            (isMeteredLocked ? 'not-allowed' : 'pointer') + ';" ' +
+            'title="' + esc(toggleTitle) + '">' +
+            '<input ' + toggleAttrs + '>' +
+            'Metered' +
+            (isMeteredLocked
+              ? ' <span style="color:#B8B8B0; font-size:10px;">' +
+                '(locked)</span>'
+              : '') +
+            '</label>';
+          html += '</div>';
+          // Delete / Restore button - second line of the action stack.
           if (isCustom) {
             html += '<button class="secondary" ' +
               'onclick="deleteTool(\'' + esc(key) + '\', \'' +
@@ -1782,6 +1813,58 @@
           } else {
             loadPricing();
           }
+        }
+      });
+    })();
+
+    // 2026-09-09 (Jenna): wire per-row Metered checkboxes with event
+    // delegation on the pricing body. Checkboxes re-render on every
+    // renderPricing() call, so binding once at the host is safer.
+    (function wireMeteredToggles() {
+      const host = $('pricing-body');
+      if (!host) return;
+      host.addEventListener('change', async (e) => {
+        const cb = e.target;
+        if (!cb || !cb.classList
+            || !cb.classList.contains('tool-metered-toggle')) {
+          return;
+        }
+        const tk = cb.dataset.tool;
+        if (!tk) return;
+        // Disable while the request is in flight so a double-click
+        // can't fire two mutations.
+        cb.disabled = true;
+        const path = cb.checked ? 'meter' : 'unmeter';
+        try {
+          const r = await fetch(
+            '/api/admin/pricing/tools/' +
+            encodeURIComponent(tk) + '/' + path,
+            { method: 'POST', credentials: 'same-origin' });
+          const j = await r.json().catch(() => ({}));
+          if (r.ok) {
+            $('banner').innerHTML =
+              '<div class="banner success">' +
+              (cb.checked
+                ? 'Switched to session-metered.'
+                : 'Switched back to per-pull priced.') +
+              '</div>';
+            loadPricing();
+          } else {
+            // Server rejected (e.g. locked default). Revert the
+            // checkbox and surface the message.
+            cb.checked = !cb.checked;
+            cb.disabled = false;
+            $('banner').innerHTML =
+              '<div class="banner error">' +
+              (j.error || 'Could not update metered state.') +
+              '</div>';
+          }
+        } catch (err) {
+          cb.checked = !cb.checked;
+          cb.disabled = false;
+          $('banner').innerHTML =
+            '<div class="banner error">Could not reach the ' +
+            'server. Try again.</div>';
         }
       });
     })();

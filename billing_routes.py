@@ -878,6 +878,64 @@ def admin_pricing_tool_unhide(tool_key):
 
 
 # ---------------------------------------------------------------------------
+# Per-tool metered toggle (Jenna 2026-09-09: 'meter toggle')
+# ---------------------------------------------------------------------------
+#
+# Every row in the admin pricing panel carries a Metered checkbox.
+# Locked defaults (Prometheus, Analyze Ask, Deck Export) render as
+# checked + disabled; every other tool is admin-toggleable. Checking
+# the box flips the tool to session-metered (rolls up in the
+# Prometheus session bill, never a per-pull line item) and force-
+# zeros any lingering per-pull / monthly USD on the tool_key so the
+# row visibly matches the metered contract.
+
+@billing_bp.route(
+    "/api/admin/pricing/tools/<tool_key>/meter", methods=["POST"])
+def admin_pricing_tool_meter(tool_key):
+    """Mark a tool as session-metered.
+
+    Adds tool_key to pricing.json:metered_tools[] and force-zeros
+    per_tool_usd + per_tool_monthly_usd for that key. Idempotent -
+    marking an already-metered tool (locked or admin-added) is a
+    no-op success."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import wallet  # type: ignore
+    try:
+        result = wallet.mark_metered(tool_key)
+    except wallet.CustomToolError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        print(f"[billing] mark_metered failed: {e}")
+        return jsonify({"error": "could not mark tool as metered"}), 500
+    return jsonify({"success": True, **result})
+
+
+@billing_bp.route(
+    "/api/admin/pricing/tools/<tool_key>/unmeter", methods=["POST"])
+def admin_pricing_tool_unmeter(tool_key):
+    """Un-mark a tool as metered (return it to the per-pull priced
+    catalog).
+
+    Idempotent - un-marking a tool that isn't in the admin-added
+    metered set is a no-op success. Returns 400 if the caller tries
+    to un-mark one of the LOCKED defaults (Prometheus family)."""
+    _, _, err = _require_super_admin()
+    if err:
+        return err
+    import wallet  # type: ignore
+    try:
+        result = wallet.unmark_metered(tool_key)
+    except wallet.CustomToolError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        print(f"[billing] unmark_metered failed: {e}")
+        return jsonify({"error": "could not un-mark tool"}), 500
+    return jsonify({"success": True, **result})
+
+
+# ---------------------------------------------------------------------------
 # Admin billing routes (per-user)
 # ---------------------------------------------------------------------------
 

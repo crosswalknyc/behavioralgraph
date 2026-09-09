@@ -111,6 +111,12 @@ DEFAULT_PRICING = {
     # Custom tools are HARD-DELETED (via remove_custom_tool) and do
     # not use this list.
     "hidden_tools": [],
+    # 2026-09-09 (Jenna): admin-configured additions to the locked
+    # metered default set. The Prometheus family (chatbot_analysis,
+    # chatbot_deck, prometheus) is ALWAYS metered regardless of
+    # what's here. This list lets an admin flip any OTHER tool to
+    # session-metered via the /admin/billing per-row checkbox.
+    "metered_tools": [],
     "top_up_packs_usd": [250, 500, 1000, 2500],
     "top_up_min_custom_usd": 100.0,
     "prometheus_markup_multiplier": 2.10,
@@ -155,6 +161,12 @@ DEFAULT_PRICING = {
 # price silently sent for these keys is a no-op). Only real pipeline
 # pulls (Profile IQ, Subscriber IQ, their chatbot / partner API twins)
 # carry a discrete per-pull charge.
+#
+# The set below is the LOCKED default - the Prometheus family is
+# always metered by design and cannot be un-toggled from the admin
+# panel. Admins can ADD additional tools to the metered set via
+# pricing.json:metered_tools[] using mark_metered() / unmark_metered()
+# (surfaced as per-row checkboxes on /admin/billing).
 METERED_TOOL_KEYS = frozenset({
     "chatbot_analysis",
     "chatbot_deck",
@@ -162,14 +174,103 @@ METERED_TOOL_KEYS = frozenset({
 })
 
 
+def metered_tool_keys() -> frozenset:
+    """Full set of tool_keys currently flagged as session-metered.
+
+    Union of the LOCKED defaults (METERED_TOOL_KEYS - Prometheus,
+    Analyze Ask, Deck Export) and any additions admins have made via
+    the pricing panel toggle (persisted in pricing.json:metered_tools).
+    """
+    try:
+        p = load_pricing()
+    except Exception:
+        # If pricing.json is unreadable for any reason, degrade to
+        # the locked defaults - the Prometheus family stays metered
+        # no matter what.
+        return METERED_TOOL_KEYS
+    admin = p.get("metered_tools") or []
+    if not isinstance(admin, (list, tuple, set)):
+        admin = []
+    extras = {
+        str(x).strip().lower() for x in admin
+        if isinstance(x, str) and x.strip()
+    }
+    return frozenset(METERED_TOOL_KEYS | extras)
+
+
 def is_metered_tool(tool_key: str) -> bool:
     """True iff the tool is session-metered (not per-pull priced).
 
+    Reads from `metered_tool_keys()` which unions the locked
+    defaults with the admin-configured pricing.json:metered_tools[].
     Used by /admin/billing to render a METERED badge in place of the
     per-month and per-pull price inputs, and by /api/admin/pricing to
     reject/ignore any incoming price for a metered tool.
     """
+    return str(tool_key or "").strip().lower() in metered_tool_keys()
+
+
+def is_metered_locked(tool_key: str) -> bool:
+    """True iff the tool is one of the LOCKED metered defaults
+    (Prometheus family). Admins cannot un-toggle these; the admin
+    panel's per-row checkbox renders as checked + disabled."""
     return str(tool_key or "").strip().lower() in METERED_TOOL_KEYS
+
+
+def mark_metered(tool_key: str) -> dict:
+    """Add a tool to the admin-configured metered set. Idempotent.
+    Raises CustomToolError if tool_key isn't a MODULE_CATALOG built-in
+    OR a currently-registered custom tool. Locked defaults stay
+    locked; marking one of them is a no-op that returns
+    metered=True."""
+    tk = str(tool_key or "").strip().lower()
+    if not tk:
+        raise CustomToolError("tool key is required")
+    if tk in METERED_TOOL_KEYS:
+        # Already metered by design; no state change needed.
+        return {"tool_key": tk, "metered": True, "locked": True}
+    builtin_keys = {t for t, *_ in MODULE_CATALOG}
+    custom = load_pricing().get("custom_tools") or []
+    custom_keys = {
+        str(c.get("tool_key") or "").strip().lower()
+        for c in custom if isinstance(c, dict)
+    }
+    if tk not in builtin_keys and tk not in custom_keys:
+        raise CustomToolError(
+            f"'{tk}' is not a known tool")
+    current = load_pricing(force_reload=True)
+    existing = [str(x) for x in (current.get("metered_tools") or [])]
+    if tk not in existing:
+        existing.append(tk)
+    save_pricing({"metered_tools": existing})
+    # A newly-metered tool should not silently keep an old per-pull
+    # or monthly price sitting on it - force both to 0 so the row
+    # visibly matches the metered contract on next load.
+    save_pricing({
+        "per_tool_usd": {tk: 0.0},
+        "per_tool_monthly_usd": {tk: 0.0},
+    })
+    return {"tool_key": tk, "metered": True, "locked": False}
+
+
+def unmark_metered(tool_key: str) -> dict:
+    """Remove a tool from the admin-configured metered set.
+    Idempotent. Raises CustomToolError if tool_key is a LOCKED
+    default (Prometheus family)."""
+    tk = str(tool_key or "").strip().lower()
+    if not tk:
+        raise CustomToolError("tool key is required")
+    if tk in METERED_TOOL_KEYS:
+        raise CustomToolError(
+            f"'{tk}' is a locked metered tool. Prometheus, Analyze "
+            f"Ask, and Deck Export are always metered by design.")
+    current = load_pricing(force_reload=True)
+    existing = [
+        str(x) for x in (current.get("metered_tools") or [])
+        if str(x).strip().lower() != tk
+    ]
+    save_pricing({"metered_tools": existing})
+    return {"tool_key": tk, "metered": False, "locked": False}
 
 
 MODULE_CATALOG = [
@@ -328,10 +429,12 @@ def module_catalog(*, include_hidden: bool = False) -> list:
             "is_hidden": is_hidden,
             # 2026-09-09 (Jenna): the admin billing pricing panel
             # renders metered tools with a METERED badge in place of
-            # per-month / per-pull price inputs. Session-metered
-            # tools (Prometheus, Analyze Ask, Deck Export) never
-            # carry a discrete per-pull price.
-            "metered": tool_key in METERED_TOOL_KEYS,
+            # per-month / per-pull price inputs. `metered` reads from
+            # the union of LOCKED defaults + admin-added set;
+            # `metered_locked` marks the Prometheus family (which
+            # admins cannot un-toggle from the panel).
+            "metered": is_metered_tool(tool_key),
+            "metered_locked": tool_key in METERED_TOOL_KEYS,
         })
     builtin_keys = {tk for tk, *_ in MODULE_CATALOG}
     custom_keys = set()
@@ -361,11 +464,12 @@ def module_catalog(*, include_hidden: bool = False) -> list:
             "is_builtin": False,
             "is_custom": True,
             "is_hidden": False,
-            # Custom tools are always per-pull priced. If a future
-            # admin-defined custom tool needs to be metered, add a
-            # 'metered' flag on the custom_tools JSON entry and
-            # honour it here.
-            "metered": bool(c.get("metered")),
+            # Custom tools can also be toggled metered via the admin
+            # panel. `metered` reads from the same admin-added set;
+            # only the Prometheus family is locked (custom tools
+            # are never locked, so admins can always un-toggle).
+            "metered": is_metered_tool(tk),
+            "metered_locked": False,
         })
     # Fold in any orphan per_tool_usd / per_tool_monthly_usd keys
     # (neither builtin nor custom) so a rogue price never goes
@@ -398,8 +502,9 @@ def module_catalog(*, include_hidden: bool = False) -> list:
             "is_hidden": False,
             # Orphan rows honour the standing metered set so a stray
             # per_tool_usd entry for a metered key still renders as
-            # metered (defence in depth).
-            "metered": k in METERED_TOOL_KEYS,
+            # metered (defence in depth). Locked = default only.
+            "metered": is_metered_tool(k),
+            "metered_locked": k in METERED_TOOL_KEYS,
         })
     return rows
 
@@ -516,12 +621,20 @@ def save_pricing(new_pricing: dict) -> dict:
             merged["hidden_tools"] = sorted({
                 str(x) for x in v if isinstance(x, str) and x.strip()
             })
+        elif k == "metered_tools" and isinstance(v, list):
+            # Same shape as hidden_tools. Replaces on save so unmark
+            # cleanly drops an entry.
+            merged["metered_tools"] = sorted({
+                str(x).strip().lower() for x in v
+                if isinstance(x, str) and x.strip()
+            })
         else:
             merged[k] = v
-    # Ensure the monthly dict + hidden list exist even when the
-    # on-disk doc predates the split (older pricing.json).
+    # Ensure the monthly dict + hidden + metered lists exist even
+    # when the on-disk doc predates the split (older pricing.json).
     merged.setdefault("per_tool_monthly_usd", {})
     merged.setdefault("hidden_tools", [])
+    merged.setdefault("metered_tools", [])
     if isinstance(new_pricing, dict):
         # Explicit-delete support (needed by remove_custom_tool). The
         # additive .update() below can't drop keys from per_tool_usd
@@ -553,6 +666,14 @@ def save_pricing(new_pricing: dict) -> dict:
                 # rebuild the list before calling save_pricing).
                 merged["hidden_tools"] = sorted({
                     str(x) for x in v
+                    if isinstance(x, str) and x.strip()
+                })
+            elif k == "metered_tools" and isinstance(v, list):
+                # Same replace-not-merge shape as hidden_tools.
+                # mark_metered / unmark_metered rebuild the desired
+                # list before calling save_pricing.
+                merged["metered_tools"] = sorted({
+                    str(x).strip().lower() for x in v
                     if isinstance(x, str) and x.strip()
                 })
             elif k in ("top_up_packs_usd",) and isinstance(v, list):
@@ -2138,7 +2259,8 @@ __all__ = [
     "PRICING_S3_KEY",
     "DEFAULT_PRICING",
     "MODULE_CATALOG", "module_catalog",
-    "METERED_TOOL_KEYS", "is_metered_tool",
+    "METERED_TOOL_KEYS", "is_metered_tool", "is_metered_locked",
+    "metered_tool_keys", "mark_metered", "unmark_metered",
     "load_pricing", "save_pricing",
     "tool_price_usd", "tool_monthly_usd", "prometheus_markup",
     "compute_user_monthly_charge", "compute_company_monthly_charge",
