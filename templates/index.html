@@ -25381,9 +25381,11 @@ https://www.instagram.com/p/..."></textarea>
             #trendsIQView .tiq-sheet-delta.up { color: #86efac; }
             #trendsIQView .tiq-sheet-delta.down { color: #fca5a5; }
             #trendsIQView .tiq-sheet-delta.flat { color: var(--text-secondary); font-weight: 500; }
+            #trendsIQView .tiq-sheet-delta.new { color: #60a5fa; font-weight: 700; letter-spacing: 0.04em; font-size: 0.85em; }
             #trendsIQView .tiq-sheet-dim { color: var(--text-secondary); }
             body[data-theme="light"] #trendsIQView .tiq-sheet-delta.up { color: #15803d; }
             body[data-theme="light"] #trendsIQView .tiq-sheet-delta.down { color: #b91c1c; }
+            body[data-theme="light"] #trendsIQView .tiq-sheet-delta.new { color: #2563eb; }
             body[data-theme="light"] #trendsIQView .tiq-sheet th.sort-asc .tiq-sort-ind, body[data-theme="light"] #trendsIQView .tiq-sheet th.sort-desc .tiq-sort-ind { color: #6d28d9; }
             #trendsIQView .tiq-sheet-subline { margin-top: 0.2rem; }
             #trendsIQView .tiq-sheet-tag { display: inline-block; padding: 1px 7px; border-radius: 9999px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.03em; background: rgba(129,140,248,0.16); color: #c7d2fe; }
@@ -57095,15 +57097,17 @@ https://www.instagram.com/p/..."></textarea>
                     var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
                     deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pos + '</span>';
                     deltaSort = String((us.direction === 'up') ? pos : -pos);
+                } else if (us.direction === 'new') {
+                    deltaHtml = '<span class="tiq-sheet-delta new">NEW</span>';
+                    deltaSort = '0';
                 } else if (typeof us.delta_pct === 'number' && us.direction) {
-                    var pct = Math.round(Math.abs(us.delta_pct) * 100);
-                    if (pct >= 1) {
-                        var glyph2 = (us.direction === 'up') ? '\u2191' : (us.direction === 'down') ? '\u2193' : '\u00b7';
-                        var dcls2  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
-                        var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
-                        deltaHtml = '<span class="tiq-sheet-delta ' + dcls2 + '">' + glyph2 + ' ' + pct + '%</span>';
-                        deltaSort = String(signed);
-                    }
+                    var pctRaw2 = Math.abs(us.delta_pct) * 100;
+                    var pct = pctRaw2 >= 1 ? Math.round(pctRaw2) : Math.round(pctRaw2 * 10) / 10;
+                    var glyph2 = (us.direction === 'up') ? '\u2191' : (us.direction === 'down') ? '\u2193' : '\u00b7';
+                    var dcls2  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
+                    var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
+                    deltaHtml = '<span class="tiq-sheet-delta ' + dcls2 + '">' + glyph2 + ' ' + pct + '%</span>';
+                    deltaSort = String(signed);
                 }
                 var tipParts = [];
                 if (hasVal) {
@@ -57997,15 +58001,17 @@ https://www.instagram.com/p/..."></textarea>
                                 var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
                                 deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pos + '</span>';
                                 deltaSort = String((us.direction === 'up') ? pos : -pos);
+                            } else if (us.direction === 'new') {
+                                deltaHtml = '<span class="tiq-sheet-delta new">NEW</span>';
+                                deltaSort = '0';
                             } else if (typeof us.delta_pct === 'number' && us.direction) {
-                                var pct = Math.round(Math.abs(us.delta_pct) * 100);
-                                if (pct >= 1) {
-                                    var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
-                                    var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
-                                    var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
-                                    deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pct + '%</span>';
-                                    deltaSort = String(signed);
-                                }
+                                var pctRaw = Math.abs(us.delta_pct) * 100;
+                                var pct = pctRaw >= 1 ? Math.round(pctRaw) : Math.round(pctRaw * 10) / 10;
+                                var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
+                                var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
+                                var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
+                                deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pct + '%</span>';
+                                deltaSort = String(signed);
                             }
                             var tipParts = [];
                             if (hasViews) {
@@ -58365,15 +58371,17 @@ https://www.instagram.com/p/..."></textarea>
                                 var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
                                 deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pos + '</span>';
                                 deltaSort = String((us.direction === 'up') ? pos : -pos);
+                            } else if (us.direction === 'new') {
+                                deltaHtml = '<span class="tiq-sheet-delta new">NEW</span>';
+                                deltaSort = '0';
                             } else if (typeof us.delta_pct === 'number' && us.direction) {
-                                var pct = Math.round(Math.abs(us.delta_pct) * 100);
-                                if (pct >= 1) {
-                                    var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
-                                    var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
-                                    var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
-                                    deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pct + '%</span>';
-                                    deltaSort = String(signed);
-                                }
+                                var pctRaw = Math.abs(us.delta_pct) * 100;
+                                var pct = pctRaw >= 1 ? Math.round(pctRaw) : Math.round(pctRaw * 10) / 10;
+                                var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
+                                var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
+                                var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
+                                deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pct + '%</span>';
+                                deltaSort = String(signed);
                             }
                             var tipParts = [];
                             if (hasViews) {
@@ -58479,15 +58487,17 @@ https://www.instagram.com/p/..."></textarea>
                                 var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
                                 deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pos + '</span>';
                                 deltaSort = String((us.direction === 'up') ? pos : -pos);
+                            } else if (us.direction === 'new') {
+                                deltaHtml = '<span class="tiq-sheet-delta new">NEW</span>';
+                                deltaSort = '0';
                             } else if (typeof us.delta_pct === 'number' && us.direction) {
-                                var pct = Math.round(Math.abs(us.delta_pct) * 100);
-                                if (pct >= 1) {
-                                    var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
-                                    var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
-                                    var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
-                                    deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pct + '%</span>';
-                                    deltaSort = String(signed);
-                                }
+                                var pctRaw = Math.abs(us.delta_pct) * 100;
+                                var pct = pctRaw >= 1 ? Math.round(pctRaw) : Math.round(pctRaw * 10) / 10;
+                                var glyph = (us.direction === 'up') ? '↑' : (us.direction === 'down') ? '↓' : '·';
+                                var dcls  = (us.direction === 'up') ? 'up' : (us.direction === 'down') ? 'down' : 'flat';
+                                var signed = (us.direction === 'up') ? pct : (us.direction === 'down') ? -pct : 0;
+                                deltaHtml = '<span class="tiq-sheet-delta ' + dcls + '">' + glyph + ' ' + pct + '%</span>';
+                                deltaSort = String(signed);
                             }
                             var tipParts = [];
                             if (hasViews) {

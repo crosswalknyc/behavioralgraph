@@ -798,6 +798,119 @@ _WINDOW_ACCUMULATOR_TIMEOUT_S   = int(
     os.environ.get('TRENDS_IQ_ACCUM_TIMEOUT_S', '90'))
 
 
+# ---------------------------------------------------------------------------
+# Fold-tolerant key matching for window deltas (2026-09-09).
+#
+# The same show drifts between key spellings across days: rails flip
+# between base and season-qualified titles ('tv:leanne' one week,
+# 'tv:leanne season 2' the next), the Netflix published-record history
+# uses the season-qualified convention, and Disney/ESPN rows land under
+# 'title:'. An exact-key join across days therefore misses real
+# history and every miss used to render a dash in the chip column.
+#
+# `_fold_stream_key` strips trailing season/part/volume qualifiers so
+# 'tv:beauty in black season 3' and 'tv:beauty in black' resolve to one
+# cross-day identity. Resolution per day stays EXACT-FIRST: the folded
+# lookup only fires when the exact key carried nothing that day.
+# ---------------------------------------------------------------------------
+
+_STREAM_KEY_QUALIFIER_RE = re.compile(
+    r'\s+(?:season|series|part|volume|vol|chapter)\s+\d+$')
+
+# Kind families that may cross-resolve, mirroring the fallback order
+# `_annotate_streaming_with_streams` / `_annotate_fast_with_streams`
+# already use when stamping rows.
+_FOLD_KIND_FALLBACK = {
+    'film':      ('film', 'tv', 'title'),
+    'tv':        ('tv', 'film', 'title'),
+    'title':     ('title', 'film', 'tv'),
+    'fast_film': ('fast_film', 'fast_tv'),
+    'fast_tv':   ('fast_tv', 'fast_film'),
+}
+
+_fold_key_cache: dict = {}
+
+
+def _fold_stream_key(key: str) -> str:
+    """'tv:my life with walter boys season 3' -> 'tv:my life with
+    walter boys'. Iterative so 'season 2 part 1' fully strips. Keys
+    with no qualifier return unchanged. Cached per process (keys
+    repeat across the ~60 daily snapshots a 30-day window reads)."""
+    cached = _fold_key_cache.get(key)
+    if cached is not None:
+        return cached
+    kind, sep, name = key.partition(':')
+    if sep:
+        prev = None
+        while prev != name:
+            prev = name
+            name = _STREAM_KEY_QUALIFIER_RE.sub('', name)
+        folded = f'{kind}:{name}'
+    else:
+        folded = key
+    if len(_fold_key_cache) < 500_000:
+        _fold_key_cache[key] = folded
+    return folded
+
+
+def _build_day_fold_index(items: dict) -> dict:
+    """{folded_key: entry-with-max-us_estimate} for one day's items.
+    When several exact keys fold to the same identity on the same day
+    (base zombie + season-qualified twin), the largest estimate wins so
+    the folded fallback never undercounts."""
+    out: dict = {}
+    for k, e in (items or {}).items():
+        if not isinstance(e, dict):
+            continue
+        v = e.get('us_estimate')
+        if not isinstance(v, (int, float)) or v <= 0:
+            continue
+        fk = _fold_stream_key(k)
+        cur = out.get(fk)
+        if cur is None or (cur.get('us_estimate') or 0) < v:
+            out[fk] = e
+    return out
+
+
+def _resolve_day_entry(day_items: dict, day_fold: dict,
+                        key: str) -> Optional[dict]:
+    """One day's entry for `key`: exact key first, then the folded
+    identity across the kind-fallback family."""
+    e = day_items.get(key)
+    if isinstance(e, dict) and (e.get('us_estimate') or 0) > 0:
+        return e
+    fk = _fold_stream_key(key)
+    kind, _, name = fk.partition(':')
+    for alt_kind in _FOLD_KIND_FALLBACK.get(kind, (kind,)):
+        e = day_fold.get(f'{alt_kind}:{name}')
+        if isinstance(e, dict):
+            return e
+    return None
+
+
+def _window_delta_fields(cur_sum: float, prev_sum: float,
+                          prev_days_fetched: int) -> Optional[tuple]:
+    """(delta_pct, direction) comparing this window's sum against the
+    immediately preceding equal-length window's sum.
+
+    prev window carried data for this item -> real ratio.
+    prev window fetched but item absent   -> ('new'): first time this
+                                              item carries a measured
+                                              audience in our record.
+    prev window entirely unreachable      -> None: caller leaves the
+                                              stored day-over-day
+                                              fields untouched.
+    """
+    if prev_days_fetched <= 0:
+        return None
+    if prev_sum > 0:
+        pct = (cur_sum - prev_sum) / prev_sum
+        return (round(pct, 4), _direction_for(pct))
+    if cur_sum > 0:
+        return (0.0, 'new')
+    return None
+
+
 def _window_noun_for_days(lookback_days: int) -> str:
     """Cadence noun that matches the WINDOW dropdown value.
 
@@ -851,15 +964,18 @@ def _rewrite_unit_label(label: Optional[str], noun: str) -> str:
 
 def _accumulate_stream_estimates_over_window(
         lookback_days: int,
-        asof: Optional[str] = None
+        asof: Optional[str] = None,
+        today_snap: Optional[dict] = None
         ) -> Optional[dict]:
     """Sum per-item `us_estimate` across the last N daily
-    `stream_estimates` snapshots and return a merged snapshot.
+    `stream_estimates` snapshots and stamp a window-over-window delta
+    on every item, returning a merged snapshot.
 
-    N = min(lookback_days, 30). The reference day is `asof` (when set)
-    or today. Reads dated snapshots via `_read_snapshot(source,
-    asof=DATE)` in parallel; today's dated read falls back to `latest/`
-    when the nightly cron hasn't stamped a dated copy yet.
+    N = min(max(lookback_days, 1), 30). The reference day is `asof`
+    (when set) or today. Reads dated snapshots via `_read_snapshot(
+    source, asof=DATE)` in parallel; today's dated read falls back to
+    `latest/` when the nightly cron hasn't stamped a dated copy yet
+    (or to `today_snap` when the caller already fetched it).
 
     Each daily snapshot's `us_estimate` is a DAILY unique-audience
     count researched fresh for that calendar day (see
@@ -868,17 +984,40 @@ def _accumulate_stream_estimates_over_window(
     unique-audience count as a plain sum with no multiplier and no
     decay factor.
 
+    DELTAS (2026-09-09 rework). The old behavior inherited the latest
+    day's day-over-day `direction` / `delta_pct` verbatim, so a 30-day
+    chip showed yesterday's movement (or nothing at all when the
+    latest-day entry was merged without trend fields). Now every
+    window's delta is computed here, at query time, from the dated
+    record itself:
+
+        this window's sum  vs  the immediately preceding
+                               equal-length window's sum
+
+    with per-day fold-tolerant key resolution (exact key first, then
+    the season-qualifier-stripped identity - see `_fold_stream_key`)
+    so rails flipping between 'Leanne' and 'Leanne: Season 2' no
+    longer sever an item from its own history. Items with no measured
+    data anywhere in the prior window get direction='new' (the chip
+    renders the NEW treatment); items whose prior window couldn't be
+    fetched at all keep their stored day-over-day fields. The same
+    computation runs per `by_platform` block so platform-scoped rows
+    (a Netflix panel row shows the Netflix-only number) carry a
+    platform-scoped delta. lookback_days=1 runs the same math with a
+    1-day window (today vs yesterday), repairing entries that were
+    merged into `latest/` without trend fields.
+
     Returns:
         A merged snapshot whose `items` dict inherits the latest day's
-        entry shape (direction, delta_pct, methods, sources), but whose
-        `us_estimate` and `by_platform.<slug>.us_estimate` are the sum
-        across the days that carried this item. Each merged entry also
-        picks up `window_days_covered` (int, days that contributed)
-        and `window_days_total` (int, N).  `unit_label` is rewritten
-        to swap the cadence prefix so the chip shows the window noun.
+        entry shape (methods, sources), but whose `us_estimate`,
+        `by_platform.<slug>.us_estimate`, `delta_pct` and `direction`
+        are window-scoped as described above. For N>1 each merged
+        entry also picks up `window_days_covered` / `window_days_total`
+        and a cadence-rewritten `unit_label`; N=1 keeps the daily
+        label and values untouched (only the delta fields are
+        recomputed).
 
-        None when lookback_days <= 1 (caller uses the plain `latest/`
-        read) OR when no dated snapshot was reachable.
+        None when no dated snapshot was reachable at all.
 
     Rules the caller can rely on:
       - Non-persistent titles sum only the days they appeared.
@@ -891,11 +1030,9 @@ def _accumulate_stream_estimates_over_window(
         n = int(lookback_days or 1)
     except Exception:
         n = 1
-    if n <= 1:
-        return None
-    # Safety cap: never fetch more than 30 dated snapshots per request.
+    # Safety cap: never sum more than 30 dated snapshots per request.
     # Larger windows are aliased to 30-day accumulation.
-    n = min(n, 30)
+    n = max(1, min(n, 30))
 
     # Reference date: asof when provided, otherwise today (UTC).
     ref_iso = asof or _today_iso()
@@ -906,14 +1043,21 @@ def _accumulate_stream_estimates_over_window(
 
     dated_isos = [(ref_date - timedelta(days=i)).isoformat()
                   for i in range(n)]
+    # The immediately preceding equal-length window, fetched in the
+    # same pool, so the delta compares window sum vs window sum.
+    prev_isos = [(ref_date - timedelta(days=i)).isoformat()
+                 for i in range(n, 2 * n)]
+    cur_set  = set(dated_isos)
+    prev_set = set(prev_isos)
 
     def _fetch_one(d_iso: str) -> tuple[str, Optional[dict]]:
         # Live view: for today's date the dated snapshot may not exist
-        # until the nightly cron runs, so fall back to `latest/` so we
+        # until the nightly cron runs, so fall back to the already-
+        # fetched `latest/` copy (or a fresh `latest/` read) so we
         # never lose today's day of data on an accumulated read.
         snap = _read_snapshot('stream_estimates', asof=d_iso)
         if snap is None and d_iso == _today_iso():
-            snap = _read_snapshot('stream_estimates')
+            snap = today_snap or _read_snapshot('stream_estimates')
         return d_iso, snap
 
     # Fail-safe fetch: futures_wait never raises, so days that landed
@@ -923,11 +1067,12 @@ def _accumulate_stream_estimates_over_window(
     # is shut down without waiting; straggler threads finish in the
     # background and are discarded.
     fetched: list[tuple[str, dict]] = []
+    prev_fetched: list[tuple[str, dict]] = []
     ex = ThreadPoolExecutor(
         max_workers=_WINDOW_ACCUMULATOR_MAX_WORKERS,
         thread_name_prefix='tiq-accum')
     try:
-        futures = [ex.submit(_fetch_one, d) for d in dated_isos]
+        futures = [ex.submit(_fetch_one, d) for d in dated_isos + prev_isos]
         done, not_done = futures_wait(
             futures, timeout=_WINDOW_ACCUMULATOR_TIMEOUT_S)
         for fut in done:
@@ -936,7 +1081,10 @@ def _accumulate_stream_estimates_over_window(
             except Exception:
                 continue
             if snap and isinstance(snap, dict):
-                fetched.append((d_iso, snap))
+                if d_iso in cur_set:
+                    fetched.append((d_iso, snap))
+                elif d_iso in prev_set:
+                    prev_fetched.append((d_iso, snap))
         if not_done:
             logger.warning(
                 "trends_iq accumulator: %d of %d dated reads missed the "
@@ -955,11 +1103,10 @@ def _accumulate_stream_estimates_over_window(
     # fields survive into the merged output) is the freshest day.
     fetched.sort(key=lambda t: t[0], reverse=True)
 
-    # Deep-copy the latest snapshot as the shape template. We keep its
-    # direction / delta_pct / method / sources / prev_estimate / prev_
-    # date verbatim - those are day-over-day signals that describe the
-    # LATEST day, not the window. Overwriting us_estimate below with
-    # the accumulated sum is the only mutation.
+    # Deep-copy the latest snapshot as the shape template. Method /
+    # sources / unit vocab survive verbatim; us_estimate becomes the
+    # window sum and delta_pct / direction become the window-over-
+    # window comparison computed below.
     try:
         merged = json.loads(json.dumps(fetched[0][1]))
     except Exception:
@@ -968,70 +1115,110 @@ def _accumulate_stream_estimates_over_window(
     if not isinstance(merged_items, dict):
         return None
 
-    # Per-item accumulator across every fetched day.
-    #   accum[key] = {'us_estimate': int, 'days_covered': int,
-    #                 'by_platform': {slug: int}}
-    accum: dict[str, dict] = {}
-    for _d_iso, snap in fetched:
-        items = snap.get('items') or {}
-        if not isinstance(items, dict):
+    # Per-day exact + folded indexes for both windows. Resolution per
+    # target key per day is exact-first, folded fallback (see
+    # `_resolve_day_entry`), so a title keeps its history across key-
+    # spelling drift without ever double-counting a day.
+    cur_days = [(d, snap.get('items') or {}, _build_day_fold_index(snap.get('items') or {}))
+                for d, snap in fetched]
+    prev_days = [(d, snap.get('items') or {}, _build_day_fold_index(snap.get('items') or {}))
+                 for d, snap in prev_fetched]
+    prev_days_fetched = len(prev_days)
+
+    noun = _window_noun_for_days(n)
+    stamped = 0
+    for key, entry in merged_items.items():
+        if not isinstance(entry, dict):
             continue
-        for key, entry in items.items():
-            if not isinstance(entry, dict):
+        if not isinstance(entry.get('us_estimate'), (int, float)) \
+                or entry.get('us_estimate') <= 0:
+            continue
+
+        cur_sum = 0
+        days_covered = 0
+        slug_cur: dict[str, int] = {}
+        for _d, day_items, day_fold in cur_days:
+            e = _resolve_day_entry(day_items, day_fold, key)
+            if e is None:
                 continue
-            v = entry.get('us_estimate')
+            v = e.get('us_estimate')
             if not isinstance(v, (int, float)) or v <= 0:
                 continue
-            a = accum.setdefault(key, {
-                'us_estimate': 0,
-                'days_covered': 0,
-                'by_platform': {},
-            })
-            a['us_estimate']  += int(v)
-            a['days_covered'] += 1
-            by_plat = entry.get('by_platform') or {}
-            if isinstance(by_plat, dict):
-                for slug, per in by_plat.items():
+            cur_sum += int(v)
+            days_covered += 1
+            bp = e.get('by_platform') or {}
+            if isinstance(bp, dict):
+                for slug, per in bp.items():
                     if not isinstance(per, dict):
                         continue
                     pv = per.get('us_estimate')
                     if isinstance(pv, (int, float)) and pv > 0:
-                        a['by_platform'][slug] = (
-                            a['by_platform'].get(slug, 0) + int(pv))
-
-    # Merge the accumulated values back into the base snapshot's items.
-    # Only items present in the base snapshot are surfaced downstream
-    # (annotators walk today's charts and match by key); items that
-    # appeared only on older days but not the latest are naturally
-    # dropped, which is correct - a title that's off every current
-    # chart shouldn't render.
-    noun = _window_noun_for_days(n)
-    for key, a in accum.items():
-        entry = merged_items.get(key)
-        if not isinstance(entry, dict):
+                        slug_cur[slug] = slug_cur.get(slug, 0) + int(pv)
+        if cur_sum <= 0:
             continue
-        entry['us_estimate']         = a['us_estimate']
-        entry['window_days_covered'] = a['days_covered']
-        entry['window_days_total']   = n
+
+        prev_sum = 0
+        slug_prev: dict[str, int] = {}
+        for _d, day_items, day_fold in prev_days:
+            e = _resolve_day_entry(day_items, day_fold, key)
+            if e is None:
+                continue
+            v = e.get('us_estimate')
+            if not isinstance(v, (int, float)) or v <= 0:
+                continue
+            prev_sum += int(v)
+            bp = e.get('by_platform') or {}
+            if isinstance(bp, dict):
+                for slug, per in bp.items():
+                    if not isinstance(per, dict):
+                        continue
+                    pv = per.get('us_estimate')
+                    if isinstance(pv, (int, float)) and pv > 0:
+                        slug_prev[slug] = slug_prev.get(slug, 0) + int(pv)
+
+        # N=1 keeps the single-day value and daily label untouched;
+        # N>1 swaps in the window sum + coverage + cadence noun.
+        if n > 1:
+            entry['us_estimate']         = cur_sum
+            entry['window_days_covered'] = days_covered
+            entry['window_days_total']   = n
+            entry['unit_label'] = _rewrite_unit_label(
+                entry.get('unit_label'), noun)
+
+        d = _window_delta_fields(cur_sum, prev_sum, prev_days_fetched)
+        if d is not None:
+            entry['delta_pct'], entry['direction'] = d
+            entry['prev_estimate'] = int(prev_sum)
+            entry['prev_date'] = prev_isos[0]
+            stamped += 1
+
         by_plat = entry.get('by_platform') or {}
         if isinstance(by_plat, dict):
-            for slug, s in a['by_platform'].items():
-                per = by_plat.get(slug)
-                if isinstance(per, dict):
-                    per['us_estimate']         = s
-                    per['window_days_covered'] = a['days_covered']
+            for slug, per in by_plat.items():
+                if not isinstance(per, dict):
+                    continue
+                s_cur = slug_cur.get(slug, 0)
+                if n > 1 and s_cur > 0:
+                    per['us_estimate']         = s_cur
+                    per['window_days_covered'] = days_covered
                     per['window_days_total']   = n
-        entry['unit_label'] = _rewrite_unit_label(
-            entry.get('unit_label'), noun)
+                pd = _window_delta_fields(
+                    s_cur, slug_prev.get(slug, 0), prev_days_fetched)
+                if pd is not None:
+                    per['delta_pct'], per['direction'] = pd
+                    per['prev_estimate'] = int(slug_prev.get(slug, 0))
+                    per['prev_date'] = prev_isos[0]
 
     # Stamp the whole snapshot so log messages and cache lookups can
     # tell an accumulated read apart from a single-day read.
     merged['window_lookback_days'] = n
     merged['window_days_fetched']  = len(fetched)
+    merged['window_prev_days_fetched'] = prev_days_fetched
     logger.info(
         "trends_iq stream_estimates accumulator: window=%dd, "
-        "fetched=%d/%d dated snapshots, unique_items=%d",
-        n, len(fetched), n, len(accum))
+        "fetched=%d/%d current + %d/%d prior dated snapshots, "
+        "window deltas on %d items",
+        n, len(fetched), n, prev_days_fetched, n, stamped)
     return merged
 
 
@@ -5502,8 +5689,12 @@ def _ensure_full_audience_coverage(cards: dict,
                 'confidence':       'directional',
                 'method':           'chart-tier audience for this rank '
                                     'position',
+                # A baseline stamp means this item carries no measured
+                # audience history anywhere in the record, so the only
+                # honest movement chip is the NEW treatment (first
+                # measured appearance), never a fabricated flat 0%.
                 'delta_pct':        0.0,
-                'direction':        'stable',
+                'direction':        'new',
                 'as_of_date':       today_iso,
                 'est_basis':        'chart_baseline',
             }
@@ -8860,11 +9051,16 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # row's `us_streams` block so the tooltip can be honest about
     # coverage). `unit_label` picks up the window cadence noun so a
     # 30-day chip reads "monthly US listeners" instead of "daily".
-    # lookback_days=1 falls back to the single `latest/` read below.
-    stream_estimates_snap = None
-    if int(lookback_days or 1) > 1:
-        stream_estimates_snap = _accumulate_stream_estimates_over_window(
-            int(lookback_days), asof=asof)
+    # lookback_days=1 runs the same accumulator with a 1-day window:
+    # values and labels stay the single-day read, but delta_pct /
+    # direction are recomputed against yesterday's dated snapshot with
+    # fold-tolerant key matching (repairs entries merged into latest/
+    # without trend fields, and entries severed from their own history
+    # by a title-spelling flip). Falls back to the plain latest/ read
+    # only when no dated snapshot was reachable at all.
+    stream_estimates_snap = _accumulate_stream_estimates_over_window(
+        int(lookback_days or 1), asof=asof,
+        today_snap=results.get('stream_estimates'))
     if not stream_estimates_snap:
         stream_estimates_snap = results.get('stream_estimates') or {}
     _annotate_music_with_streams(music_charts,       stream_estimates_snap)
