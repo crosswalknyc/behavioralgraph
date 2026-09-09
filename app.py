@@ -59597,12 +59597,20 @@ _V1_CREDITS = {
 # USD prices for the partner-facing v1 API (2026-09-09 Jenna directive:
 # the API must speak in dollars, not internal credits). Values default
 # to MODULE_CATALOG rows in bg-webapp/wallet.py:
-#   api_profile_iq_build         -> $500
+#   api_chatbot_profile_iq_build -> $500  (partner API v1 fresh build)
 #   api_profile_iq_cut           -> $100
 #   api_subscriber_iq_build      -> $1000
 # and can be overridden per-workspace via system/pricing.json (the same
 # knob the admin billing pricing panel writes to). Fallbacks live inline
 # so a wallet import failure at boot never removes pricing.
+#
+# Note (2026-09-09 consolidation): the price quote reads
+# `api_chatbot_profile_iq_build` - the same key `pull_type_to_tool_key`
+# routes every partner-API-driven build to. The legacy
+# `api_profile_iq_build` row is retired; keeping the quote and the
+# debit on one key means an admin edit to that one row updates BOTH
+# what the partner sees in /check and what they get charged in /run,
+# with zero drift risk.
 _V1_USD_FALLBACK = {
     'existing_match':       0.0,
     'derive_cut':           100.0,
@@ -59655,14 +59663,17 @@ def _v1_price_usd_for(decision: str, cut_count: int = 0) -> float:
         # Parent build + one cut, and any additional addon cuts stack
         # on top the same as new_build.
         base = _v1_tool_price_usd(
-            'api_profile_iq_build', _V1_USD_FALLBACK['new_build'])
+            'api_chatbot_profile_iq_build',
+            _V1_USD_FALLBACK['new_build'])
         # First cut is baked into the tier; every extra cut is +cut_each.
         extra_cuts = max(cut_count - 1, 0) if cut_count > 0 else 0
         return round(base + cut_each + cut_each * extra_cuts, 2)
     # new_build, time_shifted_refresh, and everything else default to
-    # the api_profile_iq_build tier.
+    # the api_chatbot_profile_iq_build tier - the same key
+    # pull_type_to_tool_key routes every partner API run to, so quote
+    # and debit always match.
     base = _v1_tool_price_usd(
-        'api_profile_iq_build',
+        'api_chatbot_profile_iq_build',
         _V1_USD_FALLBACK.get(d, _V1_USD_FALLBACK['new_build']))
     return round(base + cut_each * cut_count, 2)
 

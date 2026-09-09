@@ -351,8 +351,14 @@ MODULE_CATALOG = [
     ("ranker_talent",              "Talent Ranker",
      "rankers", 0, 0.0, None),
     # ---------- Partner API surface ----------
-    ("api_profile_iq_build",       "API - Profile IQ Build",
-     "api", 5, 500.0, None),
+    # 2026-09-09 (Jenna): the legacy `api_profile_iq_build` row was
+    # retired here. Every partner-API-driven Profile IQ build routes
+    # through the interpret / chatbot path (`pull_type_to_tool_key`
+    # maps 'Chatbot Profile IQ v1 (new_build)' to
+    # api_chatbot_profile_iq_build), so keeping a second row was pure
+    # drift risk - admin could edit one and forget the other. The
+    # price quote in bg-webapp/app.py::_v1_price_usd_for now reads
+    # api_chatbot_profile_iq_build directly, so quote == debit.
     ("api_profile_iq_cut",         "API - Profile IQ Cut",
      "api", 3, 100.0, None),
     ("api_subscriber_iq_build",    "API - Subscriber IQ Build",
