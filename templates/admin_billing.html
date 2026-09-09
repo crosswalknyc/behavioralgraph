@@ -296,6 +296,19 @@
 
       <div class="card" style="padding: 16px; margin: 0 0 16px 0;">
         <div class="kv-row">
+          <label style="margin: 0;">Unlimited access</label>
+          <label style="margin: 0; display: flex; align-items: center;
+                        gap: 8px;">
+            <input id="m-unlimited" type="checkbox"
+                   onchange="onUnlimitedToggle()">
+            <span id="m-unlimited-hint" style="color: #6B7280;
+                        font-size: 12px;">
+              When enabled, this user is never charged. Turning it
+              off will set their internal credits to 0.
+            </span>
+          </label>
+        </div>
+        <div class="kv-row">
           <label style="margin: 0;">Paying customer</label>
           <label style="margin: 0; display: flex; align-items: center;
                         gap: 8px;">
@@ -560,12 +573,14 @@
           'Unlimited access - not charged</span>');
       }
       $('modal-subtitle').innerHTML = subtitleParts.join('');
+      $('m-unlimited').checked = !!u.unlimited;
       $('m-paying').checked = !!u.paying_customer;
       $('m-mode').value = u.billing_mode || 'prepay_only';
       $('m-ar-threshold').value = u.auto_reload_threshold_usd || 500;
       $('m-ar-amount').value = u.auto_reload_amount_usd || 1000;
       $('m-mi-limit').value = u.monthly_invoice_limit_usd || 5000;
       updateModeFields();
+      onUnlimitedToggle();
       $('m-balance').textContent = fmtUsd(u.wallet_balance_usd);
       if (u.wallet_balance_usd < 0)
         $('m-balance').style.color = '#C43D2E';
@@ -589,6 +604,31 @@
         mode === 'monthly_invoice' ? 'block' : 'none';
     }
     $('m-mode').addEventListener('change', updateModeFields);
+
+    function onUnlimitedToggle() {
+      // Grey out the wallet-related config when unlimited is on,
+      // because it doesn't apply to a never-charged user. The values
+      // are still submitted (the backend translates unlimited into
+      // credits=-1) so admins don't lose their settings by flipping
+      // the toggle back and forth.
+      const on = $('m-unlimited').checked;
+      const dim = on ? 0.45 : 1.0;
+      ['m-paying', 'm-mode', 'm-ar-threshold', 'm-ar-amount',
+       'm-mi-limit'].forEach(id => {
+        const el = $(id);
+        if (el) {
+          el.disabled = on;
+          if (el.parentElement && el.parentElement.parentElement) {
+            el.parentElement.parentElement.style.opacity = dim;
+          }
+        }
+      });
+      $('m-unlimited-hint').textContent = on
+        ? 'This user has unlimited access. No charges apply. ' +
+          'Uncheck to enable metered billing.'
+        : 'When enabled, this user is never charged. Turning it ' +
+          'off will set their internal credits to 0.';
+    }
 
     function renderCardStatus(u) {
       if (u.has_card_on_file) {
@@ -640,7 +680,23 @@
     }
 
     $('m-save-config').addEventListener('click', async () => {
+      // Guardrail: if the admin is turning OFF unlimited, confirm -
+      // this flips the user from never-charged to metered and sets
+      // their internal credits to 0.
+      const currentUser = allUsers.find(
+        x => x.username === currentUsername) || {};
+      const wasUnlimited = !!currentUser.unlimited;
+      const wantsUnlimited = $('m-unlimited').checked;
+      if (wasUnlimited && !wantsUnlimited) {
+        if (!confirm(
+          'Turn off unlimited access for ' + currentUsername +
+          '?\n\nThis user will start being charged for pulls. ' +
+          'Their internal credits will be set to 0.')) {
+          return;
+        }
+      }
       const body = {
+        unlimited: wantsUnlimited,
         paying_customer: $('m-paying').checked,
         billing_mode: $('m-mode').value,
         auto_reload_threshold_usd:

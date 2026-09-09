@@ -940,16 +940,22 @@ def admin_users_billing():
     "/api/admin/user/<target_username>/billing/config",
     methods=["POST"])
 def admin_billing_config(target_username):
-    """Combined save endpoint: paying_customer flag + billing_mode +
-    auto-reload thresholds + monthly-invoice limit, in one call.
+    """Combined save endpoint: unlimited flag + paying_customer flag +
+    billing_mode + auto-reload thresholds + monthly-invoice limit,
+    in one call.
 
     Body: {
+      "unlimited": bool,        // sets credits to -1 (on) or 0 (off)
       "paying_customer": bool,
       "billing_mode": "prepay_only" | "auto_reload" | "monthly_invoice",
       "auto_reload_threshold_usd": 500,
       "auto_reload_amount_usd": 1000,
       "monthly_invoice_limit_usd": 5000,
     }
+
+    The `unlimited` field mirrors the user-admin "Unlimited credits"
+    checkbox so admins can flip the state without leaving the billing
+    view (Jenna 2026-09-09).
     """
     _, _, err = _require_super_admin()
     if err:
@@ -960,6 +966,17 @@ def admin_billing_config(target_username):
         return jsonify({"error": "invalid_mode"}), 400
 
     def _apply(u):
+        # Unlimited toggle: -1 sentinel is the pipeline-wide "never
+        # charge" state (see wallet.is_unlimited + consume_credit).
+        # Turning it OFF resets credits to 0 so the user starts
+        # flowing through the normal metered / wallet path.
+        if "unlimited" in body:
+            was_unlimited = int(u.get("credits", 0) or 0) == -1
+            wants_unlimited = bool(body.get("unlimited"))
+            if wants_unlimited:
+                u["credits"] = -1
+            elif was_unlimited and not wants_unlimited:
+                u["credits"] = 0
         if "paying_customer" in body:
             u["paying_customer"] = bool(body.get("paying_customer"))
         u["billing_mode"] = mode
