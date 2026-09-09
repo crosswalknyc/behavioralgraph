@@ -2415,7 +2415,7 @@
                     <div class="card-header">
                         <h2>💰 Analysis Pricing</h2>
                         <p style="color: var(--text-secondary); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                            Set the credit cost for each Analysis IQ module. Changes take effect immediately for new runs.
+                            Set the credit cost for each analysis module. Changes take effect immediately for new runs.
                         </p>
                     </div>
                     <div style="padding: 1rem;">
@@ -3733,7 +3733,7 @@
                             </label>
                         </div>
                         <small style="color: var(--text-secondary); font-size: 0.7rem; display: block; padding: 0 0.5rem 0.5rem 1.75rem;">
-                            Gates the E-Commerce IQ option in the Analysis IQ dropdown and access to released E-Commerce IQ reports.
+                            Grants access to E-Commerce IQ views and released E-Commerce IQ reports.
                         </small>
                     </div>
 
@@ -3776,7 +3776,7 @@
                          each user"). Flywheel Conversion is a live product in
                          the SELECT PRODUCT dropdown (index.html:18287); admins
                          need a per-user grant toggle for it. -->
-                    <div class="dashboard-access-item" data-access-group="conversion" title="Grants access to the Flywheel Conversion view + the Flywheel Conversion module inside Analysis IQ.">
+                    <div class="dashboard-access-item" data-access-group="conversion" title="Grants access to the Flywheel Conversion view + the Flywheel Conversion analysis module.">
                         <div class="dashboard-access-header">
                             <label class="checkbox-group">
                                 <input type="checkbox" id="hasFlywheelConversionAccess">
@@ -4051,7 +4051,7 @@
                                 <input type="checkbox" id="hasChatbotProfileIQAccess" onchange="_pmModeReflectMasterSwitch()">
                                 <span style="font-weight: 600;">💬 CHATBOT PROFILE IQ</span>
                             </label>
-                            <span style="margin-left: auto; font-size: 0.72rem; color: var(--text-secondary);">Analysis IQ · natural-language brief</span>
+                            <span style="margin-left: auto; font-size: 0.72rem; color: var(--text-secondary);">Natural-language brief</span>
                         </div>
                         <!-- Prometheus access tier (2026-08-26, Jenna): two
                              options. "Pulls only" = Profile IQ + Subscriber IQ
@@ -4174,10 +4174,10 @@
                                     </label>
                                     <label class="checkbox-group">
                                         <input type="checkbox" id="hasTicketSalesTrackerRun" onchange="syncTSTRunWithModule();">
-                                        <span>Run TST via Analysis IQ</span>
+                                        <span>Run TST</span>
                                     </label>
                                 </div>
-                                <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">View: access released reports. Run: submit TST analysis (requires Analysis IQ access + this).</small>
+                                <small style="color: var(--text-secondary); font-size: 0.65rem; display: block; margin-top: 0.5rem;">View: access released reports. Run: submit TST analysis (requires this checkbox).</small>
                             </div>
                         </div>
                     </div>

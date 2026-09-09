@@ -30652,7 +30652,7 @@ def submit_talent_search():
         
         # Check access (Analysis IQ + Talent Search module)
         if not user_can_run_analysis_module(user, 'talent_search'):
-            return jsonify({'error': 'Analysis IQ access with Talent Search module required'}), 403
+            return jsonify({'error': 'Talent Search access required'}), 403
         
         data = request.json
         if not data:
@@ -30720,7 +30720,7 @@ def submit_talent_theater():
         
         # Check access (Analysis IQ + Ticket Sales / Talent Theater module)
         if not user_can_run_analysis_module(user, 'talent_theater'):
-            return jsonify({'error': 'Analysis IQ access with Ticket Sales module required'}), 403
+            return jsonify({'error': 'Ticket Sales access required'}), 403
         
         data = request.json
         if not data:
@@ -31533,7 +31533,7 @@ def submit_ticket_sales_tracker():
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         if not user_can_run_analysis_module(user, 'ticket_sales_tracker'):
-            return jsonify({'error': 'Analysis IQ access with Ticket Sales Tracker module required'}), 403
+            return jsonify({'error': 'Ticket Sales Tracker access required'}), 403
         data = request.json
         if not data:
             return jsonify({'error': 'No data provided'}), 400
@@ -31670,7 +31670,7 @@ def submit_sf_lf_conversion():
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         if not user_can_run_analysis_module(user, 'sf_lf_conversion'):
-            return jsonify({'error': 'Analysis IQ access with SF-LF Conversion module required'}), 403
+            return jsonify({'error': 'SF-LF Conversion access required'}), 403
         data = request.json
         if not data:
             return jsonify({'error': 'No data provided'}), 400
@@ -34604,7 +34604,7 @@ def submit_flywheel_conversion():
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         if not user_can_run_analysis_module(user, 'flywheel_conversion'):
-            return jsonify({'error': 'Analysis IQ access with Flywheel Conversion module required'}), 403
+            return jsonify({'error': 'Flywheel Conversion access required'}), 403
         data = request.json
         if not data:
             return jsonify({'error': 'No data provided'}), 400
@@ -35734,7 +35734,7 @@ def submit_svod_acquisition():
         
         # Check access (Analysis IQ + SVOD module; run uses 7 credits)
         if not user_can_run_analysis_module(user, 'svod'):
-            return jsonify({'error': 'Analysis IQ access with SVOD module required'}), 403
+            return jsonify({'error': 'SVOD access required'}), 403
         
         data = request.json
         if not data:
@@ -35885,7 +35885,7 @@ def submit_campaign_roi():
         
         # Check access (Analysis IQ + Campaign module)
         if not user_can_run_analysis_module(user, 'campaign'):
-            return jsonify({'error': 'Analysis IQ access with Campaign module required'}), 403
+            return jsonify({'error': 'Attribution IQ Campaign access required'}), 403
         
         data = request.json
         if not data:
@@ -36297,7 +36297,7 @@ def submit_cross_show():
         
         # Check access (Analysis IQ + Cross Show module)
         if not user_can_run_analysis_module(user, 'cross_show'):
-            return jsonify({'error': 'Analysis IQ access with Cross Show module required'}), 403
+            return jsonify({'error': 'Cross Show access required'}), 403
         
         data = request.json
         if not data:
@@ -36365,7 +36365,7 @@ def submit_watch_time():
         
         # Check access (Analysis IQ + Watch Time module)
         if not user_can_run_analysis_module(user, 'watch_time'):
-            return jsonify({'error': 'Analysis IQ access with Watch Time module required'}), 403
+            return jsonify({'error': 'Watch Time access required'}), 403
         
         data = request.json
         if not data:
@@ -39083,10 +39083,9 @@ def submit_brand_partnership_iq():
         user = get_current_user()
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
-        # Module-level access gate. Brand Partnership IQ is part of Analysis IQ.
+        # Module-level access gate for Brand Partnership Valuation.
         if not user_can_run_analysis_module(user, 'brand_partnership_iq'):
-            return jsonify({'error': 'Analysis IQ access with Brand Partnership '
-                            'Valuation module required'}), 403
+            return jsonify({'error': 'Brand Partnership Valuation access required'}), 403
 
         data = request.get_json() or {}
         project_name   = (data.get('project_name') or '').strip()
@@ -39628,8 +39627,7 @@ def submit_journey_iq():
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         if not user_can_run_analysis_module(user, 'journey_iq'):
-            return jsonify({'error': 'Analysis IQ access with Digital Journey IQ '
-                            'module required'}), 403
+            return jsonify({'error': 'Digital Journey IQ access required'}), 403
 
         data = request.get_json() or {}
         project_name = (data.get('project_name') or '').strip()
@@ -39877,15 +39875,14 @@ def _run_intent_ingest(job_id):
 @app.route('/api/intent-ingest/submit', methods=['POST'])
 @requires_auth
 def submit_intent_ingest():
-    """Kick off a brand-campaign Attribution IQ build from the Analysis IQ form."""
+    """Kick off a brand-campaign Attribution IQ build from the ingest form."""
     try:
         username = session.get('username')
         user = get_current_user()
         if not user:
             return jsonify({'error': 'User not authenticated'}), 401
         if not user_can_run_analysis_module(user, 'intent_ingest'):
-            return jsonify({'error': 'Analysis IQ access with Intent Ingest '
-                            'module required'}), 403
+            return jsonify({'error': 'Attribution IQ Ingest access required'}), 403
 
         data = request.get_json() or {}
         brand_name    = (data.get('brand_name')    or '').strip()

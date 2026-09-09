@@ -19206,7 +19206,7 @@ body[data-theme="light"] .jiq-jmap-detail .det-row.is-obs .row-icon { color: #58
                                  Blue IQ, Fin IQ, Brand Tracking, LLMO IQ,
                                  SF Conversion, Attribution IQ, ROAS IQ,
                                  Brand Partnership, Flywheel Conversion,
-                                 Analysis IQ, Share of Time, Workspace,
+                                 Share of Time, Workspace,
                                  then tail (Admin).
 
                                History:
@@ -21889,7 +21889,7 @@ https://www.instagram.com/p/..."></textarea>
                 <div id="talentFitSidebarList" style="flex: 1; overflow-y: auto; padding: 0.5rem;">
                     <div style="padding: 1.5rem 1rem; font-size: 0.75rem; color: var(--text-secondary); text-align: center;">
                         <div style="font-size: 24px; margin-bottom: 0.5rem; opacity: 0.5;">📋</div>
-                        No assessments yet.<br>Run one in Analysis IQ.
+                        No assessments yet.<br>Run a new assessment below.
                     </div>
                 </div>
                 <div style="padding: 0.75rem; border-top: 1px solid var(--border-color);">
@@ -21919,7 +21919,7 @@ https://www.instagram.com/p/..."></textarea>
                     <div id="talentFitIQEmptyState" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; min-height: 400px; color: var(--text-secondary); text-align: center;">
                         <div style="font-size: 64px; margin-bottom: 1rem; opacity: 0.4;">🎭</div>
                         <div style="font-size: 18px; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">Talent Fit IQ Dashboard</div>
-                        <div style="font-size: 13px; max-width: 400px; margin-bottom: 1.5rem;">Select an assessment from the sidebar to view results, or run a new analysis in Analysis IQ.</div>
+                        <div style="font-size: 13px; max-width: 400px; margin-bottom: 1.5rem;">Select an assessment from the sidebar to view results, or run a new assessment.</div>
                         <button type="button" class="btn btn-primary" onclick="if(typeof showCustomAnalysis==='function'){showCustomAnalysis(); setTimeout(()=>switchCustomAnalysisTab('talent-fit'),100);}">🔍 Run New Assessment</button>
                     </div>
                     
@@ -24150,7 +24150,7 @@ https://www.instagram.com/p/..."></textarea>
                         <div class="empty-state-content">
                             <div class="empty-state-icon">🔄</div>
                             <h2>Select a Flywheel Analysis</h2>
-                            <p>Choose a flywheel conversion analysis from the sidebar to view conversion funnel insights, or run a new analysis in Analysis IQ.</p>
+                            <p>Choose a flywheel conversion analysis from the sidebar to view conversion funnel insights, or run a new Flywheel Conversion analysis.</p>
                             <button type="button" class="btn btn-primary" onclick="if(typeof showCustomAnalysis==='function'){showCustomAnalysis(); setTimeout(()=>switchCustomAnalysisTab('flywheel-conversion'),100);}">+ Run New Analysis</button>
                         </div>
                     </div>
@@ -26965,7 +26965,7 @@ https://www.instagram.com/p/..."></textarea>
                     sel.innerHTML = '';
                     if (!window.__intentIQ.titles.length) {
                         sel.innerHTML = '<option value="">(no campaigns available)</option>';
-                        document.getElementById('iiqStatus').textContent = 'No campaigns available. Use "Build Attribution IQ Campaign" under Analysis IQ to create one.';
+                        document.getElementById('iiqStatus').textContent = 'No campaigns available. Use "Build Attribution IQ Campaign" to create one.';
                         return;
                     }
                     window.__intentIQ.titles.forEach(function(t) {
@@ -38810,7 +38810,7 @@ https://www.instagram.com/p/..."></textarea>
             <div id="jiqDashEmpty" style="padding: 3rem 1.5rem; text-align: center; color: var(--text-secondary);">
                 <div style="font-size: 2.5rem; margin-bottom: 1rem;">🗺️</div>
                 <div style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.4rem;">No journey loaded</div>
-                <div style="font-size: 0.85rem; max-width: 520px; margin: 0 auto;">Pick a run from the dropdown above, or kick off a new one under <strong>Analysis IQ → Digital Journey IQ</strong>.</div>
+                <div style="font-size: 0.85rem; max-width: 520px; margin: 0 auto;">Pick a run from the dropdown above, or kick off a new one under <strong>Digital Journey IQ</strong>.</div>
             </div>
 
             <div id="jiqDashContent" style="display: none; flex: 1; overflow-y: auto; padding: 1rem 1.25rem;">
@@ -59246,7 +59246,7 @@ https://www.instagram.com/p/..."></textarea>
             const container = document.getElementById('sfConvProfileList');
             if (!container) return;
             if (!profiles || profiles.length === 0) {
-                container.innerHTML = '<div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No released Short Form → Long Form Conversion analyses found.<br><br>Run new analyses from <strong>Analysis IQ → Short Form to Long Form Conversion</strong></div>';
+                container.innerHTML = '<div style="padding: 1rem; font-size: 0.8rem; color: var(--text-secondary);">No released Short Form → Long Form Conversion analyses found.<br><br>Run a new Short Form to Long Form Conversion analysis.</div>';
                 return;
             }
             const html = profiles.map(p => {
@@ -61892,7 +61892,7 @@ https://www.instagram.com/p/..."></textarea>
                 .then(function(data) {
                     var files = (data.files || []);
                     if (!files.length) {
-                        tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No released results yet.<br><br>Run one in <strong>Analysis IQ → Brand Partnership Valuation</strong>.</div>';
+                        tree.innerHTML = '<div style="padding:1rem;color:var(--text-secondary);font-size:13px;">No released results yet.<br><br>Run one in <strong>Brand Partnership Valuation</strong>.</div>';
                         return;
                     }
                     // Group by admin-managed category (Profile IQ-style tree).
@@ -71626,7 +71626,7 @@ https://www.instagram.com/p/..."></textarea>
             if (!results || !results.length) {
                 sidebar.innerHTML = `<div style="padding:1.5rem 1rem;font-size:0.75rem;color:var(--text-secondary);text-align:center;">
                     <div style="font-size:24px;margin-bottom:0.5rem;opacity:0.5;">📋</div>
-                    No assessments yet.<br>Run one in Analysis IQ.
+                    No assessments yet.<br>Run a new assessment.
                 </div>`;
                 return;
             }
@@ -106173,7 +106173,7 @@ https://www.instagram.com/p/..."></textarea>
             if (searchVal) filtered = filtered.filter(r => r.name.toLowerCase().includes(searchVal));
             
             if (!filtered.length) {
-                el.innerHTML = '<div style="padding:1.5rem 1rem;text-align:center;color:var(--text-secondary);font-size:0.8rem;">No flywheel analyses found. Run one in Analysis IQ.</div>';
+                el.innerHTML = '<div style="padding:1.5rem 1rem;text-align:center;color:var(--text-secondary);font-size:0.8rem;">No flywheel analyses found. Run a new Flywheel Conversion analysis.</div>';
                 return;
             }
             
