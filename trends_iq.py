@@ -1055,7 +1055,7 @@ def _snapshot_items_for_geo(snap: dict, state: Optional[str],
 
 
 # ============================================================================
-# Geo keyword expansion — state + DMA -> list of case-insensitive match
+# Geo keyword expansion - state + DMA -> list of case-insensitive match
 # strings used to reorder national feeds so region-relevant items float
 # to the top. Never drops content; only reorders.
 # ============================================================================
@@ -3283,7 +3283,7 @@ def _cp_normalize(text: str) -> str:
 # "12.5M weekly US listeners · ↑20% vs yesterday" under the card.
 #
 # Keys are `podcast:<norm>` / `song:<norm(title+artist)>` /
-# `film:<norm>` / `tv:<norm>` — mirrored from
+# `film:<norm>` / `tv:<norm>` - mirrored from
 # `scripts/trends_scrapers/stream_estimates._lookup_key`.
 
 _STREAM_FIELDS = (
@@ -7647,8 +7647,15 @@ def _enrich_streaming_with_posters(items: list[dict], default_kind: str,
 
 
 def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
-                                keywords: Optional[list[str]] = None) -> dict:
+                                keywords: Optional[list[str]] = None,
+                                asof: Optional[str] = None) -> dict:
     """Fan out to every streaming platform's daily snapshot.
+
+    `asof` (YYYY-MM-DD) reads each platform's DATED snapshot instead of
+    `latest/`, so the historic date picker can serve the Streaming
+    panel for any archived day. Platforms with no dated snapshot for
+    that day simply render as unavailable; Netflix has dated coverage
+    back to 2026-01-01 via its published weekly Top 10 record.
 
     Netflix is populated by the public TSV scraper (no auth). The rest
     are Playwright + donated-cookie scrapers - they'll return
@@ -7671,7 +7678,7 @@ def _fetch_streaming_trending(state: Optional[str], lookback_days: int,
               for slug, label, avail in STREAMING_PLATFORMS}
 
     for slug, label, _static_avail in STREAMING_PLATFORMS:
-        snap = _read_snapshot(slug)
+        snap = _read_snapshot(slug, asof)
         if not snap:
             continue
         items = _snapshot_items_for_geo(snap, state, keywords=keywords)
@@ -8169,7 +8176,7 @@ def _fetch_trending_products(keywords: Optional[list[str]] = None) -> list[dict]
 # ============================================================================
 # Public API
 # ============================================================================
-def list_available_dates(max_days: int = 120) -> list[str]:
+def list_available_dates(max_days: int = 730) -> list[str]:
     """List UTC dates (YYYY-MM-DD, descending) that have historic data.
 
     Walks the S3 prefix `trends_iq_snapshots/` for date-shaped
@@ -8489,6 +8496,13 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
             'lens_scores':         lambda: _read_snapshot('lens_scores',        asof),
             'fast_trending':       lambda: _fetch_fast_trending(state, lookback_days,
                                                                   keywords=geo_kws, asof=asof),
+            # Streaming panel reads dated per-platform snapshots. The
+            # Netflix archive spans back to 2026-01-01 (published
+            # weekly Top 10 record); other platforms render for any
+            # day their dated snapshot exists.
+            'streaming_trending':  lambda: _fetch_streaming_trending(state, lookback_days,
+                                                                        keywords=geo_kws,
+                                                                        asof=asof),
         }
     else:
         tasks = {
@@ -8793,7 +8807,8 @@ def compute_view(filters: dict, force_refresh: bool = False) -> dict:
     # non-zero delta the estimator wrote.
     _annotate_fast_with_rank_change(fast_trending)
     _annotate_fast_channels_with_view_change(fast_trending)
-    _annotate_streaming_with_rank_change(streaming_trending)
+    _annotate_streaming_with_rank_change(streaming_trending,
+                                          asof=asof if historic else None)
     _annotate_sources_snapshot_rank_change(
         music_charts, snapshot_source='music_charts', label='music')
     _annotate_sources_snapshot_rank_change(
