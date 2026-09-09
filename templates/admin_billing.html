@@ -346,7 +346,14 @@
               The wallet is charged these amounts when a paying
               customer runs a pull and their internal allowance is
               exhausted. Built-in tools ship with the product; custom
-              tools can be added and removed here.
+              tools can be added and removed here. Tools tagged
+              <span style="display:inline-block; padding:0 5px;
+                font-size:10px; font-weight:600;
+                background:#0C1618; color:#C7F23E;
+                border-radius:3px; letter-spacing:0.05em;
+                vertical-align:1px;">METERED</span>
+              are session-billed via the Prometheus session bill and
+              carry no per-pull line item.
             </p>
           </div>
           <button id="btn-add-tool" style="flex-shrink:0;">
@@ -1409,6 +1416,13 @@
           const display = t.display_name || key;
           const isCustom = !!t.is_custom;
           const isHidden = !!t.is_hidden;
+          // 2026-09-09 (Jenna): metered tools (Prometheus, Analyze
+          // Ask, Deck Export) are session-billed, not per-pull
+          // priced. Render them with a METERED badge and a note in
+          // place of the per-month / per-pull price inputs so an
+          // admin can't accidentally set a price that would be
+          // silently ignored.
+          const isMetered = !!t.metered;
           const rowStyle = isHidden
             ? ' style="opacity:0.55; background:#FAFAF6;"'
             : '';
@@ -1416,6 +1430,7 @@
             ' data-credits="' + (Number(t.credits) || 0) + '"' +
             ' data-custom="' + (isCustom ? '1' : '0') + '"' +
             ' data-hidden="' + (isHidden ? '1' : '0') + '"' +
+            ' data-metered="' + (isMetered ? '1' : '0') + '"' +
             rowStyle + '>';
           html += '<td><div class="tool-name">' + esc(display);
           if (isCustom) {
@@ -1425,6 +1440,17 @@
               'background:#EAE3FF; color:#4A0080; ' +
               'border-radius:3px; text-transform:uppercase; ' +
               'letter-spacing:0.05em;">custom</span>';
+          }
+          if (isMetered) {
+            html += ' <span style="display:inline-block;' +
+              'padding:1px 6px; margin-left:6px; ' +
+              'font-size:10px; font-weight:600; ' +
+              'background:#0C1618; color:#C7F23E; ' +
+              'border-radius:3px; text-transform:uppercase; ' +
+              'letter-spacing:0.05em;" ' +
+              'title="Session-metered. Billed via the Prometheus ' +
+              'session bill, never a per-pull line item.">' +
+              'metered</span>';
           }
           if (isHidden) {
             html += ' <span style="display:inline-block;' +
@@ -1443,22 +1469,33 @@
               esc(key) + '</span>';
           }
           html += '</td>';
-          // Monthly access (recurring)
-          html += '<td class="num"><span class="usd-input-wrap">' +
-            '<span>$</span>' +
-            '<input type="number" step="1" min="0" ' +
-            'class="tool-monthly" value="' +
-            (Number(t.monthly_usd) || 0) + '"></span>' +
-            '<div style="font-size:10px; color:#B8B8B0; ' +
-            'margin-top:2px;">/ month</div></td>';
-          // Per-pull (metered)
-          html += '<td class="num"><span class="usd-input-wrap">' +
-            '<span>$</span>' +
-            '<input type="number" step="1" min="0" ' +
-            'class="tool-usd" value="' +
-            (Number(t.usd) || 0) + '"></span>' +
-            '<div style="font-size:10px; color:#B8B8B0; ' +
-            'margin-top:2px;">/ pull</div></td>';
+          if (isMetered) {
+            // Metered rows span both price columns with a static
+            // note instead of price inputs.
+            html += '<td class="num" colspan="2" ' +
+              'style="color:#5C6560; font-size:12px; ' +
+              'font-style:italic; text-align:right;">' +
+              'Session-metered - rolls up in the ' +
+              'Prometheus session bill' +
+              '</td>';
+          } else {
+            // Monthly access (recurring)
+            html += '<td class="num"><span class="usd-input-wrap">' +
+              '<span>$</span>' +
+              '<input type="number" step="1" min="0" ' +
+              'class="tool-monthly" value="' +
+              (Number(t.monthly_usd) || 0) + '"></span>' +
+              '<div style="font-size:10px; color:#B8B8B0; ' +
+              'margin-top:2px;">/ month</div></td>';
+            // Per-pull (metered)
+            html += '<td class="num"><span class="usd-input-wrap">' +
+              '<span>$</span>' +
+              '<input type="number" step="1" min="0" ' +
+              'class="tool-usd" value="' +
+              (Number(t.usd) || 0) + '"></span>' +
+              '<div style="font-size:10px; color:#B8B8B0; ' +
+              'margin-top:2px;">/ pull</div></td>';
+          }
           // Action button: Delete (custom) / Hide (visible builtin)
           // / Restore (hidden builtin).
           html += '<td style="text-align:right;">';
@@ -1534,11 +1571,19 @@
       const tools = {};
       rows.forEach(r => {
         const key = r.dataset.tool;
+        // 2026-09-09 (Jenna): metered rows render with no price
+        // inputs; skip them entirely so a stray null.value read
+        // doesn't blow up the save. The backend also force-zeros
+        // metered keys as defense in depth.
+        if (r.dataset.metered === '1') {
+          return;
+        }
         // Credits are wired in MODULE_CATALOG (not admin-editable);
         // we round-trip the value via data-credits so the backend
         // still gets a coherent {credits, usd, monthly_usd} triple.
         const credits = Number(r.dataset.credits || 0);
-        const usd = Number(r.querySelector('.tool-usd').value || 0);
+        const usdEl = r.querySelector('.tool-usd');
+        const usd = usdEl ? Number(usdEl.value || 0) : 0;
         const monthlyEl = r.querySelector('.tool-monthly');
         const monthly = monthlyEl ? Number(monthlyEl.value || 0) : 0;
         tools[key] = {

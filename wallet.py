@@ -149,6 +149,29 @@ DEFAULT_PRICING = {
 #                   the tool is not directly gated by a flag (e.g.
 #                   ranker sub-tabs live under has_rankers_iq_access).
 #
+# 2026-09-09 (Jenna): metered tools are session-billed via
+# pay_per_use, never a per-pull line item. The admin billing pricing
+# panel renders them with a METERED badge and no price fields (any
+# price silently sent for these keys is a no-op). Only real pipeline
+# pulls (Profile IQ, Subscriber IQ, their chatbot / partner API twins)
+# carry a discrete per-pull charge.
+METERED_TOOL_KEYS = frozenset({
+    "chatbot_analysis",
+    "chatbot_deck",
+    "prometheus",
+})
+
+
+def is_metered_tool(tool_key: str) -> bool:
+    """True iff the tool is session-metered (not per-pull priced).
+
+    Used by /admin/billing to render a METERED badge in place of the
+    per-month and per-pull price inputs, and by /api/admin/pricing to
+    reject/ignore any incoming price for a metered tool.
+    """
+    return str(tool_key or "").strip().lower() in METERED_TOOL_KEYS
+
+
 MODULE_CATALOG = [
     # ---------- Core builds ----------
     ("profile_iq_build",           "Profile IQ - Full Build",
@@ -303,6 +326,12 @@ def module_catalog(*, include_hidden: bool = False) -> list:
             "is_builtin": True,
             "is_custom": False,
             "is_hidden": is_hidden,
+            # 2026-09-09 (Jenna): the admin billing pricing panel
+            # renders metered tools with a METERED badge in place of
+            # per-month / per-pull price inputs. Session-metered
+            # tools (Prometheus, Analyze Ask, Deck Export) never
+            # carry a discrete per-pull price.
+            "metered": tool_key in METERED_TOOL_KEYS,
         })
     builtin_keys = {tk for tk, *_ in MODULE_CATALOG}
     custom_keys = set()
@@ -332,6 +361,11 @@ def module_catalog(*, include_hidden: bool = False) -> list:
             "is_builtin": False,
             "is_custom": True,
             "is_hidden": False,
+            # Custom tools are always per-pull priced. If a future
+            # admin-defined custom tool needs to be metered, add a
+            # 'metered' flag on the custom_tools JSON entry and
+            # honour it here.
+            "metered": bool(c.get("metered")),
         })
     # Fold in any orphan per_tool_usd / per_tool_monthly_usd keys
     # (neither builtin nor custom) so a rogue price never goes
@@ -362,6 +396,10 @@ def module_catalog(*, include_hidden: bool = False) -> list:
             "is_builtin": False,
             "is_custom": False,
             "is_hidden": False,
+            # Orphan rows honour the standing metered set so a stray
+            # per_tool_usd entry for a metered key still renders as
+            # metered (defence in depth).
+            "metered": k in METERED_TOOL_KEYS,
         })
     return rows
 
@@ -2100,6 +2138,7 @@ __all__ = [
     "PRICING_S3_KEY",
     "DEFAULT_PRICING",
     "MODULE_CATALOG", "module_catalog",
+    "METERED_TOOL_KEYS", "is_metered_tool",
     "load_pricing", "save_pricing",
     "tool_price_usd", "tool_monthly_usd", "prometheus_markup",
     "compute_user_monthly_charge", "compute_company_monthly_charge",

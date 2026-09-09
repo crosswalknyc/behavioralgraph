@@ -719,6 +719,17 @@ def admin_pricing_set():
         for tool_key, spec in tools.items():
             if not isinstance(spec, dict):
                 continue
+            # 2026-09-09 (Jenna): metered tools (Prometheus, Analyze
+            # Ask, Deck Export) are session-billed, not per-pull
+            # priced. Force their per-pull and monthly USD to 0 on
+            # save so a mis-fired admin form (or a hand-crafted API
+            # call) can never accidentally set a nonzero price. The
+            # UI already hides the price inputs for these keys, so
+            # in practice these fields arrive absent or 0 anyway.
+            if wallet.is_metered_tool(str(tool_key)):
+                merged_per_tool[str(tool_key)] = 0.0
+                merged_monthly[str(tool_key)] = 0.0
+                continue
             try:
                 merged_per_tool[str(tool_key)] = float(spec.get("usd", 0) or 0)
             except (TypeError, ValueError):
