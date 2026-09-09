@@ -148,10 +148,196 @@ def wallet_state():
         "transactions": list(u.get("wallet_transactions", []))[:100],
         "top_up_packs_usd": wallet.top_up_pack_sizes(),
         "top_up_min_custom_usd": wallet.top_up_min_custom(),
+        "stats": wallet.wallet_stats(u),
+        "auto_reload_defaults": (pricing.get("auto_reload_defaults")
+                                 or {"threshold_usd": 500.0,
+                                     "amount_usd": 1000.0}),
         "stripe_enabled": billing.is_enabled(),
         "stripe_publishable_key": billing.publishable_key(),
     }
     return jsonify(payload)
+
+
+# ---------------------------------------------------------------------------
+# User self-serve auto-reload prefs (Jenna 2026-09-09)
+# ---------------------------------------------------------------------------
+
+@billing_bp.route("/api/wallet/auto-reload", methods=["POST"])
+def wallet_auto_reload():
+    """User saves their own auto-reload preferences. Body:
+
+      {
+        "enabled": true | false,
+        "threshold_usd": 500,
+        "amount_usd": 1000
+      }
+
+    Setting `enabled: true` requires a card on file (added via
+    /api/wallet/setup-intent + /api/wallet/attach-card). Users can
+    only choose between prepay_only and auto_reload; monthly_invoice
+    stays admin-only per no-external-overrides.mdc (external users
+    can't grant themselves a credit line).
+    """
+    uname, u, err = _require_login()
+    if err:
+        return err
+    if not _get_paying_flag(u):
+        return jsonify({"error": "not_a_paying_customer"}), 403
+    import wallet  # type: ignore
+
+    body = request.get_json(silent=True) or {}
+    enabled = bool(body.get("enabled"))
+    try:
+        threshold = float(body.get("threshold_usd") or 500)
+        amount = float(body.get("amount_usd") or 1000)
+    except (TypeError, ValueError):
+        return jsonify({"error": "invalid_amounts"}), 400
+
+    # Bounds. Threshold 0-10K, amount 100-10K, and threshold < amount
+    # (nonsense to top up by less than the threshold — you'd just
+    # trip again on the very next pull).
+    if threshold < 0 or threshold > 10_000:
+        return jsonify({"error": "threshold_out_of_range",
+                        "min": 0, "max": 10000}), 400
+    if amount < 100 or amount > 10_000:
+        return jsonify({"error": "amount_out_of_range",
+                        "min": 100, "max": 10000}), 400
+
+    if enabled and not wallet.has_card_on_file(u):
+        return jsonify({"error": "no_card_on_file"}), 400
+
+    def _apply(usr):
+        usr["billing_mode"] = "auto_reload" if enabled else "prepay_only"
+        usr["auto_reload_threshold_usd"] = float(threshold)
+        usr["auto_reload_amount_usd"] = float(amount)
+        return True
+
+    ok, _ = _mutate_target_user(uname, _apply)
+    if not ok:
+        return jsonify({"error": "save_failed"}), 500
+    return jsonify({
+        "success": True,
+        "billing_mode": "auto_reload" if enabled else "prepay_only",
+        "auto_reload_threshold_usd": float(threshold),
+        "auto_reload_amount_usd": float(amount),
+    })
+
+
+# ---------------------------------------------------------------------------
+# User self-serve card management (mirrors admin card routes)
+# ---------------------------------------------------------------------------
+
+@billing_bp.route("/api/wallet/setup-intent", methods=["POST"])
+def wallet_setup_intent():
+    """User clicks 'Add card' on /wallet -> create a Stripe Customer
+    if needed, then a SetupIntent, and return the client_secret to
+    embed in the Stripe Elements iframe. Same shape as the admin
+    setup-intent route but scoped to the caller's own record."""
+    uname, u, err = _require_login()
+    if err:
+        return err
+    if not _get_paying_flag(u):
+        return jsonify({"error": "not_a_paying_customer"}), 403
+    import billing  # type: ignore
+    if not billing.is_enabled():
+        return jsonify({"error": "billing_not_configured"}), 503
+
+    try:
+        cus_id = billing.ensure_customer(
+            uname,
+            email=str(u.get("email") or ""),
+            name=(f"{u.get('first_name', '')} "
+                  f"{u.get('last_name', '')}").strip() or uname,
+            existing_customer_id=str(u.get("stripe_customer_id") or ""),
+        )
+    except billing.BillingError as e:
+        return jsonify({"error": str(e)}), 502
+    if cus_id and cus_id != str(u.get("stripe_customer_id") or ""):
+        _persist_customer_id(uname, cus_id)
+
+    try:
+        si = billing.create_setup_intent(cus_id)
+    except billing.BillingError as e:
+        return jsonify({"error": str(e)}), 502
+    return jsonify({
+        "setup_intent_id": si["id"],
+        "client_secret": si["client_secret"],
+        "customer_id": cus_id,
+        "publishable_key": billing.publishable_key(),
+    })
+
+
+@billing_bp.route("/api/wallet/attach-card", methods=["POST"])
+def wallet_attach_card():
+    """User confirmed the SetupIntent client-side. Attach the
+    PaymentMethod to their customer + persist display metadata.
+    Body: {"payment_method_id": "pm_..."}."""
+    uname, u, err = _require_login()
+    if err:
+        return err
+    if not _get_paying_flag(u):
+        return jsonify({"error": "not_a_paying_customer"}), 403
+    import billing  # type: ignore
+    if not billing.is_enabled():
+        return jsonify({"error": "billing_not_configured"}), 503
+
+    body = request.get_json(silent=True) or {}
+    pm_id = str(body.get("payment_method_id") or "").strip()
+    if not pm_id:
+        return jsonify({"error": "missing_payment_method_id"}), 400
+    cus_id = str(u.get("stripe_customer_id") or "")
+    if not cus_id:
+        return jsonify({"error": "no_stripe_customer"}), 400
+
+    try:
+        display = billing.attach_payment_method(cus_id, pm_id)
+    except billing.BillingError as e:
+        return jsonify({"error": str(e)}), 502
+
+    def _apply(usr):
+        usr["stripe_payment_method_id"] = display["id"]
+        usr["stripe_payment_method_last4"] = display["last4"]
+        usr["stripe_payment_method_brand"] = display["brand"]
+        return True
+
+    ok, _ = _mutate_target_user(uname, _apply)
+    return jsonify({"success": ok, "card_display": display})
+
+
+@billing_bp.route("/api/wallet/detach-card", methods=["POST"])
+def wallet_detach_card():
+    """User removes their card on file. Automatically downshifts
+    billing_mode from auto_reload to prepay_only so the wallet
+    doesn't sit in a broken 'auto-reload with no card' state."""
+    uname, u, err = _require_login()
+    if err:
+        return err
+    if not _get_paying_flag(u):
+        return jsonify({"error": "not_a_paying_customer"}), 403
+    import billing  # type: ignore
+    if not billing.is_enabled():
+        return jsonify({"error": "billing_not_configured"}), 503
+
+    pm_id = str(u.get("stripe_payment_method_id") or "")
+    if pm_id:
+        try:
+            billing.detach_payment_method(pm_id)
+        except billing.BillingError:
+            # Best effort; still remove locally so the wallet page
+            # matches what the user sees.
+            pass
+
+    def _apply(usr):
+        usr["stripe_payment_method_id"] = ""
+        usr["stripe_payment_method_last4"] = ""
+        usr["stripe_payment_method_brand"] = ""
+        # If they were on auto-reload, drop to prepay_only.
+        if str(usr.get("billing_mode") or "").strip() == "auto_reload":
+            usr["billing_mode"] = "prepay_only"
+        return True
+
+    ok, _ = _mutate_target_user(uname, _apply)
+    return jsonify({"success": ok})
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +459,34 @@ def admin_pricing_get():
     if err:
         return err
     import wallet  # type: ignore
-    return jsonify(wallet.load_pricing(force_reload=True))
+    p = wallet.load_pricing(force_reload=True)
+    catalog = wallet.module_catalog()
+    # Bundle a UI-friendly `tools` block grouped by section, plus
+    # `sections` metadata so the admin panel can render section
+    # headers without hardcoding names.
+    tools = {}
+    sections = {
+        "modules":      {"label": "Modules",      "order": 1},
+        "rankers":      {"label": "Rankers",      "order": 2},
+        "api":          {"label": "Partner API",  "order": 3},
+        "subscription": {"label": "Subscription", "order": 4},
+        "extras":       {"label": "Other",        "order": 99},
+    }
+    for row in catalog:
+        tools[row["tool_key"]] = {
+            "display_name": row["display_name"],
+            "section":      row["section"],
+            "credits":      row["credits"],
+            "usd":          row["usd"],
+            "default_usd":  row["default_usd"],
+            "access_flag":  row["access_flag"],
+        }
+    resp = dict(p)
+    resp["tools"] = tools
+    resp["sections"] = sections
+    resp["prometheus_markup"] = float(
+        p.get("prometheus_markup_multiplier", 2.10))
+    return jsonify(resp)
 
 
 @billing_bp.route("/api/admin/pricing", methods=["POST"])
@@ -288,6 +501,22 @@ def admin_pricing_set():
         body = {}
     if not isinstance(body, dict):
         return jsonify({"error": "invalid_body"}), 400
+
+    # Accept EITHER the new nested `tools` shape (from the admin UI
+    # after 2026-09-09) OR the legacy `per_tool_usd` shape (any
+    # older callers). Merge into a normalized per_tool_usd dict.
+    tools = body.get("tools") if isinstance(body.get("tools"), dict) else {}
+    if tools:
+        merged_per_tool = dict(body.get("per_tool_usd") or {})
+        for tool_key, spec in tools.items():
+            if not isinstance(spec, dict):
+                continue
+            try:
+                merged_per_tool[str(tool_key)] = float(spec.get("usd", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+        body["per_tool_usd"] = merged_per_tool
+
     saved = wallet.save_pricing(body)
     return jsonify({"success": True, "pricing": saved})
 

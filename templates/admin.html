@@ -4370,6 +4370,7 @@
 
                 <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()" style="flex: 1;">Cancel</button>
+                    <button type="button" class="btn btn-secondary" id="openUserBillingBtn" onclick="openUserBillingFromModal()" style="flex: 0 0 auto; display: none;">💳 Billing</button>
                     <button type="submit" class="btn btn-success" style="flex: 1;">Save User</button>
                 </div>
             </form>
@@ -10011,6 +10012,11 @@
 
         async function showAddUserModal() {
             document.getElementById('modalTitle').textContent = 'Add New User';
+            // 2026-09-09: Hide the Billing button on Add — user doesn't
+            // exist yet, so there's no billing record to open. Admin
+            // saves the user first, then re-opens to configure billing.
+            const _billingBtn = document.getElementById('openUserBillingBtn');
+            if (_billingBtn) _billingBtn.style.display = 'none';
             document.getElementById('editUsername').value = '';
             document.getElementById('newUsername').value = '';
             const addCreditsWrap = document.getElementById('addCreditsInModalWrap');
@@ -10206,6 +10212,13 @@
             if (!user) return;
 
             document.getElementById('modalTitle').textContent = 'Edit User: ' + username;
+            // 2026-09-09: Billing link — visible in edit mode only. New users
+            // must be saved first (stripe_customer_id is created lazily).
+            const _billingBtn = document.getElementById('openUserBillingBtn');
+            if (_billingBtn) {
+                _billingBtn.style.display = 'inline-block';
+                _billingBtn.dataset.username = username;
+            }
             document.getElementById('editUsername').value = username;
             document.getElementById('newUsername').value = username;
             document.getElementById('newUsername').disabled = true;
@@ -10586,6 +10599,19 @@
 
         function closeModal() {
             document.getElementById('userModal').classList.remove('show');
+        }
+
+        // 2026-09-09: deep-link into /admin/billing?user=<username> so
+        // the admin lands directly in the target user's billing modal.
+        function openUserBillingFromModal() {
+            const btn = document.getElementById('openUserBillingBtn');
+            const uname = (btn && btn.dataset && btn.dataset.username) || '';
+            if (!uname) {
+                alert('Save the user first, then open Billing.');
+                return;
+            }
+            const url = '/admin/billing?user=' + encodeURIComponent(uname);
+            window.open(url, '_blank', 'noopener');
         }
 
         function closeUserDetails() {

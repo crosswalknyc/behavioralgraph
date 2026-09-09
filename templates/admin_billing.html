@@ -477,6 +477,21 @@
           ' card operations.</div>';
       }
       renderUsers();
+      // 2026-09-09: deep-link support. If /admin/billing?user=<username>
+      // was called (from the user-edit modal in admin.html), open that
+      // user's billing modal automatically after the list renders.
+      const params = new URLSearchParams(window.location.search);
+      const deepUser = params.get('user');
+      if (deepUser) {
+        const hit = allUsers.find(u => (u.username || '') === deepUser);
+        if (hit) {
+          openModal(deepUser);
+        } else {
+          $('banner').innerHTML =
+            '<div class="banner error">User "' + deepUser +
+            '" not found. They may need to be created first.</div>';
+        }
+      }
     }
 
     function renderUsers() {
@@ -808,28 +823,60 @@
 
     function renderPricing(p) {
       const tools = p.tools || {};
-      let html = '<div class="pricing-grid" style="font-weight: 600;' +
-        ' color: #6B7280; font-size: 11px; text-transform: uppercase;' +
-        '">';
-      html += '<div>Tool</div><div style="text-align:right;">' +
-        'Credits</div><div style="text-align:right;">USD</div>';
-      html += '</div>';
+      const sections = p.sections || {};
+      // Group tool keys by section, preserving MODULE_CATALOG order.
+      const bySection = {};
       Object.keys(tools).forEach(key => {
-        const t = tools[key] || {};
-        html += '<div class="pricing-grid" data-tool="' + key + '">';
-        html += '<div class="tool-name">' +
-          (t.display_name || key) + '</div>';
-        html += '<div><input type="number" step="1" min="0" ' +
-          'class="tool-credits" value="' + (t.credits || 0) + '">' +
-          '</div>';
-        html += '<div><input type="number" step="0.01" min="0" ' +
-          'class="tool-usd" value="' + (t.usd || 0) + '"></div>';
-        html += '</div>';
+        const s = (tools[key] || {}).section || 'extras';
+        if (!bySection[s]) bySection[s] = [];
+        bySection[s].push(key);
       });
-      html += '<div style="text-align: right; margin-top: 12px;">' +
+      // Sort sections by `order` metadata (falls back to alphabetical).
+      const secOrder = Object.keys(bySection).sort((a, b) => {
+        const oa = (sections[a] && sections[a].order) || 100;
+        const ob = (sections[b] && sections[b].order) || 100;
+        return oa - ob;
+      });
+
+      let html = '';
+      secOrder.forEach(secKey => {
+        const secMeta = sections[secKey] || {};
+        const secLabel = secMeta.label ||
+          secKey.charAt(0).toUpperCase() + secKey.slice(1);
+        html += '<div style="margin: 20px 0 8px 0; font-size: 13px; ' +
+          'font-weight: 700; color: #0C1618; text-transform: ' +
+          'uppercase; letter-spacing: 0.05em;">' + secLabel + '</div>';
+        html += '<div class="pricing-grid" style="font-weight: 600;' +
+          ' color: #6B7280; font-size: 11px; text-transform: ' +
+          'uppercase;">' +
+          '<div>Tool</div>' +
+          '<div style="text-align:right;">Credits</div>' +
+          '<div style="text-align:right;">USD</div></div>';
+        bySection[secKey].forEach(key => {
+          const t = tools[key] || {};
+          html += '<div class="pricing-grid" data-tool="' + key + '">';
+          html += '<div class="tool-name">' +
+            (t.display_name || key);
+          if (t.access_flag) {
+            html += ' <span style="font-size: 10px; color: #B8B8B0;' +
+              ' font-weight: 400;">(' + t.access_flag + ')</span>';
+          }
+          html += '</div>';
+          html += '<div><input type="number" step="1" min="0" ' +
+            'class="tool-credits" value="' + (t.credits || 0) +
+            '" disabled title="Credits are wired in code; USD is ' +
+            'the editable price."></div>';
+          html += '<div>$<input type="number" step="1" min="0" ' +
+            'class="tool-usd" value="' + (t.usd || 0) +
+            '" style="width: 100px;"></div>';
+          html += '</div>';
+        });
+      });
+      html += '<div style="text-align: right; margin-top: 20px;">' +
         '<button id="save-tools">Save all prices</button></div>';
       $('pricing-body').innerHTML = html;
-      $('markup').value = p.prometheus_markup || 2.10;
+      $('markup').value = (p.prometheus_markup ||
+        p.prometheus_markup_multiplier || 2.10);
       renderPacks(p.top_up_packs_usd || []);
       $('min-custom').value = p.top_up_min_custom_usd || 100;
       $('save-tools').addEventListener('click', saveTools);

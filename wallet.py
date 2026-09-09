@@ -104,6 +104,155 @@ DEFAULT_PRICING = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Module catalog (Jenna 2026-09-09).
+# ---------------------------------------------------------------------------
+#
+# Every access-controlled feature must have a row here so the pricing
+# panel in /admin/billing renders a line item for it. When you add a
+# new has_*_iq_access flag to the user admin section, ALSO add a row
+# here, per pricing-catalog-registration.mdc.
+#
+# Columns:
+#   tool_key      - stable key used by consume_credit's pull_type map
+#                   and by system/pricing.json.per_tool_usd
+#   display_name  - what the admin sees in the pricing table
+#   section       - one of 'modules', 'rankers', 'api', 'subscription'
+#                   Groups the pricing table into collapsible sections.
+#   default_credits - matches the CREDITS_* constants in app.py
+#                     (display-only in the pricing UI; the constants
+#                     are the source of truth for credit deduction).
+#   default_usd   - matches DEFAULT_PRICING.per_tool_usd (canonical
+#                   dollar price when admin has not overridden).
+#   access_flag   - the has_*_access field on the user record that
+#                   toggles visibility in the dashboard. None when
+#                   the tool is not directly gated by a flag (e.g.
+#                   ranker sub-tabs live under has_rankers_iq_access).
+#
+MODULE_CATALOG = [
+    # ---------- Core builds ----------
+    ("profile_iq_build",           "Profile IQ - Full Build",
+     "modules", 5, 500.0, "has_profile_iq_access"),
+    ("profile_iq_derived_cut",     "Profile IQ - Derived Cut",
+     "modules", 3, 100.0, "has_profile_iq_access"),
+    ("subscriber_iq_build",        "Subscriber IQ",
+     "modules", 10, 1000.0, "has_subscriber_iq_access"),
+    ("chatbot_profile_iq_build",   "Chatbot Profile IQ",
+     "modules", 5, 500.0, "has_chatbot_profile_iq_access"),
+    # ---------- Analysis / attribution ----------
+    ("ecommerce_iq",               "Ecommerce IQ",
+     "modules", 5, 0.0, "has_ecommerce_iq_access"),
+    ("impact_iq",                  "Impact IQ",
+     "modules", 10, 0.0, "has_impact_iq_access"),
+    ("ticket_sales",               "Impact IQ - Ticket Sales",
+     "modules", 10, 0.0, "has_ticket_sales_iq_access"),
+    ("ticket_sales_tracker",       "Ticket Sales Tracker",
+     "modules", 10, 0.0, "has_ticket_sales_tracker_access"),
+    ("campaign_roi",               "Campaign ROI",
+     "modules", 5, 0.0, None),
+    ("roas_iq",                    "ROAS IQ",
+     "modules", 8, 0.0, None),
+    ("watch_time",                 "Watch Time",
+     "modules", 1, 0.0, None),
+    ("sf_lf_conversion",           "SF-LF Conversion",
+     "modules", 10, 0.0, "has_sf_conversion_access"),
+    ("flywheel_conversion",        "Flywheel Conversion",
+     "modules", 25, 0.0, "has_flywheel_conversion_access"),
+    ("brand_partnership_iq",       "Brand Partnership IQ",
+     "modules", 15, 0.0, "has_brand_partnership_iq_access"),
+    ("journey_iq",                 "Digital Journey IQ",
+     "modules", 10, 0.0, "has_journey_iq_access"),
+    ("share_of_time",              "Share of Time - View",
+     "modules", 0, 0.0, "has_share_of_time_access"),
+    ("share_of_time_run",          "Share of Time - Run",
+     "modules", 0, 0.0, "has_share_of_time_run_access"),
+    ("intent_iq",                  "Intent IQ",
+     "modules", 50, 0.0, "has_intent_iq_access"),
+    ("hedge_fund_iq",              "Hedge Fund IQ",
+     "modules", 0, 0.0, "has_hedge_fund_iq_access"),
+    ("blue_iq",                    "Blue IQ",
+     "modules", 0, 0.0, "has_blue_iq_access"),
+    ("brand_tracking_iq",          "Brand Tracking IQ",
+     "modules", 0, 0.0, "has_brand_tracking_iq_access"),
+    ("talent_fit",                 "Talent Fit",
+     "modules", 5, 0.0, "has_talent_fit_access"),
+    ("sentiment_iq",               "Sentiment IQ",
+     "modules", 0, 0.0, "has_sentiment_iq_access"),
+    ("trends_iq",                  "Trends IQ",
+     "modules", 0, 0.0, "has_trends_iq_access"),
+    ("microdramas_iq",             "Microdramas IQ",
+     "modules", 0, 0.0, "has_microdramas_iq_access"),
+    # ---------- Rankers (sub-tabs under has_rankers_iq_access) ----------
+    ("rankers_iq_access",          "Rankers IQ - Base Access",
+     "rankers", 0, 0.0, "has_rankers_iq_access"),
+    ("ranker_fast",                "FAST Ranker",
+     "rankers", 0, 0.0, None),
+    ("ranker_music",               "Music Ranker",
+     "rankers", 0, 0.0, None),
+    ("ranker_podcast",             "Podcast Ranker",
+     "rankers", 0, 0.0, None),
+    ("ranker_streaming",           "Streaming Ranker",
+     "rankers", 0, 0.0, None),
+    ("ranker_gaming",              "Gaming Ranker",
+     "rankers", 0, 0.0, None),
+    ("ranker_talent",              "Talent Ranker",
+     "rankers", 0, 0.0, None),
+    # ---------- Partner API surface ----------
+    ("api_profile_iq_build",       "API - Profile IQ Build",
+     "api", 5, 500.0, None),
+    ("api_profile_iq_cut",         "API - Profile IQ Cut",
+     "api", 3, 100.0, None),
+    ("api_subscriber_iq_build",    "API - Subscriber IQ Build",
+     "api", 10, 1000.0, None),
+    ("api_chatbot_profile_iq_build", "API - Chatbot Profile IQ",
+     "api", 5, 500.0, None),
+    # ---------- Recurring ----------
+    ("monthly_service",            "Monthly Service (base access)",
+     "subscription", 0, 0.0, None),
+]
+
+
+def module_catalog() -> list:
+    """Return the module catalog as list of dicts. Auto-registration
+    for new access flags lands here per pricing-catalog-registration.mdc.
+    """
+    p = load_pricing()
+    per_tool = p.get("per_tool_usd", {}) or {}
+    rows = []
+    for tool_key, display, section, def_cr, def_usd, flag in MODULE_CATALOG:
+        rows.append({
+            "tool_key": tool_key,
+            "display_name": display,
+            "section": section,
+            "credits": int(def_cr),
+            "usd": float(per_tool.get(tool_key, def_usd)),
+            "default_usd": float(def_usd),
+            "access_flag": flag,
+        })
+    # Fold in any pricing keys the admin has set that AREN'T in
+    # MODULE_CATALOG yet (defence-in-depth so an ad-hoc price never
+    # goes invisible). They land in an "extras" section so ops can
+    # see them.
+    catalog_keys = {tk for tk, *_ in MODULE_CATALOG}
+    for k, v in per_tool.items():
+        if k in catalog_keys:
+            continue
+        try:
+            usd = float(v)
+        except (TypeError, ValueError):
+            continue
+        rows.append({
+            "tool_key": k,
+            "display_name": k.replace("_", " ").title(),
+            "section": "extras",
+            "credits": 0,
+            "usd": usd,
+            "default_usd": 0.0,
+            "access_flag": None,
+        })
+    return rows
+
+
 # Cache the last-read pricing so repeated tool_price_usd() calls in a
 # request don't refetch. Callers who need fresh values (admin save)
 # invalidate via _clear_pricing_cache.
@@ -201,6 +350,10 @@ def save_pricing(new_pricing: dict) -> dict:
                        "prometheus_markup_multiplier") \
                     and isinstance(v, (int, float)):
                 merged[k] = float(v)
+            elif k == "prometheus_markup" \
+                    and isinstance(v, (int, float)):
+                # Alias so the admin UI can POST either spelling.
+                merged["prometheus_markup_multiplier"] = float(v)
             elif k in ("auto_reload_defaults",
                        "monthly_invoice_defaults") \
                     and isinstance(v, dict):
@@ -395,6 +548,99 @@ def has_card_on_file(user: dict) -> bool:
     return bool(
         (user or {}).get("stripe_customer_id")
         and (user or {}).get("stripe_payment_method_id"))
+
+
+def wallet_stats(user: dict) -> dict:
+    """Compute rolling stats from wallet_transactions for the wallet
+    page (Jenna 2026-09-09). Never raises. All figures are in USD.
+
+    Returns:
+        spend_this_month_usd: sum of `deduct` txns since the 1st of
+                              the current calendar month (UTC).
+        spend_last_30d_usd:   sum of `deduct` txns in the past 30 days.
+        pulls_this_month:     count of `deduct` txns since the 1st.
+        top_tool: {tool_key, display_name, usd} for the tool with
+                  the highest spend this month, or None.
+        next_reload_note:     short human string describing when the
+                              next automatic action will fire, or ""
+                              when nothing scheduled.
+    """
+    out = {
+        "spend_this_month_usd": 0.0,
+        "spend_last_30d_usd": 0.0,
+        "pulls_this_month": 0,
+        "top_tool": None,
+        "next_reload_note": "",
+    }
+    if not user:
+        return out
+    txns = user.get("wallet_transactions") or []
+    if not isinstance(txns, list):
+        return out
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0,
+                              microsecond=0)
+    thirty_days_ago = now - timedelta(days=30)
+    per_tool_month = {}  # tool_key -> total usd this month
+    for t in txns:
+        if not isinstance(t, dict):
+            continue
+        if str(t.get("kind") or "").lower() != "deduct":
+            continue
+        try:
+            amt = abs(float(t.get("amount_usd", 0.0) or 0.0))
+        except (TypeError, ValueError):
+            continue
+        ts_str = str(t.get("ts") or "")
+        try:
+            ts = datetime.strptime(ts_str, "%Y-%m-%dT%H:%M:%SZ")
+            ts = ts.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if ts >= month_start:
+            out["spend_this_month_usd"] = round(
+                out["spend_this_month_usd"] + amt, 2)
+            out["pulls_this_month"] += 1
+            tk = str(t.get("tool") or "").strip()
+            if tk:
+                per_tool_month[tk] = round(
+                    per_tool_month.get(tk, 0.0) + amt, 2)
+        if ts >= thirty_days_ago:
+            out["spend_last_30d_usd"] = round(
+                out["spend_last_30d_usd"] + amt, 2)
+    if per_tool_month:
+        top_key, top_amt = max(per_tool_month.items(),
+                               key=lambda kv: kv[1])
+        # Map tool_key -> display via MODULE_CATALOG (fallback: title-case)
+        display = top_key.replace("_", " ").title()
+        for tk, disp, *_ in MODULE_CATALOG:
+            if tk == top_key:
+                display = disp
+                break
+        out["top_tool"] = {
+            "tool_key": top_key,
+            "display_name": display,
+            "usd": top_amt,
+        }
+    # Next-action note
+    mode = billing_mode(user)
+    if mode == "auto_reload" and has_card_on_file(user):
+        bal = wallet_balance(user)
+        thr = auto_reload_threshold(user)
+        if bal <= thr:
+            out["next_reload_note"] = (
+                f"Auto-reload will fire on your next pull "
+                f"(balance ${bal:.2f} is at or below the "
+                f"${thr:.2f} threshold).")
+        else:
+            out["next_reload_note"] = (
+                f"Auto-reload fires when balance drops below "
+                f"${thr:.2f}. Next top-up: ${auto_reload_amount(user):.2f}.")
+    elif mode == "monthly_invoice":
+        out["next_reload_note"] = (
+            "Monthly invoice reconciles on the 1st of every month.")
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -699,12 +945,15 @@ def try_auto_reload(username: str, user_snapshot: dict) -> dict:
 __all__ = [
     "PRICING_S3_KEY",
     "DEFAULT_PRICING",
+    "MODULE_CATALOG", "module_catalog",
     "load_pricing", "save_pricing",
     "tool_price_usd", "prometheus_markup",
     "top_up_pack_sizes", "top_up_min_custom",
-    "wallet_balance", "is_paying_customer", "admits_wallet_ui",
+    "wallet_balance", "wallet_stats",
+    "is_paying_customer", "admits_wallet_ui",
     "billing_mode", "auto_reload_threshold", "auto_reload_amount",
     "monthly_invoice_limit", "has_card_on_file",
     "apply_wallet_deduct", "apply_wallet_topup", "apply_wallet_refund",
     "should_charge_wallet", "wallet_can_absorb", "needs_auto_reload",
+    "try_auto_reload",
 ]
