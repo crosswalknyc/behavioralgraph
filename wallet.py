@@ -143,6 +143,10 @@ MODULE_CATALOG = [
      "modules", 10, 1000.0, "has_subscriber_iq_access"),
     ("chatbot_profile_iq_build",   "Chatbot Profile IQ",
      "modules", 5, 500.0, "has_chatbot_profile_iq_access"),
+    ("chatbot_analysis",           "Chatbot - Analyze Ask",
+     "modules", 1, 0.0, "has_chatbot_profile_iq_access"),
+    ("chatbot_deck",               "Chatbot - Deck Export",
+     "modules", 5, 0.0, "has_chatbot_profile_iq_access"),
     # ---------- Analysis / attribution ----------
     ("ecommerce_iq",               "Ecommerce IQ",
      "modules", 5, 0.0, "has_ecommerce_iq_access"),
@@ -161,7 +165,7 @@ MODULE_CATALOG = [
     ("sf_lf_conversion",           "SF-LF Conversion",
      "modules", 10, 0.0, "has_sf_conversion_access"),
     ("flywheel_conversion",        "Flywheel Conversion",
-     "modules", 25, 0.0, "has_flywheel_conversion_access"),
+     "modules", 25, 0.0, None),  # access_flag retired 2026-09-09
     ("brand_partnership_iq",       "Brand Partnership IQ",
      "modules", 15, 0.0, "has_brand_partnership_iq_access"),
     ("journey_iq",                 "Digital Journey IQ",
@@ -181,7 +185,7 @@ MODULE_CATALOG = [
     ("talent_fit",                 "Talent Fit",
      "modules", 5, 0.0, "has_talent_fit_access"),
     ("sentiment_iq",               "Sentiment IQ",
-     "modules", 0, 0.0, "has_sentiment_iq_access"),
+     "modules", 0, 0.0, None),  # access_flag retired 2026-09-09
     ("trends_iq",                  "Trends IQ",
      "modules", 0, 0.0, "has_trends_iq_access"),
     ("microdramas_iq",             "Microdramas IQ",
@@ -393,54 +397,141 @@ def tool_price_usd(tool_key: str) -> float:
 
 # Map free-form pull_type strings (as passed to consume_credit) to the
 # canonical pricing key. Admins configure prices against the canonical
-# keys in system/pricing.json. Unknown pull_types map to '' -> no
-# wallet charge, existing credits-only behavior preserved.
+# keys in system/pricing.json + MODULE_CATALOG (bg-webapp/wallet.py).
+# Unknown pull_types map to '' -> no wallet charge, existing credits-
+# only behavior preserved.
+#
+# EVERY key here MUST match a MODULE_CATALOG tool_key. Adding a new
+# consume_credit call site? Add the pull_type -> tool_key mapping here
+# in the same commit, add a MODULE_CATALOG row for the tool_key, and
+# extend scripts/test_pull_type_mapping.py.
+#
+# Prior bug (2026-09-08 -> 2026-09-09): every Attribution IQ tool
+# (ticket_sales, campaign_roi, watch_time, sf_lf_conversion,
+# flywheel_conversion, roas_iq, ticket_sales_tracker) collapsed to a
+# fake 'attribution_iq' key that doesn't exist in MODULE_CATALOG -> a
+# paying customer running those tools got a $0 wallet charge every
+# time regardless of the admin-set price. Similarly, every Chatbot
+# Profile IQ variant landed under `chatbot_profile_iq_(new_build)`
+# with parens preserved in the normalized key. Fix: exact map for the
+# simple cases + prefix logic for the parenthesized decision variants
+# and the `v1` (partner API) suffix.
 _PULL_TYPE_TO_TOOL_KEY = {
-    # Profile IQ family
-    "profile analysis": "profile_iq_build",
-    "profile iq": "profile_iq_build",
-    "profile iq build": "profile_iq_build",
-    "chatbot profile iq": "chatbot_profile_iq_build",
-    "chatbot profile iq build": "chatbot_profile_iq_build",
-    "derived cut": "profile_iq_derived_cut",
-    "avid cut": "profile_iq_derived_cut",
-    "gender cut": "profile_iq_derived_cut",
-    "age cut": "profile_iq_derived_cut",
-    "geo cut": "profile_iq_derived_cut",
-    "behavioral cut": "profile_iq_derived_cut",
-    # Subscriber IQ
-    "subscriber iq": "subscriber_iq_build",
-    "subscriber iq build": "subscriber_iq_build",
-    "svod": "subscriber_iq_build",
-    # Attribution / marketing modules
-    "ticket sales": "attribution_iq",
-    "ticket sales tracker": "attribution_iq",
-    "sf-lf conversion": "attribution_iq",
-    "flywheel conversion": "attribution_iq",
-    "campaign roi": "attribution_iq",
-    "watch time": "attribution_iq",
-    "roas iq": "attribution_iq",
-    # Talent
-    "talent fit assessment": "profile_iq_build",
-    "find me talent": "profile_iq_build",
+    # ---- Profile IQ / Chatbot Profile IQ ----
+    "profile analysis":              "profile_iq_build",
+    "profile iq":                    "profile_iq_build",
+    "profile iq build":              "profile_iq_build",
+    "chatbot profile iq":            "chatbot_profile_iq_build",
+    "chatbot profile iq build":      "chatbot_profile_iq_build",
+    # Derived cuts (any cohort cut of an existing profile).
+    "derived cut":                   "profile_iq_derived_cut",
+    "derive cut":                    "profile_iq_derived_cut",
+    "avid cut":                      "profile_iq_derived_cut",
+    "gender cut":                    "profile_iq_derived_cut",
+    "age cut":                       "profile_iq_derived_cut",
+    "geo cut":                       "profile_iq_derived_cut",
+    "behavioral cut":                "profile_iq_derived_cut",
+    # ---- Subscriber IQ ----
+    "subscriber iq":                 "subscriber_iq_build",
+    "subscriber iq build":           "subscriber_iq_build",
+    "svod":                          "subscriber_iq_build",
+    # ---- Attribution / marketing modules ----
+    # Each has its OWN MODULE_CATALOG row so the admin billing panel
+    # can price them independently. NEVER collapse to a shared bucket.
+    "ticket sales":                  "ticket_sales",
+    "ticket sales tracker":          "ticket_sales_tracker",
+    "sf-lf conversion":              "sf_lf_conversion",
+    "sf lf conversion":              "sf_lf_conversion",
+    "flywheel conversion":           "flywheel_conversion",
+    "campaign roi":                  "campaign_roi",
+    "watch time":                    "watch_time",
+    "roas iq":                       "roas_iq",
+    # ---- Digital Journey / Intent / Sentiment ----
+    "digital journey iq":            "journey_iq",
+    "journey iq":                    "journey_iq",
+    "attribution iq ingest":         "intent_iq",
+    "intent iq":                     "intent_iq",
+    "intent ingest":                 "intent_iq",
+    "sentiment iq":                  "sentiment_iq",
+    # ---- Impact / Brand ----
+    "impact iq":                     "impact_iq",
+    "brand partnership iq":          "brand_partnership_iq",
+    "brand partnership valuation":   "brand_partnership_iq",
+    "brand tracking iq":             "brand_tracking_iq",
+    # ---- Talent Fit ----
+    "talent fit assessment":         "talent_fit",
+    "talent fit":                    "talent_fit",
+    "find me talent":                "talent_fit",
+    # ---- Chatbot secondary flows (analysis + deck) ----
+    "chatbot analysis":              "chatbot_analysis",
+    "chatbot deck":                  "chatbot_deck",
+    # ---- Rankers ----
+    "rankers iq":                    "rankers_iq_access",
+    "ranker fast":                   "ranker_fast",
+    "ranker music":                  "ranker_music",
+    "ranker podcast":                "ranker_podcast",
+    "ranker streaming":              "ranker_streaming",
+    "ranker gaming":                 "ranker_gaming",
+    "ranker talent":                 "ranker_talent",
+    # ---- Other modules currently gated only by feature flag ----
+    "ecommerce iq":                  "ecommerce_iq",
+    "hedge fund iq":                 "hedge_fund_iq",
+    "blue iq":                       "blue_iq",
+    "trends iq":                     "trends_iq",
+    "microdramas iq":                "microdramas_iq",
+    "share of time":                 "share_of_time",
+    "share of time run":             "share_of_time_run",
 }
 
 
 def pull_type_to_tool_key(pull_type: str) -> str:
     """Map a consume_credit pull_type argument to a pricing key.
 
-    Falls back to the normalized pull_type string when the canonical
-    map doesn't match, so a new pull_type can be priced by adding it
-    to system/pricing.json without a code change.
+    Handles three shapes:
+      1. Exact matches from _PULL_TYPE_TO_TOOL_KEY (simple case).
+      2. Chatbot Profile IQ variants with a decision suffix. Two
+         call sites emit these:
+           - dashboard chatbot: "Chatbot Profile IQ (new_build)",
+             "Chatbot Profile IQ (existing_match)",
+             "Chatbot Profile IQ (derive_cut)", etc.
+           - partner API v1: "Chatbot Profile IQ v1 (new_build)", etc.
+         The `v1` suffix routes to the api_* pricing keys so admins
+         can set a different price for API-driven builds than for
+         dashboard-driven builds. `derive_cut` in either decision
+         routes to the derived-cut price; `cut_needs_parent` builds
+         a fresh parent AND derives the cut, so it charges the FULL
+         build price (higher of the two).
+      3. Normalized fallback for pull_types not in the map (e.g. an
+         ad-hoc "custom_flow"): strip any parenthesized suffix, lower
+         + underscore. Admins can price these by adding the resulting
+         key to system/pricing.json.
+
+    NEVER returns a paren-wrapped key like "chatbot_profile_iq_(new_build)".
     """
     pt = str(pull_type or "").strip().lower()
     if not pt:
         return ""
     if pt in _PULL_TYPE_TO_TOOL_KEY:
         return _PULL_TYPE_TO_TOOL_KEY[pt]
-    # Normalized fallback: allow admin to price against the raw
-    # pull_type by adding a key like "custom_flow" to pricing.
-    return pt.replace(" ", "_").replace("-", "_")
+
+    # Chatbot Profile IQ variants with a decision suffix.
+    if pt.startswith("chatbot profile iq"):
+        is_v1 = " v1 " in pt or pt.startswith("chatbot profile iq v1")
+        decision = ""
+        if "(" in pt and ")" in pt:
+            decision = pt[pt.index("(") + 1:pt.index(")")].strip()
+        # `derive_cut` = pure cut of an existing parent -> cut price.
+        # `cut_needs_parent` = fresh parent + cut -> full build price.
+        # (The word "cut" appears in both decision names, so we match
+        # on the exact decision string.)
+        if decision == "derive_cut":
+            return "api_profile_iq_cut" if is_v1 else "profile_iq_derived_cut"
+        return "api_chatbot_profile_iq_build" if is_v1 else "chatbot_profile_iq_build"
+
+    # Normalized fallback: strip parens + collapse spaces/dashes.
+    if "(" in pt:
+        pt = pt.split("(", 1)[0].strip()
+    return pt.replace(" ", "_").replace("-", "_").strip("_")
 
 
 def prometheus_markup() -> float:
