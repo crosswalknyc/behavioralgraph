@@ -76,16 +76,20 @@ DEFAULT_PRICING = {
         "subscriber_iq_build": 1000.0,
         "chatbot_profile_iq_build": 500.0,
         # Analysis / journey / attribution modules (default 0 = free
-        # until the admin sets a value)
-        "digital_journey_iq": 0.0,
+        # until the admin sets a value). Every key here MUST have a
+        # matching row in MODULE_CATALOG - otherwise it renders as
+        # a phantom row in the admin billing "OTHER" (extras) section.
+        # The 5 legacy keys that once lived here (analysis_iq,
+        # attribution_iq, digital_journey_iq, rankers_iq, sf_conversion)
+        # were removed on 2026-09-09 (Jenna): each duplicated a proper
+        # catalog row under a different tool_key (intent_iq, journey_iq,
+        # rankers_iq_access, sf_lf_conversion) or, in the case of
+        # analysis_iq, was an obsolete umbrella flag with no per-tool
+        # cost meaning.
         "impact_iq": 0.0,
-        "attribution_iq": 0.0,
-        "analysis_iq": 0.0,
         "trends_iq": 0.0,
-        "rankers_iq": 0.0,
         "sentiment_iq": 0.0,
         "brand_partnership_iq": 0.0,
-        "sf_conversion": 0.0,
         "flywheel_conversion": 0.0,
         "intent_iq": 0.0,
         "share_of_time": 0.0,
