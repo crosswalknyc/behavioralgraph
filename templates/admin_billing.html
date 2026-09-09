@@ -316,12 +316,69 @@
 
     <div id="tab-pricing" class="tab-panel" style="display: none;">
       <div class="card">
-        <h2>Per-Tool USD Prices</h2>
-        <p style="color: #6B7280; font-size: 13px; margin-top: 0;">
-          The wallet is charged these amounts when a paying customer
-          runs a pull and their internal allowance is exhausted.
-        </p>
-        <div id="pricing-body"></div>
+        <div style="display:flex; justify-content:space-between;
+                    align-items:flex-start; gap:16px; margin-bottom:8px;">
+          <div>
+            <h2 style="margin:0;">Per-Tool USD Prices</h2>
+            <p style="color: #6B7280; font-size: 13px; margin:8px 0 0 0;">
+              The wallet is charged these amounts when a paying
+              customer runs a pull and their internal allowance is
+              exhausted. Built-in tools ship with the product; custom
+              tools can be added and removed here.
+            </p>
+          </div>
+          <button id="btn-add-tool" style="flex-shrink:0;">
+            + Add tool
+          </button>
+        </div>
+        <div id="add-tool-form" style="display:none;
+             background:#F7F6F0; border:1px solid #E9E8E1;
+             border-radius:8px; padding:16px; margin-top:16px;">
+          <div style="display:grid;
+               grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+               gap:12px; margin-bottom:12px;">
+            <div>
+              <label style="margin-top:0;">Display name</label>
+              <input id="new-tool-name" type="text"
+                     placeholder="e.g. Custom Sponsorship Deck"
+                     style="width:100%;">
+            </div>
+            <div>
+              <label style="margin-top:0;">Tool key (snake_case)</label>
+              <input id="new-tool-key" type="text"
+                     placeholder="e.g. custom_sponsorship_deck"
+                     style="width:100%;">
+              <div style="font-size:11px; color:#B8B8B0; margin-top:4px;">
+                Auto-generated from name if left blank.
+              </div>
+            </div>
+            <div>
+              <label style="margin-top:0;">Section</label>
+              <select id="new-tool-section" style="width:100%;">
+                <option value="modules">Modules</option>
+                <option value="rankers">Rankers</option>
+                <option value="api">Partner API</option>
+                <option value="subscription">Subscription</option>
+                <option value="custom" selected>Custom</option>
+              </select>
+            </div>
+            <div>
+              <label style="margin-top:0;">USD price</label>
+              <div style="display:flex; align-items:center; gap:4px;">
+                <span style="color:#6B7280;">$</span>
+                <input id="new-tool-usd" type="number" step="1"
+                       min="0" value="0" style="width:100%;">
+              </div>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <button class="secondary" onclick="hideAddToolForm()">
+              Cancel
+            </button>
+            <button id="btn-save-new-tool">Add tool</button>
+          </div>
+        </div>
+        <div id="pricing-body" style="margin-top:16px;"></div>
       </div>
       <div class="card">
         <h2>Prometheus Metered Billing</h2>
@@ -987,26 +1044,40 @@
 
       let html = '<table class="pricing-table">';
       html += '<thead><tr>';
-      html += '<th style="width: 70%;">Tool</th>';
-      html += '<th class="num" style="width: 30%;">USD price</th>';
+      html += '<th style="width: 60%;">Tool</th>';
+      html += '<th class="num" style="width: 25%;">USD price</th>';
+      html += '<th style="width: 15%; text-align:right;"></th>';
       html += '</tr></thead>';
       html += '<tbody>';
       secOrder.forEach(secKey => {
         const secMeta = sections[secKey] || {};
         const secLabel = secMeta.label ||
           secKey.charAt(0).toUpperCase() + secKey.slice(1);
-        html += '<tr class="section-row"><td colspan="2">' +
+        html += '<tr class="section-row"><td colspan="3">' +
           esc(secLabel) + '</td></tr>';
         bySection[secKey].forEach(key => {
           const t = tools[key] || {};
           const display = t.display_name || key;
+          const isCustom = !!t.is_custom;
           html += '<tr data-tool="' + esc(key) + '"' +
-            ' data-credits="' + (Number(t.credits) || 0) + '">';
-          html += '<td><div class="tool-name">' + esc(display) +
-            '</div>';
+            ' data-credits="' + (Number(t.credits) || 0) + '"' +
+            ' data-custom="' + (isCustom ? '1' : '0') + '">';
+          html += '<td><div class="tool-name">' + esc(display);
+          if (isCustom) {
+            html += ' <span style="display:inline-block;' +
+              'padding:1px 6px; margin-left:6px; ' +
+              'font-size:10px; font-weight:600; ' +
+              'background:#EAE3FF; color:#4A0080; ' +
+              'border-radius:3px; text-transform:uppercase; ' +
+              'letter-spacing:0.05em;">custom</span>';
+          }
+          html += '</div>';
           if (t.access_flag) {
             html += '<span class="tool-flag">' +
               esc(t.access_flag) + '</span>';
+          } else if (isCustom) {
+            html += '<span class="tool-flag">' +
+              esc(key) + '</span>';
           }
           html += '</td>';
           html += '<td class="num"><span class="usd-input-wrap">' +
@@ -1014,6 +1085,15 @@
             '<input type="number" step="1" min="0" ' +
             'class="tool-usd" value="' +
             (Number(t.usd) || 0) + '"></span></td>';
+          html += '<td style="text-align:right;">';
+          if (isCustom) {
+            html += '<button class="secondary" ' +
+              'onclick="deleteTool(\'' + esc(key) + '\', \'' +
+              esc(display).replace(/'/g, "\\'") + '\')" ' +
+              'style="font-size:11px; padding:4px 10px;">' +
+              'Delete</button>';
+          }
+          html += '</td>';
           html += '</tr>';
         });
       });
@@ -1086,6 +1166,113 @@
           (j.error || 'Save failed') + '</div>';
       }
     }
+
+    // ---- Custom tools: add / delete (Jenna 2026-09-09) ----
+    function showAddToolForm() {
+      $('add-tool-form').style.display = 'block';
+      $('new-tool-name').value = '';
+      $('new-tool-key').value = '';
+      $('new-tool-section').value = 'custom';
+      $('new-tool-usd').value = 0;
+      $('new-tool-name').focus();
+    }
+
+    function hideAddToolForm() {
+      $('add-tool-form').style.display = 'none';
+    }
+
+    // Auto-fill the key field from the name field as the admin types,
+    // unless they've already typed something in the key field.
+    function _slugify(s) {
+      return String(s || '').toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 80);
+    }
+
+    async function saveNewTool() {
+      const name = ($('new-tool-name').value || '').trim();
+      if (!name) {
+        $('banner').innerHTML =
+          '<div class="banner error">Display name is required.</div>';
+        return;
+      }
+      let key = ($('new-tool-key').value || '').trim();
+      if (!key) key = _slugify(name);
+      const section = $('new-tool-section').value || 'custom';
+      const usd = Number($('new-tool-usd').value || 0);
+      $('btn-save-new-tool').disabled = true;
+      const r = await fetch('/api/admin/pricing/tools', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool_key: key,
+          display_name: name,
+          section: section,
+          usd: usd,
+        }),
+      });
+      $('btn-save-new-tool').disabled = false;
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) {
+        $('banner').innerHTML =
+          '<div class="banner success">Added ' +
+          (j.tool && j.tool.display_name || name) + '.</div>';
+        hideAddToolForm();
+        loadPricing();
+      } else {
+        $('banner').innerHTML =
+          '<div class="banner error">' +
+          (j.error || 'Could not add tool.') + '</div>';
+      }
+    }
+
+    window.deleteTool = async (toolKey, display) => {
+      const label = display || toolKey;
+      if (!confirm('Delete "' + label + '"?\n\nThis removes the ' +
+                   'tool + its price from the pricing catalog. ' +
+                   'Any wallet transactions already recorded for ' +
+                   'this tool are preserved in transaction history.'))
+        return;
+      const r = await fetch(
+        '/api/admin/pricing/tools/' +
+        encodeURIComponent(toolKey) + '/delete',
+        { method: 'POST', credentials: 'same-origin' });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) {
+        $('banner').innerHTML =
+          '<div class="banner success">Removed ' + label + '.</div>';
+        loadPricing();
+      } else {
+        $('banner').innerHTML =
+          '<div class="banner error">' +
+          (j.error || 'Could not delete tool.') + '</div>';
+      }
+    };
+
+    // Wire the add-tool buttons. This script is inline at the bottom
+    // of <body> so the elements always exist by the time we run;
+    // attach immediately instead of waiting for DOMContentLoaded
+    // (which may or may not fire again depending on script order).
+    (function wireAddToolHandlers() {
+      const btnAdd = $('btn-add-tool');
+      const btnSave = $('btn-save-new-tool');
+      const nameInput = $('new-tool-name');
+      const keyInput = $('new-tool-key');
+      if (btnAdd) btnAdd.addEventListener('click', showAddToolForm);
+      if (btnSave) btnSave.addEventListener('click', saveNewTool);
+      // Live-slugify the tool_key field from the display name unless
+      // the admin has manually typed in the key field.
+      if (nameInput && keyInput) {
+        let keyTouched = false;
+        keyInput.addEventListener('input', () => { keyTouched = true; });
+        nameInput.addEventListener('input', () => {
+          if (!keyTouched) keyInput.value = _slugify(nameInput.value);
+        });
+      }
+    })();
 
     $('save-markup').addEventListener('click', async () => {
       const v = Number($('markup').value || 0);

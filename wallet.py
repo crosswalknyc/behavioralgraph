@@ -223,9 +223,19 @@ MODULE_CATALOG = [
 def module_catalog() -> list:
     """Return the module catalog as list of dicts. Auto-registration
     for new access flags lands here per pricing-catalog-registration.mdc.
+
+    Three row sources, in this order:
+      1. MODULE_CATALOG built-in tools (code-defined, is_custom=False,
+         is_builtin=True). Admins can price them but NEVER delete them.
+      2. pricing.json:custom_tools admin-added entries (is_custom=True,
+         is_builtin=False). Admins can rename / re-price / delete.
+      3. Orphan per_tool_usd keys that don't match #1 or #2 (defence-
+         in-depth so an ad-hoc price never goes invisible).
+         is_custom=False, is_builtin=False, section="extras".
     """
     p = load_pricing()
     per_tool = p.get("per_tool_usd", {}) or {}
+    custom = p.get("custom_tools") or []
     rows = []
     for tool_key, display, section, def_cr, def_usd, flag in MODULE_CATALOG:
         rows.append({
@@ -236,14 +246,36 @@ def module_catalog() -> list:
             "usd": float(per_tool.get(tool_key, def_usd)),
             "default_usd": float(def_usd),
             "access_flag": flag,
+            "is_builtin": True,
+            "is_custom": False,
         })
-    # Fold in any pricing keys the admin has set that AREN'T in
-    # MODULE_CATALOG yet (defence-in-depth so an ad-hoc price never
-    # goes invisible). They land in an "extras" section so ops can
-    # see them.
-    catalog_keys = {tk for tk, *_ in MODULE_CATALOG}
+    builtin_keys = {tk for tk, *_ in MODULE_CATALOG}
+    custom_keys = set()
+    for c in custom:
+        if not isinstance(c, dict):
+            continue
+        tk = str(c.get("tool_key") or "").strip()
+        if not tk or tk in builtin_keys or tk in custom_keys:
+            # Skip empties, collisions with builtins (builtin wins),
+            # and dup custom keys within the array.
+            continue
+        custom_keys.add(tk)
+        rows.append({
+            "tool_key": tk,
+            "display_name": str(c.get("display_name")
+                                or tk.replace("_", " ").title()),
+            "section": str(c.get("section") or "custom"),
+            "credits": int(c.get("credits") or 0),
+            "usd": float(per_tool.get(tk, c.get("default_usd") or 0.0)),
+            "default_usd": float(c.get("default_usd") or 0.0),
+            "access_flag": (str(c.get("access_flag"))
+                            if c.get("access_flag") else None),
+            "is_builtin": False,
+            "is_custom": True,
+        })
+    # Fold in any orphan per_tool_usd keys (neither builtin nor custom).
     for k, v in per_tool.items():
-        if k in catalog_keys:
+        if k in builtin_keys or k in custom_keys:
             continue
         try:
             usd = float(v)
@@ -257,6 +289,8 @@ def module_catalog() -> list:
             "usd": usd,
             "default_usd": 0.0,
             "access_flag": None,
+            "is_builtin": False,
+            "is_custom": False,
         })
     return rows
 
@@ -340,12 +374,42 @@ def save_pricing(new_pricing: dict) -> dict:
     Returns the effective merged dict on success. Does NOT enforce
     role gating; callers must already have confirmed the caller is a
     super_admin.
+
+    Merge behavior (2026-09-09 tightened): start from the CURRENT
+    on-disk pricing (falling back to DEFAULT_PRICING when there is
+    no on-disk state), then overlay incoming keys. This preserves
+    unrelated keys on partial saves (e.g. saving just the markup no
+    longer wipes per_tool_usd or custom_tools).
     """
-    # Merge over defaults so partial saves (admin only changed
-    # profile_iq_build) don't clobber the rest.
+    # Start from current on-disk state so a partial save preserves
+    # every other key.
+    try:
+        base = load_pricing(force_reload=True)
+        if not isinstance(base, dict):
+            base = {}
+    except Exception:
+        base = {}
     merged = json.loads(json.dumps(DEFAULT_PRICING))
+    # Overlay base on defaults (base wins).
+    for k, v in base.items():
+        if k == "per_tool_usd" and isinstance(v, dict):
+            merged["per_tool_usd"].update({
+                kk: float(vv) for kk, vv in v.items()
+                if isinstance(vv, (int, float))})
+        else:
+            merged[k] = v
     if isinstance(new_pricing, dict):
+        # Explicit-delete support (needed by remove_custom_tool). The
+        # additive .update() below can't drop keys from per_tool_usd
+        # on a partial save; process the delete list first so its
+        # entries are gone before we merge in any incoming prices.
+        _delete_keys = new_pricing.get("_delete_per_tool_keys")
+        if isinstance(_delete_keys, (list, tuple, set)):
+            for _k in _delete_keys:
+                merged.get("per_tool_usd", {}).pop(str(_k), None)
         for k, v in new_pricing.items():
+            if k == "_delete_per_tool_keys":
+                continue
             if k == "per_tool_usd" and isinstance(v, dict):
                 merged["per_tool_usd"].update({
                     kk: float(vv) for kk, vv in v.items()
@@ -367,6 +431,35 @@ def save_pricing(new_pricing: dict) -> dict:
                     and isinstance(v, dict):
                 merged[k] = {kk: float(vv) for kk, vv in v.items()
                              if isinstance(vv, (int, float))}
+            elif k == "custom_tools" and isinstance(v, list):
+                # Admin-added tools list. Validate + normalize each
+                # entry; drop anything that would collide with a
+                # MODULE_CATALOG builtin (builtins always win).
+                builtin_keys = {tk for tk, *_ in MODULE_CATALOG}
+                seen = set()
+                clean = []
+                for entry in v:
+                    if not isinstance(entry, dict):
+                        continue
+                    tk = _slugify_tool_key(entry.get("tool_key"))
+                    if not tk or tk in builtin_keys or tk in seen:
+                        continue
+                    seen.add(tk)
+                    clean.append({
+                        "tool_key": tk,
+                        "display_name": str(
+                            entry.get("display_name") or tk.replace(
+                                "_", " ").title())[:120],
+                        "section": str(
+                            entry.get("section") or "custom")[:32],
+                        "credits": int(entry.get("credits") or 0),
+                        "default_usd": float(
+                            entry.get("default_usd") or 0.0),
+                        "access_flag": (str(entry.get("access_flag"))
+                                        if entry.get("access_flag")
+                                        else None),
+                    })
+                merged["custom_tools"] = clean
     # Write to S3
     try:
         from app import s3_client, METADATA_BUCKET  # type: ignore
@@ -386,6 +479,141 @@ def save_pricing(new_pricing: dict) -> dict:
         print(f"[wallet] pricing local mirror save failed: {e}")
     _clear_pricing_cache()
     return merged
+
+
+# ---------------------------------------------------------------------------
+# Custom-tools management (super_admin only; called from billing_routes.py)
+# ---------------------------------------------------------------------------
+
+def _slugify_tool_key(raw) -> str:
+    """Coerce a free-form input into a canonical snake_case tool key.
+
+    'Custom Sponsorship Deck'   -> 'custom_sponsorship_deck'
+    'Weekly-Report v2'          -> 'weekly_report_v2'
+    '  chatbot_analysis  '      -> 'chatbot_analysis' (unchanged shape)
+    ''                          -> '' (caller rejects)
+    """
+    import re
+    s = str(raw or "").strip().lower()
+    if not s:
+        return ""
+    # Replace anything that isn't alphanumeric with underscore, then
+    # collapse repeats and trim edges.
+    s = re.sub(r"[^a-z0-9]+", "_", s)
+    s = re.sub(r"_+", "_", s).strip("_")
+    return s[:80]
+
+
+class CustomToolError(Exception):
+    """Raised for invalid add / remove operations. Message is
+    partner-safe (no internal jargon) and OK to render to admins."""
+    pass
+
+
+def add_custom_tool(tool_key: str, display_name: str, *,
+                    section: str = "custom",
+                    credits: int = 0,
+                    usd: float = 0.0,
+                    access_flag: str = None) -> dict:
+    """Register a new admin-added tool.
+
+    Returns the fully-normalized entry that got persisted. Raises
+    CustomToolError on any validation failure.
+
+    Guardrails:
+      - tool_key must slugify to something non-empty (>= 2 chars).
+      - tool_key must NOT collide with a MODULE_CATALOG builtin
+        (builtins always win; adding a duplicate would be silently
+        shadowed and confusing).
+      - display_name must be non-empty.
+      - section defaults to 'custom' (renders as its own header in
+        the admin UI); MODULE_CATALOG section names are OK too.
+      - usd must be >= 0.
+      - access_flag is optional; when present it should match one
+        of the existing has_*_access flags (not enforced strictly
+        so admins can wire flags before the code lands).
+    """
+    tk = _slugify_tool_key(tool_key)
+    if not tk or len(tk) < 2:
+        raise CustomToolError("tool key must be at least 2 characters")
+    display = str(display_name or "").strip()
+    if not display:
+        raise CustomToolError("display name is required")
+    if len(display) > 120:
+        display = display[:120]
+    section = str(section or "custom").strip().lower() or "custom"
+    if len(section) > 32:
+        section = section[:32]
+    try:
+        credits_i = max(0, int(credits or 0))
+    except (TypeError, ValueError):
+        credits_i = 0
+    try:
+        usd_f = float(usd or 0.0)
+    except (TypeError, ValueError):
+        usd_f = 0.0
+    if usd_f < 0:
+        raise CustomToolError("USD price must be zero or positive")
+    builtin_keys = {t for t, *_ in MODULE_CATALOG}
+    if tk in builtin_keys:
+        raise CustomToolError(
+            f"'{tk}' is a built-in tool key and cannot be re-added")
+    current = load_pricing(force_reload=True)
+    existing = list(current.get("custom_tools") or [])
+    for entry in existing:
+        if isinstance(entry, dict) and \
+                _slugify_tool_key(entry.get("tool_key")) == tk:
+            raise CustomToolError(
+                f"'{tk}' already exists; edit or delete it instead")
+    new_entry = {
+        "tool_key": tk,
+        "display_name": display,
+        "section": section,
+        "credits": credits_i,
+        "default_usd": usd_f,
+        "access_flag": (str(access_flag) if access_flag else None),
+    }
+    existing.append(new_entry)
+    # Persist the tool metadata + the price in one save.
+    per_tool = dict(current.get("per_tool_usd") or {})
+    per_tool[tk] = usd_f
+    save_pricing({"custom_tools": existing, "per_tool_usd": per_tool})
+    return new_entry
+
+
+def remove_custom_tool(tool_key: str) -> dict:
+    """Delete a previously-added custom tool and drop its price.
+
+    Returns {'tool_key': <canonical>, 'removed': True}. Raises
+    CustomToolError if the tool_key is a MODULE_CATALOG builtin or
+    is not currently registered as a custom tool.
+
+    Also removes the per_tool_usd entry for the deleted key so it
+    can't reappear via the orphan-price fold-in path in
+    module_catalog().
+    """
+    tk = _slugify_tool_key(tool_key)
+    if not tk:
+        raise CustomToolError("tool key is required")
+    builtin_keys = {t for t, *_ in MODULE_CATALOG}
+    if tk in builtin_keys:
+        raise CustomToolError(
+            f"'{tk}' is a built-in tool and cannot be deleted")
+    current = load_pricing(force_reload=True)
+    existing = list(current.get("custom_tools") or [])
+    filtered = [e for e in existing
+                if not (isinstance(e, dict)
+                        and _slugify_tool_key(e.get("tool_key")) == tk)]
+    if len(filtered) == len(existing):
+        raise CustomToolError(f"'{tk}' is not a custom tool")
+    # Persist the shortened custom_tools list AND explicitly delete
+    # the per_tool_usd entry (save_pricing's additive per_tool_usd
+    # merge can't remove keys on its own).
+    save_pricing({
+        "custom_tools": filtered,
+        "_delete_per_tool_keys": [tk],
+    })
+    return {"tool_key": tk, "removed": True}
 
 
 def tool_price_usd(tool_key: str) -> float:
